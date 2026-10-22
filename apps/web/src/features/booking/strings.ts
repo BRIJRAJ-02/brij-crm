@@ -6,6 +6,7 @@ export const strings = {
   listLabel: 'Booking pages',
   /** The create button's name; it reads `newButton`, the same word as Forms', so switching tabs moves nothing. */
   newPage: 'New booking page',
+  addLinkOnlyPage: 'New link only page',
   newButton: 'New',
   copyLink: 'Copy link',
   more: (title: string) => `More for ${title}`,
@@ -13,10 +14,10 @@ export const strings = {
   visibility: 'Visibility',
   on: 'On: the link works',
   off: 'Off: the link stops working',
-  isOn: (title: string) => `${title} is on`,
+  isOn: (title: string) => `${title} is live`,
   /** The switch's hint on a link's card: what it does now. */
-  takingBookings: 'Taking bookings',
-  notTakingBookings: 'Not taking bookings',
+  takingBookings: 'Live',
+  notTakingBookings: 'Paused',
   openPage: (title: string) => `Open ${title} in a new tab`,
   /** Open's tooltip on a link card. */
   openInNewTab: 'Open in a new tab',
@@ -49,7 +50,8 @@ export const strings = {
   failedText: 'Check your connection and try again.',
   deleteTitle: (title: string) => `Delete “${title}”?`,
   deleteText: 'The link stops working, and this can’t be undone. Bookings already made stay.',
-  deleteAction: 'Delete page',
+  deleteAction: 'Delete booking page',
+  deletePage: 'Delete booking page',
   deleting: 'Deleting',
   cancel: 'Cancel',
   somethingWrong: 'Something went wrong. Try again.',
@@ -67,6 +69,11 @@ export const strings = {
   customMinutesHint: 'Any length from 5 to 480 minutes, in steps of 5.',
   customMinutesInvalid: 'Type 5 to 480 minutes, in steps of 5.',
   addLength: 'Add a length',
+  /** The editor's tabs (22 Oct 2026): one per group, the chosen one in `?tab=`. */
+  tabsLabel: 'Booking page settings',
+  hostsTab: 'Hosts',
+  /** Said to screen readers after a tab's name when a field on it holds an error. */
+  needsFix: 'needs a fix',
   add: 'Add',
   lengthsFull: 'A page offers at most 4 lengths. Turn one off to add another.',
   minutesUnit: 'min',
@@ -96,13 +103,25 @@ export const strings = {
   aheadSummary: (days: number) => `up to ${days === 1 ? '1 day' : `${String(days)} days`} ahead`,
   stepSummary: (minutes: number) => `starts every ${String(minutes)} min`,
   dailySummary: (count: number) => (count === 1 ? '1 a day' : `${String(count)} a day`),
-  private: 'Private',
+  /** Who can book (the owner, 22 Oct 2026): Public or Link only, in the same words everywhere. */
+  whoCanBook: 'Who can book',
+  /** The Hours tab (22 Oct 2026): every label above its content, as the Schedule select's. */
+  to: 'to',
+  unavailable: 'Unavailable',
+  edit: 'Edit',
+  manage: 'Manage',
+  checksConflictsIn: 'Checks for conflicts in',
+  noCalendars: 'No calendars connected',
+  noneChecked: 'None, so this page can double book.',
+  reservedTime: 'Reserved time',
+  reservedTimeLine: 'This page can also book your reserved time: time only your link only pages can book.',
+  /** On Minimum notice, while the page is link only. */
+  noticeIgnored: 'Link only pages ignore this.',
+  statusFailed: (title: string) => `Couldn’t change ${title}. Try again.`,
+  publicPage: 'Public',
+  linkOnly: 'Link only',
   // A page the system paused when its last host was removed (spec 0031, AC-814).
   hostRemoved: 'Host removed',
-  hostRemovedSummary: 'Off, its host was removed from the workspace',
-  privateSummary: 'Private, only people with the link book it',
-  publicSummary: 'Anyone can book it',
-  pausedSummary: 'Off, nobody can book it',
   noticeSummary: (notice: string) => `${notice} notice`,
   /** The Limits card's groups, and a word of help on each setting (its InfoTip). */
   limitGroups: { buffers: 'Buffers', window: 'Booking window', pace: 'Pace' },
@@ -132,7 +151,13 @@ export const strings = {
       example: 'On Meeting length, a 30 min meeting offers 9:00, 9:30 and 10:00.',
     },
   },
-  privateHint: 'Only people with the link book it. It may book inside the time you hold, and skips the minimum notice.',
+  /**
+   * What each choice does, true to the app: there is no booking profile, so every page is reached by its link; a link
+   * only page is the one meant for people you send it to, and it alone books reserved time and skips the notice.
+   */
+  publicHint: 'Books inside your hours and limits.',
+  linkOnlyHint:
+    'Can also book your reserved time and ignores the minimum notice. Share it only with people you choose.',
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
     schedule: {
@@ -178,12 +203,14 @@ export const strings = {
   days: (count: number) => (count === 1 ? '1 day' : `${String(count)} days`),
   fixHours: 'Fix the hours marked in red to save.',
   fixPage: 'Fix what’s marked in red to save.',
+  /** The save bar's reason, naming the tabs that hold what's red. */
+  fixTabs: (tabs: readonly string[]) => `Fix ${tabs.join(' and ')} to save.`,
   leaveConfirm: 'You have unsaved changes. Leave without saving?',
   /** Add events to: the page's own destination calendar (spec 0024, AC-997). */
-  addEventsTo: 'Add events to',
-  addEventsHint: 'Saves as soon as you choose. New bookings from this page go on this calendar.',
-  myDefaultCalendar: 'Your default calendar',
-  yourDefault: (name: string) => `Your default (${name})`,
+  addBookingsTo: 'Add bookings to',
+  addBookingsHint: 'Saves as soon as you choose.',
+  myDefaultCalendar: 'Default calendar',
+  yourDefault: (name: string) => `Default (${name})`,
   conflicts: 'Conflicts',
   checksCalendars: (count: number) =>
     count === 0
@@ -205,10 +232,10 @@ export const strings = {
   destinationOwnerOnly: 'Only the page’s owner sees their calendars.',
   destinationLoading: 'Loading calendars…',
   noCalendarTitle: 'No calendar connected',
-  connectCalendar: 'Connect a calendar',
+  connectCalendar: 'Connect calendar',
   notNow: 'Not now',
-  statusLive: 'Taking bookings',
-  statusOff: 'Off, not taking bookings',
+  statusLive: 'Live',
+  statusOff: 'Paused',
   noCalendar: 'Until calendar sync is on, pages offer your hours minus their bookings, not your other meetings.',
   notFoundTitle: 'This booking page isn’t here',
   notFoundText: 'It was deleted, or it isn’t yours.',

@@ -3,15 +3,14 @@ import { useCalendar } from '@crm/data/react';
 import { EmptyState, Link, PageColumn, TopBar, LoadingNow } from '@crm/ui';
 import { createFileRoute, useParams, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { memberZone } from '../features/booking/zone.ts';
-import { linksHref } from '../features/booking/links.ts';
+import { linksHref, pageTabOf, type PageTab } from '../features/booking/links.ts';
 import { CalendarNote, readDismissed } from '../features/booking/CalendarNote.tsx';
-import { PageEditor } from '../features/booking/PageEditor.tsx';
+import { PageEditor, PageEditorPending as TabsPending } from '../features/booking/PageEditor.tsx';
 import { readRecordFields } from '../features/routing/record-fields.ts';
-import { EditorPending } from '../features/captures/EditorPending.tsx';
 import { strings } from '../features/booking/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
-// One booking page's editor (spec 0025, AC-623, AC-624): the page read through the data layer; one that was
+// One booking page's editor (spec 0025, AC-623, AC-624), its tab in `?tab=`: the page read through the data layer; one that was
 // deleted or isn't the reader's answers NOT_FOUND, said in the page with the way back. It sits outside the
 // Captures layout (`captures_`), as a form's editor does: it needs the whole width and its own TopBar. The owner's
 // schedules load too (spec 0035, AC-965) when the reader may read them (their own page, or any with `booking.admin`):
@@ -19,6 +18,13 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 // theirs; a colleague's, once the page names its owner. Either way the page shows: a failed read of the schedules
 // leaves the card with the hours the page books by now.
 export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
+  // The tab shown (22 Oct 2026): Page unless `?tab=` names another.
+  validateSearch: (search: Record<string, unknown>): { readonly tab?: PageTab } => {
+    const tab = pageTabOf(search.tab);
+    return tab === 'page' ? {} : { tab };
+  },
+  // Moving between tabs keeps the page as it is: the loader runs on arriving, not on each tab.
+  shouldReload: ({ cause }) => cause !== 'stay',
   loader: async ({ context, params }) => {
     try {
       const [page, mine] = await Promise.all([
@@ -78,14 +84,13 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
  */
 function PageEditorPending() {
   const { slug } = Route.useParams();
+  const { tab = 'page' } = Route.useSearch();
   const { data } = Route.useRouteContext();
   const calendar = useCalendar(data.calendar.view(slug));
   const hasNote = calendar.status === 'ready' && calendar.connections.length === 0 && !readDismissed(slug);
   return (
-    <EditorPending
-      title={strings.listLabel}
-      icon="link"
-      cards={[strings.page, strings.meeting, strings.hours, strings.limits]}
+    <TabsPending
+      tab={tab}
       {...(hasNote ? { notices: <CalendarNote slug={slug} canConnect={calendar.enabled} /> } : {})}
     />
   );
@@ -133,6 +138,8 @@ function Missing({
 function EditorRoute() {
   const { page, mayRead, ownerMember, people, fields } = Route.useLoaderData();
   const { slug } = Route.useParams();
+  const { tab = 'page' } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const { data, toasts } = Route.useRouteContext();
   if (page === undefined) return <Missing title={strings.notFoundTitle} text={strings.notFoundText} />;
   // A page of its own per id, so its draft starts afresh.
@@ -148,6 +155,9 @@ function EditorRoute() {
       {...(people === undefined ? {} : { people })}
       {...(fields === undefined ? {} : { recordFields: fields })}
       onNotice={(message) => toasts.toast({ tone: 'success', message })}
+      tab={tab}
+      // A tab change replaces the entry: Back leaves the editor rather than stepping through its tabs.
+      onTabChange={(next) => void navigate({ search: next === 'page' ? {} : { tab: next }, replace: true })}
     />
   );
 }

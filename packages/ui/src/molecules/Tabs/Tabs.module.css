@@ -170,6 +170,30 @@
     outline: none;
   }
 
+  /* A page layout inside (PreviewLayout): a flex column, so it can grow to the view's foot and put its footer there. */
+  .panel[data-variant='fill'] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* A tab of fields with no Card around them: the Form's rhythm, at most a readable column wide, from the start. */
+  .panel[data-variant='fields'] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    max-inline-size: var(--size-column-max);
+    padding-block-start: var(--space-16);
+  }
+
+  /* A field on this tab holds an error: a small danger dot after the label. Its text is for screen readers. */
+  .alert {
+    flex: none;
+    inline-size: var(--space-6);
+    block-size: var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--danger);
+  }
+
   .panel[data-focus-visible] {
     box-shadow: var(--shadow-focus-inset);
   }
@@ -183,6 +207,10 @@
   @media (forced-colors: active) {
     .indicator {
       background: Highlight;
+    }
+
+    .alert {
+      background: CanvasText;
     }
   }
 }

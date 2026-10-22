@@ -1,10 +1,10 @@
 // The confirms before a form ends something (the owner's rule, 21 October
-// 2026): pausing a live form asks first in a plain dialog, deleting a
-// submission or a form in a danger one, and adding many submissions to the
-// CRM in a plain one. Cancel (or Escape) changes nothing and sends
-// nothing; each press of the commit sends one call; a refusal says why inside
-// the dialog, which stays open to try again. Turning a form back on stays one
-// click, with no question.
+// 2026): deleting a submission or a form asks first in a danger dialog, and
+// adding many submissions to the CRM in a plain one. Cancel (or Escape)
+// changes nothing and sends nothing; each press of the commit sends one call;
+// a refusal says why inside the dialog, which stays open to try again.
+// Pausing and resuming are reversible, so they act at once with Undo in
+// their toast (the owner, 22 October 2026).
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { newWorkspace } from './people.ts';
@@ -104,31 +104,19 @@ test.describe('confirms on forms', () => {
       mutationId: randomUUID(),
     });
 
-    // Turning the form off from its card asks first; Cancel leaves it on and sends nothing.
+    // Turning the form off from its card pauses it at once (it's reversible), with Undo in its toast.
     const setStatus = calls(page, 'forms/setStatus');
     await page.goto(`/w/${slug}/captures/forms`);
-    const accepting = page.getByRole('switch', { name: `Accepting submissions on ${live.name}` });
+    const accepting = page.getByRole('switch', { name: `${live.name} is live` });
     await expect(accepting).toBeChecked();
     await accepting.press('Space');
-    const pause = page.getByRole('dialog', { name: `Pause the ${live.name} form?` });
-    await expect(pause).toBeVisible();
-    await expect(pause).toContainText('nothing is deleted');
-    await pause.getByRole('button', { name: /^Cancel/ }).click();
-    await expect(pause).toBeHidden();
-    await expect(accepting).toBeChecked();
-    expect(setStatus()).toBe(0);
-    // Pause form turns it off, with one call.
-    await accepting.press('Space');
-    await expect(pause).toBeVisible();
-    await pause.getByRole('button', { name: 'Pause form' }).click();
-    await expect(pause).toBeHidden();
     await expect(accepting).not.toBeChecked();
-    expect(setStatus()).toBe(1);
-    // On again: one click, no question.
-    await accepting.press('Space');
-    await expect(accepting).toBeChecked();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    expect(setStatus()).toBe(2);
+    await expect.poll(setStatus).toBe(1);
+    // Undo turns it back on, with one more call.
+    await page.getByRole('button', { name: 'Undo' }).first().click();
+    await expect(accepting).toBeChecked();
+    await expect.poll(setStatus).toBe(2);
 
     // Adding many to the CRM at once asks first and counts them; Escape is Cancel and sends nothing.
     const addToCrm = calls(page, 'submissions/addToCrm');
@@ -189,14 +177,14 @@ test.describe('confirms on forms', () => {
     await expect(page.getByRole('row').filter({ hasText: 'Grace Hopper' })).toHaveCount(0);
     expect(deleteSubmission()).toBe(2);
 
-    // The editor's Pause asks the same question; Cancel leaves it live.
+    // The editor's Pause acts at once too, its toast offering Undo, which resumes it.
     await page.goto(`/w/${slug}/captures/forms/${live.id}`);
     await page.getByRole('button', { name: 'More actions' }).click();
     await page.getByRole('menuitem', { name: 'Pause' }).click();
-    await expect(page.getByRole('dialog', { name: `Pause the ${live.name} form?` })).toBeVisible();
-    await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    expect(setStatus()).toBe(2);
+    await expect.poll(setStatus).toBe(3);
+    await page.getByRole('button', { name: 'Undo' }).first().click();
+    await expect.poll(setStatus).toBe(4);
 
     // Removing a site from the Install tab asks first; Escape keeps it; Remove site saves the list without it.
     const settings = calls(page, 'forms/updateSettings');

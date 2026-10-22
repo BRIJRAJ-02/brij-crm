@@ -99,11 +99,11 @@ export const strings = {
     'Something on your calendar with nobody else invited. Its details stay in your calendar, and nobody can book this time.',
   // Time the member closed (spec 0027).
   blocked: 'Blocked',
-  held: 'Held',
+  held: 'Reserved time',
   why: 'Why',
   repeats: 'Repeats',
   everyWeek: (weekday: string) => `Every ${weekday}`,
-  heldNote: 'Only a private page can book it.',
+  heldNote: 'Only your link only pages can book it.',
   blockedNote: 'None of them offers this time.',
   removeBlock: 'Remove',
   releaseHold: 'Release',
@@ -116,7 +116,7 @@ export const strings = {
   removeWeeklyTitle: (label: string | undefined) =>
     label === undefined ? 'Remove this weekly block?' : `Remove the weekly “${label}” block?`,
   releaseHoldTitle: (label: string | undefined) =>
-    label === undefined ? 'Release this hold?' : `Release the “${label}” hold?`,
+    label === undefined ? 'Release this reserved time?' : `Release “${label}”?`,
   reopensOnce: (day: string, from: string, to: string) =>
     `${day}, ${from} to ${to}, opens for booking again. This can’t be undone.`,
   reopensWeekly: (weekday: string, from: string, to: string) =>
@@ -124,7 +124,7 @@ export const strings = {
   releasesHold: (day: string, from: string, to: string) =>
     `${day}, ${from} to ${to}, opens to every booking page again. This can’t be undone.`,
   removeBlockAction: 'Remove block',
-  releaseHoldAction: 'Release hold',
+  releaseHoldAction: 'Release reserved time',
   removing: 'Removing',
   releasing: 'Releasing',
   bookingPages: 'Booking pages',
@@ -179,15 +179,16 @@ export const strings = {
   booked: (name: string) => `Booked with ${name}. The invitation is on its way from your calendar.`,
   bookedQuietly: (name: string) => `Booked with ${name}.`,
   noCalendar: 'No calendar is connected, so they won’t get an invitation yet. Connect one under Calendar.',
-  holdThisTime: 'Hold for a private page',
+  holdThisTime: 'Reserve for link only pages',
   holdFor: 'For',
-  anyPrivatePage: 'Any private page',
-  holdHint: 'Only that private page can book inside it, even outside your hours.',
-  noPrivatePages: 'No page is private yet: turn on Private in a page’s Limits to book inside this hold.',
-  holdIt: 'Hold it',
-  holding: 'Holding',
-  holdFailed: 'That time couldn’t be held. Try again.',
-  timeHeld: 'Held. Only a private booking page can book it.',
+  anyPrivatePage: 'Any link only page',
+  noPrivatePages: 'Time only your link only pages can book. You have none yet.',
+  createLinkOnly: 'Create a link only page',
+  reservedTime: 'Reserved time',
+  holdIt: 'Reserve it',
+  holding: 'Reserving',
+  holdFailed: 'That time couldn’t be reserved. Try again.',
+  timeHeld: 'Reserved. Only your link only pages can book it.',
   undo: 'Undo',
   // The host's changes to a booking (spec 0025, AC-640).
   changeBooking: 'Change this booking',

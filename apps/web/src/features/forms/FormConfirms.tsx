@@ -18,7 +18,6 @@ export interface ConfirmedForm {
 
 /** What the server answers a delete, and a pause. */
 type Deleted = Awaited<ReturnType<DataLayer['forms']['delete']>>;
-type Paused = Awaited<ReturnType<DataLayer['forms']['setStatus']>>;
 
 /** Props for each confirm. */
 interface FormConfirmProps<Done> {
@@ -92,39 +91,6 @@ export function DeleteFormDialog({ data, slug, form, onClose, onDone }: FormConf
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       <p>{strings.deleteText(shown.submissionCount)}</p>
-    </Modal>
-  );
-}
-
-/** "Pause the Demo request form?": a plain confirm (resuming undoes it), Cancel (ESC) then Pause form. */
-export function PauseFormDialog({ data, slug, form, onClose, onDone }: FormConfirmProps<Paused>) {
-  const { shown, isBusy, failure, commit } = useCommit(
-    form,
-    (each) => data.forms.setStatus(slug, each.id, 'paused'),
-    onDone,
-  );
-  if (shown === undefined) return null;
-  return (
-    <Modal
-      title={strings.pauseTitle(shown.name)}
-      isOpen={form !== undefined}
-      isBusy={isBusy}
-      onOpenChange={(isOpen) => {
-        if (!isOpen && !isBusy) onClose();
-      }}
-      actions={
-        <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
-            {strings.cancel}
-          </Button>
-          <Button variant="primary" icon="pause" isPending={isBusy} onPress={commit}>
-            {strings.pauseAction}
-          </Button>
-        </>
-      }
-    >
-      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-      <p>{strings.pauseText}</p>
     </Modal>
   );
 }

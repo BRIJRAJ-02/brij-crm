@@ -1,0 +1,50 @@
+/* FieldGroup: a Field's label (and a quiet action at its row's end) over read
+   only content, then a hint line, in the Field's rhythm. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  /* As tall as a Field's label row; the action's control overhangs it rather than pushing the content down. */
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .label {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .action {
+    display: inline-flex;
+    margin-block: calc(var(--space-4) * -1);
+  }
+
+  .content {
+    min-inline-size: 0;
+  }
+
+  .content[data-layout='row'] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  /* A step more room above the hint than between the label and the content, so the hint reads as the group's
+     note, not one more row of the content. */
+  .hint {
+    margin: var(--space-4) 0 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+}

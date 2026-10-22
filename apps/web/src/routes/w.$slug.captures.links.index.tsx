@@ -9,6 +9,9 @@ import { strings } from '../features/booking/strings.ts';
 // editor shows here without a refresh. The loader waits for the first read only; coming back, the held rows show at
 // once and are read again behind them. The Captures layout draws the frame, the TopBar and the Links · Forms strip.
 export const Route = createFileRoute('/w/$slug/captures/links/')({
+  // `?new=link-only` opens New booking page preset to Link only (Bookings' "Create a link only page").
+  validateSearch: (search: Record<string, unknown>): { readonly new?: 'link-only' } =>
+    search.new === 'link-only' ? { new: 'link-only' } : {},
   loader: async ({ context, params }) => {
     // The reader's calendars, read behind: a page's editor opened from here knows its calendar note at once.
     context.data.calendar

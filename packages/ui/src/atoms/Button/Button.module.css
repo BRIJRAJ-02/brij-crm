@@ -35,6 +35,19 @@
     text-overflow: ellipsis;
   }
 
+  /* A label that may swap (Copy link, Copied): both take one cell, the wider sets the width, the other hides. */
+  .label[data-reserve] {
+    display: inline-grid;
+  }
+
+  .label[data-reserve] > * {
+    grid-area: 1 / 1;
+  }
+
+  .reserve {
+    visibility: hidden;
+  }
+
   .keys {
     display: inline-flex;
     gap: var(--space-2);

@@ -1,8 +1,9 @@
 // Brief
 // Purpose: one booking page's editor (spec 0025, 0025-experience.md, AC-623, AC-624, AC-679): its groups beside a live preview.
 // Main task: change the page, the meeting, its hours and limits, and Save from the bar that appears while anything is unsaved.
-// Each group's header carries a live summary of what it holds (the meeting's lengths and place, the week it books on).
-// The hours are a schedule's (spec 0035, AC-965): the card picks one of the owner's, says its week, and links to it.
+// One tab per group (the owner, 22 Oct 2026: the cards stacked were too much to look through), the chosen one in
+// `?tab=`; a tab whose fields hold an error carries a dot. Every setting shows; nothing folds away (the owner).
+// The hours are a schedule's (spec 0035, AC-965): the tab picks one of the owner's, says its week, and links to it.
 // A round robin page (spec 0029, AC-732) adds Hosts: its fixed hosts, its rotations, and who reschedules go to.
 // Leaves out: questions and the deal step (milestone 2), collective members, and scrolling to a group from the preview.
 import {
@@ -16,43 +17,59 @@ import {
 import { useCalendar, useCaptureList, useSchedules } from '@crm/data/react';
 import {
   Button,
+  ButtonLink,
   Callout,
-  Card,
   ChoiceChips,
-  CopyButton,
+  DescriptionList,
   EditorStatus,
   Field,
+  FieldGroup,
   InfoTip,
-  Link,
   PreviewDeviceSwitch,
   PreviewFrame,
   PreviewLayout,
+  Popover,
   SaveBar,
+  SegmentedControl,
   Select,
   SettingsRow,
   SettingsRowGroup,
   Skeleton,
-  Switch,
+  TabPanel,
+  Tabs,
   TopBar,
   type SaveBarStatus,
   type PreviewDevice,
   type SelectItem,
 } from '@crm/ui';
-import { useBlocker } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useBlocker, useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useRef, useState, type ReactNode } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { calendarSettingsHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
-import { PageDestination } from './PageDestination.tsx';
+import { PageConflicts, PageDestination } from './PageDestination.tsx';
 import { HostsCard } from './HostsCard.tsx';
 import { recordFacts } from '../routing/facts.ts';
 import type { RecordFields } from '../routing/record-fields.ts';
 import { RulesCard } from '../routing/RulesCard.tsx';
 import { strings as routingStrings } from '../routing/strings.ts';
-import { weekSummary, zoneLabel } from './hours.ts';
-import { linksHref, publicBookingUrl, scheduleHref } from './links.ts';
+import { weekGroups } from './hours.ts';
+import { zoneDisplay } from '../../public/booking/time.ts';
+import { EditorActions } from '../captures/EditorActions.tsx';
+import { bookingsTabHref } from '../bookings/tabs.ts';
+import { strings as capturesStrings } from '../captures/strings.ts';
+import { DeletePageDialog } from './DeletePageDialog.tsx';
+import {
+  linksHref,
+  pageEditorHref,
+  PAGE_TABS,
+  pageTabOf,
+  publicBookingUrl,
+  scheduleHref,
+  type PageTab,
+} from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { scheduleChoices } from './schedules.ts';
@@ -75,6 +92,10 @@ export interface PageEditorProps {
   readonly onNotice?: (message: string) => void;
   /** A round robin page's Routing card (spec 0043): the person's and company's fields its rules may read. */
   readonly recordFields?: RecordFields;
+  /** The tab shown, from `?tab=`. */
+  readonly tab: PageTab;
+  /** Shows another tab: the route puts it in `?tab=`. */
+  readonly onTabChange: (tab: PageTab) => void;
 }
 
 const LOCATIONS = ['video', 'address', 'phone', 'custom'] as const;
@@ -109,6 +130,23 @@ const STEPS: SelectItem[] = [
   { id: 'duration', label: strings.stepDuration },
   ...[15, 30, 60].map((value) => ({ id: String(value), label: strings.minutes(value) })),
 ];
+
+/** The tab each setting sits on, for a refusal that names its field. */
+const FIELD_TABS: Readonly<Record<string, PageTab>> = {
+  description: 'page',
+  isPrivate: 'page',
+  title: 'meeting',
+  durations: 'meeting',
+  location: 'meeting',
+  rescheduleHost: 'hosts',
+  scheduleId: 'hours',
+  bufferBefore: 'limits',
+  bufferAfter: 'limits',
+  minNoticeMinutes: 'limits',
+  windowDays: 'limits',
+  dailyLimit: 'limits',
+  slotStep: 'limits',
+};
 
 /** The settings the editor edits, from the page. */
 const settingsOf = (page: BookingPageView): BookingPageSettings => ({
@@ -159,8 +197,12 @@ export function PageEditor({
   people = [],
   onNotice,
   recordFields,
+  tab,
+  onTabChange,
 }: PageEditorProps) {
   const [page, setPage] = useState(loaded);
+  const { toasts } = useRouteContext({ from: '__root__' });
+  const navigate = useNavigate();
   // A page the reader can't change shows as it is, every control read only, with no Save.
   const isLocked = !page.canChange;
   const saved = settingsOf(page);
@@ -191,8 +233,11 @@ export function PageEditor({
     }
     setLengthText('');
     setLengthError(undefined);
+    setAddingLength(false);
   };
   const [device, setDevice] = useState<PreviewDevice>('phone');
+  // When the editor opened: the zone's offset ("GMT+5:30") is read for then.
+  const [openedAt] = useState(() => Date.now());
   // The calendar note shows only to someone with no calendar connected yet (their own connections, spec 0024).
   const calendar = useCalendar(data.calendar.view(slug));
   // The route primes the list, so the note is in the first paint's layout and never pushes the cards down.
@@ -201,16 +246,31 @@ export function PageEditor({
   // A custom length typed in minutes, added to the page's lengths on Add or Enter.
   const [lengthText, setLengthText] = useState('');
   const [lengthError, setLengthError] = useState<string | undefined>(undefined);
+  // The "+ Custom" chip's popover, and the minutes typed in it.
+  const [isAddingLength, setAddingLength] = useState(false);
+  const customRef = useRef<HTMLButtonElement>(null);
+  // Which lengths the chips refuse (a fifth), said under the chips rather than in the popover.
+  const [chipsError, setChipsError] = useState<string | undefined>(undefined);
 
   // Leaving with unsaved changes asks first, in the app and when the tab closes.
   useBlocker({
     shouldBlockFn: () => isDirty && !globalThis.confirm(strings.leaveConfirm),
     enableBeforeUnload: () => isDirty,
   });
-  // Arriving at #hours (the list's Hours) scrolls to that group.
-  useEffect(() => {
-    if (globalThis.location.hash === '#hours') globalThis.document.getElementById('hours')?.scrollIntoView();
-  }, []);
+  // Pause and Resume save at once, apart from the other groups, and their toast offers Undo.
+  const setLive = (status: 'live' | 'paused') => {
+    save({ status });
+  };
+  const duplicate = () => {
+    data.bookingPages.duplicate(slug, page, strings.copyOf(page.title)).then(
+      (copy) => {
+        toasts.toast({ tone: 'success', message: strings.duplicated(copy.title) });
+        void navigate({ href: pageEditorHref(slug, copy.id) });
+      },
+      () => toasts.toast({ tone: 'danger', message: strings.duplicateFailed(page.title) }),
+    );
+  };
+  const [isDeleting, setDeleting] = useState(false);
 
   const save = (patch: Partial<BookingPageSettings>) => {
     if (isSaving || Object.keys(patch).length === 0) return;
@@ -221,13 +281,30 @@ export function PageEditor({
         setSaving(false);
         setPage(next);
         setDraft((current) => ({ ...settingsOf(next), ...changed(settingsOf(next), current) }));
-        // Saved is said for the groups' save, not the Live switch's.
-        if (patch.status === undefined) setJustSaved(true);
+        setChipsError(undefined);
+        // Saved is said for the groups' save; Pause and Resume say theirs in a toast with Undo.
+        const { status } = patch;
+        if (status === undefined) setJustSaved(true);
+        else
+          toasts.toast({
+            tone: 'success',
+            message:
+              status === 'live' ? capturesStrings.resumedToast(next.title) : capturesStrings.pausedToast(next.title),
+            action: { label: capturesStrings.undo, onAction: () => setLive(status === 'live' ? 'paused' : 'live') },
+          });
       },
       (error: unknown) => {
         setSaving(false);
-        if (patch.status !== undefined) setDraft((current) => ({ ...current, status: page.status }));
+        // Pause and Resume aren't part of the save bar's changes: their failure says so in a toast.
+        if (patch.status !== undefined) {
+          setDraft((current) => ({ ...current, status: page.status }));
+          toasts.toast({ tone: 'danger', message: strings.statusFailed(page.title) });
+          return;
+        }
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+        // A refused setting on another tab: show that tab, where the field says what's wrong.
+        const refused = field === undefined ? undefined : FIELD_TABS[field];
+        if (refused !== undefined) onTabChange(refused);
         setFailure({
           message: isDataError(error) ? error.message : strings.somethingWrong,
           ...(field === undefined ? {} : { field }),
@@ -247,40 +324,8 @@ export function PageEditor({
         ? 'unsaved'
         : 'error';
   const location = draft.location;
-  // The live summaries in the groups' headers: what the meeting is, and the week the page books on.
-  const meetingSummary = [
-    draft.durations.map((minutes) => strings.minutesShort(minutes)).join(', '),
-    strings.locations[location.type],
-  ]
-    .filter((part) => part !== '')
-    .join(' · ');
   const isTeam = page.kind === 'round_robin';
   const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember);
-  // A team page books each member by their own default schedule (spec 0037), so it names none of its own.
-  const hoursSummary = isTeam
-    ? rotationStrings.hoursMembers
-    : [...weekSummary(hours.availability, locale), zoneLabel(hours.availability.timeZone)].join(' · ');
-  // Page: who can book it.
-  const pageSummary =
-    page.status === 'paused'
-      ? page.pausedReason === 'host_removed'
-        ? strings.hostRemovedSummary
-        : strings.pausedSummary
-      : draft.isPrivate
-        ? strings.privateSummary
-        : strings.publicSummary;
-  // Limits: what holds bookings back, or that nothing does.
-  const limitParts = [
-    draft.bufferBefore + draft.bufferAfter > 0 ? strings.buffersSummary(draft.bufferBefore, draft.bufferAfter) : '',
-    draft.minNoticeMinutes > 0
-      ? strings.noticeSummary(NOTICE.find((item) => item.id === String(draft.minNoticeMinutes))?.label ?? '')
-      : '',
-    strings.aheadSummary(draft.windowDays),
-    draft.dailyLimit === null ? '' : strings.dailySummary(draft.dailyLimit),
-    draft.slotStep === null ? '' : strings.stepSummary(draft.slotStep),
-  ].filter((part) => part !== '');
-  const joined = limitParts.join(' · ');
-  const limitsSummary = joined.charAt(0).toUpperCase() + joined.slice(1);
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
   // The people a routing rule may pick: the members of the page's rotations, each once (spec 0043).
@@ -289,6 +334,53 @@ export function PageEditor({
     .filter((rotation) => teamRotations.has(rotation.id))
     .flatMap((rotation) => rotation.members.map((member) => ({ id: member.memberId, name: member.name })))
     .filter((member, at, all) => all.findIndex((each) => each.id === member.id) === at);
+  // The tabs: Hosts on a round robin page only. A tab shown that this page doesn't have falls back to Page.
+  const tabs: readonly PageTab[] = PAGE_TABS.filter((each) => each !== 'hosts' || isTeam);
+  const shown: PageTab = tabs.includes(tab) ? tab : 'page';
+  // The tabs whose fields hold an error now: what's marked red on them, and a refusal's field from the server.
+  const refusedTab = failure?.field === undefined ? undefined : FIELD_TABS[failure.field];
+  const isWhereMissing = (location.type === 'address' || location.type === 'custom') && location.value.trim() === '';
+  const hasError: Readonly<Record<PageTab, boolean>> = {
+    page: refusedTab === 'page',
+    meeting:
+      refusedTab === 'meeting' ||
+      draft.title.trim() === '' ||
+      draft.durations.length === 0 ||
+      isWhereMissing ||
+      chipsError !== undefined,
+    hosts: refusedTab === 'hosts',
+    hours: refusedTab === 'hours',
+    limits: refusedTab === 'limits',
+  };
+  const tabLabel: Readonly<Record<PageTab, string>> = {
+    page: strings.page,
+    meeting: strings.meeting,
+    hosts: strings.hostsTab,
+    hours: strings.hours,
+    limits: strings.limits,
+  };
+  const limitRow = (
+    title: string,
+    help: { readonly text: string; readonly example: string },
+    items: SelectItem[],
+    value: string,
+    onChange: (id: string | null) => void,
+    description?: string,
+  ) => (
+    <SettingsRow
+      title={title}
+      // Every select one column wide, as on Settings › Preferences, so their edges line up.
+      control="field"
+      {...(description === undefined ? {} : { description })}
+      meta={
+        <InfoTip label={title} example={help.example}>
+          {help.text}
+        </InfoTip>
+      }
+    >
+      <Select label={title} isLabelHidden items={items} isReadOnly={isLocked} value={value} onChange={onChange} />
+    </SettingsRow>
+  );
 
   return (
     <WorkspacePage
@@ -299,7 +391,7 @@ export function PageEditor({
             title={draft.title.trim() === '' ? strings.listLabel : draft.title}
             icon="link"
             crumbs={[{ id: 'links', label: strings.linksTitle, href: linksHref(slug) }]}
-            // The state, as the form editor shows its own; the Live switch beside it is what changes it.
+            // Live or Paused, as a form's; the ⋯ menu's Pause or Resume changes it.
             meta={
               <EditorStatus
                 tone={page.status === 'live' ? 'live' : 'paused'}
@@ -307,367 +399,471 @@ export function PageEditor({
               />
             }
           >
-            <Switch
-              label={strings.live}
-              isSelected={page.status === 'live'}
-              isDisabled={isSaving}
-              isReadOnly={isLocked}
-              onChange={(isLive) => {
-                // The switch saves at once, apart from the other groups.
-                const status = isLive ? 'live' : 'paused';
-                change({ status });
-                save({ status });
-              }}
+            <EditorActions
+              link={publicBookingUrl(page.publicKey)}
+              {...(isLocked
+                ? {}
+                : {
+                    menu: {
+                      status: page.status === 'live' ? ('live' as const) : ('paused' as const),
+                      onPause: () => setLive('paused'),
+                      onResume: () => setLive('live'),
+                      onDuplicate: duplicate,
+                      onDelete: () => setDeleting(true),
+                      deleteLabel: strings.deletePage,
+                    },
+                  })}
             />
-            <CopyButton value={publicBookingUrl(page.publicKey)} label={strings.copyLink} />
           </TopBar>
         ),
         body: (
-          <PreviewLayout
-            previewControls={<PreviewDeviceSwitch value={device} onChange={setDevice} />}
-            preview={
-              <PreviewFrame
-                src={`/b/${page.publicKey}`}
-                title={page.title}
-                device={device}
-                // The page's save, or a save of the schedule it books by, draws the preview again with the new times.
-                version={`${page.updatedAt}|${hours.version}`}
-                draft={{
-                  title: draft.title,
-                  description: draft.description,
-                  durations: draft.durations,
-                  location: draft.location,
-                }}
-              />
-            }
-            {...(page.status === 'paused'
-              ? { previewNote: <Callout tone="info">{strings.pausedPreview}</Callout> }
-              : {})}
-            notices={
-              <>
-                {isLocked && (
-                  <Callout tone="info" title={strings.readOnlyTitle}>
-                    {strings.readOnlyText}
-                  </Callout>
-                )}
-                {hasNoCalendar && !isNoteDismissed && (
-                  <CalendarNote
-                    slug={slug}
-                    canConnect={calendar.enabled}
-                    onDismiss={() => {
-                      setNoteDismissed(true);
-                      writeDismissed(slug);
-                    }}
-                  />
-                )}
-              </>
-            }
-            footer={
-              <SaveBar
-                status={barStatus}
-                {...(barError === undefined ? {} : { error: barError })}
-                {...(sendable(draft) ? {} : { blockedReason: strings.fixPage })}
-                onSave={() => save(dirty)}
-                onDiscard={() => {
-                  setDraft(saved);
-                  setFailure(undefined);
-                  setJustSaved(false);
-                }}
-                onFocusAway={() => pageHeading(document)?.focus()}
-              />
-            }
-          >
-            <Card title={strings.page} description={pageSummary}>
-              <Field
-                label={strings.publicLink}
-                variant="copy"
-                copyLabel={strings.copyLink}
-                value={publicBookingUrl(page.publicKey)}
-              />
-              <Field
-                label={strings.description}
-                value={draft.description}
-                isMultiline
-                maxLength={2000}
-                showCounter
-                isReadOnly={isLocked}
-                onChange={(description) => change({ description })}
-              />
-              <Switch
-                label={strings.private}
-                description={strings.privateHint}
-                isSelected={draft.isPrivate}
-                isReadOnly={isLocked}
-                onChange={(isPrivate) => change({ isPrivate })}
-              />
-            </Card>
-            <Card title={strings.meeting} description={meetingSummary}>
-              <Field
-                label={strings.title}
-                value={draft.title}
-                maxLength={120}
-                isRequired
-                isReadOnly={isLocked}
-                onChange={(title) => change({ title })}
-                {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
-              />
-              <ChoiceChips
-                label={strings.durations}
-                choices={lengths.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
-                selected={draft.durations.map(String)}
-                isDisabled={isLocked}
-                onChange={(ids) => {
-                  const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
-                  // A fifth is refused here as the server would: the public page shows four.
-                  if (durations.length > LENGTHS_MAX) {
-                    setLengthError(strings.lengthsFull);
-                    return;
+          <>
+            <DeletePageDialog
+              page={isDeleting ? page : undefined}
+              onClose={() => setDeleting(false)}
+              onDelete={(gone) =>
+                data.bookingPages.remove(slug, gone.id).then(() => {
+                  setDeleting(false);
+                  toasts.toast({ tone: 'success', message: strings.deleted(gone.title) });
+                  void navigate({ href: linksHref(slug) });
+                })
+              }
+            />
+            <Tabs
+              label={strings.tabsLabel}
+              variant="bar"
+              tabs={tabs.map((id) => ({
+                id,
+                label: tabLabel[id],
+                ...(hasError[id] ? { alert: strings.needsFix } : {}),
+              }))}
+              selectedKey={shown}
+              onSelectionChange={(id) => onTabChange(pageTabOf(id))}
+            >
+              {/* One panel, the chosen tab's: the layout and its preview stay mounted as the tab changes. */}
+              <TabPanel id={shown} variant="fill">
+                <PreviewLayout
+                  bodyWidth="form"
+                  previewControls={<PreviewDeviceSwitch value={device} onChange={setDevice} />}
+                  preview={
+                    <PreviewFrame
+                      src={`/b/${page.publicKey}`}
+                      title={page.title}
+                      device={device}
+                      // The page's save, or a save of the schedule it books by, draws the preview again with the new times.
+                      version={`${page.updatedAt}|${hours.version}`}
+                      draft={{
+                        title: draft.title,
+                        description: draft.description,
+                        durations: draft.durations,
+                        location: draft.location,
+                      }}
+                    />
                   }
-                  setLengthError(undefined);
-                  change({ durations });
-                }}
-                {...(draft.durations.length === 0 ? { error: strings.durationRequired } : {})}
-              />
-              {!isLocked && (
-                <Field
-                  label={strings.addLength}
-                  inputMode="numeric"
-                  maxLength={3}
-                  hint={strings.customMinutesHint}
-                  value={lengthText}
-                  onChange={(value) => {
-                    setLengthText(value);
-                    setLengthError(undefined);
-                  }}
-                  onSubmit={addLength}
-                  suffix={
-                    <Button variant="ghost" onPress={addLength} isDisabled={lengthText.trim() === ''}>
-                      {strings.add}
-                    </Button>
+                  {...(page.status === 'paused'
+                    ? { previewNote: <Callout tone="info">{strings.pausedPreview}</Callout> }
+                    : {})}
+                  notices={
+                    <>
+                      {isLocked && (
+                        <Callout tone="info" title={strings.readOnlyTitle}>
+                          {strings.readOnlyText}
+                        </Callout>
+                      )}
+                      {hasNoCalendar && !isNoteDismissed && (
+                        <CalendarNote
+                          slug={slug}
+                          canConnect={calendar.enabled}
+                          onDismiss={() => {
+                            setNoteDismissed(true);
+                            writeDismissed(slug);
+                          }}
+                        />
+                      )}
+                    </>
                   }
-                  {...(lengthError === undefined ? {} : { error: lengthError })}
-                />
-              )}
-              <Select
-                label={strings.location}
-                items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}
-                value={location.type}
-                isReadOnly={isLocked}
-                onChange={(type) => {
-                  if (type === 'video' || type === 'phone') change({ location: { type } });
-                  if (type === 'address' || type === 'custom')
-                    change({ location: { type, value: 'value' in location ? location.value : '' } });
-                }}
-              />
-              {(location.type === 'address' || location.type === 'custom') && (
-                <Field
-                  label={location.type === 'address' ? strings.addressOrRoom : strings.where}
-                  value={location.value}
-                  maxLength={500}
-                  isRequired
-                  isReadOnly={isLocked}
-                  {...(location.value.trim() === '' ? { error: strings.whereRequired } : {})}
-                  onChange={(value) => change({ location: { type: location.type, value } })}
-                />
-              )}
-              <PageDestination
-                destination={data.calendar.pageDestination(slug, page.id)}
-                calendars={data.calendar.calendars(slug)}
-                isReadOnly={isLocked}
-                onChange={(calendarId) => void data.calendar.setPageDestination(slug, page.id, calendarId)}
-                settingsHref={calendarSettingsHref(slug)}
-              />
-            </Card>
-            {isTeam && (
-              <HostsCard
-                data={data}
-                slug={slug}
-                page={page}
-                people={people}
-                rotations={rotationList}
-                isLocked={isLocked}
-                rescheduleHost={draft.rescheduleHost}
-                onRescheduleChange={(rescheduleHost) => change({ rescheduleHost })}
-                onSaved={(saved) => {
-                  setPage(saved);
-                  onNotice?.(rotationStrings.hostsSaved);
-                }}
-              />
-            )}
-            {isTeam && (
-              <RulesCard
-                data={data}
-                slug={slug}
-                surface={{ kind: 'page', pool: teamPool }}
-                {...(isLocked ? {} : { report: { kind: 'booking_page' as const, pageId: page.id } })}
-                rules={page.routing?.rules ?? []}
-                facts={recordFields === undefined ? [] : recordFacts(recordFields.person, recordFields.company)}
-                factLabel={routingStrings.questionOrField}
-                emptyFacts={routingStrings.noFields}
-                description={routingStrings.pageRoutingLine(page.routing?.rules.length ?? 0)}
-                isReadOnly={isLocked}
-                nameOf={(memberId) => people.find((person) => person.id === memberId)?.name ?? ''}
-                onRulesChange={async (rules) => {
-                  const saved = await data.bookingPages.update(slug, page.id, {}, { routing: { rules: [...rules] } });
-                  setPage(saved);
-                  onNotice?.(routingStrings.saved);
-                }}
-              />
-            )}
-            <div id="hours">
-              <Card
-                title={strings.hours}
-                description={hoursSummary}
-                {...(hours.editHref === undefined
-                  ? {}
-                  : { actions: <Link href={hours.editHref}>{scheduleStrings.editHours}</Link> })}
-              >
-                {!isTeam && (
-                  <Select
-                    label={scheduleStrings.schedule}
-                    info={tipFor(scheduleStrings.schedule, strings.tips.schedule)}
-                    items={hours.items}
-                    value={draft.scheduleId ?? 'default'}
-                    isReadOnly={isLocked || hours.items.length === 0}
-                    {...(hours.items.length === 0 ? { readOnlyReason: strings.followOwnerHint } : {})}
-                    hint={scheduleStrings.hoursFromSchedule}
-                    onChange={(id) => {
-                      if (id !== null) change({ scheduleId: id === 'default' ? null : id });
-                    }}
-                  />
-                )}
-              </Card>
-            </div>
-            <Card title={strings.limits} description={limitsSummary}>
-              <SettingsRowGroup title={strings.limitGroups.buffers}>
-                <SettingsRow
-                  title={strings.bufferBefore}
-                  meta={
-                    <InfoTip label={strings.bufferBefore} example={strings.limitHelp.before.example}>
-                      {strings.limitHelp.before.text}
-                    </InfoTip>
+                  footer={
+                    <SaveBar
+                      status={barStatus}
+                      {...(barError === undefined ? {} : { error: barError })}
+                      {...(sendable(draft)
+                        ? {}
+                        : {
+                            blockedReason: tabs.some((id) => hasError[id] && id !== shown)
+                              ? strings.fixTabs(tabs.filter((id) => hasError[id]).map((id) => tabLabel[id]))
+                              : strings.fixPage,
+                          })}
+                      onSave={() => save(dirty)}
+                      onDiscard={() => {
+                        setDraft(saved);
+                        setFailure(undefined);
+                        setChipsError(undefined);
+                        setJustSaved(false);
+                      }}
+                      onFocusAway={() => pageHeading(document)?.focus()}
+                    />
                   }
                 >
-                  <Select
-                    label={strings.bufferBefore}
-                    isLabelHidden
-                    items={BUFFERS}
-                    isReadOnly={isLocked}
-                    value={String(draft.bufferBefore)}
-                    onChange={(id) => change({ bufferBefore: Number(id ?? 0) })}
-                  />
-                </SettingsRow>
-                <SettingsRow
-                  title={strings.bufferAfter}
-                  meta={
-                    <InfoTip label={strings.bufferAfter} example={strings.limitHelp.after.example}>
-                      {strings.limitHelp.after.text}
-                    </InfoTip>
-                  }
-                >
-                  <Select
-                    label={strings.bufferAfter}
-                    isLabelHidden
-                    items={BUFFERS}
-                    isReadOnly={isLocked}
-                    value={String(draft.bufferAfter)}
-                    onChange={(id) => change({ bufferAfter: Number(id ?? 0) })}
-                  />
-                </SettingsRow>
-              </SettingsRowGroup>
-              <SettingsRowGroup title={strings.limitGroups.window}>
-                <SettingsRow
-                  title={strings.notice}
-                  meta={
-                    <InfoTip label={strings.notice} example={strings.limitHelp.notice.example}>
-                      {strings.limitHelp.notice.text}
-                    </InfoTip>
-                  }
-                >
-                  <Select
-                    label={strings.notice}
-                    isLabelHidden
-                    items={NOTICE}
-                    isReadOnly={isLocked}
-                    value={String(draft.minNoticeMinutes)}
-                    onChange={(id) => change({ minNoticeMinutes: Number(id ?? 0) })}
-                  />
-                </SettingsRow>
-                <SettingsRow
-                  title={strings.window}
-                  meta={
-                    <InfoTip label={strings.window} example={strings.limitHelp.ahead.example}>
-                      {strings.limitHelp.ahead.text}
-                    </InfoTip>
-                  }
-                >
-                  <Select
-                    label={strings.window}
-                    isLabelHidden
-                    items={WINDOW}
-                    isReadOnly={isLocked}
-                    value={String(draft.windowDays)}
-                    onChange={(id) => change({ windowDays: Number(id ?? 60) })}
-                  />
-                </SettingsRow>
-              </SettingsRowGroup>
-              <SettingsRowGroup title={strings.limitGroups.pace}>
-                <SettingsRow
-                  title={strings.dailyLimit}
-                  meta={
-                    <InfoTip label={strings.dailyLimit} example={strings.limitHelp.daily.example}>
-                      {strings.limitHelp.daily.text}
-                    </InfoTip>
-                  }
-                >
-                  <Select
-                    label={strings.dailyLimit}
-                    isLabelHidden
-                    items={DAILY}
-                    isReadOnly={isLocked}
-                    value={draft.dailyLimit === null ? 'none' : String(draft.dailyLimit)}
-                    onChange={(id) => change({ dailyLimit: id === null || id === 'none' ? null : Number(id) })}
-                  />
-                </SettingsRow>
-                <SettingsRow
-                  title={strings.step}
-                  meta={
-                    <InfoTip label={strings.step} example={strings.limitHelp.step.example}>
-                      {strings.limitHelp.step.text}
-                    </InfoTip>
-                  }
-                >
-                  <Select
-                    label={strings.step}
-                    isLabelHidden
-                    items={STEPS}
-                    isReadOnly={isLocked}
-                    value={draft.slotStep === null ? 'duration' : String(draft.slotStep)}
-                    onChange={(id) =>
-                      change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null })
-                    }
-                  />
-                </SettingsRow>
-              </SettingsRowGroup>
-            </Card>
-          </PreviewLayout>
+                  {shown === 'page' && (
+                    <>
+                      <Field
+                        label={strings.publicLink}
+                        variant="copy"
+                        copyLabel={strings.copyLink}
+                        value={publicBookingUrl(page.publicKey)}
+                      />
+                      <Field
+                        label={strings.description}
+                        value={draft.description}
+                        isMultiline
+                        maxLength={2000}
+                        showCounter
+                        isReadOnly={isLocked}
+                        onChange={(description) => change({ description })}
+                      />
+                      <FieldGroup
+                        label={strings.whoCanBook}
+                        hint={draft.isPrivate ? strings.linkOnlyHint : strings.publicHint}
+                      >
+                        <SegmentedControl
+                          label={strings.whoCanBook}
+                          segments={[
+                            { value: 'public', label: strings.publicPage },
+                            { value: 'link', label: strings.linkOnly },
+                          ]}
+                          value={draft.isPrivate ? 'link' : 'public'}
+                          isReadOnly={isLocked}
+                          onChange={(value) => change({ isPrivate: value === 'link' })}
+                        />
+                      </FieldGroup>
+                    </>
+                  )}
+                  {shown === 'meeting' && (
+                    <>
+                      <Field
+                        label={strings.title}
+                        value={draft.title}
+                        maxLength={120}
+                        isRequired
+                        isReadOnly={isLocked}
+                        onChange={(title) => change({ title })}
+                        {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
+                      />
+                      {isLocked ? (
+                        // Read only: the chosen lengths as text, which a viewer can reach and read; disabled chips can't be.
+                        <DescriptionList
+                          items={[
+                            {
+                              term: strings.durations,
+                              description: draft.durations.map((minutes) => strings.minutesShort(minutes)).join(', '),
+                            },
+                          ]}
+                        />
+                      ) : (
+                        <ChoiceChips
+                          label={strings.durations}
+                          choices={lengths.map((minutes) => ({
+                            id: String(minutes),
+                            label: strings.minutesShort(minutes),
+                          }))}
+                          selected={draft.durations.map(String)}
+                          onChange={(ids) => {
+                            const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
+                            // A fifth is refused here as the server would: the public page shows four.
+                            if (durations.length > LENGTHS_MAX) {
+                              setChipsError(strings.lengthsFull);
+                              return;
+                            }
+                            setChipsError(undefined);
+                            change({ durations });
+                          }}
+                          {...(chipsError === undefined
+                            ? draft.durations.length === 0
+                              ? { error: strings.durationRequired }
+                              : {}
+                            : { error: chipsError })}
+                          end={
+                            <Button ref={customRef} variant="dashed" icon="plus" onPress={() => setAddingLength(true)}>
+                              {strings.durationCustom}
+                            </Button>
+                          }
+                        />
+                      )}
+                      {!isLocked && (
+                        <Popover
+                          label={strings.addLength}
+                          triggerRef={customRef}
+                          isOpen={isAddingLength}
+                          onOpenChange={(isOpen) => {
+                            setAddingLength(isOpen);
+                            if (!isOpen) {
+                              setLengthText('');
+                              setLengthError(undefined);
+                            }
+                          }}
+                        >
+                          <Field
+                            label={strings.customMinutes}
+                            // With four lengths already, it says so before anything is typed.
+                            hint={
+                              draft.durations.length >= LENGTHS_MAX ? strings.lengthsFull : strings.customMinutesHint
+                            }
+                            // The popover opens for this one field: typing starts at once.
+                            // eslint-disable-next-line jsx-a11y-x/no-autofocus
+                            autoFocus
+                            inputMode="numeric"
+                            maxLength={3}
+                            value={lengthText}
+                            onChange={(value) => {
+                              setLengthText(value);
+                              setLengthError(undefined);
+                            }}
+                            onSubmit={addLength}
+                            suffix={
+                              <Button variant="ghost" onPress={addLength} isDisabled={lengthText.trim() === ''}>
+                                {strings.add}
+                              </Button>
+                            }
+                            {...(lengthError === undefined ? {} : { error: lengthError })}
+                          />
+                        </Popover>
+                      )}
+                      <Select
+                        label={strings.location}
+                        items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}
+                        value={location.type}
+                        isReadOnly={isLocked}
+                        onChange={(type) => {
+                          if (type === 'video' || type === 'phone') change({ location: { type } });
+                          if (type === 'address' || type === 'custom')
+                            change({ location: { type, value: 'value' in location ? location.value : '' } });
+                        }}
+                      />
+                      {(location.type === 'address' || location.type === 'custom') && (
+                        <Field
+                          label={location.type === 'address' ? strings.addressOrRoom : strings.where}
+                          value={location.value}
+                          maxLength={500}
+                          isRequired
+                          isReadOnly={isLocked}
+                          {...(location.value.trim() === '' ? { error: strings.whereRequired } : {})}
+                          onChange={(value) => change({ location: { type: location.type, value } })}
+                        />
+                      )}
+                      <PageDestination
+                        destination={data.calendar.pageDestination(slug, page.id)}
+                        calendars={data.calendar.calendars(slug)}
+                        isReadOnly={isLocked}
+                        onChange={(calendarId) => void data.calendar.setPageDestination(slug, page.id, calendarId)}
+                      />
+                    </>
+                  )}
+                  {isTeam && shown === 'hosts' && (
+                    <>
+                      <HostsCard
+                        data={data}
+                        slug={slug}
+                        page={page}
+                        people={people}
+                        rotations={rotationList}
+                        isLocked={isLocked}
+                        rescheduleHost={draft.rescheduleHost}
+                        onRescheduleChange={(rescheduleHost) => change({ rescheduleHost })}
+                        onSaved={(saved) => {
+                          setPage(saved);
+                          onNotice?.(rotationStrings.hostsSaved);
+                        }}
+                      />
+                      <RulesCard
+                        data={data}
+                        slug={slug}
+                        surface={{ kind: 'page', pool: teamPool }}
+                        {...(isLocked ? {} : { report: { kind: 'booking_page' as const, pageId: page.id } })}
+                        rules={page.routing?.rules ?? []}
+                        facts={recordFields === undefined ? [] : recordFacts(recordFields.person, recordFields.company)}
+                        factLabel={routingStrings.questionOrField}
+                        emptyFacts={routingStrings.noFields}
+                        description={routingStrings.pageRoutingLine(page.routing?.rules.length ?? 0)}
+                        isReadOnly={isLocked}
+                        nameOf={(memberId) => people.find((person) => person.id === memberId)?.name ?? ''}
+                        onRulesChange={async (rules) => {
+                          const saved = await data.bookingPages.update(
+                            slug,
+                            page.id,
+                            {},
+                            { routing: { rules: [...rules] } },
+                          );
+                          setPage(saved);
+                          onNotice?.(routingStrings.saved);
+                        }}
+                      />
+                    </>
+                  )}
+                  {shown === 'hours' && (
+                    <>
+                      {!isTeam && (
+                        <Select
+                          label={scheduleStrings.schedule}
+                          info={tipFor(scheduleStrings.schedule, strings.tips.schedule)}
+                          items={hours.items}
+                          value={draft.scheduleId ?? 'default'}
+                          isReadOnly={isLocked || hours.items.length === 0}
+                          {...(hours.items.length === 0 ? { readOnlyReason: strings.followOwnerHint } : {})}
+                          onChange={(id) => {
+                            if (id !== null) change({ scheduleId: id === 'default' ? null : id });
+                          }}
+                        />
+                      )}
+                      {/* The chosen schedule's week, read only, Calendly style; Edit opens it in Availability. */}
+                      <FieldGroup
+                        label={strings.weeklyHours}
+                        {...(hours.editHref === undefined
+                          ? {}
+                          : {
+                              action: (
+                                <ButtonLink href={hours.editHref} variant="ghost" size="sm" icon="pencil">
+                                  {strings.edit}
+                                </ButtonLink>
+                              ),
+                            })}
+                        {...(isTeam ? {} : { hint: zoneDisplay(hours.availability.timeZone, openedAt) })}
+                      >
+                        {isTeam ? (
+                          rotationStrings.hoursMembers
+                        ) : (
+                          <DescriptionList
+                            items={weekGroups(hours.availability, locale).map((group) => ({
+                              id: group.days,
+                              term: group.days,
+                              description: group.hours,
+                            }))}
+                          />
+                        )}
+                      </FieldGroup>
+                      {draft.isPrivate && (
+                        <FieldGroup
+                          label={strings.reservedTime}
+                          action={
+                            <ButtonLink href={bookingsTabHref(slug, 'calendar')} variant="ghost" size="sm">
+                              {strings.manage}
+                            </ButtonLink>
+                          }
+                        >
+                          {strings.reservedTimeLine}
+                        </FieldGroup>
+                      )}
+                      <PageConflicts
+                        destination={data.calendar.pageDestination(slug, page.id)}
+                        calendars={data.calendar.calendars(slug)}
+                        settingsHref={calendarSettingsHref(slug)}
+                      />
+                    </>
+                  )}
+                  {shown === 'limits' && (
+                    <>
+                      <SettingsRowGroup title={strings.limitGroups.buffers}>
+                        {limitRow(
+                          strings.bufferBefore,
+                          strings.limitHelp.before,
+                          BUFFERS,
+                          String(draft.bufferBefore),
+                          (id) => change({ bufferBefore: Number(id ?? 0) }),
+                        )}
+                        {limitRow(
+                          strings.bufferAfter,
+                          strings.limitHelp.after,
+                          BUFFERS,
+                          String(draft.bufferAfter),
+                          (id) => change({ bufferAfter: Number(id ?? 0) }),
+                        )}
+                      </SettingsRowGroup>
+                      <SettingsRowGroup title={strings.limitGroups.window}>
+                        {limitRow(
+                          strings.notice,
+                          strings.limitHelp.notice,
+                          NOTICE,
+                          String(draft.minNoticeMinutes),
+                          (id) => change({ minNoticeMinutes: Number(id ?? 0) }),
+                          draft.isPrivate ? strings.noticeIgnored : undefined,
+                        )}
+                        {limitRow(strings.window, strings.limitHelp.ahead, WINDOW, String(draft.windowDays), (id) =>
+                          change({ windowDays: Number(id ?? 60) }),
+                        )}
+                      </SettingsRowGroup>
+                      <SettingsRowGroup title={strings.limitGroups.pace}>
+                        {limitRow(
+                          strings.dailyLimit,
+                          strings.limitHelp.daily,
+                          DAILY,
+                          draft.dailyLimit === null ? 'none' : String(draft.dailyLimit),
+                          (id) => change({ dailyLimit: id === null || id === 'none' ? null : Number(id) }),
+                        )}
+                        {limitRow(
+                          strings.step,
+                          strings.limitHelp.step,
+                          STEPS,
+                          draft.slotStep === null ? 'duration' : String(draft.slotStep),
+                          (id) => change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null }),
+                        )}
+                      </SettingsRowGroup>
+                    </>
+                  )}
+                </PreviewLayout>
+              </TabPanel>
+            </Tabs>
+          </>
         ),
       }}
     />
   );
 }
 
-/** The editor while its page loads. */
-export function PageEditorPending() {
+/** Props for PageEditorPending. */
+export interface PageEditorPendingProps {
+  /** The tab the editor will open on, from `?tab=`. */
+  readonly tab: PageTab;
+  /** The editor's notices, when already known (the calendar note). */
+  readonly notices?: ReactNode;
+}
+
+/**
+ * The editor while its page loads: the tabs where the editor's will stand, the chosen one's fields as skeletons, and
+ * the preview's place. Hosts waits for the page, since only a round robin page has it.
+ */
+export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
+  // Hosts only when it is the tab asked for (a round robin page's); the page says whether it has it.
+  const tabs: readonly PageTab[] = PAGE_TABS.filter((each) => each !== 'hosts' || tab === 'hosts');
+  const shown = tab;
+  const label: Readonly<Record<PageTab, string>> = {
+    page: strings.page,
+    meeting: strings.meeting,
+    hosts: strings.hostsTab,
+    hours: strings.hours,
+    limits: strings.limits,
+  };
   return (
     <WorkspacePage
       currentPage="captures"
       page={{
         topBar: <TopBar title={strings.listLabel} icon="link" isLoading />,
         body: (
-          <PreviewLayout>
-            <Skeleton lines={10} />
-          </PreviewLayout>
+          <Tabs
+            label={strings.tabsLabel}
+            variant="bar"
+            // Only the shown tab while it loads: the others wait for the page.
+            tabs={tabs.map((id) => ({ id, label: label[id], ...(id === shown ? {} : { isDisabled: true }) }))}
+            selectedKey={shown}
+          >
+            <TabPanel id={shown} variant="fill">
+              <PreviewLayout
+                bodyWidth="form"
+                preview={<Skeleton shape="block" />}
+                {...(notices === undefined ? {} : { notices })}
+              >
+                <Skeleton lines={6} />
+              </PreviewLayout>
+            </TabPanel>
+          </Tabs>
         ),
       }}
     />

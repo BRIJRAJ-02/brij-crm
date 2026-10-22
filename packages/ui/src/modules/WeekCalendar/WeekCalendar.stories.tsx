@@ -61,7 +61,7 @@ function blocks(): WeekCalendarBlock[] {
       dayKey: '2026-10-09',
       startMinute: 17 * 60,
       endMinute: 18 * 60,
-      title: 'Held',
+      title: 'Reserved time',
       time: '5:00 – 6:00 PM',
       kind: 'held',
     },
@@ -163,7 +163,7 @@ function shortBlocks(): WeekCalendarBlock[] {
       hue: 'blue',
       provider: 'google-calendar',
     }),
-    block('h15', 15 * 60, 15, { title: 'Held', time: '3:00 PM', kind: 'held' }),
+    block('h15', 15 * 60, 15, { title: 'Reserved time', time: '3:00 PM', kind: 'held' }),
   ];
 }
 
@@ -363,7 +363,7 @@ export const Draw: Story = {
               focusKey="choose"
               choices={[
                 { id: 'block', label: 'Block this time', icon: 'circle-slash', onPress: fn() },
-                { id: 'hold', label: 'Hold for a private page', icon: 'bookmark', onPress: fn() },
+                { id: 'hold', label: 'Reserve for link only pages', icon: 'bookmark', onPress: fn() },
               ]}
             />
           }

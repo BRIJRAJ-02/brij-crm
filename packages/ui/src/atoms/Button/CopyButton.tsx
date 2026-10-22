@@ -1,4 +1,5 @@
-import type { RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
+import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import { useToasts } from '../../provider/context.ts';
 import { Button, type ButtonSize, type ButtonVariant } from './Button.tsx';
 import { strings } from './strings.ts';
@@ -18,6 +19,8 @@ export interface CopyButtonProps {
   readonly sourceRef?: RefObject<HTMLElement | null>;
   /** Nothing to copy yet (a form never published, a copy still on its way). */
   readonly isDisabled?: boolean;
+  /** What screen readers hear once it copied ("Link copied"); "Copied" by default. */
+  readonly announcement?: string;
 }
 
 function selectText(element: HTMLElement | null | undefined) {
@@ -29,10 +32,14 @@ function selectText(element: HTMLElement | null | undefined) {
   selection?.addRange(range);
 }
 
+/** How long the button says Copied, in milliseconds. */
+export const COPIED_MS = 2000;
+
 /**
- * A Button that copies a value to the clipboard and says so in a toast. If the
- * browser refuses, an error toast says to copy it by hand, and the text is
- * selected for that.
+ * A Button that copies a value to the clipboard. Once it lands, the icon turns to a check and the label to
+ * "Copied" for two seconds, at the width it had (the longer label's room is kept from the start), and a live
+ * region tells screen readers (`announcement`, "Copied" by default). If the browser refuses, an error toast says to
+ * copy it by hand, and the text is selected for that.
  */
 export function CopyButton({
   value,
@@ -42,12 +49,21 @@ export function CopyButton({
   size = 'md',
   sourceRef,
   isDisabled = false,
+  announcement = strings.copiedAnnouncement,
 }: CopyButtonProps) {
   const toasts = useToasts();
+  // Bumped on each copy, so a second press restarts the two seconds.
+  const [copiedAt, setCopiedAt] = useState(0);
+  const isCopied = copiedAt > 0;
+  useEffect(() => {
+    if (copiedAt === 0) return undefined;
+    const timer = setTimeout(() => setCopiedAt(0), COPIED_MS);
+    return () => clearTimeout(timer);
+  }, [copiedAt]);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(value);
-      toasts.toast({ tone: 'success', message: strings.copied });
+      setCopiedAt((count) => count + 1);
     } catch {
       selectText(sourceRef?.current);
       toasts.toast({ tone: 'danger', message: strings.copyFailed });
@@ -56,11 +72,26 @@ export function CopyButton({
   const onPress = () => {
     void copy();
   };
-  return isIconOnly ? (
-    <Button variant={variant} size={size} icon="copy" label={label} onPress={onPress} isDisabled={isDisabled} />
-  ) : (
-    <Button variant={variant} size={size} icon="copy" onPress={onPress} isDisabled={isDisabled}>
-      {label}
-    </Button>
+  const icon = isCopied ? 'check' : 'copy';
+  return (
+    <>
+      {isIconOnly ? (
+        <Button variant={variant} size={size} icon={icon} label={label} onPress={onPress} isDisabled={isDisabled} />
+      ) : (
+        <Button
+          variant={variant}
+          size={size}
+          icon={icon}
+          onPress={onPress}
+          isDisabled={isDisabled}
+          labelReserve={isCopied ? label : strings.copiedLabel}
+        >
+          {isCopied ? strings.copiedLabel : label}
+        </Button>
+      )}
+      <VisuallyHidden>
+        <span role="status">{isCopied ? announcement : ''}</span>
+      </VisuallyHidden>
+    </>
   );
 }

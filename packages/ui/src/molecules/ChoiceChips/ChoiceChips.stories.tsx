@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { ChoiceChips } from './ChoiceChips.tsx';
 
@@ -58,5 +59,48 @@ export const WithError: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Pick at least one length.')).toBeInTheDocument();
+  },
+};
+
+/** A control after the last chip, outside the group: a booking page's "+ Custom" length. */
+export const WithEnd: Story = {
+  args: { selected: ['30'] },
+  render: (args) => (
+    <Stage>
+      <ChoiceChips
+        {...args}
+        choices={lengths().slice(0, 4)}
+        end={
+          <Button variant="dashed" icon="plus">
+            Custom
+          </Button>
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const custom = canvas.getByRole('button', { name: 'Custom' });
+    await expect(custom).not.toHaveAttribute('aria-pressed');
+  },
+};
+
+/** Disabled: the caller disables its `end` with the group. */
+export const WithEndDisabled: Story = {
+  args: { selected: ['30'], isDisabled: true },
+  render: (args) => (
+    <Stage>
+      <ChoiceChips
+        {...args}
+        choices={lengths().slice(0, 4)}
+        end={
+          <Button variant="dashed" icon="plus" isDisabled>
+            Custom
+          </Button>
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Custom' })).toBeDisabled();
   },
 };

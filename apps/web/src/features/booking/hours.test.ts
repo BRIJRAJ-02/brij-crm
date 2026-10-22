@@ -3,7 +3,7 @@
 // differs from what is saved, whatever order its date overrides came back in.
 import type { BookingAvailability } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { availabilityIsValid, rangesProblem, sameHours, weekRows, withDay } from './hours.ts';
+import { availabilityIsValid, rangesProblem, sameHours, weekGroups, weekRows, withDay } from './hours.ts';
 import { strings } from './strings.ts';
 
 const hours: BookingAvailability = {
@@ -52,5 +52,20 @@ describe('a schedule’s hours', () => {
         overrides: hours.overrides.map((override) => ({ ...override, note: 'Another' })),
       }),
     ).toBe(false);
+  });
+});
+
+describe('weekGroups', () => {
+  it('groups days in a row with the same hours, Calendly style', () => {
+    const nine = [['09:00', '17:00']] as const;
+    const availability = {
+      timeZone: 'Asia/Kolkata',
+      weekly: { mon: nine, tue: nine, wed: nine, thu: nine, fri: nine, sat: [], sun: [] },
+      overrides: [],
+    } as unknown as BookingAvailability;
+    expect(weekGroups(availability, 'en-US')).toEqual([
+      { days: 'Mon to Fri', hours: '9:00 AM to 5:00 PM' },
+      { days: 'Sat, Sun', hours: 'Unavailable' },
+    ]);
   });
 });

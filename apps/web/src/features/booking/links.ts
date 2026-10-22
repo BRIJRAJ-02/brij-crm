@@ -3,8 +3,21 @@
 /** Captures › Links: the booking pages list. */
 export const linksHref = (slug: string) => `/w/${slug}/captures/links`;
 
-/** One page's editor, optionally at a group (`#hours`). */
-export const pageEditorHref = (slug: string, pageId: string) => `/w/${slug}/captures/links/${pageId}`;
+/** Captures › Links with the New booking page dialog open, preset to Link only (Bookings' reserved time). */
+export const newLinkOnlyPageHref = (slug: string) => `/w/${slug}/captures/links?new=link-only`;
+
+/** The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only. */
+export const PAGE_TABS = ['page', 'meeting', 'hosts', 'hours', 'limits'] as const;
+/** One of the editor's tabs, as `?tab=` holds it. */
+export type PageTab = (typeof PAGE_TABS)[number];
+
+/** A `?tab=` value as the editor's tab: Page for anything else. */
+export const pageTabOf = (value: unknown): PageTab =>
+  typeof value === 'string' && (PAGE_TABS as readonly string[]).includes(value) ? (value as PageTab) : 'page';
+
+/** One page's editor, optionally at a tab (`?tab=hours`); Page, the first, needs none. */
+export const pageEditorHref = (slug: string, pageId: string, tab?: PageTab) =>
+  `/w/${slug}/captures/links/${pageId}${tab === undefined || tab === 'page' ? '' : `?tab=${tab}`}`;
 
 /** The Availability tab's query: whose schedules (`member`, spec 0035 AC-971) and which one (`schedule`); none for the reader's own default. */
 const availabilityQuery = (member: string | undefined, schedule?: string) => {

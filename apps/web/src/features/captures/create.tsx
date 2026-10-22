@@ -4,9 +4,9 @@
 // Leaves out: the lists themselves (each tab's screen) and what a new page or form holds (their editors).
 import { isDataError } from '@crm/data';
 import { Button, Tooltip } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { pageEditorHref } from '../booking/links.ts';
+import { linksHref, pageEditorHref } from '../booking/links.ts';
 import { NewPageDialog } from '../booking/NewPageDialog.tsx';
 import { strings as bookingStrings } from '../booking/strings.ts';
 import { formHref } from '../forms/paths.ts';
@@ -46,6 +46,9 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
   // Round robin pages are booking.admin's (spec 0029, AC-751).
   const canBookTeams = useCan('booking.admin');
   const [isAddingPage, setAddingPage] = useState(false);
+  // Bookings' "Create a link only page" arrives as `?new=link-only`: the dialog opens preset, and closing it drops it.
+  const search: { readonly new?: unknown } = useSearch({ strict: false });
+  const isAskedLinkOnly = tab === 'links' && search.new === 'link-only';
   const [makingForm, setMakingForm] = useState<string | undefined>(undefined);
 
   // New form makes "Untitled form" at once and opens it: no dialog first, the builder is the dialog.
@@ -90,9 +93,11 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
         data={data}
         slug={slug}
         canBookTeams={canBookTeams}
-        isOpen={isAddingPage}
+        isOpen={isAddingPage || isAskedLinkOnly}
+        isLinkOnly={isAskedLinkOnly}
         onClose={() => {
           setAddingPage(false);
+          if (isAskedLinkOnly) void navigate({ href: linksHref(slug), replace: true });
         }}
         onCreated={(page) => {
           setAddingPage(false);

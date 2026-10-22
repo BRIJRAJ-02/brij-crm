@@ -22,10 +22,6 @@ import {
   Field,
   focusLater,
   HostedFormPreview,
-  Menu,
-  MenuItem,
-  MenuSeparator,
-  MenuTrigger,
   PreviewLayout,
   Select,
   TabPanel,
@@ -35,7 +31,9 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { DeleteFormDialog, PauseFormDialog } from './FormConfirms.tsx';
+import { DeleteFormDialog } from './FormConfirms.tsx';
+import { EditorActions } from '../captures/EditorActions.tsx';
+import { strings as capturesStrings } from '../captures/strings.ts';
 import { draftGap, fileByLabel, publishAttributesOf, sameDocument, savableDraft, statusOf } from './draft.ts';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
@@ -96,9 +94,8 @@ export function FormEditor(props: FormEditorProps) {
   const [problem, setProblem] = useState<(PublishProblem & { readonly atDraft?: FormDocument }) | undefined>(undefined);
   const [isPublishing, setPublishing] = useState(false);
   const [isFirstPublish, setFirstPublish] = useState(false);
-  // Delete and Pause ask first (the owner's rule, 21 October 2026); Resume stays one click.
+  // Delete asks first; Pause and Resume act at once with Undo (the owner, 22 October 2026).
   const [isDeleting, setDeleting] = useState(false);
-  const [isPausing, setPausing] = useState(false);
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
   const moreRef = useRef<HTMLButtonElement>(null);
   // After a publish that changed where answers go: offer to file the submissions before it the same way.
@@ -304,20 +301,16 @@ export function FormEditor(props: FormEditorProps) {
       });
   };
 
+  // Pause and Resume act at once, as a booking page's do, and their toast offers Undo (the owner, 22 Oct 2026).
   const setStatus = (next: 'live' | 'paused') => {
     data.forms.setStatus(slug, form.id, next).then((view) => {
       apply(view);
       toasts.toast({
         tone: 'success',
-        message: next === 'live' ? strings.resumed(view.name) : strings.paused(view.name),
+        message: next === 'live' ? capturesStrings.resumedToast(view.name) : capturesStrings.pausedToast(view.name),
+        action: { label: capturesStrings.undo, onAction: () => setStatus(next === 'live' ? 'paused' : 'live') },
       });
     }, failed);
-  };
-
-  const copyAddress = () => {
-    void navigator.clipboard.writeText(data.forms.hostedUrl(form.publicKey)).then(() => {
-      toasts.toast({ tone: 'success', message: strings.addressCopied });
-    });
   };
 
   const goTab = (next: FormTab) => {
@@ -333,74 +326,68 @@ export function FormEditor(props: FormEditorProps) {
       crumbs={[{ id: 'forms', label: strings.forms, href: formsHref(slug) }]}
       meta={<EditorStatus tone={status.tone} text={status.text} />}
     >
-      <Button
-        icon="eye"
-        onPress={() => {
-          // The tab opens at once (a popup must come from the press), and loads once the draft is saved.
-          const opened = window.open('', '_blank');
-          if (opened !== null) opened.opener = null;
-          const go = () => {
-            if (opened !== null) opened.location.href = formPreviewHref(slug, form.id);
-          };
-          flush().then(go, go);
-        }}
-      >
-        {strings.previewOpen}
-      </Button>
-      {/* Publish shows while there is something to publish; the status says when the live form is up to date. */}
-      {canManage && (!isPublished || isChanged || form.hasUnpublished) && (
-        <Button variant="primary" onPress={publish} isPending={isPublishing}>
-          {isPublishing ? strings.publishing : strings.publish}
-        </Button>
-      )}
-      {canManage && (
-        <MenuTrigger>
-          <Button ref={moreRef} variant="ghost" icon="ellipsis" label={strings.moreActions} />
-          <Menu
-            label={strings.moreActions}
-            onAction={(key) => {
-              if (key === 'copy') copyAddress();
-              if (key === 'pause') setPausing(true);
-              if (key === 'resume') setStatus('live');
-              if (key === 'duplicate') {
-                data.forms.duplicate(slug, form.id).then((copy) => {
-                  toasts.toast({ tone: 'success', message: strings.duplicated(copy.name) });
-                  void navigate({ href: formHref(slug, copy.id) });
-                }, failed);
-              }
-              if (key === 'sync') setSyncOffer('menu');
-              if (key === 'delete') setDeleting(true);
+      <EditorActions
+        link={data.forms.hostedUrl(form.publicKey)}
+        isLinkDisabled={!isPublished}
+        preview={
+          <Button
+            icon="eye"
+            onPress={() => {
+              // The tab opens at once (a popup must come from the press), and loads once the draft is saved.
+              const opened = window.open('', '_blank');
+              if (opened !== null) opened.opener = null;
+              const go = () => {
+                if (opened !== null) opened.location.href = formPreviewHref(slug, form.id);
+              };
+              flush().then(go, go);
             }}
           >
-            <MenuItem id="copy" icon="copy" isDisabled={!isPublished}>
-              {strings.copyAddress}
-            </MenuItem>
-            {form.status === 'live' && (
-              <MenuItem id="pause" icon="pause">
-                {strings.pause}
-              </MenuItem>
-            )}
-            {form.status === 'paused' && (
-              <MenuItem id="resume" icon="play">
-                {strings.resume}
-              </MenuItem>
-            )}
-            <MenuItem id="duplicate" icon="layers">
-              {strings.duplicate}
-            </MenuItem>
-            {/* Earlier submissions filed again the way the form files now: once it files and has some. */}
-            {form.live?.targets.main !== undefined && form.submissionCount > 0 && (
-              <MenuItem id="sync" icon="refresh-cw" description={strings.syncOldText}>
-                {strings.syncOld}
-              </MenuItem>
-            )}
-            <MenuSeparator />
-            <MenuItem id="delete" icon="trash" isDanger>
-              {strings.deleteForm}
-            </MenuItem>
-          </Menu>
-        </MenuTrigger>
-      )}
+            {strings.previewOpen}
+          </Button>
+        }
+        // Forms keep a draft: Publish (the first time) or Publish changes shows while there is something to publish.
+        {...(canManage && (!isPublished || isChanged || form.hasUnpublished)
+          ? {
+              publish: (
+                <Button variant="primary" onPress={publish} isPending={isPublishing}>
+                  {isPublishing ? strings.publishing : isPublished ? strings.publishChanges : strings.publish}
+                </Button>
+              ),
+            }
+          : {})}
+        {...(canManage
+          ? {
+              menu: {
+                ...(isPublished ? { status: form.status === 'paused' ? ('paused' as const) : ('live' as const) } : {}),
+                onPause: () => setStatus('paused'),
+                onResume: () => setStatus('live'),
+                onDuplicate: () => {
+                  data.forms.duplicate(slug, form.id).then((copy) => {
+                    toasts.toast({ tone: 'success', message: strings.duplicated(copy.name) });
+                    void navigate({ href: formHref(slug, copy.id) });
+                  }, failed);
+                },
+                onDelete: () => setDeleting(true),
+                deleteLabel: strings.deleteForm,
+                triggerRef: moreRef,
+                // Earlier submissions filed again the way the form files now: once it files and has some.
+                ...(form.live?.targets.main !== undefined && form.submissionCount > 0
+                  ? {
+                      extra: [
+                        {
+                          id: 'sync',
+                          label: strings.syncOld,
+                          icon: 'refresh-cw' as const,
+                          description: strings.syncOldText,
+                          onAction: () => setSyncOffer('menu'),
+                        },
+                      ],
+                    }
+                  : {}),
+              },
+            }
+          : {})}
+      />
     </TopBar>
   );
 
@@ -625,17 +612,6 @@ export function FormEditor(props: FormEditorProps) {
           void navigate({ href: formsHref(slug) });
         }}
       />
-      <PauseFormDialog
-        data={data}
-        slug={slug}
-        form={isPausing ? form : undefined}
-        onClose={() => setPausing(false)}
-        onDone={(_paused, view) => {
-          setPausing(false);
-          apply(view);
-          toasts.toast({ tone: 'success', message: strings.paused(view.name) });
-        }}
-      />
     </>
   );
 
@@ -649,6 +625,7 @@ export function FormEditor(props: FormEditorProps) {
             {isPublished ? (
               // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
               <Tabs
+                variant="bar"
                 end={<div ref={setToolbarSlot} />}
                 label={strings.tabs}
                 selectedKey={current}
@@ -663,7 +640,7 @@ export function FormEditor(props: FormEditorProps) {
                 ]}
               >
                 {FORM_TABS.map((id) => (
-                  <TabPanel key={id} id={id}>
+                  <TabPanel key={id} id={id} variant="fill">
                     {id === current && layout}
                   </TabPanel>
                 ))}

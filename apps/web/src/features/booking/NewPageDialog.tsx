@@ -28,10 +28,20 @@ export interface NewPageDialogProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
   readonly onCreated: (page: BookingPageView) => void;
+  /** Makes it Link only from the start (Bookings' "Create a link only page", for reserved time). */
+  readonly isLinkOnly?: boolean;
 }
 
 /** The dialog: Title, Duration, Schedule, then Cancel or Create page. The id is minted once per opening, so a retry makes one page. */
-export function NewPageDialog({ data, slug, canBookTeams = false, isOpen, onClose, onCreated }: NewPageDialogProps) {
+export function NewPageDialog({
+  data,
+  slug,
+  canBookTeams = false,
+  isOpen,
+  onClose,
+  onCreated,
+  isLinkOnly = false,
+}: NewPageDialogProps) {
   const [title, setTitle] = useState('');
   // A segment's minutes, or `custom` with the typed minutes beside it.
   const [length, setLength] = useState('30');
@@ -89,9 +99,12 @@ export function NewPageDialog({ data, slug, canBookTeams = false, isOpen, onClos
         title: title.trim(),
         timeZone: memberZone(data, slug),
         // A round robin page books by each host's own hours, so it names no schedule.
-        settings: isTeam
-          ? { durations: [minutes] }
-          : { durations: [minutes], scheduleId: schedule === 'default' ? null : schedule },
+        settings: {
+          ...(isTeam
+            ? { durations: [minutes] }
+            : { durations: [minutes], scheduleId: schedule === 'default' ? null : schedule }),
+          ...(isLinkOnly ? { isPrivate: true } : {}),
+        },
         ...(isTeam && rotationId !== null
           ? { kind: 'round_robin' as const, hosts: { fixed: [], rotations: [rotationId] } }
           : {}),
@@ -121,7 +134,7 @@ export function NewPageDialog({ data, slug, canBookTeams = false, isOpen, onClos
   };
   return (
     <Modal
-      title={strings.addPage}
+      title={isLinkOnly ? strings.addLinkOnlyPage : strings.addPage}
       isOpen={isOpen}
       // While the server answers, the dialog stays: a refusal has to land on its field.
       onOpenChange={(open) => {

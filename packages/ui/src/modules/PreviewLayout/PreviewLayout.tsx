@@ -39,6 +39,11 @@ export interface PreviewLayoutProps {
    * Cards, side by side where there is room).
    */
   readonly bodyLayout?: 'stack' | 'grid';
+  /**
+   * `form` holds the body's fields to `size-column-max` from the start edge, so a Select sits near its label on a
+   * wide view (the booking page editor's tabs); `full` (the default) takes the column's width.
+   */
+  readonly bodyWidth?: 'full' | 'form';
 }
 
 /** Where an editor's subject stands, as the TopBar's status says it. */
@@ -169,6 +174,7 @@ export function PreviewLayout({
   previewNote,
   footer,
   bodyLayout = 'stack',
+  bodyWidth = 'full',
 }: PreviewLayoutProps) {
   // The narrow preview is drawn only while open, so its page loads on demand.
   const [isOpen, setOpen] = useState(false);
@@ -199,7 +205,11 @@ export function PreviewLayout({
         {notices}
         <div className={styles.measure}>
           <div className={styles.body} data-preview={hasPreview || undefined}>
-            <div className={styles.main} data-layout={bodyLayout}>
+            <div
+              className={styles.main}
+              data-layout={bodyLayout}
+              data-width={bodyWidth === 'form' ? 'form' : undefined}
+            >
               {children}
               {footer !== undefined && footer !== null && footer !== false && (
                 <div className={styles.footer}>{footer}</div>

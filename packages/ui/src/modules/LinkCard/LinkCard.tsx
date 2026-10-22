@@ -130,6 +130,7 @@ export function LinkCard({
               <CopyButton
                 value={copyValue}
                 label={strings.copyLink}
+                announcement={strings.linkCopied}
                 isDisabled={isPending}
                 size="lg"
                 sourceRef={addressRef}
