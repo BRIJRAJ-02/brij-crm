@@ -60,6 +60,24 @@ export const IconOnly: Story = {
   },
 };
 
+/** `isLabelCollapsible`: the words show in a wide bar; in a narrow one (a phone) the icon stands alone, still named. */
+export const LabelCollapsible: Story = {
+  args: { isLabelCollapsible: true },
+  render: (args) => (
+    <Stage direction="column">
+      <CopyButton {...args} />
+      <Stage width="phone">
+        <CopyButton {...args} />
+      </Stage>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const [wide, narrow] = canvas.getAllByRole('button', { name: 'Copy link' });
+    await expect(wide).toHaveTextContent('Copy link');
+    await expect(narrow?.getBoundingClientRect().width).toBeLessThan(40);
+  },
+};
+
 /** Refused: an error toast says to copy it by hand, and the label stays Copy link. */
 export const Failed: Story = {
   render: (args) => (

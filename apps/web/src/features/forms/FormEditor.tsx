@@ -332,6 +332,9 @@ export function FormEditor(props: FormEditorProps) {
         preview={
           <Button
             icon="eye"
+            // On a phone the words go, so the form's name keeps its room in the header.
+            label={strings.previewOpen}
+            isLabelCollapsible
             onPress={() => {
               // The tab opens at once (a popup must come from the press), and loads once the draft is saved.
               const opened = window.open('', '_blank');

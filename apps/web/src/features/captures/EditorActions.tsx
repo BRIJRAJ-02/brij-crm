@@ -50,6 +50,7 @@ export function EditorActions({ link, linkOffReason, preview, publish, menu }: E
       value={link}
       label={strings.copyLink}
       announcement={strings.linkCopied}
+      isLabelCollapsible
       isDisabled={linkOffReason !== undefined}
     />
   );
