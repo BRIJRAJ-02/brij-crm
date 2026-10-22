@@ -68,6 +68,7 @@ describe('@crm/ui', () => {
       'EmptyState',
       'FIELD_TYPES',
       'Field',
+      'FieldGroup',
       'FileDrop',
       'FileIcon',
       'FileItem',
