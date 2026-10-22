@@ -39,6 +39,7 @@ import {
   SettingsStack,
   Table,
   TabPanel,
+  TruncatedText,
   Tabs,
   type TableColumn,
   type Toasts,
@@ -330,8 +331,9 @@ export function MembersScreen({
               {...(member.avatarUrl === undefined ? {} : { src: member.avatarUrl })}
               isDecorative
             />
-            {member.name}
-            {isMe && <Badge text={strings.you} />}
+            {/* On a phone the name truncates and "You" stays whole. */}
+            <TruncatedText>{member.name}</TruncatedText>
+            {isMe && <Badge text={strings.you} isWhole />}
           </>
         );
       case 'email':

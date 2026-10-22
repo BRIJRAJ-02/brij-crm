@@ -26,6 +26,11 @@
     overflow: hidden;
   }
 
+  /* A label too short to cut ("You") keeps its whole width; the value beside it truncates instead. */
+  .root[data-whole] {
+    flex: none;
+  }
+
   .text {
     overflow: hidden;
     text-overflow: ellipsis;

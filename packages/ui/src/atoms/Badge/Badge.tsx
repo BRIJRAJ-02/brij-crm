@@ -26,6 +26,7 @@ export type BadgeProps = BadgeBase &
         readonly isAtLeast?: boolean;
         readonly text?: never;
         readonly dot?: never;
+        readonly isWhole?: never;
       }
     | {
         /** A short label in place of a count; past the room it has, it truncates and keeps its full text. */
@@ -37,6 +38,8 @@ export type BadgeProps = BadgeBase &
          * a status attribute's value is a StatusDot, through AttributeDisplay.
          */
         readonly dot?: Hue;
+        /** A label too short to cut ("You"): it never truncates, and what sits beside it gives way instead. */
+        readonly isWhole?: boolean;
         readonly count?: never;
         readonly max?: never;
         readonly isAtLeast?: never;
@@ -56,7 +59,12 @@ export function Badge(props: BadgeProps) {
     else shown = props.count > max ? strings.overMax(number.format(max)) : number.format(props.count);
   }
   return (
-    <span className={styles.root} data-tone={tone} data-text={props.text === undefined ? undefined : ''}>
+    <span
+      className={styles.root}
+      data-tone={tone}
+      data-text={props.text === undefined ? undefined : ''}
+      data-whole={props.isWhole === true || undefined}
+    >
       {props.dot !== undefined && <span className={styles.dot} data-hue={props.dot} aria-hidden="true" />}
       {props.text === undefined ? shown : <span className={styles.text}>{shown}</span>}
       {label !== undefined && <VisuallyHidden> {label}</VisuallyHidden>}

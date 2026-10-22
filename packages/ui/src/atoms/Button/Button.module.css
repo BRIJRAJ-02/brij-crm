@@ -47,6 +47,14 @@
     }
   }
 
+  /* In a dialog on a phone (Modal's scrim container, where the footer's buttons stack) the keycaps go too: a
+     phone width dialog is rarely driven by keys, and they crowd the stacked buttons' labels. */
+  @container modal-scrim (width < 480px) {
+    .keys {
+      display: none;
+    }
+  }
+
   /* Sizes */
   .root[data-full-width] {
     inline-size: 100%;

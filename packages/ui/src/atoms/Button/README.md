@@ -48,7 +48,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only), or `
 - **Disabled**: at `opacity-disabled`, skipped by Tab, never pressed. When a line beside it says why or until when, `aria-describedby` ties that line to it.
 - **Pending** (`isPending`): a spinner in place of the icon, presses ignored, still focusable, at `opacity-busy`. Screen readers hear the change. Change the label to the ongoing verb ("Saving"), unless the button must hold its width (Captures' New): then keep the label and give the button a `label`, and React Aria adds the spinner's "In progress" to its name ("New form In progress"). Without a `label`, whether "In progress" joins the name depends on the browser, so a kept label alone wouldn't reliably say anything changed.
 - **Selected** (`ToggleButton`): `accent-soft` with an `accent` edge, which holds 3:1 against the surface (the artifact marks a pressed day with the accent too). It keeps that look while hovered. `aria-pressed` tells screen readers.
-- **Shortcut** (`kbd`): the keycaps are for sight. The button states the shortcut through `aria-keyshortcuts` (`⌘↵` is `Meta+Enter`), so screen readers hear "Add to list", not "Add to list command return". On a touch only device (no hover, a coarse pointer) the keycaps are hidden: there are no keys to press.
+- **Shortcut** (`kbd`): the keycaps are for sight. The button states the shortcut through `aria-keyshortcuts` (`⌘↵` is `Meta+Enter`), so screen readers hear "Add to list", not "Add to list command return". On a touch only device (no hover, a coarse pointer) the keycaps are hidden: there are no keys to press. In a dialog at phone width (under 480px, where the footer stacks its buttons) they are hidden too (22 October 2026).
 
 ## Keyboard
 

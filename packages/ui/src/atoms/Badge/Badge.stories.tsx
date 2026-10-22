@@ -63,3 +63,17 @@ export const States: Story = {
     await expect(canvas.getByText('Connected')).toBeVisible();
   },
 };
+
+/** `isWhole`: a label too short to cut ("You") never shrinks, so the name beside it truncates instead. */
+export const Whole: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Badge text="You" isWhole />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const badge = canvas.getByText('You').parentElement;
+    await expect(badge === null ? '' : getComputedStyle(badge).flexShrink).toBe('0');
+  },
+};
