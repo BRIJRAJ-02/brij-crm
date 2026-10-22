@@ -41,9 +41,11 @@ export interface PreviewLayoutProps {
   readonly bodyLayout?: 'stack' | 'grid';
   /**
    * `form` holds the body's fields to `size-column-max` from the start edge, so a Select sits near its label on a
-   * wide view (the booking page editor's tabs); `full` (the default) takes the column's width.
+   * wide view; `columns` sets the fields in as many columns as fit across the whole width, each at least the wide
+   * panel's width, so a wide view is used without stretching one input across it (the booking page editor's tabs,
+   * the owner, 22 October 2026: every page full width); `full` (the default) takes the column's width.
    */
-  readonly bodyWidth?: 'full' | 'form';
+  readonly bodyWidth?: 'full' | 'form' | 'columns';
 }
 
 /** Where an editor's subject stands, as the TopBar's status says it. */
@@ -216,7 +218,7 @@ export function PreviewLayout({
               data-layout={bodyLayout}
               data-width={bodyWidth === 'form' ? 'form' : undefined}
             >
-              {children}
+              {bodyWidth === 'columns' ? <div className={styles.columns}>{children}</div> : children}
               {footer !== undefined && footer !== null && footer !== false && (
                 <div className={styles.footer}>{footer}</div>
               )}

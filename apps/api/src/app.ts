@@ -315,6 +315,8 @@ export function createApp({
 
   // The public form endpoints (spec 0023) check their own origin (the hosted page's), and need no session.
   const formsOrigin = new URL(env.FORMS_PUBLIC_ORIGIN ?? env.APP_URL).origin;
+  // The public booking pages may be served from their own origin (BOOKING_PUBLIC_ORIGIN): their writes come from there.
+  const bookingOrigin = new URL(env.BOOKING_PUBLIC_ORIGIN ?? env.APP_URL).origin;
   // The app and API share one origin, so a write from anywhere else is refused.
   app.use('*', async (c, next) => {
     if (SAFE_METHODS.has(c.req.method)) return next();
@@ -327,6 +329,8 @@ export function createApp({
     // Graph's notices and its validation request likewise: the client state is their key (milestone 4, AC-1008).
     if (c.req.path === MICROSOFT_NOTIFY_PATH && c.req.method === 'POST') return next();
     const origin = c.get('origin');
+    // A public booking page's own writes (book, chat, the guest page's changes) from the booking origin.
+    if (origin === bookingOrigin && c.req.path.startsWith('/api/public/booking/')) return next();
     if (!origin || !allowedOrigins.has(origin)) {
       return errorResponse('FORBIDDEN_ORIGIN', 'This request came from an origin the API does not accept.');
     }
@@ -490,6 +494,7 @@ export function createApp({
     tickets,
     ics: {
       appOrigin: new URL(env.APP_URL).origin,
+      publicOrigin: bookingOrigin,
       organizerEmail: senderAddress(env.MAIL_FROM) ?? `bookings@${new URL(env.APP_URL).hostname}`,
       organizerName: 'Bookings',
     },

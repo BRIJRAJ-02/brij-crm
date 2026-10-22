@@ -128,6 +128,9 @@ const STEPS: SelectItem[] = [
 
 /** The tab each setting sits on, for a refusal that names its field. */
 const FIELD_TABS: Readonly<Record<string, PageTab>> = {
+  slug: 'page',
+  profileSection: 'page',
+  profilePosition: 'page',
   description: 'page',
   isPrivate: 'page',
   title: 'meeting',
@@ -160,7 +163,15 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   scheduleId: page.scheduleId,
   rescheduleHost: page.rescheduleHost,
   isPrivate: page.isPrivate,
+  profileSection: page.profileSection,
+  profilePosition: page.profilePosition,
 });
+
+/** Why a slug can't be sent, in plain words, or undefined when it can. */
+function slugProblem(value: string): string | undefined {
+  if (value === '') return strings.slugRequired;
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) && value.length <= 60 ? undefined : strings.slugInvalid;
+}
 
 /** The settings that differ between two drafts. */
 function changed(saved: BookingPageSettings, draft: BookingPageSettings): Partial<BookingPageSettings> {
@@ -175,7 +186,7 @@ function changed(saved: BookingPageSettings, draft: BookingPageSettings): Partia
 function sendable(draft: BookingPageSettings): boolean {
   return (
     draft.title.trim() !== '' &&
-    /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.slug) &&
+    slugProblem(draft.slug) === undefined &&
     draft.durations.length > 0 &&
     (draft.location.type === 'video' || draft.location.type === 'phone' || draft.location.value.trim() !== '')
   );
@@ -202,6 +213,10 @@ export function PageEditor({
   const isLocked = !page.canChange;
   const saved = settingsOf(page);
   const [draft, setDraft] = useState(saved);
+  // The Order field's text as typed (digits only), so it can be empty while editing; the draft holds its number.
+  const [positionText, setPositionText] = useState(String(saved.profilePosition));
+  // The address's shape is said once the person leaves the field, not at every key.
+  const [isSlugLeft, setSlugLeft] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
   const dirty = changed(saved, draft);
@@ -355,7 +370,7 @@ export function PageEditor({
   const refusedTab = failure?.field === undefined ? undefined : FIELD_TABS[failure.field];
   const isWhereMissing = (location.type === 'address' || location.type === 'custom') && location.value.trim() === '';
   const hasError: Readonly<Record<PageTab, boolean>> = {
-    page: refusedTab === 'page',
+    page: refusedTab === 'page' || slugProblem(draft.slug) !== undefined,
     meeting:
       refusedTab === 'meeting' ||
       draft.title.trim() === '' ||
@@ -414,8 +429,8 @@ export function PageEditor({
             }
           >
             <EditorActions
-              link={publicBookingUrl(page.publicKey)}
-              viewHref={`/b/${page.publicKey}`}
+              link={publicBookingUrl(page)}
+              viewHref={publicBookingUrl(page)}
               {...(isLocked
                 ? {}
                 : {
@@ -459,7 +474,7 @@ export function PageEditor({
                   2026): the tabs take the page's width and the fields keep a readable column, as Settings' do. */}
               <TabPanel id={shown} variant="fill">
                 <PreviewLayout
-                  bodyWidth="form"
+                  bodyWidth="columns"
                   notices={
                     <>
                       {page.status === 'paused' && <Callout tone="info">{strings.pausedNote}</Callout>}
@@ -498,6 +513,8 @@ export function PageEditor({
                       onDiscard={() => {
                         week.discard();
                         setDraft(saved);
+                        setPositionText(String(saved.profilePosition));
+                        setSlugLeft(false);
                         setFailure(undefined);
                         setChipsError(undefined);
                         setJustSaved(false);
@@ -508,11 +525,48 @@ export function PageEditor({
                 >
                   {shown === 'page' && (
                     <>
+                      {/* The same compact row as a form's Share: the link with Copy inside it, and Open. */}
                       <Field
                         label={strings.publicLink}
                         variant="copy"
                         copyLabel={strings.copyLink}
-                        value={publicBookingUrl(page.publicKey)}
+                        value={publicBookingUrl(page)}
+                        after={
+                          <Button
+                            icon="external-link"
+                            onPress={() => {
+                              globalThis.open(publicBookingUrl(page), '_blank', 'noopener');
+                            }}
+                          >
+                            {strings.openLink}
+                          </Button>
+                        }
+                      />
+                      <Field
+                        label={strings.slug}
+                        value={draft.slug}
+                        // The address after the owner's handle (22 Oct 2026); with no handle yet, the page keeps its
+                        // /b/ link and the description says where to pick one.
+                        {...(page.handle === undefined ? {} : { prefix: `/${page.handle}/` })}
+                        hint={
+                          page.handle === undefined
+                            ? strings.slugNoHandle
+                            : draft.isPrivate
+                              ? strings.slugLinkOnly
+                              : draft.slug !== page.slug && page.status === 'live' && !page.isPrivate
+                                ? strings.slugChanging
+                                : strings.slugHint
+                        }
+                        maxLength={60}
+                        isRequired
+                        isReadOnly={isLocked}
+                        onChange={(value) => change({ slug: value.toLowerCase().replace(/\s+/g, '-') })}
+                        onBlur={() => setSlugLeft(true)}
+                        {...(isSlugLeft && slugProblem(draft.slug) !== undefined
+                          ? { error: slugProblem(draft.slug) }
+                          : failure?.field === 'slug'
+                            ? { error: failure.message }
+                            : {})}
                       />
                       <Field
                         label={strings.description}
@@ -538,6 +592,33 @@ export function PageEditor({
                           onChange={(value) => change({ isPrivate: value === 'link' })}
                         />
                       </FieldGroup>
+                      {!draft.isPrivate && (
+                        // Where it sits on the owner's profile, /<handle> (22 Oct 2026): a small heading, and an order.
+                        <FieldGroup label={strings.onProfile} hint={strings.onProfileHint}>
+                          <Field
+                            label={strings.profileSection}
+                            value={draft.profileSection ?? ''}
+                            hint={strings.profileSectionHint}
+                            maxLength={40}
+                            isReadOnly={isLocked}
+                            onChange={(value) => change({ profileSection: value.trim() === '' ? null : value })}
+                          />
+                          <Field
+                            label={strings.profilePosition}
+                            value={positionText}
+                            hint={strings.profilePositionHint}
+                            inputMode="numeric"
+                            maxLength={3}
+                            isReadOnly={isLocked}
+                            onChange={(value) => {
+                              // Digits only: anything else never reaches the field, and empty counts as 0.
+                              const digits = value.replace(/\D/g, '').slice(0, 3);
+                              setPositionText(digits);
+                              change({ profilePosition: digits === '' ? 0 : Number(digits) });
+                            }}
+                          />
+                        </FieldGroup>
+                      )}
                     </>
                   )}
                   {shown === 'meeting' && (
@@ -884,7 +965,7 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
             selectedKey={shown}
           >
             <TabPanel id={shown} variant="fill">
-              <PreviewLayout bodyWidth="form" {...(notices === undefined ? {} : { notices })}>
+              <PreviewLayout bodyWidth="columns" {...(notices === undefined ? {} : { notices })}>
                 <Skeleton lines={6} />
               </PreviewLayout>
             </TabPanel>

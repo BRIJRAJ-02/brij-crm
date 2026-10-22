@@ -2,6 +2,15 @@ import { AppEnvironment } from '@crm/contracts';
 import { decodeTokenKey, type TokenKey } from '@crm/core';
 import * as z from 'zod';
 
+/** A public origin a browser may send as `Origin`: https, or http on localhost; never one whose origin is `null`. */
+const publicOrigin = z.url().refine(
+  (value) => {
+    const url = new URL(value);
+    return url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname));
+  },
+  { error: 'Use an https origin (http only on localhost).' },
+);
+
 const origins = z
   .string()
   .transform((value) =>
@@ -395,6 +404,10 @@ export const ApiEnv = z
     FORMS_IP_SALT: optional(z.string().min(32, 'FORMS_IP_SALT must be at least 32 characters.')),
     // The origin hosted form pages are served from, when it differs from APP_URL (it defaults to APP_URL).
     FORMS_PUBLIC_ORIGIN: optional(z.url()),
+    // The origin the public booking addresses are served from (`/<handle>`, `/<handle>/<slug>`, `/b/<key>`), when it
+    // differs from APP_URL (it defaults to APP_URL): links in emails and calendar files point there, and the
+    // booking pages' writes from it are accepted. The same deployment answers on both.
+    BOOKING_PUBLIC_ORIGIN: optional(publicOrigin),
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
@@ -541,6 +554,8 @@ export const WorkerEnv = z
     // transport the api uses (Resend, or Mailpit locally). Without APP_URL and a transport, booking mail is off and
     // each queued email is logged and dropped.
     APP_URL: optional(z.url()),
+    // Where the public booking pages are served, when not on APP_URL: the guest page and Book again links.
+    BOOKING_PUBLIC_ORIGIN: optional(publicOrigin),
     BOOKING_LINK_SECRET: bookingLinkSecret,
     RESEND_API_KEY: optional(z.string()),
     MAIL_FROM: optional(sender),

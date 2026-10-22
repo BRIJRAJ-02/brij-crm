@@ -53,6 +53,19 @@ export const strings = {
   restored: (name: string) => `${name} is back.`,
   // Account › Profile.
   profileTitle: 'Profile',
+  /** The public profile on Profile (22 Oct 2026): the handle booking addresses start with, and a bio. */
+  publicProfileSection: 'Public profile',
+  publicProfileText: 'Your booking pages live at your handle, and so does a page listing your public ones.',
+  handle: 'Handle',
+  handleNew: 'Suggested from your name. Claim it, or change it and save. Your pages keep their /b/ links until then.',
+  handleKept: 'The same in every workspace. If you change it, your old address keeps working.',
+  handleFix: 'Fix your handle first.',
+  claimHandle: 'Claim',
+  bio: 'Bio',
+  bioText: 'One line under your name on your page.',
+  bioNeedsHandle: 'Claim a handle first: the bio shows on its page.',
+  yourPage: 'Your page',
+  copyLink: 'Copy link',
   /** Under their name beside the picture, when the picture is the one their Google account gave. */
   fromGoogle: 'From Google',
   yourName: 'Your name',

@@ -24,6 +24,7 @@ import { addedLaterOf, guestsOf } from './change.ts';
 import { buildBookingIcs } from './ics.ts';
 import type { BookingMailKind } from './mail-queue.ts';
 import { loadPage } from './slots.ts';
+import { pagePath } from './handles.ts';
 import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
 
 const { bookingHosts, bookings, members, rotationAssignments, workspaces } = schema;
@@ -58,6 +59,8 @@ export interface BookingMail {
 /** What the emails need: the app's origin for links, the guest page key, the sender for the calendar file, the clock. */
 export interface BookingMailDeps {
   readonly appOrigin: string;
+  /** Where the public booking pages are served (`BOOKING_PUBLIC_ORIGIN`): the guest page and Book again; the app's when unset. */
+  readonly publicOrigin?: string;
   readonly linkKey: ManageLinkKey;
   readonly organizerEmail: string;
   readonly now?: () => Date;
@@ -169,8 +172,9 @@ export async function prepareBookingMail(
     }
 
     const token = await ensureManageToken(tx, deps.linkKey, row);
-    const manageUrl = `${deps.appOrigin}${managePath(page.publicKey, token)}`;
-    const bookAgainUrl = `${deps.appOrigin}/b/${encodeURIComponent(page.publicKey)}`;
+    const publicOrigin = deps.publicOrigin ?? deps.appOrigin;
+    const manageUrl = `${publicOrigin}${managePath(page.publicKey, token)}`;
+    const bookAgainUrl = `${publicOrigin}${await pagePath(tx, page)}`;
     const bookingsUrl = `${deps.appOrigin}/w/${encodeURIComponent(workspace?.slug ?? '')}/bookings/list`;
     const name = `${page.title} with ${hostName}`;
     const hostZone = page.availability.timeZone;

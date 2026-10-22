@@ -29,6 +29,7 @@
     "./csv": "./src/csv.ts",
     "./transfer-limits": "./src/transfer-limits.ts",
     "./booking": "./src/booking/index.ts",
+    "./handles": "./src/booking/handles.ts",
     "./hours": "./src/booking/summary.ts",
     "./emails": "./src/emails.ts"
   },

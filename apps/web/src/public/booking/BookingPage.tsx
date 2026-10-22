@@ -75,6 +75,11 @@ export interface BookingPageProps {
   readonly handoff?: string;
   /** Opens the guest page once booked. */
   readonly onBooked: (manageToken: string) => void;
+  /**
+   * The page has a handle address (`/<handle>/<slug>`, 22 Oct 2026): a plain `/b/<key>` visit shows it in the
+   * address bar.
+   */
+  readonly onAddress?: (path: string) => void;
 }
 
 type Client = ReturnType<typeof createBookingClient>;
@@ -99,7 +104,16 @@ const locationLabel = (location: PublicBookingPage['location']) =>
       : location.value;
 
 /** The page: its facts load once, then the steps; each state as the experience note writes it. */
-export function BookingPage({ publicKey, locale, timeZone, now, prefill: given, handoff, onBooked }: BookingPageProps) {
+export function BookingPage({
+  publicKey,
+  locale,
+  timeZone,
+  now,
+  prefill: given,
+  handoff,
+  onBooked,
+  onAddress,
+}: BookingPageProps) {
   const client = useMemo(() => createBookingClient({ origin: globalThis.location.origin }), []);
   // A form's hand off fills the name and email once the API vouches for it; anything else leaves them empty.
   const [handed, setHanded] = useState<Prefill | undefined>(undefined);
@@ -130,13 +144,16 @@ export function BookingPage({ publicKey, locale, timeZone, now, prefill: given, 
   const [preview, setPreview] = useState<unknown>(undefined);
   const load = useCallback(() => {
     client.page(publicKey).then(
-      (page) => setLoaded({ state: 'ready', page }),
+      (page) => {
+        if (page.path !== undefined) onAddress?.(page.path);
+        setLoaded({ state: 'ready', page });
+      },
       (error: unknown) => {
         const code = isDataError(error) ? error.code : undefined;
         setLoaded({ state: code === 'NOT_FOUND' ? 'gone' : code === 'BOOKING_CLOSED' ? 'closed' : 'failed' });
       },
     );
-  }, [client, publicKey]);
+  }, [client, publicKey, onAddress]);
   useEffect(load, [load]);
   // Inside the editor's preview frame, the editor's unsaved draft shows over the saved page (AC-679):
   // only from the parent window on this same origin.

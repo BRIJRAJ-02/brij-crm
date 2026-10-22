@@ -10,6 +10,10 @@ New in spec 0025. Table is a grid of cells with a header and column alignment, w
 
 On 19 October 2026 the owner asked for Links and Forms to look the same, since a form is a link too. Forms drew Cards; LinkList was extended to hold them rather than a new CaptureList made, because a form's row has the same parts (title, address, facts, on or off, actions) and this README always meant forms' links to join it. The row follows the Cal.com event types list: about 60px tall, the whole row opens it (a React Aria `GridList`, with `data-pressable`), the title in the text colour with its address inline and muted, chips under them, and at the end a grey badge when it is off, its switch, and one joined group of icon buttons. A search field and the list's action sit above.
 
+## Rows as links
+
+`rowsAreLinks` draws each row as a plain link to its `href` (a list of `a` elements) instead of a GridList row: for a public page whose visitors open rows in a new tab or copy their address, and whose crawlers follow them. A profile's booking links use it (BookingProfile, 22 October 2026). Such rows carry no switch or actions and take no `onOpen`; Tab moves from link to link.
+
 ## Density
 
 On 20 October 2026 the owner asked for the Captures screens, ported from timefix, to be built on our own design system: the records area's look, not Cal.com's event types cards. So LinkList has two densities.

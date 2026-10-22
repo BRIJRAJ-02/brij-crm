@@ -8,6 +8,7 @@
 // else the `host` the script named (Firefox). A page that names another
 // site's origin gets nothing, since the browser delivers a message only when
 // the parent's origin is the one named. The frame reads no message at all.
+import { handleAddressOf } from '@crm/contracts/handles';
 
 /** How a frame was embedded: inline (its height follows its content) or in the script's dialog. */
 export type EmbedMode = 'inline' | 'popup';
@@ -91,7 +92,18 @@ export function closeOnEscape(embed: Embed, post: PostToHost, target: Pick<Windo
   });
 }
 
-/** One of our own addresses (`/b/…`) opened in the same frame, keeping what makes it an embed. */
+/**
+ * Whether a form's next address is one of our booking pages: `/b/<key>`, or a handle address `/<handle>/<slug>`
+ * (22 Oct 2026), a path on this origin either way.
+ */
+export function isOwnBookingPath(url: string): boolean {
+  if (!url.startsWith('/') || url.startsWith('//')) return false;
+  if (url.startsWith('/b/')) return true;
+  const pathname = new URL(url, 'https://frame.invalid').pathname;
+  return handleAddressOf(pathname)?.kind === 'page';
+}
+
+/** One of our own addresses (`/b/…`, `/<handle>/<slug>`) opened in the same frame, keeping what makes it an embed. */
 export function framedUrl(path: string, embed: Embed): string {
   const url = new URL(path, 'https://frame.invalid');
   url.searchParams.set('embed', '1');

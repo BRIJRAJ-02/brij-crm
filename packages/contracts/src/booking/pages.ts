@@ -43,6 +43,8 @@ export const BookingPageView = BookingPageSettings.extend({
   publicKey: z.string(),
   kind: z.enum(['personal', 'collective', 'round_robin']),
   ownerMemberId: Uuid,
+  /** The owner's handle, when they have one: the page's address is then `/<handle>/<slug>`, else `/b/<publicKey>`. */
+  handle: z.string().optional(),
   /** The hours the page books by now: its schedule's, or the owner's default's (spec 0035), read only here. */
   availability: BookingAvailability,
   /** That schedule's name ("Working hours" while its owner has saved none), read only here. */

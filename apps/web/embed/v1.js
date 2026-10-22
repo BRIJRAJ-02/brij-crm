@@ -5,6 +5,7 @@
 //
 //   <div data-timefix-form="KEY"></div>                      a form, inline
 //   <div data-timefix-booking="KEY"></div>                   a booking page, inline
+//   <div data-timefix-booking="HANDLE/SLUG"></div>           the same, by its handle address (22 Oct 2026)
 //   <button data-timefix-form="KEY" data-timefix-mode="popup">  opens it in a dialog
 //   <div data-timefix-form="KEY" data-timefix-mode="floating"
 //        data-timefix-text="Talk to us" data-timefix-color="#2563eb"></div>  a corner button
@@ -212,9 +213,16 @@
     return { host: host, root: root };
   }
 
+  // Where a key's page is: a form at /f/KEY; a booking page at /b/KEY, or at /HANDLE/SLUG when given that way.
+  var HANDLE_ADDRESS = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  function pageUrl(kind, key) {
+    if (kind === 'booking' && HANDLE_ADDRESS.test(key)) return new URL('/' + key, ORIGIN);
+    return new URL((kind === 'booking' ? '/b/' : '/f/') + encodeURIComponent(key), ORIGIN);
+  }
+
   function frameFor(kind, key, mode, element) {
     var id = String((count += 1));
-    var src = new URL((kind === 'booking' ? '/b/' : '/f/') + encodeURIComponent(key), ORIGIN);
+    var src = pageUrl(kind, key);
     var query = new URLSearchParams(location.search);
     query.forEach(function (value, name) {
       // The site's own address passes plain parameters along, so a question's key prefills it.
@@ -271,7 +279,7 @@
       skeleton.removeAttribute('aria-hidden');
       skeleton.textContent = '';
       var link = document.createElement('a');
-      link.href = new URL((kind === 'booking' ? '/b/' : '/f/') + encodeURIComponent(key), ORIGIN).href;
+      link.href = pageUrl(kind, key).href;
       link.target = '_blank';
       link.rel = 'noopener';
       link.textContent = 'Open ' + frame.title + ' in a new tab';

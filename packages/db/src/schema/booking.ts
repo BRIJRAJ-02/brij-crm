@@ -42,10 +42,22 @@ export const bookingPages = pgTable(
     id: id(),
     /** Random, URL safe, 16 characters: the public link's key. */
     publicKey: text('public_key').notNull(),
-    /** Unique per workspace among live pages. */
+    /**
+     * The page's address after its owner's handle, `/<handle>/<slug>` (22 Oct 2026): unique among the owner's live
+     * pages across every workspace (`booking_pages_owner_slug`), and among the owner member's in this one.
+     */
     slug: text('slug').notNull(),
     kind: text('kind').notNull().default('personal'),
     ownerMemberId: uuid('owner_member_id').notNull(),
+    /**
+     * The owner member's identity (`auth.user.id`), kept by the trigger crm_booking_pages_owner_user (0086) from
+     * `members.user_id`: what makes a slug unique per handle across workspaces. Null for a member without one.
+     */
+    ownerUserId: uuid('owner_user_id'),
+    /** The small heading this page sits under on its owner's profile (`/<handle>`), or none. */
+    profileSection: text('profile_section'),
+    /** Where the page sits on its owner's profile: lower first, then oldest first. */
+    profilePosition: smallint('profile_position').notNull().default(0),
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
     /** Meeting lengths offered, in minutes: one to four, each 5 to 480 in steps of 5. */
@@ -113,8 +125,16 @@ export const bookingPages = pgTable(
     }),
     uniqueIndex('booking_pages_public_key').on(t.publicKey),
     uniqueIndex('booking_pages_slug')
-      .on(t.workspaceId, t.slug)
+      .on(t.workspaceId, t.ownerMemberId, t.slug)
       .where(sql`${t.deletedAt} is null`),
+    // `/<handle>/<slug>` names one page: read only through crm_booking_lookup's crm_booking_page_by_address.
+    uniqueIndex('booking_pages_owner_slug')
+      .on(t.ownerUserId, t.slug)
+      .where(sql`${t.deletedAt} is null and ${t.ownerUserId} is not null`),
+    // A profile's listed pages, in the owner's order: read only through crm_booking_profile_pages.
+    index('booking_pages_profile')
+      .on(t.ownerUserId, t.profilePosition, t.id)
+      .where(sql`${t.deletedAt} is null and ${t.isPrivate} = false and ${t.status} = 'live'`),
     index('booking_pages_by_owner')
       .on(t.workspaceId, t.ownerMemberId, t.createdAt)
       .where(sql`${t.deletedAt} is null`),
@@ -123,6 +143,8 @@ export const bookingPages = pgTable(
       .on(t.workspaceId, t.scheduleId)
       .where(sql`${t.scheduleId} is not null`),
     check('booking_pages_public_key_shape', sql`${t.publicKey} ~ '^[A-Za-z0-9_-]{16}$'`),
+    check('booking_pages_profile_section', sql`char_length(${t.profileSection}) between 1 and 40`),
+    check('booking_pages_profile_position', sql`${t.profilePosition} between 0 and 999`),
     check('booking_pages_slug_shape', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`),
     check('booking_pages_kind', sql`${t.kind} in ('personal', 'collective', 'round_robin')`),
     check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),

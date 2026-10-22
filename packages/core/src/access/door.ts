@@ -16,7 +16,15 @@ import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@cr
 import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
 import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
-import { FORM_SLUG, INVITE_INVALID_MESSAGE, SIGN_IN_AGAIN_MESSAGE, TWO_FACTOR_REQUIRED_MESSAGE } from '@crm/contracts';
+import {
+  FORM_SLUG,
+  HANDLE_PATTERN,
+  INVITE_INVALID_MESSAGE,
+  isReservedHandle,
+  SIGN_IN_AGAIN_MESSAGE,
+  SLUG_PATTERN,
+  TWO_FACTOR_REQUIRED_MESSAGE,
+} from '@crm/contracts';
 import type { EmailLink } from '../emails/preferences.ts';
 import { mintScope, rescope, type EngineScope } from './mint.ts';
 import {
@@ -581,6 +589,122 @@ export async function enterBookingByToken(
     access: bookingAccess(row.page_id, []),
   });
   return { scope, pageId: row.page_id, people: '', companies: '', bookingId: row.booking_id };
+}
+
+/** What a handle answers past schema auth's fence (`crm_handle_owner`): never an email. */
+interface HandleOwnerRow extends Record<string, unknown> {
+  readonly user_id: string;
+  readonly handle: string;
+  readonly bio: string;
+  readonly name: string;
+  readonly image: string | null;
+}
+
+/** The person a handle names (current or old): their identity, current handle, and what their profile shows. */
+export interface HandleOwner {
+  readonly userId: string;
+  /** Their current handle: an old one's address moves to it. */
+  readonly handle: string;
+  readonly bio: string;
+  /** Their account's name; empty for an email code account that never gave one. */
+  readonly name: string;
+  readonly image?: string;
+}
+
+/** The person `handle` names, or undefined: a malformed or reserved handle reads nothing. */
+async function handleOwner(db: Database, handle: string): Promise<HandleOwner | undefined> {
+  if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return undefined;
+  const found = await db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<HandleOwnerRow>(
+      sql`select user_id::text as user_id, handle, bio, name, image from crm_handle_owner(${handle})`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) return undefined;
+  return {
+    userId: row.user_id,
+    handle: row.handle,
+    bio: row.bio,
+    name: row.name,
+    ...(row.image === null ? {} : { image: row.image }),
+  };
+}
+
+/** A page's narrow, read only entry: its `booking` actor with no record access, as the guest page's. */
+function readOnlyEntry(db: Database, row: PageKeyRow): BookingEntry {
+  const scope = mintScope({
+    db,
+    workspaceId: row.workspace_id,
+    actor: { type: 'booking', id: row.page_id },
+    access: bookingAccess(row.page_id, []),
+  });
+  return { scope, pageId: row.page_id, people: '', companies: '' };
+}
+
+/**
+ * The page `/<handle>/<slug>` names (22 Oct 2026): the handle's person (by a current or an old handle,
+ * `crm_handle_owner`), then their page with that slug in a workspace that exists (`crm_booking_page_by_address`,
+ * ids only), as its read only `booking` entry, and the person's current handle. Anything else is NOT_FOUND, the
+ * same for every reason. Exported only from `@crm/core/public`.
+ */
+export async function enterBookingAddress(
+  deps: { readonly db: Database },
+  handle: string,
+  slug: string,
+): Promise<BookingEntry & { readonly handle: string }> {
+  const missing = () => refuse('NOT_FOUND', 'This page is no longer available.');
+  if (!SLUG_PATTERN.test(slug)) throw missing();
+  const owner = await handleOwner(deps.db, handle);
+  if (owner === undefined) throw missing();
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<PageKeyRow>(
+      sql`select workspace_id::text as workspace_id, page_id::text as page_id from crm_booking_page_by_address(${owner.userId}::uuid, ${slug})`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) throw missing();
+  return { ...readOnlyEntry(deps.db, row), handle: owner.handle };
+}
+
+/** Where a profile read starts: after the link at this position and id. */
+export interface ProfileCursor {
+  readonly position: number;
+  readonly id: string;
+}
+
+/** One listed page's entry, with its position on the profile (the next read's cursor). */
+export interface ProfilePageEntry extends BookingEntry {
+  readonly position: number;
+}
+
+interface ProfilePageRow extends PageKeyRow {
+  readonly profile_position: number;
+}
+
+/**
+ * A profile `/<handle>` (22 Oct 2026): the handle's person (current or old handle), and up to `max` of their
+ * Public, live pages in workspaces that exist, in their order, after `after`, optionally only titles holding
+ * `search` (`crm_booking_profile_pages`, ids only), each as its read only `booking` entry. A handle no one holds is
+ * NOT_FOUND. Exported only from `@crm/core/public`.
+ */
+export async function enterBookingProfile(
+  deps: { readonly db: Database },
+  handle: string,
+  query: { readonly after?: ProfileCursor; readonly search?: string; readonly max: number },
+): Promise<{ readonly owner: HandleOwner; readonly pages: readonly ProfilePageEntry[] }> {
+  const owner = await handleOwner(deps.db, handle);
+  if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
+  const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
+  const search = query.search === undefined || query.search.trim() === '' ? null : query.search.trim().slice(0, 120);
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<ProfilePageRow>(
+      sql`select workspace_id::text as workspace_id, page_id::text as page_id, profile_position from crm_booking_profile_pages(${owner.userId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${search}, ${query.max}::integer)`,
+    ),
+  );
+  return {
+    owner,
+    pages: found.rows.map((row) => ({ ...readOnlyEntry(deps.db, row), position: row.profile_position })),
+  };
 }
 
 /**

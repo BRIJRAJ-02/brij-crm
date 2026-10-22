@@ -206,6 +206,10 @@ export const BookingPageSettings = z.object({
   rescheduleHost: z.enum(['same', 'rotation']),
   /** A private page (spec 0027, AC-708): reached by its link, it books inside its host's holds and waives notice. */
   isPrivate: z.boolean(),
+  /** The small heading a Public page sits under on its owner's profile (`/<handle>`); null for none. */
+  profileSection: z.string().trim().min(1).max(40, 'Keep the section to 40 characters.').nullable(),
+  /** Where a Public page sits on its owner's profile: lower first, then oldest first. */
+  profilePosition: z.number().int().min(0, 'Use 0 to 999.').max(999, 'Use 0 to 999.'),
 });
 /** Every setting a member edits. */
 export type BookingPageSettings = z.infer<typeof BookingPageSettings>;

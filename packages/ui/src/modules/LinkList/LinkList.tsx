@@ -32,7 +32,7 @@ export interface LinkRow {
   /**
    * The muted text inline after the title: its address ("/acme/intro-call", "/f/contact-us"), or in a list
    * that is about something else, that ("Mon to Fri, 9:00 AM to 5:00 PM", Availability's pages). The search
-   * matches it.
+   * matches it. Empty draws nothing: a profile's rows (BookingProfile) are on the page they open from.
    */
   readonly address: string;
   /** Up to two lines under the title (a page's description). Left out of `density="compact"`'s one line rows. */
@@ -107,6 +107,12 @@ export interface LinkListProps {
    * Table's cells (Bookings › Availability's pages).
    */
   readonly placement?: 'page' | 'card';
+  /**
+   * Each row is a plain link to its `href` (a list of `a` elements), for a public page whose visitors open rows in
+   * a new tab, copy their address, and whose crawlers follow them: a profile's booking links (22 Oct 2026). The
+   * rows then take no `onOpen`, `toggle` or `actions`.
+   */
+  readonly rowsAreLinks?: boolean;
 }
 
 /** Props for LinkListToolbar. */
@@ -188,6 +194,7 @@ export function LinkList({
   isToolbarHidden = false,
   density = 'comfortable',
   placement = 'page',
+  rowsAreLinks = false,
 }: LinkListProps) {
   const isCompact = density === 'compact';
   const frameProps = {
@@ -272,6 +279,16 @@ export function LinkList({
         >
           {strings.noMatchesBody}
         </EmptyState>
+      ) : rowsAreLinks ? (
+        <ul className={styles.root} data-links="" aria-label={label}>
+          {shown.map((row) => (
+            <li key={row.id} className={styles.item}>
+              <a className={styles.row} href={row.href} data-off={row.isOff === true || undefined}>
+                <RowContent row={row} isCompact={isCompact} />
+              </a>
+            </li>
+          ))}
+        </ul>
       ) : (
         <GridList
           className={styles.root}
@@ -292,42 +309,51 @@ export function LinkList({
               data-off={row.isOff === true || undefined}
               data-href={row.isPending === true ? undefined : row.href}
             >
-              <div className={styles.main}>
-                <div className={styles.titleLine}>
-                  <span className={styles.title} title={isCompact ? row.title : undefined}>
-                    {row.title}
-                  </span>
-                  {row.titleBadge !== undefined && (
-                    <span className={styles.titleBadge}>
-                      <Badge text={row.titleBadge} />
-                    </span>
-                  )}
-                  <span className={styles.address}>{row.address}</span>
-                </div>
-                {!isCompact && row.description !== undefined && row.description !== '' && (
-                  <p className={styles.description}>{row.description}</p>
-                )}
-                {!isCompact && <Chips chips={row.chips} />}
-              </div>
-              {isCompact && (
-                <div className={styles.facts}>
-                  {row.chips.length > 0 && <span className={styles.factText}>{row.chips.join(' · ')}</span>}
-                </div>
-              )}
-              <div className={styles.end}>
-                {row.badge !== undefined && <Badge text={row.badge} />}
-                {row.toggle !== undefined && <RowSwitch toggle={row.toggle} isPending={row.isPending === true} />}
-                {row.actions !== undefined && row.actions !== null && (
-                  <div className={styles.rowActions} role="group" aria-label={row.title}>
-                    {row.actions}
-                  </div>
-                )}
-              </div>
+              <RowContent row={row} isCompact={isCompact} />
             </GridListItem>
           )}
         </GridList>
       )}
     </div>
+  );
+}
+
+/** A row's title line, description and chips, and its end: the same in a GridList row and a link row. */
+function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isCompact: boolean }) {
+  return (
+    <>
+      <div className={styles.main}>
+        <div className={styles.titleLine}>
+          <span className={styles.title} title={isCompact ? row.title : undefined}>
+            {row.title}
+          </span>
+          {row.titleBadge !== undefined && (
+            <span className={styles.titleBadge}>
+              <Badge text={row.titleBadge} />
+            </span>
+          )}
+          {row.address !== '' && <span className={styles.address}>{row.address}</span>}
+        </div>
+        {!isCompact && row.description !== undefined && row.description !== '' && (
+          <p className={styles.description}>{row.description}</p>
+        )}
+        {!isCompact && <Chips chips={row.chips} />}
+      </div>
+      {isCompact && (
+        <div className={styles.facts}>
+          {row.chips.length > 0 && <span className={styles.factText}>{row.chips.join(' · ')}</span>}
+        </div>
+      )}
+      <div className={styles.end}>
+        {row.badge !== undefined && <Badge text={row.badge} />}
+        {row.toggle !== undefined && <RowSwitch toggle={row.toggle} isPending={row.isPending === true} />}
+        {row.actions !== undefined && row.actions !== null && (
+          <div className={styles.rowActions} role="group" aria-label={row.title}>
+            {row.actions}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 

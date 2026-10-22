@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Avatar, AvatarStack, type AvatarStackPerson } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -193,6 +193,85 @@ export function BookingFoot({ placement = 'always', claimHref, logo = TIMEFIX_LO
         </a>
       )}
     </footer>
+  );
+}
+
+/** The person a profile page is (22 Oct 2026): their name, picture and one line bio. */
+export interface BookingProfilePerson {
+  readonly name: string;
+  /** What the avatar's colour is keyed on when there is no picture (their handle). */
+  readonly id: string;
+  readonly image?: string;
+  readonly bio?: string;
+}
+
+/** Props for BookingProfile. */
+export interface BookingProfileProps {
+  /** Missing while the profile loads: the card draws as a skeleton. */
+  readonly person?: BookingProfilePerson;
+  /** Under the card: the person's booking links (LinkList), with their section headings and search. */
+  readonly children?: ReactNode;
+  /** Where "Claim your free page" goes. */
+  readonly claimHref?: string;
+}
+
+/**
+ * A person's public profile page, `/<handle>` (22 Oct 2026, the Cal.com profile): one card with their picture,
+ * name (the page's `h1`) and bio, their links under it, and the foot. The booking pages' own page, so it keeps
+ * their background, column and foot.
+ */
+export function BookingProfile({ person, children, claimHref }: BookingProfileProps) {
+  return (
+    <main className={styles.root}>
+      <div className={styles.narrow} data-width="profile">
+        <header className={styles.message} data-kind="profile" aria-busy={person === undefined || undefined}>
+          {person === undefined ? (
+            <>
+              <Skeleton shape="circle" />
+              <Skeleton lines={2} />
+            </>
+          ) : (
+            <>
+              <Avatar
+                name={person.name}
+                id={person.id}
+                size="xl"
+                isDecorative
+                {...(person.image === undefined ? {} : { src: person.image })}
+              />
+              <div className={styles.names}>
+                <h1 className={styles.host}>{person.name}</h1>
+                {person.bio !== undefined && person.bio !== '' && <p className={styles.description}>{person.bio}</p>}
+              </div>
+            </>
+          )}
+        </header>
+        {children}
+        <BookingFoot {...(claimHref === undefined ? {} : { claimHref })} />
+      </div>
+    </main>
+  );
+}
+
+/** Props for BookingProfileSection. */
+export interface BookingProfileSectionProps {
+  /** The small heading the person put these links under; left out for links with none. */
+  readonly title?: string;
+  readonly children: ReactNode;
+}
+
+/** One group of a profile's links, under its small heading when it has one. */
+export function BookingProfileSection({ title, children }: BookingProfileSectionProps) {
+  const headingId = useId();
+  return (
+    <section className={styles.section} {...(title === undefined ? {} : { 'aria-labelledby': headingId })}>
+      {title !== undefined && (
+        <h2 id={headingId} className={styles.sectionTitle}>
+          {title}
+        </h2>
+      )}
+      {children}
+    </section>
   );
 }
 

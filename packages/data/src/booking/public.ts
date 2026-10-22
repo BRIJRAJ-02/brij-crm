@@ -5,6 +5,8 @@
 // `BOOKING_CLOSED`, `NOT_FOUND`, `RATE_LIMITED` with its wait, `INPUT_INVALID`
 // with issues), and being offline `API_UNAVAILABLE`.
 import type {
+  PublicAddress,
+  PublicProfile,
   PublicBooked,
   PublicBookInput,
   PublicBookingPage,
@@ -19,6 +21,9 @@ import { dataError, isFetchFailure, parseRetryAfter, toDataError, type DataError
 import type { FetchLike } from '../fetch.ts';
 
 export type {
+  PublicAddress,
+  PublicProfile,
+  PublicProfileLink,
   PublicBooked,
   PublicChanged,
   PublicGuestsAnswer,
@@ -100,10 +105,10 @@ export interface PublicClientOptions {
  * The plain calls the public clients make to `/api/public/booking/*`: each
  * failure a DataError with the API's code, being offline `API_UNAVAILABLE`.
  */
-export function publicCaller(options: PublicClientOptions) {
+export function publicCaller(options: PublicClientOptions, area: 'booking' | 'handles' = 'booking') {
   const send = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const now = options.now ?? Date.now;
-  const base = `${options.origin}/api/public/booking`;
+  const base = `${options.origin}/api/public/${area}`;
   const call = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
     let response: Response;
     try {
@@ -163,6 +168,29 @@ export function createBookingClient(options: PublicClientOptions): BookingClient
     },
     prefill: (publicKey, token) =>
       call<PublicPrefill>(`${encodeURIComponent(publicKey)}/prefill?${new URLSearchParams({ p: token }).toString()}`),
+  };
+}
+
+/** What a handle address needs (22 Oct 2026): a person's profile, a page of links at a time, and one page's key. */
+export interface HandleClient {
+  /** The profile at `/<handle>` and its first (or `after`'s next) page of Public links, only titles holding `q`. */
+  profile(handle: string, query?: { readonly after?: string; readonly q?: string }): Promise<PublicProfile>;
+  /** The page `/<handle>/<slug>` names, by its public key, and the owner's current handle. */
+  address(handle: string, slug: string): Promise<PublicAddress>;
+}
+
+/** The handle client, on `origin` (the page's own), with `fetch` passed in for tests. */
+export function createHandleClient(options: PublicClientOptions): HandleClient {
+  const { call } = publicCaller(options, 'handles');
+  return {
+    profile: (handle, query = {}) => {
+      const search = new URLSearchParams({
+        ...(query.after === undefined ? {} : { after: query.after }),
+        ...(query.q === undefined || query.q === '' ? {} : { q: query.q }),
+      }).toString();
+      return call<PublicProfile>(`${encodeURIComponent(handle)}${search === '' ? '' : `?${search}`}`);
+    },
+    address: (handle, slug) => call<PublicAddress>(`${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`),
   };
 }
 

@@ -22,6 +22,8 @@
     "first-load.test.ts",
     "realtime-csp.ts",
     "realtime-csp.test.ts",
+    "public-paths.ts",
+    "public-paths.test.ts",
     "playwright.config.ts",
     "e2e"
   ]

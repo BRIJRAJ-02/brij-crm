@@ -99,6 +99,8 @@ describe('Account › Profile (AC-821)', () => {
       email: 'ada@example.com',
       workspaceTimeZone: 'UTC',
       image: 'https://lh3.example.com/a.png',
+      // A member with no identity has no handle, and no suggestion for one.
+      bio: '',
     });
     expect((await getMyProfile(t.as(t.owner, 'owner'), { image: 'javascript:alert(1)' })).image).toBeUndefined();
   });

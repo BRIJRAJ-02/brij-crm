@@ -21,6 +21,8 @@ export const strings = {
   openPage: (title: string) => `Open ${title} in a new tab`,
   /** Open's tooltip on a link card. */
   openInNewTab: 'Open in a new tab',
+  /** Beside the Public link field: opens the page in a new tab. */
+  openLink: 'Open',
   /** A page's kind, among its facts on its card. */
   kindLabel: { personal: 'One on one', collective: 'Collective', round_robin: 'Round robin' },
   searchPages: 'Search booking pages',
@@ -85,6 +87,21 @@ export const strings = {
   page: 'Page',
   description: 'Description',
   publicLink: 'Public link',
+  /** The page's address after its owner's handle (22 Oct 2026). */
+  slug: 'Web address',
+  slugHint: 'Lowercase letters, numbers and single hyphens.',
+  slugNoHandle:
+    'Pick your handle in Settings under Profile to give this page an address like /your-name/30min. Until then it keeps its /b/ link.',
+  slugChanging: 'Links with the old address will stop working once you save.',
+  slugLinkOnly: 'Link only pages keep their private /b/ link. This address is used once the page is Public.',
+  slugRequired: 'Give the page a web address.',
+  slugInvalid: 'Use lowercase letters, numbers and single hyphens.',
+  onProfile: 'On your profile',
+  onProfileHint: 'Public pages are listed on your profile page. Link only pages never are.',
+  profileSection: 'Section',
+  profileSectionHint: 'Optional. Pages with the same section are listed together under it.',
+  profilePosition: 'Order',
+  profilePositionHint: 'Lower numbers come first. Pages with the same number keep the order they were made in.',
   meeting: 'Meeting',
   durations: 'Durations',
   location: 'Location',

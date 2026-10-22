@@ -27,9 +27,25 @@ New. The public booking page moved onto the library on 20 October 2026 (as the h
 
 A team page (spec 0037, AC-1339) passes `host.team`: up to 4 faces stack in place of the large picture, with "+N" for the rest and the stack named by `label` ("Team of 6"); the host's name line is left out, since the page passes the title as "Intro call with Acme". A personal page leaves `team` off and draws exactly as before.
 
+### BookingProfile (22 October 2026)
+
+A person's public profile, `/<handle>`, the Cal.com profile the owner pointed at: one card with their picture, their name as the page's `h1` and a one line bio, then their booking links, then the foot. `BookingProfileSection` groups links under the small heading their owner gave them. The links themselves are LinkList's comfortable rows (the whole row opens the page), with LinkListToolbar above them once there are many.
+
+Why a variant here rather than a new module: it is the booking pages' own page, so it keeps their background, centred column, card and foot, which live in this folder. The column is wider than BookingMessage's so a row's title and chips fit.
+
+```tsx
+<BookingProfile person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme.' }} claimHref="https://timefix.ai">
+  <BookingProfileSection title="Sales">
+    <LinkList label="Sales" searchLabel="Search" isToolbarHidden rows={rows} onOpen={open} />
+  </BookingProfileSection>
+</BookingProfile>
+```
+
+Without `person` the card draws as a skeleton.
+
 ## States
 
-Three panes, two panes, a team page, loading; BookingMessage's loading, message and Try again.
+Three panes, two panes, a team page, loading; BookingMessage's loading, message and Try again; BookingProfile's loaded, with sections (a row with no address shows none), empty, and loading.
 
 ## Keyboard
 

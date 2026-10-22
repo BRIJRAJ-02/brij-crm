@@ -30,13 +30,21 @@
       "destination": "/book.html"
     },
     {
+      "source": "/((?!(?:email-preferences|availability|integrations|developers|reschedule|theme-boot|two-factor|dashboard|undefined|accounts|bookings|calendar|callback|captures|download|manifest|schedule|security|settings|sign-out|webhooks|account|billing|booking|contact|favicon|objects|pricing|privacy|profile|sign-in|sign-up|sitemap|support|timefix|welcome|assets|cancel|health|invite|logout|manage|public|robots|search|signin|signup|static|status|verify|about|admin|brand|email|embed|forms|inbox|index|legal|links|login|oauth|terms|users|apps|auth|blog|book|demo|docs|edit|form|help|home|join|mail|null|root|team|user|api|app|new|www)(?:/|$))[a-z0-9][a-z0-9-]{1,38}[a-z0-9])",
+      "destination": "/book.html"
+    },
+    {
+      "source": "/((?!(?:email-preferences|availability|integrations|developers|reschedule|theme-boot|two-factor|dashboard|undefined|accounts|bookings|calendar|callback|captures|download|manifest|schedule|security|settings|sign-out|webhooks|account|billing|booking|contact|favicon|objects|pricing|privacy|profile|sign-in|sign-up|sitemap|support|timefix|welcome|assets|cancel|health|invite|logout|manage|public|robots|search|signin|signup|static|status|verify|about|admin|brand|email|embed|forms|inbox|index|legal|links|login|oauth|terms|users|apps|auth|blog|book|demo|docs|edit|form|help|home|join|mail|null|root|team|user|api|app|new|www)(?:/|$))[a-z0-9][a-z0-9-]{1,38}[a-z0-9])/([a-z0-9][a-z0-9-]{0,59})",
+      "destination": "/book.html"
+    },
+    {
       "source": "/((?!api/|api$|f/|b/|embed/).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
     {
-      "source": "/((?!api/|api$|f/|b/[^/]+$|embed/).*)",
+      "source": "/((?!api/|api$|f/|b/[^/]+$|embed/|(?!(?:email-preferences|availability|integrations|developers|reschedule|theme-boot|two-factor|dashboard|undefined|accounts|bookings|calendar|callback|captures|download|manifest|schedule|security|settings|sign-out|webhooks|account|billing|booking|contact|favicon|objects|pricing|privacy|profile|sign-in|sign-up|sitemap|support|timefix|welcome|assets|cancel|health|invite|logout|manage|public|robots|search|signin|signup|static|status|verify|about|admin|brand|email|embed|forms|inbox|index|legal|links|login|oauth|terms|users|apps|auth|blog|book|demo|docs|edit|form|help|home|join|mail|null|root|team|user|api|app|new|www)(?:/|$))[a-z0-9][a-z0-9-]{1,38}[a-z0-9](?:/[a-z0-9][a-z0-9-]{0,59})?$).*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
@@ -75,6 +83,23 @@
     },
     {
       "source": "/b/:publicKey",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-gYiS/BvZvRcK27JIXTuwhZ3hs2+VJ1X+2gUlE+farlg='; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://centrifugo-production-68df.up.railway.app wss://brij-crm-centrifugo.onrender.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors *"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    },
+    {
+      "source": "/((?!(?:email-preferences|availability|integrations|developers|reschedule|theme-boot|two-factor|dashboard|undefined|accounts|bookings|calendar|callback|captures|download|manifest|schedule|security|settings|sign-out|webhooks|account|billing|booking|contact|favicon|objects|pricing|privacy|profile|sign-in|sign-up|sitemap|support|timefix|welcome|assets|cancel|health|invite|logout|manage|public|robots|search|signin|signup|static|status|verify|about|admin|brand|email|embed|forms|inbox|index|legal|links|login|oauth|terms|users|apps|auth|blog|book|demo|docs|edit|form|help|home|join|mail|null|root|team|user|api|app|new|www)(?:/|$))[a-z0-9][a-z0-9-]{1,38}[a-z0-9](?:/[a-z0-9][a-z0-9-]{0,59})?)",
       "headers": [
         {
           "key": "Content-Security-Policy",

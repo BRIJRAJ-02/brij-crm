@@ -4,18 +4,7 @@
 // Main task: press Copy link, or pick how it shows and copy its snippet. Nothing else needs touching for it to work.
 // Leaves out: a QR code and analytics; the booking page's own embed lives with the booking page.
 import type { FormView } from '@crm/data';
-import {
-  Button,
-  Card,
-  Code,
-  CopyButton,
-  DescriptionList,
-  Disclosure,
-  Field,
-  InfoTip,
-  SegmentedControl,
-  Switch,
-} from '@crm/ui';
+import { Button, Card, Code, DescriptionList, Disclosure, Field, InfoTip, SegmentedControl, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { RemoveSiteDialog, RotateSecretDialog } from './FormConfirms.tsx';
@@ -128,13 +117,16 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
 
   return (
     <>
-      <Card
-        title={strings.shareTitle}
-        description={link}
-        actions={<InfoTip label={strings.shareTitle}>{strings.shareTip}</InfoTip>}
-        footer={
-          <>
-            <CopyButton value={link} label={strings.copyLink} variant="primary" />
+      {/* One compact row (the owner, 22 Oct 2026): Share with its help beside it, the link with Copy inside it, and
+          Open; the same row as a booking page's Public link. Copy isn't the page's main action, so it isn't blue. */}
+      <Card>
+        <Field
+          label={strings.shareTitle}
+          info={<InfoTip label={strings.shareTitle}>{strings.shareTip}</InfoTip>}
+          variant="copy"
+          copyLabel={strings.copyLink}
+          value={link}
+          after={
             <Button
               icon="external-link"
               onPress={() => {
@@ -143,9 +135,9 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
             >
               {strings.openLink}
             </Button>
-          </>
-        }
-      />
+          }
+        />
+      </Card>
       {/* One way to copy: the code block's own Copy, as the owner asked (no second button under it). */}
       <Card title={strings.websiteTitle} actions={<InfoTip label={strings.websiteTitle}>{strings.websiteTip}</InfoTip>}>
         <SegmentedControl

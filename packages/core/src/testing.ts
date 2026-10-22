@@ -24,6 +24,8 @@ export interface TestScopeInput {
   /** An API key's scopes: every key scope, with write on every object, by default. */
   readonly scopes?: readonly string[];
   readonly limits?: Partial<Limits>;
+  /** A member's signed in identity (`auth.user.id`), for what belongs to the person: their handle. */
+  readonly userId?: string;
 }
 
 function accessOf(input: TestScopeInput): Access {
@@ -33,7 +35,13 @@ function accessOf(input: TestScopeInput): Access {
   if (actor.type === 'api_key') return keyAccess(actor.id, input.scopes ?? KEY_SCOPES);
   if (actor.type === 'member') {
     return roleAccess(
-      { kind: 'member', memberId: actor.id, role: input.role ?? 'owner', teamIds: [] },
+      {
+        kind: 'member',
+        memberId: actor.id,
+        role: input.role ?? 'owner',
+        teamIds: [],
+        ...(input.userId === undefined ? {} : { userId: input.userId }),
+      },
       input.rules ?? NO_RULES,
     );
   }

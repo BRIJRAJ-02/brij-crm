@@ -50,7 +50,10 @@ export async function ensureManageToken(
   return token;
 }
 
-/** The guest page's path for a booking: `/b/<publicKey>/manage?t=<token>`, on the app's origin. */
+/**
+ * The guest page's path for a booking: `/b/<publicKey>/manage?t=<token>`, on the public booking origin. It stays
+ * under `/b/` once the page has a handle address: the token is the key, and the address may change.
+ */
 export function managePath(publicKey: string, token: string): string {
   return `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token }).toString()}`;
 }

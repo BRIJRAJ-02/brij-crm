@@ -11,7 +11,7 @@ import { CapturesList } from '../captures/CapturesList.tsx';
 import { useCapturesCreate } from '../captures/create.tsx';
 import { pageHeading } from '../navigation/focus.ts';
 import { DeletePageDialog } from './DeletePageDialog.tsx';
-import { pageEditorHref, publicBookingUrl, type PageTab } from './links.ts';
+import { pageEditorHref, publicBookingPath, publicBookingUrl, type PageTab } from './links.ts';
 import { strings } from './strings.ts';
 
 /** Props for the list: the data layer, whose held list of pages the route loaded. */
@@ -79,7 +79,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       colourKey: page.id,
       facts: factsOf(page),
       // The link Copy link copies, as a path.
-      address: new URL(publicBookingUrl(page.publicKey)).pathname,
+      address: publicBookingPath(page),
       // Off shows in the muted title and the switch; the badge is for what they can't say.
       ...(isPending
         ? { badge: strings.copying }
@@ -100,7 +100,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
         disabledReason: strings.notYours,
         hint: page.status === 'live' ? strings.takingBookings : strings.notTakingBookings,
       },
-      copyValue: publicBookingUrl(page.publicKey),
+      copyValue: publicBookingUrl(page),
       actions: (
         <>
           {/* Off, there is nothing to open: the muted title and the switch say why. */}
@@ -113,7 +113,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
                 label={strings.openPage(page.title)}
                 isDisabled={isPending}
                 onPress={() => {
-                  globalThis.open(publicBookingUrl(page.publicKey), '_blank', 'noopener');
+                  globalThis.open(publicBookingUrl(page), '_blank', 'noopener');
                 }}
               />
             </Tooltip>

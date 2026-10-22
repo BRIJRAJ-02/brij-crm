@@ -33,6 +33,7 @@ const MAIL_GAP_MS = 600;
 export interface JobTasksEnv {
   readonly APP_ENV: AppEnvironment;
   readonly APP_URL?: string | undefined;
+  readonly BOOKING_PUBLIC_ORIGIN?: string | undefined;
   readonly BOOKING_LINK_SECRET?: string | undefined;
   readonly WORKER_WAKE_SECRET?: string | undefined;
   readonly JOBS_RUNNER?: 'on' | 'off' | undefined;
@@ -138,6 +139,9 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
       ? undefined
       : {
           appOrigin: new URL(env.APP_URL).origin,
+          ...(env.BOOKING_PUBLIC_ORIGIN === undefined
+            ? {}
+            : { publicOrigin: new URL(env.BOOKING_PUBLIC_ORIGIN).origin }),
           linkKey: bookingLinkKey(env),
           organizerEmail: parseSender(env.MAIL_FROM).email,
         };

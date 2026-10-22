@@ -11,7 +11,7 @@ import '@crm/ui/styles.css';
 import { createPublicFormClient, loadCaptcha } from '@crm/data/public-form';
 import { mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
 import { contextFromFrame, contextOfPage, hiddenOf } from './context.ts';
-import { closeOnEscape, embedOf, framedUrl, reportHeight, type PostToHost } from './frame.ts';
+import { closeOnEscape, embedOf, framedUrl, isOwnBookingPath, reportHeight, type PostToHost } from './frame.ts';
 
 const found = document.querySelector<HTMLElement>('[data-app-root]');
 if (found === null) throw new Error('The page has no root.');
@@ -102,7 +102,7 @@ async function start(): Promise<void> {
       onRedirect: (url) => {
         // A booking page of ours carries on inside the same frame, still sized to its content; any other address
         // takes the whole window, out of the site's frame.
-        if (embed !== undefined && url.startsWith('/b/')) window.location.assign(framedUrl(url, embed));
+        if (embed !== undefined && isOwnBookingPath(url)) window.location.assign(framedUrl(url, embed));
         else if (embedded) window.open(url, '_top');
         else window.location.assign(url);
       },

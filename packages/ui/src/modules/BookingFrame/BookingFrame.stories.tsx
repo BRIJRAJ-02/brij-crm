@@ -2,12 +2,20 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ComponentProps } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
 import { MonthTiles } from '../MonthTiles/MonthTiles.tsx';
 import { SlotList } from '../SlotList/SlotList.tsx';
-import { BookingFrame, BookingMessage, type BookingFact } from './BookingFrame.tsx';
+import { LinkList } from '../LinkList/LinkList.tsx';
+import {
+  BookingFrame,
+  BookingMessage,
+  BookingProfile,
+  BookingProfileSection,
+  type BookingFact,
+} from './BookingFrame.tsx';
 
 const FACTS: readonly BookingFact[] = [
   { id: 'where', icon: 'video', children: 'Video call' },
@@ -111,6 +119,88 @@ export const Failed: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { name: 'This page didn’t load' })).toHaveFocus();
   },
+};
+
+const LINKS = [
+  {
+    id: 'intro',
+    title: 'Intro call',
+    address: '',
+    description: 'A first chat about what you need.',
+    chips: ['15 min'],
+  },
+  { id: 'demo', title: 'Product demo', address: '', chips: ['30 min', '60 min'] },
+];
+const TEAM_LINKS = [{ id: 'team', title: 'Talk to sales', address: '', chips: ['30 min', 'Team'] }];
+
+/** A person's public profile (`/<handle>`): their card, then their Public links, the whole row opening each. */
+export const Profile: Story = {
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingProfile
+        person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme. Happy to talk about anything.' }}
+        claimHref="https://timefix.ai"
+      >
+        <BookingProfileSection>
+          <LinkList
+            label="Booking links"
+            searchLabel="Search links"
+            isToolbarHidden
+            rowsAreLinks
+            rows={LINKS}
+            onOpen={fn()}
+          />
+        </BookingProfileSection>
+        <BookingProfileSection title="Sales">
+          <LinkList
+            label="Sales"
+            searchLabel="Search links"
+            isToolbarHidden
+            rowsAreLinks
+            rows={TEAM_LINKS}
+            onOpen={fn()}
+          />
+        </BookingProfileSection>
+      </BookingProfile>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Ada Lovelace' })).toBeVisible();
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Sales' })).toBeVisible();
+    // Each row is a real link, so it opens in a new tab and crawlers follow it.
+    await expect(canvas.getByRole('link', { name: /Intro call/ })).toHaveAttribute('href', '/ada/intro');
+  },
+};
+
+/** A profile while it loads: the card and the rows as skeletons. */
+export const ProfileLoading: Story = {
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingProfile>
+        <LinkList
+          label="Booking links"
+          searchLabel="Search links"
+          isToolbarHidden
+          status="loading"
+          rows={[]}
+          onOpen={fn()}
+        />
+      </BookingProfile>
+    </Stage>
+  ),
+};
+
+/** A profile with nothing public to book yet. */
+export const ProfileEmpty: Story = {
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingProfile person={{ name: 'Ada Lovelace', id: 'ada' }} claimHref="https://timefix.ai">
+        <EmptyState title="Nothing to book here yet" icon="calendar-clock">
+          This person has no public booking links right now.
+        </EmptyState>
+      </BookingProfile>
+    </Stage>
+  ),
 };
 
 /** The story's own state, in a component so the artifact's preview can render it too. */

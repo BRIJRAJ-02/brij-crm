@@ -2915,6 +2915,7 @@ export function createDataLayer({
           createdAt: _created,
           updatedAt: _updated,
           slug: _slug,
+          handle: _handle,
           // Read only: the hours and name of the schedule the page books by now (spec 0035).
           availability: _hours,
           scheduleName: _scheduleName,
@@ -3673,15 +3674,25 @@ export function createDataLayer({
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {
       get: (workspace: string): Promise<MyProfile> => call((options) => api.profile.get({ workspace }, options)),
-      /** Changes their name or time zone (null follows the workspace's). The member list is read again. */
+      /**
+       * Changes their name or time zone (null follows the workspace's), or their handle and bio (the person's, in
+       * every workspace). The member list is read again; a new handle changes every page's address, so the
+       * booking pages are read again too.
+       */
       async update(
         workspace: string,
-        change: { readonly name?: string; readonly timeZone?: string | null },
+        change: {
+          readonly name?: string;
+          readonly timeZone?: string | null;
+          readonly handle?: string;
+          readonly bio?: string;
+        },
       ): Promise<MyProfile> {
         const updated = await call((options) =>
           api.profile.update({ workspace, ...change, mutationId: mintId() }, options),
         );
         members.delete(workspace);
+        if (change.handle !== undefined) bookingPageLists.view(workspace).reload();
         return updated;
       },
     },
