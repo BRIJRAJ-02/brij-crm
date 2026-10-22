@@ -10,6 +10,7 @@ import {
   BookingProfileSection,
   Button,
   Callout,
+  claimPageHref,
   EmptyState,
   LinkList,
   LinkListToolbar,
@@ -141,11 +142,15 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   };
 
   if (loaded.state === 'gone') {
-    return <BookingMessage title={strings.notFoundTitle}>{strings.profileNotFound}</BookingMessage>;
+    return (
+      <BookingMessage title={strings.notFoundTitle} page="booking_profile">
+        {strings.profileNotFound}
+      </BookingMessage>
+    );
   }
   if (loaded.state === 'failed') {
     return (
-      <BookingMessage title={strings.failedTitle} onRetry={() => load(searched)}>
+      <BookingMessage title={strings.failedTitle} page="booking_profile" onRetry={() => load(searched)}>
         {strings.failedText}
       </BookingMessage>
     );
@@ -176,7 +181,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         id: current,
         bio: profile.bio,
       }}
-      claimHref="https://timefix.ai"
+      claimHref={claimPageHref('booking_profile')}
     >
       {isLong && <LinkListToolbar searchLabel={strings.searchLinks} query={query} onQueryChange={setQuery} />}
       {searchFailed && <Callout tone="danger">{strings.searchFailed}</Callout>}

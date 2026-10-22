@@ -92,6 +92,8 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
   const changes = useMemo(() => createManageClient({ origin: globalThis.location.origin }), []);
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
   const [notice, setNotice] = useState<'moved' | 'cancelled' | undefined>(undefined);
+  // The page the Timefix link names in its tags: the guest's page just after booking, or when they come back to it.
+  const brandPage = isWelcome ? 'booking_confirmation' : 'booking_manage';
   useEffect(() => {
     client.managed(token).then(
       (booking) => setLoaded({ state: 'ready', booking }),
@@ -113,10 +115,10 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
     if (title !== undefined) document.title = `${title} · ${strings.product}`;
   }, [title]);
 
-  if (loaded.state === 'loading') return <BookingMessage title={strings.loading} isLoading />;
+  if (loaded.state === 'loading') return <BookingMessage title={strings.loading} page={brandPage} isLoading />;
   if (loaded.state !== 'ready') {
     return (
-      <BookingMessage title={loaded.state === 'gone' ? strings.linkGone : strings.failedTitle}>
+      <BookingMessage title={loaded.state === 'gone' ? strings.linkGone : strings.failedTitle} page={brandPage}>
         {loaded.state === 'failed' ? strings.failedText : undefined}
       </BookingMessage>
     );
@@ -211,7 +213,7 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
       ]}
       {...(booking.videoUrl === undefined ? {} : { joinUrl: booking.videoUrl })}
       brand={{
-        href: poweredByHref(isWelcome ? 'booking_confirmation' : 'booking_manage', booking.workspaceSlug),
+        href: poweredByHref(brandPage, booking.workspaceSlug),
         label: changeStrings.poweredBy,
       }}
       calendars={{ google, outlook, ics: client.icsUrl(token) }}

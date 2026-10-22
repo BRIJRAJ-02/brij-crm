@@ -37,6 +37,8 @@ const path = /^\/b\/([^/]+)(\/manage)?\/?$/.exec(address.pathname);
 // Else /<handle> or /<handle>/<slug>.
 const handled = path === null ? handleAddressOf(address.pathname) : undefined;
 const isManage = path?.[2] !== undefined;
+// The guest page right after booking (`?welcome=1`), whose Timefix link is tagged as the confirmation.
+const isWelcome = address.searchParams.get('welcome') === '1';
 const locale = navigator.languages[0] ?? 'en-US';
 const now = () => Date.now();
 // A form's hand off leaves the address at once, kept in the tab's session storage (prefill.ts).
@@ -92,13 +94,16 @@ function renderBooking(publicKey: string) {
     <StrictMode>
       <BookingProvider locale={locale} timeZone={timeZone}>
         {isManage ? (
-          <Suspense fallback={<BookingMessage title={strings.loading} isLoading />}>
-            <ManagePage
-              token={address.searchParams.get('t') ?? ''}
-              isWelcome={address.searchParams.get('welcome') === '1'}
-              locale={locale}
-              now={now}
-            />
+          <Suspense
+            fallback={
+              <BookingMessage
+                title={strings.loading}
+                page={isWelcome ? 'booking_confirmation' : 'booking_manage'}
+                isLoading
+              />
+            }
+          >
+            <ManagePage token={address.searchParams.get('t') ?? ''} isWelcome={isWelcome} locale={locale} now={now} />
           </Suspense>
         ) : (
           <BookingPage
@@ -147,7 +152,7 @@ if (path !== null) {
   view.render(
     <StrictMode>
       <BookingProvider locale={locale} timeZone={timeZone}>
-        <Suspense fallback={<BookingMessage title={strings.loading} isLoading />}>
+        <Suspense fallback={<BookingMessage title={strings.loading} page="booking_profile" isLoading />}>
           <ProfilePage handle={handled.handle} onMoved={(current) => showAddress(`/${current}`)} />
         </Suspense>
       </BookingProvider>
