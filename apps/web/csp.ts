@@ -56,3 +56,33 @@ export function sentryDsnProblem(dsn: string, connectSources: readonly string[])
   }
   return undefined;
 }
+
+/** One vercel.json header rule: the paths it matches (`source`) and what it sends. */
+interface HeaderRule {
+  readonly source: string;
+  readonly headers?: readonly { readonly key: string; readonly value: string }[];
+}
+
+/** A vercel.json `source` (`/b/:publicKey`, `/f/(.*)`) as the anchored pattern Vercel matches a path with. */
+export function sourcePattern(source: string): RegExp {
+  return new RegExp(`^${source.replace(/\/:\w+/g, '/[^/]+')}$`);
+}
+
+/**
+ * The Content-Security-Policy vercel.json sends for `pathname`: the hosted form's, the booking page's or the
+ * app's, or undefined for a path no policy rule matches (the api, the embed script). `vite preview` sends its
+ * `style-src` the same way (vite.config.ts), so the flows run under the policy production enforces.
+ */
+export function policyForPath(
+  pathname: string,
+  vercelJsonPath = path.join(import.meta.dirname, 'vercel.json'),
+): string | undefined {
+  const config = JSON.parse(readFileSync(vercelJsonPath, 'utf8')) as { headers?: readonly HeaderRule[] };
+  // Vercel sends every matching rule's headers, so two policies on one path would both apply: refuse that.
+  const policies = (config.headers ?? []).flatMap((rule) => {
+    const policy = rule.headers?.find((header) => header.key.toLowerCase() === 'content-security-policy');
+    return policy !== undefined && sourcePattern(rule.source).test(pathname) ? [policy.value] : [];
+  });
+  if (policies.length > 1) throw new Error(`vercel.json sends ${pathname} ${policies.length} policies.`);
+  return policies[0];
+}

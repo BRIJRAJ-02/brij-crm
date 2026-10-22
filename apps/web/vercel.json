@@ -40,7 +40,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://centrifugo-production-68df.up.railway.app wss://brij-crm-centrifugo.onrender.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-gYiS/BvZvRcK27JIXTuwhZ3hs2+VJ1X+2gUlE+farlg='; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://centrifugo-production-68df.up.railway.app wss://brij-crm-centrifugo.onrender.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
         },
         {
           "key": "X-Content-Type-Options",
@@ -57,7 +57,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src https://www.google.com/recaptcha/; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors *"
+          "value": "default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'sha256-gYiS/BvZvRcK27JIXTuwhZ3hs2+VJ1X+2gUlE+farlg='; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src https://www.google.com/recaptcha/; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors *"
         },
         {
           "key": "X-Robots-Tag",
@@ -78,7 +78,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://centrifugo-production-68df.up.railway.app wss://brij-crm-centrifugo.onrender.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors *"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-gYiS/BvZvRcK27JIXTuwhZ3hs2+VJ1X+2gUlE+farlg='; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://centrifugo-production-68df.up.railway.app wss://brij-crm-centrifugo.onrender.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors *"
         },
         {
           "key": "X-Content-Type-Options",

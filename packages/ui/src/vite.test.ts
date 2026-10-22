@@ -60,7 +60,7 @@ describe('layerOrder', () => {
 
   it('links it at the end of the head when the page has no stylesheet yet (the dev server)', () => {
     expect(linkLayerOrder('<head><title>CRM</title></head>', '/app/')).toContain(
-      '<link rel="stylesheet" href="/app/layers.css">\n  </head>',
+      '<link rel="stylesheet" href="/app/layers.css" id="react-aria-pressable-style">\n  </head>',
     );
   });
 });
