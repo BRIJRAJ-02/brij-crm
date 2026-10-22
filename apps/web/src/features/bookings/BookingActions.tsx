@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the host's changes to a booking from its card on Bookings (spec 0025, AC-640), after the timefix app's
-// booking menu: Reschedule, Copy guest link, Link to a record (polish F2), Cancel booking.
+// booking menu: Reschedule, Copy guest link, Link to a record and Unlink record (polish F2), Cancel booking.
 // Main task: move a booking to another time its page offers, cancel it with a reason the guest is emailed, or file
 // it under a deal or another record.
 // Leaves out: Request reschedule (offering the guest times), editing the location and adding guests from here; the
@@ -28,15 +28,13 @@ import {
   Modal,
   SlotList,
   useFormatSettings,
-  type AttributeEditorProps,
   type FieldAttribute,
-  type ListSource,
   type ToastAction,
 } from '@crm/ui';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { zoneDisplay } from '../../public/booking/time.ts';
-import { useRecordSearch } from '../records/links.ts';
+import { editorSearch, useRecordSearch } from '../records/links.ts';
 import { strings } from './strings.ts';
 import { useNow } from './useNow.ts';
 
@@ -77,6 +75,11 @@ export interface BookingLinking {
 
 /** How far ahead Reschedule looks: two weeks, as the timefix booking menu does. */
 const MOVE_DAYS = 14;
+
+/** What a refused link or unlink says: the server's words, else the plain line. */
+function linkMessageOf(error: unknown): string {
+  return isDataError(error) && error.message !== '' ? error.message : strings.linkFailed;
+}
 
 /** A refusal's sentence for the member. */
 function messageOf(error: unknown): string {
@@ -130,6 +133,11 @@ export function useBookingActions({
   readonly dialogs: ReactNode;
   /** Focuses More, when the footer has it: where focus goes when a control on the card goes away under it. */
   readonly focusMore?: () => void;
+  /**
+   * Takes the hand made link off at once, with Undo (polish F2), when the card has More and the member may change the
+   * link: the linked record's object is one they may link from. The card's row offers it as its ×; More holds it too.
+   */
+  readonly unlink?: () => void;
 } {
   const [open, setOpen] = useState<BookingAsk | undefined>(undefined);
   // Each opening mounts a fresh dialog (an empty reason, no old refusal).
@@ -190,11 +198,44 @@ export function useBookingActions({
   };
   const isConfirmed = booking.status === 'confirmed';
   // Link to a record (polish F2), past or ahead, while there is an object to link from.
-  const canLink = (actions.linking?.objects.length ?? 0) > 0;
-  const linkItem = canLink ? (
-    <MenuItem id="link" icon="briefcase">
-      {booking.linkedRecord === undefined ? strings.linkRecord : strings.changeLinkedRecord}
-    </MenuItem>
+  const { linking } = actions;
+  const canLink = (linking?.objects.length ?? 0) > 0;
+  const linked = booking.linkedRecord;
+  // Unlink only a record whose object the member may link from: on any other, the link isn't theirs to change.
+  const canUnlink =
+    linking !== undefined && linked !== undefined && linking.objects.some((object) => object.id === linked.objectId);
+  // At once, with Undo (the owner's rule: an undoable removal stays one press). The control goes with the link, so
+  // focus goes to More, which holds Link to a record.
+  const unlink = () => {
+    if (linking === undefined || linked === undefined) return;
+    focusLater(() => cancelRef.current);
+    linking.link(booking.id, null).then(
+      () => {
+        actions.notify('success', strings.unlinkedToast(linked.name), {
+          label: strings.undo,
+          onAction: () => {
+            linking.link(booking.id, linked).catch((error: unknown) => {
+              actions.notify('danger', linkMessageOf(error));
+            });
+          },
+        });
+      },
+      (error: unknown) => {
+        actions.notify('danger', linkMessageOf(error));
+      },
+    );
+  };
+  const linkItems = canLink ? (
+    <>
+      <MenuItem id="link" icon="link">
+        {linked === undefined ? strings.linkRecord : strings.changeLinkedRecord}
+      </MenuItem>
+      {canUnlink && (
+        <MenuItem id="unlink" icon="unlink">
+          {strings.unlinkRecord}
+        </MenuItem>
+      )}
+    </>
   ) : null;
   // One row, as Google Calendar and Cal.com keep it: Reschedule, then More holding Copy guest link, Link to a record,
   // Reassign and Cancel booking (danger, still asking first). Join goes before them, from the card. Once started,
@@ -211,9 +252,10 @@ export function useBookingActions({
             label={strings.moreForBooking}
             onAction={(key) => {
               if (key === 'link') ask('link');
+              else if (key === 'unlink') unlink();
             }}
           >
-            {linkItem}
+            {linkItems}
           </Menu>
         </MenuTrigger>
       )}
@@ -244,12 +286,13 @@ export function useBookingActions({
               else onAsk('reassign');
             } else if (key === 'cancel') ask('cancel');
             else if (key === 'link') ask('link');
+            else if (key === 'unlink') unlink();
           }}
         >
-          <MenuItem id="copy" icon="link">
+          <MenuItem id="copy" icon="copy">
             {strings.copyGuestLink}
           </MenuItem>
-          {linkItem}
+          {linkItems}
           {onReassign !== undefined && (
             <MenuItem id="reassign" icon="users-round">
               {strings.reassignAction}
@@ -279,6 +322,7 @@ export function useBookingActions({
     actions: footer,
     dialogs,
     ...(hasMore ? { focusMore: () => focusLater(() => cancelRef.current) } : {}),
+    ...(hasMore && canUnlink ? { unlink } : {}),
   };
 }
 
@@ -596,13 +640,6 @@ const LINKED_RECORD: FieldAttribute = {
   isReadOnly: false,
 };
 
-/**
- * A search of one display shape as the editor takes it: AttributeEditor types its search over every attribute
- * type's display, and the record picker reads only record displays.
- */
-const editorSearch = (search: (query: string) => ListSource<RecordRefDisplay>) =>
-  search as unknown as NonNullable<AttributeEditorProps['onSearch']>;
-
 /** The record a picker committed (one ref, or the first of a list), or undefined once cleared. */
 function refOf(value: unknown): { readonly objectId: string; readonly recordId: string } | undefined {
   const picked: unknown = Array.isArray(value) ? (value as readonly unknown[])[0] : value;
@@ -615,8 +652,9 @@ function refOf(value: unknown): { readonly objectId: string; readonly recordId: 
 
 /**
  * Link to a record (polish F2): the record picker over the objects a booking may be linked to (Deals first, the
- * switcher in its menu as on a task's Records), then Link. It starts on the record linked now, if any. A refusal
- * stays under the picker; linked, it closes and says so, and the card shows the record.
+ * switcher in its menu as on a task's Records), then Link. It starts on the record linked now, if any; with none, its
+ * search opens at once, since picking one is the dialog's whole task. The picker holds still while Link is out. A
+ * refusal stays under the picker; linked, it closes and says so, and the card shows the record.
  */
 function LinkRecordDialog({
   booking,
@@ -650,7 +688,7 @@ function LinkRecordDialog({
     linking.link(booking.id, picked).then(
       () => {
         setBusy(false);
-        notify('success', strings.linkedToast(picked.name === '' ? strings.linkedRecordField : picked.name));
+        notify('success', strings.linkedToast(picked.name));
         onClose();
       },
       (caught: unknown) => {
@@ -690,6 +728,8 @@ function LinkRecordDialog({
         value={picked === undefined ? null : { objectId: picked.objectId, recordId: picked.recordId }}
         {...(picked === undefined ? {} : { display: picked })}
         surface="form"
+        autoOpen={now === undefined}
+        isDisabled={busy}
         onSearch={editorSearch(search.onSearch)}
         objectSwitcher={{
           objects: linking.objects.map((object) => ({

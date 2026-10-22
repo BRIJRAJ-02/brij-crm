@@ -725,11 +725,11 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     return { link, notify };
   }
 
-  it('shows the linked record on the card, opening its page, and takes the link off in one press with Undo', async () => {
+  it('shows the linked record on the card, opening its page, and unlinks it in one press with Undo', async () => {
     const { link, notify } = await openWith(navy);
     const chip = page.getByRole('link', { name: 'Navy rollout' });
     await expect.element(chip).toHaveAttribute('href', `/w/acme/objects/deals/${navy.recordId}/overview`);
-    await userEvent.click(page.getByRole('button', { name: 'Remove link to Navy rollout' }));
+    await userEvent.click(page.getByRole('button', { name: 'Unlink Navy rollout' }));
     expect(link).toHaveBeenCalledWith(bookingOf().id, null);
     await expect.element(page.getByRole('link', { name: 'Navy rollout' })).not.toBeInTheDocument();
     // The row went under focus: it lands on More, which holds Link to a record.
@@ -745,6 +745,20 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     expect(link).toHaveBeenLastCalledWith(bookingOf().id, navy);
   });
 
+  it('unlinks from More too, with the same word and Undo', async () => {
+    const { link, notify } = await openWith(navy);
+    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Change linked record' })).toBeVisible();
+    await userEvent.click(page.getByRole('menuitem', { name: 'Unlink record' }));
+    expect(link).toHaveBeenCalledWith(bookingOf().id, null);
+    await expect.element(page.getByRole('link', { name: 'Navy rollout' })).not.toBeInTheDocument();
+    expect(notify).toHaveBeenCalledWith(
+      'success',
+      'Unlinked from Navy rollout.',
+      expect.objectContaining({ label: 'Undo' }),
+    );
+  });
+
   it('links one from More: the picker over Deals, then Link', async () => {
     const { link, notify } = await openWith(undefined);
     await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
@@ -753,7 +767,7 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     await expect.element(dialog).toBeVisible();
     const linkButton = dialog.getByRole('button', { name: 'Link', exact: true });
     await expect.element(linkButton).toBeDisabled();
-    await userEvent.click(dialog.getByRole('button', { name: /Choose Record/ }));
+    // With no link yet, the search opens at once: picking one is the dialog's whole task. No Unlink with nothing linked.
     // The picker's rows sit in a list the test page doesn't size, so the keys pick one, as a keyboard user does.
     await expect.element(page.getByRole('menuitem', { name: /Navy rollout/ })).toBeInTheDocument();
     await userEvent.keyboard('{ArrowDown}{Enter}');
@@ -771,7 +785,6 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
     await userEvent.click(page.getByRole('menuitem', { name: 'Link to a record' }));
     const dialog = page.getByRole('dialog', { name: 'Link Quick chat with Ada Lovelace to a record' });
-    await userEvent.click(dialog.getByRole('button', { name: /Choose Record/ }));
     // The picker's rows sit in a list the test page doesn't size, so the keys pick one, as a keyboard user does.
     await expect.element(page.getByRole('menuitem', { name: /Navy rollout/ })).toBeInTheDocument();
     await userEvent.keyboard('{ArrowDown}{Enter}');

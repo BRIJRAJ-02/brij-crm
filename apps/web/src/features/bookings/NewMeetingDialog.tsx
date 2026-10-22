@@ -239,6 +239,13 @@ export function NewMeetingDialog({
       pick(person);
       return;
     }
+    // Tab on a highlighted row takes it, as a combobox does, and goes on to Email (filled with theirs); Shift+Tab
+    // goes back with nothing picked.
+    if (event.key === 'Tab' && !event.shiftKey && activeIndex !== -1) {
+      const person = shown[activeIndex];
+      if (person !== undefined) pick(person);
+      return;
+    }
     if (event.key === 'Escape') {
       // Esc puts the list away; the dialog stays (a second Esc closes it).
       event.preventDefault();
@@ -449,6 +456,8 @@ export function NewMeetingDialog({
           attribute={GUESTS}
           value={guests.length === 0 ? null : guests}
           surface="form"
+          // Held while Book it is out, as Day, the times and Calendar are: the guests sent are the ones shown.
+          isDisabled={busy}
           onCommit={(value) => {
             // The Email editor commits the whole list of addresses, checked by the email type.
             const next: readonly string[] = Array.isArray(value)

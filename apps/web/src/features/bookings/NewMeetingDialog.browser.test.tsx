@@ -200,6 +200,18 @@ describe('New meeting', () => {
     expect(onBook).not.toHaveBeenCalled();
   });
 
+  it('takes the highlighted row on Tab and goes on to Email, filled with theirs', async () => {
+    await open({ people: () => peopleSearch([person('01', 'Grace Hopper', 'grace@navy.example')]) });
+    await userEvent.keyboard('gra');
+    await expect.element(page.getByRole('listbox', { name: 'People' })).toBeVisible();
+    await userEvent.keyboard('{ArrowDown}{Tab}');
+    await expect.element(page.getByRole('textbox', { name: 'With' })).toHaveValue('Grace Hopper');
+    const email = page.getByRole('textbox', { name: 'Email' });
+    await expect.element(email).toHaveValue('grace@navy.example');
+    await expect.element(email).toHaveFocus();
+    await expect.element(page.getByRole('listbox', { name: 'People' })).not.toBeInTheDocument();
+  });
+
   it('puts the list away on Esc and keeps the dialog', async () => {
     await open({ people: () => peopleSearch([person('01', 'Grace Hopper', 'grace@navy.example')]) });
     await userEvent.keyboard('gr');
@@ -232,6 +244,29 @@ describe('New meeting', () => {
     await userEvent.click(page.getByRole('button', { name: /Book it/ }));
     expect(onBook).toHaveBeenCalledWith(expect.objectContaining({ guests: ['kat@nasa.example'] }));
     expect(onBook.mock.calls[0]?.[0]).not.toHaveProperty('calendarId');
+  });
+
+  it('holds Also invite still while Book it is out, as the other fields are', async () => {
+    let answer: () => void = () => undefined;
+    const onBook = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    await open({ onBook });
+    await userEvent.fill(page.getByRole('textbox', { name: 'With' }), 'Grace Hopper');
+    await userEvent.fill(page.getByRole('textbox', { name: 'Email' }), 'grace@navy.example');
+    await userEvent.click(page.getByRole('textbox', { name: 'Also invite' }));
+    await userEvent.keyboard('alan@bletchley.example{Enter}');
+    await userEvent.click(page.getByRole('button', { name: /Book it/ }));
+    await expect.element(page.getByRole('textbox', { name: 'Also invite' })).toBeDisabled();
+    await expect.element(page.getByRole('button', { name: 'Remove alan@bletchley.example' })).toBeDisabled();
+    expect(onBook).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      answer();
+      await Promise.resolve();
+    });
   });
 
   it('offers Calendar with two calendars that take events, starts on the page’s own, and sends only a pick', async () => {

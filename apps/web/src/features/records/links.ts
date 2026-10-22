@@ -6,7 +6,7 @@
 // layer as one link delta (`records.editLinks`), a pick marked "At …" moving
 // the record from its holder.
 import type { AttributeDefinition, RecordRefDisplay, RecordSearch, SearchResult } from '@crm/data';
-import { arraySource, type ListSource, type ResultState } from '@crm/ui';
+import { arraySource, type AttributeEditorProps, type ListSource, type ResultState } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { strings } from './strings.ts';
@@ -15,6 +15,14 @@ const keyOf = (display: RecordRefDisplay) => `${display.objectId}:${display.reco
 
 /** What a picker shows while its search is out: one row still loading, never "No results". */
 const LOADING: ListSource<RecordRefDisplay> = { count: 1, getItem: () => undefined, getKey: keyOf };
+
+/**
+ * A search of one display shape as the editor takes it: AttributeEditor types its search over every attribute type's
+ * display, and each editor reads only its own (a record picker's records, a member picker's members). The one cast
+ * for it, so each dialog with a picker (a task's, a booking's Link to a record) doesn't keep its own.
+ */
+export const editorSearch = <T>(search: (query: string) => ListSource<T>) =>
+  search as unknown as NonNullable<AttributeEditorProps['onSearch']>;
 
 /** What one record picker needs: its search, each result's note, and how a pick is sent. */
 export interface LinkPicker {
