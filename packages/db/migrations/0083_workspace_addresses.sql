@@ -97,11 +97,23 @@ grant create on schema public to crm_address;
 --> statement-breakpoint
 alter function crm_claim_workspace_address(text) owner to crm_address;
 --> statement-breakpoint
+-- And the migrating owner, which creates workspaces itself (seeds, load scripts, tests); it owns every table the claim
+-- touches already, so this gives it no reach it lacked. Granted by the new owner: the old owner's own entry goes with
+-- the ownership.
+do $$
+begin
+  set local role crm_address;
+  execute format('grant execute on function crm_claim_workspace_address(text) to %I', session_user);
+  reset role;
+end
+$$;
+--> statement-breakpoint
 revoke create on schema public from crm_address;
 --> statement-breakpoint
 revoke crm_address from current_user;
 --> statement-breakpoint
--- Refuse to finish unless the claim is as narrow as it reads: owned by crm_address and executable by crm_app alone,
+-- Refuse to finish unless the claim is as narrow as it reads: owned by crm_address and executable by crm_app (and the
+-- migrating owner) alone,
 -- out of the identity login's reach; crm_address a plain role in no role that nothing but the owner can become,
 -- holding exactly the privileges granted above.
 do $$
@@ -112,7 +124,7 @@ begin
     or exists (
       select 1 from pg_proc p cross join lateral aclexplode(p.proacl) a
       where p.oid = fn and a.privilege_type = 'EXECUTE'
-        and a.grantee not in ('crm_address'::regrole, 'crm_app'::regrole)
+        and a.grantee not in ('crm_address'::regrole, 'crm_app'::regrole, to_regrole(session_user))
     )
     or has_function_privilege('crm_identity', fn, 'EXECUTE') then
     raise exception 'crm_claim_workspace_address must be owned by crm_address and executable by crm_app alone';
