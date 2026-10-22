@@ -19,7 +19,6 @@ import {
   Select,
   SettingsRow,
   SettingsSection,
-  SettingsStack,
   Skeleton,
   Switch,
   type Toasts,
@@ -177,7 +176,7 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
   const isSignOut = confirm === 'signOut';
   return (
     <SettingsPage title={strings.title} titleRef={titleRef}>
-      <SettingsStack>
+      <>
         {error !== undefined && (
           <Callout tone="danger" isAnnounced>
             {error}
@@ -234,7 +233,7 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
             </SettingsRow>
           </Card>
         </SettingsSection>
-      </SettingsStack>
+      </>
       <Modal
         title={
           isSignOut
@@ -287,7 +286,7 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
 export function WorkspaceSecurityPending() {
   return (
     <SettingsPage title={strings.title} isLoading>
-      <SettingsStack>
+      <>
         <SettingsSection title={strings.twoFactor} description={strings.twoFactorDescription}>
           <Card isBusy>
             <SettingsRow title={strings.require}>
@@ -307,7 +306,7 @@ export function WorkspaceSecurityPending() {
             </SettingsRow>
           </Card>
         </SettingsSection>
-      </SettingsStack>
+      </>
     </SettingsPage>
   );
 }
