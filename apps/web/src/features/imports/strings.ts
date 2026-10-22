@@ -130,7 +130,7 @@ export const strings = {
   confirmText: (errors: number) =>
     errors === 0
       ? 'It runs in the background, and you can undo it for 7 days.'
-      : `${rowsWord(errors)} with errors stay out. It runs in the background, and you can undo it for 7 days.`,
+      : `${rowsWord(errors)} with errors ${errors === 1 ? 'stays' : 'stay'} out. It runs in the background, and you can undo it for 7 days.`,
   notYet: 'Not yet',
   sent: (sent: number, total: number) => `Sending rows: ${n(sent)} of ${n(total)}`,
   stopSending: 'Stop',
@@ -162,7 +162,7 @@ export const strings = {
     undone: 'Undone',
   },
   countsInfo:
-    'Rows with errors were left out in the preview. Rows not imported were turned down while importing, for example by a rule or a value another record holds.',
+    'Skipped rows matched a record and had nothing new for it, or you chose to skip them. Rows with errors were left out in the preview. Rows not imported were turned down while importing, for example by a rule or a value another record holds.',
   finished: 'Import finished',
   failed: 'Import failed',
   cancelled: 'Import cancelled',
