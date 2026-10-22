@@ -127,6 +127,40 @@ export const DeleteBookingPageInput = WorkspaceScoped.extend({ pageId: Uuid, mut
 /** Deleting a page. */
 export type DeleteBookingPageInput = z.infer<typeof DeleteBookingPageInput>;
 
+/** The most pages one reorder names: as many as the reader's held list of pages holds (`listBookingPages`). */
+export const PROFILE_ORDER_MAX = 500;
+
+/**
+ * The caller's own pages in the order their profile (`/<handle>`) lists them (owner ask A102: drag to reorder, in
+ * place of an Order number), each once. The server places them first, 0, 1, 2 …, and the caller's other pages after
+ * them in the order they had, so positions stay dense under the 999 cap. Any id that isn't one of the caller's pages
+ * here refuses the whole move as NOT_FOUND, saying nothing of whose it is.
+ */
+export const ReorderProfileInput = WorkspaceScoped.extend({
+  pageIds: z
+    .array(Uuid)
+    .min(1, 'Name at least one page.')
+    .max(PROFILE_ORDER_MAX, 'Order at most 500 pages at once.')
+    .refine((ids) => new Set(ids).size === ids.length, { error: 'Name each page once.' }),
+  mutationId: Uuid,
+});
+/** A new order for the caller's profile. */
+export type ReorderProfileInput = z.infer<typeof ReorderProfileInput>;
+
+/** One page's place on its owner's profile, and its version (`updatedAt`), as a reorder left it. */
+export const ProfilePlace = z.object({
+  id: Uuid,
+  profilePosition: BookingPageSettings.shape.profilePosition,
+  updatedAt: Timestamp,
+});
+/** One page's place on its owner's profile. */
+export type ProfilePlace = z.infer<typeof ProfilePlace>;
+
+/** Every page of the caller's a reorder placed, in its new order. */
+export const ProfileOrder = z.object({ pages: z.array(ProfilePlace) });
+/** Every page of the caller's a reorder placed. */
+export type ProfileOrder = z.infer<typeof ProfileOrder>;
+
 /** A booking as the page's members see it. */
 export const BookingView = z.object({
   id: Uuid,
@@ -165,6 +199,8 @@ export const bookingPagesContract = {
   create: oc.input(CreateBookingPageInput).output(BookingPageView),
   update: oc.input(UpdateBookingPageInput).output(BookingPageView),
   delete: oc.input(DeleteBookingPageInput).output(z.object({ pageId: Uuid })),
+  /** The caller's own pages in their profile's new order, one write; the answer is every page it placed. */
+  reorderProfile: oc.input(ReorderProfileInput).output(ProfileOrder),
 };
 
 /** A member's default schedule's hours and days off (spec 0035: `schedules.*` is the full surface). */

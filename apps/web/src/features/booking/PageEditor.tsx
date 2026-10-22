@@ -190,10 +190,17 @@ function slugProblem(value: string): string | undefined {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) && value.length <= 60 ? undefined : strings.slugInvalid;
 }
 
+/**
+ * The settings the editor never sends: a page's place on its owner's profile is set by Settings › Profile's order
+ * (owner ask A102), so a draft read before a reorder never puts the old place back.
+ */
+const NOT_EDITED: ReadonlySet<keyof BookingPageSettings> = new Set(['profilePosition']);
+
 /** The settings that differ between two drafts. */
 function changed(saved: BookingPageSettings, draft: BookingPageSettings): Partial<BookingPageSettings> {
   const keys = Object.keys(draft) as (keyof BookingPageSettings)[];
   const entries = keys
+    .filter((key) => !NOT_EDITED.has(key))
     .filter((key) => JSON.stringify(draft[key]) !== JSON.stringify(saved[key]))
     .map((key) => [key, draft[key]]);
   return Object.fromEntries(entries) as Partial<BookingPageSettings>;

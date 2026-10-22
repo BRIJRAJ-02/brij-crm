@@ -157,6 +157,68 @@ describe('handle addresses (22 Oct 2026)', () => {
     expect((await handles(`nobody-${newId().slice(-8)}`)).status).toBe(404);
     expect((await handles(`${handle}?after=nonsense`)).status).toBe(400);
   });
+
+  it('lists the profile in the order Settings saved at once, never from a cache (owner ask A102)', async () => {
+    const m = await memberWithWorkspace(app);
+    const handle = `order-${newId().slice(-8)}`;
+    await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
+    const make = (title: string, profileSection?: string) =>
+      m.client.bookingPages.create({
+        workspace: m.slug,
+        id: newId(),
+        title,
+        timeZone: 'UTC',
+        ...(profileSection === undefined ? {} : { settings: { profileSection } }),
+        mutationId: newId(),
+      });
+    const intro = await make('Intro call', 'Sales');
+    const coffee = await make('Coffee chat');
+    const demo = await make('Demo', 'Sales');
+    /** The profile's links as a visitor reads them: each title and its section. */
+    const listed = async () => {
+      const read = await handles(handle);
+      expect(read.headers.get('cache-control')).toContain('no-store');
+      const body = (await read.json()) as { readonly links: readonly { title: string; section?: string }[] };
+      return body.links.map((link) => [link.title, link.section ?? null]);
+    };
+    // New pages join the end, in the order they were made.
+    expect(await listed()).toEqual([
+      ['Intro call', 'Sales'],
+      ['Coffee chat', null],
+      ['Demo', 'Sales'],
+    ]);
+    const answer = await m.client.bookingPages.reorderProfile({
+      workspace: m.slug,
+      pageIds: [coffee.id, demo.id, intro.id],
+      mutationId: newId(),
+    });
+    expect(answer.pages.map((each) => [each.id, each.profilePosition])).toEqual([
+      [coffee.id, 0],
+      [demo.id, 1],
+      [intro.id, 2],
+    ]);
+    expect(await listed()).toEqual([
+      ['Coffee chat', null],
+      ['Demo', 'Sales'],
+      ['Intro call', 'Sales'],
+    ]);
+    // Someone else's page refuses the whole move as absent; a page named twice is refused at the boundary.
+    const other = await memberWithWorkspace(app);
+    const theirs = await pageOf(other);
+    const refused = await failure(() =>
+      m.client.bookingPages.reorderProfile({ workspace: m.slug, pageIds: [coffee.id, theirs.id], mutationId: newId() }),
+    );
+    expect(refused.code).toBe('NOT_FOUND');
+    const twice = await failure(() =>
+      m.client.bookingPages.reorderProfile({ workspace: m.slug, pageIds: [coffee.id, coffee.id], mutationId: newId() }),
+    );
+    expect(twice.code).toBe('INPUT_INVALID');
+    expect(await listed()).toEqual([
+      ['Coffee chat', null],
+      ['Demo', 'Sales'],
+      ['Intro call', 'Sales'],
+    ]);
+  });
 });
 
 describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {

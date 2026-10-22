@@ -375,6 +375,7 @@ export {
   getBookingPage,
   listBookingPages,
   listBookings,
+  reorderProfilePages,
   updateBookingPage,
 } from './booking/pages.ts';
 // Availability schedules (spec 0035): a member's named hours, the one the slot engine resolves for a page, and the

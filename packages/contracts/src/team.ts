@@ -69,6 +69,8 @@ export const AUDIT_ACTIONS = [
   // Spec 0033 (AC-899): an owner changed the workspace's sign in rules, or signed everyone out of it.
   'workspace_security.changed',
   'workspace_security.signed_out_everyone',
+  // Owner ask A102 (22 Oct 2026): a person put their Public booking pages in a new order on their profile.
+  'booking_page.profile_reordered',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

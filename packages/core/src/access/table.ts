@@ -331,6 +331,8 @@ export const ACCESS_TABLE = {
   createBookingPage: { bookingPages: true },
   updateBookingPage: { bookingPages: true },
   deleteBookingPage: { bookingPages: true },
+  // The owner's profile order (owner ask A102): their own pages alone, whoever else may change them.
+  reorderProfilePages: { bookingPages: true },
   listBookings: { bookingPages: true },
   listWorkspaceBookings: { bookingPages: true },
   listMeetings: { bookingPages: true },
