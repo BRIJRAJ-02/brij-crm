@@ -1,7 +1,7 @@
 // A workspace's web address (spec 0005, Value sourcing; spec 0036): made
 // from the workspace name, as it is typed, and the free ones offered.
 import { describe, expect, it } from 'vitest';
-import { addressAsTyped, addressCandidates, companyDomain, SLUG_RULE, slugFrom } from './address.ts';
+import { addressAsTyped, addressCandidates, atAddress, companyDomain, SLUG_RULE, slugFrom } from './address.ts';
 
 describe('the web address', () => {
   it.each([
@@ -66,5 +66,21 @@ describe('the addresses offered (spec 0036)', () => {
   it('come from the domain when there is no name', () => {
     expect(addressCandidates('', 'ada@halcyon.io')[0]).toBe('halcyon');
     expect(addressCandidates('', 'ada@gmail.com')).toEqual([]);
+  });
+});
+
+describe('a page at the new address', () => {
+  it.each([
+    ['/w/acme', '/w/halcyon'],
+    ['/w/acme/settings/general', '/w/halcyon/settings/general'],
+    ['/w/acme/objects/people?view=1#top', '/w/halcyon/objects/people?view=1#top'],
+    ['/w/acme?x=1', '/w/halcyon?x=1'],
+  ])('moves %j to %j', (href, moved) => {
+    expect(atAddress(href, 'acme', 'halcyon')).toBe(moved);
+  });
+
+  it('leaves another workspace, or one whose address only starts the same, alone', () => {
+    expect(atAddress('/w/acme-labs/home', 'acme', 'halcyon')).toBe('/w/acme-labs/home');
+    expect(atAddress('/sign-in', 'acme', 'halcyon')).toBe('/sign-in');
   });
 });

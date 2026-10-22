@@ -45,7 +45,7 @@ pnpm db:setup       # all three, in order
 - Outside `withWorkspace()`, a tenant query returns no rows rather than an error. The policies fail closed, which is safe but can look like a bug.
 - `withWorkspace()` throws a `TypeError` unless the id is a uuid.
 - `DATABASE_URL` is pooled (PgBouncer in transaction mode): no named prepared statements, and no LISTEN. LISTEN is accepted there but never delivers, so it only runs on `DATABASE_URL_DIRECT`.
-- Better Auth's tables are global identity in schema `auth`, outside row level security. Only `crm_identity` reads and writes them; `crm_app` may only insert the two directory rows inside the workspace transaction. Membership is always checked explicitly, in the tenant `members` row.
+- Better Auth's tables are global identity in schema `auth`, outside row level security. Only `crm_identity` reads and writes them; `crm_app` may only insert the two directory rows inside the workspace transaction. Membership is always checked explicitly, in the tenant `members` row. A workspace's address changes only through `crm_claim_workspace_address` (migration 0082, owned by `crm_address`, executable by `crm_app`), inside the workspace transaction: `auth.workspace_addresses` keeps every address a workspace held, so an old one still finds it and is never another workspace's until the purge.
 - Tests get `appUrl`, `identityUrl`, `ownerUrl` and `adminUrl` (a superuser, for `pg_authid` and built in roles) from `prepareTestDatabase`. A test that commits a role the migrations' checks would refuse runs inside `withSetupLock()`. Outside this package, use `testQuery()` from `@crm/db/testing` instead of opening a connection.
 
 ## Agent skills

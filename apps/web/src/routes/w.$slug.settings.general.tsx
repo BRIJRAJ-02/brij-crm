@@ -48,6 +48,11 @@ function GeneralRoute() {
       mayDelete={permissions.includes('workspace.delete')}
       origin={window.location.origin}
       onChanged={() => router.invalidate()}
+      onMoved={async (moved) => {
+        // The page at its new address, in place of the old one; every loader reads again under it.
+        await navigate({ to: '/w/$slug/settings/general', params: { slug: moved }, replace: true });
+        await router.invalidate();
+      }}
       onDeleted={(name) => {
         // Restore stays one click away (Undo), then the workspace's address works again.
         toasts.toast({

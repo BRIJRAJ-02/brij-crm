@@ -3612,15 +3612,26 @@ export function createDataLayer({
     workspace: {
       get: (workspace: string): Promise<WorkspaceSettings> =>
         call((options) => api.workspace.get({ workspace }, options)),
-      /** Renames it or changes its time zone. Refusals: `FORBIDDEN`, `INPUT_INVALID`. */
+      /**
+       * Renames it, changes its time zone, or moves it to a new address (the
+       * answer's `slug`). Refusals: `FORBIDDEN`, `INPUT_INVALID`, `SLUG_TAKEN`
+       * (field `slug`). A new address drops what was cached under the old one
+       * and reads the person's workspaces again, so the switcher and every
+       * page take the new one; the old address still finds the workspace.
+       */
       async update(
         workspace: string,
-        change: { readonly name?: string; readonly timeZone?: string },
+        change: { readonly name?: string; readonly timeZone?: string; readonly slug?: string },
       ): Promise<WorkspaceSettings> {
         const updated = await call((options) =>
           api.workspace.update({ workspace, ...change, mutationId: mintId() }, options),
         );
-        if (change.name !== undefined) me = undefined;
+        if (updated.slug !== workspace) {
+          objects.delete(workspace);
+          access.delete(workspace);
+          members.delete(workspace);
+        }
+        if (change.name !== undefined || updated.slug !== workspace) me = undefined;
         return updated;
       },
       /** Deletes it, softly, for 30 days. Refusals: `FORBIDDEN`, `CONFIRM_MISMATCH`. */

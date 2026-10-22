@@ -1,10 +1,14 @@
 // Settings › Workspace › General (spec 0031, slice 7, AC-822, AC-823): the
-// open workspace's name, default time zone and fixed address, and the
-// owner's delete and restore. Every change writes its audit row in its own
+// open workspace's name, default time zone and address, and the owner's
+// delete and restore. Every change writes its audit row in its own
 // transaction. The directory's copy of the name and its deleted mark live in
 // schema auth, which the app may not update (migration 0018), so the caller
 // writes them through the identity store once the change commits; the access
-// door reads the tenant row, so a deleted workspace is shut either way.
+// door reads the tenant row, so a deleted workspace is shut either way. A new
+// address is the exception: the directory finds the workspace by it, so it
+// moves in the same transaction, through the one function the app may call
+// there (`crm_claim_workspace_address`, migration 0082), which keeps the old
+// address the workspace's own.
 import {
   namesMatch,
   WORKSPACE_PURGE_DAYS,
@@ -12,20 +16,39 @@ import {
   type UpdateWorkspaceInput,
   type WorkspaceSettings,
 } from '@crm/contracts';
-import { schema, type WorkspaceTx } from '@crm/db';
+import {
+  ADDRESS_CLAIM_CONSTRAINT,
+  claimWorkspaceAddress,
+  DIRECTORY_SLUG_CONSTRAINT,
+  schema,
+  type WorkspaceTx,
+} from '@crm/db';
 import { and, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
 import { requirePermission } from '../access/check.ts';
 import { checkScope } from '../access/mint.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import { touched } from '../engine/definitions.ts';
-import { refuse, refuseOn } from '../engine/refusals.ts';
+import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
 
 const { members, workspaces } = schema;
 
 const NOT_A_MEMBER = "That workspace doesn't exist, or you're not a member of it.";
+
+/** A workspace address (spec 0005): the rule a new workspace's address follows, which the database checks too. */
+const WORKSPACE_SLUG = /^(?=.{3,40}$)[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** The keys a taken address trips: live workspaces, the directory, and every address a workspace ever held. */
+const ADDRESS_TAKEN: ReadonlySet<string> = new Set([
+  'workspaces_slug',
+  DIRECTORY_SLUG_CONSTRAINT,
+  ADDRESS_CLAIM_CONSTRAINT,
+]);
+
+/** The refusal for an address another workspace holds or held. */
+const ADDRESS_TAKEN_MESSAGE = 'That address is taken. Try another.';
 
 /** The settings columns, as the contract answers them. */
 const SETTINGS = {
@@ -76,13 +99,17 @@ export interface UpdatedWorkspace {
 }
 
 /**
- * Renames the workspace (1 to 64 characters) and changes its default time
- * zone (`workspace.manage`, AC-822). A change that changes nothing writes
- * nothing; otherwise one audit row with the changed fields only.
+ * Renames the workspace (1 to 64 characters), changes its default time
+ * zone, and moves it to a new address (`workspace.manage`, AC-822). A change
+ * that changes nothing writes nothing; otherwise one audit row with the
+ * changed fields only. A new address follows the new workspace rule
+ * (`CONFIG_INVALID` on `slug`) and must be free: one another workspace holds
+ * or ever held is refused `SLUG_TAKEN` on `slug`. The old address stays the
+ * workspace's, so links with it keep working.
  */
 export async function updateWorkspace(
   scope: EngineScope,
-  input: Pick<UpdateWorkspaceInput, 'name' | 'timeZone'>,
+  input: Pick<UpdateWorkspaceInput, 'name' | 'timeZone' | 'slug'>,
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
 ): Promise<UpdatedWorkspace> {
@@ -90,6 +117,13 @@ export async function updateWorkspace(
   const name = input.name?.trim();
   if (name !== undefined && (name.length < 1 || name.length > 64)) {
     throw refuseOn('CONFIG_INVALID', 'Use 1 to 64 characters for the name.', 'name');
+  }
+  if (input.slug !== undefined && !WORKSPACE_SLUG.test(input.slug)) {
+    throw refuseOn(
+      'CONFIG_INVALID',
+      'Use 3 to 40 lowercase letters and digits, with single dashes between them.',
+      'slug',
+    );
   }
   const { result } = await runWrite(
     scope,
@@ -105,16 +139,26 @@ export async function updateWorkspace(
         before.timeZone = now.timeZone;
         after.timeZone = input.timeZone;
       }
+      if (input.slug !== undefined && input.slug !== now.slug) {
+        before.slug = now.slug;
+        after.slug = input.slug;
+      }
       if (Object.keys(after).length === 0) return { settings: toSettings(now), renamed: false };
+      // The directory first: its claim is the one that sees every address any workspace ever held.
+      if (input.slug !== undefined && after.slug !== undefined) await claimAddress(tx, input.slug);
       const [row] = await tx
         .update(workspaces)
         .set({
           ...(name === undefined || after.name === undefined ? {} : { name }),
           ...(after.timeZone === undefined || input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          ...(after.slug === undefined || input.slug === undefined ? {} : { slug: input.slug }),
           ...touched(scope),
         })
         .where(eq(workspaces.id, scope.workspaceId))
-        .returning(SETTINGS);
+        .returning(SETTINGS)
+        .catch((error: unknown) => {
+          throw addressRefusal(error);
+        });
       if (row === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
       await writeAudit(
         tx,
@@ -128,6 +172,24 @@ export async function updateWorkspace(
     hooks,
   );
   return result;
+}
+
+/** Claims `slug` in the directory for the open workspace, refusing `SLUG_TAKEN` when another holds or held it. */
+async function claimAddress(tx: WorkspaceTx, slug: string): Promise<void> {
+  try {
+    await claimWorkspaceAddress(tx, slug);
+  } catch (error) {
+    throw addressRefusal(error);
+  }
+}
+
+/** A taken address's unique violation as the `SLUG_TAKEN` refusal on `slug`; anything else as it was. */
+function addressRefusal(error: unknown): unknown {
+  const pg = postgresError(error);
+  if (pg?.code === '23505' && pg.constraint !== undefined && ADDRESS_TAKEN.has(pg.constraint)) {
+    return refuseOn('SLUG_TAKEN', ADDRESS_TAKEN_MESSAGE, 'slug');
+  }
+  return error;
 }
 
 /** What a delete did: the workspace as its owners see it in the window, and who to tell. */

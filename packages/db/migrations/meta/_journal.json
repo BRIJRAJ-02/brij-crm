@@ -582,6 +582,13 @@
       "when": 1792650628908,
       "tag": "0082_booking_four_durations",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1792651652016,
+      "tag": "0083_workspace_addresses",
+      "breakpoints": true
     }
   ]
 }

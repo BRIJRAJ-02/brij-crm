@@ -35,7 +35,13 @@ export {
   type QueueConnection,
   type SleepCheck,
 } from './queue.ts';
-export { addWorkspaceToDirectory, DIRECTORY_SLUG_CONSTRAINT, type DirectoryEntry } from './identity/directory.ts';
+export {
+  ADDRESS_CLAIM_CONSTRAINT,
+  addWorkspaceToDirectory,
+  claimWorkspaceAddress,
+  DIRECTORY_SLUG_CONSTRAINT,
+  type DirectoryEntry,
+} from './identity/directory.ts';
 export {
   createIdentityStore,
   type AuthDatabase,

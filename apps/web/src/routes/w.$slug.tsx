@@ -8,6 +8,7 @@ import {
   useRouter,
   type ErrorComponentProps,
 } from '@tanstack/react-router';
+import { atAddress } from '../features/address/address.ts';
 import { signInHref } from '../features/auth/redirect.ts';
 import { CommandMenuProvider } from '../features/command/CommandMenuProvider.tsx';
 import { UnreadTitle } from '../features/inbox/UnreadTitle.tsx';
@@ -28,6 +29,14 @@ export const Route = createFileRoute('/w/$slug')({
     context.data.live.prepare(params.slug);
     const me = await context.data.me.get();
     if (me === undefined) throw redirect({ href: signInHref(location.href), replace: true });
+    // An address the workspace held before it moved: the door still finds it, and the page moves to the new one,
+    // so bookmarks and shared links keep working. Only for an address none of the person's workspaces has now.
+    if (!me.workspaces.some((workspace) => workspace.slug === params.slug)) {
+      const moved = await context.data.workspace.get(params.slug).catch(() => undefined);
+      if (moved !== undefined && moved.slug !== params.slug) {
+        throw redirect({ href: atAddress(location.href, params.slug, moved.slug), replace: true });
+      }
+    }
     // Remembered for `/` and sign in on every device (spec 0031, AC-802); never waited for, and silent on failure.
     void context.data.me.rememberWorkspace(params.slug);
     return { me };

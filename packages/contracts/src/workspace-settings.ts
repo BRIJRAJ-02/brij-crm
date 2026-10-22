@@ -1,5 +1,5 @@
 // Settings › Workspace › General (spec 0031, slice 7, AC-822, AC-823): the
-// workspace's name, default time zone and fixed address, and the owner's
+// workspace's name, default time zone and address, and the owner's
 // delete and restore. The `workspace` namespace (singular) is the open
 // workspace's own settings; `workspaces` (plural) is the list you are in.
 import { oc } from '@orpc/contract';
@@ -27,10 +27,15 @@ export const WorkspaceSettings = z.object({
 /** The open workspace's settings. */
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 
-/** A change to the workspace's name, default time zone, or both (`workspace.manage`). */
+/**
+ * A change to the workspace's name, default time zone or address, in any mix
+ * (`workspace.manage`). A new address follows the rule a new workspace's
+ * does; the old one keeps finding the workspace and is never anyone else's.
+ */
 export const UpdateWorkspaceInput = WorkspaceScoped.extend({
   name: WorkspaceName.optional(),
   timeZone: TimeZoneName.optional(),
+  slug: WorkspaceSlug.optional(),
   mutationId: Uuid,
 });
 /** A change to the workspace's settings. */
@@ -54,8 +59,10 @@ export const DeletedWorkspace = z.object({
 export type DeletedWorkspace = z.infer<typeof DeletedWorkspace>;
 
 /**
- * The open workspace's settings. `get` answers any member; `update` needs
- * `workspace.manage`; `delete` is owners only (`workspace.delete`) and
+ * The open workspace's settings. `get` answers any member, by its address or
+ * one it held before (the answer's `slug` is the current one); `update` needs
+ * `workspace.manage` and refuses 409 `SLUG_TAKEN` on `slug` for an address
+ * another workspace holds or held; `delete` is owners only (`workspace.delete`) and
  * refuses 422 `CONFIRM_MISMATCH` unless `confirmName` is the workspace's name.
  */
 export const workspaceContract = {

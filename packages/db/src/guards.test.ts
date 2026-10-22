@@ -137,7 +137,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly twenty two security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly twenty three security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -148,6 +148,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(definers.rows).toEqual([
       { name: 'crm_booking_by_token', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
+      { name: 'crm_claim_workspace_address', owner: 'crm_address' },
       { name: 'crm_enqueue_booking_mail', owner: 'crm_queue' },
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_email', owner: 'crm_queue' },
@@ -180,6 +181,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(hardening.rows).toEqual([
       { name: 'crm_booking_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_page_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it raises the unique violation a taken address is refused with.
+      { name: 'crm_claim_workspace_address', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_booking_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -293,6 +296,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['crm_booking_page_by_key(text)', 'crm_booking_by_token(text)'],
       ['app', 'app'],
     ],
+    ['crm_address', ['crm_claim_workspace_address'], ['crm_claim_workspace_address(text)'], ['app']],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
     async (name, fns, signatures, callers) => {
@@ -1539,6 +1543,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'user',
     'user_prefs',
     'verification',
+    'workspace_addresses',
     'workspace_directory',
     'workspace_membership',
   ];
@@ -1555,6 +1560,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
     `);
     expect(tables.rows.map((row) => row.table)).toEqual(AUTH_TABLES);
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
+      'workspace_addresses',
       'workspace_directory',
       'workspace_membership',
     ]);
@@ -1663,8 +1669,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
         'crm_app'::regrole, 'crm_identity'::regrole, (select nspowner from pg_namespace where nspname = 'auth')
       )
     `);
-    // But the purge (spec 0031, AC-823), which removes a purged workspace's directory rows through its functions.
-    expect(schema.rows).toEqual([{ grantee: 'crm_purge' }]);
+    // But the purge (spec 0031, AC-823), which removes a purged workspace's directory rows through its functions,
+    // and the address claim (migration 0082), which moves a workspace's address through its one function.
+    expect(schema.rows.map((row) => row.grantee).sort()).toEqual(['crm_address', 'crm_purge']);
     const tables = await owner.query<{ grant: string }>(`
       select table_name || ' ' || privilege_type as grant from information_schema.role_table_grants
       where table_schema = 'auth'
@@ -1673,7 +1680,12 @@ describe('the auth schema: global identity, outside row level security (spec 000
         )
       order by 1
     `);
-    expect(tables.rows.map((row) => row.grant)).toEqual(['workspace_directory DELETE', 'workspace_membership DELETE']);
+    expect(tables.rows.map((row) => row.grant)).toEqual([
+      'workspace_addresses INSERT',
+      'workspace_addresses SELECT',
+      'workspace_directory DELETE',
+      'workspace_membership DELETE',
+    ]);
     const columns = await owner.query<{ grant: string }>(`
       select att.attrelid::regclass || '.' || att.attname || ' ' || a.privilege_type as grant
       from pg_attribute att cross join lateral aclexplode(att.attacl) a
@@ -1686,6 +1698,19 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth.user_prefs.last_workspace_id UPDATE',
       'auth.workspace_directory.workspace_id SELECT',
       'auth.workspace_membership.workspace_id SELECT',
+    ]);
+    const claim = await owner.query<{ grant: string }>(`
+      select att.attrelid::regclass || '.' || att.attname || ' ' || a.privilege_type as grant
+      from pg_attribute att cross join lateral aclexplode(att.attacl) a
+      join pg_class c on c.oid = att.attrelid join pg_namespace n on n.oid = c.relnamespace
+      where a.grantee = 'crm_address'::regrole
+      order by 1
+    `);
+    // The claim reads the directory's address and moves it, and touches nothing else there.
+    expect(claim.rows.map((row) => row.grant)).toEqual([
+      'auth.workspace_directory.slug SELECT',
+      'auth.workspace_directory.slug UPDATE',
+      'auth.workspace_directory.workspace_id SELECT',
     ]);
     const search = await owner.query<{ usage: boolean }>(
       `select has_schema_privilege('crm_search', 'auth', 'USAGE') as usage`,

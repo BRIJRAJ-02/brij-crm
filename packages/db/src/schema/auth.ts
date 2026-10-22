@@ -259,6 +259,37 @@ export const workspaceDirectory = auth.table(
   ],
 );
 
+/**
+ * Every address a workspace has held, its current one included (Settings ›
+ * Workspace › General): the primary key keeps an address with the first
+ * workspace to claim it for as long as that workspace exists, so a link with
+ * an old address still finds it and no other workspace can take it. Written
+ * only by `crm_claim_workspace_address` (migration 0082), which acts on the
+ * workspace the transaction is set to; removed with the directory row when a
+ * workspace is purged. Never read to grant access.
+ */
+export const workspaceAddresses = auth.table(
+  'workspace_addresses',
+  {
+    slug: text('slug').notNull(),
+    workspaceId: uuid('workspace_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ name: 'workspace_addresses_pkey', columns: [t.slug] }),
+    index('workspace_addresses_workspace').on(t.workspaceId),
+    check(
+      'workspace_addresses_slug_shape',
+      sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) between 3 and 40`,
+    ),
+    foreignKey({
+      name: 'workspace_addresses_directory',
+      columns: [t.workspaceId],
+      foreignColumns: [workspaceDirectory.workspaceId],
+    }).onDelete('cascade'),
+  ],
+);
+
 /** Which workspaces a user is in, for "my workspaces". Written with the workspace, never read for access. */
 export const workspaceMembership = auth.table(
   'workspace_membership',
