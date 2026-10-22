@@ -171,6 +171,43 @@
     padding: 0;
   }
 
+  /* The quiet variant: the rest of a list folded under one line (a checklist's done steps). The title is a
+     control sized to its words, as quiet as a ghost Button, never a full width bar: secondary, with a pill
+     and the text colour under the pointer only. Its chevron is centred in a 16px icon's column on the content
+     edge and its words start space-12 after it, where a row's words start after its icon; the pill reaches
+     space-6 out past the column. The panel is flush, so the rows it holds line up with the rows above. */
+  .root[data-variant='quiet'] .trigger {
+    gap: var(--space-12);
+    inline-size: fit-content;
+    max-inline-size: calc(100% + var(--space-6));
+    block-size: auto;
+    min-block-size: var(--size-control);
+    margin-inline-start: calc(-1 * var(--space-6));
+    padding-inline: var(--space-6) var(--space-8);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      color var(--duration-hover) var(--ease-hover);
+  }
+
+  .root[data-variant='quiet'] .chevron {
+    flex: none;
+    justify-content: center;
+    inline-size: var(--size-icon);
+    color: inherit;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-variant='quiet'] .trigger[data-hovered] {
+      color: var(--text);
+    }
+  }
+
+  .root[data-variant='quiet'][data-expanded] .panel {
+    padding: 0;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .chevron,
     .panel {

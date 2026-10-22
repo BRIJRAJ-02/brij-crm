@@ -32,9 +32,13 @@ export interface DisclosureProps {
    * `label` draws the title as a sidebar section label: 11px, quiet, its
    * chevron after it. `fields` stacks the panel's content `space-16` apart, as
    * a Form stacks its fields, for more fields folded inside a form ("Add more
-   * fields" in a create dialog).
+   * fields" in a create dialog). `quiet` folds the rest of a list under a
+   * control sized to its words, like a ghost Button: its chevron sits in the
+   * rows' 16px icon column, its words on their text line, and the panel is
+   * flush, so the rows it holds line up with the rows above (Home's setup
+   * checklist's done steps).
    */
-  readonly variant?: 'default' | 'label' | 'fields';
+  readonly variant?: 'default' | 'label' | 'fields' | 'quiet';
   /**
    * Quiet controls after the title, outside its toggle (a sidebar section's
    * grip and its menu, spec 0034). In the `label` variant they show while the
