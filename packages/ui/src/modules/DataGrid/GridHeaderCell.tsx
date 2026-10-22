@@ -62,8 +62,8 @@ export interface GridHeaderCellProps {
   readonly sorted?: 'ascending' | 'descending';
   /** A dragged column is over this one and would land on this side of it. */
   readonly dropSide?: 'before' | 'after' | undefined;
-  /** The whole grid is read only (the trash): the per column lock is left out, since no column edits. */
-  readonly isGridReadOnly?: boolean;
+  /** The grid leaves out header locks (the trash, where every column is read only): no lock here. */
+  readonly hideLock?: boolean;
 }
 
 /** A column header with its menu, resize edge and drag to reorder. */
@@ -81,7 +81,7 @@ export function GridHeaderCell({
   actions,
   sorted,
   dropSide,
-  isGridReadOnly = false,
+  hideLock = false,
 }: GridHeaderCellProps) {
   const { attribute } = column;
   // Pointer drag only: the column menu is the keyboard route, so the header's keys stay the grid's.
@@ -166,7 +166,7 @@ export function GridHeaderCell({
       )}
       {attribute.ai !== undefined && <Icon name="sparkles" size="sm" tone="ai" label={strings.aiColumn} />}
       {/* Its cells never open: said once here, so the column doesn't look editable. */}
-      {!isGridReadOnly && readOnlyReasonOf(attribute) !== undefined && (
+      {!hideLock && readOnlyReasonOf(attribute) !== undefined && (
         <Icon name="lock" size="xs" tone="muted" label={strings.readOnlyColumn} />
       )}
       <MenuTrigger isOpen={isMenuOpen} onOpenChange={onMenuOpenChange}>

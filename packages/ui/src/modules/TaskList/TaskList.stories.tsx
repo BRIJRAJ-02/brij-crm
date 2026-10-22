@@ -34,6 +34,8 @@ interface SampleProps {
   readonly hideRecord?: boolean;
   readonly isReadOnly?: boolean;
   readonly withLocked?: boolean;
+  /** A phone's column: under 480px the record chips step aside so titles keep the row. */
+  readonly isPhone?: boolean;
 }
 
 /** The list holding its own tasks, as the data layer would, in a fixed height slot. */
@@ -48,6 +50,7 @@ function SampleTasks({
   hideRecord,
   isReadOnly,
   withLocked = false,
+  isPhone = false,
 }: SampleProps) {
   const [tasks, setTasks] = useState<readonly TaskEntry[]>(() =>
     isEmpty
@@ -60,7 +63,7 @@ function SampleTasks({
   );
   const source = isLong ? longSource(onRangeChange ?? (() => undefined)) : arraySource(tasks, (task) => task.id);
   return (
-    <Stage height="grid">
+    <Stage height="grid" {...(isPhone ? { width: 'phone' as const } : {})}>
       <TaskList
         label="Tasks"
         tasks={source}
@@ -137,6 +140,17 @@ export const OnARecord: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas }) => {
     await expect(canvas.queryByText('Northwind Traders')).not.toBeInTheDocument();
+  },
+};
+
+/** On a phone: the record chips step aside, so every title keeps the row; opening a task shows its records. */
+export const OnAPhone: Story = {
+  args: { isPhone: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Send the order form')).toBeVisible();
+    const chips = canvas.queryAllByText('Northwind Traders');
+    await expect(chips.length).toBeGreaterThan(0);
+    for (const chip of chips) await expect(chip).not.toBeVisible();
   },
 };
 

@@ -454,7 +454,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                 return undefined;
               }}
               rowHeader={TRASH_NAME_COLUMN}
-              isReadOnly
+              hideColumnLocks
               selection={selection}
               onSelectionChange={select}
               cellErrors={state.cellErrors}
