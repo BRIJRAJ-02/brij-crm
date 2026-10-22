@@ -229,6 +229,7 @@
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+    z-index: var(--z-sticky);
     pointer-events: none;
     translate: -50% -50%;
   }
@@ -598,6 +599,19 @@
     .dayButton {
       margin-inline: 0;
       padding-inline: var(--space-2);
+    }
+
+    /* One day shows at a time, so each day's button says it has something on with a small dot under its date,
+       as Apple Calendar's and Fantastical's week strips do; every button keeps the dot's room. */
+    .dayButton::after {
+      inline-size: var(--space-4);
+      block-size: var(--space-4);
+      border-radius: var(--radius-full);
+      content: '';
+    }
+
+    .dayButton[data-busy]::after {
+      background: var(--text-tertiary);
     }
   }
 }

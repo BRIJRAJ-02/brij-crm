@@ -54,7 +54,10 @@ export interface MeetingCardProps {
   /** What the people row is called for screen readers. Default "Guests". */
   readonly peopleLabel?: string;
   readonly rows?: readonly MeetingCardRow[];
-  /** The footer's actions, primary first (Join, Reschedule, Copy guest link), each a `size="lg"` Button. */
+  /**
+   * The footer's actions on one row, primary first: at most Join, one more and an overflow menu (Reschedule, then
+   * More holding Copy guest link and Cancel booking), each `size="lg"`.
+   */
   readonly actions?: ReactNode;
   /** The footer's far end: a quiet ending action (Cancel booking), apart from the rest, `size="lg"` too. */
   readonly endAction?: ReactNode;
@@ -103,7 +106,7 @@ export function MeetingCard({
           {people.map((person) => (
             <li key={person.id} className={styles.row}>
               <span className={styles.lead}>
-                <Avatar name={person.name} id={person.id} size="sm" isDecorative />
+                <Avatar name={person.name} id={person.id} size="md" isDecorative />
               </span>
               <span className={styles.content}>
                 <span className={styles.value}>
@@ -136,7 +139,7 @@ export function MeetingCard({
           {rows.map((row) => (
             <div key={row.id} className={styles.row}>
               <dt className={styles.lead}>
-                <Icon name={row.icon} size="sm" />
+                <Icon name={row.icon} />
                 <VisuallyHidden>{row.label}</VisuallyHidden>
               </dt>
               <dd className={styles.content}>

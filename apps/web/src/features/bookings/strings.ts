@@ -210,6 +210,8 @@ export const strings = {
   copyGuestLink: 'Copy guest link',
   guestLinkCopied: 'Guest link copied. It opens their booking, so share it only with them.',
   cancelBooking: 'Cancel booking',
+  /** The booking card's overflow menu. */
+  moreForBooking: 'More for this booking',
   rescheduleTitle: (title: string, name: string) => `Reschedule ${title} with ${name}`,
   tryAgain: 'Try again',
   copyFailed: 'Couldn’t copy the link. Try again.',
