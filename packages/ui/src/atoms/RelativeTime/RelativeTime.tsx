@@ -5,6 +5,9 @@ import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './RelativeTime.module.css';
 import { strings } from './strings.ts';
 
+/** Under this many milliseconds a moment reads "just now". */
+const MINUTE = 60_000;
+
 /** Props for RelativeTime. */
 export interface RelativeTimeProps {
   /** The instant, ISO 8601 in UTC (`2026-10-08T11:30:00.000Z`). */
@@ -25,7 +28,9 @@ export function RelativeTime({ value }: RelativeTimeProps) {
     <Tooltip content={exact} isTextTrigger>
       <>
         <time className={styles.root} dateTime={value}>
-          {formatRelative(value, now, locale, timeZone, dateFormat)}
+          {Math.abs(new Date(value).getTime() - now) < MINUTE
+            ? strings.justNow
+            : formatRelative(value, now, locale, timeZone, dateFormat)}
         </time>
         <VisuallyHidden>{strings.exact(exact)}</VisuallyHidden>
       </>

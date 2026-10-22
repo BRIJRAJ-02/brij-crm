@@ -82,11 +82,11 @@ export const Floating: Story = {
   },
 };
 
-/** Stacked: sections a set space apart, each a FieldGroup, as a form submission shows them. */
+/** Stacked, with a subtitle: sections a set space apart, each a FieldGroup, as a form submission shows them. */
 export const Stacked: Story = {
   render: () => (
     <Stage>
-      <Panel title="Submission" isOpen onClose={() => undefined} isStacked>
+      <Panel title="Grace Hopper" subtitle="Website enquiry · 5 minutes ago" isOpen onClose={() => undefined} isStacked>
         <DescriptionList
           items={[
             { term: 'State', description: 'Added' },
@@ -109,6 +109,7 @@ export const Stacked: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
+    await expect(canvas.getByRole('dialog', { name: 'Grace Hopper' })).toHaveTextContent('Website enquiry');
     const answers = canvas.getByRole('group', { name: 'Answers' });
     const source = canvas.getByRole('group', { name: 'Where it came from' });
     const gap = source.getBoundingClientRect().top - answers.getBoundingClientRect().bottom;
