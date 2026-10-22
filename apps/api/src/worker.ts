@@ -7,16 +7,8 @@
 // milestone 3, `jobs/lifecycle.ts`): awake while there is work, asleep with no
 // connection at all once idle for `WORKER_IDLE_SLEEP_SECONDS`, so Neon's
 // compute can suspend; the poke and a timer for scheduled work wake it.
-import { jobKinds, type QueueRows } from '@crm/core';
-import {
-  audiences,
-  meetingFacts,
-  runDailyCleanup,
-  syncConnection,
-  systemScope,
-  taskFacts,
-  viewFacts,
-} from '@crm/core/system';
+import type { QueueRows } from '@crm/core';
+import { audiences, meetingFacts, systemScope, taskFacts, viewFacts } from '@crm/core/system';
 import {
   assertWorkerConnection,
   createDatabase,
@@ -25,18 +17,9 @@ import {
   openQueueConnection,
   type QueueConnection,
 } from '@crm/db';
-import { bookingLinkKey } from './booking-link.ts';
-import { backgroundHooks } from './hooks.ts';
-import { runBookingMail } from './jobs/booking-mail.ts';
-import { createMailer } from './mail/mailer.ts';
-import { parseSender } from './mail/mailpit.ts';
-import { createFreeDomains } from './calendar/free-domains.ts';
-import { createGoogleCalendar } from './calendar/google.ts';
-import { GOOGLE_NOTIFY_PATH } from './calendar/services.ts';
-import { runnerTasks, startJobRunners } from './jobs/graphile.ts';
+import { composeJobTasks } from './jobs/compose.ts';
+import { startJobRunners } from './jobs/graphile.ts';
 import { createLifecycle, type AwakeWorker, type Lifecycle } from './jobs/lifecycle.ts';
-import { createJobRunner } from './jobs/runner.ts';
-import { APP_RULES } from './rules.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { captureFault, flush, heartbeat, metrics, MONITORING_FLUSH_MS, raiseIssue } from './monitoring/sentry.ts';
@@ -165,71 +148,15 @@ const queueRows: QueueRows = {
     return queue.rows(workspaceId, jobIds);
   },
 };
-const registry = jobKinds({ environment: env.APP_ENV, ...(jobsOn ? { queue: queueRows } : {}) });
-const runner = createJobRunner({
+// The runners' work (`jobs/compose.ts`): the core runner, calendar sync (spec 0024) and booking emails (spec 0025),
+// the same the api's job drain on Vercel builds. A stored change event wakes the relay, even if it had gone dormant.
+const jobTasks = composeJobTasks({
+  env,
   db,
-  registry,
-  // A member's job runs under the same rules as their requests (rules.ts).
-  rules: APP_RULES,
-  // A batch stored a change event: the relay publishes it, even if it had gone dormant.
   onStored: () => relay?.wake(),
-  log,
+  ...(jobsOn ? { queue: queueRows } : {}),
 });
-
-// Calendar sync (spec 0024), when CALENDAR_SYNC=on: each connection's sync runs on the light runner as the system,
-// calling Google outside every transaction; a sync that stored events wakes the relay. Off, its queued rows wait.
-const calendarSync =
-  env.calendar === undefined
-    ? undefined
-    : (() => {
-        const settings = env.calendar;
-        const deps = {
-          providers: {
-            google: createGoogleCalendar({ clientId: settings.clientId, clientSecret: settings.clientSecret }),
-          },
-          tokenKey: settings.tokenKey,
-          systemScope: (workspaceId: string) => systemScope(db, workspaceId),
-          hooks: backgroundHooks(),
-          isFreeDomain: createFreeDomains(),
-          // Push (spec 0024, milestone 2): channels open only where Google can reach us; locally the poll alone runs.
-          ...(settings.webhookOrigin === undefined
-            ? {}
-            : { pushAddress: new URL(GOOGLE_NOTIFY_PATH, settings.webhookOrigin).toString() }),
-        };
-        return async (input: { readonly workspaceId: string; readonly connectionId: string }) => {
-          const outcome = await syncConnection(deps, input);
-          if (outcome.kind === 'synced') relay?.wake();
-          return outcome;
-        };
-      })();
-if (env.calendar === undefined) log.info('calendar.off', { reason: 'CALENDAR_SYNC is not on' });
-
-// Booking emails (spec 0025, milestone 2): sent through the api's own transport (Resend, or Mailpit locally) with links
-// to the app, each guest page link derived with the key the api mints tokens with. Without APP_URL or a transport,
-// each queued email is logged and dropped.
-const bookingMailer =
-  env.APP_URL === undefined || (env.RESEND_API_KEY === undefined && env.MAILPIT_URL === undefined)
-    ? undefined
-    : createMailer({ RESEND_API_KEY: env.RESEND_API_KEY, MAIL_FROM: env.MAIL_FROM, MAILPIT_URL: env.MAILPIT_URL });
-if (bookingMailer === undefined) log.info('booking.mail.off', { reason: 'APP_URL or a mail transport is not set' });
-const bookingLinks =
-  env.APP_URL === undefined
-    ? undefined
-    : {
-        appOrigin: new URL(env.APP_URL).origin,
-        linkKey: bookingLinkKey(env),
-        organizerEmail: parseSender(env.MAIL_FROM).email,
-      };
-const bookingMail = (payload: unknown) =>
-  runBookingMail(
-    {
-      systemScope: (workspaceId) => systemScope(db, workspaceId),
-      mailer: bookingMailer,
-      links: bookingLinks,
-      log,
-    },
-    payload,
-  );
+const calendarSync = jobTasks.calendar;
 
 /** Opens the queue pool and starts the runners: what waking means. The NOTIFY check proves the direct host first. */
 async function openWorker(hooks: {
@@ -250,26 +177,15 @@ async function openWorker(hooks: {
   try {
     const runners = await startJobRunners({
       queue: opened,
-      runner,
+      runner: jobTasks.runner,
       log,
       onFault: (error) => captureFault(error, { task: 'jobs' }),
       onActivity: hooks.onActivity,
       onFailed: hooks.onFailed,
       ...(calendarSync === undefined ? {} : { calendar: calendarSync }),
-      bookingMail,
+      bookingMail: jobTasks.bookingMail,
       // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
-      daily: (input) =>
-        runDailyCleanup(
-          {
-            registry,
-            systemScope: (workspaceId) => systemScope(db, workspaceId),
-            hooks: backgroundHooks,
-            sweep: opened,
-            log,
-            onStored: () => relay?.wake(),
-          },
-          input,
-        ),
+      daily: jobTasks.daily(opened),
     });
     queue = opened;
     return {
@@ -280,7 +196,7 @@ async function openWorker(hooks: {
         opened.sleepCheck({
           outbox: relay !== undefined,
           stuck: relay?.stuckWorkspaces() ?? [],
-          tasks: runnerTasks(calendarSync !== undefined),
+          tasks: jobTasks.tasks,
         }),
       close: async () => {
         // The slices in hand finish their batch and hand their jobs back first.

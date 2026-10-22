@@ -2,10 +2,21 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "outputDirectory": "dist",
+  "regions": ["sin1"],
+  "fluid": true,
+  "functions": {
+    "api/index.mjs": {
+      "maxDuration": 60
+    }
+  },
   "git": {
     "deploymentEnabled": false
   },
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
     {
       "source": "/f/:publicKey",
       "destination": "/form.html"

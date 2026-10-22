@@ -123,6 +123,14 @@ describe('instrument.ts', () => {
     expect(releaseOf(MonitoringEnv.parse({ APP_ENV: 'production', RENDER_GIT_COMMIT: '' }))).toBe('local');
     expect(() => MonitoringEnv.parse({ APP_ENV: 'production', RENDER_GIT_COMMIT: 'not a sha' })).toThrow();
   });
+
+  it('takes the release from Vercel while the api runs there, after Render and Railway (spec 0045)', () => {
+    const sha = '5332cb46565e22105f3ebdc1e249337ba0ab4a7d';
+    expect(releaseOf(MonitoringEnv.parse({ APP_ENV: 'production', VERCEL_GIT_COMMIT_SHA: sha }))).toBe(sha);
+    expect(releaseOf({ RAILWAY_GIT_COMMIT_SHA: 'abc1234', VERCEL_GIT_COMMIT_SHA: sha })).toBe('abc1234');
+    expect(releaseOf({ RENDER_GIT_COMMIT: 'def5678', VERCEL_GIT_COMMIT_SHA: sha })).toBe('def5678');
+    expect(releaseOf(MonitoringEnv.parse({ APP_ENV: 'production', VERCEL_GIT_COMMIT_SHA: '' }))).toBe('local');
+  });
 });
 
 describe('the send hooks (AC-165)', () => {

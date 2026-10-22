@@ -5,6 +5,7 @@ import { prepareTestDatabase, type TestDatabase } from '@crm/db/testing';
 export async function setup(project: TestProject): Promise<void> {
   project.provide('testDatabase', await prepareTestDatabase('crm_test_api'));
   project.provide('sleepDatabase', await prepareTestDatabase('crm_test_api_sleep'));
+  project.provide('drainDatabase', await prepareTestDatabase('crm_test_api_drain'));
 }
 
 declare module 'vitest' {
@@ -16,5 +17,10 @@ declare module 'vitest' {
      * the shared database keeps what every other file left behind.
      */
     sleepDatabase: TestDatabase;
+    /**
+     * A database for the job drain test (spec 0045) alone: a drain runs every
+     * due row of its tasks, so it must not meet what other files left queued.
+     */
+    drainDatabase: TestDatabase;
   }
 }

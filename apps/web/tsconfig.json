@@ -9,6 +9,8 @@
     "vitest.config.ts",
     "middleware.ts",
     "middleware.test.ts",
+    "client-secrets.ts",
+    "client-secrets.test.ts",
     "build.test.ts",
     "theme-boot.test.ts",
     "first-load.ts",

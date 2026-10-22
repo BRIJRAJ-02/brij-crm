@@ -23,23 +23,36 @@ const shared = {
   DATABASE_URL: z.url(),
   // Render sets `true` on every service (spec 0044): there a one label host is the private network address.
   RENDER: optional(z.string()),
+  // Vercel sets `1` in every function (spec 0045): there the api runs as a Vercel Function, with no worker beside it.
+  VERCEL: optional(z.string()),
 };
 
 // A deployed commit's sha, as the host reports it.
 const commitSha = optional(z.string().regex(/^[0-9a-f]{7,40}$/i));
 
 /**
- * The deployed commit, which the host sets: Render's `RENDER_GIT_COMMIT`, or Railway's `RAILWAY_GIT_COMMIT_SHA`
- * while production still runs there (spec 0044). A laptop has neither.
+ * The deployed commit, which the host sets: Render's `RENDER_GIT_COMMIT`, Railway's `RAILWAY_GIT_COMMIT_SHA`
+ * (spec 0044), or Vercel's `VERCEL_GIT_COMMIT_SHA` while the api runs as a Vercel Function (spec 0045). A laptop
+ * has none.
  */
-export const DeployedCommit = { RENDER_GIT_COMMIT: commitSha, RAILWAY_GIT_COMMIT_SHA: commitSha };
+export const DeployedCommit = {
+  RENDER_GIT_COMMIT: commitSha,
+  RAILWAY_GIT_COMMIT_SHA: commitSha,
+  VERCEL_GIT_COMMIT_SHA: commitSha,
+};
 
 /** The release /api/health and Sentry name: the deployed commit from whichever host set one, else `local`. */
 export function releaseOf(env: {
   readonly RENDER_GIT_COMMIT?: string | undefined;
   readonly RAILWAY_GIT_COMMIT_SHA?: string | undefined;
+  readonly VERCEL_GIT_COMMIT_SHA?: string | undefined;
 }): string {
-  return env.RENDER_GIT_COMMIT ?? env.RAILWAY_GIT_COMMIT_SHA ?? 'local';
+  return env.RENDER_GIT_COMMIT ?? env.RAILWAY_GIT_COMMIT_SHA ?? env.VERCEL_GIT_COMMIT_SHA ?? 'local';
+}
+
+/** Whether the api runs as a Vercel Function (spec 0045): Vercel sets `VERCEL=1` there, and nowhere else does. */
+export function onVercel(env: { readonly VERCEL?: string | undefined }): boolean {
+  return env.VERCEL === '1';
 }
 
 /** Whether a one label host is a private network address: Render's, or a compose service with APP_ENV=local. */
@@ -369,8 +382,9 @@ export const ApiEnv = z
       missing('EDGE_SECRET', `EDGE_SECRET is required in ${env.APP_ENV}: the same value the Vercel project sends.`);
     }
     if (env.RESEND_API_KEY === undefined) missing('RESEND_API_KEY', `RESEND_API_KEY is required in ${env.APP_ENV}.`);
-    // Without them the relay stays dormant after a write, and changes wait for the next poke.
-    if (env.WORKER_INTERNAL_URL === undefined) {
+    // Without them the relay stays dormant after a write, and changes wait for the next poke. A Vercel Function has
+    // no worker to poke (spec 0045): its writes start the job drain instead, and live updates are off.
+    if (env.WORKER_INTERNAL_URL === undefined && !onVercel(env)) {
       missing(
         'WORKER_INTERNAL_URL',
         `WORKER_INTERNAL_URL is required in ${env.APP_ENV}: the worker's internal address.`,
@@ -409,6 +423,41 @@ export const ApiEnv = z
     calendar: calendarOf({ ...env, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET }),
   }));
 export type ApiEnv = z.infer<typeof ApiEnv>;
+
+/**
+ * The api's own variables as a Vercel Function (spec 0045), beside `ApiEnv`:
+ * the job drain's direct login (the worker's `crm_worker_user`, never Neon's
+ * pooler) and the jobs endpoint's shared secret. Both required outside local.
+ */
+export const FunctionEnv = z
+  .object({
+    APP_ENV: AppEnvironment,
+    DATABASE_URL_DIRECT: optional(z.url()),
+    // `POST /api/internal/jobs/run` takes it in a header (the scheduled run in jobs.yml sends it); a header carries
+    // it, so printable ASCII with no spaces, like the edge secret.
+    JOBS_RUN_SECRET: optional(
+      z
+        .string()
+        .min(32, 'JOBS_RUN_SECRET must be at least 32 characters.')
+        .regex(/^[\x21-\x7e]+$/, 'JOBS_RUN_SECRET may hold only printable ASCII characters, with no spaces.'),
+    ),
+  })
+  .superRefine((env, issues) => {
+    if (env.APP_ENV === 'local') return;
+    const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
+    if (env.DATABASE_URL_DIRECT === undefined) {
+      missing(
+        'DATABASE_URL_DIRECT',
+        `DATABASE_URL_DIRECT is required in ${env.APP_ENV}: the worker login's direct address, which runs the jobs.`,
+      );
+    }
+    if (env.JOBS_RUN_SECRET === undefined) {
+      missing('JOBS_RUN_SECRET', `JOBS_RUN_SECRET is required in ${env.APP_ENV}: the scheduled job run sends it.`);
+    } else if (env.JOBS_RUN_SECRET.includes(LOCAL_SECRET_MARKER)) {
+      missing('JOBS_RUN_SECRET', 'That is a local placeholder. Generate one: `openssl rand -hex 32`.');
+    }
+  });
+export type FunctionEnv = z.infer<typeof FunctionEnv>;
 
 /** A laptop's salt for hashed client addresses: never a deployed one (the env check requires a real one there). */
 export const LOCAL_FORMS_IP_SALT = 'local-only-forms-ip-salt-not-for-deployment';

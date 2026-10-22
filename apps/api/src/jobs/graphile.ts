@@ -143,6 +143,11 @@ export interface JobRunnersOptions {
   readonly onActivity?: () => void;
   /** Hears a runner that stopped on its own (its connection lost): the worker reconnects (milestone 3). */
   readonly onFailed?: (error: unknown) => void;
+  /**
+   * How many slices each lane runs at once, when not `LANES`' own: the api's
+   * job drain on Vercel (spec 0045) runs fewer, to fit its small pool.
+   */
+  readonly concurrency?: { readonly heavy: number; readonly light: number };
 }
 
 /** The running job runners. */
@@ -324,7 +329,8 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
     return runner;
   };
   try {
-    for (const lane of Object.values(LANES)) {
+    for (const name of ['heavy', 'light'] as const) {
+      const lane = LANES[name];
       // The light runner alone holds the crontab, so the cron fires once whatever the lanes.
       const daily = lane === LANES.light ? options.daily : undefined;
       const calendar = lane === LANES.light ? options.calendar : undefined;
@@ -333,7 +339,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
         watch(
           await run({
             pgPool: queue.pool,
-            concurrency: lane.concurrency,
+            concurrency: options.concurrency?.[name] ?? lane.concurrency,
             noHandleSignals: true,
             logger,
             pollInterval: options.pollInterval ?? lane.pollMs,
@@ -367,7 +373,10 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
   }
   const timer = setInterval(() => void housekeeping(), options.housekeepingMs ?? HOUSEKEEPING_MS);
   timer.unref();
-  log.info('jobs.runners.started', { heavy: LANES.heavy.concurrency, light: LANES.light.concurrency });
+  log.info('jobs.runners.started', {
+    heavy: options.concurrency?.heavy ?? LANES.heavy.concurrency,
+    light: options.concurrency?.light ?? LANES.light.concurrency,
+  });
   return {
     async stop() {
       clearInterval(timer);
