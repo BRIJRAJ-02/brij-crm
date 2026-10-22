@@ -57,9 +57,16 @@ export function layerOrderStatement(css: string): string {
   return match[0];
 }
 
+/**
+ * The id React Aria's usePress looks for before it injects its own `<style>` (the pressable `touch-action` rule).
+ * The layer order link carries it, so the library never injects one: `style-src 'self'` refuses inline styles,
+ * and the rule lives in the reset layer (`styles/reset.css`) instead.
+ */
+export const PRESSABLE_STYLE_ID = 'react-aria-pressable-style';
+
 /** `html` with the layer order linked just before its first stylesheet, or at the end of its head. */
 export function linkLayerOrder(html: string, base: string): string {
-  const link = `<link rel="stylesheet" href="${base}${LAYER_ORDER_FILE}">`;
+  const link = `<link rel="stylesheet" href="${base}${LAYER_ORDER_FILE}" id="${PRESSABLE_STYLE_ID}">`;
   const first = html.search(/<link[^>]+rel="stylesheet"/);
   if (first === -1) return html.replace('</head>', `  ${link}\n  </head>`);
   return `${html.slice(0, first)}${link}\n    ${html.slice(first)}`;
