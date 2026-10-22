@@ -32,17 +32,17 @@ The guard stays on. The middleware runs for every `/api` request before the func
 ## Jobs without a worker
 
 - **After a request.** Where a write would poke the worker, the function starts a drain turn after the response, inside `waitUntil`. A turn opens a small queue pool on the worker's direct login (`DATABASE_URL_DIRECT`, never the pooler), checks whether any row of its tasks is due, and if so starts the runners until two checks in a row find nothing busy or due, or its budget (15 seconds) is spent; the slices in hand then finish their batch and hand their jobs back. In one instance turns start at most every 5 seconds (a wake sooner waits), a burst of wakes is one turn plus at most one more, and both share the 15 second budget, so a wake stays inside the 60 second limit.
-- **On a schedule.** `POST /api/internal/jobs/run`, with the `x-crm-jobs-secret` header equal to `JOBS_RUN_SECRET` (compared over sha256 digests in constant time) and through the edge, runs one turn. `.github/workflows/jobs.yml` calls it every 10 minutes and on demand. In the 03:00 UTC hour the turn runs at least 3 seconds even with nothing due, so Graphile's cron line backfills the daily cleanup; in other hours a turn with nothing due ends after one check.
+- **On a schedule.** `POST /api/internal/jobs/run`, with the `x-crm-jobs-secret` header equal to `JOBS_RUN_SECRET` (compared over sha256 digests in constant time) and through the edge, runs one turn. `.github/workflows/jobs.yml` calls it once an hour (at minute 7) and on demand. In the 03:00 UTC hour the turn runs at least 3 seconds even with nothing due, so Graphile's cron line backfills the daily cleanup; in other hours a turn with nothing due ends after one check.
 - **The relay** does not run. A stored change event waits in the outbox.
 - Calendar sync and booking emails run through these turns, as tasks of the same runners.
 
 ## Trade offs
 
 - **No live updates.** Other people's changes show on reload or the next fetch, not at once.
-- **Job delay.** A job queued by a request usually runs within seconds of that request. A job due later (the 15 minute calendar poll, a retry after backoff, a booking reminder) waits for the next request that wakes the drain or the next scheduled run: up to about 10 minutes when nobody uses the app, longer if GitHub starts its scheduled run late or skips one.
+- **Job delay.** A job queued by a request usually runs within seconds of that request. A job due later (the 15 minute calendar poll, a retry after backoff, a booking reminder) waits for the next request that wakes the drain or the next scheduled run: up to about an hour when nobody uses the app, longer if GitHub starts its scheduled run late or skips one.
 - **The outbox grows.** With no relay, no row is ever published, and the prune deletes only published rows. Rows stay until a relay runs again, which then publishes the backlog (to nobody listening) and prunes it.
 - **Cold starts.** A new instance loads the api (about 41 MB of code) and opens its pools; the first request after idle takes longer.
-- **Neon compute.** Every scheduled run opens a connection, so the database wakes at least every 10 minutes; Neon then stays up about 5 minutes. That is roughly half the hours of a month on the free plan's compute allowance, with no users. Running the schedule hourly instead roughly halves it, at the cost of an hour's worst case delay.
+- **Neon compute.** Every scheduled run opens a connection and wakes the database, which then stays up about 5 minutes. Hourly, that is about 2 hours a day with no users, well inside the free plan's allowance; every 10 minutes would have been about half of every month, so the schedule is hourly (decided 22 Oct) and jobs queued by requests still run within seconds.
 - **Hobby limits.** 60 seconds per invocation as set (fluid compute allows up to 300 on Hobby), 4 hours of active CPU a month, 1 million invocations, 1 region, cron jobs only daily (hence GitHub's schedule), and the Hobby plan is for non commercial use.
 
 ## Switching back to Railway (or Render)

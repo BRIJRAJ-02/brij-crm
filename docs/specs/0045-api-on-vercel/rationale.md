@@ -10,7 +10,7 @@ Railway's builds are paused and its tokens revoked (spec 0044), so production's 
 |---|---|---|---|
 | New account or card | none | yes | none |
 | Live updates | off (no long running process for Centrifugo or the relay) | on | on |
-| Background jobs | bounded turns after requests and every 10 minutes | the worker, always on | the worker |
+| Background jobs | bounded turns after requests and hourly | the worker, always on | the worker |
 | Effort | one function entry, a switch in the middleware, a job drain | a Blueprint | none, but production stays stale |
 | Way back | unset to set: one variable, one redeploy | the same variable | |
 

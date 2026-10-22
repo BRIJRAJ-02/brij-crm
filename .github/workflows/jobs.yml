@@ -1,8 +1,8 @@
-# The scheduled job run (spec 0045). While the api runs as a Vercel Function there is no worker process, so every
-# 10 minutes this asks production's api to run its job queue for a bounded turn: scheduled calendar syncs, booking
+# The scheduled job run (spec 0045). While the api runs as a Vercel Function there is no worker process, so once
+# an hour (at minute 7, off GitHub's busy top of the hour) this asks production's api to run its job queue for a bounded turn: scheduled calendar syncs, booking
 # emails that a request's own turn didn't finish, retries, and the daily cleanup after 03:00 UTC. A request that
 # queues work already starts a turn of its own after it answers; this is the floor under that, so a queued job
-# waits at most about 10 minutes when nobody uses the app. GitHub may start a scheduled run late, or skip one when
+# waits at most about an hour when nobody uses the app (hourly, not more often, so Neon's free compute can sleep). GitHub may start a scheduled run late, or skip one when
 # it is busy. Behind a proxied API (Railway or Render, API_ORIGIN_INTERNAL set), the worker runs the jobs and that
 # API has no such endpoint (it answers NOT_FOUND, or FORBIDDEN_ORIGIN to a write with no Origin), which this treats
 # as nothing to do.
@@ -12,7 +12,7 @@ name: Jobs
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "7 * * * *"
   workflow_dispatch:
 
 concurrency:

@@ -1,6 +1,6 @@
 # Run the api on Vercel
 
-This puts production's api inside the Vercel project `brij-crm`, beside the web app, so production runs again while Railway is down. No new service, no card. The decision and its trade offs: [spec 0045](../specs/0045-api-on-vercel/index.md). In short: live updates are off, and a background job can wait up to about 10 minutes when nobody is using the app.
+This puts production's api inside the Vercel project `brij-crm`, beside the web app, so production runs again while Railway is down. No new service, no card. The decision and its trade offs: [spec 0045](../specs/0045-api-on-vercel/index.md). In short: live updates are off, and a job due later (a calendar poll, a retry) can wait up to about an hour when nobody is using the app; jobs a request queues run within seconds.
 
 Do the steps in order. Never paste a secret into a chat, a commit or an issue.
 

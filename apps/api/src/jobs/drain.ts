@@ -2,7 +2,7 @@
 // Where the api runs as a Vercel Function there is no worker process, so the
 // api runs the queue itself in short bounded turns: after a request that may
 // have queued work (inside `waitUntil`), and from the scheduled run
-// (`POST /api/internal/jobs/run`, every 10 minutes from jobs.yml). A turn
+// (`POST /api/internal/jobs/run`, hourly from jobs.yml). A turn
 // opens the queue pool on the worker's direct login, starts the same runners
 // the worker runs (`startJobRunners`, fewer at once), and stops them once
 // nothing it runs is due, or when its time budget is spent; the slices in hand
