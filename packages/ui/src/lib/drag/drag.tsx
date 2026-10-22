@@ -129,13 +129,16 @@ const alongY: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 /** Keeps a horizontal run's item on its line: it moves sideways only. */
 const alongX: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
-/** Items before zones: over a board card, the card wins over its column. */
-const itemsFirst: CollisionDetection = (args) => {
+/** Items before zones: over a board card, the card wins over its column. Exported for its unit test only. */
+export const itemsFirst: CollisionDetection = (args) => {
+  // The keyboard has no pointer: what sits under the moved card's top left corner, where the keyboard lines it up
+  // with its target (a card, an empty column, a slim "No value" strip), then what it overlaps. Nearest corners alone
+  // let a card in the column it left beat an empty column's tall zone, so the card showed over one column and dropped
+  // in another (QA, 22 October 2026). Nothing under it: the nearest corners, as dnd-kit gives them.
+  const corner = { x: args.collisionRect.left + 1, y: args.collisionRect.top + 1 };
   const pointed = pointerWithin(args);
-  // The keyboard has no pointer: what the moved card overlaps. Nearest corners alone let a card in the column it
-  // left beat an empty column's tall zone, so the card showed over one column and dropped in another (QA, 22 October
-  // 2026). Nothing overlapped: the nearest corners, as dnd-kit gives them.
-  const hits = pointed.length > 0 ? pointed : rectIntersection(args);
+  const cornered = pointed.length > 0 ? pointed : pointerWithin({ ...args, pointerCoordinates: corner });
+  const hits = cornered.length > 0 ? cornered : rectIntersection(args);
   if (hits.length === 0) return closestCorners(args);
   const zones = new Set(
     args.droppableContainers.flatMap((each) => (dataOf(each.data.current).isZone === true ? [each.id] : [])),
