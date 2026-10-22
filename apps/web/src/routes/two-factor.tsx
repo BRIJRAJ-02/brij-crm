@@ -21,10 +21,10 @@ export const Route = createFileRoute('/two-factor')({
   },
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.title} />
+      <AuthPending title={strings.title} isSplit />
     </LoadingNow>
   ),
-  errorComponent: () => <AuthError title={strings.title} />,
+  errorComponent: () => <AuthError title={strings.title} isSplit />,
   component: TwoFactorRoute,
 });
 

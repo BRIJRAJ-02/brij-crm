@@ -1,11 +1,18 @@
-/* SignInForm: a column space-16 apart: the notice, Continue with Google, the
-   "or" between hairlines, the form (the email field, then its submit), and
+/* SignInForm: a column space-16 apart: the notice, Continue with Google and
+   any other ways in (space-8 apart), the "or" between hairlines, the form (the email field, then its submit), and
    the closed sign up line in text-secondary. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
+  }
+
+  /* Continue with Google and the other ways in (a passkey), under one another space-8 apart, as a Form's buttons. */
+  .ways {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
   }
 
   .note {

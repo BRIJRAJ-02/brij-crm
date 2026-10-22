@@ -3,8 +3,9 @@
 // (sign in, verify, welcome), in the same frame as the page itself.
 // Main task: hold the page's place while it checks who is signed in, or offer
 // a retry when that check fails. Leaves out: the page's own task.
-import { AuthLayout, EmptyState, Skeleton, WorkspacePreview } from '@crm/ui';
+import { AuthLayout, Button, Callout, Skeleton, WorkspacePreview } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
+import { useState } from 'react';
 import { strings } from './strings.ts';
 import { PRODUCT_LOGO } from '../../brand.ts';
 
@@ -37,9 +38,11 @@ export function AuthPending({ title, isSplit = false }: { readonly title: string
 }
 
 /**
- * The page's frame and title when the check failed, with a retry that runs
- * the route again; `text` says why when the server said (a rate limit), and
- * `isSplit` is as AuthPending's.
+ * The page's frame and title when the check failed: why, in an announced
+ * Callout (the server's sentence when it said one, a rate limit, else that
+ * Timefix can't be reached), and Try again, which runs the route again. The
+ * page keeps its own title, so no second heading sits under it. `isSplit` is
+ * as AuthPending's.
  */
 export function AuthError({
   title,
@@ -51,16 +54,22 @@ export function AuthError({
   readonly isSplit?: boolean;
 }) {
   const router = useRouter();
+  // Spins while the route runs again, so a retry that fails as fast still shows it was pressed.
+  const [isRetrying, setRetrying] = useState(false);
+  const retry = () => {
+    setRetrying(true);
+    void router.invalidate().finally(() => {
+      setRetrying(false);
+    });
+  };
   return (
-    <AuthLayout
-      productName={strings.product}
-      logo={PRODUCT_LOGO}
-      title={title}
-      {...(isSplit ? { preview: <WorkspacePreview workspaceName="" personName="" /> } : {})}
-    >
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
-        {text ?? strings.failedText}
-      </EmptyState>
+    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={title} {...(isSplit ? signInFrame() : {})}>
+      <Callout tone="danger" isAnnounced>
+        {text ?? strings.unreachable}
+      </Callout>
+      <Button variant="primary" size="lg" isFullWidth="center" icon="refresh-cw" isPending={isRetrying} onPress={retry}>
+        {strings.retry}
+      </Button>
     </AuthLayout>
   );
 }

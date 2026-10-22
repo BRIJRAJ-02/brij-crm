@@ -23,3 +23,4 @@ The emails lane. The pages sit in `AuthLayout`, as the pages before the app do. 
 - The unsubscribe page sends nothing until the reader presses Unsubscribe: link scanners open addresses too, and a page that acted on load would unsubscribe people who never asked.
 - The topic of the email the link came from is listed first.
 - The topics are `EMAIL_TOPICS` in `@crm/contracts/emails`, the one list. Their words are in `strings.ts`, keyed by topic, so a topic added there fails the typecheck here until it has words.
+- A failed load is the pages before the app's own (`AuthError`): the page's title, "Can’t reach Timefix. Check your connection, then try again." in an announced danger Callout, and a primary full width Try again that spins while the route runs again. An expired link, on either page, says "This link has expired" as the title with why under it, as the invitation page's dead link does, so no second heading sits under the page's (design sweep, 22 October 2026).

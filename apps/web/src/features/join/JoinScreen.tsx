@@ -6,6 +6,7 @@ import { isDataError, type DataLayer, type Joinable } from '@crm/data';
 import { AuthLayout, Badge, Button, ButtonLink, Callout, Card, SettingsRow } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { PRODUCT_LOGO } from '../../brand.ts';
+import { signInFrame } from '../auth/AuthStates.tsx';
 import { strings } from './strings.ts';
 
 /** Props for `/join`: what its route loaded. */
@@ -37,6 +38,8 @@ export function JoinScreen({ data, email, joinable, hasHome }: JoinScreenProps) 
     if (asked !== undefined) footer.current?.querySelector('a')?.focus();
   }, [asked]);
   const domain = domainOf(email);
+  const wayOut = hasHome ? '/' : '/welcome';
+  const wayOutLabel = hasHome ? strings.goHome : strings.createOne;
 
   const ask = (workspace: Joinable) => {
     if (busy !== undefined) return;
@@ -61,15 +64,26 @@ export function JoinScreen({ data, email, joinable, hasHome }: JoinScreenProps) 
       logo={PRODUCT_LOGO}
       title={strings.title}
       description={rows.length === 0 ? strings.none(domain) : strings.atDomain(domain)}
-      footer={
-        <div ref={footer}>
-          <ButtonLink variant="ghost" href={hasHome ? '/' : '/welcome'}>
-            {hasHome ? strings.goHome : strings.createOne}
-          </ButtonLink>
-        </div>
-      }
+      {...signInFrame()}
+      {...(rows.length === 0
+        ? {}
+        : {
+            footer: (
+              <div ref={footer}>
+                <ButtonLink variant="ghost" href={wayOut}>
+                  {wayOutLabel}
+                </ButtonLink>
+              </div>
+            ),
+          })}
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+      {rows.length === 0 && (
+        // Nothing to ask: the way on is the page's one action, not a footer link.
+        <ButtonLink variant="primary" size="lg" isFullWidth="center" href={wayOut}>
+          {wayOutLabel}
+        </ButtonLink>
+      )}
       {rows.length > 0 && (
         <Card>
           {rows.map((row) => (
