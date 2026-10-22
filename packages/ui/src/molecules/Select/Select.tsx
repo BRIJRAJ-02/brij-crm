@@ -3,7 +3,6 @@ import {
   Autocomplete,
   Button as AriaButton,
   FieldError,
-  Label,
   Header,
   ListBox,
   ListBoxItem,
@@ -21,6 +20,7 @@ import { Tag } from '../../atoms/Tag/Tag.tsx';
 import type { Hue } from '../../hue.ts';
 import { Field } from '../Field/Field.tsx';
 import { InPopover, Popover, type PopoverPlacement } from '../Popover/Popover.tsx';
+import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import styles from './Select.module.css';
 import { strings } from './strings.ts';
 
@@ -254,15 +254,7 @@ export function Select({
   if (isReadOnly) {
     return (
       <span className={styles.root} data-size={size} data-readonly="">
-        {!isLabelHidden &&
-          (info === undefined ? (
-            <span className={styles.label}>{label}</span>
-          ) : (
-            <span className={styles.labelRow}>
-              <span className={styles.label}>{label}</span>
-              <span className={styles.info}>{info}</span>
-            </span>
-          ))}
+        {!isLabelHidden && <FieldLabel label={label} info={info} as="text" />}
         <span className={styles.trigger} role="group" aria-label={label}>
           <span className={styles.value}>
             {chosen === undefined ? (
@@ -413,31 +405,7 @@ export function Select({
         onChange?.(next === CLEAR || next === null ? null : String(next));
       }}
     >
-      {!isLabelHidden &&
-        (info === undefined ? (
-          <Label className={styles.label}>
-            {label}
-            {labelAside !== undefined && (
-              <>
-                {' '}
-                <span className={styles.aside}>{labelAside}</span>
-              </>
-            )}
-          </Label>
-        ) : (
-          <span className={styles.labelRow}>
-            <Label className={styles.label}>
-              {label}
-              {labelAside !== undefined && (
-                <>
-                  {' '}
-                  <span className={styles.aside}>{labelAside}</span>
-                </>
-              )}
-            </Label>
-            <span className={styles.info}>{info}</span>
-          </span>
-        ))}
+      {!isLabelHidden && <FieldLabel label={label} aside={labelAside} info={info} isDisabled={isDisabled} />}
       <AriaButton className={styles.trigger} {...(triggerRef === undefined ? {} : { ref: triggerRef })}>
         <SelectValue<SelectItem> className={styles.value}>
           {({ selectedItems, isPlaceholder, defaultChildren }) => {

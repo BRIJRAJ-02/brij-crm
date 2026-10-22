@@ -1,0 +1,37 @@
+/* FieldLabel: a control's name in text-secondary at text-label (text-label-strong for a group's question), an
+   aside a step quieter on the same line, and an InfoTip beside it in a row that keeps the label's height. */
+@layer components {
+  .label {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .label[data-tone='strong'] {
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .label[data-disabled] {
+    opacity: var(--opacity-disabled);
+    cursor: not-allowed;
+  }
+
+  /* "(optional)" after a label: the same line, a step quieter. */
+  .aside {
+    color: var(--text-tertiary);
+    font-weight: normal;
+  }
+
+  /* With an InfoTip: the tip's chip sized button overhangs the label's line, so the row keeps the label's height. */
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .info {
+    display: inline-flex;
+    margin-block: calc(var(--space-2) * -1);
+  }
+}

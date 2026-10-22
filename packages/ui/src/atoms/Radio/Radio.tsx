@@ -1,5 +1,6 @@
 import type { KeyboardEvent, ReactNode } from 'react';
-import { FieldError, Label, RadioButton, RadioField, RadioGroup as AriaRadioGroup, Text } from 'react-aria-components';
+import { FieldError, RadioButton, RadioField, RadioGroup as AriaRadioGroup, Text } from 'react-aria-components';
+import { FieldLabel } from '../FieldLabel/FieldLabel.tsx';
 import styles from './Radio.module.css';
 
 /** Props for Radio. */
@@ -96,34 +97,10 @@ export function RadioGroup({
       {...(onChange === undefined ? {} : { onChange })}
       {...(name === undefined ? {} : { name })}
     >
-      {!isLabelHidden &&
-        (info === undefined ? (
-          <Label className={styles.legend}>
-            {label}
-            {labelAside !== undefined && (
-              <>
-                {' '}
-                <span className={styles.aside}>{labelAside}</span>
-              </>
-            )}
-          </Label>
-        ) : (
-          <span className={styles.legendRow}>
-            <Label className={styles.legend}>
-              {label}
-              {labelAside !== undefined && (
-                <>
-                  {' '}
-                  <span className={styles.aside}>{labelAside}</span>
-                </>
-              )}
-            </Label>
-            {/* The group moves and picks a choice on any arrow key inside it; on the tip (or in its help) they do nothing. */}
-            <span className={styles.info} role="presentation" onKeyDown={keepArrows}>
-              {info}
-            </span>
-          </span>
-        ))}
+      {!isLabelHidden && (
+        // The group moves and picks a choice on any arrow key inside it; on the tip (or in its help) they do nothing.
+        <FieldLabel label={label} aside={labelAside} info={info} tone="strong" onInfoKeyDown={keepArrows} />
+      )}
       <span className={styles.choices} data-orientation={orientation}>
         {children}
       </span>
