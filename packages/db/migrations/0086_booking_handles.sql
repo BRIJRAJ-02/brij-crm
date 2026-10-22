@@ -212,8 +212,8 @@ grant select (workspace_id, id, user_id, status) on members to crm_booking_looku
 --> statement-breakpoint
 -- The workspace and page `/<handle>/<slug>` names (by the handle's person), or no row. Ids only. Only a page whose
 -- owner is still an active member there, with this very identity, in a workspace that exists: a workspace the
--- person left can't publish under their handle. A Link only page answers too (the owner's call: it works by its
--- address, it is never listed).
+-- person left can't publish under their handle. Never a Link only page (the owner's call, 22 Oct 2026): it is
+-- reached only by its random `/b/<key>`, so its address can't be guessed.
 create function crm_booking_page_by_address(owner uuid, wanted text)
   returns table (workspace_id uuid, page_id uuid)
   language sql
@@ -229,6 +229,7 @@ begin atomic
   where p.owner_user_id = crm_booking_page_by_address.owner
     and m.user_id = crm_booking_page_by_address.owner
     and m.status = 'active'
+    and p.is_private = false
     and p.slug = crm_booking_page_by_address.wanted
     and p.deleted_at is null
     and w.deleted_at is null

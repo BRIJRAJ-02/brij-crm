@@ -158,15 +158,17 @@ export function handleAddressOf(pathname: string): HandleAddress | undefined {
 }
 
 /**
- * A booking page's public path: `/<handle>/<slug>` once its owner has a handle, else `/b/<publicKey>`, which keeps
- * working either way.
+ * A booking page's public path: `/<handle>/<slug>` for a Public page once its owner has a handle, else
+ * `/b/<publicKey>`, which keeps working either way. A Link only page is only ever `/b/<publicKey>`: its random key
+ * is what keeps it to the people it is sent to (the owner, 22 Oct 2026).
  */
 export function bookingPagePath(page: {
   readonly handle?: string | undefined;
   readonly slug: string;
   readonly publicKey: string;
+  readonly isPrivate?: boolean;
 }): string {
-  return page.handle === undefined
+  return page.handle === undefined || page.isPrivate === true
     ? `/b/${encodeURIComponent(page.publicKey)}`
     : `/${encodeURIComponent(page.handle)}/${encodeURIComponent(page.slug)}`;
 }

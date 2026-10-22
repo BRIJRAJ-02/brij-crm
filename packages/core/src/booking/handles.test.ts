@@ -133,6 +133,17 @@ describe('a handle address', () => {
     expect(facts.path).toBe(`/${renamed}/${made.slug}`);
   });
 
+  it('never answers for a Link only page: it keeps its random /b/<key> link alone', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('ada');
+    await updateMyMemberProfile(ada.scope, { handle });
+    const hidden = await page(ada.scope, 'Reserved', { isPrivate: true });
+    expect(hidden.handle).toBe(handle);
+    expect(await refusalOf(enterBookingAddress({ db }, handle, hidden.slug))).toBe('NOT_FOUND');
+    const facts = await getPublicBookingPage(await enterBookingPage({ db }, hidden.publicKey));
+    expect(facts.path).toBeUndefined();
+  });
+
   it('keeps a slug unique per person across workspaces, so each address names one page', async () => {
     const ada = await person('Ada');
     const elsewhere = await person('Ada', ada.userId);

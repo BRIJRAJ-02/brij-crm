@@ -87,6 +87,10 @@ describe('handles', () => {
   it('builds a page’s path: the handle address once there is a handle, else /b/<key>', () => {
     expect(bookingPagePath({ handle: 'ada', slug: '30min', publicKey: 'AbCdEfGhIjKlMnOp' })).toBe('/ada/30min');
     expect(bookingPagePath({ slug: '30min', publicKey: 'AbCdEfGhIjKlMnOp' })).toBe('/b/AbCdEfGhIjKlMnOp');
+    // A Link only page keeps its random key link.
+    expect(bookingPagePath({ handle: 'ada', slug: '30min', publicKey: 'AbCdEfGhIjKlMnOp', isPrivate: true })).toBe(
+      '/b/AbCdEfGhIjKlMnOp',
+    );
   });
 
   it('parses a handle and a bio at the boundary', () => {

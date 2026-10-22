@@ -77,12 +77,15 @@ export function publicBookingOrigin(): string {
   return globalThis.location.origin;
 }
 
-/** A page's public path: `/<handle>/<slug>` once its owner has a handle, else `/b/<publicKey>`. */
-export const publicBookingPath = (page: Pick<BookingPageView, 'handle' | 'slug' | 'publicKey'>) =>
+/**
+ * A page's public path: `/<handle>/<slug>` for a Public page once its owner has a handle, else `/b/<publicKey>`
+ * (a Link only page's only address).
+ */
+export const publicBookingPath = (page: Pick<BookingPageView, 'handle' | 'slug' | 'publicKey' | 'isPrivate'>) =>
   bookingPagePath(page);
 
 /** The page's public link, on the public booking origin. */
-export const publicBookingUrl = (page: Pick<BookingPageView, 'handle' | 'slug' | 'publicKey'>) =>
+export const publicBookingUrl = (page: Pick<BookingPageView, 'handle' | 'slug' | 'publicKey' | 'isPrivate'>) =>
   `${publicBookingOrigin()}${publicBookingPath(page)}`;
 
 /** A person's public profile, `/<handle>`, on the public booking origin. */

@@ -91,6 +91,7 @@ export const strings = {
   slugNoHandle:
     'Pick your handle in Settings under Profile to give this page an address like /your-name/30min. Until then it keeps its /b/ link.',
   slugChanging: 'Links with the old address will stop working once you save.',
+  slugLinkOnly: 'Link only pages keep their private /b/ link. This address is used once the page is Public.',
   slugRequired: 'Give the page a web address.',
   slugInvalid: 'Use lowercase letters, numbers and single hyphens.',
   onProfile: 'On your profile',

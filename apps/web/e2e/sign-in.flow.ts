@@ -545,7 +545,9 @@ test('keeps the status screen at /status, open to anyone, and says plainly when 
   await expect(page.getByRole('heading', { level: 1, name: 'System status' })).not.toBeFocused();
   await expect(page.getByText('Healthy')).toBeVisible();
   await checkScreen(page, '9-status');
-  await page.goto('/nowhere');
+  // One or two plain words are a handle address now (22 Oct 2026), which the booking pages answer: a deeper path
+  // is the app's own not found.
+  await page.goto('/nowhere/to/be/found');
   await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible();
   await expect(page).toHaveTitle('Page not found · Timefix');
   // Signed out, / leads to sign in, so the way back doesn't promise a workspace.

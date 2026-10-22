@@ -142,10 +142,24 @@ export const Profile: Story = {
         claimHref="https://timefix.ai"
       >
         <BookingProfileSection>
-          <LinkList label="Booking links" searchLabel="Search links" isToolbarHidden rows={LINKS} onOpen={fn()} />
+          <LinkList
+            label="Booking links"
+            searchLabel="Search links"
+            isToolbarHidden
+            rowsAreLinks
+            rows={LINKS}
+            onOpen={fn()}
+          />
         </BookingProfileSection>
         <BookingProfileSection title="Sales">
-          <LinkList label="Sales" searchLabel="Search links" isToolbarHidden rows={TEAM_LINKS} onOpen={fn()} />
+          <LinkList
+            label="Sales"
+            searchLabel="Search links"
+            isToolbarHidden
+            rowsAreLinks
+            rows={TEAM_LINKS}
+            onOpen={fn()}
+          />
         </BookingProfileSection>
       </BookingProfile>
     </Stage>
@@ -153,6 +167,8 @@ export const Profile: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Ada Lovelace' })).toBeVisible();
     await expect(canvas.getByRole('heading', { level: 2, name: 'Sales' })).toBeVisible();
+    // Each row is a real link, so it opens in a new tab and crawlers follow it.
+    await expect(canvas.getByRole('link', { name: /Intro call/ })).toHaveAttribute('href', '/ada/intro');
   },
 };
 

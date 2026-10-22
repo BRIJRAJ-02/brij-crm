@@ -76,13 +76,19 @@ export async function suggestHandle(tx: WorkspaceTx, name: string): Promise<stri
 }
 
 /**
- * A page's public path: `/<handle>/<slug>` once its owner has a handle, else `/b/<publicKey>` (which keeps working
- * either way).
+ * A page's public path: `/<handle>/<slug>` for a Public page once its owner has a handle, else `/b/<publicKey>`
+ * (which keeps working either way, and is a Link only page's only address).
  */
 export async function pagePath(
   tx: WorkspaceTx,
-  page: { readonly ownerUserId: string | null; readonly slug: string; readonly publicKey: string },
+  page: {
+    readonly ownerUserId: string | null;
+    readonly slug: string;
+    readonly publicKey: string;
+    readonly isPrivate: boolean;
+  },
 ): Promise<string> {
+  if (page.isPrivate) return bookingPagePath(page);
   const handle =
     page.ownerUserId === null
       ? undefined

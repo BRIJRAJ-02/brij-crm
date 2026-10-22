@@ -119,7 +119,12 @@ async function bookingNext(
   text: string,
 ): Promise<SubmitNext | undefined> {
   const [page] = await tx
-    .select({ publicKey: bookingPages.publicKey, slug: bookingPages.slug, ownerUserId: bookingPages.ownerUserId })
+    .select({
+      publicKey: bookingPages.publicKey,
+      slug: bookingPages.slug,
+      ownerUserId: bookingPages.ownerUserId,
+      isPrivate: bookingPages.isPrivate,
+    })
     .from(bookingPages)
     .where(and(eq(bookingPages.id, bookingPageId), eq(bookingPages.status, 'live'), isNull(bookingPages.deletedAt)));
   if (page === undefined) return undefined;

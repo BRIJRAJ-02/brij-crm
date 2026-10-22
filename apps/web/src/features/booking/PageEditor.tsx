@@ -540,9 +540,11 @@ export function PageEditor({
                         hint={
                           page.handle === undefined
                             ? strings.slugNoHandle
-                            : draft.slug !== page.slug && page.status === 'live'
-                              ? strings.slugChanging
-                              : strings.slugHint
+                            : draft.isPrivate
+                              ? strings.slugLinkOnly
+                              : draft.slug !== page.slug && page.status === 'live' && !page.isPrivate
+                                ? strings.slugChanging
+                                : strings.slugHint
                         }
                         maxLength={60}
                         isRequired

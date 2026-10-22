@@ -16,6 +16,7 @@ import {
   type LinkRow,
 } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { sectionsOf } from './sections.ts';
 import { strings } from './strings.ts';
 
 /** Past this many links, a search sits above the list. */
@@ -41,20 +42,6 @@ type Loaded =
       readonly links: readonly PublicProfileLink[];
       readonly next?: string;
     };
-
-/** The links grouped by their section, in the owner's order: each section where its first link is. */
-export function sectionsOf(
-  links: readonly PublicProfileLink[],
-): readonly { readonly title?: string; readonly links: readonly PublicProfileLink[] }[] {
-  const groups = new Map<string, PublicProfileLink[]>();
-  for (const link of links) {
-    const key = link.section ?? '';
-    const group = groups.get(key) ?? [];
-    group.push(link);
-    groups.set(key, group);
-  }
-  return [...groups].map(([title, grouped]) => ({ ...(title === '' ? {} : { title }), links: grouped }));
-}
 
 /** A link as a row: its title, description and lengths, and Team for a team page. */
 function rowOf(handle: string, link: PublicProfileLink): LinkRow {
@@ -181,9 +168,6 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
 
   const { profile, links } = loaded;
   const current = profile.handle;
-  const open = (slug: string) => {
-    globalThis.location.assign(`/${encodeURIComponent(current)}/${encodeURIComponent(slug)}`);
-  };
   const sections = sectionsOf(links);
   return (
     <BookingProfile
@@ -213,8 +197,9 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
               label={section.title === undefined ? strings.profileLinks : strings.sectionLinks(section.title)}
               searchLabel={strings.searchLinks}
               isToolbarHidden
+              rowsAreLinks
               rows={section.links.map((link) => rowOf(current, link))}
-              onOpen={open}
+              onOpen={() => undefined}
             />
           </BookingProfileSection>
         ))
