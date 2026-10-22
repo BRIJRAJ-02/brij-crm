@@ -388,7 +388,7 @@ export function SubmissionsTab({
 
   // One clear action for the rows: Export, only when there are rows. Form wide actions live in the top bar's menu.
   const exportButton = (
-    <Button size="sm" icon="download" onPress={exportCsv}>
+    <Button icon="download" onPress={exportCsv}>
       {strings.exportButton}
     </Button>
   );
