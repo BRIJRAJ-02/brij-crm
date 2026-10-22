@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Bookings › Calendar and Bookings › List (spec 0025, AC-646), on the reference product's bookings page: a week calendar (bookings and the member's own calendar events) and a list (Upcoming, Past, Canceled) with sort and pages.
+// Purpose: Bookings › Calendar and Bookings › List (spec 0025, AC-646), on the reference product's bookings page: a week calendar (bookings and the member's own calendar events) and a list (Upcoming, Past, Cancelled) with sort and pages.
 // Main task: see the week at a glance, open a booking or an event for its details, or page through the list.
 // Leaves out: changing a booking from here (the actions arrive next), the new meeting dialog, team views and filing, and live arrival (it reads again when the page is shown again).
 import {
@@ -17,6 +17,8 @@ import {
   type CalendarListState,
   type CalendarsHeld,
   type CalendarEventItem,
+  type PageDestinationState,
+  type RecordSearch,
   type ObjectSummary,
   type CreateTimeBlockInput,
   type TimeBlockOccurrence,
@@ -40,6 +42,7 @@ import {
   MonthCalendar,
   Popover,
   PageColumn,
+  RecordChip,
   VisuallyHidden,
   Panel,
   SectionBar,
@@ -152,6 +155,9 @@ const NO_ACTIONS: HostBookingActions = {
   markNoShow: () => Promise.reject(new Error('no actions')),
   notify: () => undefined,
 };
+
+/** A chip's link, when there is a page to open. */
+const hrefProps = (href: string | undefined) => (href === undefined ? {} : { href });
 
 /** The person's page, when the booking names one and the reader can open People. */
 function personHrefOf(booking: BookingListItem, link: RecordLink, people: ObjectSummary | undefined) {
@@ -321,6 +327,25 @@ function BookingCard({
   const hasActions = actions !== undefined;
   const now = useNow();
   const isConfirmed = booking.status === 'confirmed';
+  // The record it was linked to by hand (polish F2): its chip opens it; its × unlinks it at once, with Undo, and focus
+  // goes to More (which holds Link to a record) as the row goes. Only where the member may change the link and the card
+  // has More; else the chip alone.
+  const record = booking.linkedRecord;
+  const { unlink } = footer;
+  const linked: MeetingCardRow | undefined =
+    record === undefined
+      ? undefined
+      : {
+          id: 'linked',
+          icon: 'link',
+          label: strings.linkedTo,
+          value: <RecordChip display={record} {...hrefProps(actions?.linking?.hrefOf(record))} />,
+          ...(unlink === undefined
+            ? {}
+            : {
+                action: <Button variant="ghost" icon="x" label={strings.unlink(record.name)} onPress={unlink} />,
+              }),
+        };
   const hasNotice = booking.hostRemoved === true || (isConfirmed && (booking.eventFailed || booking.needsHost));
   const notices = hasNotice ? (
     <>
@@ -376,6 +401,7 @@ function BookingCard({
         ]}
         rows={[
           { id: 'where', ...whereRowOf(booking) },
+          ...(linked === undefined ? [] : [linked]),
           ...(booking.note === undefined
             ? []
             : [
@@ -783,6 +809,10 @@ export interface BookingsCalendarScreenProps {
   readonly onBlock: (draft: BlockDraft, preview: readonly BlockPreview[]) => Promise<{ readonly id: string }>;
   /** Books someone into a drawn span (spec 0027); settles once made, throws a data error on a refusal. */
   readonly onBookAsHost: (meeting: NewMeeting) => Promise<void>;
+  /** New meeting's With: People as the member types, when they may see People (one search per dialog). */
+  readonly peopleSearch?: (() => RecordSearch) | undefined;
+  /** A booking page's own "Add events to", which New meeting's Calendar starts on. */
+  readonly pageDestination?: ((pageId: string) => CalendarsHeld<PageDestinationState>) | undefined;
   /** Mints a new booking's idempotency key, once per New meeting dialog. */
   readonly newBookingKey: () => string;
   /** Where the member's day starts, for a span drawn from the keyboard (their hours; 9:00 when unknown). */
@@ -1453,6 +1483,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
           hasCalendar={connections.length > 0}
           pages={bookable}
           newKey={newBookingKey}
+          people={props.peopleSearch}
+          calendars={calendarList}
+          pageDestination={props.pageDestination}
           onBook={async (input) => {
             await onBookAsHost(input);
             toasts.toast({
@@ -1547,7 +1580,7 @@ function groupsOf(
               ...(me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
                 ? {}
                 : { hostName: item.booking.hostName }),
-              // Every booking says where it stands (the owner, 22 October 2026): Canceled (above), Needs a host
+              // Every booking says where it stands (the owner, 22 October 2026): Cancelled (above), Needs a host
               // (round robin, spec 0029, AC-749), No show (spec 0043), else Confirmed while it is ahead (a past one
               // needs no tag). Calendar events have their calendar's dot instead.
               ...(item.booking.status === 'cancelled'
@@ -1585,7 +1618,7 @@ function groupsOf(
   return groups;
 }
 
-/** The list's bar: Upcoming · Past · Canceled, then the calendars and Filter (which meetings, which link). */
+/** The list's bar: Upcoming · Past · Cancelled, then the calendars and Filter (which meetings, which link). */
 function ListBar({
   slug,
   search,
@@ -1677,7 +1710,7 @@ function useFocusAfterMore(label: string, isReady: boolean, isShown: boolean, co
 }
 
 /**
- * Bookings › List: every meeting on Upcoming, Past or Canceled (bookings and the member's own calendar events),
+ * Bookings › List: every meeting on Upcoming, Past or Cancelled (bookings and the member's own calendar events),
  * narrowed to All, Bookings or Calendar and to the calendars the panel picks, under day bands, a page at a time
  * (More); a row opens its card in a Panel.
  */

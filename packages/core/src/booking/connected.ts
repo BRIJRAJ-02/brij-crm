@@ -75,6 +75,7 @@ export function connectedCalendar(deps: ConnectedCalendarDeps): BookingCalendar 
           requestId: event.bookingId,
           bookingId: event.bookingId,
           ...(event.pageId === undefined ? {} : { pageId: event.pageId }),
+          ...(event.calendarId === undefined ? {} : { calendarId: event.calendarId }),
           ...(event.description === '' ? {} : { description: event.description }),
           ...(event.location === undefined ? {} : { location: event.location }),
         });

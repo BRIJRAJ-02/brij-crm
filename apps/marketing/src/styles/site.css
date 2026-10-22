@@ -6,6 +6,9 @@
     /* Where the frame's lines run, in from the window's sides: 16px on a phone; from the wide breakpoint the content
        is a centred container, 85% of the window (the owner, 23 October 2026), capped at twice a wide dialog. */
     --site-share: 85vw;
+    /* The frame's ink: pitch black (the owner, 23 October 2026), which no token is; the one raw colour on the site. */
+    /* stylelint-disable-next-line scale-unlimited/declaration-strict-value, color-no-hex */
+    --site-ink: #000;
     --site-edge: var(--space-16);
     /* The gap from a frame line to the content. */
     --site-gutter: clamp(var(--space-16), 3vw, calc(var(--space-32) + var(--space-8)));
@@ -35,6 +38,13 @@
   @media (width >= 1024px) {
     :root {
       --site-edge: max(calc((100vw - var(--site-share)) / 2), calc((100vw - var(--size-dialog-wide) * 2) / 2));
+    }
+  }
+
+  /* A phone: no frame, and one 16px gutter from the window's side (the owner, 23 October 2026: 15px; 16 is the token). */
+  @media (width < 1024px) {
+    :root {
+      --site-inline: var(--space-16);
     }
   }
 }

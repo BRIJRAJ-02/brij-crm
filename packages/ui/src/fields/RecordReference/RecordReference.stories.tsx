@@ -60,6 +60,25 @@ export const NameLoading: Story = {
   },
 };
 
+/**
+ * While the form around it sends (a dialog's Link in flight): the chosen record shows faded, and neither the box nor
+ * its Remove takes a press until the answer.
+ */
+export const WhileSending: Story = {
+  args: { value: sample.value as never, display: sample.display as never, isDisabled: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByRole('button', { name: /Change Company/ })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: /^Remove/ })).toBeDisabled();
+    await expect(document.querySelector('[role="menu"]')).toBeNull();
+    await expect(args.onCommit).not.toHaveBeenCalled();
+  },
+};
+
 /** The one editor, in a form: what it commits parses with the type's schema (AC-5). */
 export const Editor: Story = {
   args: {

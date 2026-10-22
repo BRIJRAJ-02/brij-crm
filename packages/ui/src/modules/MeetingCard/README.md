@@ -48,7 +48,7 @@ Google Calendar's alignment (the owner, 22 October 2026: "better alignment"): ev
 
 ## States
 
-Upcoming with a call (Join primary), confirmed with no call, cancelled (status Canceled, a reason row, no footer), needs a host (a notice), long names and emails (the title and the email wrap inside the card), booked by chat (a row whose View chat opens the transcript under it). Hover, focus, pressed, pending and disabled come from its buttons and links; read only is a footer with Join alone, or none. Loading and failure belong to its holder (a Skeleton or an EmptyState in the Panel or Popover).
+Upcoming with a call (Join primary), confirmed with no call, cancelled (status Cancelled, a reason row, no footer), needs a host (a notice), long names and emails (the title and the email wrap inside the card), booked by chat (a row whose View chat opens the transcript under it). Hover, focus, pressed, pending and disabled come from its buttons and links; read only is a footer with Join alone, or none. Loading and failure belong to its holder (a Skeleton or an EmptyState in the Panel or Popover).
 
 ## Keyboard
 

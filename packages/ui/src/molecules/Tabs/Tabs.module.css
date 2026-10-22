@@ -30,6 +30,11 @@
     background: var(--surface);
   }
 
+  /* Tabs drawn under their panels: the bar goes last, the markup order unchanged. */
+  .root[data-placement='bottom'] .bar {
+    order: 1;
+  }
+
   .list {
     display: flex;
     flex: 1;
@@ -253,13 +258,26 @@
     letter-spacing: var(--tracking-body);
   }
 
-  /* Under the page's compact breakpoint (a phone or a tablet, four columns across): the tile over the label, and
-     no description. A page query, as Modal's: a column's own width at 1440 is under the 320px container step. */
+  /* Under the page's compact breakpoint (a phone or a tablet): a row that scrolls, as the strip does, each tab as
+     wide as its tile and label on one line, no description, the line still along the top. A page query, as
+     Modal's: a column's own width at 1440 is under the 320px container step. */
   @media (width < 1024px) {
+    .bar[data-variant='feature'] .list {
+      grid-auto-columns: max-content;
+      gap: var(--space-4);
+    }
+
+    .bar[data-variant='feature'] .tab {
+      padding: var(--space-12) var(--space-8);
+    }
+
     .featureBody {
-      grid-template-columns: auto;
-      justify-items: start;
+      align-items: center;
       gap: var(--space-8);
+    }
+
+    .featureLabel {
+      white-space: nowrap;
     }
 
     .featureDescription {

@@ -20,6 +20,9 @@ export const BOOKING_LIMITS = {
   /** The booking chat (spec 0042, AC-1520): 30 turns a minute per address, 600 per page; a turn that books also counts as a booking. */
   chatPerAddress: { max: 30, windowMs: 60_000 },
   chatPerPage: { max: 600, windowMs: 60_000 },
+  /** A host's picture (23 Oct 2026): 60 a minute per address, 600 per page or handle; the edge keeps most of them. */
+  picturesPerAddress: { max: 60, windowMs: 60_000 },
+  picturesPerTarget: { max: 600, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;
 
 /** The least time a person takes from opening the page to booking. */

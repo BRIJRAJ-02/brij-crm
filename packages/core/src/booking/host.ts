@@ -5,14 +5,17 @@
 // only when it would overlap another confirmed booking of theirs (the host
 // lock, then the exclusion constraint), is in the past, or runs under 5
 // minutes or past 8 hours. The guest is filed as a person like a visitor is;
-// the calendar event, with every guest invited, is written after the commit.
+// the calendar event, with every guest invited, is written after the commit,
+// on the calendar the member picked (one of their own they can write), else
+// the page's own "Add events to", else their default.
 import { randomUUID } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { HOST_BOOKING_LIMITS, PERMISSIONS } from '@crm/contracts';
-import { schema } from '@crm/db';
+import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
+import { isUuid } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { BookingCalendar } from './calendar.ts';
@@ -39,6 +42,11 @@ export interface HostBookingInput {
   readonly timeZone: string;
   readonly guests: readonly string[];
   readonly message?: string | undefined;
+  /**
+   * The member's own calendar the event goes on (`calendar_calendars.id`), when they picked one: refused unless it
+   * is theirs to write on an account that works. Absent, the page's own "Add events to", else their default.
+   */
+  readonly calendarId?: string | undefined;
 }
 
 /** What the member's booking needs from outside: the calendar to write its event to, and the clock. */
@@ -60,6 +68,24 @@ function bookingHost(scope: EngineScope): string {
 
 const TAKEN = 'Something else is already in that time.';
 const REUSED = 'That request was already used. Open New meeting again to book.';
+const NO_SUCH_CALENDAR = 'That calendar isn’t one of yours, or can’t take events now. Pick another.';
+
+/**
+ * Refuses a picked calendar the host can't put the event on (NOT_FOUND on `calendarId`): it must be one of their
+ * own, which they own or can write, on an account that still works, as the event writer's destination rule has it.
+ * Anyone else's calendar answers the same as one that doesn't exist.
+ */
+async function checkCalendar(tx: WorkspaceTx, host: string, calendarId: string): Promise<void> {
+  if (!isUuid(calendarId)) throw refuseOn('NOT_FOUND', NO_SUCH_CALENDAR, 'calendarId');
+  const found = await tx.execute<{ id: string }>(sql`
+    select k.id::text as id
+    from calendar_calendars k
+    join calendar_connections c on c.workspace_id = k.workspace_id and c.id = k.connection_id
+    where k.id = ${calendarId}::uuid and k.member_id = ${host}::uuid and k.access_role in ('owner', 'writer')
+      and c.status in ('syncing', 'connected', 'failed')
+  `);
+  if (found.rows.length === 0) throw refuseOn('NOT_FOUND', NO_SUCH_CALENDAR, 'calendarId');
+}
 
 /**
  * Books a guest into the member's own time (AC-709, AC-710): answers the
@@ -120,6 +146,8 @@ export async function bookAsHost(
           ),
         );
       if (again !== undefined) return { bookingId: again.id, replayed: true, title: page.title, place: undefined };
+      // After the retry check: a retry answers the booking it made, even once that calendar is disconnected.
+      if (input.calendarId !== undefined) await checkCalendar(tx, host, input.calendarId);
       const by = { type: 'member' as const, id: host, memberId: host };
       let bookingId: string;
       try {
@@ -196,6 +224,7 @@ export async function bookAsHost(
         hostMemberId: host,
         bookingId: result.bookingId,
         pageId: input.pageId,
+        ...(input.calendarId === undefined ? {} : { calendarId: input.calendarId }),
         title: `${result.title} with ${input.name}`,
         description: [
           `Booked in by you through “${result.title}”.`,

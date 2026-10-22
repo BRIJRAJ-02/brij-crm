@@ -8,10 +8,12 @@ export interface SlidesProps {
   readonly area: ShowcaseArea;
   /** The first area on the page: its first screen loads with the page, ahead of everything else. */
   readonly isFirst: boolean;
+  /** Called when the play has shown the last screen for its time: the showcase moves on to the next area. */
+  readonly onEnd?: () => void;
 }
 
 /** How long each screen stays before the next. */
-const DWELL_MS = 5000;
+const DWELL_MS = 4000;
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
@@ -41,12 +43,13 @@ function usePageHidden() {
 }
 
 /**
- * An area's screens in the app's window, playing in turn: the bar holds the lights, the address of the screen on
- * show, a segment per screen (the library's SegmentedControl, so the arrow keys move between them) and a pause.
- * The screens are stacked and cross fade. The play stops while the pointer or focus is on the window, while the
+ * An area's screens in the app's window, playing in turn: the bar holds the lights and the address of the screen on
+ * show; floating at the foot, a segment per screen (the library's SegmentedControl, so the arrow
+ * keys move between them) and a pause. The screens are stacked, whole, cross fading, and the window fades out at
+ * its foot (the owner, 23 October 2026: nothing cut, faded). The play stops while the pointer or focus is on the window, while the
  * page is hidden, when paused, and for anyone who asked for reduced motion.
  */
-export function Slides({ area, isFirst }: SlidesProps) {
+export function Slides({ area, isFirst, onEnd }: SlidesProps) {
   const [current, setCurrent] = useState(area.slides[0]?.id ?? '');
   const [isPaused, setIsPaused] = useState(false);
   const [isHeld, setIsHeld] = useState(false);
@@ -59,18 +62,15 @@ export function Slides({ area, isFirst }: SlidesProps) {
 
   useEffect(() => {
     if (!isPlaying) return undefined;
-    const timer = window.setInterval(() => {
-      setCurrent((id) => {
-        const index = area.slides.findIndex((slide) => slide.id === id);
-        for (let step = 1; step < area.slides.length; step += 1) {
-          const next = area.slides[(index + step) % area.slides.length];
-          if (next !== undefined && !broken.includes(next.id)) return next.id;
-        }
-        return id;
-      });
+    const timer = window.setTimeout(() => {
+      const index = area.slides.findIndex((slide) => slide.id === current);
+      // The next screen after this one, or, past the last, the next area.
+      const next = area.slides.slice(index + 1).find((slide) => !broken.includes(slide.id));
+      if (next === undefined) onEnd?.();
+      else setCurrent(next.id);
     }, DWELL_MS);
-    return () => window.clearInterval(timer);
-  }, [isPlaying, area.slides, current, broken]);
+    return () => window.clearTimeout(timer);
+  }, [isPlaying, area.slides, current, broken, onEnd]);
 
   const shown = area.slides.find((slide) => slide.id === current) ?? area.slides[0];
 
@@ -82,55 +82,58 @@ export function Slides({ area, isFirst }: SlidesProps) {
       onFocus={() => setIsHeld(true)}
       onBlur={() => setIsHeld(false)}
     >
-      <div className={styles.bar}>
-        <span className={styles.lights} aria-hidden="true">
-          <span className={styles.light} data-tone="red" />
-          <span className={styles.light} data-tone="yellow" />
-          <span className={styles.light} data-tone="green" />
-        </span>
-        <span className={styles.address} aria-hidden="true">
-          <Icon name="lock" size="xs" />
-          {shown?.address}
-        </span>
-        <span className={styles.controls}>
-          <SegmentedControl
-            label={`${area.label} screen`}
-            size="compact"
-            isFitted
-            segments={area.slides.map((slide) => ({ value: slide.id, label: slide.caption }))}
-            value={current}
-            onChange={setCurrent}
-          />
-          <Button
-            variant="ghost"
-            icon={isPaused ? 'play' : 'pause'}
-            label={isPaused ? 'Play the screens' : 'Pause the screens'}
-            onPress={() => setIsPaused((paused) => !paused)}
-          />
-        </span>
+      <div className={styles.frame}>
+        <div className={styles.bar}>
+          <span className={styles.lights} aria-hidden="true">
+            <span className={styles.light} data-tone="red" />
+            <span className={styles.light} data-tone="yellow" />
+            <span className={styles.light} data-tone="green" />
+          </span>
+          <span className={styles.address} aria-hidden="true">
+            <Icon name="lock" size="xs" />
+            {shown?.address}
+          </span>
+        </div>
+        <div className={styles.viewport}>
+          {area.slides.map((slide, index) => {
+            const isShown = slide.id === current;
+            const isEager = isFirst && index === 0;
+            return (
+              <picture className={styles.shot} key={slide.id} data-shown={isShown || undefined}>
+                <source media="(width < 1024px)" srcSet={slideSrc(slide, 'phone')} width={1170} height={2532} />
+                <img
+                  className={styles.image}
+                  src={slideSrc(slide)}
+                  alt={slide.alt}
+                  width={3840}
+                  height={2400}
+                  decoding="async"
+                  loading={isEager ? 'eager' : 'lazy'}
+                  aria-hidden={isShown ? undefined : 'true'}
+                  onError={() => setBroken((ids) => (ids.includes(slide.id) ? ids : [...ids, slide.id]))}
+                  {...(isEager ? { fetchPriority: 'high' as const } : {})}
+                />
+              </picture>
+            );
+          })}
+        </div>
       </div>
-      <div className={styles.viewport}>
-        {area.slides.map((slide, index) => {
-          const isShown = slide.id === current;
-          const isEager = isFirst && index === 0;
-          return (
-            <img
-              className={styles.shot}
-              key={slide.id}
-              src={slideSrc(slide)}
-              alt={slide.alt}
-              width={3840}
-              height={2400}
-              decoding="async"
-              loading={isEager ? 'eager' : 'lazy'}
-              data-shown={isShown || undefined}
-              aria-hidden={isShown ? undefined : 'true'}
-              onError={() => setBroken((ids) => (ids.includes(slide.id) ? ids : [...ids, slide.id]))}
-              {...(isEager ? { fetchPriority: 'high' as const } : {})}
-            />
-          );
-        })}
-      </div>
+      <span className={styles.controls}>
+        <SegmentedControl
+          label={`${area.label} screen`}
+          size="compact"
+          isFitted
+          segments={area.slides.map((slide) => ({ value: slide.id, label: slide.caption }))}
+          value={current}
+          onChange={setCurrent}
+        />
+        <Button
+          variant="ghost"
+          icon={isPaused ? 'play' : 'pause'}
+          label={isPaused ? 'Play the screens' : 'Pause the screens'}
+          onPress={() => setIsPaused((paused) => !paused)}
+        />
+      </span>
     </figure>
   );
 }

@@ -24,9 +24,10 @@ export interface FieldGroupProps {
 }
 
 /**
- * A labelled block of read only content in a form's rhythm: a Field's label above, a quiet action at that row's
- * end, the content, then one hint line. For what a form shows but doesn't edit in place (a schedule's week, the
- * calendars checked for conflicts), so it lines up with the fields around it.
+ * A labelled block of content in a form's rhythm that isn't one field: a Field's label above, a quiet action at that
+ * row's end, the content, then one hint line. For what a form shows but doesn't edit in place (a schedule's week, the
+ * calendars checked for conflicts), or a list whose own controls change it (a list editor's chips), so it lines up
+ * with the fields around it.
  */
 export function FieldGroup({
   label,

@@ -132,6 +132,8 @@ export {
   type WorkspaceDeletion,
 } from './workspace/settings.ts';
 export { getMyProfile, updateMyMemberProfile, type ProfileExtras } from './members/profile.ts';
+// A person's own account picture from our origin (23 Oct 2026): only Google's account pictures, with their version.
+export { servedPicture, type AccountPicture } from './booking/picture.ts';
 export {
   acceptInvite,
   getInviteLink,
@@ -402,10 +404,12 @@ export {
   type HomeMetricsCache,
   type WorkspaceFigures,
 } from './home/metrics.ts';
-// Changing a booking from Bookings (spec 0025, AC-640): its host moves or cancels it, or copies the guest's link.
+// Changing a booking from Bookings (spec 0025, AC-640): its host moves or cancels it, or copies the guest's link,
+// and links it to a record by hand (polish F2).
 export {
   bookingGuestPath,
   cancelBooking,
+  linkBookingRecord,
   markNoShow,
   hostTarget,
   MAX_GUESTS,

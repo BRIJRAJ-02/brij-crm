@@ -5,8 +5,8 @@ export const strings = {
   pageTabsLabel: 'Bookings',
   pageTabs: { calendar: 'Calendar', list: 'List', availability: 'Availability' },
   tabsLabel: 'Which bookings',
-  tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Canceled' },
-  listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Canceled meetings' },
+  tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Cancelled' },
+  listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Cancelled meetings' },
   sourceLabel: 'Show',
   sources: { all: 'Everything', bookings: 'Bookings only', calendar: 'Calendar events only' },
   noMatch: 'Nothing matches these filters',
@@ -16,7 +16,7 @@ export const strings = {
   empty: {
     upcoming: { title: 'Nothing coming up', text: 'Bookings from your booking pages show up here.' },
     past: { title: 'Nothing behind you yet', text: 'Meetings that have happened show up here.' },
-    cancelled: { title: 'Nothing has been called off', text: 'Canceled bookings show up here.' },
+    cancelled: { title: 'Nothing has been called off', text: 'Cancelled bookings show up here.' },
   },
   /** The list's way to share a booking page when nothing is coming up. */
   shareBookingPage: 'Share a booking page',
@@ -43,7 +43,7 @@ export const strings = {
   calendarsRetry: 'Calendars didn’t load. Try again',
   /** The calendars panel's small month. */
   goToDate: 'Go to date',
-  cancelled: 'Canceled',
+  cancelled: 'Cancelled',
   /** Who provides a meeting link, by its host. */
   providers: { google: 'Google Meet', microsoft: 'Microsoft Teams', zoom: 'Zoom', other: 'the call' },
   /** Filters. */
@@ -72,7 +72,7 @@ export const strings = {
   sortLabel: (current: string) => `Sort: ${current}. Change`,
   /** The details card. */
   details: 'Booking',
-  status: { confirmed: 'Confirmed', cancelled: 'Canceled' },
+  status: { confirmed: 'Confirmed', cancelled: 'Cancelled' },
   when: 'When',
   /** New meeting's day: the drawn span's, or the next free one, and changed in place. */
   day: 'Day',
@@ -91,7 +91,7 @@ export const strings = {
   showChat: 'Chat',
   chatVisitor: 'Visitor',
   chatAssistant: 'Assistant',
-  cancelReason: 'Why it was canceled',
+  cancelReason: 'Why it was cancelled',
   openPerson: 'Open their page',
   joinCall: 'Join call',
   /** The card's Join: short on screen, its name the provider ("Join Google Meet"). */
@@ -178,6 +178,11 @@ export const strings = {
   /** What the TopBar's count counts, for screen readers: "4 upcoming bookings". */
   with: 'With',
   theirName: 'Their name',
+  /** With, when it searches People as you type. */
+  withPlaceholder: 'Their name, or someone in People',
+  /** The rows under With, for screen readers. */
+  fromPeople: 'People',
+  noPeopleMatch: 'No one in People matches',
   email: 'Email',
   emailPlaceholder: 'them@example.com',
   theirTimeZone: 'Their time zone',
@@ -188,8 +193,9 @@ export const strings = {
   aboutExample: 'Pick Demo to book Ana in, and the meeting is called Demo with Ana.',
   length: 'Length',
   alsoInvite: 'Also invite',
-  alsoInviteHint: 'Emails, separated by commas. Everyone gets the calendar invitation.',
-  guestPlaceholder: 'colleague@example.com',
+  guestsFull: (max: number) => `Up to ${String(max)} guests.`,
+  /** New meeting's Calendar, with two or more calendars that take events: where its event goes. */
+  calendarChoice: 'Calendar',
   message: 'Message',
   messagePlaceholder: 'Grabbing the hour we talked about.',
   cancel: 'Cancel',
@@ -220,6 +226,24 @@ export const strings = {
   cancelBooking: 'Cancel booking',
   /** The booking card's overflow menu. */
   moreForBooking: 'More for this booking',
+  // Linking a booking to a record by hand (polish F2).
+  linkRecord: 'Link to a record',
+  changeLinkedRecord: 'Change linked record',
+  /** Unlink is the one verb for taking a link off: More's item, the row's ×, and the toast. */
+  unlinkRecord: 'Unlink record',
+  /** Names the booking, as Reschedule's title does: "Link Quick chat with Ada Lovelace to a record". */
+  linkTitle: (title: string, name: string) => `Link ${title} with ${name} to a record`,
+  linkedRecordField: 'Record',
+  linkIt: 'Link',
+  linking: 'Linking',
+  linkedTo: 'Linked to',
+  /** A record with no name (its name hidden, or not read yet) is left out: never "Linked to Record.". */
+  linkedToast: (name: string) => (name === '' ? 'Linked.' : `Linked to ${name}.`),
+  unlink: (name: string) => (name === '' ? 'Unlink record' : `Unlink ${name}`),
+  unlinkedToast: (name: string) => (name === '' ? 'Unlinked.' : `Unlinked from ${name}.`),
+  linkFailed: 'That link didn’t go through. Try again.',
+  unlinkFailed: 'Couldn’t unlink it. Try again.',
+  searchFailed: 'The search didn’t answer. Type again to try again.',
   rescheduleTitle: (title: string, name: string) => `Reschedule ${title} with ${name}`,
   tryAgain: 'Try again',
   copyFailed: 'Couldn’t copy the link. Try again.',

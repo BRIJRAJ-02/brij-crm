@@ -132,6 +132,11 @@ export interface CreateEventInput {
   readonly bookingId?: string;
   /** The booking page, whose own "Add events to" wins when it names a calendar of this member (AC-997). */
   readonly pageId?: string;
+  /**
+   * The member's pick for this one event (`calendar_calendars.id`, New meeting's Calendar): wins over the page's
+   * and their destination while it is still theirs to write, on an account that works; else ignored.
+   */
+  readonly calendarId?: string;
 }
 
 /** What `createEvent` made: the meeting row, the provider's event id, the video link, and where it went. */
@@ -416,26 +421,29 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
   }
 
   /**
-   * Where a member's new event goes (AC-996, AC-997): the page's own calendar when it names one of this member's
-   * calendars they can still write, on an account that works, else the member's destination, else none.
+   * Where a member's new event goes (AC-996, AC-997): the calendar they picked for it (New meeting), then the page's
+   * own calendar when it names one of this member's, each only while they can still write it on an account that
+   * works; else the member's destination, else none.
    */
   const destinationFor = async (
     scope: EngineScope,
     memberId: string,
     pageId: string | undefined,
+    chosenId: string | undefined,
   ): Promise<Destination | undefined> => {
     const found = await inWorkspace(scope, (tx) =>
       tx.execute<Destination & { readonly from_page: boolean }>(sql`
         select c.id::text as id, c.member_id::text as member_id, c.provider, c.account_email, c.tokens,
           c.status::text as status, k.id::text as calendar_id, k.provider_calendar_id,
+          (k.id = ${chosenId ?? null}::uuid) as chosen,
           (k.id = (select p.destination_calendar_id from booking_pages p where p.id = ${pageId ?? null}::uuid)) as from_page
         from calendar_calendars k
         join calendar_connections c on c.workspace_id = k.workspace_id and c.id = k.connection_id
         where k.member_id = ${memberId}::uuid and k.access_role in ('owner', 'writer')
           and c.status in ('syncing', 'connected', 'failed')
-          and (k.is_destination
+          and (k.is_destination or k.id = ${chosenId ?? null}::uuid
             or k.id = (select p.destination_calendar_id from booking_pages p where p.id = ${pageId ?? null}::uuid))
-        order by from_page desc nulls last
+        order by chosen desc nulls last, from_page desc nulls last
         limit 1
       `),
     );
@@ -536,7 +544,8 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
       checkSystem(scope);
       const memberId = checkId(input.memberId, NOT_CONNECTED);
       const pageId = input.pageId === undefined ? undefined : checkId(input.pageId, NOT_CONNECTED);
-      const row = await destinationFor(scope, memberId, pageId);
+      const chosenId = input.calendarId === undefined ? undefined : checkId(input.calendarId, NOT_CONNECTED);
+      const row = await destinationFor(scope, memberId, pageId, chosenId);
       if (row === undefined) throw refuse('CALENDAR_NOT_CONNECTED', NOT_CONNECTED);
       const live = await tokensFor(scope, row);
       if (live === undefined) throw refuse('CALENDAR_NOT_CONNECTED', NOT_CONNECTED);

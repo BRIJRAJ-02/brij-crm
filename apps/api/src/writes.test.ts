@@ -1403,6 +1403,26 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     // Only the booking's own row (its person filed by the host's booking): the mark itself stores none.
     return [{ kind: 'records', object_id: m.people.id }];
   },
+  // A booking linked to a deal by hand (polish F2): settings like a no show, so the link stores no row of its own.
+  'bookings.link': async (m, mutationId) => {
+    const bookingId = await hostBooking(m);
+    const deals = (await m.client.objects.list({ workspace: m.slug })).find((object) => object.standardKey === 'deals');
+    if (deals?.primaryAttributeId === undefined) throw new Error('The template has no Deals.');
+    const recordId = newId();
+    // Named, since a deal's Name is required.
+    await m.client.records.create({
+      workspace: m.slug,
+      objectId: deals.id,
+      id: recordId,
+      values: { [deals.primaryAttributeId]: 'Navy rollout' },
+      mutationId: newId(),
+    });
+    await m.client.bookings.link({ workspace: m.slug, bookingId, recordId, mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id },
+      { kind: 'records', object_id: deals.id },
+    ];
+  },
   'bookings.move': async (m, mutationId) => {
     const bookingId = await hostBooking(m);
     // To a time the page offers (a move refuses any other), read first: a read, so no poke.
@@ -2021,6 +2041,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,
   'bookings.markNoShow': 3,
+  // The page, the booking and the deal, then the link.
+  'bookings.link': 4,
   'bookings.move': 3,
   // A schedule made first, then the write (spec 0035).
   'schedules.update': 2,

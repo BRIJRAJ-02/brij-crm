@@ -159,6 +159,8 @@ export interface SessionUser {
   readonly name: string;
   readonly email: string;
   readonly emailVerified: boolean;
+  /** The account's picture as stored (Google's): a raw outside URL, served only through `/api/me/picture`. */
+  readonly image?: string;
 }
 
 /** A live session's user, and any cookies to send back (a session extended on use renews its cookie). */
@@ -420,9 +422,21 @@ export function createAuth({
   /** Whether a new account may be made for `email`: on the list, or holding an open email invitation (AC-807). */
   const mayJoin = async (email: string): Promise<boolean> =>
     allowlist.allows(email) || (invited !== undefined && (await invited(email)));
+  // The picture Google's profile names in this request (23 Oct 2026): Better Auth stores it only when Google makes
+  // the account, so one made with an email code and linked to Google later has none, and a picture changed at Google
+  // never arrives. The two factor hold below saves it once the sign in stands (`savePicture`).
+  const googlePictures = new AsyncLocalStorage<string[]>();
   const google =
     env.GOOGLE_CLIENT_ID !== undefined && env.GOOGLE_CLIENT_SECRET !== undefined
-      ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
+      ? {
+          clientId: env.GOOGLE_CLIENT_ID,
+          clientSecret: env.GOOGLE_CLIENT_SECRET,
+          // Changes nothing Better Auth keeps: only notes the picture for this request.
+          mapProfileToUser: (profile: { readonly picture?: unknown }) => {
+            if (typeof profile.picture === 'string') googlePictures.getStore()?.push(profile.picture);
+            return {};
+          },
+        }
       : undefined;
   const appOrigin = new URL(env.APP_URL).origin;
 
@@ -461,6 +475,20 @@ export function createAuth({
         log.error('Sign in alert not sent', { error: error instanceof Error ? error.name : typeof error });
         captureFault(error, { task: 'sign in alert' });
       }
+    }
+  }
+  /**
+   * Saves the picture Google named in this request as the account's, when it has none or an older one of Google's
+   * (https only): only for a sign in that stands, never one held back for its second step. A failure is logged,
+   * never thrown.
+   */
+  async function savePicture(userId: string): Promise<void> {
+    const picture = googlePictures.getStore()?.at(-1);
+    if (picture === undefined) return;
+    try {
+      if (await identity.setUserImageFromGoogle(userId, picture)) log.info('Account picture set from Google', {});
+    } catch (error) {
+      log.warn('Account picture not set', { error: error instanceof Error ? error.name : typeof error });
     }
   }
   // The year old security history goes at most once a day per process, after a sign in (AC-898): no timer keeps
@@ -876,7 +904,9 @@ export function createAuth({
                 const made = ctx.context.newSession;
                 if (made === null) return;
                 const userId = made.user.id;
-                if (!isTwoFactorUser(made.user)) return;
+                // Google's picture, once the sign in stands (23 Oct 2026): never for one held back below.
+                const stands = () => (ctx.path === CALLBACK_ROUTE ? savePicture(userId) : Promise.resolve());
+                if (!isTwoFactorUser(made.user)) return stands();
                 // A remembered device (AC-884) passes, and its cookie is renewed, as the plugin's own hold does.
                 const trust = ctx.context.createAuthCookie(TRUST_DEVICE_COOKIE, { maxAge: TRUST_DEVICE_SECONDS });
                 const trusted = await ctx.getSignedCookie(trust.name, ctx.context.secret);
@@ -903,7 +933,7 @@ export function createAuth({
                       ctx.context.secret,
                       trust.attributes,
                     );
-                    return;
+                    return stands();
                   }
                   expireCookie(ctx, trust);
                 }
@@ -946,7 +976,7 @@ export function createAuth({
       if (checked instanceof Response) return checked;
       const forwarded = new Request(checked, { headers: forwardedHeaders(checked.headers, clientIp, origin, geo) });
       const made: { userId: string; sessionId: string }[] = [];
-      const answered = await signedInThisRequest.run(made, () => auth.handler(forwarded));
+      const answered = await googlePictures.run([], () => signedInThisRequest.run(made, () => auth.handler(forwarded)));
       if (made.length > 0) {
         track(alertAfter(made));
         track(sweepAfterSignIn());
@@ -961,11 +991,11 @@ export function createAuth({
         returnHeaders: true,
       });
       if (response === null) return undefined;
-      const { id, name, email, emailVerified } = response.user;
+      const { id, name, email, emailVerified, image } = response.user;
       const verified: unknown = response.session.verifiedAt;
       return {
         sessionId: response.session.id,
-        user: { id, name, email, emailVerified },
+        user: { id, name, email, emailVerified, ...(typeof image === 'string' ? { image } : {}) },
         setCookies: answered.getSetCookie(),
         verifiedAt: verifiedAtOf(verified, response.session.createdAt),
         twoFactorEnabled: isTwoFactorUser(response.user),

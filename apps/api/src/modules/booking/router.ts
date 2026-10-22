@@ -12,6 +12,7 @@ import {
   updateRotation,
   bookingGuestPath,
   cancelBooking,
+  linkBookingRecord,
   markNoShow,
   routingReport,
   hostTarget,
@@ -131,6 +132,7 @@ export const bookingsRouter = member.bookings.router({
           timeZone: input.timeZone,
           guests: input.guests,
           message: input.message,
+          calendarId: input.calendarId,
         },
         hooks,
       );
@@ -152,6 +154,13 @@ export const bookingsRouter = member.bookings.router({
   markNoShow: member.bookings.markNoShow.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       markNoShow(context.scope, { bookingId: input.bookingId, noShow: input.noShow }),
+    ),
+  ),
+  // A booking linked to a record by hand (polish F2): its host, the page's owner or an admin, then the record's own
+  // access (visible, and on an object they may change); audited.
+  link: member.bookings.link.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      linkBookingRecord(context.scope, { bookingId: input.bookingId, recordId: input.recordId }),
     ),
   ),
   move: member.bookings.move.handler(({ context, input }) =>

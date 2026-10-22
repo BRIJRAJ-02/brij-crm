@@ -18,6 +18,7 @@ import { openHoursOf, workingStartOf } from '../features/bookings/span.ts';
 import { addDays, weekRange } from '../features/bookings/week.ts';
 import { memberZone } from '../features/booking/zone.ts';
 import { firstDayFor, useFirstDay } from '../features/workspace/first-day.ts';
+import { peopleSearchOf } from '../features/bookings/people.ts';
 
 // Bookings › Calendar (spec 0025, AC-646): the week (`w`, its Monday; `d`, the day picked) with the reader's own
 // calendar events beside the bookings, filtered by `link` (one booking page) and `cal` (the calendars the panel shows). The
@@ -103,7 +104,7 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
   const navigate = useNavigate();
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
-  const actions = useMemo(() => hostActions(data, toasts, slug), [data, toasts, slug]);
+  const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
   const week = heldWeek(search.week, data, slug, timeZone);
   // The member's zone changed in Preferences while the page is open: the loader primed the weeks either side in the
   // old one, so prime them again in the new one (each held read is the same one for the same range).
@@ -134,6 +135,8 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
       onBookAsHost={async (meeting) => {
         await data.bookings.bookAsHost(slug, { ...meeting, guests: [...meeting.guests] });
       }}
+      peopleSearch={peopleSearchOf(data, slug, objects)}
+      pageDestination={(pageId) => data.calendar.pageDestination(slug, pageId)}
       newBookingKey={data.bookings.newKey}
       toasts={toasts}
       actions={actions}

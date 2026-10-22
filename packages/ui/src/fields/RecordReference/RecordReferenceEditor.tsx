@@ -20,6 +20,7 @@ export function RecordReferenceEditor({
   startText,
   objectSwitcher,
   describeResult,
+  isDisabled = false,
 }: EditorProps<'record_reference'>) {
   const displays = asList<RecordRefDisplay>(display);
   const [chosen, setChosen] = useState<readonly (typeof displays)[number][]>(() =>
@@ -42,6 +43,7 @@ export function RecordReferenceEditor({
       keyOf={keyOf}
       isCompact={isCompactSurface(surface)}
       isOpenAtStart={autoOpen}
+      isDisabled={isDisabled}
       isInline={surface === 'cell'}
       showLabel={surface === 'form'}
       {...(startText === undefined ? {} : { startQuery: startText })}
