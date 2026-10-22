@@ -23,6 +23,7 @@ import {
 import { actorColumns, auditColumns, timestamptz, workspaceId } from './common.ts';
 import { objects } from './definitions.ts';
 import { records } from './records.ts';
+import { rotations } from './rotation.ts';
 import { actorConstraints, members } from './workspaces.ts';
 
 /** One form. Its documents live in `form_versions`; `draft_version_id` is the one being edited. */
@@ -52,6 +53,11 @@ export const forms = pgTable(
     publicKey: text('public_key').notNull(),
     /** Who owns a record the form creates (AC-567); applies at once. Null: nobody. */
     ownerMemberId: uuid('owner_member_id'),
+    /**
+     * Or the round robin rotation that gives each new lead its owner (spec 0029 milestone 3, AC-755, AC-756; spec
+     * 0023 AC-1050); applies at once. At most one of the two is set.
+     */
+    ownerRotationId: uuid('owner_rotation_id'),
     /** The sites that may post their own form's answers here ("Your own form"), as origins. */
     allowedOrigins: text('allowed_origins')
       .array()
@@ -91,6 +97,16 @@ export const forms = pgTable(
       columns: [t.workspaceId, t.ownerMemberId],
       foreignColumns: [members.workspaceId, members.id],
     }),
+    foreignKey({
+      name: 'forms_owner_rotation',
+      columns: [t.workspaceId, t.ownerRotationId],
+      foreignColumns: [rotations.workspaceId, rotations.id],
+    }),
+    // The forms a rotation gives owners for: its delete guard ("Used by 1 form") and the foreign key's check.
+    index('forms_by_owner_rotation')
+      .on(t.workspaceId, t.ownerRotationId)
+      .where(sql`${t.ownerRotationId} is not null`),
+    check('forms_one_owner', sql`${t.ownerMemberId} is null or ${t.ownerRotationId} is null`),
     check(
       'forms_live_version',
       sql`(${t.status} = 'draft') = (${t.liveVersionId} is null) or ${t.status} = 'archived'`,

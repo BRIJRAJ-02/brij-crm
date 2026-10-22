@@ -30,6 +30,8 @@ export interface FormRow {
   readonly liveObjectId: string | null;
   readonly revision: number;
   readonly ownerMemberId: string | null;
+  /** The rotation that gives each new lead its owner (spec 0029 milestone 3); null when a member or nobody does. */
+  readonly ownerRotationId: string | null;
   readonly allowedOrigins: readonly string[];
   readonly requireSignature: boolean;
   readonly signingSecret: string;
@@ -71,6 +73,7 @@ const FORM_COLUMNS = {
   liveObjectId: liveObjectOf(),
   revision: forms.revision,
   ownerMemberId: forms.ownerMemberId,
+  ownerRotationId: forms.ownerRotationId,
   allowedOrigins: forms.allowedOrigins,
   requireSignature: forms.requireSignature,
   signingSecret: forms.signingSecret,

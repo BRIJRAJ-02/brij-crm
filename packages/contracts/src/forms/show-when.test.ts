@@ -3,7 +3,16 @@
 // dropping what a hidden question was given.
 import { describe, expect, it } from 'vitest';
 import { checkAnswers } from './check.ts';
-import { matchesCondition, matchesShowWhen, summarizeShowWhen, visibleQuestions } from './show-when.ts';
+import { publishProblem } from './publish.ts';
+import { RoutingRules } from './routing.ts';
+import {
+  hiddenFacts,
+  isHiddenFact,
+  matchesCondition,
+  matchesShowWhen,
+  summarizeShowWhen,
+  visibleQuestions,
+} from './show-when.ts';
 
 describe('a condition', () => {
   it('compares text without case or spaces, and yes or no answers as yes and no', () => {
@@ -65,5 +74,81 @@ describe('Show when on questions', () => {
       { budget: 'Small', size: '12' },
     );
     expect(checked).toEqual({ ok: true, answers: { budget: 'Small' } });
+  });
+});
+
+describe('hidden fields as facts', () => {
+  it('reads a visit’s UTM tags, page and referrer under hidden keys, and nothing else', () => {
+    const facts = hiddenFacts({
+      utm_source: 'Google',
+      page: 'https://acme.example/pricing',
+      utm_term: ' ',
+      other: 'x',
+    });
+    expect(facts).toEqual({ 'hidden.utm_source': 'Google', 'hidden.page': 'https://acme.example/pricing' });
+    expect(hiddenFacts(null)).toEqual({});
+    expect(hiddenFacts(['utm_source'])).toEqual({});
+    // The stored context comes first (its page is `page_url`), the older hidden fields after.
+    expect(
+      hiddenFacts(
+        { utm_source: 'Old', referrer: 'https://a.example/' },
+        { utm_source: 'New', page_url: 'https://b.example/' },
+      ),
+    ).toEqual({
+      'hidden.utm_source': 'New',
+      'hidden.page': 'https://b.example/',
+      'hidden.referrer': 'https://a.example/',
+    });
+    expect(isHiddenFact('hidden.utm_campaign')).toBe(true);
+    expect(isHiddenFact('hidden.other')).toBe(false);
+    expect(isHiddenFact('utm_source')).toBe(false);
+    expect(matchesCondition({ key: 'hidden.utm_source', op: 'is', value: 'google' }, facts)).toBe(true);
+    expect(matchesCondition({ key: 'hidden.page', op: 'contains', value: '/pricing' }, facts)).toBe(true);
+    // A field the visit didn't bring reads as empty.
+    expect(matchesCondition({ key: 'hidden.utm_campaign', op: 'is_empty' }, facts)).toBe(true);
+  });
+
+  it('lets a rule read them, but never a question’s Show when, nor as a number', () => {
+    const rule = (op: 'is' | 'more_than', value: string) =>
+      RoutingRules.parse({
+        rules: [
+          {
+            id: 'ads',
+            when: { join: 'all', rules: [{ key: 'hidden.utm_source', op, value }] },
+            then: { kind: 'message' },
+          },
+        ],
+      }).rules;
+    const form = (
+      rules: ReturnType<typeof rule>,
+      showWhen?: { join: 'all'; rules: { key: string; op: 'is'; value: string }[] },
+    ) =>
+      publishProblem({
+        name: 'Demo',
+        slug: 'demo',
+        attributes: new Map(),
+        document: {
+          targets: {},
+          questions: [
+            {
+              id: 'q',
+              key: 'budget',
+              label: 'Budget',
+              answerType: 'short_text',
+              required: false,
+              update: 'fill',
+              ...(showWhen === undefined ? {} : { showWhen }),
+            },
+          ],
+          routing: { rules },
+        },
+      });
+    expect(form(rule('is', 'google'))).toBeUndefined();
+    expect(form(rule('more_than', '3'))?.message).toBe(
+      'Rule 1 compares a hidden field as a number, but it holds text. Change it in Routing.',
+    );
+    expect(form([], { join: 'all', rules: [{ key: 'hidden.utm_source', op: 'is', value: 'google' }] })?.code).toBe(
+      'SHOW_WHEN_INVALID',
+    );
   });
 });

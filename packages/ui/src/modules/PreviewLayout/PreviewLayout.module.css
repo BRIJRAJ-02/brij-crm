@@ -122,7 +122,7 @@
     flex-direction: column;
     gap: var(--space-12);
     align-items: center;
-    block-size: max(var(--size-panel), calc(100dvh - 2 * var(--size-bar) - 3 * var(--space-24)));
+    block-size: max(var(--size-panel), calc(100dvh - 2 * var(--size-bar) - 3 * var(--space-16)));
   }
 
   /* In the sheet, the window less its bar and the sheet's own. */

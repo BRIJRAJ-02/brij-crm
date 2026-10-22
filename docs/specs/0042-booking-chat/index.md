@@ -31,7 +31,7 @@ Reasoning and options: see [rationale.md](rationale.md). Checks: [verify.md](ver
 
 *The panel*
 - **AC-1501**: The card's view switch on `/b/<publicKey>` offers Month, List and Chat. Chat replaces the picker inside the same card; the rail (host, meeting, length, time zone) stays. The choice is remembered like Month and List. Nothing else on the page changes.
-- **AC-1502**: The chat opens with one greeting that names the meeting and its length ("I book Ada's Intro call (30 minutes). When suits you?") and offers the soonest times as buttons, drawn as the picker draws them (SlotList), grouped under their day, plus up to two suggestions as buttons ("Something later", "Next week"). The greeting needs no request: it is drawn from the slots the page already holds; the first request goes on the visitor's first message.
+- **AC-1502**: The chat opens with one greeting that names the meeting and its length ("I can book your 30 minute Intro call with Ada. When works for you?", owner's wording fix of 23 Oct 2026) and offers the soonest times as buttons, drawn as the picker draws them (SlotList), grouped under their day, plus up to two suggestions as buttons ("Something later", "Next week"). The greeting needs no request: it is drawn from the slots the page already holds; the first request goes on the visitor's first message.
 - **AC-1503**: A visitor types in one labelled field ("Message", at most 500 characters) and sends with Enter or the Send button. A time button or a suggestion sends its own words as the visitor's message, so a tap and typing go through one parser.
 - **AC-1504**: The panel's code loads in its own chunk when Chat is first chosen, never in the page's first load (`pnpm size` holds).
 

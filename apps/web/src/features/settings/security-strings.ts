@@ -123,6 +123,8 @@ export const strings = {
     /** On Profile, the page's last section, as General's Delete workspace sits (the owner, 22 October 2026). */
     section: 'Danger zone',
     row: 'Delete account',
+    /** On the page of a deleted workspace that was the person's last, where Settings can't open. */
+    pageAction: 'Delete your account',
     rowText: 'You leave every workspace. Records you made stay, credited to Deleted user.',
     action: 'Delete account',
     title: 'Delete your account?',
@@ -133,6 +135,11 @@ export const strings = {
         ? `You’re the last owner of ${names[0] ?? ''}. Make someone else an owner, or delete the workspace.`
         : `You’re the last owner of ${names.join(', ')}. Make someone else an owner of each, or delete them.`,
     openMembers: (name: string) => `Open ${name} members`,
+    /** Its General settings, where Delete workspace is. */
+    openGeneral: (name: string) => `Open ${name} settings`,
+    /** Deleting the account from a deleted workspace's page: nobody it leaves behind can bring the person back. */
+    lostWorkspace: (name: string) =>
+      `You won’t be able to restore ${name} after this. To keep anything in it, restore it first.`,
     text: 'You’ll leave every workspace, and your sign in, devices and details are deleted. This can’t be undone. Export anything you need from each workspace first.',
     emailLabel: (email: string) => `Type ${email} to confirm`,
     deleting: 'Deleting',

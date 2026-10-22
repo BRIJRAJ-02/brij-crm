@@ -8,8 +8,10 @@
 import {
   BOOKING_COUNTDOWN,
   checkAnswers,
+  hiddenFacts,
   storedContext,
   SubmitBody,
+  type Facts,
   type FormDocument,
   type PublicForm,
   type Route,
@@ -143,7 +145,13 @@ async function bookingNext(
  */
 async function handedOff(tx: WorkspaceTx, submissionId: string, pageId: string) {
   const [row] = await tx
-    .select({ id: formSubmissions.id, versionId: formSubmissions.versionId, answers: formSubmissions.answers })
+    .select({
+      id: formSubmissions.id,
+      versionId: formSubmissions.versionId,
+      answers: formSubmissions.answers,
+      hidden: formSubmissions.hidden,
+      context: formSubmissions.context,
+    })
     .from(formSubmissions)
     .where(eq(formSubmissions.id, submissionId));
   if (row === undefined) return undefined;
@@ -155,7 +163,7 @@ async function handedOff(tx: WorkspaceTx, submissionId: string, pageId: string) 
     (after.kind === 'booking' && after.bookingPageId === pageId) ||
     (await submissionDecision(tx, row.id))?.routedPageId === pageId;
   if (!routedHere) return undefined;
-  return { id: row.id, document: version.document, answers: row.answers };
+  return { id: row.id, document: version.document, answers: row.answers, hidden: row.hidden, context: row.context };
 }
 
 /**
@@ -174,14 +182,16 @@ export async function handoffVisitor(
   return visitorOf(found.document, answers);
 }
 
-/** The answers a hand off's submission gave, for page `pageId`'s routing rules (spec 0043, AC-1608); empty for any other. */
-export async function handoffAnswers(
-  tx: WorkspaceTx,
-  submissionId: string,
-  pageId: string,
-): Promise<Readonly<Record<string, unknown>>> {
+/**
+ * What a hand off's submission gave, as page `pageId`'s routing rules read it (spec 0043, AC-1608): its answers by
+ * question key and the visit's hidden fields as `hidden.<name>`; empty for any other page.
+ */
+export async function handoffFacts(tx: WorkspaceTx, submissionId: string, pageId: string): Promise<Facts> {
   const found = await handedOff(tx, submissionId, pageId);
-  return typeof found?.answers === 'object' && found.answers !== null ? (found.answers as Record<string, unknown>) : {};
+  if (found === undefined) return {};
+  const answers =
+    typeof found.answers === 'object' && found.answers !== null ? (found.answers as Record<string, unknown>) : {};
+  return { ...answers, ...hiddenFacts(found.hidden, found.context) };
 }
 
 /** The submission a booking on page `pageId` links to (AC-1058): one this page's form handed on, else undefined. */
@@ -447,6 +457,8 @@ export async function submitForm(
               submissionId: row.id,
               document: live.document,
               answers,
+              hidden: body.hidden,
+              context: cameFrom,
             })
           : undefined;
       const next = await nextOf(tx, live.document, row.id, input.signHandoff, route);
