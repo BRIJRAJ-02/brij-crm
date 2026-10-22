@@ -191,17 +191,23 @@
     transform-origin: 0 0;
   }
 
-  /* A long preview's screen takes focus to be scrolled: the phone's outline shows it. */
-  .phone:has(> .screen:focus-visible) {
+  /* A long preview's screen, or a long page's frame, takes focus to be scrolled: the phone's outline shows it. */
+  .phone:has(.screen:focus-visible, .viewport:focus-visible) {
     border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
   }
 
-  /* PreviewFrame: the page fills the phone's screen. */
+  /* PreviewFrame: the page fills the phone's screen, and a wheel over it scrolls the page (the frame is inert). */
   .viewport {
+    outline: none;
     inline-size: 100%;
     block-size: 100%;
     background: var(--surface-subtle);
+  }
+
+  /* While the page is long, a finger over the phone drags the page, not the sheet around it. */
+  .viewport[data-long] {
+    touch-action: none;
   }
 
   .iframe {
@@ -239,7 +245,7 @@
       border-color: CanvasText;
     }
 
-    .phone:has(> .screen:focus-visible) {
+    .phone:has(.screen:focus-visible, .viewport:focus-visible) {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: var(--border-width-hairline);
     }
