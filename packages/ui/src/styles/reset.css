@@ -1,5 +1,6 @@
 /* Removes the browser's default spacing and sizing, so every value on screen
-   comes from a token. It never removes focus outlines. */
+   comes from a token. It never removes focus outlines. It also holds React
+   Aria's pressable touch-action rule (see the end). */
 @layer reset {
   *,
   *::before,
@@ -46,5 +47,12 @@
   canvas {
     display: block;
     max-inline-size: 100%;
+  }
+
+  /* React Aria's pressable rule (usePress), which it would otherwise inject as an inline \3c style> the CSP refuses.
+     The /layers.css link carries the id it checks for (PRESSABLE_STYLE_ID in vite.ts), so it never does. Without
+     it a double tap would zoom and a tap would wait for one. */
+  [data-react-aria-pressable] {
+    touch-action: pan-x pan-y pinch-zoom;
   }
 }

@@ -5,7 +5,7 @@ import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
-import { contentSecurityPolicy, directiveSources, sentryDsnProblem } from './csp.ts';
+import { contentSecurityPolicy, directiveSources, policyForPath, sentryDsnProblem } from './csp.ts';
 import { embedScript } from './embed-script.ts';
 import { realtimeCspProblem } from './realtime-csp.ts';
 
@@ -62,6 +62,26 @@ function deleteSourceMaps(): Plugin {
           if (file.endsWith('.map')) rmSync(path.join(outDir, file));
         }
       },
+    },
+  };
+}
+
+/**
+ * `vite preview` (the flows' server in CI) sends each page the `style-src` vercel.json sends it, so an inline
+ * style the production policy refuses is refused in the flows too. Only `style-src`: the rest of the policy
+ * names production's socket, and the flows connect to a local one.
+ */
+function deployedStylePolicy(): Plugin {
+  return {
+    name: 'crm:deployed-style-policy',
+    configurePreviewServer(server) {
+      server.middlewares.use((request, response, next) => {
+        // Before the page rewrites below, so the policy follows the address the browser asked for.
+        const policy = policyForPath(new URL(request.url ?? '/', 'http://preview').pathname);
+        const styles = policy === undefined ? [] : directiveSources(policy, 'style-src');
+        if (styles.length > 0) response.setHeader('Content-Security-Policy', `style-src ${styles.join(' ')}`);
+        next();
+      });
     },
   };
 }
@@ -185,6 +205,7 @@ export default defineConfig({
     checkSentryDsn(),
     uploadSourceMaps(),
     deleteSourceMaps(),
+    deployedStylePolicy(),
     hostedForms(),
     publicBookingPage(),
     // The one script a site adds for embeds and its own form, minified as /embed/v1.js.

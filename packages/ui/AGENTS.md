@@ -10,7 +10,7 @@ The component library every screen draws with. It holds the root stylesheet (cas
 |---|---|
 | `src/index.ts` | The public surface screens import from `@crm/ui`: components and their types. `src/index.test.ts` pins the list |
 | `src/styles/index.css` | `@crm/ui/styles.css`: the layer order `reset, tokens, base, components, utilities`, then the tokens, the reset and the base styles |
-| `src/styles/reset.css`, `src/styles/base.css` | `@layer reset` and `@layer base`: the page background, and body type and colour, all from tokens |
+| `src/styles/reset.css`, `src/styles/base.css` | `@layer reset` and `@layer base`: the page background, and body type and colour, all from tokens, and React Aria's pressable `touch-action` rule |
 | `src/styles/cursors.css` | The one cursor rule, in `@layer base` with no specificity: pointer, text, the arrow, not-allowed, progress, grab and col-resize, by tag, role and React Aria's attributes |
 | `src/theme/theme.ts` | `@crm/ui/theme`: the `crm.theme` storage key, `parseThemeChoice`, `safeLocalStorage`, `createThemeController`, and `THEME_SURFACE` with `themeBarColor` for the phone browser bar |
 | `src/hue.ts` | `HUES` and `Hue`, the nine data hues used by tags and icon tiles |
@@ -68,7 +68,7 @@ pnpm ui:artifact                   # build the artifact files into .artifact/; -
 - `package.json` lists only the root stylesheets in `sideEffects`, so every other module (components and their CSS modules) is side effect free: a screen that imports one component from `@crm/ui` gets that component, not the whole library, and the app's first load holds only what `main.tsx` uses. A module that must run for its side effect alone has to be listed there.
 - The base layer sizes `[data-app-root]` (the web app's mount point) to the window, so AppShell and AuthLayout, which fill their container, fill the window. Their stories give them a window's height with `Stage height="page"`.
 - `apps/web/public/theme-boot.js` repeats the storage key and the `light` or `dark` check, because it has to run before any module loads. Change `THEME_STORAGE_KEY` and that file together (`apps/web/theme-boot.test.ts` checks they match).
-- Vite's CSS minifier (Lightning CSS) removes the `@layer` order statement from the build, and a shared chunk's CSS can load before the reset. So `layerOrder()` in `src/vite.ts` publishes the root stylesheet's `@layer` statement as `/layers.css` and links it ahead of every bundled stylesheet; `apps/web/build.test.ts` checks it.
+- Vite's CSS minifier (Lightning CSS) removes the `@layer` order statement from the build, and a shared chunk's CSS can load before the reset. So `layerOrder()` in `src/vite.ts` publishes the root stylesheet's `@layer` statement as `/layers.css` and links it ahead of every bundled stylesheet; `apps/web/build.test.ts` checks it. The link carries `id="react-aria-pressable-style"` (`PRESSABLE_STYLE_ID`), the id React Aria's usePress checks before injecting an inline `<style>` the CSP refuses; its `touch-action` rule lives in `styles/reset.css` instead.
 - The `unit` project runs in Node with no DOM, so anything that renders belongs in a story or a `*.browser.test.tsx`, which run in real browsers.
 - React Aria's `Button` drops `aria-keyshortcuts`. Pass it through the `render` prop, as `Button.tsx` does.
 - Toast is still `UNSTABLE_` in React Aria. Only `src/provider/toasts.tsx` imports it, so an upgrade changes one file.

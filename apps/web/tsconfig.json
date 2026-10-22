@@ -16,6 +16,7 @@
     "first-load.ts",
     "csp.ts",
     "csp.test.ts",
+    "style-csp.test.ts",
     "embed-script.ts",
     "embed-script.test.ts",
     "first-load.test.ts",

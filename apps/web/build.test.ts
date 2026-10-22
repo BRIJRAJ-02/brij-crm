@@ -103,6 +103,17 @@ describe('the built page', () => {
     expect(assets).not.toContain('theme-boot.js');
     expect(readdirSync(outDir)).toContain('theme-boot.js');
   });
+
+  // style-src 'self' refuses inline styles (style-csp.test.ts): no page ships one, and each page's first stylesheet
+  // link carries the id React Aria's usePress checks for, so it never injects its own <style>.
+  it.each(['index.html', 'form.html', 'book.html'])(
+    'ships %s with no inline style, the pressable id on layers.css',
+    (page) => {
+      const built = readFileSync(path.join(outDir, page), 'utf8');
+      expect(built).not.toMatch(/<style[\s>]|\sstyle=/i);
+      expect(built).toContain('<link rel="stylesheet" href="/layers.css" id="react-aria-pressable-style">');
+    },
+  );
 });
 
 describe('source maps (spec 0010, AC-164)', () => {
