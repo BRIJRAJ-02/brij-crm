@@ -89,7 +89,17 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
-      - run: pnpm --filter @crm/ui exec playwright install --with-deps chromium
+      # The runner's apt mirror once stalled this step for 17 minutes and the job ran out of time (run 39768197543):
+      # apt gives up on a slow mirror after 20 seconds and tries the next, and a stalled try starts again once.
+      - name: Install the browsers and their system packages
+        timeout-minutes: 12
+        run: |
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/99ci-timeouts > /dev/null
+          for attempt in 1 2; do
+            if timeout 5m pnpm --filter @crm/ui exec playwright install --with-deps chromium; then break; fi
+            if [ "$attempt" = 2 ]; then exit 1; fi
+            echo "The browser install stalled or failed; trying once more"
+          done
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
       # Every package's tests; the library's stories run in their own jobs below.
       # The library runs after the rest, on its own: its scroll perf test counts
@@ -133,7 +143,7 @@ jobs:
     name: flows (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     # Four shards, each with its own stack: one job ran past 40 minutes once round 9 had every flow (run 39706435009).
-    timeout-minutes: 25
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -232,7 +242,17 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-webkit
-      - run: pnpm --filter @crm/web exec playwright install --with-deps chromium webkit
+      # The runner's apt mirror once stalled this step for 17 minutes and the job ran out of time (run 39768197543):
+      # apt gives up on a slow mirror after 20 seconds and tries the next, and a stalled try starts again once.
+      - name: Install the browsers and their system packages
+        timeout-minutes: 12
+        run: |
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/99ci-timeouts > /dev/null
+          for attempt in 1 2; do
+            if timeout 5m pnpm --filter @crm/web exec playwright install --with-deps chromium webkit; then break; fi
+            if [ "$attempt" = 2 ]; then exit 1; fi
+            echo "The browser install stalled or failed; trying once more"
+          done
       - name: Start the api, the worker and the built app
         run: |
           mkdir -p logs
@@ -329,7 +349,17 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
-      - run: pnpm --filter @crm/ui exec playwright install --with-deps ${{ matrix.browser }}
+      # The runner's apt mirror once stalled this step for 17 minutes and the job ran out of time (run 39768197543):
+      # apt gives up on a slow mirror after 20 seconds and tries the next, and a stalled try starts again once.
+      - name: Install the browsers and their system packages
+        timeout-minutes: 12
+        run: |
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/99ci-timeouts > /dev/null
+          for attempt in 1 2; do
+            if timeout 5m pnpm --filter @crm/ui exec playwright install --with-deps ${{ matrix.browser }}; then break; fi
+            if [ "$attempt" = 2 ]; then exit 1; fi
+            echo "The browser install stalled or failed; trying once more"
+          done
       - run: pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})"
         env:
           CRM_STORY_BROWSERS: ${{ matrix.browser }}

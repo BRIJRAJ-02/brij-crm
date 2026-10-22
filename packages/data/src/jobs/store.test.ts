@@ -161,6 +161,25 @@ describe('the jobs store', () => {
     expect(watches.open).toBe(0);
   });
 
+  it('tells the app about a followed job that had ended before it was read, once, and leaves nothing watching', async () => {
+    const server = new Map<string, JobView>();
+    const { store, finished, watches } = setup(server, []);
+    const ended: JobView = { ...job(30, 'succeeded', 10), kind: 'records.export' };
+    store.track('acme', ended, true);
+    store.track('acme', ended, true);
+    await flush();
+    expect(finished.map((each) => each.id)).toEqual([ended.id]);
+    expect(watches.open).toBe(0);
+    // Held already from a list, before this tab followed it: the follow still tells the app, once.
+    const listed: JobView = { ...job(32, 'succeeded', 10), kind: 'records.export' };
+    store.track('acme', listed);
+    store.track('acme', listed, true);
+    expect(finished.map((each) => each.id)).toEqual([ended.id, listed.id]);
+    // Without `tellEnded` (a bulk change of nothing), nobody waits on it.
+    store.track('acme', { ...job(31, 'succeeded', 0), kind: 'records.bulk' });
+    expect(finished).toHaveLength(2);
+  });
+
   it('hears a job end that comes while its read is out, reading it again once that read lands', async () => {
     const server = new Map<string, JobView>();
     const { store, finished } = setup(server, []);
@@ -311,18 +330,39 @@ describe('following a job while live updates are paused or off (spec 0022)', () 
     expect(Math.max(...waits.map((ms) => ms ?? 0))).toBe(JOB_POLL_MAX_MS);
   });
 
-  it('stops when live updates come back, starts again when they pause, and never runs while live', () => {
+  it('starts its waits again when live updates come back or pause, and while live reads only as a backstop', async () => {
     const running: JobView = job(22, 'running', 1);
-    const { store, setLive, waiting } = paused(new Map([[running.id, running]]));
+    const server = new Map([[running.id, running]]);
+    const { store, gets, setLive, next, waiting } = paused(server);
     store.track('acme', running);
     expect(waiting()).toBe(1);
     setLive('live');
-    expect(waiting()).toBe(0);
+    expect(waiting()).toBe(1);
+    // Live: one catch up read after the first wait, then one at the longest wait each time.
+    expect(next()).toBe(JOB_POLL_FIRST_MS);
+    await flush();
+    expect(next()).toBe(JOB_POLL_MAX_MS);
+    await flush();
+    expect(next()).toBe(JOB_POLL_MAX_MS);
+    await flush();
+    expect(gets).toEqual([running.id, running.id, running.id]);
     setLive('off');
     expect(waiting()).toBe(1);
+    expect(next()).toBe(JOB_POLL_FIRST_MS);
+  });
+
+  it('hears a job that ended before its live event could reach this tab, by the catch up read', async () => {
+    const exporting: JobView = { ...job(24, 'running'), kind: 'records.export' };
+    const server = new Map([[exporting.id, exporting]]);
+    const { store, finished, setLive, next, waiting } = paused(server);
     setLive('live');
-    const other: JobView = job(23, 'running', 1);
-    store.track('acme', other);
+    store.track('acme', exporting);
+    // It ends at once and its event is lost (the workspace's subscription was not up yet).
+    server.set(exporting.id, { ...exporting, status: 'succeeded', done: 10 });
+    expect(next()).toBe(JOB_POLL_FIRST_MS);
+    await flush();
+    expect(finished.map((each) => each.status)).toEqual(['succeeded']);
+    next();
     expect(waiting()).toBe(0);
   });
 });

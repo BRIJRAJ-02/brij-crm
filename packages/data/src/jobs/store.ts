@@ -85,10 +85,10 @@ export interface JobsDeps {
   readonly random?: () => number;
 }
 
-/** The first wait before a followed job is read again while live updates are paused or off. */
+/** The first wait before a followed job is read again, live or not (live, it is the one catch up read). */
 export const JOB_POLL_FIRST_MS = 3_000;
 
-/** The longest wait between those reads: each doubles while the job stays at the same step. */
+/** The longest wait between those reads: paused, each doubles while the job stays at one step; live, every read after the first. */
 export const JOB_POLL_MAX_MS = 30_000;
 
 /** What a view of jobs shows now. */
@@ -150,6 +150,8 @@ export function createJobsStore(deps: JobsDeps) {
   // The jobs this browser started and hasn't heard the end of, per workspace, and the watch that hears it.
   const startedHere = new Map<string, Set<string>>();
   const watching = new Map<string, () => void>();
+  // The jobs whose end the app was told of, so a later follow of one tells it no second time.
+  const told = new Set<string>();
   const fetching = new Set<string>();
   // Reads asked for while one was out, run once it lands.
   const fetchAgain = new Set<string>();
@@ -190,15 +192,18 @@ export function createJobsStore(deps: JobsDeps) {
   };
 
   /**
-   * Reads a followed job again on its own timer while live updates are paused
-   * or off: first after about 3 seconds, then twice as long each time while
-   * the job stays at the same step (a new step, such as counted or stopping,
-   * starts the waits again), at most 30 seconds, each wait spread by a random
-   * quarter either way. It stops when live updates come back or the job ends.
+   * Reads a followed job again on its own timer. While live updates are
+   * paused or off: first after about 3 seconds, then twice as long each time
+   * while the job stays at the same step (a new step, such as counted or
+   * stopping, starts the waits again), at most 30 seconds. While live: once
+   * after the first wait, then at the longest wait, as a backstop for an end
+   * event the tab never heard (a job that ends before the workspace's
+   * subscription is up, CI run 39768555503). Each wait is spread by a random
+   * quarter either way; the reads stop when the job ends.
    */
   const poll = (workspace: string, jobId: string) => {
     const key = `${workspace}\u0000${jobId}`;
-    if (polling.has(key) || isLive()) return;
+    if (polling.has(key)) return;
     let wait = JOB_POLL_FIRST_MS;
     let step = jobsOf(workspace).get(jobId)?.status;
     let cancel: () => void = () => undefined;
@@ -207,11 +212,12 @@ export function createJobsStore(deps: JobsDeps) {
     };
     const read = () => {
       const held = jobsOf(workspace).get(jobId);
-      if (isLive() || held === undefined || isFinished(held)) {
+      if (held === undefined || isFinished(held)) {
         polling.delete(key);
         return;
       }
-      if (held.status === step) wait = Math.min(JOB_POLL_MAX_MS, wait * 2);
+      if (isLive()) wait = JOB_POLL_MAX_MS;
+      else if (held.status === step) wait = Math.min(JOB_POLL_MAX_MS, wait * 2);
       else {
         step = held.status;
         wait = JOB_POLL_FIRST_MS;
@@ -225,13 +231,10 @@ export function createJobsStore(deps: JobsDeps) {
     });
   };
 
-  // Live updates stopped or came back: the followed jobs start or stop being read on a timer.
+  // Live updates stopped or came back: the followed jobs' timers start again at the first wait, at the pace for now.
   deps.live?.subscribe(() => {
-    if (isLive()) {
-      for (const stop of polling.values()) stop();
-      polling.clear();
-      return;
-    }
+    for (const stop of polling.values()) stop();
+    polling.clear();
     for (const [workspace, ids] of startedHere) for (const jobId of ids) poll(workspace, jobId);
   });
 
@@ -240,6 +243,7 @@ export function createJobsStore(deps: JobsDeps) {
     const mine = startedHere.get(workspace);
     if (mine === undefined || !mine.has(job.id) || !isFinished(job)) return;
     mine.delete(job.id);
+    told.add(job.id);
     stopPolling(workspace, job.id);
     deps.onFinished(workspace, job);
     if (mine.size === 0) {
@@ -454,12 +458,15 @@ export function createJobsStore(deps: JobsDeps) {
   /**
    * Follows a job this browser started elsewhere (a bulk change, spec 0022):
    * live until it ends, then `onFinished`; read again on a timer meanwhile
-   * whenever live updates are paused or off.
+   * whenever live updates are paused or off. A job read after it was
+   * started may have ended already (an export of a few hundred rows):
+   * `tellEnded` still raises `onFinished` for it; without it a job that ended
+   * at once (a count of zero) is shown, and nobody waits on it.
    */
-  const track = (workspace: string, job: JobView) => {
+  const track = (workspace: string, job: JobView, tellEnded = false) => {
     const mine = startedHere.get(workspace) ?? new Set<string>();
     startedHere.set(workspace, mine);
-    if (!isFinished(job)) mine.add(job.id);
+    if (!isFinished(job) || (tellEnded && !told.has(job.id))) mine.add(job.id);
     if (!watching.has(workspace) && !isFinished(job)) watching.set(workspace, deps.watch(workspace));
     put(workspace, job, true);
     // Finished already (a count of zero): nobody waits on it.
@@ -597,6 +604,7 @@ export function createJobsStore(deps: JobsDeps) {
       tellFollowers();
       views.clear();
       startedHere.clear();
+      told.clear();
       for (const stop of polling.values()) stop();
       polling.clear();
       for (const stop of watching.values()) stop();
