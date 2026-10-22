@@ -1,0 +1,255 @@
+// A form's owner in Chromium (spec 0029 milestone 3, AC-755; spec 0023 AC-567, AC-1050): Settings › Details' Owner
+// lists Nobody, the teammates and, under Round robin, the groups the reader can see with how many are switched on.
+// Choosing a group says who gets each new record and saves the group alone (never a teammate beside it) from the
+// SaveBar; a group with nobody switched on, and one the reader can't list, each say why in the one line under it.
+import type { DataLayer, FormDocument, FormView, MemberSummary, ObjectSummary, RotationView } from '@crm/data';
+import { useState } from 'react';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { page, userEvent } from 'vitest/browser';
+import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
+import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
+
+const PEOPLE = '0199f0a0-0000-7000-8000-00000000000b';
+const EMAIL = '0199f0a0-0000-7000-8000-00000000000e';
+const ADA = '0199f0a0-0000-7000-8000-0000000000a1';
+const BEA = '0199f0a0-0000-7000-8000-0000000000a2';
+const SALES = '0199f0a0-0000-7000-8000-0000000000c1';
+const QUIET = '0199f0a0-0000-7000-8000-0000000000c2';
+const GONE = '0199f0a0-0000-7000-8000-0000000000c3';
+
+const MEMBERS: readonly MemberSummary[] = [
+  { id: ADA, name: 'Ada Lovelace', email: 'ada@acme.com' },
+  { id: BEA, name: 'Bea Brown', email: 'bea@acme.com' },
+];
+
+const OBJECTS = [
+  {
+    id: PEOPLE,
+    apiSlug: 'people',
+    singularName: 'Person',
+    pluralName: 'People',
+    icon: 'user',
+    hue: 'blue',
+    standardKey: 'people',
+    access: 'write',
+    position: 0,
+    isStandard: true,
+    isArchived: false,
+  },
+] as unknown as readonly ObjectSummary[];
+
+const DRAFT: FormDocument = {
+  questions: [
+    {
+      id: 'q-email',
+      key: 'email',
+      label: 'Work email',
+      answerType: 'email',
+      required: true,
+      filedOn: { objectRole: 'main', attributeId: EMAIL },
+      update: 'fill',
+    },
+  ],
+  targets: { main: { objectId: PEOPLE, matchAttributeId: EMAIL } },
+  look: { colour: 'light', corners: 'rounded' },
+  headline: 'Talk to us',
+  buttonText: 'Send',
+  language: 'en',
+  after: { kind: 'message', message: '' },
+  routing: { rules: [] },
+  spam: { minFillMs: 2_000, scoreThreshold: 0.3 },
+};
+
+/** A published form owned by Ada unless the test says otherwise. */
+function formView(owner: { readonly ownerMemberId?: string; readonly ownerRotationId?: string }): FormView {
+  return {
+    id: '0199f0a0-0000-7000-8000-0000000000f1',
+    name: 'Contact us',
+    status: 'live',
+    mainObjectId: PEOPLE,
+    publicKey: 'contact-us',
+    liveVersionNumber: 1,
+    submissionsThisMonth: 0,
+    spamCount: 0,
+    submissionCount: 0,
+    updatedAt: '2026-10-22T10:00:00.000Z',
+    createdAt: '2026-10-22T10:00:00.000Z',
+    draftNumber: 1,
+    revision: 3,
+    draft: DRAFT,
+    live: DRAFT,
+    hasUnpublished: false,
+    ...owner,
+    allowedOrigins: [],
+    requireSignature: false,
+    workspaceKey: 'ws_0123456789abcdef',
+    canManage: true,
+  };
+}
+
+/** A round robin group of Ada and Bea, each switched on unless `on` says otherwise. */
+function group(id: string, name: string, on: readonly boolean[]): RotationView {
+  return {
+    id,
+    name,
+    strategy: 'fair',
+    windowDays: 30,
+    evenGap: 3,
+    returning: 'owner',
+    members: [ADA, BEA].map((memberId, index) => ({
+      memberId,
+      name: MEMBERS[index]?.name ?? '',
+      weight: 100,
+      priority: 2,
+      dailyCap: null,
+      weeklyCap: null,
+      isOn: on[index] ?? true,
+      hasCalendar: true,
+    })),
+    pages: 0,
+    canChange: true,
+    createdAt: '2026-10-22T10:00:00.000Z',
+    updatedAt: '2026-10-22T10:00:00.000Z',
+  };
+}
+
+/** A list view holding `items`, ready, the same snapshot each read as a store's must be. */
+function readyList<Item>(items: readonly Item[]) {
+  const state = { status: 'ready' as const, items, pendingIds: new Set<string>() };
+  return {
+    subscribe: () => () => undefined,
+    getSnapshot: () => state,
+    retain: () => () => undefined,
+    ready: () => Promise.resolve(),
+    reload: () => undefined,
+  };
+}
+
+/** A data layer holding the workspace's groups and the settings saves, kept. */
+function fakeData(groups: readonly RotationView[]) {
+  const saves: Record<string, unknown>[] = [];
+  const rotations = readyList(groups);
+  const pages = readyList([]);
+  const data = {
+    rotations: { view: () => rotations },
+    bookingPages: { view: () => pages },
+    routing: { report: () => readyList([]) },
+    forms: {
+      hostedUrl: (key: string) => `https://app.example.com/f/${key}`,
+      updateSettings: (_slug: string, _formId: string, settings: Record<string, unknown>) => {
+        saves.push(settings);
+        return Promise.resolve(
+          formView({
+            ...(typeof settings.ownerMemberId === 'string' ? { ownerMemberId: settings.ownerMemberId } : {}),
+            ...(typeof settings.ownerRotationId === 'string' ? { ownerRotationId: settings.ownerRotationId } : {}),
+          }),
+        );
+      },
+    },
+  } as unknown as DataLayer;
+  return { data, saves };
+}
+
+/** The Settings tab with its SaveBar, as the form editor holds them. */
+function Editor({ initial }: { readonly initial: FormView }) {
+  const [form, setForm] = useState(initial);
+  const settings = useFormSettings({ slug: 'acme', form, onFormChange: setForm });
+  return (
+    <>
+      <SettingsTab
+        slug="acme"
+        form={form}
+        draft={form.draft}
+        target={{ objectId: PEOPLE, objectName: 'People', items: [] }}
+        objects={OBJECTS}
+        members={MEMBERS}
+        isReadOnly={false}
+        settings={settings}
+        onDraftChange={() => undefined}
+        onRetarget={() => undefined}
+        isRetargeting={false}
+        showGaps={false}
+      />
+      {settings.footer}
+    </>
+  );
+}
+
+let shown: InApp | undefined;
+
+beforeAll(async () => {
+  await page.viewport(1280, 900);
+});
+
+afterEach(() => {
+  shown?.unmount();
+  shown = undefined;
+});
+
+async function show(initial: FormView, groups: readonly RotationView[]) {
+  const fake = fakeData(groups);
+  shown = await renderInApp(() => <Editor initial={initial} />, {
+    data: fake.data,
+    pattern: '/w/$slug/captures/forms/$formId',
+    at: '/w/acme/captures/forms/form-1',
+  });
+  return fake;
+}
+
+describe('the owner of a form’s new records', () => {
+  it('offers the round robin groups, says who gets each new record, and saves the group alone', async () => {
+    const fake = await show(formView({ ownerMemberId: ADA }), [
+      group(SALES, 'Sales team', [true, true]),
+      group(QUIET, 'Night shift', [false, false]),
+    ]);
+    const owner = page.getByRole('button', { name: /Owner$/ });
+    await expect.element(owner).toHaveTextContent('Ada Lovelace');
+    await expect.element(page.getByText('For new records only.')).toBeVisible();
+
+    await owner.click();
+    const list = page.getByRole('listbox');
+    await expect.element(list.getByRole('option', { name: 'Nobody', exact: true })).toBeVisible();
+    await expect.element(list.getByText('Round robin', { exact: true })).toBeVisible();
+    await expect.element(list.getByRole('option', { name: /Sales team/ }).getByText('2 teammates')).toBeVisible();
+    await expect
+      .element(list.getByRole('option', { name: /Night shift/ }).getByText('Nobody switched on'))
+      .toBeVisible();
+    await list.getByRole('option', { name: /Sales team/ }).click();
+
+    await expect.element(owner).toHaveTextContent('Sales team');
+    await expect.element(page.getByText('Each new record goes to the next teammate in Sales team.')).toBeVisible();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect.poll(() => fake.saves).toEqual([{ ownerMemberId: null, ownerRotationId: SALES }]);
+    await expect.element(owner).toHaveTextContent('Sales team');
+
+    // A group with nobody switched on says new records get no owner; Nobody saves both cleared.
+    await owner.click();
+    await page
+      .getByRole('listbox')
+      .getByRole('option', { name: /Night shift/ })
+      .click();
+    await expect
+      .element(page.getByText('Nobody in Night shift is switched on, so new records get no owner.'))
+      .toBeVisible();
+    await owner.click();
+    await page.getByRole('listbox').getByRole('option', { name: 'Nobody', exact: true }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect.poll(() => fake.saves.at(-1)).toEqual({ ownerMemberId: null, ownerRotationId: null });
+  });
+
+  it('keeps a group the reader can’t list in view, muted, with why, and the keyboard reaches every choice', async () => {
+    await show(formView({ ownerRotationId: GONE }), [group(SALES, 'Sales team', [true, true])]);
+    const owner = page.getByRole('button', { name: /Owner$/ });
+    await expect.element(owner).toHaveTextContent('Round robin group');
+    await expect.element(page.getByText('This round robin group is gone, or you can’t see it.')).toBeVisible();
+
+    // Opened from the keyboard, the arrows move through the list; Enter picks a teammate in place of the group.
+    (owner.element() as HTMLElement).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    const list = page.getByRole('listbox');
+    await expect.element(list).toBeVisible();
+    await userEvent.keyboard('{Home}{ArrowDown}{Enter}');
+    await expect.element(owner).toHaveTextContent('Ada Lovelace');
+    await expect.element(page.getByText('For new records only.')).toBeVisible();
+  });
+});

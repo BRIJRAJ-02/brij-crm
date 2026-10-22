@@ -216,6 +216,15 @@ export const strings = {
   owner: 'Owner',
   ownerHint: 'For new records only.',
   nobody: 'Nobody',
+  // A round robin group as the owner (spec 0029 milestone 3): in code a rotation, on screen a round robin group.
+  ownerGroups: 'Round robin',
+  /** A group's line in the list: who in it takes new records now. */
+  groupTakers: (on: number) => (on === 0 ? 'Nobody switched on' : on === 1 ? '1 teammate' : `${String(on)} teammates`),
+  groupHint: (name: string) => `Each new record goes to the next teammate in ${name}.`,
+  groupNobodyOn: (name: string) => `Nobody in ${name} is switched on, so new records get no owner.`,
+  /** The group the form names, while the list loads or when the reader can't list it. */
+  groupUnknown: 'Round robin group',
+  groupGone: 'This round robin group is gone, or you can’t see it.',
   spamTitle: 'Spam',
   spamSummary: 'On. Doubtful sends wait for review.',
   detailsTitle: 'Details',

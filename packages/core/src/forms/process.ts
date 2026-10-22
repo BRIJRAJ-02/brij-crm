@@ -12,6 +12,11 @@
 // it touched (AC-561), who was given ownership and why (AC-567), and ends the
 // submission `processed`; a refusal no answer explains ends it `failed` at
 // once, and anything unexpected is retried by the job, then `failed` (AC-566).
+// A form whose owner is a round robin rotation hands each lead to the
+// rotation's fairest member (spec 0029 milestone 3, `rotation/owner.ts`), for
+// every submission, whether or not the visitor goes on to book (spec 0023
+// AC-1050): the rotation's lock first, then the match key's, the pick before
+// the write and its ledger row after it, all in this one transaction.
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { fitsAttribute, type EngineRefusal, type FormDocument } from '@crm/contracts';
@@ -27,6 +32,8 @@ import { formAccess } from '../access/policy.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition } from '../jobs/registry.ts';
 import { liveOptions, loadForm, loadVersions, type FormRow } from './shared.ts';
 import { parseAttributeInput } from '../engine/parse-value.ts';
+import { lockRotation } from '../rotation/ledger.ts';
+import { pickLeadOwner, recordLeadOwner, type LeadOwner } from '../rotation/owner.ts';
 
 const { formSubmissionRecords, formSubmissions, members } = schema;
 
@@ -41,18 +48,32 @@ export const FORMS_PROCESS = 'forms.process';
 /** What a submission says when its job gave up after every try (AC-566). */
 export const PROCESS_GAVE_UP = 'Processing kept failing, so it stopped. Retry it once the cause is fixed.';
 
-/** Who a new record's owner is, and why (AC-567): what `assignment` stores. */
+/**
+ * Who a new record's owner is, and why (AC-567): what `assignment` stores.
+ * With a rotation (AC-1050): its id, and the pick's reason (`fair`,
+ * `priority`, `even`, `owner`, `only_free`), `already_assigned` (the rotation
+ * gave this lead to them before), `kept_existing`, `none_available` or
+ * `rotation_gone` (AC-756), or `not_filed` when the record wasn't written.
+ */
 export interface Assignment {
   readonly memberId?: string;
+  readonly rotationId?: string;
   readonly reason: string;
 }
 
-/**
- * The seam round robin (#58) plugs into: who owns a new main record. Milestone
- * 1 has a fixed member (when still active) or nobody; `{ kind: 'rotation' }`
- * will call `assignOwner(rotationId, record)` here, once, inside this
- * transaction, its answer stored in `assignment` before records are written.
- */
+/** A stored `assignment` column read back, or undefined when it holds nothing usable. */
+export function assignmentOf(stored: unknown): Assignment | undefined {
+  if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return undefined;
+  const { memberId, rotationId, reason } = stored as Record<string, unknown>;
+  if (typeof reason !== 'string') return undefined;
+  return {
+    reason,
+    ...(typeof memberId === 'string' ? { memberId } : {}),
+    ...(typeof rotationId === 'string' ? { rotationId } : {}),
+  };
+}
+
+/** A fixed owner: the form's member while still active, else nobody (`owner_removed`). */
 export async function chooseOwner(tx: WorkspaceTx, ownerMemberId: string | null): Promise<Assignment> {
   if (ownerMemberId === null) return { reason: 'none' };
   const [active] = await tx
@@ -269,6 +290,7 @@ interface SubmissionRow extends Record<string, unknown> {
   readonly version_id: string;
   readonly state: string;
   readonly answers: unknown;
+  readonly assignment: unknown;
 }
 
 /** Ends a submission `failed` with its reason (AC-566). */
@@ -318,6 +340,10 @@ export interface FileInput {
    * only records they can see). Absent for the form's own processing.
    */
   readonly canUse?: (recordId: string) => Promise<boolean>;
+  /** What the submission recorded when it was filed before: a rotation's pick is never made twice for it. */
+  readonly previous?: Assignment;
+  /** The clock a rotation's pick reads (its window, caps and days off). */
+  readonly now?: Date;
 }
 
 /** What filing into a record the member can't open says, without saying whose it is. */
@@ -334,16 +360,11 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   const { tx } = context;
   const { form, document, attributes, objectId } = input;
   const { planned, refused } = plan(document, attributes, input.options, input.answers);
-
-  // Who owns a new record: chosen once, before anything is written (round robin's seam).
-  const assignment = await chooseOwner(tx, form.ownerMemberId);
   const owner = ownerAttribute(attributes);
-  const ownerValue = assignment.memberId === undefined ? undefined : { type: 'member', id: assignment.memberId };
-  const writable = new Set([
-    ...planned.map((each) => each.attribute.id),
-    ...(owner !== undefined && ownerValue !== undefined ? [owner.id] : []),
-  ]);
-  const writer = input.writer(writable);
+  // A rotation's lock comes before any match key's (bookings take it first too), so a batch filing many
+  // submissions and one submission never wait on each other in opposite orders. Held to commit.
+  const rotationId = owner === undefined ? undefined : (form.ownerRotationId ?? undefined);
+  if (rotationId !== undefined) await lockRotation(tx, context.scope.workspaceId, rotationId);
 
   let matchedId: string | undefined = input.keepRecordId;
   if (matchedId === undefined) {
@@ -358,26 +379,41 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   }
 
   if (matchedId !== undefined && input.canUse !== undefined && !(await input.canUse(matchedId))) {
-    return { kind: 'failed', failure: HIDDEN_TARGET, refused, assignment };
+    return { kind: 'failed', failure: HIDDEN_TARGET, refused, assignment: notFiled(form) };
   }
+
+  // Who owns the record: chosen once, before anything is written (AC-567, AC-1050).
+  const chosen = await chooseFor(context, input, owner, matchedId);
+  const { assignment } = chosen;
+  const ownerValue = chosen.memberId === undefined ? undefined : { type: 'member', id: chosen.memberId };
+  const writable = new Set([
+    ...planned.map((each) => each.attribute.id),
+    ...(owner !== undefined && ownerValue !== undefined ? [owner.id] : []),
+  ]);
+  const writer = input.writer(writable);
+  // The owner lands only when the engine took it (a member's filing skips a field their access can't write).
+  const ownerTaken = (skipped: readonly EngineRefusal[]) =>
+    owner !== undefined && !skipped.some((refusal) => refusal.attributeId === owner.id);
 
   let recordId: string;
   let action: 'created' | 'updated' | 'matched';
   let skipped: readonly EngineRefusal[] = [];
-  let gaveOwner = false;
+  let gaveOwner: boolean;
   if (matchedId === undefined) {
     const values = new Map<string, unknown>(planned.map((each) => [each.attribute.id, each.value]));
     if (owner !== undefined && ownerValue !== undefined) {
       values.set(owner.id, owner.isMulti ? [ownerValue] : ownerValue);
-      gaveOwner = true;
     }
     const written = await writeSkipping(writer, values, (inner, given) =>
       insertRecord(inner, { objectId, values: given }),
     );
-    if (!written.ok) return { kind: 'failed', failure: written.failure, refused, assignment };
+    if (!written.ok) {
+      return { kind: 'failed', failure: written.failure, refused, assignment: notFiled(form, assignment) };
+    }
     recordId = written.value.recordId;
     action = 'created';
     skipped = written.skipped;
+    gaveOwner = ownerValue !== undefined && ownerTaken(skipped);
   } else {
     recordId = matchedId;
     const values = await changesFor(tx, recordId, planned, owner, ownerValue);
@@ -391,10 +427,20 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
           values: Object.fromEntries(Object.entries(given).map(([id, value]) => [id, { value }])),
         }),
       );
-      if (!written.ok) return { kind: 'failed', failure: written.failure, refused, assignment };
+      if (!written.ok) {
+        return { kind: 'failed', failure: written.failure, refused, assignment: notFiled(form, assignment) };
+      }
       skipped = written.skipped;
+      gaveOwner = gaveOwner && ownerTaken(skipped);
       action = Object.values(written.value).some((result) => result.versionId !== undefined) ? 'updated' : 'matched';
     }
+  }
+
+  // The rotation's ledger row, once the lead is theirs: given now, or counted to the owner it kept (AC-755).
+  const pick = chosen.pick;
+  const counted = pick !== undefined && (gaveOwner || pick.reason === 'owner');
+  if (counted) {
+    await recordLeadOwner(tx, writer.scope, pick, { recordId, formId: form.id, submissionId: input.submissionId });
   }
 
   const questionOf = new Map(planned.map((each) => [each.attribute.id, each.questionId]));
@@ -406,8 +452,11 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
     }),
   ];
   const kept: Assignment =
-    assignment.memberId !== undefined && !gaveOwner
-      ? { reason: matchedId === undefined ? 'no_owner_field' : 'kept_existing' }
+    assignment.memberId !== undefined && !gaveOwner && !counted
+      ? {
+          ...(assignment.rotationId === undefined ? {} : { rotationId: assignment.rotationId }),
+          reason: matchedId === undefined ? 'no_owner_field' : 'kept_existing',
+        }
       : assignment;
   await tx
     .insert(formSubmissionRecords)
@@ -421,6 +470,79 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
     })
     .onConflictDoNothing();
   return { kind: 'filed', recordId, action, refused: allRefused, assignment: kept };
+}
+
+/** What a submission that wasn't filed records of its owner: a rotation's pick wasn't made, so it says so. */
+function notFiled(form: FormRow, chosen?: Assignment): Assignment {
+  if (form.ownerRotationId !== null) return { rotationId: form.ownerRotationId, reason: 'not_filed' };
+  return chosen ?? { reason: 'not_filed' };
+}
+
+/** The owner filing gives: the member (if any), what the submission records, and a rotation's pick to count. */
+interface OwnerChoice {
+  readonly memberId?: string;
+  readonly assignment: Assignment;
+  readonly pick?: Extract<LeadOwner, { kind: 'picked' }>;
+}
+
+/** Whether an owner value holds anyone, and the member it names (the first, for a list). */
+function heldOwner(value: unknown): { readonly memberId?: string } | undefined {
+  const first: unknown = Array.isArray(value) ? value[0] : value;
+  if (first === null || first === undefined) return undefined;
+  const { type, id } = typeof first === 'object' ? (first as { type?: unknown; id?: unknown }) : {};
+  return type === 'member' && typeof id === 'string' ? { memberId: id } : {};
+}
+
+/**
+ * Who owns the record filing writes (AC-567): a fixed member, or the form's
+ * rotation (AC-755, AC-756, AC-1050) asked once for this lead, under its lock.
+ * A matched record that has an owner keeps them; filing again into the record
+ * the submission filed into before (Sync) never counts it again.
+ */
+async function chooseFor(
+  context: WriteContext,
+  input: FileInput,
+  owner: AttributeDef | undefined,
+  matchedId: string | undefined,
+): Promise<OwnerChoice> {
+  const { tx } = context;
+  const rotationId = input.form.ownerRotationId;
+  if (rotationId === null) {
+    const fixed = await chooseOwner(tx, input.form.ownerMemberId);
+    return { ...(fixed.memberId === undefined ? {} : { memberId: fixed.memberId }), assignment: fixed };
+  }
+  if (owner === undefined) return { assignment: { rotationId, reason: 'no_owner_field' } };
+  const current =
+    matchedId === undefined
+      ? undefined
+      : heldOwner(heldValues(indexHeld(await currentItems(tx, [matchedId], [owner.id])), matchedId)(owner));
+  const previous = input.previous?.rotationId === rotationId ? input.previous.memberId : undefined;
+  const lead = await pickLeadOwner(tx, {
+    workspaceId: context.scope.workspaceId,
+    rotationId,
+    now: input.now ?? new Date(),
+    ...(matchedId === undefined ? {} : { recordId: matchedId }),
+    ...(current === undefined ? {} : { current }),
+    ...(previous === undefined ? {} : { previousMemberId: previous }),
+    again: input.keepRecordId !== undefined,
+  });
+  switch (lead.kind) {
+    case 'picked':
+      return {
+        memberId: lead.memberId,
+        assignment: { memberId: lead.memberId, rotationId, reason: lead.reason },
+        pick: lead,
+      };
+    case 'held':
+      return {
+        memberId: lead.memberId,
+        assignment: { memberId: lead.memberId, rotationId, reason: 'already_assigned' },
+      };
+    case 'kept':
+      return { assignment: { rotationId, reason: 'kept_existing' } };
+    case 'none':
+      return { assignment: { rotationId, reason: lead.reason } };
+  }
 }
 
 /** The oldest live record of `objectId` holding `key` on the unique attribute, if any. */
@@ -499,10 +621,14 @@ export function heldValues(index: HeldIndex, recordId: string): (attribute: Attr
  * failed), so a job run twice never writes twice. Runs inside the job's
  * transaction with the system's scope (`context`), writing as the form.
  */
-export async function processSubmission(context: WriteContext, submissionId: string): Promise<void> {
+export async function processSubmission(
+  context: WriteContext,
+  submissionId: string,
+  now: Date = new Date(),
+): Promise<void> {
   const { tx } = context;
   const found = await tx.execute<SubmissionRow>(sql`
-    select id::text, form_id::text, version_id::text, state, answers
+    select id::text, form_id::text, version_id::text, state, answers, assignment
     from form_submissions where id = ${submissionId} for update
   `);
   const submission = found.rows[0];
@@ -527,6 +653,8 @@ export async function processSubmission(context: WriteContext, submissionId: str
     objectId: target.objectId,
     attributes,
     options: await optionsFor(tx, document, attributes),
+    ...withPrevious(assignmentOf(submission.assignment)),
+    now,
     // The form acts with exactly its mapping: the answered attributes and, when it gives one, the owner.
     writer: (writable) =>
       actingAs(
@@ -540,6 +668,9 @@ export async function processSubmission(context: WriteContext, submissionId: str
   });
   await settle(tx, submission.id, filed);
 }
+
+/** A stored assignment as filing's `previous`, when there is one. */
+export const withPrevious = (previous: Assignment | undefined) => (previous === undefined ? {} : { previous });
 
 /** Ends a submission its form keeps only: `processed`, with no record, its outcome saying it was kept. */
 async function keep(tx: WorkspaceTx, submissionId: string): Promise<void> {

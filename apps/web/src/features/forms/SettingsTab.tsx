@@ -1,6 +1,7 @@
 // Brief
 // Purpose: a form's Settings tab (spec 0023), for someone setting up a form in under a minute: what people see after
-// sending, whether and where submissions go in the CRM, the form's words, its details (name, link, owner) and spam.
+// sending, whether and where submissions go in the CRM, the form's words, its details (name, link, owner: nobody, a
+// teammate, or a round robin group handing each new record to its next teammate, spec 0029) and spam.
 // Main task: scan the groups, change only what needs changing (the defaults already work), and save the name,
 // address and owner from the SaveBar; the rest goes live on Publish, which the header's state says once (not each card).
 // Leaves out: email notifications (no backend yet), each question's filing (set on the question, linked from here),
@@ -41,6 +42,21 @@ import { strings as routingStrings } from '../routing/strings.ts';
 
 const NOBODY = 'nobody';
 
+/** A round robin group's option id in the owner list, apart from a teammate's id. */
+const GROUP = 'group:';
+const groupOption = (rotationId: string) => `${GROUP}${rotationId}`;
+/** The round robin group an owner choice names, if it names one. */
+const groupOf = (choice: string) => (choice.startsWith(GROUP) ? choice.slice(GROUP.length) : undefined);
+
+/** What an owner choice saves: nobody, a teammate, or a round robin group, never a teammate and a group at once. */
+function ownerChange(choice: string): { ownerMemberId: string | null; ownerRotationId: string | null } {
+  if (choice === NOBODY) return { ownerMemberId: null, ownerRotationId: null };
+  const group = groupOf(choice);
+  return group === undefined
+    ? { ownerMemberId: choice, ownerRotationId: null }
+    : { ownerMemberId: null, ownerRotationId: group };
+}
+
 /** The countdowns a form offers before it sends its visitor on to book (AC-1056): 0 is at once. */
 const COUNTDOWNS = [0, 3, 5, 10, 15, 30] as const;
 
@@ -75,7 +91,11 @@ export interface FormSettingsInput {
  */
 export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
-  const saved: Applied = { name: form.name, address: form.publicKey, owner: form.ownerMemberId ?? NOBODY };
+  const saved: Applied = {
+    name: form.name,
+    address: form.publicKey,
+    owner: form.ownerRotationId === undefined ? (form.ownerMemberId ?? NOBODY) : groupOption(form.ownerRotationId),
+  };
   // Only the edits are held, so a change made elsewhere (the first publish, a rename) shows here at once.
   const [edits, setEdits] = useState<Partial<Applied>>({});
   const values: Applied = { ...saved, ...edits };
@@ -97,7 +117,7 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
       .updateSettings(slug, form.id, {
         ...(values.name === saved.name ? {} : { name: values.name.trim() }),
         ...(addressChanged ? { slug: values.address } : {}),
-        ...(values.owner === saved.owner ? {} : { ownerMemberId: values.owner === NOBODY ? null : values.owner }),
+        ...(values.owner === saved.owner ? {} : ownerChange(values.owner)),
       })
       .then(
         (view) => {
@@ -140,7 +160,12 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
     />
   );
 
-  const fieldError = (field: 'name' | 'slug') => (failure?.field === field ? failure.message : undefined);
+  const fieldError = (field: 'name' | 'slug' | 'owner') =>
+    failure !== undefined &&
+    (failure.field === field ||
+      (field === 'owner' && (failure.field === 'ownerMemberId' || failure.field === 'ownerRotationId')))
+      ? failure.message
+      : undefined;
   return { values, set, footer, fieldError, isDirty };
 }
 
@@ -268,6 +293,34 @@ export function SettingsTab({
   // Routing (spec 0043): a team page's people, for rules that narrow who takes the booking.
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
+
+  // The owner of new records (AC-567): nobody, a teammate, or a round robin group (spec 0029, AC-755), the groups
+  // the reader can see under their own heading. One the form names that the reader can't list stays shown, muted.
+  const chosenGroupId = groupOf(settings.values.owner);
+  const chosenGroup = rotationList.find((rotation) => rotation.id === chosenGroupId);
+  const takers = (rotation: (typeof rotationList)[number]) => rotation.members.filter((member) => member.isOn).length;
+  const ownerItems = [
+    { id: NOBODY, label: strings.nobody },
+    ...members.map((member) => ({ id: member.id, label: member.name })),
+    ...rotationList.map((rotation) => ({
+      id: groupOption(rotation.id),
+      label: rotation.name,
+      description: strings.groupTakers(takers(rotation)),
+      group: strings.ownerGroups,
+    })),
+    ...(chosenGroupId !== undefined && chosenGroup === undefined
+      ? [{ id: groupOption(chosenGroupId), label: strings.groupUnknown, isArchived: true, group: strings.ownerGroups }]
+      : []),
+  ];
+  // One line under it: who gets new records, or why nobody will.
+  const ownerHint =
+    chosenGroupId === undefined || (chosenGroup === undefined && rotations.status === 'loading')
+      ? strings.ownerHint
+      : chosenGroup === undefined
+        ? strings.groupGone
+        : takers(chosenGroup) === 0
+          ? strings.groupNobodyOn(chosenGroup.name)
+          : strings.groupHint(chosenGroup.name);
   const poolOf = (pageId: string) => {
     const page = pageList.find((each) => each.id === pageId);
     if (page?.kind !== 'round_robin') return [];
@@ -573,13 +626,11 @@ export function SettingsTab({
         {isFiling && (
           <Select
             label={strings.owner}
-            hint={strings.ownerHint}
-            items={[
-              { id: NOBODY, label: strings.nobody },
-              ...members.map((member) => ({ id: member.id, label: member.name })),
-            ]}
+            hint={ownerHint}
+            items={ownerItems}
             value={settings.values.owner}
             isReadOnly={isReadOnly}
+            {...(settings.fieldError('owner') === undefined ? {} : { error: settings.fieldError('owner') ?? '' })}
             onChange={(id) => {
               settings.set({ owner: id ?? NOBODY });
             }}

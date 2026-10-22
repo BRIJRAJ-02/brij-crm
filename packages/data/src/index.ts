@@ -4671,7 +4671,7 @@ export function createDataLayer({
             call((options) => api.forms.publish({ workspace, formId, ...input, mutationId: mintId() }, options)),
           land: landForm(formId),
         }),
-      /** The settings that apply at once: name, address, owner, the sites that may post, signatures. */
+      /** The settings that apply at once: name, address, owner (a member or a rotation), the sites that may post, signatures. */
       updateSettings: (
         workspace: string,
         formId: string,
@@ -4679,6 +4679,7 @@ export function createDataLayer({
           readonly name?: string;
           readonly slug?: string;
           readonly ownerMemberId?: string | null;
+          readonly ownerRotationId?: string | null;
           readonly allowedOrigins?: readonly string[];
           readonly requireSignature?: boolean;
         },
