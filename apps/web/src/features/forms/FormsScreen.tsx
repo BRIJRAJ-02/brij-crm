@@ -11,7 +11,8 @@ import { CapturesList } from '../captures/CapturesList.tsx';
 import { useCapturesCreate } from '../captures/create.tsx';
 import { pageHeading } from '../navigation/focus.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
-import { DeleteFormDialog, PauseFormDialog } from './FormConfirms.tsx';
+import { strings as capturesStrings } from '../captures/strings.ts';
+import { DeleteFormDialog } from './FormConfirms.tsx';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
 
@@ -42,17 +43,25 @@ export function FormsScreen({ slug }: FormsScreenProps) {
   const list = useCaptureList(data.forms.view(slug));
   const create = useCapturesCreate();
   const [deleting, setDeleting] = useState<FormSummary | undefined>(undefined);
-  // Turning a live form off asks first (it ends its submissions); turning one on is one click.
-  const [pausing, setPausing] = useState<FormSummary | undefined>(undefined);
 
   // A refusal says what was put back, then why.
   const failed = (what: string) => (error: unknown) => {
     toasts.toast({ tone: 'danger', message: `${what} ${isDataError(error) ? error.message : strings.failedText}` });
   };
 
-  // Turning one on shows in the list at once; a refusal puts it back there, and the toast says why.
-  const resume = (form: FormSummary) => {
-    data.forms.setStatus(slug, form.id, 'live').catch(failed(strings.turnOnFailed(form.name)));
+  // Pause and Resume show in the list at once, as the editor's menu does, with Undo in their toast; a refusal puts
+  // it back there, and the toast says why (the owner, 22 Oct 2026: pausing is reversible, so it doesn't ask first).
+  const setLive = (form: FormSummary, status: 'live' | 'paused') => {
+    data.forms.setStatus(slug, form.id, status).then(
+      () => {
+        toasts.toast({
+          tone: 'success',
+          message: status === 'live' ? capturesStrings.resumedToast(form.name) : capturesStrings.pausedToast(form.name),
+          action: { label: capturesStrings.undo, onAction: () => setLive(form, status === 'live' ? 'paused' : 'live') },
+        });
+      },
+      failed(status === 'live' ? strings.turnOnFailed(form.name) : strings.turnOffFailed(form.name)),
+    );
   };
 
   const duplicate = (form: FormSummary) => {
@@ -88,8 +97,7 @@ export function FormsScreen({ slug }: FormsScreenProps) {
               label: strings.acceptingOf(form.name),
               isSelected: isLive,
               onChange: (isOn: boolean) => {
-                if (isOn) resume(form);
-                else setPausing(form);
+                setLive(form, isOn ? 'live' : 'paused');
               },
               isDisabled: !canManage,
               disabledReason: strings.manageOnly,
@@ -180,16 +188,6 @@ export function FormsScreen({ slug }: FormsScreenProps) {
               // The card and its menu went with the form: focus goes to the page's title rather than to a card
               // that is about to leave, or to the page.
               focusLater(() => pageHeading(document));
-            }}
-          />
-          <PauseFormDialog
-            data={data}
-            slug={slug}
-            form={pausing}
-            onClose={() => setPausing(undefined)}
-            onDone={(form) => {
-              setPausing(undefined);
-              toasts.toast({ tone: 'success', message: strings.paused(form.name) });
             }}
           />
         </>

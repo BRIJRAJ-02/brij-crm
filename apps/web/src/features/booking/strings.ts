@@ -6,6 +6,7 @@ export const strings = {
   listLabel: 'Booking pages',
   /** The create button's name; it reads `newButton`, the same word as Forms', so switching tabs moves nothing. */
   newPage: 'New booking page',
+  addLinkOnlyPage: 'New link only page',
   newButton: 'New',
   copyLink: 'Copy link',
   more: (title: string) => `More for ${title}`,

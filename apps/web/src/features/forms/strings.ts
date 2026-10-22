@@ -26,7 +26,8 @@ export const strings = {
   openInNewTab: 'Open in a new tab',
   manageOnly: 'Only members who manage forms can change it',
   createFailed: 'Couldn’t make the form.',
-  turnOnFailed: (name: string) => `Couldn’t turn on ${name}. It’s off again.`,
+  turnOnFailed: (name: string) => `Couldn’t resume ${name}. It’s still paused.`,
+  turnOffFailed: (name: string) => `Couldn’t pause ${name}. It’s still live.`,
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
   submissionCount: (n: number) => count(n, 'submission', 'submissions'),
   noSubmissionsYet: 'No submissions yet',
@@ -36,10 +37,10 @@ export const strings = {
   addressPending: '/f/…',
   thisMonth: (n: number) => `${count(n, 'submission', 'submissions')} this month`,
   spam: (n: number) => `${new Intl.NumberFormat().format(n)} spam`,
-  accepting: 'Accepting submissions',
-  notAccepting: 'Not accepting submissions',
+  accepting: 'Live',
+  notAccepting: 'Paused',
   notPublishedYet: 'Not published',
-  acceptingOf: (name: string) => `Accepting submissions on ${name}`,
+  acceptingOf: (name: string) => `${name} is live`,
   formActions: (name: string) => `Actions for ${name}`,
   open: 'Open',
   duplicate: 'Duplicate',
@@ -54,14 +55,8 @@ export const strings = {
       : `The form, its link and its ${count(submissions, 'submission', 'submissions')} are gone for good; the people and records they made stay.`,
   /** The confirm's commit: the verb last, never OK. */
   deleteFormAction: 'Delete form',
-  /** Pausing ends a live form's submissions until it is resumed, so it asks first (a plain dialog, not a danger one). */
-  pauseTitle: (name: string) => `Pause the ${name} form?`,
-  pauseText: 'Its link shows a closed notice and takes no submissions until you resume it; nothing is deleted.',
-  pauseAction: 'Pause form',
   deleted: (name: string) => `Deleted “${name}”.`,
   cancel: 'Cancel',
-  paused: (name: string) => `${name} isn’t taking submissions now.`,
-  resumed: (name: string) => `${name} is taking submissions again.`,
 
   // The editor
   untitledForm: 'Untitled form',
