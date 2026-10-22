@@ -399,7 +399,7 @@ export const Grouped: Story = {
     optionStyle: 'dot',
     value: 'default',
     items: [
-      { id: 'default', label: 'Your default (Ada Lovelace)' },
+      { id: 'default', label: 'Your default (Ada Lovelace)', description: 'Follows your default in Settings' },
       { id: 'ada', label: 'Ada Lovelace', hue: 'blue', group: 'ada@acme.dev' },
       { id: 'team', label: 'Team', hue: 'green', group: 'ada@acme.dev' },
       { id: 'cal', label: 'Calendar', hue: 'purple', group: 'ada@lovelace.example' },
@@ -412,7 +412,10 @@ export const Grouped: Story = {
     </Stage>
   ),
   play: async ({ canvas, canvasElement }) => {
-    await userEvent.click(canvas.getByRole('button', { name: /Add events to/ }));
+    // The closed field shows the chosen option's label alone, never its description run on after it.
+    const trigger = canvas.getByRole('button', { name: /Add events to/ });
+    await expect(trigger).toHaveTextContent(/^Your default \(Ada Lovelace\)$/);
+    await userEvent.click(trigger);
     const body = within(canvasElement.ownerDocument.body);
     const group = await body.findByRole('group', { name: 'ada@acme.dev' });
     await expect(within(group).getAllByRole('option')).toHaveLength(2);
