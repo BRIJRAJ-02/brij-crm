@@ -143,14 +143,17 @@ export const OnARecord: Story = {
   },
 };
 
-/** On a phone: the record chips step aside, so every title keeps the row; opening a task shows its records. */
+/** On a phone: each title keeps at least a narrow column, and the record chip gives way first. */
 export const OnAPhone: Story = {
   args: { isPhone: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Send the order form')).toBeVisible();
-    const chips = canvas.queryAllByText('Northwind Traders');
-    await expect(chips.length).toBeGreaterThan(0);
-    for (const chip of chips) await expect(chip).not.toBeVisible();
+    const title = canvas.getByText('Send the order form');
+    const row = title.closest('[role="row"]');
+    // The title keeps at least a narrow column (120px) beside the chip, due day and assignee.
+    await expect(row).not.toBeNull();
+    await expect(title.getBoundingClientRect().width).toBeGreaterThanOrEqual(120);
+    await expect(canvas.getAllByText('Northwind Traders')[0]).toBeVisible();
   },
 };
 

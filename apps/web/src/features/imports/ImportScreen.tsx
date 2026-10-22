@@ -589,7 +589,7 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
       )}
       {step === 'preview' && loaded !== undefined && result !== undefined && (
         <Card
-          title={strings.steps.preview}
+          title={strings.fileSummary(loaded.name, loaded.table.rows.length)}
           description={strings.totals(readyCount, errors)}
           actions={<InfoTip label={strings.rowColumn}>{strings.rowInfo}</InfoTip>}
           footer={

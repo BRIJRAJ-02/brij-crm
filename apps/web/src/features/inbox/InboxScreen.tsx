@@ -45,7 +45,7 @@ const TABS: readonly { readonly value: 'inbox' | 'done'; readonly label: string 
 
 /** The kind filter's choices: a menu, so four kinds fit beside Inbox and Done on a phone (AC-1170). */
 const KINDS: readonly { readonly value: 'all' | InboxKind; readonly label: string; readonly icon?: IconName }[] = [
-  { value: 'all', label: strings.allKinds },
+  { value: 'all', label: strings.allKinds, icon: 'inbox' },
   { value: 'mentions', label: strings.mentions, icon: 'at-sign' },
   { value: 'replies', label: strings.replies, icon: 'message-square' },
   { value: 'assignments', label: strings.assignments, icon: 'user-check' },

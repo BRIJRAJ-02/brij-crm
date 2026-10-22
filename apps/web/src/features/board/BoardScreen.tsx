@@ -108,7 +108,8 @@ export function BoardScreen(props: BoardScreenProps) {
     isCreateRequested = false,
     onCreateRequestTaken,
   } = props;
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const navigate = useNavigate();
   const live = useLiveStatus(data.live);
   const canChangeSchema = useCan('schema.manage');
   const [isAdding, setAdding] = useState(false);
@@ -237,8 +238,24 @@ export function BoardScreen(props: BoardScreenProps) {
               onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
               singularName={object.singularName}
               objectKey={object.standardKey ?? object.apiSlug}
-              onCreated={() => {
+              onCreated={(record) => {
                 setCreating(false);
+                // Its column may be scrolled off or hidden while empty: say it was made, with a way to it.
+                const name =
+                  record.display.name === '' ? workspaceStrings.unnamed(object.singularName) : record.display.name;
+                toasts.toast({
+                  tone: 'success',
+                  message: strings.created(name),
+                  action: {
+                    label: strings.open,
+                    onAction: () => {
+                      void navigate({
+                        to: '/w/$slug/objects/$object/$recordId/$tab',
+                        params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
+                      });
+                    },
+                  },
+                });
               }}
             />
           </>

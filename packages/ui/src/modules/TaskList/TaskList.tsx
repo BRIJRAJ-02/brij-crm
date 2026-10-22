@@ -27,7 +27,7 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { ChipRow } from '../../fields/parts.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
-import { formatDate } from '../../lib/format.ts';
+import { formatDate, formatDateInYear } from '../../lib/format.ts';
 import { itemOfKey, keyedRows, type KeyedRow } from '../../lib/keyed-rows.ts';
 import type { ListSource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
@@ -159,7 +159,10 @@ function useDueOf(): (dueOn: string) => { readonly text: string; readonly isPast
           ? strings.tomorrow
           : days === -1
             ? strings.yesterday
-            : formatDate(dueOn, locale, dateFormat);
+            : // This year's days leave out the year, as lists of dates do (Linear, Attio); another year's keep it.
+              parseDate(dueOn).year === today.year
+              ? formatDateInYear(dueOn, locale, dateFormat)
+              : formatDate(dueOn, locale, dateFormat);
     return { text, isPast: days < 0 };
   };
 }

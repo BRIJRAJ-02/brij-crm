@@ -24,4 +24,7 @@ export const strings = {
   readOnly: (plural: string) => `You can view ${plural.toLowerCase()} but not change them.`,
   /** After a move, for screen readers (AC-509). */
   moved: (name: string, column: string) => `Moved ${name} to ${column}.`,
+  /** A record made from the top bar's New: its column may be off screen, so a toast says so, with Open. */
+  created: (name: string) => `${name} created`,
+  open: 'Open',
 } as const;

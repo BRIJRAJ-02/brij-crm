@@ -25,6 +25,7 @@ import { useLiveStatus, usePendingOptions, useView } from '@crm/data/react';
 import {
   Badge,
   Button,
+  ButtonLink,
   Callout,
   EmptyState,
   isSystemOnly,
@@ -651,14 +652,9 @@ export function RecordsScreen({
                                 {newRecord}
                               </Button>
                               {!object.isArchived && (
-                                <Button
-                                  icon="upload"
-                                  onPress={() => {
-                                    void navigate({ href: importHref(slug, object) });
-                                  }}
-                                >
+                                <ButtonLink icon="upload" href={importHref(slug, object)}>
                                   {importStrings.menuItem}
-                                </Button>
+                                </ButtonLink>
                               )}
                             </>
                           ),

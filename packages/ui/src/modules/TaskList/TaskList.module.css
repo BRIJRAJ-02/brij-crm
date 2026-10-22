@@ -120,7 +120,7 @@
 
   .record {
     display: flex;
-    flex: none;
+    flex: 0 1 auto;
     gap: var(--space-4);
     align-items: center;
     max-inline-size: var(--size-column);
@@ -152,19 +152,20 @@
     color: var(--danger);
   }
 
-  /* Under 480px the title would be squeezed to nothing by the chip and the due day (a record's Overview on a
-     phone): the chips step aside, since opening the task shows them, and the title keeps the row. */
+  /* Under 480px (My tasks on a phone, a record's Overview) the title comes first: it keeps a narrow column at
+     least, the record chip holds to the smallest column and is cut short, and nothing else in the row shrinks. */
   @container (inline-size < 480px) {
-    .record {
-      display: none;
+    .row > :not(.title, .record) {
+      flex-shrink: 0;
     }
-  }
 
-  .assignee {
-    display: flex;
-    flex: none;
-    justify-content: center;
-    inline-size: var(--size-chip);
+    .title {
+      min-inline-size: var(--size-column-narrow);
+    }
+
+    .record {
+      max-inline-size: var(--size-column-min);
+    }
   }
 
   @media (forced-colors: active) {

@@ -3,7 +3,15 @@
 // provider's language and time zone (AC-11).
 import { describe, expect, it } from 'vitest';
 import { parseLocaleDecimal } from './decimal.ts';
-import { formatAmount, formatDate, formatDecimal, formatExactTime, formatRelative, minorUnits } from './format.ts';
+import {
+  formatAmount,
+  formatDate,
+  formatDateInYear,
+  formatDecimal,
+  formatExactTime,
+  formatRelative,
+  minorUnits,
+} from './format.ts';
 import { arraySource } from './list-source.ts';
 import { safeHref } from './safe-href.ts';
 import { safeImageSrc } from './safe-image-src.ts';
@@ -107,6 +115,13 @@ describe('formats', () => {
   it('formats a calendar day without shifting it by any time zone', () => {
     expect(formatDate('2026-10-08', 'en-US')).toBe('Oct 8, 2026');
     expect(formatDate('2026-10-08', 'de-DE')).toBe('08.10.2026');
+  });
+
+  it('formats a day in the current year without its year, keeping it in the numeric format', () => {
+    expect(formatDateInYear('2026-10-24', 'en-US')).toBe('Oct 24');
+    expect(formatDateInYear('2026-10-24', 'en-US', 'dmy')).toBe('24 Oct');
+    expect(formatDateInYear('2026-10-24', 'en-US', 'mdy')).toBe('Oct 24');
+    expect(formatDateInYear('2026-10-24', 'en-US', 'ymd')).toBe('2026-10-24');
   });
 
   it('gives the exact time with its time zone', () => {
