@@ -8,6 +8,8 @@ export const strings = {
   choiceLabel: (place: number) => `Choice ${String(place)}`,
   newChoice: 'New choice',
   typeChoice: 'Type a choice',
+  typeOption: 'Type an option',
+  typeStage: 'Type a stage',
   addChoice: 'Add choice',
   noChoices: 'No choices yet',
   removeOf: (label: string) => `Remove ${label === '' ? 'choice' : label}`,

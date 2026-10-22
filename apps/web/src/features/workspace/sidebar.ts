@@ -5,7 +5,7 @@
 import type { NavEntry, NavPage, NavPrefs, NavSectionKey, NavState, NavUniverse, ObjectSummary } from '@crm/data';
 import { navKey, sectionItems, sectionOrder } from '@crm/data/navigation';
 import type { IconName } from '@crm/ui';
-import { bookingsHref, capturesHref, navObjects, tasksHref } from './objects.ts';
+import { bookingsHref, capturesHref, inboxHref, navObjects, tasksHref } from './objects.ts';
 import { strings } from './strings.ts';
 
 /** A page the sidebar marks current that isn't an object's: Tasks, Bookings, Captures and the trash. */
@@ -24,6 +24,8 @@ export interface SidebarPageLink {
  * notifications (#28) exist; until then the server never offers it.
  */
 export const PAGE_LINKS: { readonly [Page in NavPage]?: SidebarPageLink } = {
+  // The inbox (spec 0038) had a page and an unread count but no row, so a mention reached nobody (QA, 22 October 2026).
+  inbox: { label: strings.inbox, icon: 'inbox', href: inboxHref },
   tasks: { label: strings.tasks, icon: 'square-check', href: tasksHref },
   bookings: { label: strings.bookings, icon: 'calendar-days', href: bookingsHref },
   captures: { label: strings.captures, icon: 'link', href: capturesHref },

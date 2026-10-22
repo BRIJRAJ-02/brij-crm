@@ -87,7 +87,10 @@ test.describe('availability schedules', () => {
     await page.getByRole('button', { name: 'Create page' }).click();
     await expect(page).toHaveURL(/captures\/links\/[0-9a-f-]{36}/, { timeout: 60_000 });
     const pageUrl = page.url();
-    const key = /\/b\/([A-Za-z0-9_-]{16})/.exec((await page.getByLabel('Public link').inputValue()) || '')?.[1];
+    // The preview beside the editor loads the page by its /b/ link.
+    const key = /\/b\/([A-Za-z0-9_-]{16})/.exec(
+      (await page.getByTitle('Preview of Intro call').getAttribute('src')) ?? '',
+    )?.[1];
     // The schedule is on the Hours tab.
     await page.getByRole('tab', { name: 'Hours', exact: true }).click();
     await expect(page.getByRole('button', { name: /Working hours.*Default/ }).first()).toBeVisible();

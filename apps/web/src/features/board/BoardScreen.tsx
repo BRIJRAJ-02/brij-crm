@@ -222,6 +222,8 @@ export function BoardScreen(props: BoardScreenProps) {
               members={members}
               canManage={canChangeSchema}
               objectAttributes={attributes}
+              // The board needs a status or select field: the dialog starts on Select.
+              initialTypeKey="select"
               onClose={closeAdding}
               onSaved={() => {
                 // The route reads the attributes again: a status or select field makes the board.

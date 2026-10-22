@@ -87,8 +87,8 @@ A new grid column's width tier, by type (an attribute that allows several values
 
 | Tier | Token | Types |
 |---|---|---|
-| `narrow` | `size-column-narrow` | checkbox, rating, number, date, timestamp |
-| `default` | `size-column` | text, currency, select, status, email, phone, domain, URL, personal name, actor reference, record reference, interaction |
+| `narrow` | `size-column-narrow` | checkbox, rating, number, date |
+| `default` | `size-column` | timestamp (a narrow one cut its header to one letter beside the sort, lock and menu icons; QA, 22 October 2026), text, currency, select, status, email, phone, domain, URL, personal name, actor reference, record reference, interaction |
 | `wide` | `size-column-wide` | long text, location, file |
 
 The types the registry uses, exported from `packages/ui`:

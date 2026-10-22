@@ -23,6 +23,7 @@ import {
   Checkbox,
   createPhoneParser,
   EmptyState,
+  Icon,
   FileDrop,
   InfoTip,
   loadPhoneLibrary,
@@ -1084,7 +1085,15 @@ function PreviewTable({ loaded, targets, fields, context, errors, filter, page, 
       renderCell={(row, columnId) => {
         if (columnId === 'row') return n(row.rowNumber);
         // A ready row says so, so the column never reads as missing values beside the errors.
-        if (columnId === 'problems') return row.error === undefined ? strings.readyRow : problemText(row.error);
+        if (columnId === 'problems') {
+          if (row.error === undefined) return strings.readyRow;
+          // A row that can't go in is marked, so it stands out from the ready ones beside it.
+          return (
+            <>
+              <Icon name="circle-alert" size="xs" tone="danger" /> {problemText(row.error)}
+            </>
+          );
+        }
         const column = Number(columnId.slice('cell-'.length));
         const target = targets[column];
         const text = cellText(row.cells[column]);

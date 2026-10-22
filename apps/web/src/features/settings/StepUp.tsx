@@ -39,7 +39,14 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
   const twoFactorOn = security.status === 'ready' && security.twoFactor.on;
   const isNeeded = needsStepUp(data, security, need);
   const [kind, setKind] = useState<'totp' | 'backup'>('totp');
-  const [code, setCode] = useState('');
+  const [code, setShownCode] = useState('');
+  // The code as typed this moment: the boxes filling calls the dialog's commit in the same event as the last
+  // change, before a render, so `prove` reads this, never the rendered (one digit short) state.
+  const typedNow = useRef('');
+  const setCode = (next: string) => {
+    typedNow.current = next;
+    setShownCode(next);
+  };
   const [error, setError] = useState<string | undefined>(undefined);
   // A send that didn't go (mail down, too many codes): said in its own alert, never on the code field.
   const [sendError, setSendError] = useState<string | undefined>(undefined);
@@ -82,8 +89,9 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
       await send();
       return false;
     }
-    const typed = code.trim();
-    if (typed === '' || (kind === 'totp' && twoFactorOn && typed.length < 6)) {
+    const typed = typedNow.current.trim();
+    // Every code is at least 6 characters (an email or app code is 6 digits): a short one never goes to the server.
+    if (typed.length < 6) {
       setError(strings.stepUp.missing);
       refocus();
       return false;
@@ -100,7 +108,15 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
   };
 
   const errorProps = error === undefined ? {} : { error };
-  const complete = need.onComplete === undefined ? {} : { onComplete: () => need.onComplete?.() };
+  const complete =
+    need.onComplete === undefined
+      ? {}
+      : {
+          onComplete: (full: string) => {
+            setCode(full);
+            need.onComplete?.();
+          },
+        };
   let fields: ReactNode = null;
   if (isNeeded && twoFactorOn) {
     fields = (

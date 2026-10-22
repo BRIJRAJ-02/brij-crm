@@ -34,7 +34,7 @@ export interface EditorActionsProps {
   readonly linkOffReason?: string;
   /**
    * The live page's address, for View page: it opens in a new tab, the way Calendly and Cal.com let an event type's
-   * editor open its booking page (a booking page's editor, which has no preview beside it).
+   * editor open its booking page (a booking page's editor, whose preview beside it is a phone).
    */
   readonly viewHref?: string;
   /** The editor's Preview button, where it applies (a form's, which previews its unpublished changes). */

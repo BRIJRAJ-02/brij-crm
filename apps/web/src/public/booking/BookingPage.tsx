@@ -24,6 +24,7 @@ import {
   BookingMessage,
   Button,
   Callout,
+  claimPageHref,
   DayStrip,
   MonthTiles,
   SegmentedControl,
@@ -38,7 +39,7 @@ import { railHost, railTitle } from './host.ts';
 import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
 import { saveHour12, savedHour12, savedView, saveView, type SlotView } from './prefs.ts';
-import { needsRead } from './reads.ts';
+import { needsRead, pageEnded } from './reads.ts';
 import { strings } from './strings.ts';
 import {
   addDays,
@@ -92,8 +93,8 @@ type Loaded =
 /** One slots read covers 62 days (two months of the month view). */
 const CHUNK_DAYS = 62;
 
-/** Where "Claim your free page" goes. */
-const CLAIM_URL = 'https://timefix.ai';
+/** Where "Claim your free page" goes: timefix.ai, tagged as this page's claim link (the wordmark beside it tags itself). */
+const CLAIM_URL = claimPageHref('booking_page');
 
 /** How the location reads in the facts: "Video call", "Phone call", or the address or words the host gave. */
 const locationLabel = (location: PublicBookingPage['location']) =>
@@ -155,6 +156,8 @@ export function BookingPage({
     );
   }, [client, publicKey, onAddress]);
   useEffect(load, [load]);
+  // A slot read can find the page deleted or paused after it loaded: then that state shows, not a retry.
+  const ended = useCallback((state: 'gone' | 'closed') => setLoaded({ state }), []);
   // Inside the editor's preview frame, the editor's unsaved draft shows over the saved page (AC-679):
   // only from the parent window on this same origin.
   useEffect(() => {
@@ -180,6 +183,7 @@ export function BookingPage({
           now={now}
           startedAt={startedAt}
           onBooked={onBooked}
+          onEnded={ended}
           chosen={back.chosen}
           isPreview={isPreview}
           {...(back.result === undefined ? {} : { connected: back.result })}
@@ -239,6 +243,7 @@ function Booking({
   prefill,
   handoff,
   onBooked,
+  onEnded,
   chosen,
   connected,
   isPreview,
@@ -257,6 +262,8 @@ function Booking({
   readonly startedAt: number;
   readonly prefill?: Prefill;
   readonly onBooked: (manageToken: string) => void;
+  /** The page was deleted or paused since it loaded. */
+  readonly onEnded: (state: 'gone' | 'closed') => void;
 }) {
   const [zone, setZone] = useState(chosen.zone ?? detected);
   const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
@@ -392,6 +399,11 @@ function Booking({
         },
         (error: unknown) => {
           if (error instanceof DOMException && error.name === 'AbortError') return;
+          const end = pageEnded(isDataError(error) ? error.code : undefined);
+          if (end !== undefined) {
+            onEnded(end);
+            return;
+          }
           setRead({
             key: readKey,
             loaded: current,
@@ -402,7 +414,22 @@ function Booking({
         },
       );
     return () => controller.abort();
-  }, [client, page.publicKey, zone, duration, wanted, readKey, read, today, chunks, now, notYou, showAll, handoff]);
+  }, [
+    client,
+    page.publicKey,
+    zone,
+    duration,
+    wanted,
+    readKey,
+    read,
+    today,
+    chunks,
+    now,
+    notYou,
+    showAll,
+    handoff,
+    onEnded,
+  ]);
 
   const loaded = read.key === readKey ? read.loaded : new Map<number, readonly string[]>();
   const allStarts = [...loaded.values()].flat().sort();

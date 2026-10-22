@@ -124,7 +124,6 @@ describe('@crm/ui', () => {
       'Path',
       'PhoneField',
       'Popover',
-      'PreviewDeviceSwitch',
       'PreviewFrame',
       'PreviewLayout',
       'ProgressBar',

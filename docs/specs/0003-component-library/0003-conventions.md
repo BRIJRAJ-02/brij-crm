@@ -97,7 +97,7 @@ Milestones 1 and 2 drew some sizes from tokens meant for other things (`size-sid
 | `size-kbd` | 16px | a keycap's height and minimum width | `size-check` |
 | `size-column-check` | 36px | the grid's checkbox column | new |
 | `size-column-min` | 80px | the narrowest a column resizes to | new |
-| `size-column-narrow` | 120px | checkbox, rating, number, date and timestamp columns | new |
+| `size-column-narrow` | 120px | checkbox, rating, number and date columns | new |
 | `size-column` | 200px | a new column of any other type | new |
 | `size-column-wide` | 300px | long text, location, file, and any attribute that allows several values | new |
 | `size-column-max` | 640px | the widest a column resizes to | new |

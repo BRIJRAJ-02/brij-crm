@@ -10,6 +10,7 @@ import {
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { PageEdge } from '../../lib/page-edge.ts';
+import { RowInset } from '../../lib/row-inset.ts';
 import { CardTitleLevel } from '../Card/Card.tsx';
 import styles from './Disclosure.module.css';
 
@@ -32,9 +33,13 @@ export interface DisclosureProps {
    * `label` draws the title as a sidebar section label: 11px, quiet, its
    * chevron after it. `fields` stacks the panel's content `space-16` apart, as
    * a Form stacks its fields, for more fields folded inside a form ("Add more
-   * fields" in a create dialog).
+   * fields" in a create dialog). `quiet` folds the rest of a list under a
+   * control sized to its words, like a ghost Button: its chevron sits in the
+   * rows' 16px icon column, its words on their text line, and the panel is
+   * flush, so the rows it holds line up with the rows above (Home's setup
+   * checklist's done steps).
    */
-  readonly variant?: 'default' | 'label' | 'fields';
+  readonly variant?: 'default' | 'label' | 'fields' | 'quiet';
   /**
    * Quiet controls after the title, outside its toggle (a sidebar section's
    * grip and its menu, spec 0034). In the `label` variant they show while the
@@ -65,6 +70,8 @@ export function Disclosure({
 }: DisclosureProps) {
   // Directly in a settings page's body, the title row runs to the page's edges, its chevron on the content edge.
   const atPageEdge = useContext(PageEdge) && variant === 'default';
+  // Under rows inset by space-8 (a TaskList's footer), a quiet fold lines up with those rows instead.
+  const atRowInset = useContext(RowInset) && variant === 'quiet';
   // At the page edge its title is a heading at the level a card's title takes there (an h2 right under a
   // settings page's TopBar), so headings never skip a level; anywhere else an h3, as before.
   const level = useContext(CardTitleLevel);
@@ -85,6 +92,7 @@ export function Disclosure({
       className={styles.root}
       data-variant={variant}
       data-edge={atPageEdge ? 'page' : undefined}
+      data-inset={atRowInset ? 'row' : undefined}
       {...(id === undefined ? {} : { id })}
       {...(isExpanded === undefined ? {} : { isExpanded })}
       {...(defaultExpanded === undefined ? {} : { defaultExpanded })}

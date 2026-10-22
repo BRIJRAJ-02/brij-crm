@@ -5,7 +5,7 @@ export const strings = {
   /** The same, held by a record the person can't see: never named. */
   linkedElsewhere: 'Linked elsewhere',
   /** A record that doesn't exist and one the person may not see read the same (AC-376, AC-384). */
-  recordUnavailable: 'This record isn’t available.',
+  recordUnavailable: 'This record isn’t available',
   /** Under it: what to do next. */
   recordUnavailableText: 'It may have been deleted, or you may not have access to it.',
   backTo: (pluralName: string) => `Back to ${pluralName}`,
@@ -13,7 +13,7 @@ export const strings = {
   wasDeleted: (singularName: string) => `This ${singularName.toLowerCase()} was deleted.`,
   /** Deleted, or access lost, while the page was open (AC-376). */
   noLongerAvailable: (singularName: string) => `This ${singularName.toLowerCase()} is no longer available.`,
-  loadFailed: 'We couldn’t load this record.',
+  loadFailed: 'Couldn’t load this record',
   loadFailedText: 'Something went wrong. Try again in a moment.',
   loading: 'Loading',
   /** What the tabs switch between, for screen readers. */
@@ -25,7 +25,7 @@ export const strings = {
   /** The stat strip under the header (the tabs keep the counts): when it last changed, its next meeting, its stage. */
   lastActivity: 'Last activity',
   nextMeeting: 'Next meeting',
-  enteredStage: (stage: string) => `Entered ${stage}`,
+  enteredStage: (stage: string) => `Entered “${stage}”`,
   viewAll: 'View all',
   /** Recent activity's "View all" by its full name, apart from Open tasks' beside it. */
   viewAllActivity: 'View all activity',

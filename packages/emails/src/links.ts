@@ -1,49 +1,31 @@
 // The links an email may carry. Every link is either on the app's own origin
-// (an app path joined to it) or the "Powered by Timefix" link, built here
-// from fixed words only, so no email can link anywhere else and no link
-// carries a workspace, a person or an id.
+// (an app path joined to it) or the "Powered by Timefix" link, built by
+// `@crm/contracts/brand` from fixed words only, so no email can link anywhere
+// else and no link carries a workspace, a person or an id.
+import { POWERED_BY_EMAILS, timefixUrl, type PoweredByEmail } from '@crm/contracts/brand';
 
 /** The marketing site the footer's logo links to. */
-export const TIMEFIX_SITE = 'https://timefix.ai';
+export { TIMEFIX_SITE } from '@crm/contracts/brand';
 
 /**
- * Every footer link's `utm_medium`, one per family of email: a closed list,
- * so nothing but these words (never a workspace or a person) can ride in it.
+ * Every footer link's `utm_medium`, one per family of email: a closed list
+ * (kept with every other surface's in `@crm/contracts/brand`), so nothing but
+ * these words, never a workspace or a person, can ride in it.
  */
-export const EMAIL_MEDIUMS = [
-  'email_sign_in',
-  'email_sign_in_alert',
-  'email_invite',
-  'email_form_notice',
-  'email_form_confirmation',
-  'email_calendar_alert',
-  'email_booking',
-  'email_reminder',
-  'email_import',
-  'email_mention',
-] as const;
+export const EMAIL_MEDIUMS = POWERED_BY_EMAILS;
 /** A footer link's `utm_medium`. */
-export type EmailMedium = (typeof EMAIL_MEDIUMS)[number];
+export type EmailMedium = PoweredByEmail;
 
 /**
  * "Powered by Timefix": timefix.ai tagged `utm_source=timefix`,
  * `utm_medium=email_<kind>`, `utm_campaign=powered_by` and
- * `utm_content=footer_logo`, the same scheme as the guest pages' footer.
- * Nothing else goes in: no workspace, person or id.
- *
- * TODO(brandlinks): swap for the shared builder (`poweredByUrl` in
- * `@crm/contracts/brand`, wip/brandlinks, or the booking pages' `poweredByHref`
- * once it moves to a shared package) when it lands on landing2, keeping the
- * email surfaces and leaving out its workspace `ref`.
+ * `utm_content=footer_logo` by the one builder the public pages use. Nothing
+ * else goes in: an email never sends the workspace as `ref`, nor a person or
+ * an id.
  */
 export function poweredByUrl(medium: EmailMedium): string {
   if (!(EMAIL_MEDIUMS as readonly string[]).includes(medium)) throw new Error('That isn’t an email medium.');
-  const url = new URL(TIMEFIX_SITE);
-  url.searchParams.set('utm_source', 'timefix');
-  url.searchParams.set('utm_medium', medium);
-  url.searchParams.set('utm_campaign', 'powered_by');
-  url.searchParams.set('utm_content', 'footer_logo');
-  return url.toString();
+  return timefixUrl({ surface: medium });
 }
 
 /** A path inside the app: one leading slash, never `//` or a backslash. */

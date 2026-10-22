@@ -88,7 +88,7 @@ test('a record opens from the table, edits in place, and keeps its tab', async (
   // An id that names nothing, and one that isn't an id: one state, with the way back.
   for (const missing of ['0199a6f2-0000-7000-8000-000000000001', 'not-an-id']) {
     await page.goto(`/w/${slug}/objects/people/${missing}/overview`);
-    await expect(page.getByText('This record isn’t available.')).toBeVisible();
+    await expect(page.getByText('This record isn’t available', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Back to People' })).toBeVisible();
   }
   await checkScreen(page, 'record-unavailable');

@@ -35,7 +35,9 @@ describe('the sidebar’s routes (AC-944)', () => {
   });
 
   it('draws one Bookings row and one Captures row, as round 6 did (the owner, 22 October 2026)', () => {
-    expect(Object.keys(PAGE_LINKS)).toEqual(['tasks', 'bookings', 'captures']);
+    // The inbox comes first among the member's own pages: a mention or an assignment lands there (spec 0038).
+    expect(Object.keys(PAGE_LINKS)).toEqual(['inbox', 'tasks', 'bookings', 'captures']);
+    expect(PAGE_LINKS.inbox?.href('acme')).toBe('/w/acme/inbox');
     expect(PAGE_LINKS.bookings?.href('acme')).toBe('/w/acme/bookings/calendar');
     expect(PAGE_LINKS.captures?.href('acme')).toBe('/w/acme/captures/links');
   });

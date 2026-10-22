@@ -89,7 +89,7 @@ describe('the registry (AC-4)', () => {
       number: 'narrow',
       currency: 'default',
       date: 'narrow',
-      timestamp: 'narrow',
+      timestamp: 'default',
       checkbox: 'narrow',
       select: 'default',
       status: 'default',

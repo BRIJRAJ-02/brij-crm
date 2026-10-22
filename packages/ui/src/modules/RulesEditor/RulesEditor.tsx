@@ -30,6 +30,7 @@ import { focusLater } from '../../lib/focus-later.ts';
 import { reorder } from '../../lib/reorder.ts';
 import { DatePicker } from '../../molecules/DatePicker/DatePicker.tsx';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
+import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
@@ -307,7 +308,7 @@ export function RulesEditor({
       attribute: { type: attribute.type, isMulti: true },
       attributes: settingsAttributes,
     });
-    return checked.ok ? generatedMessage(checked.rule, title, named) : strings.unfinished(strings.kinds[rule.kind]);
+    return checked.ok ? generatedMessage(checked.rule, title, named) : strings.unfinished;
   };
   const errorsOf = (index: number) =>
     Object.entries(errors).filter(
@@ -349,7 +350,12 @@ export function RulesEditor({
   return (
     <div ref={rootRef} className={styles.root} onKeyDownCapture={keepEnter}>
       <div className={styles.head}>
-        <span className={styles.title}>{label}</span>
+        <span className={styles.title}>
+          {label}{' '}
+          <InfoTip label={label} example={strings.aboutRulesExample}>
+            {strings.aboutRules}
+          </InfoTip>
+        </span>
         {!isReadOnly && rules.length > 0 && <span className={styles.usage}>{strings.usage(rules.length, limit)}</span>}
       </div>
       {hint !== undefined && !isReadOnly && <span className={styles.note}>{hint}</span>}
@@ -471,8 +477,10 @@ export function RulesEditor({
                       />
                       <Field
                         label={strings.message}
+                        labelAside={strings.optional}
                         size="sm"
-                        isMultiline
+                        // One sentence: a line that wraps as it grows, not an empty box that looks required.
+                        isWrapping
                         maxLength={RULE_LIMITS.message}
                         showCounter
                         hint={strings.messageHint}
@@ -540,7 +548,7 @@ export function RulesEditor({
                 kind === 'required_when'
                   ? []
                   : [
-                      <MenuItem key={kind} id={kind}>
+                      <MenuItem key={kind} id={kind} description={strings.kindHelp[kind]}>
                         {strings.kinds[kind]}
                       </MenuItem>,
                     ],

@@ -4,7 +4,7 @@
 import type { MemberPreferences } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import type { Notice } from '../notice.ts';
-import { applyChange, createPreferencesStore } from './store.ts';
+import { applyChange, createPreferencesStore, PREFERENCES_FRESH_MS } from './store.ts';
 
 const DEFAULTS: MemberPreferences = { dateFormat: 'auto', weekStart: 'auto', landing: { kind: 'home' } };
 
@@ -33,12 +33,14 @@ function setup() {
   const fake = fakeApi();
   const notices: Notice[] = [];
   let ids = 0;
+  const clock = { at: 0 };
   const store = createPreferencesStore({
     api: fake.api,
     mintId: () => `m${String((ids += 1))}`,
     notify: (notice) => notices.push(notice),
+    now: () => clock.at,
   });
-  return { ...fake, notices, store };
+  return { ...fake, notices, store, clock };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -69,6 +71,28 @@ describe('the preferences store', () => {
     calls[0]?.settle(true, DEFAULTS);
     expect(await loaded).toEqual(DEFAULTS);
     expect(held.getSnapshot()).toEqual({ status: 'ready', preferences: DEFAULTS });
+  });
+
+  it('serves a screen held right after its loader from that read, and reads again for a later visit', async () => {
+    const { calls, store, clock } = setup();
+    const loaded = store.load('acme');
+    calls[0]?.settle(true, DEFAULTS);
+    await loaded;
+    clock.at = PREFERENCES_FRESH_MS - 1;
+    store.of('acme').retain();
+    expect(calls).toHaveLength(1);
+    clock.at = 2 * PREFERENCES_FRESH_MS;
+    store.of('acme').retain();
+    expect(calls).toHaveLength(2);
+  });
+
+  it('reads again for a new holder after a failed read', async () => {
+    const { calls, store } = setup();
+    const loaded = store.load('acme');
+    calls[0]?.settle(false);
+    await expect(loaded).rejects.toBeDefined();
+    store.of('acme').retain();
+    expect(calls).toHaveLength(2);
   });
 
   it('shows a change at once and keeps the answer', async () => {

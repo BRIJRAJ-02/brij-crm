@@ -57,7 +57,7 @@ test('a mention reaches the other browser’s inbox live, opens its thread, and 
     .click();
   await expect(ada).toHaveURL(RECORD_URL);
   await ada.getByRole('tab', { name: /Comments/ }).click();
-  await expect(ada.getByText('No comments yet. Start the conversation.')).toBeVisible();
+  await expect(ada.getByText('No comments yet', { exact: true })).toBeVisible();
   await checkScreen(ada, 'comments-empty');
   const composer = ada.getByRole('textbox', { name: 'Add a comment' });
   await composer.click();

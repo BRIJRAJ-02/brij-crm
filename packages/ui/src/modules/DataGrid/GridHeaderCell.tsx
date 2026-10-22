@@ -146,12 +146,17 @@ export function GridHeaderCell({
       style={{ '--col-width': `${String(place.width)}px`, '--col-offset': `${String(place.stickyOffset ?? 0)}px` }}
       onPointerDown={onPointerDown}
     >
-      <Icon name={iconOf(attribute)} size="sm" tone="muted" />
-      <span className={styles.name}>
-        {/* While resizing, the keys are on show, and the grid announces the width. */}
-        <Tooltip content={strings.resizeHint} isTextTrigger isOpen={isResizing}>
-          <TruncatedText>{attribute.name}</TruncatedText>
-        </Tooltip>
+      {/* The name first, then its decorative type icon, drawn icon first (row-reverse). The icon wraps out of the one
+          line lead, out of sight, only when the name wouldn't fit beside it, so a narrow header reads "Close date"
+          rather than "Close d…" (QA, 22 October 2026), and a short name keeps its icon. The menu stays. */}
+      <span className={styles.lead}>
+        <span className={styles.name}>
+          {/* While resizing, the keys are on show, and the grid announces the width. */}
+          <Tooltip content={strings.resizeHint} isTextTrigger isOpen={isResizing}>
+            <TruncatedText>{attribute.name}</TruncatedText>
+          </Tooltip>
+        </span>
+        <Icon name={iconOf(attribute)} size="sm" tone="muted" />
       </span>
       {/* Decorative: aria-sort says it to screen readers. */}
       {sorted !== undefined && (
