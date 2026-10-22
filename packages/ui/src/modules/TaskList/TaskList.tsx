@@ -297,8 +297,12 @@ function TaskListContent({
         tone="error"
         icon="list-todo"
         title={strings.failed}
+        // In place (a card on Home) or framed, the failure takes one row, like the empty list would.
+        layout={isInline || isFramed ? 'row' : 'block'}
         {...(onRetry === undefined ? {} : { onRetry })}
-      />
+      >
+        {strings.failedBody}
+      </EmptyState>
     );
   }
   if (status === 'no-access') {

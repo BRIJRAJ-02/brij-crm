@@ -231,7 +231,13 @@ export function LinkList({
     return (
       <div {...frameProps}>
         {toolbar}
-        <EmptyState tone="error" title={errorTitle ?? strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
+        <EmptyState
+          tone="error"
+          title={errorTitle ?? strings.failed}
+          // In a card the failure takes one row, as the card's other sections draw theirs.
+          layout={isCompact && placement === 'card' ? 'row' : 'block'}
+          {...(onRetry === undefined ? {} : { onRetry })}
+        />
       </div>
     );
   }

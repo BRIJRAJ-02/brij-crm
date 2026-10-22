@@ -58,7 +58,10 @@ export interface SectionRun<Section> {
   readonly sections: readonly Section[];
 }
 
-/** The sections in runs, keeping their order: each full one alone, each stretch of half ones in one grid. */
+/**
+ * The sections in runs, keeping their order: each full one alone, each stretch of half ones in one grid. A stretch
+ * with an odd count gives its last one the full width, so no card sits beside an empty column.
+ */
 export function sectionRuns<Section extends Pick<HomeSection, 'id' | 'width'>>(
   sections: readonly Section[],
 ): readonly SectionRun<Section>[] {
@@ -71,7 +74,13 @@ export function sectionRuns<Section extends Pick<HomeSection, 'id' | 'width'>>(
       runs.push({ key: section.id, width: section.width, sections: [section] });
     }
   }
-  return runs;
+  return runs.flatMap((run) => {
+    const lone = run.sections.at(-1);
+    if (run.width === 'full' || run.sections.length % 2 === 0 || lone === undefined) return [run];
+    const paired = run.sections.slice(0, -1);
+    const alone: SectionRun<Section> = { key: lone.id, width: 'full', sections: [lone] };
+    return paired.length === 0 ? [alone] : [{ ...run, sections: paired }, alone];
+  });
 }
 
 /** The member's hidden list with `id` added (each key once). */

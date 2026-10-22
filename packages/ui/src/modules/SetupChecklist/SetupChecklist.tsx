@@ -130,7 +130,7 @@ export function SetupChecklist({
       ) : status === 'no-access' ? (
         <EmptyState tone="locked" title={strings.noAccess} layout="row" />
       ) : status === 'error' ? (
-        <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })}>
+        <EmptyState tone="error" title={strings.failed} layout="row" {...(onRetry === undefined ? {} : { onRetry })}>
           {strings.failedBody}
         </EmptyState>
       ) : (

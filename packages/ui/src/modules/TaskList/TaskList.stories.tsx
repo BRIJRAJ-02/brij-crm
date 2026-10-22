@@ -474,7 +474,7 @@ export const InlineEmpty: Story = {
   },
 };
 
-/** In place, failed, with Try again. */
+/** In place (a card on Home), failed: one row with Try again, like the inline empty list. */
 export const InlineFailed: Story = {
   args: { onRetry: fn() },
   render: function Render(args) {
@@ -492,6 +492,7 @@ export const InlineFailed: Story = {
     );
   },
   play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByRole('alert')).toHaveAttribute('data-layout', 'row');
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
     await expect(args.onRetry).toHaveBeenCalled();
   },

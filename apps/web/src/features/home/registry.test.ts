@@ -56,8 +56,23 @@ describe('the section registry', () => {
     const runs = sectionRuns(visibleSections(SECTIONS, CONTEXT, []));
     expect(runs.map((run) => [run.width, run.sections.map((each) => each.id)])).toEqual([
       ['full', ['setup']],
-      ['half', ['today', 'tasks', 'captures']],
+      ['half', ['today', 'tasks']],
+      ['full', ['captures']],
       ['full', ['metrics']],
+    ]);
+  });
+
+  it('gives a lone half section the full width', () => {
+    const runs = sectionRuns([
+      { id: 'today', width: 'half' },
+      { id: 'metrics', width: 'full' },
+      { id: 'tasks', width: 'half' },
+      { id: 'team', width: 'half' },
+    ] as const);
+    expect(runs.map((run) => [run.width, run.sections.map((each) => each.id)])).toEqual([
+      ['full', ['today']],
+      ['full', ['metrics']],
+      ['half', ['tasks', 'team']],
     ]);
   });
 
