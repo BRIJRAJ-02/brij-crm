@@ -113,7 +113,7 @@ export const strings = {
   removeWeeklyTitle: (label: string | undefined) =>
     label === undefined ? 'Remove this weekly block?' : `Remove the weekly “${label}” block?`,
   releaseHoldTitle: (label: string | undefined) =>
-    label === undefined ? 'Release this reserved time?' : `Release the “${label}” reserved time?`,
+    label === undefined ? 'Release this reserved time?' : `Release “${label}”?`,
   reopensOnce: (day: string, from: string, to: string) =>
     `${day}, ${from} to ${to}, opens for booking again. This can’t be undone.`,
   reopensWeekly: (weekday: string, from: string, to: string) =>
@@ -179,7 +179,6 @@ export const strings = {
   holdThisTime: 'Reserve for link only pages',
   holdFor: 'For',
   anyPrivatePage: 'Any link only page',
-  holdHint: 'Time only your link only pages can book.',
   noPrivatePages: 'Time only your link only pages can book. You have none yet.',
   createLinkOnly: 'Create a link only page',
   reservedTime: 'Reserved time',

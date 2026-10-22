@@ -58,6 +58,7 @@ import { strings as routingStrings } from '../routing/strings.ts';
 import { weekGroups } from './hours.ts';
 import { zoneDisplay } from '../../public/booking/time.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
+import { bookingsTabHref } from '../bookings/tabs.ts';
 import { strings as capturesStrings } from '../captures/strings.ts';
 import { DeletePageDialog } from './DeletePageDialog.tsx';
 import {
@@ -258,7 +259,6 @@ export function PageEditor({
   });
   // Pause and Resume save at once, apart from the other groups, and their toast offers Undo.
   const setLive = (status: 'live' | 'paused') => {
-    change({ status });
     save({ status });
   };
   const duplicate = () => {
@@ -295,7 +295,12 @@ export function PageEditor({
       },
       (error: unknown) => {
         setSaving(false);
-        if (patch.status !== undefined) setDraft((current) => ({ ...current, status: page.status }));
+        // Pause and Resume aren't part of the save bar's changes: their failure says so in a toast.
+        if (patch.status !== undefined) {
+          setDraft((current) => ({ ...current, status: page.status }));
+          toasts.toast({ tone: 'danger', message: strings.statusFailed(page.title) });
+          return;
+        }
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
         // A refused setting on another tab: show that tab, where the field says what's wrong.
         const refused = field === undefined ? undefined : FIELD_TABS[field];
@@ -360,9 +365,11 @@ export function PageEditor({
     items: SelectItem[],
     value: string,
     onChange: (id: string | null) => void,
+    description?: string,
   ) => (
     <SettingsRow
       title={title}
+      {...(description === undefined ? {} : { description })}
       meta={
         <InfoTip label={title} example={help.example}>
           {help.text}
@@ -721,7 +728,14 @@ export function PageEditor({
                     )}
                   </FieldGroup>
                   {draft.isPrivate && (
-                    <FieldGroup label={strings.reservedTime} hint={strings.reservedTimeHint}>
+                    <FieldGroup
+                      label={strings.reservedTime}
+                      action={
+                        <ButtonLink href={bookingsTabHref(slug, 'calendar')} variant="ghost" size="sm">
+                          {strings.manage}
+                        </ButtonLink>
+                      }
+                    >
                       {strings.reservedTimeLine}
                     </FieldGroup>
                   )}
@@ -745,8 +759,13 @@ export function PageEditor({
                     )}
                   </SettingsRowGroup>
                   <SettingsRowGroup title={strings.limitGroups.window}>
-                    {limitRow(strings.notice, strings.limitHelp.notice, NOTICE, String(draft.minNoticeMinutes), (id) =>
-                      change({ minNoticeMinutes: Number(id ?? 0) }),
+                    {limitRow(
+                      strings.notice,
+                      strings.limitHelp.notice,
+                      NOTICE,
+                      String(draft.minNoticeMinutes),
+                      (id) => change({ minNoticeMinutes: Number(id ?? 0) }),
+                      draft.isPrivate ? strings.noticeIgnored : undefined,
                     )}
                     {limitRow(strings.window, strings.limitHelp.ahead, WINDOW, String(draft.windowDays), (id) =>
                       change({ windowDays: Number(id ?? 60) }),

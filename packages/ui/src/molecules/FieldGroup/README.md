@@ -20,7 +20,7 @@ New (22 October 2026), for the booking page editor's Hours tab. It shows a sched
 
 ## States
 
-With and without an action and a hint, block and row, empty (a hint and the action that fixes it). Loading, error, read only and disabled belong to its content (Skeleton, Callout).
+With and without an action and a hint, block and row, a long row that wraps, loading (a Skeleton as content), empty (a hint and the action that fixes it). Loading, error, read only and disabled belong to its content (Skeleton, Callout).
 
 ## Keyboard
 

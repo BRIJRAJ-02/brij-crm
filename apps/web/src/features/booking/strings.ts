@@ -49,7 +49,7 @@ export const strings = {
   failedText: 'Check your connection and try again.',
   deleteTitle: (title: string) => `Delete “${title}”?`,
   deleteText: 'The link stops working, and this can’t be undone. Bookings already made stay.',
-  deleteAction: 'Delete page',
+  deleteAction: 'Delete booking page',
   deletePage: 'Delete booking page',
   deleting: 'Deleting',
   cancel: 'Cancel',
@@ -113,8 +113,10 @@ export const strings = {
   noCalendars: 'No calendars connected',
   noneChecked: 'None, so this page can double book.',
   reservedTime: 'Reserved time',
-  reservedTimeLine: 'This page can also book your reserved time.',
-  reservedTimeHint: 'Time only your link only pages can book.',
+  reservedTimeLine: 'This page can also book your reserved time: time only your link only pages can book.',
+  /** On Minimum notice, while the page is link only. */
+  noticeIgnored: 'Link only pages ignore this.',
+  statusFailed: (title: string) => `Couldn’t change ${title}. Try again.`,
   publicPage: 'Public',
   linkOnly: 'Link only',
   // A page the system paused when its last host was removed (spec 0031, AC-814).
@@ -152,8 +154,9 @@ export const strings = {
    * What each choice does, true to the app: there is no booking profile, so every page is reached by its link; a link
    * only page is the one meant for people you send it to, and it alone books reserved time and skips the notice.
    */
-  publicHint: 'Anyone with the link can book, inside your hours and limits.',
-  linkOnlyHint: 'For people you send the link to. It can also book into reserved time and ignores the minimum notice.',
+  publicHint: 'Books inside your hours and limits.',
+  linkOnlyHint:
+    'Can also book your reserved time and ignores the minimum notice. Share it only with people you choose.',
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
     schedule: {

@@ -150,7 +150,6 @@ function CloseForm({
       {isHold ? (
         <Select
           label={strings.holdFor}
-          hint={strings.holdHint}
           items={[
             { id: ANY_PAGE, label: strings.anyPrivatePage },
             ...privatePages.map((each) => ({ id: each.id, label: each.title })),

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DescriptionList } from '../DescriptionList/DescriptionList.tsx';
 import { FieldGroup } from './FieldGroup.tsx';
@@ -83,5 +84,38 @@ export const Empty: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No calendars connected')).toBeInTheDocument();
+  },
+};
+
+/** Loading: a Skeleton in the content's place, the label already there, so nothing moves when it lands. */
+export const Loading: Story = {
+  render: (args) => (
+    <Stage>
+      <FieldGroup {...args}>
+        <Skeleton lines={2} />
+      </FieldGroup>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Weekly hours' })).toBeInTheDocument();
+  },
+};
+
+/** A long row wraps: many calendars, then the action that fixes it at the label row's end. */
+export const LongRow: Story = {
+  args: { label: 'Checks for conflicts in' },
+  render: (args) => (
+    <Stage>
+      <FieldGroup {...args} layout="row">
+        {['ada@acme.dev', 'Team offsites', 'Holidays in India', 'Birthdays', 'Support rota', 'Board meetings'].map(
+          (name) => (
+            <Badge key={name} text={name} dot="purple" />
+          ),
+        )}
+      </FieldGroup>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Board meetings')).toBeInTheDocument();
   },
 };
