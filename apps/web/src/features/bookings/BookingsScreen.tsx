@@ -56,7 +56,7 @@ import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { createPortal } from 'react-dom';
 import { browserZone } from '../booking/zone.ts';
-import { availabilityHref, newLinkOnlyPageHref } from '../booking/links.ts';
+import { newLinkOnlyPageHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
