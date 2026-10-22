@@ -22,6 +22,8 @@ export const strings = {
   },
   back: 'Back',
   continue: 'Continue',
+  /** Why Continue is off on the columns step. */
+  matchOneFirst: 'Choose a field for at least one column to go on.',
   // Upload (AC-1112)
   uploadText: 'The first row holds the column names. Nothing changes until you start the import.',
   dropLabel: 'Upload a CSV file',

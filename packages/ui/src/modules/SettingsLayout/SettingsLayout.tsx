@@ -90,6 +90,13 @@ export interface SettingsLayoutProps {
    * trail and the first section. `page` (the default) draws the header.
    */
   readonly header?: 'page' | 'bar';
+  /**
+   * A bar at the foot of the view: the library SaveBar, while the page holds unsaved changes. The page then takes
+   * at least the view's height, so on a short page the bar sits at the viewport's bottom, and on a long one it
+   * sticks there and follows the last section once scrolled to the end, never covering it (as PageColumn's and
+   * PreviewLayout's footers do). A SaveBar with nothing to save draws nothing and takes no room.
+   */
+  readonly footer?: ReactNode;
   /** The page's body. */
   readonly children: ReactNode;
 }
@@ -117,12 +124,20 @@ export function SettingsLayout({
   hasTile = false,
   titleRef,
   header = 'page',
+  footer,
   children,
 }: SettingsLayoutProps) {
   const showSkeleton = useDelayedLoading(isLoading);
+  const hasFooter = footer !== undefined && footer !== null && footer !== false;
+  // At the view's foot, after the body: the wrapper lets the pointer through, the bar takes it back.
+  const footerSlot = hasFooter ? <div className={styles.footer}>{footer}</div> : null;
   if (header === 'bar') {
     return (
-      <div className={styles.root} data-has-nav={nav === undefined ? undefined : true}>
+      <div
+        className={styles.root}
+        data-has-nav={nav === undefined ? undefined : true}
+        data-footer={hasFooter ? '' : undefined}
+      >
         {nav !== undefined && <SettingsNav nav={nav} currentNavId={currentNavId} navLabel={navLabel} />}
         <div
           className={styles.page}
@@ -138,6 +153,7 @@ export function SettingsLayout({
               <CardTitleLevel value={2}>{children}</CardTitleLevel>
             </PageEdge>
           </div>
+          {footerSlot}
         </div>
       </div>
     );
@@ -150,7 +166,11 @@ export function SettingsLayout({
       </span>
     ) : null;
   return (
-    <div className={styles.root} data-has-nav={nav === undefined ? undefined : true}>
+    <div
+      className={styles.root}
+      data-has-nav={nav === undefined ? undefined : true}
+      data-footer={hasFooter ? '' : undefined}
+    >
       {nav !== undefined && <SettingsNav nav={nav} currentNavId={currentNavId} navLabel={navLabel} />}
       <div className={styles.page}>
         {isLoading ? (
@@ -200,6 +220,7 @@ export function SettingsLayout({
             {titleLevel === 1 ? <CardTitleLevel value={2}>{children}</CardTitleLevel> : children}
           </PageEdge>
         </div>
+        {footerSlot}
       </div>
     </div>
   );

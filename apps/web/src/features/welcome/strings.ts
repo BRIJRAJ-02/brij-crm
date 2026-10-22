@@ -80,6 +80,7 @@ export const strings = {
   connectGoogle: 'Connect Google Calendar',
   connectingGoogle: 'Opening Google',
   connectOutlook: 'Connect Outlook',
+  outlookSoon: 'Outlook is coming soon.',
   skipCalendar: 'Skip for now',
   opening: 'Opening your workspace',
   /** What a connect that came back with `?calendar=` says. */

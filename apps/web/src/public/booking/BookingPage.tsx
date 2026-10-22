@@ -51,6 +51,7 @@ import {
   startOfDay,
   timeLabel,
   zoneDisplay,
+  zoneName,
 } from './time.ts';
 import { readReturn, returnPath, tidiedAddress, type Chosen, type ConnectResult } from './visitor.ts';
 
@@ -195,7 +196,7 @@ function zoneItems(current: string, at: number): readonly SelectItem[] {
   const listed = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
   return [current, ...listed.filter((zone) => zone !== current)].map((zone) => ({
     id: zone,
-    label: zoneDisplay(zone, at).replace(/ \(.*\)$/, ''),
+    label: zoneName(zone),
     description: offsetLabel(zone, at),
   }));
 }

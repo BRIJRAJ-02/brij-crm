@@ -88,19 +88,23 @@ export function SidebarSections({
             menu={
               <Menu
                 label={strings.sectionOptions(section.title)}
-                disabledKeys={[...(index === 0 ? ['up'] : []), ...(index === sections.length - 1 ? ['down'] : [])]}
                 onAction={(key) => {
                   if (key === 'up') moveSection(section.key, index - 1);
                   if (key === 'down') moveSection(section.key, index + 1);
                   if (key === 'customise') onCustomise();
                 }}
               >
-                <MenuItem id="up" icon="arrow-up">
-                  {strings.moveUp}
-                </MenuItem>
-                <MenuItem id="down" icon="arrow-down">
-                  {strings.moveDown}
-                </MenuItem>
+                {/* Only the moves there is room for: the first has no Move up, the last no Move down. */}
+                {index > 0 && (
+                  <MenuItem id="up" icon="arrow-up">
+                    {strings.moveUp}
+                  </MenuItem>
+                )}
+                {index < sections.length - 1 && (
+                  <MenuItem id="down" icon="arrow-down">
+                    {strings.moveDown}
+                  </MenuItem>
+                )}
                 <MenuItem id="customise" icon="sliders-horizontal">
                   {strings.customiseSidebar}
                 </MenuItem>

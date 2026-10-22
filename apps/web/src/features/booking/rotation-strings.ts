@@ -111,6 +111,9 @@ export const strings = {
       : `Every booking: ${[...fixed, ...rotations.map((name, index) => (index === 0 && fixed.length === 0 ? `one from ${name}` : `plus one from ${name}`))].join(', ')}`,
   fixedHosts: 'Fixed hosts',
   fixedHint: 'They attend every meeting.',
+  /** Why Add a fixed host or Add a group is off: the page holds its most hosts. */
+  fixedFull: (max: number) => `A page has at most ${String(max)} fixed hosts. Remove one to add another.`,
+  hostsFull: (max: number) => `A page has at most ${String(max)} hosts and groups together. Remove one to add another.`,
   addFixed: 'Add a fixed host',
   noFixed: 'None. Each booking goes to the round robin groups only.',
   moveUp: (name: string) => `Move ${name} up`,

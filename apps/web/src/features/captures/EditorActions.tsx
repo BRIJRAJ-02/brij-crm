@@ -3,7 +3,7 @@
 // applies, Publish changes where there are drafts, then a ⋯ menu.
 // Main task: copy the link, and from the menu Pause or Resume, Duplicate, and Delete (which asks first in a Modal).
 // Leaves out: the editor's status (EditorStatus in the TopBar's meta) and what each action does (the editor's).
-import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, type IconName } from '@crm/ui';
+import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip, type IconName } from '@crm/ui';
 import type { ReactNode, RefObject } from 'react';
 import { strings } from './strings.ts';
 
@@ -20,8 +20,8 @@ export interface EditorExtraAction {
 export interface EditorActionsProps {
   /** The public link Copy link copies. */
   readonly link: string;
-  /** Copy link can't copy yet (a form never published has no live link). */
-  readonly isLinkDisabled?: boolean;
+  /** Why Copy link can't copy yet (a form never published has no live link): it turns off and says this on hover. */
+  readonly linkOffReason?: string;
   /** The editor's Preview button, where it applies (a form's; a booking page shows its preview beside the editor). */
   readonly preview?: ReactNode;
   /** A primary action before the menu: a form's Publish changes, while there are unpublished edits. */
@@ -44,10 +44,18 @@ export interface EditorActionsProps {
 }
 
 /** The editors' header actions, in one order on both: Copy link, Preview, Publish changes, then ⋯. */
-export function EditorActions({ link, isLinkDisabled = false, preview, publish, menu }: EditorActionsProps) {
+export function EditorActions({ link, linkOffReason, preview, publish, menu }: EditorActionsProps) {
+  const copy = (
+    <CopyButton
+      value={link}
+      label={strings.copyLink}
+      announcement={strings.linkCopied}
+      isDisabled={linkOffReason !== undefined}
+    />
+  );
   return (
     <>
-      <CopyButton value={link} label={strings.copyLink} announcement={strings.linkCopied} isDisabled={isLinkDisabled} />
+      {linkOffReason === undefined ? copy : <Tooltip content={linkOffReason}>{copy}</Tooltip>}
       {preview}
       {publish}
       {menu !== undefined && (

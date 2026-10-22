@@ -31,6 +31,8 @@ export interface SettingsPageProps {
   readonly titleRef?: Ref<HTMLHeadingElement>;
   /** The body opens with Tabs: their underline divides the page in place of the header's hairline. */
   readonly hasTabs?: boolean;
+  /** At the view's foot: the library SaveBar, for a page that saves its changes with one Save. */
+  readonly footer?: ReactNode;
   readonly children: ReactNode;
 }
 
@@ -52,6 +54,7 @@ export function SettingsPage({
   hasTile = false,
   titleRef,
   hasTabs = false,
+  footer,
   children,
 }: SettingsPageProps) {
   const { slug = '' } = useParams({ strict: false });
@@ -90,7 +93,14 @@ export function SettingsPage({
                 </TopBar>,
                 slot,
               )}
-            <SettingsLayout header="bar" hasTabs={hasTabs} title={title} isLoading={isLoading} hasTile={hasTile}>
+            <SettingsLayout
+              header="bar"
+              hasTabs={hasTabs}
+              title={title}
+              isLoading={isLoading}
+              hasTile={hasTile}
+              footer={footer}
+            >
               {children}
             </SettingsLayout>
           </>

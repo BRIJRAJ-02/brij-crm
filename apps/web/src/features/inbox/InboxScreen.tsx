@@ -10,6 +10,7 @@ import {
   SectionBar,
   SegmentedControl,
   Switch,
+  Tooltip,
   TopBar,
   type ListSource,
   type NotificationItem,
@@ -150,15 +151,23 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
       page={{
         topBar: (
           <TopBar title={strings.inbox} icon="inbox">
-            <Button
-              icon="check"
-              isDisabled={!hasUnread}
-              onPress={() => {
-                void data.inbox.markAllRead(slug, status, kind);
-              }}
-            >
-              {strings.markAllRead}
-            </Button>
+            {hasUnread ? (
+              <Button
+                icon="check"
+                onPress={() => {
+                  void data.inbox.markAllRead(slug, status, kind);
+                }}
+              >
+                {strings.markAllRead}
+              </Button>
+            ) : (
+              // Off with nothing unread here, and says so on hover and focus.
+              <Tooltip content={strings.nothingUnread}>
+                <Button icon="check" isDisabled>
+                  {strings.markAllRead}
+                </Button>
+              </Tooltip>
+            )}
           </TopBar>
         ),
         toolbar: (

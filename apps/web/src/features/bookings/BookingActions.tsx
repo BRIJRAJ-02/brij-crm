@@ -14,6 +14,7 @@ import {
 } from '@crm/data';
 import { Button, ButtonGroup, Callout, DayStrip, Field, focusLater, Modal, SlotList } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
+import { zoneDisplay } from '../../public/booking/time.ts';
 import { strings } from './strings.ts';
 import { useNow } from './useNow.ts';
 
@@ -235,6 +236,7 @@ function MoveDialog({
   readonly onDone: () => void;
 }) {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [openedAt] = useState(() => Date.now());
   const [slots, setSlots] = useState<readonly string[] | undefined>(undefined);
   const [day, setDay] = useState<string | undefined>(undefined);
   const [time, setTime] = useState<string | undefined>(undefined);
@@ -381,7 +383,7 @@ function MoveDialog({
             layout="grid"
             isLoading={slots === undefined}
           />
-          <p>{strings.timesIn(zone)}</p>
+          <p>{strings.timesIn(zoneDisplay(zone, openedAt))}</p>
         </>
       )}
       {!failed && error !== '' && (

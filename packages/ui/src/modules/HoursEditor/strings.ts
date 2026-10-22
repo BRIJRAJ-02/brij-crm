@@ -2,6 +2,9 @@
 export const strings = {
   to: 'to',
   unavailable: 'Unavailable',
+  allDay: 'All day',
+  setHours: 'Set hours',
+  setHoursFor: (day: string) => `Set hours for ${day}`,
   midnight: 'Midnight',
   mixed: 'Mixed',
   setAll: 'Set all days',
@@ -11,7 +14,6 @@ export const strings = {
   copyTitle: 'Copy times to',
   copyHint: 'Copy to other days',
   addHint: 'Add hours',
-  noRoom: 'No room for more hours this day',
   removeHint: 'Remove these hours',
   selectAll: 'Select all',
   apply: 'Apply',

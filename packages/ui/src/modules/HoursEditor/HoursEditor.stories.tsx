@@ -198,3 +198,33 @@ export const LocaleClock: Story = {
     await expect(canvas.getByText('13:00 to 24:00')).toBeInTheDocument();
   },
 };
+
+/** A whole day reads All day with Set hours, and a day that runs to midnight has no +; Copy stays in one column. */
+export const AllDay: Story = {
+  args: {
+    rows: [
+      { id: 'mon', label: 'Monday', ranges: [['00:00', '24:00']] },
+      { id: 'tue', label: 'Tuesday', ranges: [['09:00', '17:00']] },
+      { id: 'wed', label: 'Wednesday', ranges: [['20:00', '24:00']] },
+      { id: 'sat', label: 'Saturday', ranges: [] },
+    ],
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <HoursEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByText('All day')).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Add more hours on Wednesday' })).not.toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Add more hours on Tuesday' })).toBeInTheDocument();
+    const copies = ['Monday', 'Tuesday', 'Wednesday'].map((day) =>
+      Math.round(
+        canvas.getByRole('button', { name: `Copy ${day}’s times to other days` }).getBoundingClientRect().left,
+      ),
+    );
+    await expect(new Set(copies).size).toBe(1);
+    await userEvent.click(canvas.getByRole('button', { name: 'Set hours for Monday' }));
+    await expect(args.onChange).toHaveBeenCalledWith('mon', [['09:00', '17:00']]);
+  },
+};

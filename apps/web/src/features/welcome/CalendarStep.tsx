@@ -2,7 +2,7 @@
 // Purpose: first run's Connect your calendar (spec 0036): meetings onto the people and companies a new member meets.
 // Main task: Connect Google Calendar (to Google and back here), or Skip for now; then into the workspace.
 // Leaves out: choosing calendars and sharing (Settings › Calendars), and Outlook until spec 0024 milestone 4.
-import { Button, Callout } from '@crm/ui';
+import { Button, Callout, Tooltip } from '@crm/ui';
 import { useEffect, useRef } from 'react';
 import type { ConnectResult } from './steps.ts';
 import { strings } from './strings.ts';
@@ -58,10 +58,12 @@ export function CalendarStep({ result, onConnect, isConnecting, onFinish }: Cale
           >
             {isConnecting ? strings.connectingGoogle : strings.connectGoogle}
           </Button>
-          {/* Off until Outlook sync arrives (spec 0024, milestone 4); the step's description says so. */}
-          <Button size="lg" isFullWidth="center" provider="outlook" isDisabled>
-            {strings.connectOutlook}
-          </Button>
+          {/* Off until Outlook sync arrives (spec 0024, milestone 4); the step's description and its tooltip say so. */}
+          <Tooltip content={strings.outlookSoon}>
+            <Button size="lg" isFullWidth="center" provider="outlook" isDisabled>
+              {strings.connectOutlook}
+            </Button>
+          </Tooltip>
           <Button variant="ghost" size="lg" isFullWidth="center" onPress={onFinish}>
             {strings.skipCalendar}
           </Button>

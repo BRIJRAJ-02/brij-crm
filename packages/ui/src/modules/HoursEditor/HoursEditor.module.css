@@ -13,12 +13,13 @@
     container-type: inline-size;
   }
 
+  /* Each row takes the week's columns (subgrid), so the windows and Copy sit at one place down the week whatever
+     a row holds (two windows, All day, Unavailable). */
   .row {
     display: grid;
-    grid-template-columns: var(--size-column-narrow) auto auto;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
     align-items: start;
-    justify-content: start;
-    column-gap: var(--space-8);
     row-gap: var(--space-4);
     padding-block: var(--space-4);
   }
@@ -38,11 +39,24 @@
   }
 
   .rows {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: var(--size-column-narrow) auto auto;
+    justify-content: start;
+    column-gap: var(--space-8);
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  /* A whole day: "All day" in the windows' place, with Set hours beside it. */
+  .allDay {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-control);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
   }
 
   .day {
@@ -104,7 +118,7 @@
     letter-spacing: var(--tracking-body);
   }
 
-  .rows[data-read-only] .row {
+  .rows[data-read-only] {
     grid-template-columns: var(--size-column-narrow) minmax(0, 1fr);
   }
 
@@ -130,7 +144,7 @@
   /* A narrow card: the day and Copy on one line, the windows under them at the card's start, so two times,
      "to" and + still fit a phone; A day off keeps one line. */
   @container (inline-size < 480px) {
-    .row {
+    .rows {
       grid-template-columns: minmax(0, 1fr) auto;
       justify-content: stretch;
     }
