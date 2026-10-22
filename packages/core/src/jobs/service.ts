@@ -459,17 +459,41 @@ export async function enqueue(tx: WorkspaceTx, jobId: string, runAt?: SQL): Prom
 /** How long past its time a queued job may wait before a read of it wakes the worker (spec 0008, The wake call). */
 export const OVERDUE_MS = 5_000;
 
-/** What a read of jobs may tell its caller: a queued job is overdue, so a wake call was lost (spec 0008). */
+/** What a read of jobs may tell its caller: a job waits that nothing runs, so a wake call was lost (spec 0008). */
 export interface JobReadOptions {
-  /** Called once when any job read is `queued` more than `OVERDUE_MS` past its `run_at`: the api wakes the worker. */
+  /** Called once when any job read is overdue (`isOverdue`): the api wakes the worker, or the job drain. */
   readonly onOverdue?: () => void;
 }
 
-/** Calls `onOverdue` once when a read job is queued and overdue: a lost wake heals as soon as someone looks. */
-function tellOverdue(rows: readonly Pick<JobRow, 'status' | 'runAt'>[], options: JobReadOptions | undefined): void {
+/**
+ * Whether a job waits with nothing running it, `OVERDUE_MS` past when it
+ * should have moved (spec 0008, The wake call): `queued` past its `run_at`;
+ * or `running` with no live slice: handed over (no lease) since its last
+ * update and past its `run_at` (a failed try waits for its retry until
+ * then), or holding a lease that ran out (its slice's process stopped or was
+ * frozen mid slice). On the Vercel Function a handed over job waits
+ * so after a turn's budget ends (spec 0045), so a read of it is what starts
+ * the next turn.
+ */
+export function isOverdue(
+  row: Pick<JobRow, 'status' | 'runAt' | 'leaseUntil' | 'updatedAt'>,
+  now: number = Date.now(),
+): boolean {
+  const cutoff = now - OVERDUE_MS;
+  if (row.status === 'queued') return row.runAt.getTime() < cutoff;
+  if (row.status !== 'running') return false;
+  if (row.leaseUntil !== null) return row.leaseUntil.getTime() < cutoff;
+  return row.updatedAt.getTime() < cutoff && row.runAt.getTime() < cutoff;
+}
+
+/** Calls `onOverdue` once when a read job is overdue: a lost wake heals as soon as someone looks. */
+function tellOverdue(
+  rows: readonly Pick<JobRow, 'status' | 'runAt' | 'leaseUntil' | 'updatedAt'>[],
+  options: JobReadOptions | undefined,
+): void {
   if (options?.onOverdue === undefined) return;
-  const cutoff = Date.now() - OVERDUE_MS;
-  if (rows.some((row) => row.status === 'queued' && row.runAt.getTime() < cutoff)) options.onOverdue();
+  const now = Date.now();
+  if (rows.some((row) => isOverdue(row, now))) options.onOverdue();
 }
 
 /** One job, for its starter or a holder of `jobs.manage`; NOT_FOUND otherwise (AC-114). */

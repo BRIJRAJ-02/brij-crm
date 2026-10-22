@@ -8,7 +8,8 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from './client.ts';
 import { openDirectConnection } from './direct.ts';
-import { createOutboxReader, PRUNE_BATCH, pruneOutbox, type OutboxReader } from './outbox.ts';
+import { createOutboxReader, expireUnrelayed, PRUNE_BATCH, pruneOutbox, type OutboxReader } from './outbox.ts';
+import { openQueueConnection } from './queue.ts';
 import { OUTBOX_RETENTION } from './schema/outbox.ts';
 
 const { appUrl, adminUrl, workerUrl } = inject('testDatabase');
@@ -265,6 +266,48 @@ describe('the outbox reader', () => {
       expect(left.rows).toEqual([]);
     } finally {
       await Promise.all([app.end(), worker.end()]);
+    }
+  });
+
+  it('marks unpublished rows past retention where no relay runs, so the prune takes them (spec 0045)', async () => {
+    const workspaceId = await workspaceWithEvents([]);
+    const admin = new pg.Client({ connectionString: adminUrl });
+    await admin.connect();
+    const queue = openQueueConnection({ url: workerUrl, applicationName: 'crm-outbox-expiry-tests', max: 1 });
+    try {
+      const event = (seq: number, age: string) =>
+        admin.query(
+          `insert into outbox (workspace_id, seq, kind, object_id, created_at)
+           values ($1, $2, 'records', (select id from objects where workspace_id = $1), now() - $3::interval)`,
+          [workspaceId, seq, age],
+        );
+      // Two never published and past retention, then one inside it.
+      await event(1, '3 days');
+      await event(2, `${OUTBOX_RETENTION} 1 minute`);
+      await event(3, `${OUTBOX_RETENTION} -1 minute`);
+      await expect(queue.expireUnrelayed()).resolves.toBeGreaterThanOrEqual(2);
+      const marked = await admin.query<{ seq: number; published: boolean }>(
+        'select seq::int as seq, published_at is not null as published from outbox where workspace_id = $1 order by seq',
+        [workspaceId],
+      );
+      expect(marked.rows).toEqual([
+        { seq: 1, published: true },
+        { seq: 2, published: true },
+        { seq: 3, published: false },
+      ]);
+      while ((await queue.pruneOutbox()) === PRUNE_BATCH);
+      const left = await admin.query<{ seq: number }>(
+        'select seq::int as seq from outbox where workspace_id = $1 order by seq',
+        [workspaceId],
+      );
+      expect(left.rows.map((row) => row.seq)).toEqual([3]);
+      // A batch is clamped to at least one row, and a bad id is refused before any query.
+      await event(4, '3 days');
+      await event(5, '3 days');
+      expect(await expireUnrelayed(queue.pool, workspaceId, 0)).toBe(1);
+      await expect(expireUnrelayed(queue.pool, 'nope')).rejects.toThrow(TypeError);
+    } finally {
+      await Promise.all([admin.end(), queue.close()]);
     }
   });
 

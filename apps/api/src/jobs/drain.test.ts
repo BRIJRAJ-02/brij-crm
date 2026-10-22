@@ -9,7 +9,17 @@ import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
 import { composeJobTasks, type JobTasks } from './compose.ts';
-import { createDrainWake, createJobDrain, type DrainReport, type JobDrain } from './drain.ts';
+import type { QueueConnection } from '@crm/db';
+import {
+  createDrainWake,
+  createDueWake,
+  createJobDrain,
+  DUE_LOOK_MS,
+  DUE_WAKE_MS,
+  type DrainReport,
+  type JobDrain,
+  unrelayedSweep,
+} from './drain.ts';
 import type { JobsLog } from './graphile.ts';
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 
@@ -47,11 +57,12 @@ function drainWith(send: (payload: unknown) => Promise<void>): JobDrain {
   });
 }
 
-async function queueBookingMail(marker: string): Promise<void> {
-  await testQuery(ownerUrl, `select graphile_worker.add_job($1, json_build_object('marker', $2::text))`, [
-    BOOKING_MAIL_TASK,
-    marker,
-  ]);
+async function queueBookingMail(marker: string, runAt?: string): Promise<void> {
+  await testQuery(
+    ownerUrl,
+    `select graphile_worker.add_job($1, json_build_object('marker', $2::text), run_at => coalesce($3::timestamptz, now()))`,
+    [BOOKING_MAIL_TASK, marker, runAt ?? null],
+  );
 }
 
 async function queueRows(): Promise<number> {
@@ -114,6 +125,42 @@ describe('the job drain', () => {
     expect(await queueRows()).toBe(0);
   });
 
+  it('remembers when a row queued for later comes due, on this instance clock, and runs it only then', async () => {
+    await queueBookingMail('reminder', new Date(Date.now() + 60 * 60_000).toISOString());
+    const sent: unknown[] = [];
+    const drain = drainWith((payload) => {
+      sent.push(payload);
+      return Promise.resolve();
+    });
+    expect(drain.nextDue()).toBeUndefined();
+    expect((await drain.run({ budgetMs: 10_000 })).outcome).toBe('nothing');
+    const due = drain.nextDue();
+    // An hour out, give or take the two clocks and the test's own time.
+    expect(due).toBeGreaterThan(Date.now() + 55 * 60_000);
+    expect(due).toBeLessThan(Date.now() + 65 * 60_000);
+    expect(sent).toEqual([]);
+    // Its time comes: the next turn runs it, and then knows of nothing more.
+    await testQuery(ownerUrl, `update graphile_worker._private_jobs set run_at = now()`);
+    expect((await drain.run({ budgetMs: 15_000 })).outcome).toBe('idle');
+    expect(sent).toEqual([{ marker: 'reminder' }]);
+    expect(drain.nextDue()).toBeUndefined();
+  });
+
+  it('frees a row a frozen slice left locked, so the job it held runs again', async () => {
+    await queueBookingMail('frozen');
+    await testQuery(
+      ownerUrl,
+      `update graphile_worker._private_jobs set locked_at = now() - interval '10 minutes', locked_by = 'gone'`,
+    );
+    const sent: unknown[] = [];
+    const report = await drainWith((payload) => {
+      sent.push(payload);
+      return Promise.resolve();
+    }).run({ budgetMs: 15_000 });
+    expect(report.outcome).toBe('idle');
+    expect(sent).toEqual([{ marker: 'frozen' }]);
+  });
+
   it('runs the scheduled turn for at least its minimum, even with nothing due', async () => {
     const report = await drainWith(() => Promise.resolve()).run({ budgetMs: 10_000, minimumMs: 1_000 });
     expect(report.outcome).toBe('idle');
@@ -132,6 +179,7 @@ describe('the after request trigger', () => {
         return Promise.resolve({ outcome: 'idle', ms: 18_000 });
       },
       running: () => false,
+      nextDue: () => undefined,
     };
     const kept: Promise<unknown>[] = [];
     const wake = createDrainWake({
@@ -162,6 +210,7 @@ describe('the after request trigger', () => {
           : Promise.resolve({ outcome: 'nothing', ms: 1 });
       },
       running: () => false,
+      nextDue: () => undefined,
     };
     const kept: Promise<unknown>[] = [];
     const wake = createDrainWake({
@@ -186,7 +235,11 @@ describe('the after request trigger', () => {
 
   it('logs a failed turn and never rejects what it hands the platform', async () => {
     const errors: string[] = [];
-    const drain: JobDrain = { run: () => Promise.reject(new Error('down')), running: () => false };
+    const drain: JobDrain = {
+      run: () => Promise.reject(new Error('down')),
+      running: () => false,
+      nextDue: () => undefined,
+    };
     const kept: Promise<unknown>[] = [];
     const wake = createDrainWake({
       drain,
@@ -198,5 +251,84 @@ describe('the after request trigger', () => {
     wake();
     await expect(kept[0]).resolves.toBeUndefined();
     expect(errors).toEqual(['jobs.drain.failed']);
+  });
+});
+
+describe('the wake from use', () => {
+  function counting(due: () => number | undefined) {
+    let clock = 1_000_000;
+    let wakes = 0;
+    const wake = createDueWake({
+      drain: { nextDue: due },
+      wake: () => {
+        wakes += 1;
+      },
+      now: () => clock,
+    });
+    return {
+      wake,
+      wakes: () => wakes,
+      pass: (ms: number) => {
+        clock += ms;
+      },
+      at: () => clock,
+    };
+  }
+
+  it('looks at most every 2 minutes while nothing is known due', () => {
+    const use = counting(() => undefined);
+    use.wake();
+    use.wake();
+    expect(use.wakes()).toBe(1);
+    use.pass(DUE_LOOK_MS - 1);
+    use.wake();
+    expect(use.wakes()).toBe(1);
+    use.pass(1);
+    use.wake();
+    expect(use.wakes()).toBe(2);
+  });
+
+  it('wakes the drain within 10 seconds of a known row coming due, and not before it does', () => {
+    const known: { due?: number } = {};
+    const use = counting(() => known.due);
+    use.wake();
+    known.due = use.at() + 30_000;
+    use.pass(DUE_WAKE_MS);
+    use.wake();
+    // Known, but not due yet.
+    expect(use.wakes()).toBe(1);
+    use.pass(20_000);
+    use.wake();
+    expect(use.wakes()).toBe(2);
+    // Still due (the turn it started hasn't run it yet): asked again only after 10 seconds.
+    use.pass(DUE_WAKE_MS - 1);
+    use.wake();
+    expect(use.wakes()).toBe(2);
+    use.pass(1);
+    use.wake();
+    expect(use.wakes()).toBe(3);
+  });
+});
+
+describe('the sweep where no relay runs', () => {
+  it('marks the outbox rows past retention once, before its first prune batch, then only prunes', async () => {
+    const calls: string[] = [];
+    const queue = {
+      expireUnrelayed: () => {
+        calls.push('expire');
+        return Promise.resolve(3);
+      },
+      pruneOutbox: () => {
+        calls.push('prune');
+        return Promise.resolve(0);
+      },
+    } as Partial<QueueConnection> as QueueConnection;
+    const sweep = unrelayedSweep(queue);
+    await sweep.pruneOutbox();
+    await sweep.pruneOutbox();
+    expect(calls).toEqual(['expire', 'prune', 'prune']);
+    // A sweep of its own each turn: the next day's cleanup marks again.
+    await unrelayedSweep(queue).pruneOutbox();
+    expect(calls).toEqual(['expire', 'prune', 'prune', 'expire', 'prune']);
   });
 });

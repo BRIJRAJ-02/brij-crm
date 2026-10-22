@@ -102,6 +102,11 @@ function errorResponse(code: ErrorCode, message: string): Response {
   return Response.json({ code, message }, { status: errorStatus(code) });
 }
 
+/** Work after the answer on a long running server: nothing holds it, and it runs on (it never rejects). */
+const RUNS_ON = (work: Promise<unknown>): void => {
+  void work.catch(() => undefined);
+};
+
 /** A path as logs and error reports may hold it: a guest's manage token (their key to a booking) stands as `:token`. */
 export function redactedPath(path: string): string {
   return path.replace(/(\/public\/booking\/manage\/)[^/]+/, '$1:token');
@@ -125,6 +130,12 @@ export interface AppServices {
   readonly wakeOnUse?: WakeRelay;
   /** The wake a read of an overdue job sends: `wakeRelay` at most every 10 seconds for this process unless given. */
   readonly wakeOverdue?: WakeRelay;
+  /**
+   * Keeps the process alive until work a request started after answering
+   * settles (Vercel's `waitUntil`, spec 0045). Absent, as on a long running
+   * server, the work simply runs on.
+   */
+  readonly keepAlive?: (work: Promise<unknown>) => void;
   /**
    * Where the door reads object, field and record rules (spec 0009), always
    * named: the server passes `APP_RULES` (rules.ts, none until #24), the same
@@ -209,6 +220,7 @@ export function createApp({
   // Off in production until the owner turns the worker's jobs on (WORKER_WAKE_ON_USE).
   const wakeOnUse = services.wakeOnUse ?? (wakesOnUse(env) ? throttleWake(wakeRelay) : NO_WAKE);
   const wakeOverdue = services.wakeOverdue ?? throttleWake(wakeRelay, OVERDUE_WAKE_MS);
+  const keepAlive = services.keepAlive ?? RUNS_ON;
   // Centrifugo's tokens, where live updates are on (spec 0005).
   const realtime =
     env.CENTRIFUGO_TOKEN_SECRET === undefined
@@ -345,6 +357,7 @@ export function createApp({
         wakeRelay,
         wakeOnUse,
         wakeOverdue,
+        keepAlive,
         analytics,
         environment: env.APP_ENV,
         requestId: c.get('requestId'),

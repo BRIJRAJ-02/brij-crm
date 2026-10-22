@@ -7,11 +7,25 @@
 // the worker runs (`startJobRunners`, fewer at once), and stops them once
 // nothing it runs is due, or when its time budget is spent; the slices in hand
 // then finish their batch and hand their jobs back, as at a worker's shutdown.
-// The daily cleanup's cron line rides along: a turn started after 03:00 UTC
-// backfills the day's run (one day of fill). No relay runs here: live updates
-// are off while the api is on Vercel, so a stored change event wakes nothing.
+// The cron lines ride along: a turn started after 03:00 UTC backfills the
+// daily cleanup's run (one day of fill), and any turn that starts the runners
+// backfills the hour's digest run (one hour of fill). No relay runs here: live
+// updates are off while the api is on Vercel, so a stored change event wakes
+// nothing, and the daily cleanup also clears the outbox rows no relay will
+// ever publish once they are past retention (`unrelayedSweep`).
+//
+// Nothing runs between turns, so the drain remembers when the earliest queue
+// row it saw comes due (`nextDue`), and `createDueWake` starts a turn from a
+// signed in request once that time has passed: a reminder or a delayed email
+// goes out with the next use of the app, or at the scheduled run.
 import type { QueueRows } from '@crm/core';
-import { assertWorkerConnection, openDirectConnection, openQueueConnection, type QueueConnection } from '@crm/db';
+import {
+  assertWorkerConnection,
+  openDirectConnection,
+  openQueueConnection,
+  PRUNE_BATCH,
+  type QueueConnection,
+} from '@crm/db';
 import { errorFields } from '../log.ts';
 import type { JobTasks } from './compose.ts';
 import { startJobRunners, type JobsLog } from './graphile.ts';
@@ -72,6 +86,8 @@ export interface JobDrainOptions {
   readonly pollMs?: number;
   /** The clock, for tests. */
   readonly now?: () => number;
+  /** The wall clock in epoch milliseconds, which `nextDue` answers in; for tests. */
+  readonly wallNow?: () => number;
 }
 
 /** The drain: one turn at a time per instance. */
@@ -80,6 +96,13 @@ export interface JobDrain {
   run(turn: DrainTurn): Promise<DrainReport>;
   /** Whether a turn runs in this instance now. */
   running(): boolean;
+  /**
+   * When the earliest unlocked queue row this instance last saw comes due, in
+   * epoch milliseconds on this instance's clock, or undefined when it saw none
+   * (or has not looked yet). A row queued since, by another instance, isn't
+   * known here.
+   */
+  nextDue(): number | undefined;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -88,8 +111,11 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export function createJobDrain(options: JobDrainOptions): JobDrain {
   const { log } = options;
   const now = options.now ?? (() => performance.now());
+  const wallNow = options.wallNow ?? Date.now;
   const pollMs = options.pollMs ?? DRAIN_POLL_MS;
   let current: Promise<DrainReport> | undefined;
+  // What the last due check saw: the earliest unlocked row's time, moved onto this instance's clock.
+  let nextDue: number | undefined;
   // The queue of the turn in hand, for the daily cleanup's requeue phase; between turns it is closed.
   let open: QueueConnection | undefined;
   const tasks = options.compose({
@@ -124,6 +150,7 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
   /** Due now: an unlocked row of a task these runners take, with attempts left, whose time has come. */
   const dueNow = async (queue: QueueConnection) => {
     const check = await queue.sleepCheck({ outbox: false, tasks: tasks.tasks });
+    nextDue = check.nextRunAt === undefined ? undefined : wallNow() + (check.nextRunAt.getTime() - check.now.getTime());
     return check.nextRunAt !== undefined && check.nextRunAt.getTime() <= check.now.getTime();
   };
 
@@ -145,6 +172,10 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
     });
     open = queue;
     try {
+      // A slice frozen with its instance (or killed) left its queue row locked, which reads as not due: its locks go
+      // once older than any live call, so the job it held runs again (its lease ran out long before).
+      const released = await queue.releaseStaleLocks();
+      if (released > 0) log.warn('jobs.locks.released', { workers: released });
       if (minimumMs === undefined && !(await dueNow(queue))) return report('nothing');
       // Set by a runner that stopped on its own; read between checks.
       const runner = { failed: false };
@@ -156,7 +187,7 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
         bookingMail: tasks.bookingMail,
         ...(tasks.email === undefined ? {} : { email: tasks.email }),
         notificationEmail: tasks.notificationEmail,
-        daily: tasks.daily(queue),
+        daily: tasks.daily(unrelayedSweep(queue)),
         ...(tasks.calendar === undefined ? {} : { calendar: tasks.calendar }),
         ...(options.onFault === undefined ? {} : { onFault: options.onFault }),
         onFailed: () => {
@@ -208,6 +239,29 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
       return running;
     },
     running: () => current !== undefined,
+    nextDue: () => nextDue,
+  };
+}
+
+/**
+ * The daily cleanup's sweep where no relay runs (spec 0045): the outbox
+ * prune deletes published rows only, and nothing publishes here, so before
+ * its first prune batch the outbox rows past retention are marked published
+ * (`expireUnrelayed`: delivered to nobody, since no live connection exists to
+ * hear them). The prune then takes them as it would after a relay, so the
+ * outbox stays about a day long. Later batches only prune.
+ */
+export function unrelayedSweep(queue: QueueConnection): QueueConnection {
+  let expired = false;
+  return {
+    ...queue,
+    async pruneOutbox() {
+      if (!expired) {
+        expired = true;
+        await queue.expireUnrelayed(PRUNE_BATCH);
+      }
+      return queue.pruneOutbox();
+    },
   };
 }
 
@@ -280,5 +334,49 @@ export function createDrainWake(options: DrainWakeOptions): () => void {
     })();
     pending = work;
     options.keepAlive(work);
+  };
+}
+
+/** What the wake from use needs: the drain's knowledge of the next due row, and the wake to send. */
+export interface DueWakeOptions {
+  readonly drain: Pick<JobDrain, 'nextDue'>;
+  /** The after request wake (`createDrainWake`). */
+  readonly wake: () => void;
+  /** The longest between two looks while the app is in use (2 minutes): a row another instance queued is seen so. */
+  readonly everyMs?: number;
+  /** The shortest between two wakes for a row known due (10 seconds), so a busy turn isn't asked again each request. */
+  readonly soonestMs?: number;
+  /** The wall clock in epoch milliseconds (the drain's `nextDue` clock), for tests. */
+  readonly now?: () => number;
+}
+
+/** How often a signed in request looks for due work at most, with none known due, per instance. */
+export const DUE_LOOK_MS = 120_000;
+
+/** How often a signed in request wakes the drain at most for work known due, per instance. */
+export const DUE_WAKE_MS = 10_000;
+
+/**
+ * The function's wake from use (spec 0045, in place of spec 0008's once a
+ * minute poke): nothing runs between turns, so a job queued for later (a
+ * booking reminder, the 5 minute delayed mention, comment and task emails, a
+ * retry's backoff) waits for whatever starts the next one. Every signed in
+ * request calls this: it wakes the drain once the earliest row the drain saw
+ * has come due (at most every 10 seconds), and otherwise at most every 2
+ * minutes, to see rows other instances queued. A wake with nothing due costs
+ * one check and ends without starting the runners.
+ */
+export function createDueWake(options: DueWakeOptions): () => void {
+  const now = options.now ?? Date.now;
+  const everyMs = options.everyMs ?? DUE_LOOK_MS;
+  const soonestMs = options.soonestMs ?? DUE_WAKE_MS;
+  let last = Number.NEGATIVE_INFINITY;
+  return () => {
+    const at = now();
+    const due = options.drain.nextDue();
+    const gap = due !== undefined && due <= at ? soonestMs : everyMs;
+    if (at - last < gap) return;
+    last = at;
+    options.wake();
   };
 }

@@ -60,6 +60,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * from sleeping or resets the relay's poll on every call.
    */
   wakeOverdue: WakeRelay;
+  /**
+   * Keeps the process alive until work started after the answer settles
+   * (`waitUntil` on Vercel, spec 0045; on a long running server it just runs).
+   * Anything a procedure doesn't await, such as an email, goes through it.
+   */
+  keepAlive: (work: Promise<unknown>) => void;
   /** Product events (spec 0010): a write sends the milestones it reached once it commits (`hooks.ts`). */
   analytics: Analytics;
   environment: AppEnvironment;

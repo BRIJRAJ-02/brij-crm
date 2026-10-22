@@ -9,7 +9,7 @@
 // queue holds nothing else.
 import pg from 'pg';
 import { assertDirectUrl, CONNECT_TIMEOUT_MS } from './direct.ts';
-import { pruneOutbox } from './outbox.ts';
+import { expireUnrelayed, PRUNE_BATCH, pruneOutbox } from './outbox.ts';
 
 /** The schema Graphile Worker keeps its queue in. */
 export const QUEUE_SCHEMA = 'graphile_worker';
@@ -60,6 +60,13 @@ export interface QueueConnection {
   /** One outbox prune batch (`pruneOutbox`, spec 0007) on this connection: only crm_worker may run it. */
   pruneOutbox(): Promise<number>;
   /**
+   * Where no relay runs (spec 0045): marks the outbox rows past retention
+   * that nothing published, in every workspace with any waiting
+   * (`crm_outbox_workspaces`), at most `max` a batch, until none is left
+   * (`expireUnrelayed`), so `pruneOutbox` can delete them. Answers how many.
+   */
+  expireUnrelayed(max?: number): Promise<number>;
+  /**
    * What the worker reads before it sleeps (spec 0008, Letting the database
    * sleep), in one round trip: whether any queue row or queue is locked (a
    * call in flight, or a stale lock not yet released), when the earliest
@@ -93,6 +100,9 @@ export interface SleepCheck {
   /** The database's clock, so the worker compares times on one clock. */
   readonly now: Date;
 }
+
+/** How many workspaces one page of `crm_outbox_workspaces` lists (its most). */
+const WORKSPACE_PAGE = 500;
 
 /** The most dead queue rows one round deletes. */
 export const DEAD_BATCH = 1_000;
@@ -203,6 +213,30 @@ export function openQueueConnection(options: {
       return result.rows.map((row) => row.id);
     },
     pruneOutbox: () => pruneOutbox(pool),
+    async expireUnrelayed(max) {
+      let marked = 0;
+      const seen = new Set<string>();
+      let after: string | undefined;
+      for (;;) {
+        // The function wraps round after the last id, so a page that repeats one has seen them all.
+        const page = await pool.query<{ id: string }>('select id from public.crm_outbox_workspaces($1, $2) as w(id)', [
+          WORKSPACE_PAGE,
+          after ?? null,
+        ]);
+        const ids = page.rows.map((row) => row.id);
+        const fresh = ids.filter((id) => !seen.has(id));
+        for (const id of fresh) {
+          seen.add(id);
+          for (;;) {
+            const batch = await expireUnrelayed(pool, id, max);
+            marked += batch;
+            if (batch < (max ?? PRUNE_BATCH)) break;
+          }
+        }
+        if (ids.length < WORKSPACE_PAGE || fresh.length < ids.length) return marked;
+        after = ids.at(-1);
+      }
+    },
     async sleepCheck({ outbox, stuck = [], tasks }) {
       const result = await pool.query<{
         locked: boolean;

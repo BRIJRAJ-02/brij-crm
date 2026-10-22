@@ -23,7 +23,12 @@ const FUNCTION_LEAVES_OUT: Readonly<Record<string, string>> = {
 };
 
 /** The services the function gives that `server.ts` doesn't. Add one only with its reason. */
-const FUNCTION_ADDS: Readonly<Record<string, string>> = {};
+const FUNCTION_ADDS: Readonly<Record<string, string>> = {
+  // Nothing runs between drain turns, so a signed in request starts one once queued work comes due (spec 0045).
+  wakeOnUse: 'the job drain wakes from use when work is due, in place of the worker poke',
+  // An instance may be frozen once it answers, so work started after the answer runs inside waitUntil.
+  keepAlive: "Vercel's waitUntil; a long running server needs none",
+};
 
 const source = (file: string) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8');
 

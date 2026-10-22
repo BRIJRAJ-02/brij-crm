@@ -87,8 +87,9 @@ export const workspaceRouter = member.workspace.router({
       deleteWorkspace(context.scope, { confirmName: input.confirmName }, hooks, sourceOf(context)),
     );
     await followInDirectory('delete', () => context.directory.setWorkspaceDeleted(context.scope.workspaceId, true));
-    // Each member is told (AC-823), after the commit and without holding up the answer.
-    void tellMembersDeleted(context, deletion);
+    // Each member is told (AC-823), after the commit and without holding up the answer; on Vercel the instance stays
+    // up until the last one is sent.
+    context.keepAlive(tellMembersDeleted(context, deletion));
     return deletion.deleted;
   }),
 });
