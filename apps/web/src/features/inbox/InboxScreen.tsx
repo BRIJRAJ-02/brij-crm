@@ -151,6 +151,7 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
 
   return (
     <WorkspacePage
+      currentPage="inbox"
       page={{
         topBar: (
           <TopBar title={strings.inbox} icon="inbox">
