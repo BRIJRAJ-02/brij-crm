@@ -14,6 +14,8 @@ import {
   type SubmissionView,
 } from '@crm/data';
 import {
+  AttributeDisplay,
+  Avatar,
   BulkActionBar,
   Button,
   Callout,
@@ -26,6 +28,7 @@ import {
   RecordChip,
   RelativeTime,
   LinkListToolbar,
+  Separator,
   Select,
   Table,
   TruncatedText,
@@ -34,9 +37,10 @@ import {
 // eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
 import { StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
+import { answerFiling } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
@@ -59,6 +63,8 @@ export interface SubmissionsTabProps {
   }[];
   /** The form's public link, for the empty state's Copy link. */
   readonly link: string;
+  /** The form's name, under a submission's sender in its panel. */
+  readonly formName: string;
   /** Follows a job this tab started to its end; the editor holds it, so a tab change never loses the result. */
   readonly followJob: (jobId: string, onDone: (job: JobView) => void) => void;
   /** The live form adds submissions to the CRM; one that keeps them only offers no Add to CRM or sync. */
@@ -127,6 +133,7 @@ export function SubmissionsTab({
   canManage,
   questions,
   link: formLink,
+  formName,
   followJob,
   isFiling,
   hasSubmissions,
@@ -569,7 +576,14 @@ export function SubmissionsTab({
       )}
       {open !== undefined && (
         <Panel
-          title={strings.submission}
+          title={open.mainRecord?.name ?? nameOf(open) ?? open.email ?? strings.submission}
+          leading={<Avatar name={open.mainRecord?.name ?? nameOf(open) ?? open.email ?? strings.submission} />}
+          subtitle={
+            <>
+              {formName} · <RelativeTime value={open.receivedAt} />
+            </>
+          }
+          actions={<StatusDot hue={stateHue(open, isFiling)}>{stateLabel(open, isFiling)}</StatusDot>}
           isStacked
           isOpen
           onClose={() => {
@@ -604,7 +618,7 @@ export function SubmissionsTab({
                         {strings.markSpam}
                       </Button>
                     )}
-                    <Button variant="ghost" icon="trash" onPress={() => setConfirmingDelete(true)}>
+                    <Button variant="danger" icon="trash" onPress={() => setConfirmingDelete(true)}>
                       {strings.deleteSubmission}
                     </Button>
                   </>
@@ -682,7 +696,42 @@ export function SubmissionsTab({
   );
 }
 
-/** One submission: its answers in question order (Not filed marked), where it came from, and the records it touched. */
+/** The field set's attribute type an answer shows as, where it has one: an email, a phone and a website as links. */
+const ANSWER_DISPLAY = { email: 'email', phone: 'phone', website: 'url' } as const;
+
+/** An answer's value as the panel shows it: through the field set for email, phone and website, else as words. */
+function answerValue(answer: SubmissionAnswer): ReactNode {
+  const type = (ANSWER_DISPLAY as Partial<Record<string, 'email' | 'phone' | 'url'>>)[answer.answerType];
+  const text = answerText(answer);
+  if (type === undefined || text === '') return text === '' ? strings.noAnswer : text;
+  return (
+    <AttributeDisplay
+      attribute={{
+        id: answer.questionId,
+        name: answer.label,
+        type,
+        allowMultiple: false,
+        isRequired: false,
+        isUnique: false,
+        isReadOnly: true,
+      }}
+      value={(type === 'phone' ? answer.value : text) as never}
+      surface="panel"
+    />
+  );
+}
+
+/** What copying an answer copies: an email as typed, a phone as its full international number. */
+function answerCopy(answer: SubmissionAnswer): { readonly value: string; readonly label: string } | undefined {
+  if (answer.answerType !== 'email' && answer.answerType !== 'phone') return undefined;
+  const text = answerText(answer);
+  return text === '' ? undefined : { value: text, label: strings.copyAnswer(answer.label) };
+}
+
+/**
+ * One submission, every row stacked the same way: what went wrong when it did, its answers in question order
+ * (filing said once for the section, the exceptions marked), the records it touched, and where it came from.
+ */
 function SubmissionDetail({
   submission,
   link,
@@ -693,6 +742,7 @@ function SubmissionDetail({
   readonly isFiling: boolean;
 }) {
   const source = cameFromOf(submission);
+  const filing = answerFiling(submission.answers, submission.crm, isFiling);
   return (
     <>
       {submission.failure !== undefined && (
@@ -700,39 +750,58 @@ function SubmissionDetail({
           {submission.failure}
         </Callout>
       )}
-      <DescriptionList
-        items={[
-          { term: strings.state, description: stateLabel(submission, isFiling) },
-          { term: strings.when, description: <RelativeTime value={submission.receivedAt} /> },
-        ]}
-      />
-      <FieldGroup label={strings.answers} tone="heading" headingLevel={3}>
+      <FieldGroup
+        label={strings.answers}
+        tone="heading"
+        headingLevel={3}
+        {...(filing.note === undefined ? {} : { meta: filing.note })}
+      >
         <DescriptionList
           layout="stacked"
-          items={submission.answers.map((answer) => ({
-            term: answer.attributeId === undefined ? `${answer.label} · ${strings.notFiledMark}` : answer.label,
-            description: answerText(answer),
-          }))}
+          items={submission.answers.map((answer) => {
+            const copy = answerCopy(answer);
+            return {
+              id: answer.questionId,
+              term: filing.marked.has(answer.questionId) ? `${answer.label} · ${filing.mark}` : answer.label,
+              description: answerValue(answer),
+              ...(copy === undefined ? {} : { copy }),
+            };
+          })}
         />
       </FieldGroup>
-      {source.length > 0 && (
-        <FieldGroup label={strings.cameFrom} tone="heading" headingLevel={3}>
-          {/* Plain text, never links: a page's address came from the visitor's browser. */}
-          <DescriptionList items={[...source]} />
-        </FieldGroup>
+      {(submission.records.length > 0 || submission.crm.state === 'filing') && (
+        <>
+          <Separator />
+          <FieldGroup
+            label={strings.records}
+            tone="heading"
+            headingLevel={3}
+            {...(submission.records.length > 0 ? {} : { hint: strings.answersFiling })}
+          >
+            {submission.records.length > 0 ? (
+              <DescriptionList
+                layout="stacked"
+                items={submission.records.map((touched) => {
+                  const href = link(touched.record.objectId, touched.record.recordId);
+                  return {
+                    id: `${touched.record.recordId}:${touched.action}`,
+                    term: strings.recordAction[touched.action],
+                    description: <RecordChip display={touched.record} {...(href === undefined ? {} : { href })} />,
+                  };
+                })}
+              />
+            ) : null}
+          </FieldGroup>
+        </>
       )}
-      {submission.records.length > 0 && (
-        <FieldGroup label={strings.records} tone="heading" headingLevel={3}>
-          <DescriptionList
-            items={submission.records.map((touched) => {
-              const href = link(touched.record.objectId, touched.record.recordId);
-              return {
-                term: strings.recordAction[touched.action],
-                description: <RecordChip display={touched.record} {...(href === undefined ? {} : { href })} />,
-              };
-            })}
-          />
-        </FieldGroup>
+      {source.length > 0 && (
+        <>
+          <Separator />
+          <FieldGroup label={strings.cameFrom} tone="heading" headingLevel={3}>
+            {/* Plain text, never links: a page's address came from the visitor's browser. */}
+            <DescriptionList layout="stacked" items={[...source]} />
+          </FieldGroup>
+        </>
       )}
     </>
   );

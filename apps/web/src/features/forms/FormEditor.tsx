@@ -457,6 +457,7 @@ export function FormEditor(props: FormEditorProps) {
             canManage={canManage}
             questions={(form.live ?? form.draft).questions}
             link={data.forms.hostedUrl(form.publicKey)}
+            formName={form.name}
             followJob={jobs.follow}
             isFiling={form.live?.targets.main !== undefined}
             hasSubmissions={form.submissionCount > 0}

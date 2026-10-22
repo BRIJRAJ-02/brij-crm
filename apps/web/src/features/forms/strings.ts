@@ -440,7 +440,21 @@ export const strings = {
     who === undefined ? 'Delete this submission?' : `Delete the submission from ${who}?`,
   deleteSubmissionText: 'Its answers are gone for good; the people and records it made stay.',
   deleteSubmissionAction: 'Delete submission',
-  notFiledMark: 'Not filed',
+  /** Marks the answers that differ from the rest: saved on the record, or not. */
+  savedMark: 'Saved',
+  notSavedMark: 'Not saved',
+  /** Names an answer's copy button. */
+  copyAnswer: (label: string) => `Copy ${label}`,
+  /** An answer left empty. */
+  noAnswer: 'No answer',
+  /** After Answers, once for the section: what went to the CRM. */
+  answersKeptOnly: 'Not added to the CRM',
+  answersNotInCrm: 'Not in the CRM',
+  answersAllSaved: 'All saved on the record',
+  answersNoneSaved: 'None saved on the record',
+  answersSomeSaved: (saved: number, total: number) => `${String(saved)} of ${String(total)} saved on the record`,
+  /** Under Records while the job adds it. */
+  answersFiling: 'Adding it to the CRM now.',
   yes: 'Yes',
   no: 'No',
   released: 'Released. It is being processed.',
