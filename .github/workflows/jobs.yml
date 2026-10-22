@@ -1,6 +1,6 @@
 # The scheduled job run (spec 0045). While the api runs as a Vercel Function there is no worker process, so once
 # an hour (at minute 7, off GitHub's busy top of the hour) this asks production's api to run its job queue for a bounded turn: scheduled calendar syncs, booking
-# emails that a request's own turn didn't finish, retries, and the daily cleanup after 03:00 UTC. A request that
+# emails that a request's own turn didn't finish, retries, the hour's digest, and the daily cleanup after 03:00 UTC. A request that
 # queues work already starts a turn of its own after it answers; this is the floor under that, so a queued job
 # waits at most about an hour when nobody uses the app (hourly, not more often, so Neon's free compute can sleep). GitHub may start a scheduled run late, or skip one when
 # it is busy. Behind a proxied API (Railway or Render, API_ORIGIN_INTERNAL set), the worker runs the jobs and that
@@ -26,7 +26,7 @@ jobs:
   run:
     name: run (${{ matrix.target }})
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 6
     strategy:
       fail-fast: false
       matrix:
@@ -48,15 +48,20 @@ jobs:
             echo "::notice::${{ matrix.secret }} isn't set, so there is no job run to call."
             exit 0
           fi
-          # The secret goes in a header read from stdin, never on the command line or in the log.
-          status=$(printf 'x-crm-jobs-secret: %s\n' "$JOBS_RUN_SECRET" | curl -sS -o body.json -w '%{http_code}' \
-            --max-time 120 -X POST -H @- "$JOBS_URL")
-          code=$(jq -r '.code // empty' body.json 2>/dev/null || true)
-          if [ "$status" = 200 ]; then
-            echo "Job run: $(jq -c '{outcome, ms}' body.json)"
-          elif [ "$code" = NOT_FOUND ] || [ "$code" = FORBIDDEN_ORIGIN ]; then
-            echo "::notice::No job endpoint here: the api runs behind a proxy, where the worker runs the jobs."
-          else
-            echo "::error::The job run answered $status ${code:-with no code}."
-            exit 1
-          fi
+          # The secret goes in a header read from stdin, never on the command line or in the log. A turn that ends on
+          # its budget left work due (a long import, a backlog of reminders), so the run calls again, up to 4 turns.
+          for turn in 1 2 3 4; do
+            status=$(printf 'x-crm-jobs-secret: %s\n' "$JOBS_RUN_SECRET" | curl -sS -o body.json -w '%{http_code}' \
+              --max-time 120 -X POST -H @- "$JOBS_URL")
+            code=$(jq -r '.code // empty' body.json 2>/dev/null || true)
+            if [ "$status" = 200 ]; then
+              echo "Job run $turn: $(jq -c '{outcome, ms}' body.json)"
+              [ "$(jq -r '.outcome' body.json)" = budget ] || break
+            elif [ "$code" = NOT_FOUND ] || [ "$code" = FORBIDDEN_ORIGIN ]; then
+              echo "::notice::No job endpoint here: the api runs behind a proxy, where the worker runs the jobs."
+              break
+            else
+              echo "::error::The job run answered $status ${code:-with no code}."
+              exit 1
+            fi
+          done

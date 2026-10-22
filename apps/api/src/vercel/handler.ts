@@ -1,8 +1,11 @@
 // The api as a Vercel Function (spec 0045): the same Hono app `server.ts`
 // serves, built once per function instance from the validated environment,
 // plus what a host without a worker needs. Writes start a bounded job drain
-// after the response (`waitUntil`), and `POST /api/internal/jobs/run`, which
-// the scheduled workflow calls with `JOBS_RUN_SECRET`, runs one turn of it.
+// after the response (`waitUntil`), a signed in request starts one once a
+// queued row has come due (`createDueWake`), and `POST /api/internal/jobs/run`,
+// which the scheduled workflow calls with `JOBS_RUN_SECRET`, runs one turn of
+// it. Work a request starts after answering (the new device alert, the
+// workspace deleted notice) is kept alive the same way.
 // No relay and no Centrifugo: live updates stay off while the api runs here.
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { type ErrorCode, errorStatus } from '@crm/contracts';
@@ -14,8 +17,7 @@ import { createAuth } from '../auth/auth.ts';
 import { createEdgeGuard } from '../edge.ts';
 import { ApiEnv, FunctionEnv } from '../env.ts';
 import { composeJobTasks } from '../jobs/compose.ts';
-import { createDrainWake, createJobDrain, type DrainReport, type JobDrain } from '../jobs/drain.ts';
-import { DAILY_CRON_HOUR_UTC } from '../jobs/graphile.ts';
+import { createDrainWake, createDueWake, createJobDrain, type DrainReport, type JobDrain } from '../jobs/drain.ts';
 import { errorFields, log } from '../log.ts';
 import { createMailer } from '../mail/mailer.ts';
 import { createAnalytics, POSTHOG_EU_HOST } from '../monitoring/posthog.ts';
@@ -42,18 +44,18 @@ export const JOBS_SECRET_HEADER = 'x-crm-jobs-secret';
 export const DRAIN_BUDGET_MS = 15_000;
 
 /**
- * The scheduled turn in the daily cleanup's hour (03:00 UTC) runs at least
- * this long, so the cron line's backfill gets its chance. In every other hour
- * a scheduled turn with nothing due ends after one check, so the database can
- * go back to sleep.
+ * Every scheduled turn runs at least this long, with the runners started
+ * even when nothing is due, so the cron lines' backfill gets its chance: the
+ * hour's digest run (`DIGEST_CRONTAB`, one hour of fill) in every hour, quiet
+ * or not, and the daily cleanup's (one day of fill) in the first turn after
+ * 03:00 UTC. An hourly run of 3 seconds keeps Neon's compute awake for its
+ * few idle minutes, once an hour.
  */
 export const SCHEDULED_MINIMUM_MS = 3_000;
 
-/** The scheduled turn's limits at `at`: the minimum only in the daily cleanup's hour. */
-export function scheduledTurn(at: Date): { readonly budgetMs: number; readonly minimumMs?: number } {
-  return at.getUTCHours() === DAILY_CRON_HOUR_UTC
-    ? { budgetMs: DRAIN_BUDGET_MS, minimumMs: SCHEDULED_MINIMUM_MS }
-    : { budgetMs: DRAIN_BUDGET_MS };
+/** The scheduled turn's limits: the budget, and the minimum, so the cron lines always get their turn. */
+export function scheduledTurn(): { readonly budgetMs: number; readonly minimumMs: number } {
+  return { budgetMs: DRAIN_BUDGET_MS, minimumMs: SCHEDULED_MINIMUM_MS };
 }
 
 /** The tenant pool's size per instance: Neon's pooler multiplexes them, and each instance serves many requests. */
@@ -153,6 +155,8 @@ export function createFunctionApi(source: Record<string, string | undefined>, pl
     analytics,
     invited: (email) => isInvitedEmail({ db }, email),
     requiredBy: (userId) => twoFactorRequiredBy({ db, identity }, userId),
+    // The new device alert and the history sweep run after sign in answers: the instance stays up for them.
+    keepAlive: platform.keepAlive,
   });
 
   // The job drain, on the worker's direct login (FunctionEnv requires it outside local). No relay runs here, so a
@@ -176,10 +180,26 @@ export function createFunctionApi(source: Record<string, string | undefined>, pl
           log,
           onFault: (error) => captureFault(error, { task: 'jobs' }),
         });
+  // In place of spec 0008's once a minute poke from use (WORKER_WAKE_ON_USE): nothing runs between turns, so a signed
+  // in request starts one once a row the drain saw has come due (a reminder, a delayed email), or every 2 minutes.
+  const wakeOnUse = drain === undefined ? NO_WAKE : createDueWake({ drain, wake: wakeRelay });
   log.info('API on Vercel', { environment: env.APP_ENV, jobs: drain === undefined ? 'off' : 'drain' });
 
   // The same mailer as sign in's: step up codes and invitations send through it, as on `server.ts`.
-  const app = createApp({ services: { db, identity, auth, wakeRelay, analytics, mailer, rules: APP_RULES }, env });
+  const app = createApp({
+    services: {
+      db,
+      identity,
+      auth,
+      wakeRelay,
+      wakeOnUse,
+      analytics,
+      mailer,
+      rules: APP_RULES,
+      keepAlive: platform.keepAlive,
+    },
+    env,
+  });
   // The jobs endpoint answers only through the app's edge, like every other route.
   const edge = createEdgeGuard({ secret: env.EDGE_SECRET, environment: env.APP_ENV });
 
@@ -209,7 +229,7 @@ export function createFunctionApi(source: Record<string, string | undefined>, pl
     if (refused !== undefined) return refused;
     let report: DrainReport;
     try {
-      report = await drain.run(scheduledTurn(new Date()));
+      report = await drain.run(scheduledTurn());
     } catch (error) {
       log.error('jobs.drain.failed', errorFields(error));
       captureFault(error, { task: 'jobs' });

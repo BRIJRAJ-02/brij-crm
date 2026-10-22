@@ -68,6 +68,23 @@ describe('the worker woken by use (spec 0008, The wake call)', () => {
     expect(pokes).toBe(quiet + 1);
     await m.client.jobs.list({ workspace: m.slug });
     expect(pokes).toBe(quiet + 2);
+    // Handed over at a turn's end (running, no lease) and claimed by nothing since (spec 0045): a read wakes it too.
+    await testQuery(
+      ownerUrl,
+      `update jobs set status = 'running', run_at = now() - interval '1 minute', lease_owner = null, lease_until = null,
+         updated_at = now() - interval '10 seconds' where id = $1`,
+      [job.id],
+    );
+    await m.client.jobs.get({ workspace: m.slug, jobId: job.id });
+    expect(pokes).toBe(quiet + 3);
+    // A slice holds it under a live lease: no wake.
+    await testQuery(
+      ownerUrl,
+      `update jobs set lease_owner = 'w:1', lease_until = now() + interval '1 minute' where id = $1`,
+      [job.id],
+    );
+    await m.client.jobs.get({ workspace: m.slug, jobId: job.id });
+    expect(pokes).toBe(quiet + 3);
   });
 });
 

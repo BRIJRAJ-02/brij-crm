@@ -254,6 +254,43 @@ export async function pruneOutbox(connection: pg.ClientBase | pg.Pool, max: numb
   return result.rows[0]?.pruned ?? 0;
 }
 
+/**
+ * Where no relay runs (the api as a Vercel Function, spec 0045), marks one
+ * batch of a workspace's unpublished outbox rows made more than
+ * `OUTBOX_RETENTION` ago as published, oldest `seq` first, at most `max`
+ * (clamped to 1 to `PRUNE_BATCH`): delivered to nobody, since no live
+ * connection exists to hear them, and nothing else will ever publish them.
+ * `pruneOutbox` then deletes them as it deletes a relay's, so the outbox
+ * doesn't grow without end. Never call it beside a running relay: a row it
+ * marks is one that relay never sends. Runs under row level security for the
+ * one workspace, as the relay's own marking does (`outbox_publish_once`
+ * holds), on the worker's login; one implicit transaction; returns a count.
+ */
+export async function expireUnrelayed(
+  connection: pg.ClientBase | pg.Pool,
+  workspaceId: string,
+  max: number = PRUNE_BATCH,
+): Promise<number> {
+  if (!UUID.test(workspaceId)) throw new TypeError('The outbox expiry needs a workspace id (a uuid).');
+  const text = [
+    `select set_config('app.workspace_id', '${workspaceId}', true)`,
+    `with marked as (
+      update public.outbox set published_at = now()
+      where workspace_id = '${workspaceId}' and seq in (
+        select seq from public.outbox
+        where workspace_id = '${workspaceId}' and published_at is null
+          and created_at < now() - interval '${OUTBOX_RETENTION}'
+        order by seq limit ${String(clamp(max, PRUNE_BATCH))}
+      )
+      returning 1
+    )
+    select count(*)::integer as marked from marked`,
+  ].join(';\n');
+  // With more than one statement, pg answers one result per statement.
+  const results = (await connection.query(text)) as unknown as pg.QueryResult<{ marked: number }>[];
+  return results[1]?.rows[0]?.marked ?? 0;
+}
+
 /** An outbox row as pg parses it. */
 export interface RawOutboxRow {
   readonly seq: string;

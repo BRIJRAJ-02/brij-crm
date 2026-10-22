@@ -167,11 +167,7 @@ describe('the jobs endpoint', () => {
 });
 
 describe('the scheduled turn', () => {
-  it('runs a minimum only in the daily cleanup hour, so other scheduled runs let the database sleep', () => {
-    expect(scheduledTurn(new Date('2026-10-22T03:10:00Z'))).toEqual({
-      budgetMs: DRAIN_BUDGET_MS,
-      minimumMs: SCHEDULED_MINIMUM_MS,
-    });
-    expect(scheduledTurn(new Date('2026-10-22T04:10:00Z'))).toEqual({ budgetMs: DRAIN_BUDGET_MS });
+  it('always runs its minimum, so the hourly digest and the daily cleanup cron lines start even in a quiet hour', () => {
+    expect(scheduledTurn()).toEqual({ budgetMs: DRAIN_BUDGET_MS, minimumMs: SCHEDULED_MINIMUM_MS });
   });
 });

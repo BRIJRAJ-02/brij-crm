@@ -223,6 +223,12 @@ export interface AuthDeps {
    * off. Always named, so no sign in is built without it.
    */
   readonly requiredBy: (userId: string) => Promise<readonly string[]>;
+  /**
+   * Keeps the process alive until the work a sign in starts after answering
+   * settles (the new device alert, the history sweep): Vercel's `waitUntil`
+   * (spec 0045). Absent, as on a long running server, the work runs on.
+   */
+  readonly keepAlive?: (work: Promise<unknown>) => void;
 }
 
 /**
@@ -400,7 +406,15 @@ function isTwoFactorUser(user: unknown): boolean {
 }
 
 /** Builds sign in for this environment. */
-export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, invited, requiredBy }: AuthDeps): Auth {
+export function createAuth({
+  env,
+  identity,
+  mailer,
+  analytics = NO_ANALYTICS,
+  invited,
+  requiredBy,
+  keepAlive,
+}: AuthDeps): Auth {
   const local = env.APP_ENV === 'local';
   const allowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
   /** Whether a new account may be made for `email`: on the list, or holding an open email invitation (AC-807). */
@@ -465,6 +479,7 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
   /** Settles after-answer work for tests: the alerts and sweep started by the last requests. */
   const pending = new Set<Promise<void>>();
   const track = (work: Promise<void>) => {
+    keepAlive?.(work);
     pending.add(work);
     void work.finally(() => pending.delete(work));
   };

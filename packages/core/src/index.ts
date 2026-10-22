@@ -460,6 +460,7 @@ export {
   getJob,
   listJobs,
   startJob,
+  isOverdue,
   OVERDUE_MS,
   startTestJob,
   toJobView,
