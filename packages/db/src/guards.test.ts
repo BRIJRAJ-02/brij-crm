@@ -94,6 +94,9 @@ describe('every tenant table', () => {
             // only through crm_booking_lookup's crm_booking_page_by_address and crm_booking_profile_pages.
             row.index === 'booking_pages_owner_slug' ||
             row.index === 'booking_pages_profile' ||
+            // An old slug's address (slug history, 0087) likewise, read only through crm_booking_page_by_address and
+            // crm_booking_owner_slugs; unique per person across workspaces, so no other page of theirs takes it.
+            row.index === 'booking_page_slugs_owner_slug' ||
             row.index === 'bookings_manage_token' ||
             // An invitation's token finds it before the workspace is known, and sign up asks about an address
             // across workspaces (spec 0031): both read only through crm_invitation_lookup's two functions.

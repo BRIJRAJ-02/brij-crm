@@ -61,6 +61,7 @@ The design system, interaction and state reviews of milestone 2 found, and this 
 - Create a <object> on an object that lands on a board did nothing. It now opens the landing, default or first table view with the New dialog, and an object with only boards says "Open a table view to add a deal".
 - "Searching…" was a disabled row at half opacity. Menu gained a pending row (`isPending`): the secondary text colour at full contrast and the arrow cursor.
 - Typing and pressing Enter could open nothing once the records came in after a "Searching…" row. Enter with no row highlighted now opens the first row; the flow types and presses Enter with no arrow.
+- QA, 22 October 2026: typing a page's name opened a typo guess. "trash" and Enter opened Northwind Traders, a close match (AC-1078), because Records always came first. When every record found is a close match and the text names a page, a Settings page or an action (its name, or a word of it, starts with the text), Records now come after the commands, so Enter opens the Trash (`namesACommand`, unit tested).
 - The live region said "Searching…" while the person kept typing, and a count on a failure. It now waits half a second per query, and says the search failed.
 - Empty Go to lists the pages only (Settings pages show when searched), the field's name includes views, the create request is handed back once, and the closed menu disposes its search and reads only its match's loader data.
 

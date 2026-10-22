@@ -299,7 +299,10 @@ test.describe('a schema change keeps the table where it was', () => {
     await attribute.getByRole('button', { name: /Type$/ }).click();
     await page.getByRole('option', { name: 'Relationship', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'New relationship' });
-    await dialog.getByRole('button', { name: /Related object/ }).click();
+    await dialog
+      .getByRole('button', { name: /Related object/ })
+      .and(dialog.locator('[aria-haspopup="listbox"]'))
+      .click();
     await page.getByRole('option', { name: 'Companies', exact: true }).click();
     await dialog.getByRole('button', { name: 'Create relationship' }).click();
     await expect(dialog).toBeHidden();

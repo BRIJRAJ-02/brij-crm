@@ -12,7 +12,7 @@ import type {
   Permission,
   WorkspaceSummary,
 } from '@crm/data';
-import { useDueTasks, useNav } from '@crm/data/react';
+import { useDueTasks, useInboxUnread, useNav } from '@crm/data/react';
 import {
   AppShell,
   AppShellContext,
@@ -458,6 +458,8 @@ function TopPages({
   const today = useToday(timeZone);
   const due = useDueTasks(data.tasks.due(slug, today));
   const tasksBadge = due.status === 'ready' && due.count > 0 ? (due.atLeast ? due.count + 1 : due.count) : undefined;
+  // The inbox's badge (spec 0038, AC-1174): unread notifications in this workspace, live; none at zero.
+  const unread = useInboxUnread(data.inbox.unread(slug)) ?? 0;
   const items = topEntries(nav, universe)
     .filter((entry) => !entry.hidden)
     .flatMap((entry) => {
@@ -470,6 +472,7 @@ function TopPages({
           href={page.href(slug)}
           isCurrent={currentPage === entry.id}
           {...(entry.id === 'tasks' && tasksBadge !== undefined ? { badge: tasksBadge } : {})}
+          {...(entry.id === 'inbox' && unread > 0 ? { badge: unread } : {})}
           menu={itemMenu(page.label, strings.hideFromSidebar, () => {
             onHide(entry.id);
           })}

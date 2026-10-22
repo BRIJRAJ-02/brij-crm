@@ -70,6 +70,10 @@ export const RowErrorWithText: Story = {
     onRetry: fn(),
   },
   play: async ({ canvas, args }) => {
+    // Try again starts where the words start, not centred under them.
+    const title = canvas.getByText('Recent records didn’t load').getBoundingClientRect();
+    const retry = canvas.getByRole('button', { name: 'Try again' }).getBoundingClientRect();
+    await expect(Math.abs(retry.left - title.left)).toBeLessThan(1);
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
     await expect(args.onRetry).toHaveBeenCalled();
   },

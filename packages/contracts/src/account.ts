@@ -103,15 +103,18 @@ export const StepUpStartInput = z.object({ method: z.literal('email') });
 /** Asking for a step up email code. */
 export type StepUpStartInput = z.infer<typeof StepUpStartInput>;
 
+/** What a refused step up code says, in place of Zod's own wording (which reached a person once). */
+const STEP_UP_CODE_REFUSED = 'That code doesn’t look right. Check it and try again.';
+
 /** A step up's code: 6 digits from the app or the email, or a backup code ("abcde-12345"). */
 export const StepUpVerifyInput = z.object({
   method: StepUpMethod,
   code: z
     .string()
     .trim()
-    .min(6)
-    .max(20)
-    .regex(/^[A-Za-z0-9-]+$/),
+    .min(6, STEP_UP_CODE_REFUSED)
+    .max(20, STEP_UP_CODE_REFUSED)
+    .regex(/^[A-Za-z0-9-]+$/, STEP_UP_CODE_REFUSED),
 });
 /** A step up's code. */
 export type StepUpVerifyInput = z.infer<typeof StepUpVerifyInput>;

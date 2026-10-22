@@ -94,6 +94,7 @@
   }
 
   .root[data-layout='row'] .actions {
+    justify-content: start;
     margin-block-start: 0;
   }
 
@@ -113,7 +114,9 @@
     grid-column: 2;
   }
 
+  /* A row's line of help runs the width of its slot: a measure wraps it early inside a wide card. */
   .root[data-layout='row'] .text {
+    max-inline-size: none;
     color: var(--text-tertiary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);

@@ -165,19 +165,35 @@ export function matchCommands(commands: readonly Command[], query: string): read
   const text = query.trim().toLocaleLowerCase();
   if (text === '') return commands;
   const ranked = commands.flatMap((command, index) => {
-    const name = command.name.toLocaleLowerCase();
-    const rank = name.startsWith(text)
-      ? 0
-      : name.split(/\s+/u).some((word) => word.startsWith(text))
-        ? 1
-        : name.includes(text)
-          ? 2
-          : command.terms.some((term) => term.toLocaleLowerCase().startsWith(text))
-            ? 3
-            : undefined;
+    const rank = rankOf(command, text);
     return rank === undefined ? [] : [{ command, rank, index }];
   });
   return ranked.sort((a, b) => a.rank - b.rank || a.index - b.index).map((entry) => entry.command);
+}
+
+/**
+ * Whether what is typed names one of the commands: a name, or a word of one,
+ * starts with it ("trash" names Open trash). The menu then lists records found
+ * only as close matches (typo guesses) after the commands, so Enter opens the
+ * page that was typed rather than a guess (Northwind Traders).
+ */
+export function namesACommand(commands: readonly Command[], query: string): boolean {
+  const text = query.trim().toLocaleLowerCase();
+  return text !== '' && commands.some((command) => (rankOf(command, text) ?? 2) < 2);
+}
+
+/** How well a command matches lower case text: 0 its name starts with it, 1 a word does, 2 its name holds it, 3 another word for it does. */
+function rankOf(command: Command, text: string): number | undefined {
+  const name = command.name.toLocaleLowerCase();
+  return name.startsWith(text)
+    ? 0
+    : name.split(/\s+/u).some((word) => word.startsWith(text))
+      ? 1
+      : name.includes(text)
+        ? 2
+        : command.terms.some((term) => term.toLocaleLowerCase().startsWith(text))
+          ? 3
+          : undefined;
 }
 
 const go = (href: string): CommandRun => ({ kind: 'go', href });

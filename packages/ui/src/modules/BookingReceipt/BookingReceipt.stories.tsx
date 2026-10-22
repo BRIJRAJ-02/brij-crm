@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingReceipt } from './BookingReceipt.tsx';
 
 const meta = {
@@ -39,9 +40,11 @@ export const Welcome: Story = {
       <BookingReceipt {...args} />
     </Stage>
   ),
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByRole('heading', { name: 'You’re booked' })).toHaveFocus();
     await expect(canvas.getByRole('link', { name: 'Join the call' })).toHaveAttribute('target', '_blank');
+    // With no brand of its own, the foot's Timefix link is tagged as the page just after booking.
+    await expect(timefixLinkTags(canvasElement)).toEqual([timefixTags('booking_confirmation', 'footer_logo')]);
   },
 };
 
@@ -57,6 +60,10 @@ export const Cancelled: Story = {
       <BookingReceipt {...args} />
     </Stage>
   ),
+  play: async ({ canvasElement }) => {
+    // Opened again later, the foot's Timefix link is tagged as the guest's page.
+    await expect(timefixLinkTags(canvasElement)).toEqual([timefixTags('booking_manage', 'footer_logo')]);
+  },
 };
 
 /** Passed. */

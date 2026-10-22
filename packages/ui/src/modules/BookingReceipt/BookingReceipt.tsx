@@ -153,7 +153,7 @@ export function BookingReceipt({
           )}
         </article>
         {brand === undefined ? (
-          <BookingFoot />
+          <BookingFoot page={isWelcome ? 'booking_confirmation' : 'booking_manage'} />
         ) : (
           <footer className={styles.foot}>
             <a

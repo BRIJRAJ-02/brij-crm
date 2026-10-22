@@ -228,7 +228,7 @@ export function GridCell({
       )}
       {content}
       {note !== undefined && isLoaded && mode === undefined && (
-        <span className={styles.note}>
+        <span className={styles.note} data-note={note}>
           {/* Read apart from the name before it. */}
           <VisuallyHidden>{strings.noteSeparator}</VisuallyHidden>
           <Badge text={note === 'new' ? strings.rowNew : strings.rowNoLongerMatches} />

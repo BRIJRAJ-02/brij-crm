@@ -301,11 +301,9 @@ export {
 } from './modules/RecordChipList/RecordChipList.tsx';
 export {
   EditorStatus,
-  PreviewDeviceSwitch,
   PreviewFrame,
   PreviewLayout,
   type EditorStatusTone,
-  type PreviewDevice,
   type PreviewFrameProps,
   type PreviewLayoutProps,
 } from './modules/PreviewLayout/PreviewLayout.tsx';

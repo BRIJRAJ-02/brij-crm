@@ -434,6 +434,26 @@ export const CompactLoading: Story = {
   },
 };
 
+/** Compact in a card and failed: one row with Try again, as the card's other sections draw theirs. */
+export const CardFailed: Story = {
+  args: {
+    density: 'compact',
+    placement: 'card',
+    isToolbarHidden: true,
+    status: 'error',
+    onRetry: fn(),
+    errorTitle: 'Forms didn’t load',
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkList {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveAttribute('data-layout', 'row');
+  },
+};
+
 /** Compact and failed: the failure where the rows go, with Try again. */
 export const CompactFailed: Story = {
   args: {

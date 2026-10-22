@@ -209,7 +209,7 @@ export async function readAddressedPage(entry: BookingEntry & { readonly handle:
   return inWorkspace(entry.scope, async (tx) => {
     const page = await loadPage(tx, entry.pageId);
     if (page === undefined || page.isDeleted) throw refuse('NOT_FOUND', 'This page is no longer available.');
-    return { publicKey: page.publicKey, handle: entry.handle };
+    return { publicKey: page.publicKey, handle: entry.handle, slug: page.slug };
   });
 }
 

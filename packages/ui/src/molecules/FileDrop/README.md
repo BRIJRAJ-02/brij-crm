@@ -18,6 +18,8 @@ New. Imports (#30) and file attributes (#32) take files the same way, and say up
 
 ## States
 
+- Its hint reads "Drag a file here, or browse" when it takes one file and "Drag files here, or browse" with `allowsMultiple` (QA, 22 October 2026).
+
 Idle, drag over (accent), focus, refused (the error under it), disabled.
 
 ## Keyboard

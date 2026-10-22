@@ -1,5 +1,5 @@
 {
-  "id": "9aa1f613-cddc-4d80-9700-b47f18cb0cdb",
+  "id": "8c747969-1974-427f-9f22-60405d812b62",
   "prevId": "ed597a2e-aa05-45ed-8255-5dbe81ad532f",
   "version": "7",
   "dialect": "postgresql",
@@ -1660,6 +1660,109 @@
         "booking_page_rotations_position_range": {
           "name": "booking_page_rotations_position_range",
           "value": "\"booking_page_rotations\".\"position\" between 0 and 2"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.booking_page_slugs": {
+      "name": "booking_page_slugs",
+      "schema": "",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_id": {
+          "name": "page_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (6) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (6) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "booking_page_slugs_owner_slug": {
+          "name": "booking_page_slugs_owner_slug",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "booking_page_slugs_page": {
+          "name": "booking_page_slugs_page",
+          "tableFrom": "booking_page_slugs",
+          "tableTo": "booking_pages",
+          "columnsFrom": [
+            "workspace_id",
+            "page_id"
+          ],
+          "columnsTo": [
+            "workspace_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "booking_page_slugs_pkey": {
+          "name": "booking_page_slugs_pkey",
+          "columns": [
+            "workspace_id",
+            "page_id",
+            "slug"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "booking_page_slugs_slug_shape": {
+          "name": "booking_page_slugs_slug_shape",
+          "value": "\"booking_page_slugs\".\"slug\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(\"booking_page_slugs\".\"slug\") <= 60"
         }
       },
       "isRLSEnabled": false
@@ -13801,8 +13904,8 @@
           "method": "btree",
           "with": {}
         },
-        "routing_decisions_one_per_submission": {
-          "name": "routing_decisions_one_per_submission",
+        "routing_decisions_by_submission": {
+          "name": "routing_decisions_by_submission",
           "columns": [
             {
               "expression": "workspace_id",
@@ -13817,30 +13920,8 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "where": "\"routing_decisions\".\"submission_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "routing_decisions_one_per_booking": {
-          "name": "routing_decisions_one_per_booking",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "booking_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"routing_decisions\".\"surface_kind\" = 'booking_page'",
           "concurrently": false,
           "method": "btree",
           "with": {}

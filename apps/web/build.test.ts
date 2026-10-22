@@ -9,6 +9,7 @@ import path from 'node:path';
 import { build } from 'vite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { firstLoad, type Manifest } from './first-load.ts';
+import { servedOnPublicHost } from './public-paths.ts';
 
 const ROOT = import.meta.dirname;
 const outDir = mkdtempSync(path.join(tmpdir(), 'crm-web-build-'));
@@ -114,6 +115,20 @@ describe('the built page', () => {
       expect(built).toContain('<link rel="stylesheet" href="/layers.css" id="react-aria-pressable-style">');
     },
   );
+});
+
+describe('the public booking host (22 Oct 2026)', () => {
+  // With PUBLIC_HOST_HOME_URL set, the middleware moves any path the public host doesn't serve: every built file a
+  // page there loads must be one it serves (public-paths.ts's TOP_LEVEL_FILES and folders).
+  it('serves every built file there: each top level file but the pages, and every folder', () => {
+    const entries = readdirSync(outDir, { withFileTypes: true }).filter((entry) => !entry.name.startsWith('.'));
+    expect(entries.map((entry) => entry.name)).toContain('layers.css');
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.endsWith('.html')) continue;
+      const pathname = entry.isFile() ? `/${entry.name}` : `/${entry.name}/file.js`;
+      expect(servedOnPublicHost(pathname), pathname).toBe(true);
+    }
+  });
 });
 
 describe('source maps (spec 0010, AC-164)', () => {

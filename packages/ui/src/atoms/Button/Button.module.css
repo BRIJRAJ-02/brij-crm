@@ -38,6 +38,8 @@
   /* A label that may swap (Copy link, Copied): both take one cell, the wider sets the width, the other hides. */
   .label[data-reserve] {
     display: inline-grid;
+    /* The shorter label sits by its icon, not centred in the wider one's room. */
+    justify-items: start;
   }
 
   .label[data-reserve] > * {

@@ -6,6 +6,8 @@ export const strings = {
   readOnly: 'Read only',
   search: 'Search',
   noMatches: 'No matches',
+  /** An empty list that creates, before anything is typed. */
+  typeToCreate: 'Type a name to add one',
   /** The last item when what is typed is no option yet (spec 0012, AC-238). */
   create: (label: string) => `Create "${label}"`,
   /** Between the names of several chosen options in the closed field (`selectionMode="multiple"`). */

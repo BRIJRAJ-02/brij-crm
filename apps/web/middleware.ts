@@ -5,9 +5,69 @@
 // app and the API share one origin (host only cookies, no CORS), and either way
 // the request carries the edge secret and the caller's address from here: the
 // function, like a proxied API, admits only requests this middleware vouched for.
+//
+// It also keeps the public booking origin's host (BOOKING_PUBLIC_ORIGIN, timefix.com, served by this same
+// deployment) to what belongs there: with PUBLIC_HOST_HOME_URL set, any other path on that host, `/` included,
+// moves (308) to the marketing site. So it runs for every path but the built files; any other request passes on
+// untouched. The move may be cached for an hour, so a path that later joins the public host is reachable soon.
 import { geolocation, ipAddress, next, rewrite } from '@vercel/functions';
 
-export const config = { matcher: ['/api', '/api/:path*'] };
+// What the public booking origin's host serves, written out from public-paths.ts. Vercel compiles this file on its
+// own and can't follow an import of the repo's TypeScript or of a workspace package (a deploy failed on one,
+// 22 Oct 2026), so it imports nothing but @vercel/functions. middleware.test.ts fails until these say exactly what
+// public-paths.ts builds, and until this file imports nothing else.
+
+/** The handle words the app keeps for itself (RESERVED_HANDLES of 3 characters and more), longest first. */
+export const RESERVED_WORDS =
+  'email-preferences|availability|integrations|developers|reschedule|theme-boot|two-factor|dashboard|undefined|accounts|bookings|calendar|callback|captures|download|manifest|schedule|security|settings|sign-out|webhooks|account|billing|booking|contact|favicon|objects|pricing|privacy|profile|sign-in|sign-up|sitemap|support|timefix|welcome|assets|cancel|health|invite|logout|manage|public|robots|search|signin|signup|static|status|verify|about|admin|brand|email|embed|forms|inbox|index|legal|links|login|oauth|terms|users|apps|auth|blog|book|demo|docs|edit|form|help|home|join|mail|null|root|team|user|api|app|new|www';
+
+/** A handle's path segment, never a reserved word, and a booking page's slug segment (public-paths.ts). */
+const HANDLE = `(?!(?:${RESERVED_WORDS})(?:/|$))[a-z0-9][a-z0-9-]{1,38}[a-z0-9]`;
+const SLUG = '[a-z0-9][a-z0-9-]{0,59}';
+
+/** public-paths.ts's PUBLIC_HOST_PATH: the handle addresses, /b/, /f/, /embed/, the built files and /api/public/. */
+export const PUBLIC_HOST_PATH = new RegExp(
+  `^(?:/(?:b|f|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:embed\\.js|favicon\\.ico|layers\\.css|theme-boot\\.js)|/${HANDLE}(?:/${SLUG})?/?)$`,
+);
+
+/** An https URL, or undefined for anything else (unset, empty, malformed or plain http). */
+const httpsUrl = (value: string | undefined): URL | undefined => {
+  if (value === undefined || !URL.canParse(value)) return undefined;
+  const url = new URL(value);
+  return url.protocol === 'https:' ? url : undefined;
+};
+
+/**
+ * public-paths.ts's publicHostRedirect: where a request on the public booking origin's host goes instead (a 308),
+ * `PUBLIC_HOST_HOME_URL`, for any path that doesn't belong there, `/` included; undefined, so nothing changes, for
+ * every other request, and whenever a setting is missing or not https, or the public origin is the app's own or
+ * the home's.
+ */
+export function publicHostRedirect(
+  url: URL,
+  env: {
+    readonly PUBLIC_HOST_HOME_URL?: string | undefined;
+    readonly BOOKING_PUBLIC_ORIGIN?: string | undefined;
+    readonly APP_URL?: string | undefined;
+  },
+): string | undefined {
+  const home = httpsUrl(env.PUBLIC_HOST_HOME_URL);
+  const publicOrigin = httpsUrl(env.BOOKING_PUBLIC_ORIGIN);
+  const app = httpsUrl(env.APP_URL);
+  if (home === undefined || publicOrigin === undefined || app === undefined) return undefined;
+  if (url.host !== publicOrigin.host || app.host === publicOrigin.host || home.host === publicOrigin.host) {
+    return undefined;
+  }
+  return PUBLIC_HOST_PATH.test(url.pathname) ? undefined : home.href;
+}
+
+/** Every path but the built files, which belong on every host: public-paths.ts's MIDDLEWARE_MATCHER, written out. */
+export const config = {
+  matcher: ['/((?!assets/|brand/|embed\\.js$|favicon\\.ico$|layers\\.css$|theme-boot\\.js$).*)'],
+};
+
+/** Whether a path is the API's: only these get the edge's headers, the proxy or the function. */
+const isApiPath = (pathname: string) => pathname === '/api' || pathname.startsWith('/api/');
 
 /**
  * The header carrying the edge secret, which proves to the API that a request
@@ -52,6 +112,13 @@ export function apiTarget(env: { readonly API_ORIGIN_INTERNAL?: string | undefin
 }
 
 export default function middleware(request: Request): Response {
+  const url = new URL(request.url);
+  const home = publicHostRedirect(url, process.env);
+  if (home !== undefined) {
+    return new Response(null, { status: 308, headers: { location: home, 'cache-control': 'public, max-age=3600' } });
+  }
+  if (!isApiPath(url.pathname)) return next();
+
   const origin = process.env.API_ORIGIN_INTERNAL ?? '';
   const proxied = apiTarget(process.env) === 'proxy';
 
@@ -77,7 +144,6 @@ export default function middleware(request: Request): Response {
     );
   }
 
-  const url = new URL(request.url);
   // Replace these, never append to them: a client can send its own values.
   const headers = new Headers(request.headers);
   headers.set('x-forwarded-host', url.host);

@@ -86,7 +86,7 @@ export const Default: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('grid', { name: 'Rules' })).toBeInTheDocument();
     await expect(canvas.getAllByRole('row')).toHaveLength(3);
-    await expect(canvas.getByText('3 of 20')).toBeInTheDocument();
+    await expect(canvas.getByText('3 of 20 rules')).toBeInTheDocument();
     await expect(canvas.getByText('Reference needs 3 to 40 characters.')).toBeInTheDocument();
     await expect(canvas.getByText('Reference can only contain letters when Stage is Won.')).toBeInTheDocument();
     await expect(canvas.getByText('Keep the reference under 80 characters.')).toBeInTheDocument();
@@ -98,6 +98,7 @@ export const Empty: Story = {
   args: { initial: [] },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No rules yet, so any value is accepted.')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'About Rules' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Add rule' })).toBeEnabled();
   },
 };
@@ -156,14 +157,17 @@ export const Refused: Story = {
   },
 };
 
-/** A condition: Only when… holds the FilterBuilder on the object's own attributes, open when the rule has one. */
+/** A condition: Only use this rule when… holds the FilterBuilder on the object's own attributes, open when the rule has one. */
 export const Condition: Story = {
   args: { initial: [RULES[1] ?? RULES[0]].flatMap((rule) => (rule === undefined ? [] : [rule])) },
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: /Actions for/ }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
-    await expect(await canvas.findByRole('button', { name: 'Only when…' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(await canvas.findByRole('button', { name: 'Only use this rule when…' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     await expect(canvas.getByRole('group', { name: 'Filters' })).toBeInTheDocument();
   },
 };
@@ -192,6 +196,9 @@ export const ReorderByKeyboard: Story = {
   args: { onChange: fn() },
   parameters: { crm: { screenshot: false } },
   play: async ({ args, canvas, userEvent }) => {
+    // The label's ⓘ comes first, then the rules.
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'About Rules' })).toHaveFocus();
     await userEvent.tab();
     await userEvent.keyboard('{ArrowDown}{ArrowDown}');
     await userEvent.tab();
@@ -340,7 +347,7 @@ export const NewFormat: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Add rule' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Format' }));
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
-    await expect(canvas.getByText('Format rule isn’t finished.')).toBeInTheDocument();
+    await expect(canvas.getByText('Not set up yet. Fill in its settings, or delete it.')).toBeInTheDocument();
     await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
   },
 };

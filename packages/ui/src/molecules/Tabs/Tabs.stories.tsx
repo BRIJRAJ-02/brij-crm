@@ -128,6 +128,37 @@ export const NoInsetNarrow: Story = {
   },
 };
 
+/** More tabs than a phone's width: the end fades, so the row shows it scrolls; scrolled to the end, the start fades. */
+export const Overflowing: Story = {
+  args: {
+    tabs: [
+      { id: 'overview', label: 'Overview', icon: 'layout-grid' },
+      { id: 'activity', label: 'Activity', icon: 'activity' },
+      { id: 'notes', label: 'Notes', icon: 'notebook', count: 12 },
+      { id: 'tasks', label: 'Tasks', icon: 'list-checks', count: 3 },
+      { id: 'comments', label: 'Comments', icon: 'message-square' },
+    ],
+    defaultSelectedKey: 'overview',
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Tabs {...args}>
+        <TabPanel id="overview">The record at a glance.</TabPanel>
+        <TabPanel id="activity">Field changes, newest first.</TabPanel>
+        <TabPanel id="notes">12 notes.</TabPanel>
+        <TabPanel id="tasks">3 open tasks.</TabPanel>
+        <TabPanel id="comments">No comments yet.</TabPanel>
+      </Tabs>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const list = canvas.getByRole('tablist', { name: 'Record' });
+    await waitFor(() => expect(list).toHaveAttribute('data-fade', 'end'));
+    list.scrollLeft = list.scrollWidth;
+    await waitFor(() => expect(list).toHaveAttribute('data-fade', 'start'));
+  },
+};
+
 /**
  * As a page's second bar (Captures, Bookings): the row People's ViewBar takes, size-bar tall on the surface,
  * the tab's tools at its end, the underline on its hairline.
