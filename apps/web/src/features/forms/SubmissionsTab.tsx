@@ -40,6 +40,7 @@ import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router'
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
+import { PhoneValue } from '@crm/contracts/values';
 import { answerFiling } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
@@ -239,6 +240,8 @@ export function SubmissionsTab({
     const text = answer === undefined ? '' : answerText(answer).trim();
     return text === '' ? undefined : text;
   };
+  // Who sent the open submission: their record's name, the name they gave, or their email.
+  const sender = open === undefined ? undefined : (open.mainRecord?.name ?? nameOf(open) ?? open.email);
   // Search narrows the rows loaded so far, by the person's name or email.
   const needle = query.trim().toLowerCase();
   const shown =
@@ -576,8 +579,8 @@ export function SubmissionsTab({
       )}
       {open !== undefined && (
         <Panel
-          title={open.mainRecord?.name ?? nameOf(open) ?? open.email ?? strings.submission}
-          leading={<Avatar name={open.mainRecord?.name ?? nameOf(open) ?? open.email ?? strings.submission} />}
+          title={sender ?? strings.submission}
+          {...(sender === undefined ? {} : { leading: <Avatar name={sender} isDecorative /> })}
           subtitle={
             <>
               {formName} · <RelativeTime value={open.receivedAt} />
@@ -704,6 +707,9 @@ function answerValue(answer: SubmissionAnswer): ReactNode {
   const type = (ANSWER_DISPLAY as Partial<Record<string, 'email' | 'phone' | 'url'>>)[answer.answerType];
   const text = answerText(answer);
   if (type === undefined || text === '') return text === '' ? strings.noAnswer : text;
+  // A phone the field set can read is a stored { number, country }; anything else shows as its words.
+  const phone = type === 'phone' ? PhoneValue.safeParse(answer.value) : undefined;
+  if (phone !== undefined && !phone.success) return text;
   return (
     <AttributeDisplay
       attribute={{
@@ -715,7 +721,7 @@ function answerValue(answer: SubmissionAnswer): ReactNode {
         isUnique: false,
         isReadOnly: true,
       }}
-      value={(type === 'phone' ? answer.value : text) as never}
+      value={phone?.success === true ? phone.data : text}
       surface="panel"
     />
   );

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { FocusScope, useFocusVisible, useKeyboard } from 'react-aria';
 import { Dialog, Heading } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -82,6 +82,7 @@ export function Panel({
   isStacked = false,
 }: PanelProps) {
   const ref = useRef<HTMLElement>(null);
+  const subtitleId = useId();
   const phase = usePresence(isOpen, ref);
   const { isFocusVisible } = useFocusVisible();
   const [openedBy] = useState(() => (isFocusVisible ? 'keyboard' : 'pointer'));
@@ -106,7 +107,7 @@ export function Panel({
         data-opened-by={openedBy}
         {...keyboardProps}
       >
-        <Dialog className={styles.dialog}>
+        <Dialog className={styles.dialog} {...(subtitle === undefined ? {} : { 'aria-describedby': subtitleId })}>
           <header className={styles.head}>
             {leading}
             {subtitle === undefined ? (
@@ -118,7 +119,9 @@ export function Panel({
                 <Heading slot="title" className={styles.title}>
                   {title}
                 </Heading>
-                <span className={styles.subtitle}>{subtitle}</span>
+                <span id={subtitleId} className={styles.subtitle}>
+                  {subtitle}
+                </span>
               </span>
             )}
             <span className={styles.actions}>
