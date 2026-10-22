@@ -45,6 +45,8 @@ interface GooglePerson {
   readonly email: string;
   readonly emailVerified: boolean;
   readonly name?: string;
+  /** Their profile picture, as Google's id token names it. */
+  readonly picture?: string;
 }
 
 /** A JWT shaped like Google's id token; unsigned, as Better Auth only decodes one from the token endpoint. */
@@ -60,6 +62,7 @@ function idToken(person: GooglePerson): string {
       email: person.email,
       email_verified: person.emailVerified,
       name: person.name ?? 'Grace Hopper',
+      ...(person.picture === undefined ? {} : { picture: person.picture }),
       iat: now,
       exp: now + 3600,
     }),
@@ -294,5 +297,51 @@ describe('Google sign in, against a fake Google (AC-28)', () => {
     ]);
     expect(two.user.id).toBe(one.user.id);
     expect((await stored(email)).accounts).toHaveLength(1);
+  });
+
+  it('keeps Google’s picture on a new account, as Better Auth does at sign up', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const email = newEmail();
+    const picture = 'https://lh3.googleusercontent.com/a/new-account=s96-c';
+    fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture });
+    const { cookie } = await googleRoundTrip(app, newIp());
+    const { user } = await rpcClient(app, cookie).me.get();
+    expect(await identity.userImage(user.id)).toBe(picture);
+  });
+
+  it('fills a picture an account lacks from Google (an email code account linked later), and never replaces one', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const email = newEmail();
+    const userId = randomUUID();
+    // Made with an email code: no picture. Better Auth fills one only when Google makes the account.
+    await testQuery(
+      identityUrl,
+      `insert into auth."user" (id, name, email, email_verified) values ($1, '', $2, true)`,
+      [userId, email],
+    );
+    const sub = randomUUID();
+    const picture = 'https://lh3.googleusercontent.com/a/linked=s96-c';
+    fakeGoogle({ sub, email, emailVerified: true, picture });
+    await googleRoundTrip(app, newIp());
+    expect(await identity.userImage(userId)).toBe(picture);
+    // Signed in again with a new picture at Google: the account keeps the one it has.
+    vi.unstubAllGlobals();
+    fakeGoogle({ sub, email, emailVerified: true, picture: 'https://lh3.googleusercontent.com/a/newer=s96-c' });
+    await googleRoundTrip(app, newIp());
+    expect(await identity.userImage(userId)).toBe(picture);
+  });
+
+  it('never fills a picture that isn’t https', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const email = newEmail();
+    const userId = randomUUID();
+    await testQuery(
+      identityUrl,
+      `insert into auth."user" (id, name, email, email_verified) values ($1, '', $2, true)`,
+      [userId, email],
+    );
+    fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture: 'http://lh3.googleusercontent.com/a/x' });
+    await googleRoundTrip(app, newIp());
+    expect(await identity.userImage(userId)).toBeUndefined();
   });
 });

@@ -666,6 +666,16 @@ async function handleOwner(db: Database, handle: string): Promise<HandleOwner | 
   };
 }
 
+/**
+ * The person a handle names, current or old (`crm_handle_owner`: no email), for their profile's picture (23 Oct
+ * 2026). A handle no one holds, malformed or reserved, is NOT_FOUND. Exported only from `@crm/core/public`.
+ */
+export async function findHandleOwner(deps: { readonly db: Database }, handle: string): Promise<HandleOwner> {
+  const owner = await handleOwner(deps.db, handle);
+  if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
+  return owner;
+}
+
 /** A page's narrow, read only entry: its `booking` actor with no record access, as the guest page's. */
 function readOnlyEntry(db: Database, row: PageKeyRow): BookingEntry {
   const scope = mintScope({

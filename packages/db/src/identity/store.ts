@@ -31,6 +31,8 @@ import {
 } from '../schema/auth.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The longest account picture URL kept (the same bound as `members.avatar_url`). */
+const USER_IMAGE_MAX = 2048;
 
 /** How a session last proved who it is: a second factor, or an email code or Google alone. */
 export type VerifiedWith = 'email' | 'second_factor';
@@ -287,6 +289,17 @@ export interface IdentityStore {
   sweepAuthHistory(before: Date, limit: number): Promise<number>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
   setUserNameIfEmpty(id: string, name: string): Promise<boolean>;
+  /**
+   * The user's account picture as stored (Google's at sign up, or `setUserImageIfEmpty`'s), or undefined. A raw
+   * outside URL: callers check its host before using it, and never hand it to a browser.
+   */
+  userImage(id: string): Promise<string | undefined>;
+  /**
+   * Saves the picture only when the user has none yet, and only an https URL of at most 2048 characters: an account
+   * made with an email code and later linked to Google starts with none, and Better Auth fills it only at sign up.
+   * True when it saved.
+   */
+  setUserImageIfEmpty(id: string, image: string): Promise<boolean>;
   /**
    * Counts one use of `key` against `rule` in Better Auth's `auth.rate_limit`
    * table, in one atomic statement, so the limit holds across instances. For
@@ -729,6 +742,24 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .update(user)
         .set({ name: trimmed, updatedAt: sql`now()` })
         .where(and(eq(user.id, id), sql`btrim(${user.name}) = ''`))
+        .returning({ id: user.id });
+      return saved.length > 0;
+    },
+
+    async userImage(id) {
+      if (!UUID.test(id)) return undefined;
+      const [row] = await db.select({ image: user.image }).from(user).where(eq(user.id, id)).limit(1);
+      return row?.image ?? undefined;
+    },
+
+    async setUserImageIfEmpty(id, image) {
+      const trimmed = image.trim();
+      if (!UUID.test(id) || trimmed.length > USER_IMAGE_MAX || !URL.canParse(trimmed)) return false;
+      if (new URL(trimmed).protocol !== 'https:') return false;
+      const saved = await db
+        .update(user)
+        .set({ image: trimmed, updatedAt: sql`now()` })
+        .where(and(eq(user.id, id), sql`coalesce(btrim(${user.image}), '') = ''`))
         .returning({ id: user.id });
       return saved.length > 0;
     },

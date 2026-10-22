@@ -7,6 +7,7 @@ export {
   enterBookingByToken,
   enterBookingPage,
   enterBookingProfile,
+  findHandleOwner,
   type BookingEntry,
   type HandleOwner,
   type ProfileCursor,
@@ -21,10 +22,15 @@ export {
   isPageHost,
   managedBookingIcs,
   readManagedBooking,
+  readPagePicture,
+  readProfilePicture,
   readPublicSlots,
   type IcsOrigin,
   type PublicBookingDeps,
+  type PublicPictureDeps,
 } from './booking/public.ts';
+// A host's account picture (23 Oct 2026): only Google's picture hosts, so the api's fetch goes nowhere else.
+export { accountPicture, isPictureHost, type AccountPictureReader } from './booking/picture.ts';
 // The booking chat (spec 0042): one turn, through the slots and booking services above.
 export { chatTurn, type ChatTurn } from './booking/chat/turn.ts';
 // The guest page's changes (milestone 2): move, add guests, cancel, and where it could move.

@@ -43,6 +43,7 @@ import type { Mailer } from './mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
+import { createPictureFetch, type PictureFetch } from './public/picture.ts';
 import { EMAIL_UNSUBSCRIBE_PATH, mountEmailPreferences } from './public/email-preferences.ts';
 import { emailLinkKey } from './email-link.ts';
 import { guestKeys } from './public/visitor.ts';
@@ -176,6 +177,8 @@ export interface AppServices {
   readonly bookingLimiter?: PublicLimiter;
   /** The email preferences routes' limiter (the emails lane): this process's memory unless a test passes its own. */
   readonly emailPreferenceLimiter?: PublicLimiter;
+  /** Fetches a host's account picture from Google's picture hosts (23 Oct 2026): the real one unless a test passes its own. */
+  readonly pictureFetch?: PictureFetch;
   /** The clock the public booking routes read, for tests. */
   readonly now?: () => Date;
   /** Where invitation emails go (spec 0031): the server's mailer; absent, every send fails and is reported unsent. */
@@ -499,6 +502,16 @@ export function createApp({
       organizerName: 'Bookings',
     },
     wakeRelay,
+    pictures: {
+      // Only the one read of schema auth, so a public route holds nothing else of global identity. A failure is no
+      // picture: the page's facts never fail for it.
+      pictureOf: (userId) =>
+        identity.userImage(userId).catch((error: unknown) => {
+          log.warn('booking.picture.unread', errorFields(error));
+          return undefined;
+        }),
+      fetch: services.pictureFetch ?? createPictureFetch(),
+    },
     ...(services.now === undefined ? {} : { now: services.now }),
     // Knowing the visitor (spec 0028): their session through the member door, or a guest's own Google for the visit.
     visitor: {

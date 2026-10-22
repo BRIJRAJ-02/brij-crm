@@ -20,7 +20,14 @@
 import { handoffSubmission, handoffVisitor } from '../forms/public.ts';
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { PROFILE_PAGE_SIZE, type PublicAddress, type PublicProfile, type PublicProfileLink } from '@crm/contracts';
+import {
+  bookingPicturePath,
+  PROFILE_PAGE_SIZE,
+  profilePicturePath,
+  type PublicAddress,
+  type PublicProfile,
+  type PublicProfileLink,
+} from '@crm/contracts';
 import type {
   PublicBookInput,
   PublicBooking,
@@ -34,6 +41,7 @@ import type {
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry, HandleOwner, ProfilePageEntry } from '../access/door.ts';
 import { pagePath } from './handles.ts';
+import { accountPicture, type AccountPictureReader } from './picture.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -176,14 +184,26 @@ function publicLocation(page: PageRecord): PublicLocation {
   return page.location;
 }
 
-/** The page's facts for its public page (AC-644: no member email, no internal id). */
-export async function getPublicBookingPage(entry: BookingEntry): Promise<PublicBookingPage> {
+/** Reads account pictures (schema auth, through the identity login): the public page's host picture. */
+export interface PublicPictureDeps {
+  readonly pictureOf: AccountPictureReader;
+}
+
+/**
+ * The page's facts for its public page (AC-644: no member email, no internal id). With `pictures`, a personal
+ * page whose owner's account has a Google picture names our own path to it (`hostImage`); a team page never does
+ * (AC-754). The picture is read after the transaction, so no tenant connection waits on the identity login.
+ */
+export async function getPublicBookingPage(
+  entry: BookingEntry,
+  pictures?: PublicPictureDeps,
+): Promise<PublicBookingPage> {
   checkEntry(entry);
-  return inWorkspace(entry.scope, async (tx) => {
+  const { facts, pictureUser } = await inWorkspace(entry.scope, async (tx) => {
     const page = await livePage(tx, entry);
     const team = await loadTeam(tx, page);
     const path = await pagePath(tx, page);
-    return {
+    const facts: PublicBookingPage = {
       publicKey: page.publicKey,
       title: page.title,
       description: page.description,
@@ -197,7 +217,30 @@ export async function getPublicBookingPage(entry: BookingEntry): Promise<PublicB
       // Once the owner has a handle, a plain `/b/<key>` visit moves to `/<handle>/<slug>`.
       ...(path.startsWith('/b/') ? {} : { path }),
     };
+    return { facts, pictureUser: team === undefined ? (page.ownerUserId ?? undefined) : undefined };
   });
+  if (pictures === undefined || pictureUser === undefined) return facts;
+  const picture = accountPicture(await pictures.pictureOf(pictureUser));
+  return picture === undefined ? facts : { ...facts, hostImage: bookingPicturePath(facts.publicKey) };
+}
+
+/**
+ * Where a personal page's host picture is fetched from (23 Oct 2026): the owner's account picture, when it is an
+ * https one on Google's picture hosts (`accountPicture`), else undefined; a team page has none (AC-754). The same
+ * door and liveness as the page's facts, so a picture shows only where the page does.
+ */
+export async function readPagePicture(entry: BookingEntry, pictures: PublicPictureDeps): Promise<URL | undefined> {
+  checkEntry(entry);
+  const owner = await inWorkspace(entry.scope, async (tx) => {
+    const page = await livePage(tx, entry);
+    return page.kind === 'personal' ? (page.ownerUserId ?? undefined) : undefined;
+  });
+  return owner === undefined ? undefined : accountPicture(await pictures.pictureOf(owner));
+}
+
+/** Where a handle's profile picture is fetched from: their account's, when Google's (`accountPicture`), else undefined. */
+export function readProfilePicture(owner: HandleOwner): URL | undefined {
+  return accountPicture(owner.image);
 }
 
 /**
@@ -288,7 +331,9 @@ export async function readBookingProfile(found: {
     handle: found.owner.handle,
     name,
     initials: profileInitials(name, found.owner.handle),
-    // No picture: the account's is Google's, which the public pages' policy (img-src 'self') never loads.
+    // The account's picture is Google's, which the public pages' policy (img-src 'self') never loads: our own
+    // origin serves it, under the current handle.
+    ...(readProfilePicture(found.owner) === undefined ? {} : { image: profilePicturePath(found.owner.handle) }),
     bio: found.owner.bio,
     links: ordered,
     ...(found.pages.length > PROFILE_PAGE_SIZE && last !== undefined

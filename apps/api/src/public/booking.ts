@@ -21,6 +21,8 @@
 //   POST /api/public/booking/connect/forget      drops the guest's calendar
 //   GET  /api/public/handles/:handle             ?after&q: a profile and a page of its Public links (22 Oct 2026)
 //   GET  /api/public/handles/:handle/:slug       the page a handle address names, by its public key
+//   GET  /api/public/booking/:publicKey/picture  a personal page's host picture, from our origin (23 Oct 2026)
+//   GET  /api/public/profiles/:handle/picture    a profile's picture, likewise (`picture.ts` fetches both)
 //
 // A slots read from a recognised visitor with a calendar also reads their
 // busy times (at most 3 seconds, failing open) and answers which slots clash
@@ -69,10 +71,14 @@ import {
   enterBookingAddress,
   enterBookingPage,
   enterBookingProfile,
+  findHandleOwner,
   getPublicBookingPage,
   readAddressedPage,
   readBookingProfile,
+  readPagePicture,
+  readProfilePicture,
   isPageHost,
+  type AccountPictureReader,
   type BookingEntry,
   managedBookingIcs,
   readManagedBooking,
@@ -90,6 +96,7 @@ import type { WakeRelay } from '../realtime/wake.ts';
 import type { TicketBook } from '../forms/ticket.ts';
 import { handoffForPage } from '../forms/handoff.ts';
 import { BOOKING_LIMITS, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
+import { pictureResponse, type PictureFetch } from './picture.ts';
 import {
   findVisitor,
   GUEST_CALLBACK_PATH,
@@ -124,6 +131,11 @@ export interface PublicBookingServices {
   readonly handoffKey?: Buffer;
   /** Where calendar files say they come from: the app's origin and the sending address. */
   readonly ics: IcsOrigin;
+  /**
+   * A host's account picture (23 Oct 2026): `pictureOf` reads it through the identity login (a failure reads as
+   * none), and `fetch` gets it from Google's picture hosts (`picture.ts`).
+   */
+  readonly pictures: { readonly pictureOf: AccountPictureReader; readonly fetch: PictureFetch };
   /** Knowing the visitor (spec 0028): sign in, the member door, and the guest leg where calendar sync is on. */
   readonly visitor?: VisitorDeps & {
     /** Signs a guest connect's state (derived from the calendar token key). */
@@ -264,6 +276,48 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       return nobody;
     });
   };
+
+  /** Answers the picture at `url` (one core's `accountPicture` gave), or 404 when there is none or it can't be had. */
+  const servePicture = async (c: Context<{ Variables: Variables }>, url: URL | undefined): Promise<Response> => {
+    const none = () => answer('NOT_FOUND', 'There’s no picture here.');
+    if (url === undefined) return none();
+    const fetched = await services.pictures.fetch(url);
+    if (fetched.ok) return pictureResponse(fetched);
+    // Why, never the URL: it names the account.
+    log.warn('booking.picture.missed', { requestId: c.get('requestId'), reason: fetched.reason });
+    return none();
+  };
+
+  // A personal page's host picture (23 Oct 2026): through the same door and liveness as its facts; a team page has none.
+  app.get('/public/booking/:publicKey/picture', async (c) => {
+    const key = c.req.param('publicKey');
+    const refused = limited([
+      [`booking:picture:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.picturesPerAddress],
+      [`booking:picture-of:${key}`, BOOKING_LIMITS.picturesPerTarget],
+    ]);
+    if (refused !== undefined) return refused;
+    try {
+      const entry = await enterBookingPage({ db }, key);
+      return await servePicture(c, await readPagePicture(entry, services.pictures));
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  // A profile's picture, by a current or old handle. Under `profiles`: `/handles/:handle/:slug` is a page's address.
+  app.get('/public/profiles/:handle/picture', async (c) => {
+    const handle = c.req.param('handle');
+    const refused = limited([
+      [`booking:picture:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.picturesPerAddress],
+      [`booking:picture-of:${handle}`, BOOKING_LIMITS.picturesPerTarget],
+    ]);
+    if (refused !== undefined) return refused;
+    try {
+      return await servePicture(c, readProfilePicture(await findHandleOwner({ db }, handle)));
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
 
   // A handle address (22 Oct 2026): the person by a current or old handle, through the door's definers only.
   app.get('/public/handles/:handle', async (c) => {
@@ -530,7 +584,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (refused !== undefined) return refused;
     try {
       const entry = await enterBookingPage({ db }, key);
-      return ok(await getPublicBookingPage(entry));
+      return ok(await getPublicBookingPage(entry, services.pictures));
     } catch (error) {
       return refusalAnswer(error);
     }

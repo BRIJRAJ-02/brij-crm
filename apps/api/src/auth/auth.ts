@@ -420,9 +420,21 @@ export function createAuth({
   /** Whether a new account may be made for `email`: on the list, or holding an open email invitation (AC-807). */
   const mayJoin = async (email: string): Promise<boolean> =>
     allowlist.allows(email) || (invited !== undefined && (await invited(email)));
+  // The picture Google's profile names in this request (23 Oct 2026): Better Auth stores it only when Google makes
+  // the account, so one made with an email code and linked to Google later has none. The session hook below fills
+  // it then, only where the account has no picture yet.
+  const googlePictures = new AsyncLocalStorage<string[]>();
   const google =
     env.GOOGLE_CLIENT_ID !== undefined && env.GOOGLE_CLIENT_SECRET !== undefined
-      ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
+      ? {
+          clientId: env.GOOGLE_CLIENT_ID,
+          clientSecret: env.GOOGLE_CLIENT_SECRET,
+          // Changes nothing Better Auth keeps: only notes the picture for this request.
+          mapProfileToUser: (profile: { readonly picture?: unknown }) => {
+            if (typeof profile.picture === 'string') googlePictures.getStore()?.push(profile.picture);
+            return {};
+          },
+        }
       : undefined;
   const appOrigin = new URL(env.APP_URL).origin;
 
@@ -461,6 +473,14 @@ export function createAuth({
         log.error('Sign in alert not sent', { error: error instanceof Error ? error.name : typeof error });
         captureFault(error, { task: 'sign in alert' });
       }
+    }
+  }
+  /** Sets the account's picture when it has none (https only); a failure is logged, never thrown. */
+  async function fillPicture(userId: string, picture: string): Promise<void> {
+    try {
+      if (await identity.setUserImageIfEmpty(userId, picture)) log.info('Account picture set from Google', {});
+    } catch (error) {
+      log.warn('Account picture not set', { error: error instanceof Error ? error.name : typeof error });
     }
   }
   // The year old security history goes at most once a day per process, after a sign in (AC-898): no timer keeps
@@ -655,6 +675,9 @@ export function createAuth({
             // Checked for a new device once the request has answered (AC-897), when a held back one is gone.
             signedInThisRequest.getStore()?.push({ userId: session.userId, sessionId: session.id });
             const method = signInMethod(context?.path);
+            // A Google sign in gives an account with no picture yet Google's (an email code account linked later).
+            const picture = googlePictures.getStore()?.at(-1);
+            if (method === 'google' && picture !== undefined) await fillPicture(session.userId, picture);
             const secondFactor =
               context?.path === '/two-factor/verify-totp'
                 ? 'totp'
@@ -946,7 +969,7 @@ export function createAuth({
       if (checked instanceof Response) return checked;
       const forwarded = new Request(checked, { headers: forwardedHeaders(checked.headers, clientIp, origin, geo) });
       const made: { userId: string; sessionId: string }[] = [];
-      const answered = await signedInThisRequest.run(made, () => auth.handler(forwarded));
+      const answered = await googlePictures.run([], () => signedInThisRequest.run(made, () => auth.handler(forwarded)));
       if (made.length > 0) {
         track(alertAfter(made));
         track(sweepAfterSignIn());
