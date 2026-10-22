@@ -1,5 +1,6 @@
-// Every area of Timefix and the features it holds. Only what is live on app.timefix.ai is listed (the feature
-// inventory of 22 Oct 2026); planned work stays off the page.
+// Every area of Timefix and the features it holds. Only what is built is listed, each line checked against the code
+// (the inventory of 22 Oct 2026, verified line by line on 23 Oct: numbers corrected, nothing unbuilt kept);
+// planned work stays off the page.
 import type { Hue, IconName } from '@crm/ui';
 
 /** One area of the product and its features. */
@@ -41,7 +42,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
       'Reschedule, cancel or mark a no-show',
       'Block time',
       'Several schedules, with days off',
-      'Google Calendar, up to three accounts',
+      'Google Calendar, up to six accounts',
       'Conflict checks per calendar',
       'Confirmations and reminders by email',
       'Add to Google, Outlook or Apple',
@@ -70,13 +71,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
     title: 'Pipeline',
     icon: 'kanban',
     hue: 'red',
-    features: [
-      'Board by stage',
-      'Drag and drop, keyboard too',
-      'Value and time in stage',
-      'The next meeting on every deal',
-      'Group and sort any view',
-    ],
+    features: ['Board by stage', 'Drag and drop, keyboard too', 'Value and time in stage', 'Group and sort any view'],
   },
   {
     id: 'forms',
@@ -84,15 +79,15 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
     icon: 'clipboard-list',
     hue: 'orange',
     features: [
-      'Twelve answer types',
+      'Eleven answer types',
       'Show when conditions',
       'Draft, preview, publish',
       'Hosted link, inline, popup or floating',
-      'Capture your site’s own form',
+      'Your own HTML, or posts from your server',
       'End on a booking page, prefilled',
       'Spam protection and a review queue',
       'UTM and source tagging',
-      'Every submission lands in the CRM',
+      'Submissions filed onto your records',
     ],
   },
   {
@@ -102,7 +97,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
     hue: 'lime',
     features: [
       'Rotations with weighted fair share',
-      'Fixed hosts on any page',
+      'Fixed hosts beside a rotation',
       'A distribution report',
       'Reassign a booking',
       'Routing rules for forms and team pages',
@@ -116,7 +111,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
     features: [
       'A setup checklist',
       'Today’s meetings',
-      'My tasks: overdue, today, upcoming',
+      'My tasks due today or overdue',
       'Recently viewed',
       'New captures',
       'Who on the team is busy today',

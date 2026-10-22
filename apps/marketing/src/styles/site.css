@@ -3,8 +3,10 @@
    (packages/config/stylelint.js reads this file), so any component on the site may use them. */
 @layer base {
   :root {
-    /* Where the frame's lines run, in from the window's sides: 16px, or wider once the content reaches its cap. */
-    --site-edge: max(var(--space-16), calc((100vw - var(--size-dialog-wide) * 2) / 2));
+    /* Where the frame's lines run, in from the window's sides: 16px on a phone; from the wide breakpoint the content
+       is a centred container, 85% of the window (the owner, 23 October 2026), capped at twice a wide dialog. */
+    --site-share: 85vw;
+    --site-edge: var(--space-16);
     /* The gap from a frame line to the content. */
     --site-gutter: clamp(var(--space-16), 3vw, calc(var(--space-32) + var(--space-8)));
     /* The content's inset from the window's side: every row of every page lines up on it. */
@@ -28,5 +30,11 @@
     --site-leading-lead: 1.5;
     --site-text-reading: var(--space-16);
     --site-leading-reading: 1.65;
+  }
+
+  @media (width >= 1024px) {
+    :root {
+      --site-edge: max(calc((100vw - var(--site-share)) / 2), calc((100vw - var(--size-dialog-wide) * 2) / 2));
+    }
   }
 }

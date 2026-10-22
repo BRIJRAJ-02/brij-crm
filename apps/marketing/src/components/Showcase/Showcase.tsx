@@ -6,7 +6,7 @@ import styles from './Showcase.module.css';
 
 /**
  * The product's four areas as the library's feature tabs, the chosen one's screens playing in a window under
- * them, whole: the window takes the content's full width. The first area's first screen is in the page from the
+ * them, whole: the window takes the content’s full width, at 16:9. The first area’s first screen is in the page from the
  * start; the rest load as they are picked.
  */
 export function Showcase() {

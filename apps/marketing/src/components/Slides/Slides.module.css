@@ -1,4 +1,4 @@
-/* Slides: the app's window at the full width of the content, its screens whole at 16:10 and stacked, the one on
+/* Slides: the app’s window at the full width of the content, its screens at 16:9 and stacked, the one on
    show faded in over the others (the owner, 23 October 2026: "slides/images moving showing what all we can do").
    The bar is a browser's: the lights, the address, then the screens' segments and a pause at the end. */
 @layer components {
@@ -72,16 +72,21 @@
     min-inline-size: 0;
   }
 
+  /* The window is 16:9 (the owner, 23 October 2026: 16:10 ran too long); the 16:10 screens keep their top and lose
+     a strip at the foot, where the app's screens are emptiest. */
   .viewport {
     display: grid;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
     background: var(--surface-sunken);
   }
 
   .shot {
     grid-area: 1 / 1;
     inline-size: 100%;
-    block-size: auto;
-    aspect-ratio: 16 / 10;
+    block-size: 100%;
+    object-fit: cover;
+    object-position: top;
     opacity: 0;
     transition: opacity var(--duration-modal) var(--ease-out);
   }

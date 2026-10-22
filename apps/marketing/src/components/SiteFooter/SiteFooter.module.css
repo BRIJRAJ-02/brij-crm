@@ -54,10 +54,10 @@
     list-style: none;
   }
 
-  /* Each row's ButtonLink starts on the column's edge, its label where the heading's text starts. */
+  /* Each row's ButtonLink starts on the column's edge, with the heading's own inset, so its label and the heading's
+     text line up. */
   .row {
     display: flex;
-    margin-inline-start: calc(-1 * var(--space-8));
   }
 
   /* The copyright row's hairline runs from frame line to frame line, as the footer's top one does. */
