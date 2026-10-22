@@ -147,6 +147,30 @@ export const MoveByKeyboard: Story = {
   },
 };
 
+/** By keyboard into an empty column past full ones: the column the card shows over is the one it drops in. */
+export const MoveByKeyboardToEmpty: Story = {
+  args: { onMove: fn(), startShowingEmpty: true },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    const lead = canvas.getByRole('grid', { name: /Lead/ });
+    const name = String(sampleRowAt(0).values.name);
+    await userEvent.tab();
+    await expect(within(lead).getAllByRole('row')[0]).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    const handle = canvas.getByRole('button', { name: `Move ${name}` });
+    await waitFor(() => expect(handle).toHaveFocus());
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(handle).not.toHaveFocus());
+    for (const column of [/Qualified/, /Proposal/, /Won/, /Lost/]) {
+      await userEvent.keyboard('{ArrowRight}');
+      await waitFor(() => expect(canvas.getByRole('region', { name: column })).toHaveAttribute('data-over'));
+    }
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(args.onMove).toHaveBeenCalled());
+    await waitFor(() => expect(within(canvas.getByRole('grid', { name: /Lost/ })).getByText(name)).toBeInTheDocument());
+  },
+};
+
 /** A locked card has a lock in place of its grip, says why, and a pointer can't pick it up. */
 export const LockedCard: Story = {
   parameters: { crm: { screenshot: false } },

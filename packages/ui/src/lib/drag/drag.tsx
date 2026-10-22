@@ -19,6 +19,7 @@ import {
   KeyboardSensor,
   PointerSensor,
   pointerWithin,
+  rectIntersection,
   useDraggable,
   useDroppable,
   useSensor,
@@ -130,8 +131,11 @@ const alongX: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
 /** Items before zones: over a board card, the card wins over its column. */
 const itemsFirst: CollisionDetection = (args) => {
-  const hits = pointerWithin(args);
-  // The keyboard has no pointer: the nearest corners, as dnd-kit gives them.
+  const pointed = pointerWithin(args);
+  // The keyboard has no pointer: what the moved card overlaps. Nearest corners alone let a card in the column it
+  // left beat an empty column's tall zone, so the card showed over one column and dropped in another (QA, 22 October
+  // 2026). Nothing overlapped: the nearest corners, as dnd-kit gives them.
+  const hits = pointed.length > 0 ? pointed : rectIntersection(args);
   if (hits.length === 0) return closestCorners(args);
   const zones = new Set(
     args.droppableContainers.flatMap((each) => (dataOf(each.data.current).isZone === true ? [each.id] : [])),

@@ -62,6 +62,8 @@ export interface AttributeDialogProps {
   readonly optionsLimit?: number | undefined;
   /** The object's attributes, for a rule's "Only when…" (spec 0013): its own, live, never a system one. */
   readonly objectAttributes?: readonly AttributeDefinition[] | undefined;
+  /** On create, the type chosen at the start (a picker key, `select` for a board with nothing to group by). */
+  readonly initialTypeKey?: string | undefined;
   readonly onClose: () => void;
   /** The server agreed: the attribute as it is now, and whether it is new. */
   readonly onSaved: (attribute: AttributeDefinition, isNew: boolean) => void;
@@ -164,6 +166,7 @@ export function AttributeDialog({
   canManage,
   optionsLimit,
   objectAttributes,
+  initialTypeKey,
   onClose,
   onSaved,
 }: AttributeDialogProps) {
@@ -345,6 +348,7 @@ export function AttributeDialog({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
+      {...(initialTypeKey === undefined ? {} : { initialTypeKey })}
       {...(attribute === undefined
         ? {}
         : {

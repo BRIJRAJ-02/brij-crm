@@ -421,6 +421,17 @@ export const CreateSelect: Story = {
   },
 };
 
+/** Opened where only a select or status will do (a board with nothing to group by): it starts on Select. */
+export const StartsOnSelect: Story = {
+  args: { typeKeys: undefined, initialTypeKey: 'select', newOptionId: optionIds(), optionsLimit: 500 },
+  play: async () => {
+    const dialog = await openDialog();
+    // Select's options editor is there from the start, with no type chosen by hand.
+    await expect(dialog).toHaveTextContent('0 of 500');
+    await expect(within(dialog).getByRole('button', { name: 'Add option' })).toBeVisible();
+  },
+};
+
 /** A new status starts with its three stages, Not started, In progress (open) and Done (won), editable before create. */
 export const CreateStatus: Story = {
   args: { typeKeys: undefined, newOptionId: optionIds() },
