@@ -88,8 +88,22 @@
     box-shadow: var(--shadow-focus-inset), var(--pinned-edge, 0 0 transparent);
   }
 
-  .name {
+  /* The type icon and the name on one line: the name comes first in the markup and the row is reversed, so the
+     icon draws first and is the one that wraps to a second line, hidden, when the name needs its room. */
+  .lead {
+    display: flex;
     flex: 1;
+    flex-flow: row-reverse wrap;
+    column-gap: var(--space-4);
+    align-items: center;
+    justify-content: flex-end;
+    min-inline-size: 0;
+    max-block-size: 1lh;
+    overflow: hidden;
+  }
+
+  .name {
+    flex: 0 1 auto;
     min-inline-size: 0;
   }
 

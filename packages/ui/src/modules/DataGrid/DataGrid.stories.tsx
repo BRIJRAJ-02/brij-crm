@@ -340,10 +340,22 @@ export const Default: Story = {
     await expect(grid).toHaveAttribute('aria-colcount', '10');
     await expect(canvas.getAllByRole('row').length).toBeLessThan(100);
     await expect(canvas.getByRole('rowheader', { name: /Northwind Traders/ })).toBeInTheDocument();
-    // A narrow column (a number) gives its type icon's room to its name (the menu's chevron is its one icon); a
-    // default one keeps its icon.
-    await expect(canvas.getByRole('columnheader', { name: /Employees/ }).querySelectorAll('svg')).toHaveLength(1);
-    await expect(canvas.getByRole('columnheader', { name: /Domain/ }).querySelectorAll('svg')).toHaveLength(2);
+    // A narrow column's type icon gives way only when its name needs the room: the icon is in sight before the
+    // name when both fit, and wrapped out of the one line lead (below it) when they don't.
+    for (const header of canvas.getAllByRole('columnheader')) {
+      const lead = header.querySelector('[class*="header-cell-lead"]');
+      const icon = lead?.querySelector('svg')?.getBoundingClientRect();
+      const name = lead?.querySelector('[data-truncated], [class*="truncated-text"]');
+      const box = lead?.getBoundingClientRect();
+      if (icon === undefined || box === undefined || name === null || name === undefined) continue;
+      const isIconShown = icon.top >= box.top - 1 && icon.bottom <= box.bottom + 1;
+      if (isIconShown) await expect(icon.right).toBeLessThanOrEqual(name.getBoundingClientRect().left + 1);
+      // Hidden only when the name and the icon beside it wouldn't both fit.
+      else {
+        const gap = Number.parseFloat(getComputedStyle(lead as Element).columnGap);
+        await expect(name.scrollWidth + gap + icon.width).toBeGreaterThan(box.width);
+      }
+    }
   },
 };
 
