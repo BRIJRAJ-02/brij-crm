@@ -28,12 +28,15 @@ export function isDefaultSort(
   return createdAt !== undefined && only.attributeId === createdAt.id;
 }
 
-/** The sort every view runs when it asks none: Created at, newest first; none when the object has no Created at. */
-export function defaultSorts(
+/**
+ * A query in its one form for comparing: the default order written as no sorts, so a view that stores Created at
+ * newest first and a draft that asks none (or the other way round) are the same question, never a draft.
+ */
+export function withDefaultOrderAsNone(
+  query: DraftQuery,
   attributes: readonly Pick<AttributeDefinition, 'id' | 'isSystem' | 'apiSlug'>[],
-): readonly { readonly attributeId: string; readonly direction: 'descending' }[] {
-  const createdAt = attributes.find((attribute) => attribute.isSystem && attribute.apiSlug === CREATED_AT_SLUG);
-  return createdAt === undefined ? [] : [{ attributeId: createdAt.id, direction: 'descending' }];
+): DraftQuery {
+  return query.sorts.length > 0 && isDefaultSort(query.sorts, attributes) ? { ...query, sorts: [] } : query;
 }
 
 /** A view's saved filter and sorts. */

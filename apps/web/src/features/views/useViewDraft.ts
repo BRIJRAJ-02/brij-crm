@@ -44,11 +44,23 @@ export interface ViewDraftInput {
   readonly write: (param: string | undefined, replace: boolean) => void;
   /** A link's draft couldn't be read: the screen says so and the param goes. */
   readonly onUnreadable: () => void;
+  /** Writes a query in its one form before comparing (the default order as no sorts); unchanged when absent. */
+  readonly normalize?: (query: DraftQuery) => DraftQuery;
 }
 
 /** The view's draft over the route's `draft` search param. */
-export function useViewDraft({ saved, savedVersion, param, opened, write, onUnreadable }: ViewDraftInput): ViewDraft {
+export function useViewDraft({
+  saved,
+  savedVersion,
+  param,
+  opened,
+  write,
+  onUnreadable,
+  normalize = (query) => query,
+}: ViewDraftInput): ViewDraft {
   const { data } = useRouteContext({ from: '__root__' });
+  // The same question in two forms (the default order stored, or asked as none) is no draft.
+  const isSame = (a: DraftQuery, b: DraftQuery) => data.views.isSameQuery(normalize(a), normalize(b));
   const [draft, setDraft] = useState<Draft | undefined>(() =>
     opened === undefined || param === undefined ? undefined : { query: opened, text: param, base: savedVersion },
   );
@@ -83,14 +95,14 @@ export function useViewDraft({ saved, savedVersion, param, opened, write, onUnre
     known.current = next;
     write(next, replace);
   };
-  const isDraft = draft !== undefined && !data.views.isSameQuery(draft.query, saved);
+  const isDraft = draft !== undefined && !isSame(draft.query, saved);
   return {
     query: isDraft ? draft.query : saved,
     isDraft,
     isLinkable: !isDraft || draft.text !== undefined,
     baseQueryVersion: isDraft ? draft.base : savedVersion,
     set: (next, how) => {
-      if (data.views.isSameQuery(next, saved)) {
+      if (isSame(next, saved)) {
         setDraft(undefined);
         go(undefined, how === 'replace');
         return;

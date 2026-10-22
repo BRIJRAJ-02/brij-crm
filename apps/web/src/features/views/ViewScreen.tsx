@@ -57,7 +57,15 @@ import {
   type BoardPatch,
   type ShownLayout,
 } from './layout.ts';
-import { farAttributesFrom, relationTarget, runningQuery, savableQuery, savedQuery, toViewQuery } from './query.ts';
+import {
+  farAttributesFrom,
+  relationTarget,
+  runningQuery,
+  savableQuery,
+  savedQuery,
+  toViewQuery,
+  withDefaultOrderAsNone,
+} from './query.ts';
 import { strings as importStrings } from '../imports/strings.ts';
 import { strings } from './strings.ts';
 import { useViewDraft } from './useViewDraft.ts';
@@ -210,6 +218,7 @@ export function ViewScreen(props: ViewScreenProps) {
       toasts.toast({ tone: 'info', message: strings.draftUnreadable });
       writeParam(undefined, true);
     },
+    normalize: (query) => withDefaultOrderAsNone(query, attributes),
   });
   // A link's draft that couldn't be read: say so once (StrictMode runs this twice in development), and show the
   // saved view.

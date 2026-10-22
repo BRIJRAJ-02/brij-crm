@@ -84,10 +84,26 @@ describe('the view bar sort chip', () => {
     expect(page.getByRole('button', { name: 'Remove sort' }).elements()).toHaveLength(0);
   });
 
-  it('shows no chip for a view with no sorts, and its Sort menu names the default that runs', async () => {
-    await render({ sorts: [] });
+  it('opens the Sort builder on the default that runs, and Add sort starts a sort of its own', async () => {
+    await render(DEFAULT);
     await userEvent.click(page.getByRole('button', { name: 'Sort', exact: true }));
-    await expect.element(page.getByRole('dialog').getByText('Created at')).toBeVisible();
+    await expect.element(page.getByText('Newest records show first.')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Add sort' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Name' }));
+    // One sort, the new one: the chip says it alone, with no "+1" for a Created at nobody chose.
+    await expect.element(page.getByRole('button', { name: 'Remove sort' })).toBeInTheDocument();
+    expect(page.getByText('+1').elements()).toHaveLength(0);
+  });
+
+  it('keeps a row edited into the default order in the open builder, rather than dropping it', async () => {
+    await render(DEFAULT);
+    await userEvent.click(page.getByRole('button', { name: 'Sort', exact: true }));
+    await userEvent.click(page.getByRole('button', { name: 'Add sort' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Created at' }));
+    // Created at starts ascending; turned descending it asks the default order, and its row stays in the builder.
+    await userEvent.click(page.getByRole('button', { name: /Ascending/ }));
+    await userEvent.click(page.getByText('Descending', { exact: true }));
+    await expect.element(page.getByRole('button', { name: 'Remove the sort by Created at' })).toBeVisible();
   });
 
   it('shows a chip for another order, and removing it goes back to the default with no chip', async () => {
@@ -95,6 +111,7 @@ describe('the view bar sort chip', () => {
     await expect.element(page.getByRole('button', { name: 'Remove sort' })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Remove sort' }));
     expect(page.getByRole('button', { name: 'Remove sort' }).elements()).toHaveLength(0);
-    await expect.element(page.getByRole('button', { name: 'Sort', exact: true })).toBeVisible();
+    // Focus lands on the dashed Sort button that takes the chip's place.
+    await expect.element(page.getByRole('button', { name: 'Sort', exact: true })).toHaveFocus();
   });
 });
