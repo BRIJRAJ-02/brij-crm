@@ -19,17 +19,20 @@ export const strings = {
   /** Under the related object in edit mode: the objects and the cardinality are fixed (#14 widens it). */
   shapeFixed: 'The objects and how records link can’t change once the relationship exists.',
   cardinality: 'How records link',
-  /** The ⓘ beside How records link. */
+  /** The ⓘ beside the first side's question: what one and many mean. */
   aboutCardinality: 'How many records each side can link to. One shows a single record; many shows a list.',
-  aboutCardinalityExample:
-    'Each person has one company and each company has many people: a person shows one Company, a company shows a list of People.',
+  /** Each side's question, one per object: "Each person has" One company or Many companies. */
+  eachHas: (singular: string) => `Each ${singular} has`,
+  one: (singular: string) => `One ${singular}`,
+  many: (plural: string) => `Many ${plural}`,
+  /** The two questions of a relationship from an object to itself, by side. */
+  thisSideHolds: 'This side holds',
+  reverseSideHolds: 'The reverse side holds',
   /** The ⓘ beside Related object. */
   aboutRelated:
     'The object on the other side. Records of the two objects can then link to each other. It can be the same object, such as a person’s manager.',
   aboutRelatedExample: 'Companies and People: link each person to the company they work at.',
-  /** The ⓘ beside a side's name: "Name on People". */
-  aboutName: (plural: string) => `The column this adds to ${plural}, and the name it shows on their pages.`,
-  aboutNameExample: 'On People “Company”, on Companies “Team”.',
+
   /**
    * One cardinality as a plain choice, phrased with both objects (spec 0014,
    * AC-282): "Each person has one company, each company has many people".
@@ -52,9 +55,9 @@ export const strings = {
   nameHint: 'Each name shows as a column on its object. API names come from the names and never change.',
   nameMissing: 'Name this side.',
   namesEqual: 'Give each side its own name.',
-  /** One side in the sentence under the choices: "People get Company, holding one company." */
+  /** One side in the sentence under the choices: "People get Company, showing one company." */
   sideSentence: (onPlural: string, title: string, isOne: boolean, singular: string, plural: string) =>
-    `${onPlural} get ${title === '' ? 'a column' : `“${title}”`}, holding ${howMany(isOne, singular, plural)}.`,
+    `${onPlural} get ${title === '' ? 'a column' : `“${title}”`}, showing ${howMany(isOne, singular, plural)}.`,
   /** Both sides of a relationship from an object to itself, in one sentence. */
   selfSentence: (
     onPlural: string,
@@ -63,7 +66,7 @@ export const strings = {
     singular: string,
     plural: string,
   ) =>
-    `${onPlural} get ${first.title === '' ? 'a column' : `“${first.title}”`}, holding ${howMany(first.isOne, singular, plural)}, and ${second.title === '' ? 'a column' : `“${second.title}”`}, holding ${howMany(second.isOne, singular, plural)}.`,
+    `${onPlural} get ${first.title === '' ? 'a column' : `“${first.title}”`}, showing ${howMany(first.isOne, singular, plural)}, and ${second.title === '' ? 'a column' : `“${second.title}”`}, showing ${howMany(second.isOne, singular, plural)}.`,
   /** Said in place of an object the viewer can't see or the dialog doesn't hold. */
   unknownSingular: 'record',
   unknownPlural: 'records',

@@ -308,7 +308,7 @@ export function RulesEditor({
       attribute: { type: attribute.type, isMulti: true },
       attributes: settingsAttributes,
     });
-    return checked.ok ? generatedMessage(checked.rule, title, named) : strings.unfinished(strings.kinds[rule.kind]);
+    return checked.ok ? generatedMessage(checked.rule, title, named) : strings.unfinished;
   };
   const errorsOf = (index: number) =>
     Object.entries(errors).filter(
@@ -477,8 +477,10 @@ export function RulesEditor({
                       />
                       <Field
                         label={strings.message}
+                        labelAside={strings.optional}
                         size="sm"
-                        isMultiline
+                        // One sentence: a line that wraps as it grows, not an empty box that looks required.
+                        isWrapping
                         maxLength={RULE_LIMITS.message}
                         showCounter
                         hint={strings.messageHint}

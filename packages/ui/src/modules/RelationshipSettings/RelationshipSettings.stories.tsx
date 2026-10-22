@@ -58,6 +58,10 @@ function openDialog() {
 
 const inDialog = (dialog: HTMLElement, label: string) => within(dialog).getByLabelText(label);
 
+/** One side's question ("Each person has"), whose two choices are One and Many. */
+const question = (dialog: HTMLElement, label: string) =>
+  within(dialog).getByRole('radiogroup', { name: new RegExp(`^${label}`) });
+
 /** Opens a Select in the dialog by its label and picks the option with these words. */
 async function choose(
   dialog: HTMLElement,
@@ -98,17 +102,18 @@ export const Create: Story = {
     await expect(dialog).toHaveAccessibleName('New relationship');
     await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
     await choose(dialog, userEvent, 'Related object', 'Companies');
+    await expect(within(question(dialog, 'Each person has')).getByRole('radio', { name: 'One company' })).toBeChecked();
     await expect(
-      within(dialog).getByRole('radio', { name: 'Each person has one company, each company has many people' }),
+      within(question(dialog, 'Each company has')).getByRole('radio', { name: 'Many people' }),
     ).toBeChecked();
     await expect(inDialog(dialog, 'Name on People')).toHaveValue('Company');
     await expect(inDialog(dialog, 'Name on Companies')).toHaveValue('People');
     // Each setting that needs a word of help has its ⓘ (owner, 22 October 2026).
-    for (const about of ['Related object', 'How records link', 'Name on People', 'Name on Companies']) {
+    for (const about of ['Related object', 'How records link']) {
       await expect(within(dialog).getByRole('button', { name: `About ${about}` })).toBeInTheDocument();
     }
     await expect(dialog).toHaveTextContent(
-      'People get “Company”, holding one company. Companies get “People”, holding many people.',
+      'People get “Company”, showing one company. Companies get “People”, showing many people.',
     );
     await userEvent.click(within(dialog).getByRole('button', { name: /Create relationship/ }));
     await waitFor(() =>
@@ -127,14 +132,16 @@ export const EveryCardinality: Story = {
   args: { to: { objectId: COMPANIES } },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
+    // Each case answers both questions: what each person has, then what each company has.
     const cases = [
-      ['Each person has many companies, each company has one person', 'one_to_many', 'Companies', 'Person'],
-      ['Each person has many companies, each company has many people', 'many_to_many', 'Companies', 'People'],
-      ['Each person has one company, each company has one person', 'one_to_one', 'Company', 'Person'],
-      ['Each person has one company, each company has many people', 'many_to_one', 'Company', 'People'],
+      ['Many companies', 'One person', 'one_to_many', 'Companies', 'Person'],
+      ['Many companies', 'Many people', 'many_to_many', 'Companies', 'People'],
+      ['One company', 'One person', 'one_to_one', 'Company', 'Person'],
+      ['One company', 'Many people', 'many_to_one', 'Company', 'People'],
     ] as const;
-    for (const [choice, cardinality, fromName, toName] of cases) {
-      await userEvent.click(within(dialog).getByRole('radio', { name: choice }));
+    for (const [nearChoice, farChoice, cardinality, fromName, toName] of cases) {
+      await userEvent.click(within(question(dialog, 'Each person has')).getByRole('radio', { name: nearChoice }));
+      await userEvent.click(within(question(dialog, 'Each company has')).getByRole('radio', { name: farChoice }));
       await expect(inDialog(dialog, 'Name on People')).toHaveValue(fromName);
       await expect(inDialog(dialog, 'Name on Companies')).toHaveValue(toName);
       await userEvent.click(within(dialog).getByRole('button', { name: /Create relationship/ }));
@@ -161,9 +168,7 @@ export const TypedName: Story = {
     await waitFor(() => expect(near).toHaveFocus());
     await userEvent.clear(near);
     await userEvent.type(near, 'Employer');
-    await userEvent.click(
-      within(dialog).getByRole('radio', { name: 'Each person has many companies, each company has many people' }),
-    );
+    await userEvent.click(within(question(dialog, 'Each person has')).getByRole('radio', { name: 'Many companies' }));
     await expect(near).toHaveValue('Employer');
     await expect(inDialog(dialog, 'Name on Companies')).toHaveValue('People');
     await userEvent.click(within(dialog).getByRole('button', { name: /Create relationship/ }));
@@ -190,8 +195,9 @@ export const SelfRelation: Story = {
     // Both names start empty (both defaults would be People), and the choices name the sides.
     await expect(first).toHaveValue('');
     await expect(second).toHaveValue('');
+    await expect(within(question(dialog, 'This side holds')).getByRole('radio', { name: 'One person' })).toBeChecked();
     await expect(
-      within(dialog).getByRole('radio', { name: 'This side holds one person, the reverse side holds many people' }),
+      within(question(dialog, 'The reverse side holds')).getByRole('radio', { name: 'Many people' }),
     ).toBeChecked();
     await userEvent.type(first, 'Manager');
     await userEvent.type(second, 'manager');
@@ -201,7 +207,7 @@ export const SelfRelation: Story = {
     await userEvent.clear(second);
     await userEvent.type(second, 'Reports');
     await expect(dialog).toHaveTextContent(
-      'People get “Manager”, holding one person, and “Reports”, holding many people.',
+      'People get “Manager”, showing one person, and “Reports”, showing many people.',
     );
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>
@@ -237,9 +243,8 @@ export const BothEndsChoosable: Story = {
     await expect(args.onSubmit).not.toHaveBeenCalled();
     await choose(dialog, userEvent, 'Object', 'Deals');
     await choose(dialog, userEvent, 'Related object', 'Companies');
-    await expect(
-      within(dialog).getByRole('radio', { name: 'Each deal has one company, each company has many deals' }),
-    ).toBeChecked();
+    await expect(within(question(dialog, 'Each deal has')).getByRole('radio', { name: 'One company' })).toBeChecked();
+    await expect(within(question(dialog, 'Each company has')).getByRole('radio', { name: 'Many deals' })).toBeChecked();
     await expect(inDialog(dialog, 'Name on Deals')).toHaveValue('Company');
     await expect(inDialog(dialog, 'Name on Companies')).toHaveValue('Deals');
   },

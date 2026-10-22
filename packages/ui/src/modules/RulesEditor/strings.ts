@@ -32,10 +32,10 @@ export const strings = {
   ruleKinds: 'Kinds of rule',
   noRules: 'No rules yet, so any value is accepted.',
   noKinds: 'This type takes no rules.',
-  usage: (count: number, limit: number) => `${String(count)} of ${String(limit)}`,
+  usage: (count: number, limit: number) => `${String(count)} of ${String(limit)} rules`,
   full: (limit: number) => `An attribute holds at most ${String(limit)} rules.`,
-  /** A rule whose settings aren't finished, in place of its summary. */
-  unfinished: (kind: string) => `${kind} rule isn’t finished.`,
+  /** A rule whose settings aren't finished, in place of its summary (its kind's name sits above it). */
+  unfinished: 'Not set up yet. Fill in its settings, or delete it.',
   /** What a message names while a new attribute has no name yet. */
   untitled: 'This attribute',
   /** Under the group's label in a dialog: rules wait for its Save, unlike options. */
@@ -95,8 +95,9 @@ export const strings = {
   latestDays: 'Latest, in days from today',
   daysHint: 'A negative number counts days before today.',
   integerNote: 'Values must be whole numbers.',
-  message: 'Message when it’s broken',
-  messageHint: 'What someone sees when their value breaks this rule. Leave it empty to use the message above.',
-  onlyWhen: 'Only when…',
-  conditionHint: 'The rule applies only to records that match, using this object’s own attributes.',
+  message: 'Error message',
+  optional: '(optional)',
+  messageHint: 'Shown when a value breaks this rule. Leave it empty to show the sentence above.',
+  onlyWhen: 'Only use this rule when…',
+  conditionHint: 'Records that don’t match these conditions skip this rule.',
 } as const;

@@ -131,15 +131,18 @@ test.describe('relations', () => {
     // Add attribute, a name, then Relationship: the dialog takes over with the name on this side (AC-282).
     const dialog = await newRelationship(page, 'Investors');
     await relatedObject(page, dialog, 'People');
-    await dialog.getByText('Each company has many people, each person has many companies').click();
-    await expect(
-      dialog.getByRole('radio', { name: 'Each company has many people, each person has many companies' }),
-    ).toBeChecked();
+    // One question per side (owner ask A99): each company has many people, each person has many companies.
+    const companySide = dialog.getByRole('radiogroup', { name: /^Each company has/ });
+    const personSide = dialog.getByRole('radiogroup', { name: /^Each person has/ });
+    await companySide.getByText('Many people', { exact: true }).click();
+    await personSide.getByText('Many companies', { exact: true }).click();
+    await expect(companySide.getByRole('radio', { name: 'Many people' })).toBeChecked();
+    await expect(personSide.getByRole('radio', { name: 'Many companies' })).toBeChecked();
     await expect(dialog.getByLabel('Name on Companies', { exact: true })).toHaveValue('Investors');
     await expect(dialog.getByLabel('Name on People', { exact: true })).toHaveValue('Companies');
     await dialog.getByLabel('Name on People', { exact: true }).fill('Investments');
     await expect(dialog).toContainText(
-      'Companies get “Investors”, holding many people. People get “Investments”, holding many companies.',
+      'Companies get “Investors”, showing many people. People get “Investments”, showing many companies.',
     );
     await checkScreen(page, 'relations-new');
     await dialog.getByRole('button', { name: 'Create relationship' }).click();
