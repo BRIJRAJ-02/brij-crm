@@ -339,7 +339,7 @@ export const WorkspaceBusy: Story = {
 /** Signing out with the sidebar folded: the workspace mark spins in place, says what is under way, and ignores presses. */
 export const CollapsedWorkspaceBusy: Story = {
   args: { isCollapsed: true, isWorkspaceBusy: true },
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ canvas, canvasElement, userEvent }) => {
     const button = canvas.getByRole('button', { name: 'Brightline, workspace menu Signing out' });
     await expect(button).toHaveAttribute('aria-disabled', 'true');
     const spinner = canvas.getByRole('progressbar', { name: 'Signing out' });
@@ -348,8 +348,8 @@ export const CollapsedWorkspaceBusy: Story = {
     await expect(button.getBoundingClientRect().right).toBeLessThanOrEqual(nav.getBoundingClientRect().right);
     await userEvent.click(button);
     await expect(document.querySelector('[role="menu"]')).toBeNull();
-    // The rail's name tooltip gone before the screenshot, so the shot is the same every run.
-    await userEvent.unhover(button);
+    // The pointer rests on the empty page, not the button, and its name tooltip is gone before the screenshot.
+    await userEvent.hover(canvasElement);
     await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull(), { timeout: 4000 });
   },
 };

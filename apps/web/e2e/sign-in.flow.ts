@@ -147,8 +147,9 @@ async function signOut(page: Page): Promise<void> {
     if (!(await page.getByRole('dialog', { name: 'Sign out?' }).isVisible())) {
       await button.focus();
       await page.keyboard.press('Enter');
-      // The menu is whole once the person's role is known (Leave workspace joins it); then Sign out is last.
-      await expect(page.getByRole('menuitem', { name: 'Leave workspace' })).toBeVisible({ timeout: 5_000 });
+      // The menu is whole once the person's role is known (it sits under the open workspace's name; Leave workspace
+      // stays out for an only owner); then Sign out is last.
+      await expect(page.getByRole('menu').getByText('Owner', { exact: true })).toBeVisible({ timeout: 5_000 });
       // The workspaces come first (spec 0031, AC-801); Sign out is last, so End reaches it.
       await page.keyboard.press('End');
       await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused({ timeout: 2_000 });
@@ -299,7 +300,8 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(title).toBeVisible();
   await page.getByRole('button', { name: /workspace menu/ }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('menuitem', { name: 'Leave workspace' })).toBeVisible();
+  // Whole once the role is known (an only owner gets no Leave workspace).
+  await expect(page.getByRole('menu').getByText('Owner', { exact: true })).toBeVisible();
   await checkScreen(page, '7-workspace-menu');
   // The workspaces come first (spec 0031, AC-801); Sign out is last, so End reaches it.
   await page.keyboard.press('End');

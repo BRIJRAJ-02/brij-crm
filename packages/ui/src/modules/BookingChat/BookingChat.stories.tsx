@@ -88,11 +88,13 @@ export const ReadBack: Story = {
       </Stage>
     );
   },
-  play: async ({ canvas, args }) => {
+  play: async ({ canvas, canvasElement, args }) => {
     // Only the last reply's buttons are live: the greeting's times are gone.
     await expect(canvas.queryByRole('list', { name: 'Times on Fri 9 Oct' })).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: 'Yes, book it' }));
     await expect(args.onSend).toHaveBeenCalledWith('Yes, book it');
+    // The pointer leaves the chip for the empty page, so the shot never catches its hover.
+    await userEvent.hover(canvasElement);
   },
 };
 
