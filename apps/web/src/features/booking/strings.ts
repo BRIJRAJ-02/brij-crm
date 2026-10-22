@@ -100,7 +100,7 @@ export const strings = {
   findSection: 'Find or add a section',
   /** With no handle yet, the page keeps its /b/ link and this links to Settings › Profile. */
   setHandle: 'Set your handle to get a short address',
-  slugChanging: 'Links with the old address will stop working once you save.',
+  slugChanging: 'Links with the old address keep working and move to the new one.',
   slugRequired: 'Give the page a web address.',
   slugInvalid: 'Use lowercase letters, numbers and single hyphens.',
   profileSection: 'Section',

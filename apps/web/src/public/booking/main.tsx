@@ -167,8 +167,8 @@ if (path !== null) {
       .address(page.handle, page.slug)
       .then(
         (found) => {
-          // An old handle's address shows the current one.
-          if (found.handle !== page.handle) showAddress(`/${found.handle}/${page.slug}`);
+          // An old handle's or an old slug's address shows the current one.
+          if (found.handle !== page.handle || found.slug !== page.slug) showAddress(`/${found.handle}/${found.slug}`);
           renderBooking(found.publicKey);
         },
         (error: unknown) => {

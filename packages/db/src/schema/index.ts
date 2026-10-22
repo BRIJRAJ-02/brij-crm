@@ -43,6 +43,7 @@ export {
   bookingHosts,
   bookingMemberHours,
   bookingPageMembers,
+  bookingPageSlugs,
   bookingPages,
   bookings,
   bookingTimeBlocks,

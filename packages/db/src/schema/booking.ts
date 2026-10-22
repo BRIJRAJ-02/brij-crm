@@ -289,6 +289,43 @@ export const bookingPageMembers = pgTable(
   ],
 );
 
+/**
+ * Every slug a page holds or held at its owner's address, `/<handle>/<slug>` (slug history, 22 Oct 2026): its
+ * current one, and up to 20 old ones, which keep finding the page (the public page moves to the current address).
+ * Kept only by the trigger crm_booking_page_slugs_keep (0087) on `booking_pages`: a page that is deleted or changes
+ * hands loses its old slugs, and its rows go with it when it is purged. `booking_page_slugs_owner_slug` keeps a slug
+ * one page of a person holds or held from any other page of theirs, in every workspace, so an old link never finds
+ * a different page; the same page may take it back.
+ */
+export const bookingPageSlugs = pgTable(
+  'booking_page_slugs',
+  {
+    workspaceId: workspaceId(),
+    pageId: uuid('page_id').notNull(),
+    /** The page owner's identity when the page held the slug (`booking_pages.owner_user_id`). */
+    ownerUserId: uuid('owner_user_id').notNull(),
+    slug: text('slug').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    /** When the page last took or left this slug: the oldest past the cap of 20 old ones goes first. */
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'booking_page_slugs_pkey', columns: [t.workspaceId, t.pageId, t.slug] }),
+    foreignKey({
+      name: 'booking_page_slugs_page',
+      columns: [t.workspaceId, t.pageId],
+      foreignColumns: [bookingPages.workspaceId, bookingPages.id],
+    }).onDelete('cascade'),
+    // An old address is found before the workspace is known: read only through crm_booking_lookup's
+    // crm_booking_page_by_address and crm_booking_owner_slugs.
+    uniqueIndex('booking_page_slugs_owner_slug').on(t.ownerUserId, t.slug),
+    check(
+      'booking_page_slugs_slug_shape',
+      sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`,
+    ),
+  ],
+);
+
 /** One booking a visitor made. Cancelled bookings stay, holding nothing. */
 export const bookings = pgTable(
   'bookings',
