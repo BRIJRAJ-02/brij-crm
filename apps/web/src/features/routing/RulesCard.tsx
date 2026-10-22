@@ -3,7 +3,7 @@
 // Main task: read the rules in order, add or change one in its dialog, reorder or remove one, and check each rule's report to tune it.
 // Leaves out: the fallback itself (a form's After sending, a page's rotation, each set in its own card).
 import type { DataLayer, RoutingRule } from '@crm/data';
-import { useRoutingReport } from '@crm/data/react';
+import { usePageRules, useRoutingReport } from '@crm/data/react';
 import {
   Button,
   Callout,
@@ -24,7 +24,7 @@ import {
   type TableColumn,
 } from '@crm/ui';
 import { useMemo, useState } from 'react';
-import { conditionsLine, type Fact } from './facts.ts';
+import { conditionsLine, hiddenFieldFacts, type Fact } from './facts.ts';
 import { RuleDialog, type RuleSurface } from './RuleDialog.tsx';
 import { strings } from './strings.ts';
 
@@ -40,9 +40,15 @@ export interface RulesCardProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly surface: RuleSurface;
-  /** The surface the report is read for; absent before the surface exists (no report yet). */
+  /**
+   * The surface the report is read for; absent before the surface exists (no report yet). On a team page it also
+   * names the page whose rules the data layer holds: the card shows those, so a change shows at once and a refusal
+   * puts it back.
+   */
   readonly report?: ReportSurface;
+  /** The rules as the caller has them: a form's draft; on a team page, the first paint until the data layer holds the page. */
   readonly rules: readonly RoutingRule[];
+  /** What a condition may read; the visit's hidden fields (UTM tags, page, referrer) come after them on every surface. */
   readonly facts: readonly Fact[];
   /** Names the fact picker: "Question" on a form, "Question or field" on a page. */
   readonly factLabel: string;
@@ -69,8 +75,26 @@ const REPORT_COLUMNS: readonly TableColumn[] = [
   { id: 'qualified', label: strings.qualified, align: 'end' },
 ];
 
-/** The rules as rows with a menu each, Add a rule, the dialog, the remove confirm and the report. */
-export function RulesCard({
+/**
+ * The rules as rows with a menu each, Add a rule, the dialog, the remove confirm and the report. A team page's
+ * rules come from the data layer's copy of the page (`data.routing.pageRules`), never a copy of the card's own.
+ */
+export function RulesCard(props: RulesCardProps) {
+  const { report } = props;
+  return report?.kind === 'booking_page' ? (
+    <PageRulesCard {...props} pageId={report.pageId} />
+  ) : (
+    <RulesCardBody {...props} />
+  );
+}
+
+/** A team page's card: its rules as the data layer holds the page, the caller's until the layer holds it. */
+function PageRulesCard({ pageId, ...props }: RulesCardProps & { readonly pageId: string }) {
+  const held = usePageRules(props.data.routing.pageRules(props.slug, pageId));
+  return <RulesCardBody {...props} rules={held ?? props.rules} />;
+}
+
+function RulesCardBody({
   data,
   slug,
   surface,
@@ -89,6 +113,10 @@ export function RulesCard({
   const [removing, setRemoving] = useState<number | undefined>();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | undefined>();
+  // Every rule may also read the visit's hidden fields; on a team page they come from the form that sent the visitor.
+  const readable = [...facts, ...hiddenFieldFacts(surface.kind)];
+  // So the picker's name says so on a form; a team page's "Question or field" already does.
+  const pickerLabel = surface.kind === 'form' ? strings.questionOrHidden : factLabel;
 
   const pageTitle = (pageId: string) =>
     surface.kind === 'form' ? surface.pages.find((page) => page.id === pageId)?.title : undefined;
@@ -148,7 +176,7 @@ export function RulesCard({
           <SettingsRow
             key={rule.id}
             title={strings.ruleTitle(index, rule.name)}
-            description={`${strings.when} ${conditionsLine(rule.when, facts)}. ${routeLine(rule)}.`}
+            description={`${strings.when} ${conditionsLine(rule.when, readable)}. ${routeLine(rule)}.`}
           >
             {!isReadOnly && (
               <MenuTrigger>
@@ -212,8 +240,8 @@ export function RulesCard({
         {...(editing?.rule === undefined ? {} : { rule: editing.rule })}
         index={editing?.index ?? 0}
         surface={surface}
-        facts={facts}
-        factLabel={factLabel}
+        facts={readable}
+        factLabel={pickerLabel}
         isBusy={busy}
         {...(failure === undefined ? {} : { failure })}
         onClose={() => {

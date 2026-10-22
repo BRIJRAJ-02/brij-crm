@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { InfoTip } from '../InfoTip/InfoTip.tsx';
-import { Select, type SelectItem } from './Select.tsx';
+import { Select, type SelectItem, type SelectProps } from './Select.tsx';
 
 const STAGES: readonly SelectItem[] = [
   { id: 'lead', label: 'Lead', hue: 'gray' },
@@ -448,5 +449,85 @@ export const OptionBadge: Story = {
     if (!(list instanceof HTMLElement)) throw new Error('the list is not an element');
     // Once the popover has faded in.
     await waitFor(() => expect(within(list).getByRole('option', { name: /Working hours.*Default/ })).toBeVisible());
+  },
+};
+
+const COUNTRIES: readonly SelectItem[] = [
+  { id: 'de', label: 'Germany' },
+  { id: 'fr', label: 'France' },
+  { id: 'nl', label: 'Netherlands' },
+  { id: 'es', label: 'Spain' },
+];
+
+/** A Select of several that keeps its own choices, so the story shows each pick land in the field. */
+function ChooseSeveral(props: SelectProps) {
+  const [values, setValues] = useState<readonly string[]>(props.values ?? []);
+  return (
+    <Select
+      {...props}
+      values={values}
+      onValuesChange={(next) => {
+        setValues(next);
+        props.onValuesChange?.(next);
+      }}
+    />
+  );
+}
+
+/**
+ * Several at once (`selectionMode="multiple"`): a routing rule's "Country is any of". Each pick toggles its check
+ * and the list stays open for the next; the closed field names them all, in the list's order.
+ */
+export const Multiple: Story = {
+  args: {
+    label: 'Country',
+    items: COUNTRIES,
+    optionStyle: 'plain',
+    selectionMode: 'multiple',
+    values: ['fr'],
+    placeholder: 'Pick values',
+    onValuesChange: fn(),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <ChooseSeveral {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    const trigger = canvas.getByRole('button', { name: /Country/ });
+    await expect(trigger).toHaveTextContent('France');
+    await userEvent.click(trigger);
+    const list = await listbox();
+    await expect(list).toHaveAttribute('aria-multiselectable', 'true');
+    const option = (name: string) =>
+      [...list.querySelectorAll('[role="option"]')].find((each) => each.textContent.includes(name));
+    await userEvent.click(option('Germany') ?? list);
+    await expect(args.onValuesChange).toHaveBeenLastCalledWith(['de', 'fr']);
+    // Still open: the next pick goes in beside them, in the list's order.
+    await userEvent.click(option('Spain') ?? list);
+    await expect(args.onValuesChange).toHaveBeenLastCalledWith(['de', 'fr', 'es']);
+    await expect(option('Spain')).toHaveAttribute('aria-selected', 'true');
+    await expect(trigger).toHaveTextContent('Germany, France, Spain');
+  },
+};
+
+/** Several chosen, read only: the names in one line, with the lock. */
+export const MultipleReadOnly: Story = {
+  args: {
+    label: 'Country',
+    items: COUNTRIES,
+    optionStyle: 'plain',
+    selectionMode: 'multiple',
+    values: ['es', 'de'],
+    isReadOnly: true,
+    readOnlyReason: 'Only an admin can change it.',
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Country' })).toHaveTextContent('Germany, Spain');
   },
 };

@@ -1,5 +1,5 @@
 // The words of routing rules and Show when (spec 0043), in one place.
-import type { ConditionOp } from '@crm/data/forms';
+import type { ConditionOp, HiddenField } from '@crm/data/forms';
 
 const OPS: Readonly<Record<ConditionOp, string>> = {
   is: 'is',
@@ -10,6 +10,17 @@ const OPS: Readonly<Record<ConditionOp, string>> = {
   is_empty: 'is empty',
   more_than: 'is more than',
   less_than: 'is less than',
+};
+
+/** The visit's hidden fields, named as a submission's Came from names them. */
+const HIDDEN: Readonly<Record<HiddenField, string>> = {
+  utm_source: 'UTM source',
+  utm_medium: 'UTM medium',
+  utm_campaign: 'UTM campaign',
+  utm_term: 'UTM term',
+  utm_content: 'UTM content',
+  page: 'Page',
+  referrer: 'Referrer',
 };
 
 export const strings = {
@@ -24,9 +35,11 @@ export const strings = {
   fact: 'Reads',
   question: 'Question',
   questionOrField: 'Question or field',
+  questionOrHidden: 'Question or hidden field',
   comparison: 'Comparison',
   value: 'Value',
   pickValue: 'Pick a value',
+  pickValues: 'Pick values',
   pickFact: 'Pick a question',
   addCondition: 'Add a condition',
   removeCondition: (index: number) => `Remove condition ${String(index + 1)}`,
@@ -34,6 +47,9 @@ export const strings = {
   no: 'No',
   removedQuestion: 'A removed question',
   fieldOf: (side: 'person' | 'company', title: string) => `${side === 'person' ? 'Person' : 'Company'} · ${title}`,
+  hiddenField: (field: HiddenField) => HIDDEN[field],
+  // On a team page a hidden field is the one the sending form's visit brought.
+  fromForm: (name: string) => `Form · ${name}`,
   conditionsIncomplete: 'Finish each condition, or remove it.',
 
   // Show when on a question

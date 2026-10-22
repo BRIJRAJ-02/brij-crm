@@ -121,6 +121,7 @@ import {
   type RoutingReportHeld,
   type RoutingReportSurface,
 } from './routing/reports.ts';
+import { pageRulesOf, type PageRulesHeld } from './routing/page-rules.ts';
 import {
   createAccountSecurityStore,
   isFresh as isSessionFresh,
@@ -395,6 +396,7 @@ export type {
   RoutingReportState,
   RoutingReportSurface,
 } from './routing/reports.ts';
+export type { PageRulesHeld } from './routing/page-rules.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -1742,6 +1744,9 @@ export function createDataLayer({
     report: (workspace, surface, days) =>
       beforeRead(workspace).then(() => call((options) => api.routing.report({ workspace, surface, days }, options))),
   });
+  // A team page's rules as its Routing card reads them: one read per workspace and page over the held booking page
+  // list, kept so a screen's subscription stays the same across renders.
+  const pageRules = new Map<string, PageRulesHeld>();
 
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
   // a `schedules` event.
@@ -3100,6 +3105,18 @@ export function createDataLayer({
        */
       report: (workspace: string, surface: RoutingReportSurface, days: RoutingReportDays): RoutingReportHeld =>
         routingReports.view(workspace, surface, days),
+      /**
+       * A team page's routing rules as the layer holds them (spec 0043, AC-1608), for its Routing card: the page's
+       * entry in the held booking page list (`bookingPages.view`), which `bookingPages.update` patches at once and
+       * puts back on a refusal, so a rule added, moved or removed shows before the server answers. Held while the
+       * card shows (`usePageRules`); undefined until the list holds the page.
+       */
+      pageRules: (workspace: string, pageId: string): PageRulesHeld => {
+        const key = `${workspace} ${pageId}`;
+        const held = pageRules.get(key) ?? pageRulesOf(bookingPageLists.view(workspace), pageId);
+        pageRules.set(key, held);
+        return held;
+      },
     },
     home: {
       /**

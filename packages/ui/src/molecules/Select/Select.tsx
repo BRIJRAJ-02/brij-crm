@@ -69,6 +69,16 @@ export interface SelectProps {
   readonly defaultValue?: string | null;
   /** Called with the chosen id, or `null` when cleared. */
   readonly onChange?: (id: string | null) => void;
+  /**
+   * `multiple` lets several options be chosen ("Country is any of Germany or France"): each chosen option is
+   * checked, the list stays open while choosing, and the closed field names them all, in the list's order. `values`
+   * and `onValuesChange` take the place of `value` and `onChange`; Clear and Create are for one choice only.
+   */
+  readonly selectionMode?: 'single' | 'multiple';
+  /** With `selectionMode="multiple"`: the chosen ids. */
+  readonly values?: readonly string[];
+  /** With `selectionMode="multiple"`: every chosen id after each change, in the list's order. */
+  readonly onValuesChange?: (ids: readonly string[]) => void;
   /** Shown when nothing is chosen: "Set Stage…". */
   readonly placeholder?: string;
   readonly hint?: string;
@@ -181,6 +191,26 @@ function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optio
   );
 }
 
+/** Several chosen options in the closed field: plain names joined in one line that cuts with an ellipsis, else each face. */
+function Faces({
+  items,
+  optionStyle,
+}: {
+  readonly items: readonly SelectItem[];
+  readonly optionStyle: SelectOptionStyle;
+}) {
+  if (optionStyle === 'plain') {
+    return <span className={styles.plain}>{items.map((item) => item.label).join(strings.listJoin)}</span>;
+  }
+  return (
+    <>
+      {items.map((item) => (
+        <Face key={item.id} item={item} optionStyle={optionStyle} />
+      ))}
+    </>
+  );
+}
+
 /**
  * Choose one of a short list (up to about 15): a stage, a status, an owner.
  * Its options show as tags, status dots or people, the same as the value
@@ -197,6 +227,9 @@ export function Select({
   value,
   defaultValue,
   onChange,
+  selectionMode = 'single',
+  values,
+  onValuesChange,
   placeholder,
   hint,
   error,
@@ -225,8 +258,12 @@ export function Select({
   // In a popover the popover's edge frames the trigger, so its focus is the accent edge alone.
   const isInPopover = use(InPopover);
   const [query, setQuery] = useState(defaultSearch ?? '');
-  const current = value ?? defaultValue ?? null;
+  const isMultiple = selectionMode === 'multiple';
+  const current = isMultiple ? null : (value ?? defaultValue ?? null);
   const chosen = items.find((item) => item.id === current);
+  // Every chosen id: the one in a single choice, all of them in a multiple one.
+  const chosenIds: readonly string[] = isMultiple ? (values ?? []) : current === null ? [] : [current];
+  const chosenItems = items.filter((item) => chosenIds.includes(item.id));
   const description = (isReadOnly ? readOnlyReason : undefined) ?? hint;
   const typed = query.trim();
   const hasSearch = isSearchable || onCreate !== undefined;
@@ -257,10 +294,12 @@ export function Select({
         {!isLabelHidden && <FieldLabel label={label} info={info} as="text" />}
         <span className={styles.trigger} role="group" aria-label={label}>
           <span className={styles.value}>
-            {chosen === undefined ? (
-              <span className={styles.placeholder}>{placeholder ?? strings.none}</span>
-            ) : (
+            {isMultiple && chosenItems.length > 0 ? (
+              <Faces items={chosenItems} optionStyle={optionStyle} />
+            ) : !isMultiple && chosen !== undefined ? (
               <Face item={chosen} optionStyle={optionStyle} />
+            ) : (
+              <span className={styles.placeholder}>{placeholder ?? strings.none}</span>
             )}
           </span>
           <Icon name="lock" size="xs" tone="muted" label={strings.readOnly} />
@@ -271,15 +310,16 @@ export function Select({
   }
 
   const disabledKeys = items
-    .filter((item) => item.isDisabled === true || (item.isArchived === true && item.id !== current))
+    .filter((item) => item.isDisabled === true || (item.isArchived === true && !chosenIds.includes(item.id)))
     .map((item) => item.id);
   const canCreate =
     onCreate !== undefined &&
+    !isMultiple &&
     typed !== '' &&
     !items.some((item) => item.isArchived !== true && item.label.trim().toLowerCase() === typed.toLowerCase());
   const options: readonly SelectItem[] = [
     ...ranked,
-    ...(isClearable && !isRequired && current !== null
+    ...(isClearable && !isRequired && !isMultiple && current !== null
       ? [{ id: CLEAR, label: strings.clear, icon: 'x' as const }]
       : []),
     // Its words hold what was typed, so the search's own filter always keeps it.
@@ -388,8 +428,10 @@ export function Select({
       disabledKeys={disabledKeys}
       placeholder={placeholder ?? strings.choose}
       {...(isLabelHidden ? { 'aria-label': label } : {})}
-      {...(value === undefined ? {} : { value })}
-      {...(defaultValue === undefined ? {} : { defaultValue })}
+      selectionMode={selectionMode}
+      {...(isMultiple ? { value: [...chosenIds] } : {})}
+      {...(isMultiple || value === undefined ? {} : { value })}
+      {...(isMultiple || defaultValue === undefined ? {} : { defaultValue })}
       {...(defaultOpen === undefined ? {} : { defaultOpen })}
       {...(autoFocus ? { autoFocus: true } : {})}
       // Each opening searches afresh (from the key that opened a cell's list, when one did).
@@ -398,6 +440,11 @@ export function Select({
         onOpenChange?.(isOpen);
       }}
       onChange={(next) => {
+        if (Array.isArray(next)) {
+          const picked = new Set(next.map(String));
+          onValuesChange?.(items.filter((item) => picked.has(item.id)).map((item) => item.id));
+          return;
+        }
         if (next === CREATE) {
           if (canCreate) onCreate(typed);
           return;
@@ -409,6 +456,14 @@ export function Select({
       <AriaButton className={styles.trigger} {...(triggerRef === undefined ? {} : { ref: triggerRef })}>
         <SelectValue<SelectItem> className={styles.value}>
           {({ selectedItems, isPlaceholder, defaultChildren }) => {
+            // Several chosen: each by the field's own values, in the list's order.
+            if (isMultiple) {
+              return chosenItems.length === 0 ? (
+                <span className={styles.placeholder}>{defaultChildren}</span>
+              ) : (
+                <Faces items={chosenItems} optionStyle={optionStyle} />
+              );
+            }
             // A static (grouped) option without its value still names the chosen item by the field's own value:
             // React Aria types the entry as always there, but a static item's is null.
             const first = selectedItems[0];

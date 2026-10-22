@@ -8,4 +8,6 @@ export const strings = {
   noMatches: 'No matches',
   /** The last item when what is typed is no option yet (spec 0012, AC-238). */
   create: (label: string) => `Create "${label}"`,
+  /** Between the names of several chosen options in the closed field (`selectionMode="multiple"`). */
+  listJoin: ', ',
 } as const;

@@ -29,9 +29,10 @@ export const NUMBER_OPS: readonly ConditionOp[] = ['more_than', 'less_than'];
 export const CONDITIONS_MAX = 5;
 
 /**
- * One condition: a fact's key (a question key, or `person.<attributeId>` /
- * `company.<attributeId>` for a record field), a comparison and its value.
- * `is_any_of` takes a list; the number comparisons a number as text.
+ * One condition: a fact's key (a question key, `person.<attributeId>` /
+ * `company.<attributeId>` for a record field, or `hidden.<name>` for one of
+ * the visit's hidden fields), a comparison and its value. `is_any_of` takes a
+ * list; the number comparisons a number as text.
  */
 export interface Condition {
   readonly key: string;
@@ -54,6 +55,69 @@ export const RECORD_FACT = /^(person|company)\.([0-9a-f-]{36})$/;
 /** True when a key names a record field, not an answer. */
 export function isRecordFact(key: string): boolean {
   return RECORD_FACT.test(key);
+}
+
+/**
+ * The hidden fields a visit brings (spec 0023, AC-591): its UTM tags, the
+ * page it was on and the referrer, as a form's submission keeps them
+ * (`SubmitHidden`). Routing rules read them as `hidden.<name>`; a question's
+ * Show when doesn't, since the hosted page decides it from answers alone.
+ */
+export const HIDDEN_FIELDS = [
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'page',
+  'referrer',
+] as const;
+/** One hidden field. */
+export type HiddenField = (typeof HIDDEN_FIELDS)[number];
+
+/** The fact key of a hidden field: `hidden.utm_source`. */
+export function hiddenFactKey(field: HiddenField): string {
+  return `hidden.${field}`;
+}
+
+/** True when a key names one of the visit's hidden fields (`hidden.utm_source`), not an answer. */
+export function isHiddenFact(key: string): boolean {
+  return key.startsWith('hidden.') && (HIDDEN_FIELDS as readonly string[]).includes(key.slice('hidden.'.length));
+}
+
+/** Where each hidden field sits in a submission's stored context (`SubmissionContext`): the page is `page_url`. */
+const CONTEXT_KEYS: Readonly<Record<HiddenField, string>> = {
+  utm_source: 'utm_source',
+  utm_medium: 'utm_medium',
+  utm_campaign: 'utm_campaign',
+  utm_term: 'utm_term',
+  utm_content: 'utm_content',
+  page: 'page_url',
+  referrer: 'referrer',
+};
+
+/** The text an object holds at `key`, or undefined (not an object, not text, or blank). */
+function textAt(source: unknown, key: string): string | undefined {
+  if (typeof source !== 'object' || source === null || Array.isArray(source) || !Object.hasOwn(source, key)) {
+    return undefined;
+  }
+  const value: unknown = (source as Readonly<Record<string, unknown>>)[key];
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+}
+
+/**
+ * A visit's hidden fields as facts, under their `hidden.<name>` keys: from a
+ * submission's stored context first, then its older hidden fields, as the
+ * submission's Came from reads them. A field the visit didn't bring is left
+ * out, so a rule over it reads it as empty.
+ */
+export function hiddenFacts(hidden: unknown, context?: unknown): Facts {
+  return Object.fromEntries(
+    HIDDEN_FIELDS.flatMap((field) => {
+      const value = textAt(context, CONTEXT_KEYS[field]) ?? textAt(hidden, field);
+      return value === undefined ? [] : [[hiddenFactKey(field), value]];
+    }),
+  );
 }
 
 /** A fact's values as comparable text: trimmed, lower case; yes or no for booleans; a phone's number. */

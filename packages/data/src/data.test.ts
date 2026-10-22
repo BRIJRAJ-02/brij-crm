@@ -4,13 +4,16 @@
 // shape every failure takes, and that a 401 signs out once.
 import {
   contract,
+  defaultAvailability,
   type AttributeDefinition,
+  type BookingPageView,
   type AttributeOption,
   type ChangeEvent,
   type DeleteManyResults,
   type GlobalSearchResults,
   type RecentItem,
   type RestoreResults,
+  type RoutingRule,
   type UpdateManyResults,
   type TrashPage,
   type JobView,
@@ -166,6 +169,12 @@ interface Behaviour {
   /** The command menu (spec 0039): a search's answer, the recent items, and each visit as sent. */
   globalSearch: (query: string) => GlobalSearchResults;
   recents: () => RecentItem[];
+  /** Booking pages (spec 0025): the held list's read, and an update's answer, which a team page's rules ride (spec 0043). */
+  bookingPagesList: () => BookingPageView[];
+  bookingPagesUpdate: (input: {
+    readonly pageId: string;
+    readonly routing?: { readonly rules: readonly RoutingRule[] } | undefined;
+  }) => BookingPageView | Promise<BookingPageView>;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -217,6 +226,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     trashRestore: notServed,
     globalSearch: () => ({ records: [], views: [] }),
     recents: () => [],
+    bookingPagesList: notServed,
+    bookingPagesUpdate: notServed,
     ...overrides,
   };
   const calls: string[] = [];
@@ -626,10 +637,13 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       get: os.exports.get.handler(notServed),
     },
     bookingPages: {
-      list: os.bookingPages.list.handler(notServed),
+      list: os.bookingPages.list.handler(() => behaviour.bookingPagesList()),
       get: os.bookingPages.get.handler(notServed),
       create: os.bookingPages.create.handler(notServed),
-      update: os.bookingPages.update.handler(notServed),
+      update: os.bookingPages.update.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.bookingPagesUpdate(input);
+      }),
       delete: os.bookingPages.delete.handler(notServed),
     },
     home: {
@@ -2695,5 +2709,88 @@ describe('search (spec 0039)', () => {
       expect(count(api.calls, '/api/rpc/recents/visit')).toBe(3);
     });
     expect(notices).toEqual([]);
+  });
+});
+
+describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
+  const rule = (id: string): RoutingRule => ({
+    id,
+    when: { join: 'all', rules: [{ key: 'budget', op: 'is_any_of', value: ['Large', 'Huge'] }] },
+    then: { kind: 'hosts', hosts: [ADA_MEMBER.id] },
+  });
+  const teamPage = (rules: readonly RoutingRule[]): BookingPageView => ({
+    id: '0199a6f2-0000-7000-8000-0000000000b1',
+    title: 'Demo',
+    description: '',
+    slug: 'demo',
+    durations: [30],
+    location: { type: 'video' },
+    bufferBefore: 0,
+    bufferAfter: 0,
+    minNoticeMinutes: 0,
+    windowDays: 30,
+    dailyLimit: null,
+    slotStep: null,
+    status: 'live',
+    scheduleId: null,
+    rescheduleHost: 'same',
+    isPrivate: false,
+    profileSection: null,
+    profilePosition: 0,
+    publicKey: 'demo-key',
+    kind: 'round_robin',
+    ownerMemberId: ADA_MEMBER.id,
+    availability: defaultAvailability('UTC'),
+    scheduleName: 'Working hours',
+    routing: { rules: [...rules] },
+    bookingsThisMonth: 0,
+    canChange: true,
+    createdAt: '2026-10-22T09:00:00.000Z',
+    updatedAt: '2026-10-22T09:00:00.000Z',
+  });
+
+  it('reads the rules from the held page: a change shows at once, the answer lands, a refusal puts them back', async () => {
+    const page = teamPage([rule('large')]);
+    const answers: { settle: (outcome: 'ok' | 'refuse') => void }[] = [];
+    const api = fakeApi({
+      bookingPagesList: () => [page],
+      bookingPagesUpdate: (input) =>
+        new Promise((resolve, reject) => {
+          answers.push({
+            settle: (outcome) => {
+              if (outcome === 'ok') resolve({ ...page, routing: { rules: [...(input.routing?.rules ?? [])] } });
+              else
+                reject(new ORPCError('CONFIG_INVALID', { status: 400, message: 'Rule 2 needs people to pick from.' }));
+            },
+          });
+        }),
+    });
+    const { data } = layer(api);
+    const held = data.routing.pageRules('acme', page.id);
+    // One read per page, so a card's subscription holds across renders.
+    expect(data.routing.pageRules('acme', page.id)).toBe(held);
+    expect(held.getSnapshot()).toBeUndefined();
+    const release = held.retain();
+    await data.bookingPages.view('acme').ready();
+    expect(held.getSnapshot()?.map((each) => each.id)).toEqual(['large']);
+
+    const added = data.bookingPages.update('acme', page.id, {}, { routing: { rules: [rule('large'), rule('huge')] } });
+    expect(held.getSnapshot()?.map((each) => each.id)).toEqual(['large', 'huge']);
+    await vi.waitFor(() => {
+      expect(answers).toHaveLength(1);
+    });
+    answers[0]?.settle('ok');
+    await added;
+    expect(held.getSnapshot()?.map((each) => each.id)).toEqual(['large', 'huge']);
+
+    const cleared = data.bookingPages.update('acme', page.id, {}, { routing: { rules: [] } });
+    expect(held.getSnapshot()).toEqual([]);
+    await vi.waitFor(() => {
+      expect(answers).toHaveLength(2);
+    });
+    answers[1]?.settle('refuse');
+    expect((await failure(cleared)).code).toBe('CONFIG_INVALID');
+    expect(held.getSnapshot()?.map((each) => each.id)).toEqual(['large', 'huge']);
+    release();
   });
 });
