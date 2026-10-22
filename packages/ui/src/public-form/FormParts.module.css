@@ -45,7 +45,15 @@
     padding-block: var(--space-32) var(--space-24);
   }
 
+  /* A visitor reads each question once, often on a phone: inside the card a question's name (and its line under the
+     field) reads at the body size, medium, as a contact form's labels do, rather than the app's dense 11px label. A
+     choice group's question was already medium, so both now match. The foot under the card keeps the small size. */
   .card {
+    --text-label: var(--text-body-strong);
+    --tracking-label: var(--tracking-body-strong);
+    --text-label-strong: var(--text-body-strong);
+    --tracking-label-strong: var(--tracking-body-strong);
+
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
