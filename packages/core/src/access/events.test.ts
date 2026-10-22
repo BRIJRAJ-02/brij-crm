@@ -78,6 +78,7 @@ describe('every kind has a rule', () => {
     expect([...EVENT_KINDS].sort()).toEqual(
       [
         'access',
+        'calendars',
         'comments',
         'definitions',
         'entries',

@@ -143,7 +143,10 @@ export async function connectCalendar(
   });
   const { result } = await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
+      // The member's other tabs list the new connection (the `calendars` live kind).
+      context.record({ calendars: [memberId] });
       // The member's connections, locked, so two consents at once can't both take the third place.
       const mine = await tx.execute<{ id: string; provider: string; account_email: string }>(sql`
         select id::text as id, provider, account_email from calendar_connections
@@ -210,6 +213,7 @@ export async function updateCalendarConnection(
     async (context: WriteContext) => {
       const { tx } = context;
       const row = await ownConnection(tx, memberId, input.connectionId);
+      context.record({ calendars: [memberId] });
       const touch = sql`updated_at = now(), updated_by_type = 'member', updated_by_id = ${memberId}::uuid,
         updated_by_member_id = ${memberId}::uuid`;
       if (input.isDefault === true && !row.is_default) {
@@ -315,6 +319,7 @@ export async function removeCalendarConnection(
     scope,
     async (context) => {
       const row = await ownConnection(context.tx, memberId, input.connectionId);
+      context.record({ calendars: [memberId] });
       // Its destination, by name, so the member is told which calendar new bookings no longer go to (AC-1005).
       const lost = await context.tx.execute<{ name: string }>(sql`
         select name from calendar_calendars where connection_id = ${row.id}::uuid and is_destination

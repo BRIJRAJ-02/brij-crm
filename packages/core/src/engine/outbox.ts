@@ -65,7 +65,8 @@ export interface OutboxEvent {
     | 'schedules'
     | 'nav'
     | 'comments'
-    | 'notifications';
+    | 'notifications'
+    | 'calendars';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
@@ -374,6 +375,10 @@ function kindRows(change: CappedChange): OutboxEvent[] {
   // A member's own sidebar (spec 0034): one row naming the members whose rows the write changed, nothing else.
   if (change.nav.length > 0) {
     rows.push({ kind: 'nav', ...NO_IDS, itemIds: [...change.nav].sort(byId), coarse: false });
+  }
+  // A member's own calendar connections or calendars: one row naming the members, nothing else.
+  if (change.calendars.length > 0) {
+    rows.push({ kind: 'calendars', ...NO_IDS, itemIds: [...change.calendars].sort(byId), coarse: false });
   }
   // Comments (spec 0038): one row per object, its records and threads; coarse with no ids past `CHANGE_CAP` threads.
   const byObject = new Map<string, { recordIds: Set<string>; threadIds: Set<string> }>();

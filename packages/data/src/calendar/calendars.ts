@@ -171,6 +171,17 @@ export function createCalendarsStore(deps: CalendarsDeps) {
       lists.clear();
       pages.clear();
     },
+    /**
+     * The member's calendars changed elsewhere (the `calendars` live kind: another tab of theirs, a listing): the
+     * lists and page destinations already read in the workspace read again; nothing unread is fetched.
+     */
+    changed(workspace: string): void {
+      const list = lists.get(workspace);
+      if (list?.getSnapshot().status === 'ready') list.reload();
+      for (const [key, page] of pages) {
+        if (key.startsWith(`${workspace}:`) && page.getSnapshot().status === 'ready') page.reload();
+      }
+    },
     /** The member's accounts and calendars in a workspace, read when a screen first holds them. */
     list: (workspace: string): CalendarsHeld<CalendarListState> => listOf(workspace),
     /** A booking page's own "Add events to", read when a screen first holds it. */

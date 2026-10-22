@@ -1830,6 +1830,20 @@ export function createDataLayer({
     onShownChange: (workspace) => reloadBookings(workspace),
   });
 
+  // A member's own calendar connections or calendars changed (the `calendars` live kind): only the person's own tabs
+  // read their connections and calendars again; every other member's tab drops the event.
+  router.on('calendars', (workspace, event) => {
+    void namesMe(workspace, event.memberIds).then((named) => {
+      if (!named) return;
+      calendar.changed(workspace);
+      calendars.changed(workspace);
+    });
+  });
+  router.onResync((workspace) => {
+    calendar.changed(workspace);
+    calendars.changed(workspace);
+  });
+
   // Captures › Links and Forms: one held list per workspace each, patched by every write below (the list's menu, the
   // New dialog, the editors), so the list never needs a refresh to show a change.
   const bookingPageLists = createCaptureList<BookingPageView>({
