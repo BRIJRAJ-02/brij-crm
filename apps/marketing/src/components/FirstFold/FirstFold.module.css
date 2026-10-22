@@ -84,10 +84,16 @@
     min-inline-size: 0;
   }
 
-  /* A phone: the fold is as tall as its content, so no dead ink sits under the window before the footer. */
+  /* A phone: the fold is as tall as its content, so no dead ink sits under the window before the footer, and the
+     promise, the claim row and the tabs sit closer. */
   @media (width < 1024px) {
     .root {
       min-block-size: auto;
+    }
+
+    .main {
+      gap: var(--space-24);
+      padding-block: var(--space-24) var(--space-16);
     }
   }
 }
