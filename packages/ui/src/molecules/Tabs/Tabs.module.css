@@ -30,6 +30,11 @@
     background: var(--surface);
   }
 
+  /* Tabs drawn under their panels: the bar goes last, the markup order unchanged. */
+  .root[data-placement='bottom'] .bar {
+    order: 1;
+  }
+
   .list {
     display: flex;
     flex: 1;

@@ -1,5 +1,6 @@
 import { ButtonLink } from '@crm/ui';
 import { LINKS, SAMPLE_BOOKING_ADDRESS } from '../../site.ts';
+import { Backdrop } from '../Backdrop/Backdrop.tsx';
 import { Showcase } from '../Showcase/Showcase.tsx';
 import { SiteHeader } from '../SiteHeader/SiteHeader.tsx';
 import styles from './FirstFold.module.css';
@@ -13,6 +14,8 @@ export function FirstFold() {
     <div className={styles.root}>
       <SiteHeader />
       <main className={styles.main}>
+        <Backdrop side="start" />
+        <Backdrop side="end" />
         <div className={styles.hero}>
           <h1 className={styles.title}>
             <span className={styles.line} data-tone="quiet">

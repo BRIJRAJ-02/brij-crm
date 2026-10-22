@@ -1,6 +1,7 @@
 // The home page's showcase: the product's four areas, each with a few screens of the demo workspace that play in
-// turn. The screens are 1920 × 1200 windows at 2x (public/shots/<area>-<n>.webp, 3840 × 2400), dark, taken from a
-// seeded workspace (American names and companies, the owner's ask of 23 October 2026).
+// turn. The screens are 1920 × 1200 windows at 2x (public/shots/<area>-<n>.webp, 3840 × 2400) and, for phones, the
+// same views at 390 × 844 at 3x (<area>-<n>-phone.webp), dark, taken from a seeded workspace (American names and
+// companies, the owner's ask of 23 October 2026).
 import type { Hue, IconName } from '@crm/ui';
 
 /** One screen of an area. */
@@ -18,20 +19,19 @@ export interface ShowcaseSlide {
 export interface ShowcaseArea {
   readonly id: 'crm' | 'booking' | 'forms' | 'calendar';
   readonly label: string;
-  readonly description: string;
   readonly icon: IconName;
   readonly hue: Hue;
   readonly slides: readonly ShowcaseSlide[];
 }
 
-/** The file of a slide. */
-export const slideSrc = (slide: ShowcaseSlide) => `/shots/${slide.id}.webp`;
+/** The file of a slide: the 3840 × 2400 screen, or its phone screen (390 × 844 at 3x, the app's own phone layout). */
+export const slideSrc = (slide: ShowcaseSlide, form: 'desktop' | 'phone' = 'desktop') =>
+  `/shots/${slide.id}${form === 'phone' ? '-phone' : ''}.webp`;
 
 export const SHOWCASE: readonly ShowcaseArea[] = [
   {
     id: 'crm',
     label: 'CRM',
-    description: 'People, companies and deals.',
     icon: 'users',
     hue: 'green',
     slides: [
@@ -58,7 +58,6 @@ export const SHOWCASE: readonly ShowcaseArea[] = [
   {
     id: 'booking',
     label: 'Booking pages',
-    description: 'Your address. They pick a time.',
     icon: 'calendar-check',
     hue: 'sky',
     slides: [
@@ -85,7 +84,6 @@ export const SHOWCASE: readonly ShowcaseArea[] = [
   {
     id: 'forms',
     label: 'Forms',
-    description: 'Capture leads, send them to a booking.',
     icon: 'clipboard-list',
     hue: 'orange',
     slides: [
@@ -112,7 +110,6 @@ export const SHOWCASE: readonly ShowcaseArea[] = [
   {
     id: 'calendar',
     label: 'Calendar',
-    description: 'Every meeting beside your own.',
     icon: 'calendar-days',
     hue: 'blue',
     slides: [

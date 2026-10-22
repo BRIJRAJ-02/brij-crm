@@ -241,6 +241,36 @@ export const Feature: Story = {
   },
 };
 
+/** `feature` drawn under its panels: the screen first, the areas as a caption row under it. */
+export const FeatureBelow: Story = {
+  render: () => (
+    <Tabs
+      label="What Timefix does"
+      variant="feature"
+      placement="bottom"
+      defaultSelectedKey="crm"
+      tabs={[
+        { id: 'crm', label: 'CRM', icon: 'users', hue: 'green' },
+        { id: 'booking', label: 'Booking pages', icon: 'calendar-check', hue: 'sky' },
+        { id: 'forms', label: 'Forms', icon: 'clipboard-list', hue: 'orange' },
+        { id: 'calendar', label: 'Calendar', icon: 'calendar-days', hue: 'blue' },
+      ]}
+    >
+      <TabPanel id="crm">The People table.</TabPanel>
+      <TabPanel id="booking">A booking page.</TabPanel>
+      <TabPanel id="forms">The form editor.</TabPanel>
+      <TabPanel id="calendar">The Bookings week.</TabPanel>
+    </Tabs>
+  ),
+  play: async ({ canvas }) => {
+    const list = canvas.getByRole('tablist', { name: 'What Timefix does' });
+    const panel = canvas.getByRole('tabpanel');
+    // Drawn under the panel, though it comes first in the markup.
+    await expect(list.getBoundingClientRect().top).toBeGreaterThan(panel.getBoundingClientRect().bottom - 1);
+    await expect(list.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  },
+};
+
 /** `feature` in a narrow slot: four equal columns of the sidebar’s width, labels wrapping, nothing cut. */
 export const FeatureNarrow: Story = {
   render: () => (

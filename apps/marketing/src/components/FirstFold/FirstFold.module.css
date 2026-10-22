@@ -13,7 +13,8 @@
 
   .main {
     display: grid;
-    grid-template-rows: auto auto;
+    position: relative;
+    grid-template-rows: auto 1fr;
     align-content: start;
     gap: clamp(var(--space-32), 7svh, calc(var(--space-32) * 2));
     min-block-size: 0;
@@ -23,6 +24,8 @@
 
   .hero {
     display: grid;
+    position: relative;
+    z-index: var(--z-raised);
     justify-items: center;
     gap: clamp(var(--space-12), 2.2svh, var(--space-20));
     text-align: center;
@@ -80,8 +83,21 @@
     color: var(--text);
   }
 
+  /* The showcase sits at the fold's foot, over the backdrop; from the wide breakpoint it is a centred column, 80% of
+     the content, so the backdrop shows at both sides (Twenty's home, the owner's reference). */
   .demo {
+    position: relative;
+    z-index: var(--z-raised);
+    align-self: end;
+    inline-size: 100%;
     min-inline-size: 0;
+    margin-inline: auto;
+  }
+
+  @media (width >= 1024px) {
+    .demo {
+      inline-size: 80%;
+    }
   }
 
   /* A phone: the fold is as tall as its content, so no dead ink sits under the window before the footer, and the

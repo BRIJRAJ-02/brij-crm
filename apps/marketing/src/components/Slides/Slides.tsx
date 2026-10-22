@@ -41,9 +41,10 @@ function usePageHidden() {
 }
 
 /**
- * An area's screens in the app's window, playing in turn: the bar holds the lights, the address of the screen on
- * show, a segment per screen (the library's SegmentedControl, so the arrow keys move between them) and a pause.
- * The screens are stacked and cross fade. The play stops while the pointer or focus is on the window, while the
+ * An area's screens in the app's window, playing in turn: the bar holds the lights and the address of the screen on
+ * show; a glass pill floating at the foot holds a segment per screen (the library's SegmentedControl, so the arrow
+ * keys move between them) and a pause. The screens are stacked, whole, cross fading, and the window fades out at
+ * its foot (the owner, 23 October 2026: nothing cut, faded). The play stops while the pointer or focus is on the window, while the
  * page is hidden, when paused, and for anyone who asked for reduced motion.
  */
 export function Slides({ area, isFirst }: SlidesProps) {
@@ -82,55 +83,58 @@ export function Slides({ area, isFirst }: SlidesProps) {
       onFocus={() => setIsHeld(true)}
       onBlur={() => setIsHeld(false)}
     >
-      <div className={styles.bar}>
-        <span className={styles.lights} aria-hidden="true">
-          <span className={styles.light} data-tone="red" />
-          <span className={styles.light} data-tone="yellow" />
-          <span className={styles.light} data-tone="green" />
-        </span>
-        <span className={styles.address} aria-hidden="true">
-          <Icon name="lock" size="xs" />
-          {shown?.address}
-        </span>
-        <span className={styles.controls}>
-          <SegmentedControl
-            label={`${area.label} screen`}
-            size="compact"
-            isFitted
-            segments={area.slides.map((slide) => ({ value: slide.id, label: slide.caption }))}
-            value={current}
-            onChange={setCurrent}
-          />
-          <Button
-            variant="ghost"
-            icon={isPaused ? 'play' : 'pause'}
-            label={isPaused ? 'Play the screens' : 'Pause the screens'}
-            onPress={() => setIsPaused((paused) => !paused)}
-          />
-        </span>
+      <div className={styles.frame}>
+        <div className={styles.bar}>
+          <span className={styles.lights} aria-hidden="true">
+            <span className={styles.light} data-tone="red" />
+            <span className={styles.light} data-tone="yellow" />
+            <span className={styles.light} data-tone="green" />
+          </span>
+          <span className={styles.address} aria-hidden="true">
+            <Icon name="lock" size="xs" />
+            {shown?.address}
+          </span>
+        </div>
+        <div className={styles.viewport}>
+          {area.slides.map((slide, index) => {
+            const isShown = slide.id === current;
+            const isEager = isFirst && index === 0;
+            return (
+              <picture className={styles.shot} key={slide.id} data-shown={isShown || undefined}>
+                <source media="(width < 1024px)" srcSet={slideSrc(slide, 'phone')} width={1170} height={2532} />
+                <img
+                  className={styles.image}
+                  src={slideSrc(slide)}
+                  alt={slide.alt}
+                  width={3840}
+                  height={2400}
+                  decoding="async"
+                  loading={isEager ? 'eager' : 'lazy'}
+                  aria-hidden={isShown ? undefined : 'true'}
+                  onError={() => setBroken((ids) => (ids.includes(slide.id) ? ids : [...ids, slide.id]))}
+                  {...(isEager ? { fetchPriority: 'high' as const } : {})}
+                />
+              </picture>
+            );
+          })}
+        </div>
       </div>
-      <div className={styles.viewport}>
-        {area.slides.map((slide, index) => {
-          const isShown = slide.id === current;
-          const isEager = isFirst && index === 0;
-          return (
-            <img
-              className={styles.shot}
-              key={slide.id}
-              src={slideSrc(slide)}
-              alt={slide.alt}
-              width={3840}
-              height={2400}
-              decoding="async"
-              loading={isEager ? 'eager' : 'lazy'}
-              data-shown={isShown || undefined}
-              aria-hidden={isShown ? undefined : 'true'}
-              onError={() => setBroken((ids) => (ids.includes(slide.id) ? ids : [...ids, slide.id]))}
-              {...(isEager ? { fetchPriority: 'high' as const } : {})}
-            />
-          );
-        })}
-      </div>
+      <span className={styles.controls}>
+        <SegmentedControl
+          label={`${area.label} screen`}
+          size="compact"
+          isFitted
+          segments={area.slides.map((slide) => ({ value: slide.id, label: slide.caption }))}
+          value={current}
+          onChange={setCurrent}
+        />
+        <Button
+          variant="ghost"
+          icon={isPaused ? 'play' : 'pause'}
+          label={isPaused ? 'Play the screens' : 'Pause the screens'}
+          onPress={() => setIsPaused((paused) => !paused)}
+        />
+      </span>
     </figure>
   );
 }

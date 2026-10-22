@@ -1,5 +1,5 @@
-/* SiteFrame: the app's own dark ink with a faint light at the top, quiet as the owner's references are (Cal.com,
-   Attio and Twenty on Mobbin, 23 October 2026), and Twenty's hairline frame: a line down each side of the content
+/* SiteFrame: pitch black (the owner, 23 October 2026, after a faint light at the top came and went), and Twenty's
+   hairline frame: a line down each side of the content
    and a cross where each meets the bar's hairline (wide screens only). Its lines and the pages' gutters come from the
    site's shared properties (styles/site.css). */
 @layer components {
@@ -12,12 +12,7 @@
     min-block-size: 100vh;
     min-block-size: 100svh;
     overflow-x: clip;
-    background-color: var(--surface-sunken);
-    background-image: radial-gradient(
-      60% 40svh at 50% 0%,
-      color-mix(in srgb, var(--text) 6%, transparent),
-      transparent
-    );
+    background-color: var(--site-ink);
     color: var(--text);
   }
 

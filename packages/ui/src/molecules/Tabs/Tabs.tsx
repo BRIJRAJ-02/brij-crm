@@ -102,6 +102,12 @@ export interface TabsProps {
    */
   readonly inset?: 'default' | 'none';
   /**
+   * `bottom` puts the tabs under their panels (the marketing site's showcase: the screen first, the areas under it,
+   * 23 October 2026). The markup order stays tabs then panels, so the keyboard and screen readers meet the tabs
+   * first; only the drawing moves.
+   */
+  readonly placement?: 'top' | 'bottom';
+  /**
    * One TabPanel per tab, with the same ids. Leave it off for a strip whose
    * chosen tab is drawn by the page under it (a published form's Form,
    * Settings, Install and Submissions, each its own address).
@@ -124,6 +130,7 @@ export function Tabs({
   end,
   variant = 'strip',
   inset = 'default',
+  placement = 'top',
   children,
 }: TabsProps) {
   const { isFocusVisible } = useFocusVisible();
@@ -135,6 +142,7 @@ export function Tabs({
   return (
     <AriaTabs
       className={styles.root}
+      data-placement={placement === 'bottom' ? 'bottom' : undefined}
       {...(selectedKey === undefined ? {} : { selectedKey })}
       {...(defaultSelectedKey === undefined ? {} : { defaultSelectedKey })}
       {...(onSelectionChange === undefined
