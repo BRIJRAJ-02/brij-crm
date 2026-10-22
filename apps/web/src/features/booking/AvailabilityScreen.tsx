@@ -9,7 +9,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsActionSlot, useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
-import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
 import { memberZone } from './zone.ts';
 import { availabilityHref, scheduleHref } from './links.ts';
@@ -17,7 +17,7 @@ import { NewScheduleDialog } from './NewScheduleDialog.tsx';
 import { RenameScheduleDialog } from './RenameScheduleDialog.tsx';
 import { ScheduleEditor, ScheduleEditorPending } from './ScheduleEditor.tsx';
 import { ScheduleSwitcher } from './ScheduleSwitcher.tsx';
-import { SCHEDULES_MAX } from './schedules.ts';
+import { SCHEDULES_MAX, showsViewing } from './schedules.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
 
@@ -40,9 +40,8 @@ export function AvailabilityScreen({ data, slug, scheduleId, member, members, me
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const view = data.schedules.view(slug, member, memberZone(data, slug));
-  // A reader who reaches colleagues (the server's `canActFor`; today `booking.admin`, AC-971) picks whose show.
-  const reachesColleagues = useCan('booking.admin');
-  const isAdmin = members.length > 1 || reachesColleagues;
+  // An admin (the server's `canActFor`; today `booking.admin`, AC-971) picks whose show, once there is a colleague.
+  const hasColleagues = showsViewing(members, member);
   // A colleague's, by name, for the words that say whose they are.
   const owner = member === undefined ? undefined : members.find((each) => each.id === member)?.name;
   const state = useSchedules(view);
@@ -143,7 +142,7 @@ export function AvailabilityScreen({ data, slug, scheduleId, member, members, me
       start={switcher}
       end={
         <>
-          {isAdmin && (
+          {hasColleagues && (
             <Viewing
               members={members}
               me={me}
@@ -299,23 +298,10 @@ function NewScheduleButton({ isDisabled, onPress }: { readonly isDisabled: boole
 export function AvailabilityPending() {
   const slot = useBookingsToolbarSlot();
   const actionSlot = useBookingsActionSlot();
-  // An admin's Viewing Select stands in the strip while it loads, and New schedule waits in the TopBar, so
-  // neither moves when the editor arrives.
-  const isAdmin = useCan('booking.admin');
+  // New schedule waits in the TopBar, so it doesn't move when the editor arrives. The Viewing Select shows only
+  // once colleagues are known, so it doesn't stand here.
   const waiting = <NewScheduleButton isDisabled onPress={() => undefined} />;
-  const tools = (
-    <SectionBar
-      start={<SwitcherPending />}
-      end={
-        <>
-          {isAdmin && (
-            <Viewing members={[{ id: 'me', name: '' }]} me="me" value="me" onChange={() => undefined} isDisabled />
-          )}
-          {actionSlot === null && waiting}
-        </>
-      }
-    />
-  );
+  const tools = <SectionBar start={<SwitcherPending />} end={<>{actionSlot === null && waiting}</>} />;
   return (
     <WorkspacePage
       currentPage="bookings"

@@ -60,3 +60,12 @@ export function scheduleChoices(
     ),
   ];
 }
+
+/**
+ * Whether Availability shows its Viewing Select: once there is a colleague to pick, or while a colleague's
+ * schedules are open (so the way back stays). A workspace of one has only its own, as Cal.com shows its member
+ * switcher only on a team.
+ */
+export function showsViewing(members: readonly { readonly id: string }[], member: string | undefined): boolean {
+  return members.length > 1 || member !== undefined;
+}
