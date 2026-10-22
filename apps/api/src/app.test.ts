@@ -253,6 +253,10 @@ describe('the Better Auth routes the API serves', () => {
   });
 
   it.each([
+    // Passkeys were taken out on 22 October 2026: their routes are never served.
+    ['POST', '/passkey/verify-authentication'],
+    ['GET', '/passkey/generate-register-options'],
+    ['GET', '/passkey/list-user-passkeys'],
     ['POST', '/update-user'],
     ['GET', '/list-sessions'],
     ['POST', '/link-social'],
