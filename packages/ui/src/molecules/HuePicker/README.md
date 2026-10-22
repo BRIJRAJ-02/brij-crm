@@ -14,6 +14,7 @@ New. A select option's colour and an object's tile (#13) are picked from the sam
 ```
 
 - `isCompact` draws one swatch in the chosen hue, named "<label>: <hue>", which opens the nine in a Popover and closes it on a choice (read only, it is the swatch alone). Why a variant: an option's row in the OptionsEditor (spec 0012) has room for one swatch, not nine, and a second swatch style would have been a new element for the same thing.
+- `look="dot"` (with `isCompact`) draws a small round dot in the hue's dot colour instead of the square swatch, still a button that opens the nine, pressed at 24px. Why a variant: in Settings › Calendars the square beside two checkbox columns read as one more empty checkbox (the owner, 22 October 2026).
 - `label` names the group for screen readers. `isLabelShown` also draws it above the swatches as a field's label, for a form that stacks it with Fields (the new object dialog, an object's Configuration). Why a variant: in a form beside labelled Fields, swatches with no visible label read as decoration.
 
 ## States

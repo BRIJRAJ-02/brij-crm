@@ -88,3 +88,19 @@ export const CompactOpen: Story = {
     await expect(await screen.findByRole('radio', { name: 'Yellow' })).toBeChecked();
   },
 };
+
+/** Compact as a dot (`look="dot"`): a calendar's colour beside checkboxes, one per hue; it still opens the nine. */
+export const CompactDot: Story = {
+  args: { label: 'Work colour', defaultValue: 'green', isCompact: true, look: 'dot' },
+  render: (args) => (
+    <Stage>
+      <HuePicker {...args} />
+      <HuePicker label="Team colour" defaultValue="purple" isCompact look="dot" />
+      <HuePicker label="Holidays colour" defaultValue="orange" isCompact look="dot" isReadOnly />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Work colour: Green' })).toBeInTheDocument();
+    await expect(canvas.getByRole('img', { name: 'Holidays colour: Orange' })).toBeInTheDocument();
+  },
+};
