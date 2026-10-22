@@ -330,7 +330,8 @@ export function PageEditor({
                 src={`/b/${page.publicKey}`}
                 title={page.title}
                 device={device}
-                version={page.updatedAt}
+                // The page's save, or a save of the schedule it books by, draws the preview again with the new times.
+                version={`${page.updatedAt}|${hours.version}`}
                 draft={{
                   title: draft.title,
                   description: draft.description,
@@ -688,7 +689,7 @@ function useHours(
 ) {
   const state = useSchedulesOrNone(view);
   if (state === undefined) {
-    return { items: [], availability: page.availability, editHref: undefined } as const;
+    return { items: [], availability: page.availability, editHref: undefined, version: '' } as const;
   }
   const fallback = state.find((each) => each.isDefault);
   const named = scheduleId === null ? undefined : state.find((each) => each.id === scheduleId);
@@ -700,6 +701,8 @@ function useHours(
     availability: isVirtualSaved ? page.availability : (chosen?.availability ?? page.availability),
     // The owner's schedule; an admin's view of a colleague's page opens it as theirs (`?member=`).
     editHref: chosen === undefined ? undefined : scheduleHref(slug, chosen.id ?? 'default', ownerMember),
+    // When the hours it books by were last saved: the preview reads its times again after a change.
+    version: chosen?.updatedAt ?? '',
   };
 }
 

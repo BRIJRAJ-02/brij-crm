@@ -30,6 +30,8 @@ describe('openHoursOf', () => {
     expect(openHoursOf(hours, '2026-10-21', 'Europe/London')).toEqual([]);
     expect(openHoursOf(hours, '2026-10-24', 'Europe/London')).toEqual([]);
     expect(openHoursOf(hours, '2026-10-20', 'Asia/Kolkata')).toBeUndefined();
+    // Another name for the same clock still shades.
+    expect(openHoursOf({ ...hours, timeZone: 'Asia/Kolkata' }, '2026-10-20', 'Asia/Calcutta')).toHaveLength(2);
     expect(openHoursOf(undefined, '2026-10-20', 'Europe/London')).toBeUndefined();
   });
 });

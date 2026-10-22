@@ -56,6 +56,27 @@ function minuteOf(clock: string): number {
 }
 
 /**
+ * Whether two zones read the same clock on a day: the same name, or the same offset at its noon (a browser may name
+ * India "Asia/Calcutta" while the schedule says "Asia/Kolkata").
+ */
+function sameClock(a: string, b: string, dayKey: string): boolean {
+  if (a === b) return true;
+  const noon = dayStart(dayKey);
+  noon.setHours(12);
+  const offset = (timeZone: string) => {
+    try {
+      return new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
+        .formatToParts(noon)
+        .find((part) => part.type === 'timeZoneName')?.value;
+    } catch {
+      return undefined;
+    }
+  };
+  const first = offset(a);
+  return first !== undefined && first === offset(b);
+}
+
+/**
  * The member's open hours on a day, for shading the rest of the week grid: that date's override when there is one
  * (no ranges is a day off), else their weekly hours for its weekday. Undefined (no shading) when the hours are
  * unknown, or kept in another zone than the one the week is drawn in, where they would shade the wrong hours.
@@ -65,7 +86,7 @@ export function openHoursOf(
   dayKey: string,
   zone: string,
 ): readonly { readonly startMinute: number; readonly endMinute: number }[] | undefined {
-  if (availability === undefined || availability.timeZone !== zone) return undefined;
+  if (availability === undefined || !sameClock(availability.timeZone, zone, dayKey)) return undefined;
   const weekday = WEEKDAY_KEYS[dayStart(dayKey).getDay()] ?? 'mon';
   const ranges =
     availability.overrides.find((override) => override.date === dayKey)?.ranges ?? availability.weekly[weekday];
