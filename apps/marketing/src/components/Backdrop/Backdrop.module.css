@@ -8,7 +8,7 @@
     position: absolute;
     inset-block-end: 0;
     z-index: 0;
-    inline-size: 42%;
+    inline-size: 36%;
     block-size: 92%;
     color: color-mix(in srgb, var(--accent) 85%, transparent);
     pointer-events: none;
