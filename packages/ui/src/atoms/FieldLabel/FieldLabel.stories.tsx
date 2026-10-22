@@ -13,7 +13,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Plain, with an aside, with an InfoTip, strong and disabled. */
+/** Plain, with an aside, with an InfoTip and strong. Disabled shows inside a disabled Field (its story). */
 export const States: Story = {
   render: () => (
     <Stage direction="column">
@@ -25,10 +25,9 @@ export const States: Story = {
         info={<InfoTip label="Minimum notice">How soon a visitor can book.</InfoTip>}
       />
       <FieldLabel label="Who can book?" tone="strong" as="text" />
-      <FieldLabel label="Archived" as="text" isDisabled />
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: 'Minimum notice' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'About Minimum notice' })).toBeInTheDocument();
   },
 };

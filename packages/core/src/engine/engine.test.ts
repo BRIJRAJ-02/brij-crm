@@ -289,7 +289,6 @@ describe('a network url attribute (polish item 8)', () => {
       title: 'GitHub',
       type: 'url',
     });
-    // Both named, as a company and a person must be.
     const companyName = (await attributeIds(scope, companies)).name ?? '';
     const personName = (await attributeIds(scope, people)).name ?? '';
     const { recordId: acme } = await createRecord(scope, {
@@ -298,7 +297,7 @@ describe('a network url attribute (polish item 8)', () => {
     });
     const { recordId: ada } = await createRecord(scope, {
       objectId: people,
-      values: { [personName]: { firstName: 'Ada' }, [github]: 'https://www.github.com/ada/' },
+      values: { [personName]: { fullName: 'Ada Lovelace' }, [github]: 'https://www.github.com/ada/' },
     });
     const both = await getRecords(scope, { ids: [acme, ada] });
     const company = both.find((each) => each.display.recordId === acme);
