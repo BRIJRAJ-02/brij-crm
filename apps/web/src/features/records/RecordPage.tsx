@@ -230,7 +230,14 @@ function LoadingLayout({
 }) {
   return (
     <RecordLayout
-      header={<RecordHeader objectName="" isLoading />}
+      // The loaded header always has its stat strip (the next meeting at least): its row is kept while loading.
+      header={
+        <RecordHeader
+          objectName=""
+          isLoading
+          stats={[{ id: 'meeting', label: strings.nextMeeting, icon: 'calendar', isLoading: true }]}
+        />
+      }
       tabs={TABS}
       tabsLabel={strings.tabs}
       selectedTab={tab}

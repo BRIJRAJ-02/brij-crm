@@ -24,7 +24,7 @@ export interface RecordHeaderProps {
   readonly children?: ReactNode;
   /** The record is still coming: skeletons after the loading delay. */
   readonly isLoading?: boolean;
-  /** The stat strip under the header: counts (tasks, notes) and the last activity. */
+  /** The stat strip under the header: counts (tasks, notes) and the last activity. While loading, its row is kept. */
   readonly stats?: readonly RecordStat[];
 }
 
@@ -62,6 +62,12 @@ export function RecordHeader({
               </span>
             </span>
           </>
+        )}
+        {/* The stat strip's row is kept while the record comes, so nothing under the header moves when it lands. */}
+        {stats.length > 0 && (
+          <div className={styles.stats}>
+            <RecordStats label={strings.loading} stats={stats.map((stat) => ({ ...stat, isLoading: true }))} />
+          </div>
         )}
         <VisuallyHidden>{strings.loading}</VisuallyHidden>
       </div>
