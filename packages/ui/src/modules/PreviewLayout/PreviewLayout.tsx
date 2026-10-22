@@ -1,15 +1,16 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
-import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
-import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
+import { CardTitleLevel } from '../../molecules/Card/Card.tsx';
+import { Modal } from '../../molecules/Modal/Modal.tsx';
 import styles from './PreviewLayout.module.css';
 import { strings } from './strings.ts';
 
-/** The widths a page preview lays the page out at. */
-export type PreviewDevice = 'phone' | 'tablet' | 'desktop';
-
-/** The width, in CSS pixels, each device lays the page out at. */
-const DEVICE_WIDTHS: Readonly<Record<PreviewDevice, number>> = { phone: 390, tablet: 768, desktop: 1280 };
+/**
+ * The phone the preview is drawn in, in CSS pixels: the page is laid out at this size, then scaled down to fit the
+ * column's width and the view's height (never above 1).
+ */
+const PHONE = { width: 375, height: 812 } as const;
 
 /** Props for PreviewLayout. */
 export interface PreviewLayoutProps {
@@ -18,18 +19,17 @@ export interface PreviewLayoutProps {
   /** Above the body, full width: a read only note, a refused publish's Callout, a teammate's change. */
   readonly notices?: ReactNode;
   /**
-   * What the editor shows itself as: a `PreviewFrame` (a page in a frame) or a
-   * drawn preview (`HostedFormPreview`). Sticky in a column the panel's width
-   * beside the body, or under the body in "Show preview" when they don't both
-   * fit. Leave it out on a tab with nothing to preview.
+   * What the editor shows itself as, drawn in a phone: a `PreviewFrame` (a page in a frame) or a drawn preview
+   * (`HostedFormPreview`). Sticky in the last third of the width beside the body, or behind a "Preview" button
+   * that opens it in a sheet when they don't both fit. Leave it out on a tab with nothing to preview.
    */
   readonly preview?: ReactNode;
   /**
-   * The preview's controls, at the end of its header row beside its "Preview" heading (`PreviewDeviceSwitch`,
-   * a form's look Selects with hidden labels and `size="sm"`, their values saying what they set).
+   * The preview's controls, at the end of its header row beside its "Preview" heading (a form's look Selects with
+   * hidden labels and `size="sm"`, their values saying what they set).
    */
   readonly previewControls?: ReactNode;
-  /** Between the controls and the preview, when what it shows needs a word ("This page is off"). */
+  /** Between the controls and the phone, when what it shows needs a word ("This page is off"). */
   readonly previewNote?: ReactNode;
   /** A bar pinned to the body's foot while it has something to say: the SaveBar. */
   readonly footer?: ReactNode;
@@ -40,12 +40,10 @@ export interface PreviewLayoutProps {
    */
   readonly bodyLayout?: 'stack' | 'grid';
   /**
-   * `form` holds the body's fields to `size-column-max` from the start edge, so a Select sits near its label on a
-   * wide view; `columns` sets the fields in as many columns as fit across the whole width, each at least the wide
-   * panel's width, so a wide view is used without stretching one input across it (the booking page editor's tabs,
-   * the owner, 22 October 2026: every page full width); `full` (the default) takes the column's width.
+   * `form` holds the body's groups to `size-column-max`, centred in the body's column, so a Select sits near its
+   * label on a wide view (the booking page editor's tabs); `full` (the default) takes the column's width.
    */
-  readonly bodyWidth?: 'full' | 'form' | 'columns';
+  readonly bodyWidth?: 'full' | 'form';
 }
 
 /** Where an editor's subject stands, as the TopBar's status says it. */
@@ -70,37 +68,11 @@ export function EditorStatus({ tone, text }: { readonly tone: EditorStatusTone; 
   );
 }
 
-/** The Phone, Tablet and Desktop switch for a `PreviewFrame`, for `previewControls`. */
-export function PreviewDeviceSwitch({
-  value,
-  onChange,
-}: {
-  readonly value: PreviewDevice;
-  readonly onChange: (device: PreviewDevice) => void;
-}) {
-  return (
-    <SegmentedControl
-      label={strings.width}
-      segments={[
-        { value: 'phone', label: strings.phone },
-        { value: 'tablet', label: strings.tablet },
-        { value: 'desktop', label: strings.desktop },
-      ]}
-      value={value}
-      onChange={(next) => {
-        if (next === 'phone' || next === 'tablet' || next === 'desktop') onChange(next);
-      }}
-    />
-  );
-}
-
 /** Props for PreviewFrame. */
 export interface PreviewFrameProps {
   /** The page previewed: its address, loaded in a frame, and what it is. */
   readonly src: string;
   readonly title: string;
-  /** The width the page is laid out at. */
-  readonly device: PreviewDevice;
   /** Changes when what the preview shows was saved, so the frame loads it again. */
   readonly version?: string;
   /**
@@ -110,33 +82,11 @@ export interface PreviewFrameProps {
   readonly draft?: unknown;
 }
 
-/** The scale that fits a device's width into the space the preview has (never above 1). */
-function useFit(device: PreviewDevice) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const element = ref.current;
-    if (element === null) return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry !== undefined) setWidth(entry.contentRect.width);
-    });
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-  const deviceWidth = DEVICE_WIDTHS[device];
-  const scale = width === 0 ? 1 : Math.min(1, width / deviceWidth);
-  return { ref, deviceWidth, scale };
-}
-
 /**
- * A page in a frame, laid out at its device's width and scaled down to fit
- * the preview column, so nothing scrolls sideways. The page is to look at:
- * the frame is inert and out of the tab order, so pressing in it never books.
+ * A page in a frame, filling the phone PreviewLayout draws it in. The page is to look at: the frame is inert and
+ * out of the tab order, so pressing in it never books.
  */
-export function PreviewFrame({ src, title, device, version, draft }: PreviewFrameProps) {
-  const { ref, deviceWidth, scale } = useFit(device);
+export function PreviewFrame({ src, title, version, draft }: PreviewFrameProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   const post = () => {
     if (draft === undefined) return;
@@ -144,13 +94,8 @@ export function PreviewFrame({ src, title, device, version, draft }: PreviewFram
   };
   useEffect(post);
   return (
-    <div
-      ref={ref}
-      className={styles.viewport}
-      // A picture of the page, not a second copy to use: nothing in it takes focus or a press.
-      inert
-      style={{ '--device-width': `${String(deviceWidth)}px`, '--preview-scale': String(scale) }}
-    >
+    // A picture of the page, not a second copy to use: nothing in it takes focus or a press.
+    <div className={styles.viewport} inert>
       <iframe
         key={version ?? ''}
         ref={frame}
@@ -165,14 +110,109 @@ export function PreviewFrame({ src, title, device, version, draft }: PreviewFram
   );
 }
 
+/** The scale that fits the phone into the stage's width and height (never above 1). */
+function usePhoneScale() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry === undefined) return;
+      const { width, height } = entry.contentRect;
+      if (width === 0 || height === 0) return;
+      // Less the phone's two hairlines, so its outline fits too.
+      setScale(Math.min(1, (width - 2) / PHONE.width, (height - 2) / PHONE.height));
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  return { ref, scale };
+}
+
+/** Whether the screen's content runs past its foot (a long form), so it scrolls and takes focus to be scrolled. */
+function useOverflow() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isOverflowing, setOverflowing] = useState(false);
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null) return;
+    const check = () => {
+      setOverflowing(element.scrollHeight > element.clientHeight);
+    };
+    const observer = new ResizeObserver(check);
+    observer.observe(element);
+    // The content's own size changes as a form gains questions; the screen's never does.
+    if (element.firstElementChild !== null) observer.observe(element.firstElementChild);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  return { ref, isOverflowing };
+}
+
+/** Props for PhoneColumn. */
+interface PhoneColumnProps {
+  /** Where it is drawn: the column beside the body, or the narrow layout's sheet. */
+  readonly place: 'side' | 'sheet';
+  /** The heading's id, which names the column beside the body. */
+  readonly headingId?: string;
+  readonly controls?: ReactNode;
+  readonly note?: ReactNode;
+  /** What the phone shows. */
+  readonly children: ReactNode;
+}
+
+/**
+ * The preview's column: the "Preview" heading with the controls at its end, as wide as the phone at least and
+ * centred over it, then any note, then the phone. The phone lays the page out at a phone's size and is scaled to
+ * fit the room left under them (never above 1). When what it shows runs past the phone's foot (a long form), the
+ * screen scrolls, and takes focus so the keyboard can scroll it too.
+ */
+function PhoneColumn({ place, headingId, controls, note, children }: PhoneColumnProps) {
+  const { ref, scale } = usePhoneScale();
+  const { ref: screenRef, isOverflowing } = useOverflow();
+  return (
+    <div
+      className={styles.preview}
+      data-place={place}
+      style={{
+        '--phone-width': `${String(PHONE.width)}px`,
+        '--phone-height': `${String(PHONE.height)}px`,
+        '--phone-scale': String(scale),
+      }}
+    >
+      <div className={styles.head}>
+        <h2 className={styles.heading} {...(headingId === undefined ? {} : { id: headingId })}>
+          {strings.preview}
+        </h2>
+        {controls !== undefined && <div className={styles.controls}>{controls}</div>}
+      </div>
+      {note}
+      <div ref={ref} className={styles.stage}>
+        <div className={styles.phone}>
+          <div
+            ref={screenRef}
+            className={styles.screen}
+            {...(isOverflowing ? { tabIndex: 0, role: 'region', 'aria-label': strings.phone } : {})}
+          >
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Every Captures editor's body under its TopBar (the booking page editor, the
- * form editor): the Tabs edge to edge under the TopBar, as on Captures, then
- * any notices and the body at the page gutter (space-24, PageColumn's)
- * beside a sticky preview column the panel's width. When the layout's own
- * width can't hold both (a container query), the column hides and the
- * preview waits under the body in a "Show preview" Disclosure. `footer` pins
- * the SaveBar to the body's foot.
+ * form editor): any notices, then the body at the page gutter in the first
+ * two thirds of the width, beside a sticky phone preview centred in the last
+ * third. When the layout's own width can't hold both (a container query), the
+ * column hides and a "Preview" button over the body opens the phone in a
+ * sheet. `footer` pins the SaveBar to the body's foot.
  */
 export function PreviewLayout({
   children,
@@ -184,60 +224,55 @@ export function PreviewLayout({
   bodyLayout = 'stack',
   bodyWidth = 'full',
 }: PreviewLayoutProps) {
-  // The narrow preview is drawn only while open, so its page loads on demand.
+  // The sheet's phone is drawn only while it is open, so a narrow page loads no second frame until asked.
   const [isOpen, setOpen] = useState(false);
   const hasPreview = preview !== undefined && preview !== null;
   const headingId = useId();
-  // Beside the body, the column's header row names it, with the controls at its end, level with the body's
-  // first header. Under the body, in "Show preview", the Disclosure already names it: the controls sit alone.
-  const column = (isBeside: boolean) =>
-    hasPreview && (
-      <div className={styles.preview}>
-        {(isBeside || previewControls !== undefined) && (
-          <div className={styles.head}>
-            {isBeside && (
-              <h2 className={styles.heading} id={headingId}>
-                {strings.preview}
-              </h2>
-            )}
-            {previewControls !== undefined && <div className={styles.controls}>{previewControls}</div>}
-          </div>
-        )}
-        {previewNote}
-        <div className={styles.frame}>{preview}</div>
-      </div>
-    );
   return (
     <div className={styles.root}>
       <div className={styles.inner}>
         {notices}
         <div className={styles.measure}>
+          {hasPreview && (
+            <div className={styles.bar}>
+              <Button icon="smartphone" onPress={() => setOpen(true)}>
+                {strings.preview}
+              </Button>
+            </div>
+          )}
           <div className={styles.body} data-preview={hasPreview || undefined}>
             <div
               className={styles.main}
               data-layout={bodyLayout}
               data-width={bodyWidth === 'form' ? 'form' : undefined}
             >
-              {bodyWidth === 'columns' ? <div className={styles.columns}>{children}</div> : children}
+              {/* The body's Cards are the page's sections, h2 beside the Preview heading, under the TopBar's h1. */}
+              <CardTitleLevel value={2}>{children}</CardTitleLevel>
               {footer !== undefined && footer !== null && footer !== false && (
                 <div className={styles.footer}>{footer}</div>
               )}
             </div>
             {hasPreview && (
               <aside className={styles.side} aria-labelledby={headingId}>
-                {column(true)}
+                <PhoneColumn place="side" headingId={headingId} controls={previewControls} note={previewNote}>
+                  {preview}
+                </PhoneColumn>
               </aside>
             )}
           </div>
-          {hasPreview && (
-            <div className={styles.below}>
-              <Disclosure title={strings.showPreview} isExpanded={isOpen} onExpandedChange={setOpen}>
-                {isOpen ? column(false) : null}
-              </Disclosure>
-            </div>
-          )}
         </div>
       </div>
+      {hasPreview && (
+        // A sheet from the window's foot, as a phone's card for one thing on the page (Modal's `sheet`).
+        <Modal title={strings.preview} variant="sheet" isOpen={isOpen} onOpenChange={setOpen}>
+          {isOpen && (
+            // The sheet's bar holds Close alone: the column's own heading names what it shows.
+            <PhoneColumn place="sheet" controls={previewControls} note={previewNote}>
+              {preview}
+            </PhoneColumn>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }

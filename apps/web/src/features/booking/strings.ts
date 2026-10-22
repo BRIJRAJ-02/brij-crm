@@ -86,22 +86,26 @@ export const strings = {
   live: 'Live',
   page: 'Page',
   description: 'Description',
-  publicLink: 'Public link',
-  /** The page's address after its owner's handle (22 Oct 2026). */
-  slug: 'Web address',
-  slugHint: 'Lowercase letters, numbers and single hyphens.',
-  slugNoHandle:
-    'Pick your handle in Settings under Profile to give this page an address like /your-name/30min. Until then it keeps its /b/ link.',
+  descriptionPlaceholder: 'What the meeting is for, in a line or two',
+  /** The Page tab's sections (22 Oct 2026): Details, Sharing, and Profile for a Public page. */
+  details: 'Details',
+  sharing: 'Sharing',
+  profile: 'Profile',
+  /** The page's one address row: its full link, the part after the owner's handle editable (22 Oct 2026). */
+  address: 'Web address',
+  /** Copy and Open, while the address has unsaved changes: the new one works once saved. */
+  saveAddressFirst: 'Save to use this address',
+  /** The preview's note while the hours or limits have unsaved changes: its times come from the server. */
+  previewSavedTimes: 'Shows your saved times until you save.',
+  findSection: 'Find or add a section',
+  /** With no handle yet, the page keeps its /b/ link and this links to Settings › Profile. */
+  setHandle: 'Set your handle to get a short address',
   slugChanging: 'Links with the old address will stop working once you save.',
-  slugLinkOnly: 'Link only pages keep their private /b/ link. This address is used once the page is Public.',
   slugRequired: 'Give the page a web address.',
   slugInvalid: 'Use lowercase letters, numbers and single hyphens.',
-  onProfile: 'On your profile',
-  onProfileHint: 'Public pages are listed on your profile page. Link only pages never are.',
   profileSection: 'Section',
-  profileSectionHint: 'Optional. Pages with the same section are listed together under it.',
-  profilePosition: 'Order',
-  profilePositionHint: 'Lower numbers come first. Pages with the same number keep the order they were made in.',
+  profileSectionLine: 'Pages in the same section are listed together.',
+  noSection: 'No section',
   meeting: 'Meeting',
   durations: 'Durations',
   location: 'Location',
@@ -141,6 +145,8 @@ export const strings = {
   noCalendars: 'No calendars connected',
   noneChecked: 'None, so this page can double book.',
   reservedTime: 'Reserved time',
+  /** The Hours and Meeting tabs' sections (22 Oct 2026). */
+  calendarSection: 'Calendar',
   reservedTimeLine: 'This page can also book your reserved time: time only your link only pages can book.',
   /** On Minimum notice, while the page is link only. */
   noticeIgnored: 'Link only pages ignore this.',
@@ -178,13 +184,8 @@ export const strings = {
       example: 'On Meeting length, a 30 minute meeting offers 9:00, 9:30 and 10:00 AM.',
     },
   },
-  /**
-   * What each choice does, true to the app: there is no booking profile, so every page is reached by its link; a link
-   * only page is the one meant for people you send it to, and it alone books reserved time and skips the notice.
-   */
-  publicHint: 'Books inside your hours and limits.',
-  linkOnlyHint:
-    'Can also book your reserved time and ignores the minimum notice. Share it only with people you choose.',
+  /** Under Who can book, for Link only: what it does that Public doesn't. */
+  linkOnlyHint: 'Not on your profile. It can also book your reserved time.',
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
     schedule: {

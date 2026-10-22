@@ -270,6 +270,8 @@ export function Select({
     );
   }
 
+  // Nothing to choose yet and nothing typed: a list that creates says how to add the first one.
+  const emptyText = onCreate !== undefined && typed === '' ? strings.typeToCreate : strings.noMatches;
   const disabledKeys = items
     .filter((item) => item.isDisabled === true || (item.isArchived === true && item.id !== current))
     .map((item) => item.id);
@@ -325,7 +327,7 @@ export function Select({
       <ListBox
         ref={listRef}
         className={styles.list}
-        renderEmptyState={() => <span className={styles.empty}>{strings.noMatches}</span>}
+        renderEmptyState={() => <span className={styles.empty}>{emptyText}</span>}
       >
         {options
           .filter(
@@ -349,7 +351,7 @@ export function Select({
       ref={listRef}
       className={styles.list}
       items={options}
-      renderEmptyState={() => <span className={styles.empty}>{strings.noMatches}</span>}
+      renderEmptyState={() => <span className={styles.empty}>{emptyText}</span>}
     >
       {(item) => (
         <ListBoxItem

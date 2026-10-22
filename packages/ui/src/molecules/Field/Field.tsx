@@ -357,7 +357,12 @@ export function Field({
             data-wrapping={(isWrapping && !isMultiline) || undefined}
           >
             {leading !== undefined && <Icon name={leading} size="sm" tone="muted" />}
-            {prefix !== undefined && <span className={styles.prefix}>{prefix}</span>}
+            {prefix !== undefined && (
+              // A text prefix (an address's fixed start) gives way first on a narrow box; a picker never does.
+              <span className={styles.prefix} data-text={typeof prefix === 'string' || undefined}>
+                {prefix}
+              </span>
+            )}
             {isTextArea ? <TextArea {...inputProps} /> : <Input {...inputProps} />}
             {isReadOnly && !isCopy && variant !== 'title' && (
               <span className={styles.lock}>

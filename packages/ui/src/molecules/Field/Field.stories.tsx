@@ -367,3 +367,16 @@ export const WithSuggestions: Story = {
     await expect(canvas.getByRole('textbox', { name: 'Web address' })).toHaveValue('stealth-design');
   },
 };
+
+/** A long text prefix on a narrow box: the address's fixed start gives way, cut with an ellipsis, and the input keeps room. */
+export const LongPrefix: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Field label="Web address" prefix="app.timefix.ai/ada-lovelace-consulting/" defaultValue="intro-call" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const input = canvas.getByRole('textbox', { name: 'Web address' });
+    await expect(input.getBoundingClientRect().width).toBeGreaterThanOrEqual(80);
+  },
+};

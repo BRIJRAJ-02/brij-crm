@@ -1,14 +1,15 @@
 // Brief
-// Purpose: one booking page's editor (spec 0025, 0025-experience.md, AC-623, AC-624, AC-679): its groups, full width.
+// Purpose: one booking page's editor (spec 0025, 0025-experience.md, AC-623, AC-624, AC-679): its groups beside the page.
 // Main task: change the page, the meeting, its hours and limits, and Save from the bar that appears while anything is unsaved.
 // One tab per group (the owner, 22 Oct 2026: the cards stacked were too much to look through), the chosen one in
-// `?tab=`; a tab whose fields hold an error carries a dot. Every setting shows; nothing folds away (the owner).
-// No preview beside it (the owner, 22 Oct 2026): View page in the header opens the live page in a new tab, as
-// Calendly's and Cal.com's event editors do.
+// `?tab=`; a tab whose fields hold an error carries a dot. Each tab is one readable column of headed sections (Cards)
+// in the first two thirds, beside the page in a phone in the last third (the owner, 22 Oct 2026, after the masonry
+// columns: "bring back the visual on the side, with just mobile view").
 // The hours are a schedule's (spec 0035, AC-965): the tab picks one of the owner's and edits its week and days off in
 // place (the owner, 22 Oct 2026, like Calendly's and Cal.com's event Availability tab), saved by the same Save.
 // A round robin page (spec 0029, AC-732) adds Hosts: its fixed hosts, its rotations, and who reschedules go to.
-// Leaves out: questions and the deal step (milestone 2), collective members, and a preview (View page opens the page).
+// Leaves out: questions and the deal step (milestone 2), collective members, and the profile's order (pages keep the
+// order they were made in until the Links list can be reordered by drag).
 import {
   isDataError,
   type BookingPageSettings,
@@ -23,22 +24,26 @@ import {
   Button,
   ButtonLink,
   Callout,
+  Card,
   ChoiceChips,
+  CopyButton,
   DescriptionList,
   EditorStatus,
   Field,
   FieldGroup,
   InfoTip,
+  Link,
+  PreviewFrame,
   PreviewLayout,
   Popover,
   SaveBar,
   SegmentedControl,
   Select,
   SettingsRow,
-  SettingsRowGroup,
   Skeleton,
   TabPanel,
   Tabs,
+  Tooltip,
   TopBar,
   type SaveBarStatus,
   type SelectItem,
@@ -47,7 +52,7 @@ import { useBlocker, useNavigate, useRouteContext } from '@tanstack/react-router
 import { useRef, useState, type ReactNode } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { calendarSettingsHref } from '../settings/nav.ts';
+import { calendarSettingsHref, profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { PageConflicts, PageDestination } from './PageDestination.tsx';
@@ -71,6 +76,7 @@ import {
   pageEditorHref,
   PAGE_TABS,
   pageTabOf,
+  publicBookingOrigin,
   publicBookingUrl,
   type PageTab,
 } from './links.ts';
@@ -146,6 +152,17 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   slotStep: 'limits',
 };
 
+/** The settings the preview's times come from, read from the server: it shows them only once saved. */
+const TIME_KEYS: readonly (keyof BookingPageSettings)[] = [
+  'scheduleId',
+  'bufferBefore',
+  'bufferAfter',
+  'minNoticeMinutes',
+  'windowDays',
+  'dailyLimit',
+  'slotStep',
+];
+
 /** The settings the editor edits, from the page. */
 const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   title: page.title,
@@ -213,8 +230,6 @@ export function PageEditor({
   const isLocked = !page.canChange;
   const saved = settingsOf(page);
   const [draft, setDraft] = useState(saved);
-  // The Order field's text as typed (digits only), so it can be empty while editing; the draft holds its number.
-  const [positionText, setPositionText] = useState(String(saved.profilePosition));
   // The address's shape is said once the person leaves the field, not at every key.
   const [isSlugLeft, setSlugLeft] = useState(false);
   const [isSaving, setSaving] = useState(false);
@@ -354,6 +369,37 @@ export function PageEditor({
         ? 'unsaved'
         : 'error';
   const location = draft.location;
+  // The Sharing section's address: the saved link (the one that works now), and the /b/ link a Link only page keeps.
+  const savedLink = publicBookingUrl(page);
+  const bLink = publicBookingUrl({ ...page, isPrivate: true });
+  const addressHost = new URL(publicBookingOrigin()).host;
+  const isSlugUnsaved = draft.slug !== page.slug;
+  // The phone shows the unsaved words and lengths, but its times come from the server: while the hours or limits
+  // have unsaved changes it says so.
+  const isTimesStale = isWeekDirty || TIME_KEYS.some((key) => key in dirty);
+  // Open, as the header's View page: a real link to a new tab, waiting while the address shown isn't saved.
+  const openButton = (href: string, isWaiting: boolean) => {
+    const button = (
+      <ButtonLink href={href} isExternal icon="external-link" isDisabled={isWaiting}>
+        {strings.openLink}
+      </ButtonLink>
+    );
+    return isWaiting ? <Tooltip content={strings.saveAddressFirst}>{button}</Tooltip> : button;
+  };
+  // The owner's sections so far, from their other pages, for the Profile section's choices; a new one is typed in.
+  const pageList = useCaptureList(data.bookingPages.view(slug));
+  const sectionItems: SelectItem[] = [
+    ...new Set(
+      [
+        ...(pageList.status === 'ready' ? pageList.items : [])
+          .filter((each) => each.ownerMemberId === page.ownerMemberId)
+          .map((each) => each.profileSection),
+        draft.profileSection,
+      ].filter((section): section is string => section !== null),
+    ),
+  ]
+    .sort((left, right) => left.localeCompare(right))
+    .map((section) => ({ id: section, label: section }));
   const isTeam = page.kind === 'round_robin';
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
@@ -470,11 +516,27 @@ export function PageEditor({
               selectedKey={shown}
               onSelectionChange={(id) => onTabChange(pageTabOf(id))}
             >
-              {/* One panel, the chosen tab's: the layout stays mounted as the tab changes. No preview (the owner, 22 Oct
-                  2026): the tabs take the page's width and the fields keep a readable column, as Settings' do. */}
+              {/* One panel, the chosen tab's: the layout and its phone preview stay mounted as the tab changes. Each tab
+                  is one readable column of sections beside the phone (the owner, 22 Oct 2026). */}
               <TabPanel id={shown} variant="fill">
                 <PreviewLayout
-                  bodyWidth="columns"
+                  bodyWidth="form"
+                  {...(isTimesStale ? { previewNote: <Callout tone="info">{strings.previewSavedTimes}</Callout> } : {})}
+                  // The page in a phone beside every tab (the owner, 22 Oct 2026), showing the unsaved edits.
+                  preview={
+                    <PreviewFrame
+                      src={`/b/${page.publicKey}`}
+                      title={page.title}
+                      // The page's save, or a save of the schedule it books by, draws it again with the new times.
+                      version={`${page.updatedAt}|${hours.schedule?.updatedAt ?? ''}`}
+                      draft={{
+                        title: draft.title,
+                        description: draft.description,
+                        durations: draft.durations,
+                        location: draft.location,
+                      }}
+                    />
+                  }
                   notices={
                     <>
                       {page.status === 'paused' && <Callout tone="info">{strings.pausedNote}</Callout>}
@@ -513,7 +575,6 @@ export function PageEditor({
                       onDiscard={() => {
                         week.discard();
                         setDraft(saved);
-                        setPositionText(String(saved.profilePosition));
                         setSlugLeft(false);
                         setFailure(undefined);
                         setChipsError(undefined);
@@ -525,219 +586,251 @@ export function PageEditor({
                 >
                   {shown === 'page' && (
                     <>
-                      {/* The same compact row as a form's Share: the link with Copy inside it, and Open. */}
-                      <Field
-                        label={strings.publicLink}
-                        variant="copy"
-                        copyLabel={strings.copyLink}
-                        value={publicBookingUrl(page)}
-                        after={
-                          <Button
-                            icon="external-link"
-                            onPress={() => {
-                              globalThis.open(publicBookingUrl(page), '_blank', 'noopener');
-                            }}
-                          >
-                            {strings.openLink}
-                          </Button>
-                        }
-                      />
-                      <Field
-                        label={strings.slug}
-                        value={draft.slug}
-                        // The address after the owner's handle (22 Oct 2026); with no handle yet, the page keeps its
-                        // /b/ link and the description says where to pick one.
-                        {...(page.handle === undefined ? {} : { prefix: `/${page.handle}/` })}
-                        hint={
-                          page.handle === undefined
-                            ? strings.slugNoHandle
-                            : draft.isPrivate
-                              ? strings.slugLinkOnly
-                              : draft.slug !== page.slug && page.status === 'live' && !page.isPrivate
-                                ? strings.slugChanging
-                                : strings.slugHint
-                        }
-                        maxLength={60}
-                        isRequired
-                        isReadOnly={isLocked}
-                        onChange={(value) => change({ slug: value.toLowerCase().replace(/\s+/g, '-') })}
-                        onBlur={() => setSlugLeft(true)}
-                        {...(isSlugLeft && slugProblem(draft.slug) !== undefined
-                          ? { error: slugProblem(draft.slug) }
-                          : failure?.field === 'slug'
-                            ? { error: failure.message }
-                            : {})}
-                      />
-                      <Field
-                        label={strings.description}
-                        value={draft.description}
-                        isMultiline
-                        maxLength={2000}
-                        showCounter
-                        isReadOnly={isLocked}
-                        onChange={(description) => change({ description })}
-                      />
-                      <FieldGroup
-                        label={strings.whoCanBook}
-                        hint={draft.isPrivate ? strings.linkOnlyHint : strings.publicHint}
-                      >
-                        <SegmentedControl
-                          label={strings.whoCanBook}
-                          segments={[
-                            { value: 'public', label: strings.publicPage },
-                            { value: 'link', label: strings.linkOnly },
-                          ]}
-                          value={draft.isPrivate ? 'link' : 'public'}
+                      <Card title={strings.details}>
+                        <Field
+                          label={strings.description}
+                          value={draft.description}
+                          placeholder={strings.descriptionPlaceholder}
+                          isMultiline
+                          maxLength={2000}
+                          showCounter
                           isReadOnly={isLocked}
-                          onChange={(value) => change({ isPrivate: value === 'link' })}
+                          onChange={(description) => change({ description })}
                         />
-                      </FieldGroup>
-                      {!draft.isPrivate && (
-                        // Where it sits on the owner's profile, /<handle> (22 Oct 2026): a small heading, and an order.
-                        <FieldGroup label={strings.onProfile} hint={strings.onProfileHint}>
+                      </Card>
+                      <Card title={strings.sharing}>
+                        {page.handle !== undefined && !draft.isPrivate ? (
+                          // The full address, the part after the owner's handle editable (22 Oct 2026); Copy and
+                          // Open take the saved link, so they wait while the address has unsaved changes.
                           <Field
-                            label={strings.profileSection}
-                            value={draft.profileSection ?? ''}
-                            hint={strings.profileSectionHint}
-                            maxLength={40}
+                            label={strings.address}
+                            value={draft.slug}
+                            prefix={`${addressHost}/${page.handle}/`}
+                            {...(isSlugUnsaved && page.status === 'live' && !page.isPrivate
+                              ? { hint: strings.slugChanging }
+                              : {})}
+                            maxLength={60}
+                            isRequired
                             isReadOnly={isLocked}
-                            onChange={(value) => change({ profileSection: value.trim() === '' ? null : value })}
+                            onChange={(value) => change({ slug: value.toLowerCase().replace(/\s+/g, '-') })}
+                            onBlur={() => setSlugLeft(true)}
+                            {...(isSlugLeft && slugProblem(draft.slug) !== undefined
+                              ? { error: slugProblem(draft.slug) }
+                              : failure?.field === 'slug'
+                                ? { error: failure.message }
+                                : {})}
+                            suffix={
+                              isSlugUnsaved ? (
+                                <Tooltip content={strings.saveAddressFirst}>
+                                  <CopyButton
+                                    value={savedLink}
+                                    label={strings.copyLink}
+                                    variant="ghost"
+                                    isIconOnly
+                                    isDisabled
+                                  />
+                                </Tooltip>
+                              ) : (
+                                <CopyButton value={savedLink} label={strings.copyLink} variant="ghost" isIconOnly />
+                              )
+                            }
+                            after={openButton(savedLink, isSlugUnsaved)}
                           />
+                        ) : (
+                          // No handle yet, or a Link only page: its /b/ link, which only those who have it can use.
                           <Field
-                            label={strings.profilePosition}
-                            value={positionText}
-                            hint={strings.profilePositionHint}
-                            inputMode="numeric"
-                            maxLength={3}
+                            label={strings.address}
+                            variant="copy"
+                            copyLabel={strings.copyLink}
+                            value={bLink}
+                            after={openButton(bLink, false)}
+                          />
+                        )}
+                        {page.handle === undefined && !draft.isPrivate && (
+                          <Link href={profileHref(slug)}>{strings.setHandle}</Link>
+                        )}
+                        <FieldGroup
+                          label={strings.whoCanBook}
+                          {...(draft.isPrivate ? { hint: strings.linkOnlyHint } : {})}
+                        >
+                          <SegmentedControl
+                            label={strings.whoCanBook}
+                            segments={[
+                              { value: 'public', label: strings.publicPage },
+                              { value: 'link', label: strings.linkOnly },
+                            ]}
+                            value={draft.isPrivate ? 'link' : 'public'}
                             isReadOnly={isLocked}
                             onChange={(value) => {
-                              // Digits only: anything else never reaches the field, and empty counts as 0.
-                              const digits = value.replace(/\D/g, '').slice(0, 3);
-                              setPositionText(digits);
-                              change({ profilePosition: digits === '' ? 0 : Number(digits) });
+                              const isPrivate = value === 'link';
+                              // Link only hides the address: one it can't save goes back to the saved one, so nothing
+                              // hidden blocks Save.
+                              change({
+                                isPrivate,
+                                ...(isPrivate && slugProblem(draft.slug) !== undefined ? { slug: page.slug } : {}),
+                              });
                             }}
                           />
                         </FieldGroup>
+                      </Card>
+                      {page.handle !== undefined && !draft.isPrivate && (
+                        // Where it sits on the owner's profile, /<handle> (so only once there is a handle): under a
+                        // section heading, or none. Pages keep the order they were made in (a drag order on the
+                        // Links list is left for later).
+                        <Card title={strings.profile}>
+                          <SettingsRow
+                            title={strings.profileSection}
+                            description={strings.profileSectionLine}
+                            control="field"
+                          >
+                            <Select
+                              label={strings.profileSection}
+                              isLabelHidden
+                              searchLabel={strings.findSection}
+                              placeholder={strings.noSection}
+                              items={sectionItems}
+                              value={draft.profileSection}
+                              isClearable
+                              isReadOnly={isLocked}
+                              onChange={(id) => change({ profileSection: id })}
+                              onCreate={(label) => {
+                                const section = label.trim().slice(0, 40);
+                                if (section !== '') change({ profileSection: section });
+                              }}
+                            />
+                          </SettingsRow>
+                        </Card>
                       )}
                     </>
                   )}
                   {shown === 'meeting' && (
                     <>
-                      <Field
-                        label={strings.title}
-                        value={draft.title}
-                        maxLength={120}
-                        isRequired
-                        isReadOnly={isLocked}
-                        onChange={(title) => change({ title })}
-                        {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
-                      />
-                      {isLocked ? (
-                        // Read only: the chosen lengths as text, which a viewer can reach and read; disabled chips can't be.
-                        <DescriptionList
-                          items={[
-                            {
-                              term: strings.durations,
-                              description: draft.durations.map((minutes) => strings.minutesShort(minutes)).join(', '),
-                            },
-                          ]}
-                        />
-                      ) : (
-                        <ChoiceChips
-                          label={strings.durations}
-                          choices={lengths.map((minutes) => ({
-                            id: String(minutes),
-                            label: strings.minutesShort(minutes),
-                          }))}
-                          selected={draft.durations.map(String)}
-                          onChange={(ids) => {
-                            const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
-                            // A fifth is refused here as the server would: the public page shows four.
-                            if (durations.length > LENGTHS_MAX) {
-                              setChipsError(strings.lengthsFull);
-                              return;
-                            }
-                            setChipsError(undefined);
-                            change({ durations });
-                          }}
-                          {...(chipsError === undefined
-                            ? draft.durations.length === 0
-                              ? { error: strings.durationRequired }
-                              : {}
-                            : { error: chipsError })}
-                          end={
-                            <Button ref={customRef} variant="dashed" icon="plus" onPress={() => setAddingLength(true)}>
-                              {strings.durationCustom}
-                            </Button>
-                          }
-                        />
-                      )}
-                      {!isLocked && (
-                        <Popover
-                          label={strings.addLength}
-                          triggerRef={customRef}
-                          isOpen={isAddingLength}
-                          onOpenChange={(isOpen) => {
-                            setAddingLength(isOpen);
-                            if (!isOpen) {
-                              setLengthText('');
-                              setLengthError(undefined);
-                            }
-                          }}
-                        >
-                          <Field
-                            label={strings.customMinutes}
-                            // With four lengths already, it says so before anything is typed.
-                            hint={
-                              draft.durations.length >= LENGTHS_MAX ? strings.lengthsFull : strings.customMinutesHint
-                            }
-                            // The popover opens for this one field: typing starts at once.
-                            // eslint-disable-next-line jsx-a11y-x/no-autofocus
-                            autoFocus
-                            inputMode="numeric"
-                            maxLength={3}
-                            value={lengthText}
-                            onChange={(value) => {
-                              setLengthText(value);
-                              setLengthError(undefined);
-                            }}
-                            onSubmit={addLength}
-                            suffix={
-                              <Button variant="ghost" onPress={addLength} isDisabled={lengthText.trim() === ''}>
-                                {strings.add}
-                              </Button>
-                            }
-                            {...(lengthError === undefined ? {} : { error: lengthError })}
-                          />
-                        </Popover>
-                      )}
-                      <Select
-                        label={strings.location}
-                        items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}
-                        value={location.type}
-                        isReadOnly={isLocked}
-                        onChange={(type) => {
-                          if (type === 'video' || type === 'phone') change({ location: { type } });
-                          if (type === 'address' || type === 'custom')
-                            change({ location: { type, value: 'value' in location ? location.value : '' } });
-                        }}
-                      />
-                      {(location.type === 'address' || location.type === 'custom') && (
+                      <Card title={strings.meeting}>
                         <Field
-                          label={location.type === 'address' ? strings.addressOrRoom : strings.where}
-                          value={location.value}
-                          maxLength={500}
+                          label={strings.title}
+                          value={draft.title}
+                          maxLength={120}
                           isRequired
                           isReadOnly={isLocked}
-                          {...(location.value.trim() === '' ? { error: strings.whereRequired } : {})}
-                          onChange={(value) => change({ location: { type: location.type, value } })}
+                          onChange={(title) => change({ title })}
+                          {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
                         />
-                      )}
+                        {isLocked ? (
+                          // Read only: the chosen lengths as text, which a viewer can reach and read; disabled chips can't be.
+                          <DescriptionList
+                            items={[
+                              {
+                                term: strings.durations,
+                                description: draft.durations.map((minutes) => strings.minutesShort(minutes)).join(', '),
+                              },
+                            ]}
+                          />
+                        ) : (
+                          <ChoiceChips
+                            label={strings.durations}
+                            choices={lengths.map((minutes) => ({
+                              id: String(minutes),
+                              label: strings.minutesShort(minutes),
+                            }))}
+                            selected={draft.durations.map(String)}
+                            onChange={(ids) => {
+                              const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
+                              // A fifth is refused here as the server would: the public page shows four.
+                              if (durations.length > LENGTHS_MAX) {
+                                setChipsError(strings.lengthsFull);
+                                return;
+                              }
+                              setChipsError(undefined);
+                              change({ durations });
+                            }}
+                            {...(chipsError === undefined
+                              ? draft.durations.length === 0
+                                ? { error: strings.durationRequired }
+                                : {}
+                              : { error: chipsError })}
+                            end={
+                              <Button
+                                ref={customRef}
+                                variant="dashed"
+                                icon="plus"
+                                onPress={() => setAddingLength(true)}
+                              >
+                                {strings.durationCustom}
+                              </Button>
+                            }
+                          />
+                        )}
+                        {!isLocked && (
+                          <Popover
+                            label={strings.addLength}
+                            triggerRef={customRef}
+                            isOpen={isAddingLength}
+                            onOpenChange={(isOpen) => {
+                              setAddingLength(isOpen);
+                              if (!isOpen) {
+                                setLengthText('');
+                                setLengthError(undefined);
+                              }
+                            }}
+                          >
+                            <Field
+                              label={strings.customMinutes}
+                              // With four lengths already, it says so before anything is typed.
+                              hint={
+                                draft.durations.length >= LENGTHS_MAX ? strings.lengthsFull : strings.customMinutesHint
+                              }
+                              // The popover opens for this one field: typing starts at once.
+                              // eslint-disable-next-line jsx-a11y-x/no-autofocus
+                              autoFocus
+                              inputMode="numeric"
+                              maxLength={3}
+                              value={lengthText}
+                              onChange={(value) => {
+                                setLengthText(value);
+                                setLengthError(undefined);
+                              }}
+                              onSubmit={addLength}
+                              suffix={
+                                <Button variant="ghost" onPress={addLength} isDisabled={lengthText.trim() === ''}>
+                                  {strings.add}
+                                </Button>
+                              }
+                              {...(lengthError === undefined ? {} : { error: lengthError })}
+                            />
+                          </Popover>
+                        )}
+                      </Card>
+                      <Card title={strings.location}>
+                        <Select
+                          label={strings.location}
+                          isLabelHidden
+                          items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}
+                          value={location.type}
+                          isReadOnly={isLocked}
+                          onChange={(type) => {
+                            if (type === 'video' || type === 'phone') change({ location: { type } });
+                            if (type === 'address' || type === 'custom')
+                              change({ location: { type, value: 'value' in location ? location.value : '' } });
+                          }}
+                        />
+                        {(location.type === 'address' || location.type === 'custom') && (
+                          <Field
+                            label={location.type === 'address' ? strings.addressOrRoom : strings.where}
+                            value={location.value}
+                            maxLength={500}
+                            isRequired
+                            isReadOnly={isLocked}
+                            {...(location.value.trim() === '' ? { error: strings.whereRequired } : {})}
+                            onChange={(value) => change({ location: { type: location.type, value } })}
+                          />
+                        )}
+                      </Card>
                       <PageDestination
                         destination={data.calendar.pageDestination(slug, page.id)}
                         calendars={data.calendar.calendars(slug)}
                         isReadOnly={isLocked}
                         onChange={(calendarId) => void data.calendar.setPageDestination(slug, page.id, calendarId)}
+                        settingsHref={calendarSettingsHref(slug)}
                       />
                     </>
                   )}
@@ -784,19 +877,18 @@ export function PageEditor({
                   )}
                   {shown === 'hours' && (
                     <>
+                      {/* In reading order (the owner, 22 Oct 2026): the schedule, its week, its days off, then
+                          reserved time and conflicts, each a section with its heading. */}
                       {isTeam ? (
-                        <FieldGroup label={strings.weeklyHours}>{rotationStrings.hoursMembers}</FieldGroup>
+                        <Card title={strings.weeklyHours} description={rotationStrings.hoursMembers} />
                       ) : (
-                        <FieldGroup
-                          label={scheduleStrings.schedule}
-                          action={
+                        <Card
+                          title={scheduleStrings.schedule}
+                          actions={
                             <ButtonLink href={hours.manageHref} variant="ghost" size="sm" icon="settings">
                               {strings.manageSchedules}
                             </ButtonLink>
                           }
-                          {...(hours.schedule !== undefined && hours.schedule.pages.length > 1
-                            ? { hint: strings.sharedSchedule(hours.schedule.name, hours.schedule.pages.length) }
-                            : {})}
                         >
                           <Select
                             label={scheduleStrings.schedule}
@@ -809,11 +901,14 @@ export function PageEditor({
                               : isWeekDirty
                                 ? { readOnlyReason: strings.saveHoursFirst }
                                 : {})}
+                            {...(hours.schedule !== undefined && hours.schedule.pages.length > 1
+                              ? { hint: strings.sharedSchedule(hours.schedule.name, hours.schedule.pages.length) }
+                              : {})}
                             onChange={(id) => {
                               if (id !== null) change({ scheduleId: id === 'default' ? null : id });
                             }}
                           />
-                        </FieldGroup>
+                        </Card>
                       )}
                       {!isTeam &&
                         (hours.status === 'loading' ? (
@@ -821,20 +916,26 @@ export function PageEditor({
                           <WeekCardPending />
                         ) : hours.schedule === undefined ? (
                           // The owner's schedules can't be read here: the week the page books by, read only, saying why.
-                          <FieldGroup
-                            label={strings.weeklyHours}
-                            meta={zoneDisplay(hours.availability.timeZone, openedAt)}
-                            hint={hours.status === 'failed' ? strings.hoursUnreadable : strings.followOwnerHint}
+                          <Card
+                            title={strings.weeklyHours}
+                            description={hours.status === 'failed' ? strings.hoursUnreadable : strings.followOwnerHint}
                           >
                             <DescriptionList
                               layout="compact"
-                              items={weekGroups(hours.availability, locale).map((group) => ({
-                                id: group.days,
-                                term: group.days,
-                                description: group.hours,
-                              }))}
+                              items={[
+                                {
+                                  id: 'zone',
+                                  term: strings.timeZone,
+                                  description: zoneDisplay(hours.availability.timeZone, openedAt),
+                                },
+                                ...weekGroups(hours.availability, locale).map((group) => ({
+                                  id: group.days,
+                                  term: group.days,
+                                  description: group.hours,
+                                })),
+                              ]}
                             />
-                          </FieldGroup>
+                          </Card>
                         ) : (
                           <>
                             <WeekCard availability={week.shown} onChange={changeWeek} isReadOnly={isLocked} />
@@ -846,9 +947,10 @@ export function PageEditor({
                           </>
                         ))}
                       {draft.isPrivate && (
-                        <FieldGroup
-                          label={strings.reservedTime}
-                          action={
+                        <Card
+                          title={strings.reservedTime}
+                          description={strings.reservedTimeLine}
+                          actions={
                             <ButtonLink
                               href={bookingsTabHref(slug, 'calendar')}
                               variant="ghost"
@@ -858,9 +960,7 @@ export function PageEditor({
                               {strings.manage}
                             </ButtonLink>
                           }
-                        >
-                          {strings.reservedTimeLine}
-                        </FieldGroup>
+                        />
                       )}
                       <PageConflicts
                         destination={data.calendar.pageDestination(slug, page.id)}
@@ -871,7 +971,7 @@ export function PageEditor({
                   )}
                   {shown === 'limits' && (
                     <>
-                      <SettingsRowGroup variant="plain" title={strings.limitGroups.buffers}>
+                      <Card title={strings.limitGroups.buffers}>
                         {limitRow(
                           strings.bufferBefore,
                           strings.limitHelp.before,
@@ -886,8 +986,8 @@ export function PageEditor({
                           String(draft.bufferAfter),
                           (id) => change({ bufferAfter: Number(id ?? 0) }),
                         )}
-                      </SettingsRowGroup>
-                      <SettingsRowGroup variant="plain" title={strings.limitGroups.window}>
+                      </Card>
+                      <Card title={strings.limitGroups.window}>
                         {limitRow(
                           strings.notice,
                           strings.limitHelp.notice,
@@ -899,8 +999,8 @@ export function PageEditor({
                         {limitRow(strings.window, strings.limitHelp.ahead, WINDOW, String(draft.windowDays), (id) =>
                           change({ windowDays: Number(id ?? 60) }),
                         )}
-                      </SettingsRowGroup>
-                      <SettingsRowGroup variant="plain" title={strings.limitGroups.pace}>
+                      </Card>
+                      <Card title={strings.limitGroups.pace}>
                         {limitRow(
                           strings.dailyLimit,
                           strings.limitHelp.daily,
@@ -915,7 +1015,7 @@ export function PageEditor({
                           draft.slotStep === null ? 'duration' : String(draft.slotStep),
                           (id) => change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null }),
                         )}
-                      </SettingsRowGroup>
+                      </Card>
                     </>
                   )}
                 </PreviewLayout>
@@ -965,8 +1065,14 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
             selectedKey={shown}
           >
             <TabPanel id={shown} variant="fill">
-              <PreviewLayout bodyWidth="columns" {...(notices === undefined ? {} : { notices })}>
-                <Skeleton lines={6} />
+              <PreviewLayout
+                bodyWidth="form"
+                preview={<Skeleton shape="block" />}
+                {...(notices === undefined ? {} : { notices })}
+              >
+                <Card isBusy>
+                  <Skeleton lines={6} />
+                </Card>
               </PreviewLayout>
             </TabPanel>
           </Tabs>
