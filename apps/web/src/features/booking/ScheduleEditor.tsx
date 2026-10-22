@@ -129,7 +129,7 @@ export function WeekCard({
       actions={
         <ZoneSelect
           value={availability.timeZone}
-          isDisabled={isReadOnly}
+          isReadOnly={isReadOnly}
           onChange={(zone) => onChange((current) => ({ ...current, timeZone: zone }))}
         />
       }
@@ -151,10 +151,13 @@ function ZoneSelect({
   value,
   onChange,
   isDisabled = false,
+  isReadOnly = false,
 }: {
   readonly value: string;
   readonly onChange: (zone: string) => void;
   readonly isDisabled?: boolean;
+  /** Shows the zone with nothing to change (a page the reader can't change), as the week beside it. */
+  readonly isReadOnly?: boolean;
 }) {
   const zones = useMemo(() => zoneItems(value, new Date()), [value]);
   return (
@@ -167,6 +170,7 @@ function ZoneSelect({
       filter={zoneMatches}
       isSearchable
       isDisabled={isDisabled}
+      isReadOnly={isReadOnly}
       value={value}
       onChange={(zone) => {
         if (zone !== null && zone !== value) onChange(zone);
@@ -220,26 +224,31 @@ function UsedBy({ slug, schedule }: { readonly slug: string; readonly schedule: 
   );
 }
 
-/** The editor while the schedules load: its week and its side cards in their places. */
-export function ScheduleEditorPending() {
+/** The week's card while the schedules load, in its loaded shape: Availability's and a booking page's Hours tab. */
+export function WeekCardPending() {
   // The member's zone (Preferences), as the schedule will show once it loads.
   const { timeZone } = useFormatSettings();
   return (
+    <Card
+      title={strings.weeklyHours}
+      isBusy
+      actions={<ZoneSelect value={timeZone} onChange={() => undefined} isDisabled />}
+    >
+      <HoursEditor
+        label={strings.weeklyHours}
+        rows={WEEKDAYS.map((day) => ({ id: day, label: strings.weekday[day], ranges: [] }))}
+        onChange={() => undefined}
+        isLoading
+      />
+    </Card>
+  );
+}
+
+/** The editor while the schedules load: its week and its side cards in their places. */
+export function ScheduleEditorPending() {
+  return (
     <Layout
-      week={
-        <Card
-          title={strings.weeklyHours}
-          isBusy
-          actions={<ZoneSelect value={timeZone} onChange={() => undefined} isDisabled />}
-        >
-          <HoursEditor
-            label={strings.weeklyHours}
-            rows={WEEKDAYS.map((day) => ({ id: day, label: strings.weekday[day], ranges: [] }))}
-            onChange={() => undefined}
-            isLoading
-          />
-        </Card>
-      }
+      week={<WeekCardPending />}
       aside={
         <>
           <Card title={strings.daysOff} isBusy>

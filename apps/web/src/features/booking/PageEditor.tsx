@@ -59,7 +59,7 @@ import { strings as routingStrings } from '../routing/strings.ts';
 import { weekGroups } from './hours.ts';
 import { zoneDisplay } from '../../public/booking/time.ts';
 import { DaysOff } from './DaysOff.tsx';
-import { WeekCard } from './ScheduleEditor.tsx';
+import { WeekCard, WeekCardPending } from './ScheduleEditor.tsx';
 import { useScheduleDraft } from './scheduleDraft.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { bookingsTabHref } from '../bookings/tabs.ts';
@@ -730,11 +730,15 @@ export function PageEditor({
                         </FieldGroup>
                       )}
                       {!isTeam &&
-                        (hours.schedule === undefined ? (
-                          // The owner's schedules can't be read here: the week the page books by, read only.
+                        (hours.status === 'loading' ? (
+                          // The week's card in its loading shape, so the editor lands where it stood.
+                          <WeekCardPending />
+                        ) : hours.schedule === undefined ? (
+                          // The owner's schedules can't be read here: the week the page books by, read only, saying why.
                           <FieldGroup
                             label={strings.weeklyHours}
                             meta={zoneDisplay(hours.availability.timeZone, openedAt)}
+                            hint={hours.status === 'failed' ? strings.hoursUnreadable : strings.followOwnerHint}
                           >
                             <DescriptionList
                               layout="compact"
@@ -899,16 +903,20 @@ function useHours(
   slug: string,
   ownerMember: string | undefined,
 ) {
-  const state = useSchedulesOrNone(view);
+  const read = useSchedules(view);
   // Availability, on the owner's schedules (an admin's view of a colleague's page opens theirs, `?member=`).
   const manageHref = availabilityHref(slug, ownerMember);
-  if (state === undefined) {
-    return { items: [], availability: page.availability, schedule: undefined, manageHref } as const;
+  if (view === undefined || read.status !== 'ready') {
+    // None to read (a reader who may not read them), still on their way, or a read that failed.
+    const status = view === undefined ? 'none' : read.status === 'loading' ? 'loading' : 'failed';
+    return { status, items: [], availability: page.availability, schedule: undefined, manageHref } as const;
   }
+  const state = read.schedules;
   const fallback = state.find((each) => each.isDefault);
   const named = scheduleId === null ? undefined : state.find((each) => each.id === scheduleId);
   const chosen = named ?? fallback;
   return {
+    status: 'ready',
     items: scheduleChoices(state, scheduleId),
     availability: chosen?.availability ?? page.availability,
     schedule: chosen,
@@ -926,9 +934,3 @@ const standIn = (page: BookingPageView): ScheduleView => ({
   pages: [],
   updatedAt: null,
 });
-
-/** The owner's schedules once read, or undefined (none read for a reader who can't read them). */
-function useSchedulesOrNone(view: SchedulesView | undefined) {
-  const state = useSchedules(view);
-  return state.status === 'ready' ? state.schedules : undefined;
-}

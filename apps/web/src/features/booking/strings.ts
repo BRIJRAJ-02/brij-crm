@@ -62,7 +62,7 @@ export const strings = {
   titleRequired: 'Give the page a title.',
   whereRequired: 'Say where the meeting happens.',
   /** Above a paused page's editor: what visitors see, and how to turn it back on. */
-  pausedNote: 'This page is off, so visitors see it closed. Resume it from the ⋯ menu to take bookings again.',
+  pausedNote: 'This page is off, so visitors see it closed. Resume it from More actions to take bookings again.',
   duration: 'Duration',
   durationRequired: 'Pick at least one length.',
   durationCustom: 'Custom',
@@ -96,7 +96,9 @@ export const strings = {
   manageSchedules: 'Manage schedules',
   /** Under the Schedule picker when other pages book by the same schedule. */
   sharedSchedule: (name: string, pages: number) =>
-    `Changes apply to every page that uses ${name}, ${String(pages)} pages.`,
+    `${String(pages)} pages use ${name}. Changes here apply to all of them.`,
+  /** Why the week shows read only when the owner's schedules couldn't be read. */
+  hoursUnreadable: 'Couldn’t load the schedules, so these hours show read only. Reload to edit them.',
   /** Why the Schedule picker waits: its hours have changes not saved yet. */
   saveHoursFirst: 'Save or discard the changes to these hours first.',
   followOwnerHint: 'This page books by its owner’s schedule.',
