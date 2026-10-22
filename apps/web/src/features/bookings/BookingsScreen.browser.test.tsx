@@ -307,12 +307,12 @@ describe('cancelling a booking', () => {
     await expect.poll(alert).toBeNull();
     // The card is back, and focus with it on Cancel booking.
     await expect.poll(card).not.toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Cancel booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
     await userEvent.keyboard('{Enter}');
     await confirmAlone();
     await userEvent.click(page.getByRole('button', { name: /^Keep booking/ }));
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Cancel booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
     expect(week.actions.cancel).not.toHaveBeenCalled();
   });
 
@@ -398,7 +398,7 @@ describe('cancelling from the list', () => {
     expect(alert()?.textContent).toContain('Cancel Quick chat with Ada Lovelace?');
     await userEvent.keyboard('{Escape}');
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Cancel booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
     expect(cancel).not.toHaveBeenCalled();
 
     await userEvent.keyboard('{Enter}');

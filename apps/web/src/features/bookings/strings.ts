@@ -86,6 +86,16 @@ export const strings = {
   cancelReason: 'Why it was canceled',
   openPerson: 'Open their page',
   joinCall: 'Join call',
+  /** The card's Join: short on screen, its name the provider ("Join Google Meet"). */
+  join: 'Join',
+  joinProvider: (provider: string) => `Join ${provider}`,
+  /** The card's people row, for screen readers. */
+  cardPeople: 'Who',
+  /** Booked by chat: the transcript under the row. */
+  viewChat: (count: number) => `View chat (${String(count)})`,
+  hideChat: 'Hide chat',
+  /** A booking's card heading: who, then which page ("Grace Hopper · Intro call"). */
+  cardTitle: (guest: string, page: string) => `${guest} · ${page}`,
   // A removed host's booking stays for an admin to hand on (spec 0031, AC-815).
   hostRemoved: 'Host removed',
   eventFailed: 'This booking isn’t on your calendar: the event couldn’t be made. Add it by hand.',

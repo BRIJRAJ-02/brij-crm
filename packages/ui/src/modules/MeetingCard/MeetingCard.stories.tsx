@@ -184,3 +184,27 @@ export const LongAndNoCall: Story = {
     await expect(canvasElement.querySelector('[class*="detail"]')).not.toBeNull();
   },
 };
+
+/** At a phone's width the actions wrap among themselves, and the ending action keeps the first line's end. */
+export const Phone: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="phone">
+      <MeetingCard
+        {...args}
+        status={{ label: 'Confirmed', hue: 'green' }}
+        people={[{ id: 'grace', name: 'Grace Hopper', detail: 'grace@navy.mil', isDetailCopyable: true }]}
+        rows={[where]}
+        actions={<Actions />}
+        endAction={<Button variant="ghost-danger" icon="circle-x" label="Cancel booking" />}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const join = canvas.getByRole('link', { name: 'Join Google Meet' }).getBoundingClientRect();
+    const cancel = canvas.getByRole('button', { name: 'Cancel booking' }).getBoundingClientRect();
+    await expect(Math.abs(cancel.top - join.top)).toBeLessThanOrEqual(1);
+    const card = canvas.getByRole('article');
+    await expect(cancel.right).toBeLessThanOrEqual(card.getBoundingClientRect().right + 1);
+  },
+};

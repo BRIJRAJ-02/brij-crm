@@ -12,9 +12,22 @@ import {
   type ReassignedBooking,
   type RotationView,
 } from '@crm/data';
-import { Button, ButtonGroup, Callout, DayStrip, Field, focusLater, Modal, SlotList, useFormatSettings } from '@crm/ui';
+import {
+  Button,
+  ButtonLink,
+  Callout,
+  DayStrip,
+  Field,
+  focusLater,
+  Modal,
+  SlotList,
+  Tooltip,
+  useFormatSettings,
+} from '@crm/ui';
+import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { zoneDisplay } from '../../public/booking/time.ts';
+import { providerOf } from './provider.ts';
 import { strings } from './strings.ts';
 import { useNow } from './useNow.ts';
 
@@ -61,13 +74,15 @@ function dayOf(instant: string, zone: string): string {
 export type BookingAsk = 'move' | 'cancel';
 
 /**
- * The card's changes: Reschedule, Copy guest link and Cancel booking; Reschedule and Cancel each open a dialog.
- * The buttons are for a confirmed booking only. In a panel the dialogs open here, and stay while the booking shows
+ * The card's footer, as Google Calendar's and Calendly's event cards hold it: Join first and primary while the call
+ * can be joined, then Reschedule and Copy guest link; once it has started, Mark no show. Cancel booking is apart, at
+ * the footer's end (`endAction`), quiet and icon only with its name in a tooltip; it still asks first. Reschedule
+ * and Cancel each open a dialog. The buttons are for a confirmed booking only. In a panel the dialogs open here, and stay while the booking shows
  * cancelled at once (the layer's optimistic cancel), so Cancel's confirm stays busy until the server answers. In a
  * popover (the week's card) they can't: React Aria draws popovers above every dialog, so `onAsk` hands them to the
  * screen, which closes the card and draws `BookingDialog` itself.
  */
-export function BookingActions({
+export function useBookingActions({
   booking,
   actions,
   locale,
@@ -84,7 +99,7 @@ export function BookingActions({
   readonly focusOnMount?: BookingAsk;
   /** Opens Reassign for a round robin booking an admin may hand to someone else (spec 0029, AC-748). */
   readonly onReassign?: () => void;
-}) {
+}): { readonly actions: ReactNode; readonly endAction: ReactNode; readonly dialogs: ReactNode } {
   const [open, setOpen] = useState<BookingAsk | undefined>(undefined);
   // Each opening mounts a fresh dialog (an empty reason, no old refusal).
   const [opens, setOpens] = useState(0);
@@ -141,48 +156,70 @@ export function BookingActions({
       setMarking(false);
     }
   };
-  return (
+  const hasEnded = Date.parse(booking.endsAt) <= now.getTime();
+  const isConfirmed = booking.status === 'confirmed';
+  const join =
+    isConfirmed && !hasEnded && booking.videoUrl !== undefined ? (
+      <ButtonLink
+        variant="primary"
+        icon="video"
+        href={booking.videoUrl}
+        isExternal
+        label={strings.joinProvider(providerOf(booking.videoUrl))}
+      >
+        {strings.join}
+      </ButtonLink>
+    ) : undefined;
+  const footer = !isConfirmed ? undefined : hasStarted ? (
     <>
-      {booking.status === 'confirmed' && hasStarted && (
-        <ButtonGroup label={strings.changeBooking} layout="row">
-          <Button icon="user-x" isPending={marking} onPress={() => void markNoShow()}>
-            {booking.noShow === true ? strings.undoNoShow : strings.markNoShow}
-          </Button>
-        </ButtonGroup>
+      {join}
+      <Button icon="user-x" isPending={marking} onPress={() => void markNoShow()}>
+        {booking.noShow === true ? strings.undoNoShow : strings.markNoShow}
+      </Button>
+    </>
+  ) : (
+    <>
+      {join}
+      {booking.reschedules < 5 && (
+        <Button ref={moveRef} icon="calendar-clock" onPress={() => ask('move')}>
+          {strings.reschedule}
+        </Button>
       )}
-      {booking.status === 'confirmed' && !hasStarted && (
-        <ButtonGroup label={strings.changeBooking} layout="row">
-          {booking.reschedules < 5 && (
-            <Button ref={moveRef} icon="calendar-clock" onPress={() => ask('move')}>
-              {strings.reschedule}
-            </Button>
-          )}
-          <Button icon="link" isPending={copying} onPress={() => void copy()}>
-            {strings.copyGuestLink}
-          </Button>
-          {onReassign !== undefined && (
-            <Button icon="users-round" onPress={onReassign}>
-              {strings.reassignAction}
-            </Button>
-          )}
-          <Button ref={cancelRef} variant="danger" icon="circle-x" onPress={() => ask('cancel')}>
-            {strings.cancelBooking}
-          </Button>
-        </ButtonGroup>
-      )}
-      {onAsk === undefined && opens > 0 && (
-        <BookingDialog
-          key={opens}
-          booking={booking}
-          actions={actions}
-          locale={locale}
-          ask={open}
-          onClose={() => setOpen(undefined)}
-          onDone={() => setOpen(undefined)}
-        />
+      <Button icon="link" isPending={copying} onPress={() => void copy()}>
+        {strings.copyGuestLink}
+      </Button>
+      {onReassign !== undefined && (
+        <Button icon="users-round" onPress={onReassign}>
+          {strings.reassignAction}
+        </Button>
       )}
     </>
   );
+  const endAction =
+    isConfirmed && !hasStarted ? (
+      <Tooltip content={strings.cancelBooking}>
+        <Button
+          ref={cancelRef}
+          variant="ghost-danger"
+          icon="circle-x"
+          label={strings.cancelBooking}
+          onPress={() => ask('cancel')}
+        />
+      </Tooltip>
+    ) : undefined;
+  const dialogs =
+    onAsk === undefined && opens > 0 ? (
+      <BookingDialog
+        key={opens}
+        booking={booking}
+        actions={actions}
+        locale={locale}
+        ask={open}
+        onClose={() => setOpen(undefined)}
+        onDone={() => setOpen(undefined)}
+      />
+    ) : undefined;
+  return { actions: footer, endAction, dialogs };
 }
 
 /**

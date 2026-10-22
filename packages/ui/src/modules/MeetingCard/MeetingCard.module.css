@@ -126,10 +126,10 @@
     min-inline-size: 0;
   }
 
+  /* The actions wrap among themselves; the ending action keeps the first line's end. */
   .foot {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-8);
     padding-block-start: var(--space-12);
@@ -138,6 +138,7 @@
 
   .actions {
     display: flex;
+    flex: 1;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-8);
