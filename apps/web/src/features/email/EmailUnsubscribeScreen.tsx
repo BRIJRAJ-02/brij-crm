@@ -7,7 +7,7 @@
 // signing in.
 import type { EmailUnsubscribeStore } from '@crm/data';
 import { useEmailUnsubscribe } from '@crm/data/react';
-import { AuthLayout, Button, Callout, EmptyState } from '@crm/ui';
+import { AuthLayout, Button, Callout } from '@crm/ui';
 import { PRODUCT_LOGO } from '../../brand.ts';
 import { strings } from './strings.ts';
 
@@ -16,8 +16,13 @@ export function EmailUnsubscribeScreen({ store }: { readonly store: EmailUnsubsc
   const state = useEmailUnsubscribe(store);
   if (state.status === 'error' && state.error.code === 'NOT_FOUND') {
     return (
-      <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.unsubscribeTitle}>
-        <EmptyState title={strings.goneTitle}>{strings.goneText}</EmptyState>
+      <AuthLayout
+        productName={strings.product}
+        logo={PRODUCT_LOGO}
+        title={strings.goneTitle}
+        description={strings.goneText}
+      >
+        {null}
       </AuthLayout>
     );
   }

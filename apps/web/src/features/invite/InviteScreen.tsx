@@ -54,7 +54,7 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
         description={strings.invalidText}
         {...signInFrame()}
       >
-        <ButtonLink size="lg" isFullWidth="center" href="/">
+        <ButtonLink variant="primary" size="lg" isFullWidth="center" href="/">
           {strings.goHome}
         </ButtonLink>
       </AuthLayout>

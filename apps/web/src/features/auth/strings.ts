@@ -22,6 +22,9 @@ export const strings = {
   retry: 'Try again',
   /** `/` while it works out where to send you. */
   openingTitle: 'Opening Timefix',
+  /** `/` when that check failed: the title says what failed, so the line under it only says what to do. */
+  openFailedTitle: 'Can’t open Timefix',
+  openFailedText: 'Check your connection, then try again.',
   duration,
   /** A code send refused for sending too often, with the server's wait. */
   sendLimited: (seconds: number) => `Too many codes sent to this email. Try again in ${duration(seconds)}.`,

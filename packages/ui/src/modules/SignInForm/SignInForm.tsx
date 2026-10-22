@@ -51,7 +51,8 @@ export interface SignInFormProps {
    * passkey"): Buttons with `size="lg"` and `isFullWidth="center"`, under
    * Continue with Google. The "or" shows when this or Google is there. Prefer
    * it to `afterEmail` for a way in that doesn't use the typed address, so
-   * the email field and its submit stay together.
+   * the email field and its submit stay together. The form doesn't turn these
+   * off for `isDisabled` or `status`: the screen does, as it renders them.
    */
   readonly otherWays?: ReactNode;
   /**

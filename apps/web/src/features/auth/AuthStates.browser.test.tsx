@@ -2,10 +2,11 @@
 // check keeps the page's title as its one heading, says why in one sentence and
 // offers Try again; the second step and join sit in the same split card as sign
 // in; and join with nothing to ask makes its way on the page's one action.
-import type { DataLayer, Joinable } from '@crm/data';
+import type { DataError, DataLayer, Joinable } from '@crm/data';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
+import { EmailPreferencesError } from '../email/EmailPreferencesScreen.tsx';
 import { JoinScreen } from '../join/JoinScreen.tsx';
 import { AuthError } from './AuthStates.tsx';
 import { TwoFactorScreen } from './TwoFactorScreen.tsx';
@@ -84,5 +85,28 @@ describe('JoinScreen', () => {
     shown = await join([{ workspaceId: '0199a6f2-0000-7000-8000-00000000000b', name: 'Acme', state: 'none' }], false);
     await expect.element(page.getByRole('button', { name: 'Ask to join Acme' })).toBeVisible();
     await expect.element(page.getByRole('link', { name: 'Create a workspace' })).toBeVisible();
+  });
+});
+
+describe('EmailPreferencesError', () => {
+  it('says an expired link as the page title, with why under it and no second heading', async () => {
+    const gone = { code: 'NOT_FOUND', message: 'Not found' } as unknown as DataError;
+    shown = await renderInApp(() => <EmailPreferencesError error={gone} />, {
+      data: {},
+      pattern: '/email-preferences',
+      at: '/email-preferences',
+    });
+    await expect.element(page.getByRole('heading', { level: 1, name: 'This link has expired' })).toBeVisible();
+    expect(document.querySelectorAll('h1, h2, h3')).toHaveLength(1);
+  });
+
+  it('fails to load as the pages before the app do', async () => {
+    shown = await renderInApp(() => <EmailPreferencesError error={undefined} />, {
+      data: {},
+      pattern: '/email-preferences',
+      at: '/email-preferences',
+    });
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Email preferences' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 });

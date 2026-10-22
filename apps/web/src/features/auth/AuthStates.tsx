@@ -5,6 +5,7 @@
 // a retry when that check fails. Leaves out: the page's own task.
 import { AuthLayout, Button, Callout, Skeleton, WorkspacePreview } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
+import { useState } from 'react';
 import { strings } from './strings.ts';
 import { PRODUCT_LOGO } from '../../brand.ts';
 
@@ -53,12 +54,20 @@ export function AuthError({
   readonly isSplit?: boolean;
 }) {
   const router = useRouter();
+  // Spins while the route runs again, so a retry that fails as fast still shows it was pressed.
+  const [isRetrying, setRetrying] = useState(false);
+  const retry = () => {
+    setRetrying(true);
+    void router.invalidate().finally(() => {
+      setRetrying(false);
+    });
+  };
   return (
     <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={title} {...(isSplit ? signInFrame() : {})}>
       <Callout tone="danger" isAnnounced>
         {text ?? strings.unreachable}
       </Callout>
-      <Button size="lg" isFullWidth="center" icon="refresh-cw" onPress={() => void router.invalidate()}>
+      <Button variant="primary" size="lg" isFullWidth="center" icon="refresh-cw" isPending={isRetrying} onPress={retry}>
         {strings.retry}
       </Button>
     </AuthLayout>

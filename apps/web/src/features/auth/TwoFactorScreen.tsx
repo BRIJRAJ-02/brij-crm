@@ -5,7 +5,7 @@
 // Leaves out: any way round the second factor (no email recovery, owner decision). An account whose only second
 // factor is a passkey (`passkeyOnly`) gets the passkey alone.
 import { isDataError, type DataLayer } from '@crm/data';
-import { AuthLayout, Button, Callout, Checkbox, CodeInput, Field, Form, Link } from '@crm/ui';
+import { AuthLayout, Button, ButtonLink, Callout, Checkbox, CodeInput, Field, Form } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { signInFrame } from './AuthStates.tsx';
@@ -104,12 +104,17 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
     refocus();
   };
 
+  const signInAgainHref = signInHref(safeRedirect(redirect));
   if (expired !== undefined) {
     return (
       <AuthLayout productName={signIn.product} logo={PRODUCT_LOGO} title={strings.title} {...signInFrame()}>
-        <Callout tone="warning" isAnnounced actions={<Link href="/sign-in">{strings.signInAgain}</Link>}>
+        <Callout tone="warning" isAnnounced>
           {expired === '' ? strings.expired : expired}
         </Callout>
+        {/* The one way on, as every page before the app shows it, keeping where the sign in was going. */}
+        <ButtonLink variant="primary" size="lg" isFullWidth="center" href={signInAgainHref}>
+          {strings.signInAgain}
+        </ButtonLink>
       </AuthLayout>
     );
   }
@@ -130,12 +135,12 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
           </Callout>
         )}
         {supportKnown && !hasPasskeys ? (
-          <Callout
-            tone="warning"
-            actions={<Link href={signInHref(safeRedirect(redirect))}>{strings.signInAgain}</Link>}
-          >
-            {strings.passkeyUnavailable}
-          </Callout>
+          <>
+            <Callout tone="warning">{strings.passkeyUnavailable}</Callout>
+            <ButtonLink variant="primary" size="lg" isFullWidth="center" href={signInAgainHref}>
+              {strings.signInAgain}
+            </ButtonLink>
+          </>
         ) : (
           <Button
             variant="primary"
