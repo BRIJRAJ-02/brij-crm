@@ -25,12 +25,12 @@ export function linkableObjects(objects: readonly ObjectSummary[]): readonly Obj
     );
 }
 
-/** Linking for `slug`'s bookings: the objects to link from, their record search, the link itself, and record pages. */
+/** Linking for `slug`'s bookings: the objects to link from, the link itself, and record pages. */
 export function bookingLinking(data: DataLayer, slug: string, objects: readonly ObjectSummary[]): BookingLinking {
   const link = recordLinks(slug, objects);
   return {
+    slug,
     objects: linkableObjects(objects),
-    search: (objectId) => data.records.search(slug, { objectId }),
     link: (bookingId, record) => data.bookings.link(slug, bookingId, record),
     hrefOf: (record) => link(record.objectId, record.recordId),
   };

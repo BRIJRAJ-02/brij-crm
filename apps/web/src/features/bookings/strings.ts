@@ -229,8 +229,8 @@ export const strings = {
   // Linking a booking to a record by hand (polish F2).
   linkRecord: 'Link to a record',
   changeLinkedRecord: 'Change linked record',
-  linkTitle: (guest: string, page: string) => `Link ${guest} · ${page} to a record`,
-  linkText: 'Its card shows the record, so the meeting is filed with the deal or project it was about.',
+  /** Names the booking, as Reschedule's title does: "Link Quick chat with Ada Lovelace to a record". */
+  linkTitle: (title: string, name: string) => `Link ${title} with ${name} to a record`,
   linkedRecordField: 'Record',
   linkIt: 'Link',
   linking: 'Linking',
@@ -239,6 +239,7 @@ export const strings = {
   unlink: (name: string) => `Remove link to ${name}`,
   unlinkedToast: (name: string) => `Unlinked from ${name}.`,
   linkFailed: 'That link didn’t go through. Try again.',
+  searchFailed: 'The search didn’t answer. Type again to try again.',
   rescheduleTitle: (title: string, name: string) => `Reschedule ${title} with ${name}`,
   tryAgain: 'Try again',
   copyFailed: 'Couldn’t copy the link. Try again.',

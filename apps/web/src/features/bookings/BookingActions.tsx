@@ -13,11 +13,9 @@ import {
   type PublicSlots,
   type ReassignedBooking,
   type RecordRefDisplay,
-  type RecordSearch,
   type RotationView,
 } from '@crm/data';
 import {
-  arraySource,
   AttributeEditor,
   Button,
   Callout,
@@ -36,8 +34,9 @@ import {
   type ToastAction,
 } from '@crm/ui';
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { zoneDisplay } from '../../public/booking/time.ts';
+import { useRecordSearch } from '../records/links.ts';
 import { strings } from './strings.ts';
 import { useNow } from './useNow.ts';
 
@@ -66,10 +65,10 @@ export interface HostBookingActions {
 
 /** What linking a booking to a record by hand needs (polish F2), bound to the workspace by the route. */
 export interface BookingLinking {
+  /** The workspace, whose records the picker searches. */
+  readonly slug: string;
   /** The objects a booking may be linked to: those the member may change, but People and Companies, Deals first. */
   readonly objects: readonly ObjectSummary[];
-  /** The record picker's search over one of them. */
-  readonly search: (objectId: string) => RecordSearch;
   /** Links the booking, or takes the link off with `null`: shown at once, back on a refusal (which it throws). */
   readonly link: (bookingId: string, record: RecordRefDisplay | null) => Promise<void>;
   /** A record's page, for the linked record's chip. */
@@ -126,7 +125,12 @@ export function useBookingActions({
   readonly focusOnMount?: BookingAsk;
   /** Opens Reassign for a round robin booking an admin may hand to someone else (spec 0029, AC-748). */
   readonly onReassign?: () => void;
-}): { readonly actions: ReactNode; readonly dialogs: ReactNode } {
+}): {
+  readonly actions: ReactNode;
+  readonly dialogs: ReactNode;
+  /** Focuses More, when the footer has it: where focus goes when a control on the card goes away under it. */
+  readonly focusMore?: () => void;
+} {
   const [open, setOpen] = useState<BookingAsk | undefined>(undefined);
   // Each opening mounts a fresh dialog (an empty reason, no old refusal).
   const [opens, setOpens] = useState(0);
@@ -270,7 +274,12 @@ export function useBookingActions({
         onDone={() => setOpen(undefined)}
       />
     ) : undefined;
-  return { actions: footer, dialogs };
+  const hasMore = isConfirmed && (!hasStarted || canLink);
+  return {
+    actions: footer,
+    dialogs,
+    ...(hasMore ? { focusMore: () => focusLater(() => cancelRef.current) } : {}),
+  };
 }
 
 /**
@@ -587,43 +596,27 @@ const LINKED_RECORD: FieldAttribute = {
   isReadOnly: false,
 };
 
-const keyOf = (display: RecordRefDisplay) => `${display.objectId}:${display.recordId}`;
-
-/** What a picker shows while its search is out: one row still loading, never "No results". */
-const LOADING: ListSource<RecordRefDisplay> = { count: 1, getItem: () => undefined, getKey: keyOf };
-
-const noSubscribe = () => () => undefined;
-
 /**
- * One record search per object picked (made when the object is picked, let go when another is or the dialog
- * closes), drawn again as its answers land; and the display of every record it answered, for the pick.
+ * A search of one display shape as the editor takes it: AttributeEditor types its search over every attribute
+ * type's display, and the record picker reads only record displays.
  */
-function useLinkSearch(linking: BookingLinking, objectId: string | undefined) {
-  const search = useMemo(() => (objectId === undefined ? undefined : linking.search(objectId)), [linking, objectId]);
-  useEffect(
-    () => () => {
-      search?.dispose();
-    },
-    [search],
-  );
-  useSyncExternalStore(search?.subscribe ?? noSubscribe, () => search?.getSnapshot());
-  const onSearch = (query: string): ListSource<RecordRefDisplay> => {
-    if (search === undefined) return arraySource([], keyOf);
-    search.ask(query);
-    const now = search.getSnapshot();
-    if (now.query !== query.trim() || now.status === 'loading' || now.status === 'idle') return LOADING;
-    return arraySource(
-      now.results.map((result) => result.ref),
-      keyOf,
-    );
-  };
-  return { onSearch, displayOf: (recordId: string) => search?.resultOf(recordId)?.ref };
+const editorSearch = (search: (query: string) => ListSource<RecordRefDisplay>) =>
+  search as unknown as NonNullable<AttributeEditorProps['onSearch']>;
+
+/** The record a picker committed (one ref, or the first of a list), or undefined once cleared. */
+function refOf(value: unknown): { readonly objectId: string; readonly recordId: string } | undefined {
+  const picked: unknown = Array.isArray(value) ? (value as readonly unknown[])[0] : value;
+  if (typeof picked !== 'object' || picked === null || !('objectId' in picked) || !('recordId' in picked)) {
+    return undefined;
+  }
+  const { objectId, recordId } = picked;
+  return typeof objectId === 'string' && typeof recordId === 'string' ? { objectId, recordId } : undefined;
 }
 
 /**
  * Link to a record (polish F2): the record picker over the objects a booking may be linked to (Deals first, the
  * switcher in its menu as on a task's Records), then Link. It starts on the record linked now, if any. A refusal
- * stays under the picker; linked, it closes and says so.
+ * stays under the picker; linked, it closes and says so, and the card shows the record.
  */
 function LinkRecordDialog({
   booking,
@@ -640,15 +633,16 @@ function LinkRecordDialog({
 }) {
   const now = booking.linkedRecord;
   const [objectId, setObjectId] = useState(
-    linking.objects.find((object) => object.id === now?.objectId)?.id ?? linking.objects[0]?.id,
+    linking.objects.find((object) => object.id === now?.objectId)?.id ?? linking.objects[0]?.id ?? '',
   );
   const [picked, setPicked] = useState<RecordRefDisplay | undefined>(now);
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
-  const { onSearch, displayOf } = useLinkSearch(linking, objectId);
+  const search = useRecordSearch(linking.slug, objectId);
+  const isSame = picked !== undefined && picked.recordId === now?.recordId;
   const link = () => {
     if (busy || picked === undefined) return;
-    if (picked.recordId === now?.recordId) {
+    if (isSame) {
       onClose();
       return;
     }
@@ -666,9 +660,10 @@ function LinkRecordDialog({
       },
     );
   };
+  const shownError = error ?? (search.failed ? strings.searchFailed : undefined);
   return (
     <Modal
-      title={strings.linkTitle(booking.visitorName, booking.pageTitle)}
+      title={strings.linkTitle(booking.pageTitle, booking.visitorName)}
       isOpen={isOpen}
       isBusy={busy}
       onOpenChange={(open) => {
@@ -679,19 +674,18 @@ function LinkRecordDialog({
           <Button slot="close" isDisabled={busy} kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button variant="primary" isPending={busy} isDisabled={picked === undefined} onPress={link}>
+          <Button variant="primary" icon="link" isPending={busy} isDisabled={picked === undefined} onPress={link}>
             {busy ? strings.linking : strings.linkIt}
           </Button>
         </>
       }
     >
-      <p>{strings.linkText}</p>
       <AttributeEditor
         attribute={LINKED_RECORD}
         value={picked === undefined ? null : { objectId: picked.objectId, recordId: picked.recordId }}
         {...(picked === undefined ? {} : { display: picked })}
         surface="form"
-        onSearch={onSearch as unknown as NonNullable<AttributeEditorProps['onSearch']>}
+        onSearch={editorSearch(search.onSearch)}
         objectSwitcher={{
           objects: linking.objects.map((object) => ({
             id: object.id,
@@ -699,22 +693,17 @@ function LinkRecordDialog({
             icon: object.icon,
             hue: object.hue,
           })),
-          objectId: objectId ?? '',
+          objectId,
           onObjectChange: setObjectId,
         }}
         onCommit={(value) => {
           setError(undefined);
-          const ref = (Array.isArray(value) ? value[0] : value) as
-            { readonly objectId: string; readonly recordId: string } | null | undefined;
-          if (ref === null || ref === undefined) {
-            setPicked(undefined);
-            return;
-          }
+          const ref = refOf(value);
           setPicked(
-            displayOf(ref.recordId) ?? { objectId: ref.objectId, recordId: ref.recordId, name: '', kind: 'other' },
+            ref === undefined ? undefined : (search.displayOf(ref.recordId) ?? { ...ref, name: '', kind: 'other' }),
           );
         }}
-        {...(error === undefined ? {} : { error })}
+        {...(shownError === undefined ? {} : { error: shownError })}
       />
     </Modal>
   );

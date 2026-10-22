@@ -157,6 +157,11 @@ const NO_ACTIONS: HostBookingActions = {
   notify: () => undefined,
 };
 
+/** What a refused link or unlink says: the server's words, else the plain line. */
+function linkMessageOf(error: unknown): string {
+  return isDataError(error) && error.message !== '' ? error.message : strings.linkFailed;
+}
+
 /** A chip's link, when there is a page to open. */
 const hrefProps = (href: string | undefined) => (href === undefined ? {} : { href });
 
@@ -328,25 +333,28 @@ function BookingCard({
   const hasActions = actions !== undefined;
   const now = useNow();
   const isConfirmed = booking.status === 'confirmed';
-  // The record it was linked to by hand (polish F2): its chip opens it; Remove takes the link off at once, with Undo.
+  // The record it was linked to by hand (polish F2): its chip opens it; Remove takes the link off at once, with Undo,
+  // and focus goes to More (which holds Link to a record) as the row goes. A card with no More keeps the chip only.
   const linking = actions?.linking;
   const record = booking.linkedRecord;
+  const { focusMore } = footer;
   const unlink = (shown: RecordRefDisplay) => {
     if (linking === undefined || actions === undefined) return;
     const name = shown.name === '' ? strings.linkedRecordField : shown.name;
+    focusMore?.();
     linking.link(booking.id, null).then(
       () => {
         actions.notify('success', strings.unlinkedToast(name), {
           label: strings.undo,
           onAction: () => {
-            linking.link(booking.id, shown).catch(() => {
-              actions.notify('danger', strings.linkFailed);
+            linking.link(booking.id, shown).catch((error: unknown) => {
+              actions.notify('danger', linkMessageOf(error));
             });
           },
         });
       },
-      () => {
-        actions.notify('danger', strings.linkFailed);
+      (error: unknown) => {
+        actions.notify('danger', linkMessageOf(error));
       },
     );
   };
@@ -358,7 +366,7 @@ function BookingCard({
           icon: 'briefcase',
           label: strings.linkedTo,
           value: <RecordChip display={record} {...hrefProps(linking?.hrefOf(record))} />,
-          ...(linking === undefined
+          ...(linking === undefined || focusMore === undefined
             ? {}
             : {
                 action: (

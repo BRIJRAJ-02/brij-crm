@@ -647,8 +647,11 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     };
   }
 
-  /** The List with one booking open in its panel, linked to `linked`, and linking that changes it as the layer does. */
-  async function openWith(linked: RecordRefDisplay | undefined) {
+  /**
+   * The List with one booking open in its panel, linked to `linked`, and linking that changes it as the layer does
+   * (or is refused with `refusal`).
+   */
+  async function openWith(linked: RecordRefDisplay | undefined, refusal?: Error) {
     let state: MeetingsState = {
       ...ready,
       items: [
@@ -668,6 +671,7 @@ describe('linking a booking to a record by hand (polish F2)', () => {
       reload: () => undefined,
     };
     const link = vi.fn((_bookingId: string, record: RecordRefDisplay | null) => {
+      if (refusal !== undefined) return Promise.reject(refusal);
       const first = state.status === 'ready' ? state.items[0] : undefined;
       if (first?.kind === 'booking') {
         const { linkedRecord: _was, ...rest } = first.booking;
@@ -702,8 +706,8 @@ describe('linking a booking to a record by hand (polish F2)', () => {
             rotations: vi.fn(() => Promise.resolve([])),
             markNoShow: vi.fn(() => Promise.resolve()),
             linking: {
+              slug: 'acme',
               objects: [deals],
-              search: dealSearch,
               link,
               hrefOf: (record) => `/w/acme/objects/deals/${record.recordId}/overview`,
             },
@@ -711,7 +715,11 @@ describe('linking a booking to a record by hand (polish F2)', () => {
           onSearch={() => undefined}
         />
       ),
-      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
+      {
+        data: { records: { search: dealSearch } as unknown as DataLayer['records'] },
+        pattern: '/w/$slug/bookings/list',
+        at: '/w/acme/bookings/list',
+      },
     );
     await userEvent.click(page.getByRole('button', { name: 'Quick chat', exact: true }));
     return { link, notify };
@@ -724,6 +732,8 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     await userEvent.click(page.getByRole('button', { name: 'Remove link to Navy rollout' }));
     expect(link).toHaveBeenCalledWith(bookingOf().id, null);
     await expect.element(page.getByRole('link', { name: 'Navy rollout' })).not.toBeInTheDocument();
+    // The row went under focus: it lands on More, which holds Link to a record.
+    await expect.element(page.getByRole('button', { name: 'More for this booking' })).toHaveFocus();
     expect(notify).toHaveBeenCalledWith(
       'success',
       'Unlinked from Navy rollout.',
@@ -739,15 +749,35 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     const { link, notify } = await openWith(undefined);
     await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
     await userEvent.click(page.getByRole('menuitem', { name: 'Link to a record' }));
-    const dialog = page.getByRole('dialog', { name: 'Link Ada Lovelace · Quick chat to a record' });
+    const dialog = page.getByRole('dialog', { name: 'Link Quick chat with Ada Lovelace to a record' });
     await expect.element(dialog).toBeVisible();
     const linkButton = dialog.getByRole('button', { name: 'Link', exact: true });
     await expect.element(linkButton).toBeDisabled();
     await userEvent.click(dialog.getByRole('button', { name: /Choose Record/ }));
-    await userEvent.click(page.getByRole('menuitem', { name: /Navy rollout/ }));
+    // The picker's rows sit in a list the test page doesn't size, so the keys pick one, as a keyboard user does.
+    await expect.element(page.getByRole('menuitem', { name: /Navy rollout/ })).toBeInTheDocument();
+    await userEvent.keyboard('{ArrowDown}{Enter}');
     await userEvent.click(linkButton);
     expect(link).toHaveBeenCalledWith(bookingOf().id, navy);
     expect(notify).toHaveBeenCalledWith('success', 'Linked to Navy rollout.');
     await expect.element(page.getByRole('link', { name: 'Navy rollout' })).toBeVisible();
+  });
+
+  it('keeps the dialog open with the refusal under the picker when the link is refused', async () => {
+    const { link, notify } = await openWith(
+      undefined,
+      dataError('FORBIDDEN', 'You can’t link a booking to a record you can’t change.'),
+    );
+    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Link to a record' }));
+    const dialog = page.getByRole('dialog', { name: 'Link Quick chat with Ada Lovelace to a record' });
+    await userEvent.click(dialog.getByRole('button', { name: /Choose Record/ }));
+    // The picker's rows sit in a list the test page doesn't size, so the keys pick one, as a keyboard user does.
+    await expect.element(page.getByRole('menuitem', { name: /Navy rollout/ })).toBeInTheDocument();
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    await userEvent.click(dialog.getByRole('button', { name: 'Link', exact: true }));
+    expect(link).toHaveBeenCalledWith(bookingOf().id, navy);
+    await expect.element(dialog.getByText('You can’t link a booking to a record you can’t change.')).toBeVisible();
+    expect(notify).not.toHaveBeenCalled();
   });
 });
