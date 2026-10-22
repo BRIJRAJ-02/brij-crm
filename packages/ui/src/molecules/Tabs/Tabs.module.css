@@ -206,10 +206,7 @@
   }
 
   .bar[data-variant='feature'] .tab {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
-    gap: var(--space-12);
+    display: block;
     block-size: auto;
     padding: var(--space-16) var(--space-4);
     border-block-start: var(--border-width-hairline) solid var(--border);
@@ -222,8 +219,21 @@
     color: var(--text);
   }
 
+  @media (hover: hover) and (pointer: fine) {
+    .bar[data-variant='feature'] .tab[data-hovered] {
+      color: var(--text);
+    }
+  }
+
   .bar[data-variant='feature'] .indicator {
     inset-block: calc(-1 * var(--border-width-hairline)) auto;
+  }
+
+  .featureBody {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-12);
   }
 
   .feature {
@@ -243,8 +253,10 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* Under the page's compact breakpoint (a phone or a tablet, four columns across): the tile over the label, and
+     no description. A page query, as Modal's: a column's own width at 1440 is under the 320px container step. */
   @media (width < 1024px) {
-    .bar[data-variant='feature'] .tab {
+    .featureBody {
       grid-template-columns: auto;
       justify-items: start;
       gap: var(--space-8);

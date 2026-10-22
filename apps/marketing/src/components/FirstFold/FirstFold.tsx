@@ -5,14 +5,14 @@ import { SiteHeader } from '../SiteHeader/SiteHeader.tsx';
 import styles from './FirstFold.module.css';
 
 /**
- * The home page's first screen, exactly one screen tall: the bar, the promise, the one call to action (claim your
- * booking address), and the showcase (the product's areas as tabs, each with its screen), which takes whatever height is left.
+ * The home page's first screen, at least one screen tall: the bar, the promise, the one call to action (claim your
+ * booking address), and the showcase (the product's areas as tabs, each with its screens), at the content's full width.
  */
 export function FirstFold() {
   return (
     <div className={styles.root}>
       <SiteHeader />
-      <main className={styles.main} id="product">
+      <main className={styles.main}>
         <div className={styles.hero}>
           <h1 className={styles.title}>
             <span className={styles.line} data-tone="quiet">
@@ -20,7 +20,9 @@ export function FirstFold() {
             </span>{' '}
             <span className={styles.line}>Keep the customer.</span>
           </h1>
-          <p className={styles.lead}>Booking pages, forms and CRM in one place. Every booking lands in your CRM.</p>
+          <p className={styles.lead}>
+            Booking pages, forms and CRM in one place. Every booking becomes a customer record.
+          </p>
           <div className={styles.claim}>
             <span className={styles.address} aria-hidden="true">
               {SAMPLE_BOOKING_ADDRESS.host}/
@@ -29,7 +31,7 @@ export function FirstFold() {
             <ButtonLink
               href={LINKS.getStarted}
               variant="primary"
-              size="xl"
+              size="lg"
               iconRight="arrow-right"
               label={`Claim your page at ${SAMPLE_BOOKING_ADDRESS.host}`}
             >

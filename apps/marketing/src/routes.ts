@@ -15,7 +15,7 @@ export interface Route {
   readonly description: string;
 }
 
-const HOME_DESCRIPTION = 'Booking pages, forms and CRM in one place. Every booking lands in your CRM.';
+const HOME_DESCRIPTION = 'Booking pages, forms and CRM in one place. Every booking becomes a customer record.';
 
 export const ROUTES: readonly Route[] = [
   {

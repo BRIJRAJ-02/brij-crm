@@ -4,6 +4,7 @@
  * beside /privacy, and its verification reads /privacy, so the Limited Use
  * paragraph there must stay word for word.
  */
+import { Link } from '@crm/ui';
 import { LegalHeading, LegalList, LegalPage, LegalParagraph } from '../components/LegalPage/LegalPage.tsx';
 
 /** The terms page's document title and meta description. */
@@ -36,8 +37,8 @@ export function TermsPage() {
         </li>
         <li>
           Connecting Google Calendar authorizes Timefix to read your free/busy times and create booking events on your
-          behalf, as described in the <a href="/privacy">Privacy Policy</a>. You can disconnect at any time from the
-          Connections page.
+          behalf, as described in the <Link href="/privacy">Privacy Policy</Link>. You can disconnect at any time from
+          the Connections page.
         </li>
         <li>
           Keep your availability honest: guests rely on the times your page offers, and you are responsible for honoring
@@ -102,7 +103,7 @@ export function TermsPage() {
 
       <LegalHeading>Contact</LegalHeading>
       <LegalParagraph>
-        Questions about these terms: <a href="mailto:privacy@timefix.com">privacy@timefix.com</a>.
+        Questions about these terms: <Link href="mailto:privacy@timefix.com">privacy@timefix.com</Link>.
       </LegalParagraph>
     </LegalPage>
   );

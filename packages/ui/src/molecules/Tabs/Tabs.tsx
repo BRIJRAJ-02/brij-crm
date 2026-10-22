@@ -167,15 +167,17 @@ export function Tabs({
               data-href={tab.href}
             >
               {variant === 'feature' ? (
-                <>
+                <span className={styles.featureBody}>
                   {tab.icon !== undefined && <Icon name={tab.icon} tile={tab.hue ?? 'gray'} />}
                   <span className={styles.feature}>
                     <span className={styles.featureLabel}>{tab.label}</span>
                     {tab.description !== undefined && (
-                      <span className={styles.featureDescription}>{tab.description}</span>
+                      <span className={styles.featureDescription} aria-hidden="true">
+                        {tab.description}
+                      </span>
                     )}
                   </span>
-                </>
+                </span>
               ) : (
                 <>
                   {tab.icon !== undefined && <Icon name={tab.icon} size="sm" />}

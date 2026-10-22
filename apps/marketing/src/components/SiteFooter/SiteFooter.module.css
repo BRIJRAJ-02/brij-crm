@@ -54,39 +54,21 @@
     list-style: none;
   }
 
-  .link {
-    display: inline-flex;
-    align-items: center;
-    block-size: var(--size-nav-item);
-    padding-inline: var(--space-8);
-    border-radius: var(--radius-md);
-    color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
-    text-decoration: none;
-    outline: none;
-    transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      color var(--duration-hover) var(--ease-hover);
+  /* Each row's ButtonLink starts on the column's edge, its label where the heading's text starts. */
+  .row {
+    display: flex;
+    margin-inline-start: calc(-1 * var(--space-8));
   }
 
-  @media (hover: hover) and (pointer: fine) {
-    .link:hover {
-      background: var(--surface-hover);
-      color: var(--text);
-    }
-  }
-
-  .link:focus-visible {
-    box-shadow: var(--shadow-focus-inset), var(--shadow-focus);
-  }
-
+  /* The copyright row's hairline runs from frame line to frame line, as the footer's top one does. */
   .bottom {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
     gap: var(--space-8) var(--space-24);
+    margin-inline: calc(-1 * var(--site-gutter));
     padding-block-start: var(--space-24);
+    padding-inline: var(--site-gutter);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 

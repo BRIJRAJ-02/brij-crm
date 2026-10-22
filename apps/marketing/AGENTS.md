@@ -14,13 +14,14 @@ The marketing site, timefix.ai: the home page (one dark screen: the promise, a c
 | `src/App.tsx` | The page inside `UiProvider` (a fixed clock and platform, so the server and the browser render the same) |
 | `src/routes.ts` | The pages: path, built file, title and description |
 | `src/site.ts` | Every link out: the app (`app.timefix.ai`, where `/sign-in` both signs in and signs up), the booking origin (`timefix.com`) |
-| `src/showcase.ts`, `src/features.ts` | The four areas with their screens, and every feature by area (the All features panel) |
-| `src/components/` | The site's own components, each with a README: `SiteFrame` (dark, Twenty's hairline frame), `SiteHeader`, `FirstFold`, `Showcase`, `AllFeatures` (a native popover), `SiteFooter`, `SiteLogo`, `LegalPage` |
+| `src/showcase.ts`, `src/features.ts` | The four areas with their screens (three each, with address and caption), and every feature by area (the All features sheet) |
+| `src/styles/site.css` | Also the site's type outside the app's scale: the display face, the headline, lead and reading sizes, declared once |
+| `src/components/` | The site's own components, each with a README: `SiteFrame` (dark, Twenty's hairline frame), `SiteHeader`, `FirstFold`, `Showcase` (the feature tabs), `Slides` (an area's screens playing in the window), `AllFeatures` (the library's Modal, a rail beside the sections), `SiteFooter`, `SiteLogo`, `LegalPage` |
 | `src/pages/` | The privacy policy and the terms, ported unchanged from the old Timefix site on 23 Oct 2026 |
 | `src/styles/site.css` | The site's shared custom properties (gutters, frame lines, bar height), built from tokens; Stylelint reads it |
 | `src/styles/fonts.css` | Host Grotesk, the headline face (SIL OFL, `src/fonts/`) |
 | `scripts/prerender.ts`, `scripts/page.ts` | The build's last step: each route rendered into the shell with its own head, the SSR bundle deleted |
-| `public/shots/` | The screens: 3840 × 2400 WebPs, dark, of a seeded demo workspace |
+| `public/shots/` | The screens, `<area>-<n>.webp`: 3840 × 2400 WebPs, dark, of a seeded demo workspace (American names and companies) |
 | `vercel.json` | Clean URLs, the CSP and caching, and 308s of the old `timefix.ai/<handle>` booking links to `timefix.com` |
 
 ## Commands

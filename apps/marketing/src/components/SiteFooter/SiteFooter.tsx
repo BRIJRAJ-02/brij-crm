@@ -21,13 +21,13 @@ function Column({ title, children }: { readonly title: string; readonly children
   );
 }
 
-/** One link in a column. */
+/** One link in a column: a quiet ButtonLink, the app's ghost row. */
 function Row({ href, children }: { readonly href: string; readonly children: string }) {
   return (
-    <li>
-      <a className={styles.link} href={href}>
+    <li className={styles.row}>
+      <ButtonLink href={href} variant="ghost">
         {children}
-      </a>
+      </ButtonLink>
     </li>
   );
 }
@@ -41,7 +41,7 @@ export function SiteFooter({ year }: SiteFooterProps) {
     <footer className={styles.root}>
       <div className={styles.top}>
         <div className={styles.brand}>
-          <SiteLogo tone="dark" />
+          <SiteLogo />
           <p className={styles.tagline}>Booking pages, forms and CRM in one place.</p>
           <ButtonLink href={LINKS.dashboard} variant="secondary" size="lg" iconRight="arrow-up-right">
             Open dashboard
@@ -51,7 +51,6 @@ export function SiteFooter({ year }: SiteFooterProps) {
           <Column title="Get started">
             <Row href={LINKS.getStarted}>Claim your page</Row>
             <Row href={LINKS.signIn}>Sign in</Row>
-            <Row href={LINKS.dashboard}>Open dashboard</Row>
           </Column>
           <Column title="Company">
             <Row href="/privacy">Privacy</Row>

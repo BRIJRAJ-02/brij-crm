@@ -20,4 +20,4 @@ The owner asked for the existing privacy and terms pages on the new site (23 Oct
 
 ## States
 
-Static text. Links inside it are the library's `Link`, or plain anchors for addresses on this site.
+Static text. Every link inside it is the library's `Link` (an `https` link opens in a new tab, `mailto:` and this site's pages open in place).

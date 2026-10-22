@@ -236,6 +236,45 @@ export const Feature: Story = {
     const widths = tabs.map((tab) => Math.round(tab.getBoundingClientRect().width));
     await expect(new Set(widths).size).toBe(1);
     await expect(canvas.getByRole('tab', { name: /Forms/ })).toHaveTextContent('Capture leads');
+    // The description is read from the panel, not as part of the tab's name.
+    await expect(canvas.getByRole('tab', { name: 'Forms' })).toBeInTheDocument();
+  },
+};
+
+/** `feature` in a narrow slot: four equal columns of the sidebar’s width, labels wrapping, nothing cut. */
+export const FeatureNarrow: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Tabs
+        label="What Timefix does"
+        variant="feature"
+        defaultSelectedKey="crm"
+        tabs={[
+          { id: 'crm', label: 'CRM', description: 'People, companies and deals.', icon: 'users', hue: 'green' },
+          {
+            id: 'booking',
+            label: 'Booking',
+            description: 'Your address. They pick a time.',
+            icon: 'calendar-check',
+            hue: 'sky',
+          },
+          { id: 'forms', label: 'Forms', description: 'Capture leads.', icon: 'clipboard-list', hue: 'orange' },
+          { id: 'calendar', label: 'Calendar', description: 'Every meeting.', icon: 'calendar-days', hue: 'blue' },
+        ]}
+      >
+        <TabPanel id="crm">The People table.</TabPanel>
+        <TabPanel id="booking">A booking page.</TabPanel>
+        <TabPanel id="forms">The form editor.</TabPanel>
+        <TabPanel id="calendar">The Bookings week.</TabPanel>
+      </Tabs>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const tabs = canvas.getAllByRole('tab');
+    await expect(tabs).toHaveLength(4);
+    // Four equal columns even in the sidebar's width; the compact look itself follows the page's width.
+    const widths = tabs.map((tab) => Math.round(tab.getBoundingClientRect().width));
+    await expect(new Set(widths).size).toBe(1);
   },
 };
 

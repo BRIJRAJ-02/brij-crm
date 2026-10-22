@@ -4,6 +4,7 @@
  * so the Limited Use paragraph under "How we use Google user data" must stay
  * word for word.
  */
+import { Link } from '@crm/ui';
 import { LegalHeading, LegalList, LegalPage, LegalParagraph } from '../components/LegalPage/LegalPage.tsx';
 
 /** The privacy page's document title and meta description. */
@@ -112,9 +113,9 @@ export function PrivacyPage() {
       </LegalList>
       <LegalParagraph>
         Timefix&rsquo;s use and transfer of information received from Google APIs adheres to the{' '}
-        <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">
+        <Link href="https://developers.google.com/terms/api-services-user-data-policy">
           Google API Services User Data Policy
-        </a>
+        </Link>
         , including the Limited Use requirements. We do not use Google user data for advertising, do not sell it, do not
         let humans read it except with your consent or for security and abuse investigation, and do not use it to
         develop, improve or train generalized AI or machine-learning models.
@@ -253,7 +254,7 @@ export function PrivacyPage() {
 
       <LegalHeading>Contact</LegalHeading>
       <LegalParagraph>
-        Questions or requests: <a href="mailto:privacy@timefix.com">privacy@timefix.com</a>.
+        Questions or requests: <Link href="mailto:privacy@timefix.com">privacy@timefix.com</Link>.
       </LegalParagraph>
     </LegalPage>
   );

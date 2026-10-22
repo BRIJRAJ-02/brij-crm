@@ -1,10 +1,10 @@
 # AllFeatures
 
-Every feature of Timefix, one click away: a quiet "All features" button in the footer that opens a panel listing each area and what it holds.
+Every feature of Timefix, one click away: a quiet "All features" button in the footer that opens a sheet listing each area and what it holds.
 
 ## Why it exists
 
-The owner wanted every feature on the page (22 October 2026), then the page down to one screen with no scrolling and minimal copy (23 October 2026). A panel keeps both: nothing on screen until asked for, everything there when it is. The library's `Modal` and `Popover` need React Aria running in the browser, and this site ships no script, so this is a native popover (`popover`, `popoverTarget`) drawn as the app's Modal is: the raised surface, a hairline, the large shadow, the overlay inset, the scrim.
+The owner wanted every feature on the page (22 October 2026), then the page down to one screen with no scrolling and minimal copy (23 October 2026), then the sheet itself "better" (23 October 2026). A sheet keeps all three: nothing on screen until asked for, everything there when it is. It is the library's `Modal` (`variant="window"`, opened from a `ModalTrigger` by a ghost `Button`), so focus, Escape, the click outside, the enter and exit motion and the return of focus are the app's. What is the site's own is the sheet inside the body: the areas down the left as quiet full width Buttons, each a jump to its section, and the sections on the right, each a checked list of features. Nothing in the library lays out a reference of this shape (a settings page's rail beside long content), and it is text, not a control, so it lives here.
 
 ## Use
 
@@ -12,9 +12,9 @@ The owner wanted every feature on the page (22 October 2026), then the page down
 <AllFeatures groups={FEATURE_GROUPS} />
 ```
 
-The areas and features live in `src/features.ts`: only what is live on app.timefix.ai.
+The areas and features live in `src/features.ts`: only what is live on app.timefix.ai. The title bar's context counts them.
 
 ## States
 
-- **Closed:** the trigger, a footer row with the sidebar's hover surface and the library's focus ring.
-- **Open:** the panel grows from `scale-enter` over `duration-modal` (reduced motion fades only), the header stays put while the list scrolls, and Escape, a click outside or the close button shuts it. The browser returns focus to the trigger.
+- **Closed:** the ghost Button, with the library's hover and focus.
+- **Open:** the Modal's own states. The rail and the sections scroll together in the Modal’s body (nothing is sticky, so nothing overlaps); a row scrolls its section to the top and moves focus onto it. Under 480px of sheet (a phone) the rail sits above the sections in one column. The foot holds Close (Esc) and Claim your page.

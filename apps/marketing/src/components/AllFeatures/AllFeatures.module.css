@@ -1,146 +1,93 @@
-/* AllFeatures: the trigger is a footer row like the sidebar's; the panel is drawn as the app's Modal (the raised
-   surface, a hairline, the large shadow, the overlay inset) and opens from the centre over the scrim. */
+/* AllFeatures: the sheet inside the library's Modal, laid out as the app's settings page: the areas as a column of
+   quiet rows on the left, the sections on the right (the Modal's body is the scroll box, and nothing in the sheet is
+   sticky, so nothing overlaps as it scrolls); one column under the compact width. Each section is a hairline apart,
+   its features two to a row with a check. */
 @layer components {
-  .trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-6);
-    block-size: var(--size-nav-item);
-    padding-inline: var(--space-8);
-    border: 0;
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
-    white-space: nowrap;
-    cursor: pointer;
-    outline: none;
-    transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      color var(--duration-hover) var(--ease-hover);
+  /* The sheet is the size container; the layout inside it answers to its width (a query never styles its own container). */
+  .sheet {
+    container: all-features / inline-size;
   }
 
-  @media (hover: hover) and (pointer: fine) {
-    .trigger:hover {
-      background: var(--surface-hover);
-      color: var(--text);
-    }
-  }
-
-  .trigger:focus-visible {
-    box-shadow: var(--shadow-focus-inset), var(--shadow-focus);
-  }
-
-  .panel {
-    inline-size: min(calc(100vw - 2 * var(--space-16)), var(--size-dialog-wide));
-    max-block-size: calc(100svh - 2 * var(--space-32));
-    margin: auto;
-    padding: 0;
-    overflow: auto;
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-xl);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-lg);
-    color: var(--text);
-    overscroll-behavior: contain;
-  }
-
-  .panel:popover-open {
-    animation: open var(--duration-modal) var(--ease-out);
-  }
-
-  .panel::backdrop {
-    background: var(--scrim);
-  }
-
-  .header {
-    position: sticky;
-    inset-block-start: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-16);
-    padding: var(--space-12) var(--overlay-inset);
-    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
-    background: var(--surface-raised);
-  }
-
-  .title {
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
-  }
-
-  .close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    inline-size: var(--size-control);
-    block-size: var(--size-control);
-    border: 0;
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    outline: none;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .close:hover {
-      background: var(--surface-hover);
-      color: var(--text);
-    }
-  }
-
-  .close:focus-visible {
-    box-shadow: var(--shadow-focus-inset), var(--shadow-focus);
-  }
-
-  .groups {
+  .layout {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--size-column), 1fr));
     gap: var(--space-24);
-    padding: var(--overlay-inset);
   }
 
-  .groupTitle {
+  .nav {
+    display: grid;
+    align-content: start;
+    gap: var(--space-2);
+  }
+
+  .sections {
+    display: grid;
+    min-inline-size: 0;
+  }
+
+  .section {
+    padding-block: var(--space-20);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    outline: none;
+    scroll-margin-block-start: var(--space-16);
+  }
+
+  .section:first-child {
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
+
+  .section:last-child {
+    padding-block-end: 0;
+  }
+
+  .sectionTitle {
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .sectionLabel {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .sectionCount {
+    color: var(--text-tertiary);
+    font: var(--text-body);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-body);
   }
 
   .features {
     display: grid;
-    gap: var(--space-4);
-    margin-block-start: var(--space-8);
+    grid-template-columns: repeat(auto-fill, minmax(var(--size-column), 1fr));
+    gap: var(--space-6) var(--space-16);
+    margin-block-start: var(--space-12);
     padding: 0;
     list-style: none;
   }
 
   .feature {
+    display: flex;
+    align-items: start;
+    gap: var(--space-8);
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }
 
-  @keyframes open {
-    from {
-      opacity: 0;
-      transform: scale(var(--scale-enter));
-    }
+  /* The check sits on the first line's centre. */
+  .feature > :first-child {
+    flex: none;
+    margin-block-start: var(--space-2);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .panel:popover-open {
-      animation: fade var(--duration-modal) var(--ease-out);
-    }
-  }
-
-  @keyframes fade {
-    from {
-      opacity: 0;
+  @container all-features (width >= 480px) {
+    .layout {
+      grid-template-columns: calc(var(--size-column) + var(--space-16)) minmax(0, 1fr);
+      gap: var(--space-32);
     }
   }
 }

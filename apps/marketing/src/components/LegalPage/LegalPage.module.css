@@ -6,9 +6,6 @@
   }
 
   .article {
-    --font-display: 'Host Grotesk', var(--font-sans);
-    --reading-leading: 1.65;
-
     max-inline-size: var(--size-dialog-wide);
     margin-inline: auto;
   }
@@ -22,8 +19,8 @@
 
   .title {
     font: var(--text-note-title);
-    font-family: var(--font-display);
-    font-size: clamp(var(--space-32), 5vw, calc(var(--space-32) + var(--space-16)));
+    font-family: var(--site-font-display);
+    font-size: var(--site-text-display-sm);
     letter-spacing: var(--tracking-note-title);
   }
 
@@ -44,8 +41,8 @@
     margin-block-start: var(--space-12);
     color: var(--text-secondary);
     font: var(--text-body);
-    font-size: var(--space-16);
-    line-height: var(--reading-leading);
+    font-size: var(--site-text-reading);
+    line-height: var(--site-leading-reading);
     letter-spacing: var(--tracking-body);
   }
 

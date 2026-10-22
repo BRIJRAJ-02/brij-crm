@@ -104,7 +104,6 @@
     gap: var(--space-8);
     block-size: calc(var(--size-input) + var(--space-6));
     padding-inline: var(--space-16);
-    border-radius: var(--radius-lg);
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
   }

@@ -1,10 +1,10 @@
 # FirstFold
 
-The home page's first fold: the site's bar, the promise and its call to action, and the product tour.
+The home page's first screen: the site's bar, the promise and its one call to action, and the showcase.
 
 ## Why it exists
 
-The owner asked for one dark fold and a footer (23 October 2026). The fold sets `data-theme="dark"` on itself, so every token inside it (and every library component in it) takes its dark value whatever the reader's theme, as the app's own dark theme does. Its look is the app's: tokens only, library Buttons and Icons, sidebar style rows in the tour. Display type is built from tokens with `calc()`, the way the library's base layer builds its overlay scale, because the token scale stops at 28px and a page's headline needs 36 to 60.
+The owner asked for one dark landing section, in the dashboard's design, with minimal copy and the product's areas as tabs over full width screens (23 October 2026). The fold is at least one screen tall (`100svh`) and grows when the full width screen needs more; on a phone it is as tall as its content. Its look is the app's: tokens only, library ButtonLinks, Tabs and Icons. The headline is set in the site's display face and size, declared once in `styles/site.css` (`--site-font-display`, `--site-text-display`, `--site-text-lead`), since the token scale stops at 28px and a page's headline needs more; the theme is set on the document and SiteFrame.
 
 ## Use
 
@@ -12,12 +12,12 @@ The owner asked for one dark fold and a footer (23 October 2026). The fold sets 
 <FirstFold />
 ```
 
-The links come from `src/site.ts`, the tour's areas from `src/tour.ts`.
+The links come from `src/site.ts`; the showcase's areas and screens from `src/showcase.ts`.
 
 ## States
 
-The Sign in and Get started buttons are library ButtonLinks (hover, focus, disabled as theirs). The claim link draws the library's focus ring and darkens its edge on hover. The backdrop is decorative and ignores the pointer.
+The bar's buttons are library ButtonLinks (hover, focus as theirs). The claim row is the booking address as text beside a `lg` primary ButtonLink named "Claim your page at timefix.com". The showcase's states are Showcase's and Slides'.
 
 ## Layout
 
-One column on a phone (16px gutters), 24px gutters from 480px, and from 1024px the promise splits in two (the headline left, the pitch right) above the tour.
+One column, centred: the headline, the lead, the claim row, then the tabs and the window at the content's full width (`--site-inline` gutters from SiteFrame).

@@ -7,12 +7,12 @@ import styles from './SiteHeader.module.css';
 export function SiteHeader() {
   return (
     <header className={styles.root}>
-      <SiteLogo tone="dark" />
+      <SiteLogo />
       <nav className={styles.nav} aria-label="Account">
         <ButtonLink href={LINKS.signIn} variant="ghost" size="lg">
           Sign in
         </ButtonLink>
-        <ButtonLink href={LINKS.getStarted} variant="primary" size="lg">
+        <ButtonLink href={LINKS.getStarted} variant="secondary" size="lg">
           Get started
         </ButtonLink>
       </nav>
