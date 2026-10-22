@@ -9,6 +9,7 @@ import {
   Callout,
   Card,
   EmptyState,
+  focusLater,
   InfoTip,
   Menu,
   MenuItem,
@@ -23,7 +24,7 @@ import {
   Table,
   type TableColumn,
 } from '@crm/ui';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { conditionsLine, hiddenFieldFacts, type Fact } from './facts.ts';
 import { RuleDialog, type RuleSurface } from './RuleDialog.tsx';
 import { strings } from './strings.ts';
@@ -67,6 +68,8 @@ export interface RulesCardProps {
 // The rule being edited (and the one being removed) is found again by its id when saved, so an answer landing
 // meanwhile that moves the rules never puts the change on another rule.
 type Editing = { readonly index: number; readonly rule?: RoutingRule } | undefined;
+// The rule being removed, named as it was when Remove was chosen: a team page's rules drop it at once while saving.
+type Removing = { readonly id: string; readonly title: string } | undefined;
 
 const REPORT_COLUMNS: readonly TableColumn[] = [
   { id: 'rule', label: strings.reportRule, isRowHeader: true },
@@ -111,12 +114,15 @@ function RulesCardBody({
   onRulesChange,
 }: RulesCardProps) {
   const [editing, setEditing] = useState<Editing>();
-  const [removing, setRemoving] = useState<string | undefined>();
-  const removingAt = rules.findIndex((rule) => rule.id === removing);
+  const [removing, setRemoving] = useState<Removing>();
+  // After a removal its row (and its menu button) is gone: focus goes to Add a rule rather than being lost.
+  const addRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | undefined>();
   // Every rule may also read the visit's hidden fields; on a team page they come from the form that sent the visitor.
   const readable = [...facts, ...hiddenFieldFacts(surface.kind)];
+  // A form's rules can always read the visit's hidden fields; a team page with no fields to read has failed to load them.
+  const noFacts = surface.kind === 'page' && facts.length === 0;
   // So the picker's name says so on a form; a team page's "Question or field" already does.
   const pickerLabel = surface.kind === 'form' ? strings.questionOrHidden : factLabel;
 
@@ -191,7 +197,7 @@ function RulesCardBody({
                     if (key === 'edit') setEditing({ index, rule });
                     if (key === 'up') move(index, -1);
                     if (key === 'down') move(index, 1);
-                    if (key === 'remove') setRemoving(rule.id);
+                    if (key === 'remove') setRemoving({ id: rule.id, title: strings.ruleTitle(index, rule.name) });
                   }}
                 >
                   <MenuItem id="edit" icon="pencil">
@@ -219,9 +225,10 @@ function RulesCardBody({
         ))}
         {!isReadOnly && (
           <Button
+            ref={addRef}
             variant="secondary"
             icon="plus"
-            isDisabled={busy || rules.length >= RULES_MAX || facts.length === 0}
+            isDisabled={busy || rules.length >= RULES_MAX || noFacts}
             onPress={() => {
               setFailure(undefined);
               setEditing({ index: rules.length });
@@ -230,7 +237,7 @@ function RulesCardBody({
             {strings.addRule}
           </Button>
         )}
-        {!isReadOnly && (rules.length >= RULES_MAX || facts.length === 0) && (
+        {!isReadOnly && (rules.length >= RULES_MAX || noFacts) && (
           <Callout tone="info">{rules.length >= RULES_MAX ? strings.ruleLimit : emptyFacts}</Callout>
         )}
         {report !== undefined && rules.length > 0 && (
@@ -252,6 +259,11 @@ function RulesCardBody({
         }}
         onSave={(saved) => {
           const editedId = editing?.rule?.id;
+          // A rule removed meanwhile (an answer landed while the dialog was open) has nothing left to change.
+          if (editedId !== undefined && !rules.some((each) => each.id === editedId)) {
+            setFailure(strings.ruleGone);
+            return;
+          }
           const next =
             editedId === undefined ? [...rules, saved] : rules.map((each) => (each.id === editedId ? saved : each));
           void keep(next).then((ok) => {
@@ -260,7 +272,7 @@ function RulesCardBody({
         }}
       />
       <Modal
-        title={strings.removeTitle(strings.ruleTitle(Math.max(removingAt, 0), rules[removingAt]?.name))}
+        title={strings.removeTitle(removing?.title ?? '')}
         tone="danger"
         isOpen={removing !== undefined}
         isBusy={busy}
@@ -276,8 +288,10 @@ function RulesCardBody({
               variant="danger-solid"
               isPending={busy}
               onPress={() => {
-                void keep(rules.filter((rule) => rule.id !== removing)).then((ok) => {
-                  if (ok) setRemoving(undefined);
+                void keep(rules.filter((rule) => rule.id !== removing?.id)).then((ok) => {
+                  if (!ok) return;
+                  setRemoving(undefined);
+                  focusLater(() => addRef.current);
                 });
               }}
             >

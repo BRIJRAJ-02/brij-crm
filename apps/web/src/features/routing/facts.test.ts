@@ -80,6 +80,7 @@ describe('is any of and hidden fields', () => {
     ]);
     expect(onForm.every((fact) => fact.kind === 'text')).toBe(true);
     expect(onForm[0]?.label).toBe('UTM source');
+    expect(onForm[0]?.group).toBe('Hidden fields');
     expect(hiddenFieldFacts('page')[0]?.label).toBe('Form · UTM source');
     const when = { join: 'all' as const, rules: [{ key: 'hidden.utm_campaign', op: 'is' as const, value: 'spring' }] };
     expect(conditionsLine(when, onForm)).toBe('UTM campaign is spring');

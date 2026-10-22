@@ -522,6 +522,8 @@ export const MultipleReadOnly: Story = {
     isReadOnly: true,
     readOnlyReason: 'Only an admin can change it.',
   },
+  // The read only face is WithInfoReadOnly's, and the several names Multiple's: no picture of its own.
+  parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage width="narrow">
       <Select {...args} />

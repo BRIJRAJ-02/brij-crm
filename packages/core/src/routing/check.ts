@@ -159,9 +159,10 @@ export async function checkPageRoutes(
   tx: WorkspaceTx,
   pageId: string,
   rules: readonly RoutingRule[],
-  fields?: { readonly access: Access; readonly before: readonly RoutingRule[] },
+  fields: { readonly access: Access; readonly before: readonly RoutingRule[] },
 ): Promise<void> {
-  if (fields !== undefined) await checkRuleFields(tx, fields.access, rules, fields.before);
+  // Always given, so no write path (a copy, an import) can keep a rule over a field its writer can't see.
+  await checkRuleFields(tx, fields.access, rules, fields.before);
   for (const [index, rule] of rules.entries()) {
     const name = ruleName(rule, index);
     if (rule.then.kind !== 'hosts') {

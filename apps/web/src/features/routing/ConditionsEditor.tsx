@@ -40,7 +40,12 @@ export function ConditionsEditor({
   const addRef = useRef<HTMLButtonElement>(null);
   const replace = (index: number, condition: Condition) =>
     onChange({ ...value, rules: value.rules.map((each, at) => (at === index ? condition : each)) });
-  const factItems = facts.map((fact) => ({ id: fact.key, label: fact.label }));
+  // The visit's hidden fields sit under their own heading, after the questions or fields.
+  const factItems = facts.map((fact) => ({
+    id: fact.key,
+    label: fact.label,
+    ...(fact.group === undefined ? {} : { group: fact.group }),
+  }));
 
   return (
     <SettingsStack>

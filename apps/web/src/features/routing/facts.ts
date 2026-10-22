@@ -27,6 +27,8 @@ export interface Fact {
   readonly kind: FactKind;
   /** A choice fact's options: the stored value (a choice's words, or an option's id) and its name. */
   readonly options?: readonly { readonly id: string; readonly label: string }[];
+  /** The heading it sits under in the picker, after the facts with none: the visit's hidden fields. */
+  readonly group?: string;
 }
 
 /** The comparisons each kind offers, in the order the Select lists them. */
@@ -151,6 +153,7 @@ export function hiddenFieldFacts(surface: 'form' | 'page'): readonly Fact[] {
     key: hiddenFactKey(field),
     label: surface === 'page' ? strings.fromForm(strings.hiddenField(field)) : strings.hiddenField(field),
     kind: 'text' as const,
+    group: surface === 'page' ? strings.hiddenFieldsFromForm : strings.hiddenFields,
   }));
 }
 
