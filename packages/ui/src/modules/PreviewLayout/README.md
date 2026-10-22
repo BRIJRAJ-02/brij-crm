@@ -1,6 +1,6 @@
 # PreviewLayout
 
-Every Captures editor's body under its TopBar: the Tabs, notices, then the editor beside a sticky live preview (the booking page editor, spec 0025; the form editor, spec 0023).
+Every Captures editor's body under its TopBar: the Tabs, notices, then the editor, beside a sticky live preview where it has one (the form editor, spec 0023). The preview is optional: the booking page editor (spec 0025) leaves it out since 22 October 2026 (the owner: View page in its header opens the live page instead), so its body takes the whole width with the fields in `bodyWidth="form"`'s readable column (the `FullWidth` story).
 
 ## Why it exists
 

@@ -138,10 +138,13 @@ test.describe('availability schedules', () => {
       await reader.goto(editorUrl);
     });
     await expect(reader.getByRole('button', { name: /Monday until/ }).first()).toContainText('8:00 PM');
-    await page.goto(editorUrl);
+    // The page's Hours tab edits the schedule's week in place, saved by the page's own Save (the owner, 22 October
+    // 2026), and says which other pages the change reaches; View page opens the live page in a new tab.
+    await page.goto(`${pageUrl}?tab=hours`);
+    await expect(page.getByRole('link', { name: 'View page' })).toHaveAttribute('href', `/b/${key ?? ''}`);
     await setAllDays(page, '6:00 PM', '9:00 PM');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(page.getByText('Saved Evenings.').first()).toBeVisible();
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible();
     if (!LIVE) await reader.reload();
     await expect(reader.getByRole('button', { name: /Monday until/ }).first()).toContainText('9:00 PM', {
       timeout: LIVE_MS,
