@@ -459,6 +459,27 @@ describe('push channels (AC-602, AC-622)', () => {
   });
 });
 
+describe('a calendar a run couldn’t read (owner ask A115)', () => {
+  it('names it with the provider’s code and status while the account still syncs', async () => {
+    const w = await world();
+    w.fake.addCalendar('ada@acme.dev', { id: 'team@acme.dev', name: 'Team', accessRole: 'writer' });
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    await w.sync(conn.id);
+    const [main] = await w.query<{ id: string }>(sql`select id::text as id from calendar_calendars where is_primary`);
+    const [team] = await w.query<{ id: string }>(
+      sql`select id::text as id from calendar_calendars where provider_calendar_id = 'team@acme.dev'`,
+    );
+    await updateMemberCalendar(w.owner, { calendarId: team?.id ?? '', showInWeek: true });
+    // The main calendar is read first, and Google doesn't answer for it this once.
+    w.fake.failNext('listChanges', 'CALENDAR_UNAVAILABLE', 1, { status: 503 });
+    const outcome = await w.sync(conn.id);
+    expect(outcome).toMatchObject({ kind: 'synced' });
+    expect(outcome.failedCalendars).toEqual([{ calendarId: main?.id, code: 'CALENDAR_UNAVAILABLE', status: 503 }]);
+    // Read again on the next run: nothing to name.
+    expect((await w.sync(conn.id)).failedCalendars).toBeUndefined();
+  });
+});
+
 describe('a deleted workspace’s calendars (spec 0031, AC-823)', () => {
   const channelOf = async (w: World) =>
     (

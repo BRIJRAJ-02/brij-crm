@@ -349,13 +349,17 @@ function calendarTask(options: JobRunnersOptions, sync: NonNullable<JobRunnersOp
       options.log.error('calendar.sync.failed', { connectionId: parsed.data.connectionId, error: failure });
       throw new Error('A calendar sync failed; the worker log has its connection id.');
     }
-    options.log.info('calendar.sync', {
+    const synced = {
       connectionId: parsed.data.connectionId,
       outcome: outcome.kind,
       ...(outcome.kind === 'synced' ? { events: outcome.events, full: outcome.full } : {}),
       ...(outcome.kind === 'retry' ? { code: outcome.code } : {}),
       ...(outcome.kind === 'stopped' ? { reason: outcome.reason } : {}),
-    });
+      // Calendars the run couldn't read while the account synced: ids and the provider's code, status and reason.
+      ...(outcome.failedCalendars === undefined ? {} : { failedCalendars: outcome.failedCalendars }),
+    };
+    if (outcome.failedCalendars === undefined) options.log.info('calendar.sync', synced);
+    else options.log.warn('calendar.sync', synced);
     // Each push channel the run opened, failed to open or ended (spec 0024, AC-602): our ids, its expiry, and the
     // provider's code, status and reason when it refused. Never a token or a channel id.
     for (const channel of outcome.channels ?? []) {

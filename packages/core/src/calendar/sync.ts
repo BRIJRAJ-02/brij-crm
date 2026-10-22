@@ -119,9 +119,14 @@ export interface CalendarSyncInput {
   readonly connectionId: string;
 }
 
+/** One pulled calendar a run couldn't sync (the others still did): its row id and the provider's refusal. */
+export type CalendarFailure = { readonly calendarId: string } & ProviderFailure;
+
 /**
  * How a sync ended, and when the next one should run (`nextInMs`), if ever. `channels`, when the run opened, failed
- * to open or ended any push channel, says what became of each (the `calendar.channel` log lines).
+ * to open or ended any push channel, says what became of each (the `calendar.channel` log lines); `failedCalendars`,
+ * when one or more pulled calendars couldn't be read while the account synced, names them, so a calendar that
+ * silently stops syncing shows in the log (`calendar.sync`).
  */
 export type CalendarSyncOutcome = (
   | { readonly kind: 'synced'; readonly full: boolean; readonly events: number; readonly nextInMs: number }
@@ -130,11 +135,19 @@ export type CalendarSyncOutcome = (
       readonly kind: 'stopped';
       readonly reason: 'gone' | 'not-syncing' | 'expired' | 'no-provider' | 'revoked' | 'workspace-deleted';
     }
-) & { readonly channels?: readonly ChannelReport[] };
+) & { readonly channels?: readonly ChannelReport[]; readonly failedCalendars?: readonly CalendarFailure[] };
 
-/** An outcome with the channel reports a run gathered, when it gathered any. */
-function withChannels(outcome: CalendarSyncOutcome, channels: readonly ChannelReport[]): CalendarSyncOutcome {
-  return channels.length === 0 ? outcome : { ...outcome, channels };
+/** An outcome with the channel reports and calendar failures a run gathered, when it gathered any. */
+function withReports(
+  outcome: CalendarSyncOutcome,
+  channels: readonly ChannelReport[],
+  failedCalendars: readonly CalendarFailure[] = [],
+): CalendarSyncOutcome {
+  return {
+    ...outcome,
+    ...(channels.length === 0 ? {} : { channels }),
+    ...(failedCalendars.length === 0 ? {} : { failedCalendars }),
+  };
 }
 
 /** A connection as the sync reads it. */
@@ -310,7 +323,7 @@ async function recordCalendarFailure(scope: EngineScope, calendarRowId: string, 
 type CalendarRun =
   | { readonly kind: 'synced'; readonly full: boolean; readonly events: number }
   | { readonly kind: 'off' }
-  | { readonly kind: 'failed'; readonly code: CalendarErrorCode };
+  | { readonly kind: 'failed'; readonly code: CalendarErrorCode; readonly failure: ProviderFailure };
 
 /**
  * Ends a revoked connection (spec 0031, AC-815): the provider ends its grant,
@@ -396,7 +409,7 @@ async function endDeletedChannels(
         : { calendarId: each.id, outcome: 'unstopped', why: 'workspace-deleted', ...failure },
     );
   }
-  return withChannels(stopped, channels);
+  return withReports(stopped, channels);
 }
 
 /**
@@ -430,7 +443,7 @@ async function syncCalendar(
     }
   } catch (error) {
     if (!isProviderError(error)) throw error;
-    return { kind: 'failed', code: error.code };
+    return { kind: 'failed', code: error.code, failure: failureOf(error) };
   }
   const synced = { ...connection, calendarId: calendar.provider_calendar_id, syncs: calendar.sync };
   const { events } = changes;
@@ -576,8 +589,9 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   let failures = 0;
   let relist = false;
   let lastCode: CalendarErrorCode | undefined;
-  // What became of each push channel this run touched, for the log (`calendar.channel`).
+  // What became of each push channel this run touched, and each calendar it couldn't read, for the log.
   const channels: ChannelReport[] = [];
+  const failedCalendars: CalendarFailure[] = [];
   for (const calendar of pulled) {
     const run = await syncCalendar(deps, scope, provider, tokens, connection, calendar, window);
     if (run.kind === 'synced') {
@@ -606,11 +620,12 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
       run.code === 'CALENDAR_AUTH' ||
       run.code === 'CALENDAR_SCOPE_DECLINED'
     ) {
-      return withChannels(await failed(run.code), channels);
+      return withReports(await failed(run.code), channels, failedCalendars);
     }
     failures += 1;
     lastCode = run.code;
     if (run.code === 'CALENDAR_GONE') relist = true;
+    failedCalendars.push({ calendarId: calendar.id, ...run.failure });
     await recordCalendarFailure(scope, calendar.id, run.code);
   }
   // A calendar no longer pulled stops its channel at the provider.
@@ -635,7 +650,7 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   }
   // Every pulled calendar failing is the connection's failure: it backs off, and fails after 6 hours (AC-620).
   if (pulled.length > 0 && failures === pulled.length && lastCode !== undefined) {
-    return withChannels(await failed(lastCode), channels);
+    return withReports(await failed(lastCode), channels, failedCalendars);
   }
   const stored = await inWorkspace(scope, (tx) =>
     tx.execute<{ was: string }>(sql`
@@ -653,10 +668,10 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
     `),
   );
   const [synced] = stored.rows;
-  if (synced === undefined) return withChannels({ kind: 'stopped', reason: 'gone' }, channels);
+  if (synced === undefined) return withReports({ kind: 'stopped', reason: 'gone' }, channels, failedCalendars);
   // Connected again (a first sync, or healed): the member's other tabs show it.
   if (synced.was !== 'connected') await tellCalendars(scope, deps.hooks, row.member_id);
-  return withChannels(
+  return withReports(
     {
       kind: 'synced',
       full,
@@ -664,5 +679,6 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
       nextInMs: relist ? RETRY_FIRST_MS : POLL_INTERVAL_MS,
     },
     channels,
+    failedCalendars,
   );
 }
