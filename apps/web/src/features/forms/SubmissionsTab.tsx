@@ -15,6 +15,9 @@ import {
 } from '@crm/data';
 import {
   AttributeDisplay,
+  Menu,
+  MenuItem,
+  MenuTrigger,
   Avatar,
   BulkActionBar,
   Button,
@@ -40,6 +43,7 @@ import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router'
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
+import { PhoneValue } from '@crm/contracts/values';
 import { answerFiling } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
@@ -239,6 +243,8 @@ export function SubmissionsTab({
     const text = answer === undefined ? '' : answerText(answer).trim();
     return text === '' ? undefined : text;
   };
+  // Who sent the open submission: their record's name, the name they gave, or their email.
+  const sender = open === undefined ? undefined : (open.mainRecord?.name ?? nameOf(open) ?? open.email);
   // Search narrows the rows loaded so far, by the person's name or email.
   const needle = query.trim().toLowerCase();
   const shown =
@@ -576,8 +582,8 @@ export function SubmissionsTab({
       )}
       {open !== undefined && (
         <Panel
-          title={open.mainRecord?.name ?? nameOf(open) ?? open.email ?? strings.submission}
-          leading={<Avatar name={open.mainRecord?.name ?? nameOf(open) ?? open.email ?? strings.submission} />}
+          title={sender ?? strings.submission}
+          {...(sender === undefined ? {} : { leading: <Avatar name={sender} isDecorative /> })}
           subtitle={
             <>
               {formName} · <RelativeTime value={open.receivedAt} />
@@ -591,6 +597,13 @@ export function SubmissionsTab({
           }}
           {...(canManage
             ? {
+                // Delete keeps the footer's start, away from the main action; a failed one keeps Retry in view and
+                // folds its other choices into More, so the footer never holds four buttons on a phone.
+                footerStart: (
+                  <Button variant="danger" icon="trash" onPress={() => setConfirmingDelete(true)}>
+                    {strings.deleteSubmission}
+                  </Button>
+                ),
                 footer: (
                   <>
                     {open.state === 'spam' && (
@@ -598,29 +611,41 @@ export function SubmissionsTab({
                         {strings.release}
                       </Button>
                     )}
-                    {open.crm.state === 'not_in_crm' && open.crm.canAddToCrm && (
-                      // Retry is the one primary on a failed enquiry; Add to CRM files it with today's settings.
-                      <Button
-                        {...(open.state === 'failed' ? {} : { variant: 'primary' as const })}
-                        isPending={busy === 'add'}
-                        onPress={() => addToCrm([open.id])}
-                      >
-                        {strings.addToCrm}
-                      </Button>
+                    {open.state === 'failed' ? (
+                      <>
+                        <MenuTrigger>
+                          <Button icon="ellipsis" label={strings.moreActions} />
+                          <Menu
+                            label={strings.moreActions}
+                            onAction={(key) => {
+                              if (key === 'add') addToCrm([open.id]);
+                              if (key === 'spam') act('spam', open.id);
+                            }}
+                          >
+                            {open.crm.state === 'not_in_crm' && open.crm.canAddToCrm ? (
+                              <MenuItem id="add">{strings.addToCrm}</MenuItem>
+                            ) : null}
+                            <MenuItem id="spam">{strings.markSpam}</MenuItem>
+                          </Menu>
+                        </MenuTrigger>
+                        <Button variant="primary" isPending={busy === 'retry'} onPress={() => act('retry', open.id)}>
+                          {strings.retry}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {open.state !== 'spam' && (
+                          <Button isPending={busy === 'spam'} onPress={() => act('spam', open.id)}>
+                            {strings.markSpam}
+                          </Button>
+                        )}
+                        {open.crm.state === 'not_in_crm' && open.crm.canAddToCrm && (
+                          <Button variant="primary" isPending={busy === 'add'} onPress={() => addToCrm([open.id])}>
+                            {strings.addToCrm}
+                          </Button>
+                        )}
+                      </>
                     )}
-                    {open.state === 'failed' && (
-                      <Button variant="primary" isPending={busy === 'retry'} onPress={() => act('retry', open.id)}>
-                        {strings.retry}
-                      </Button>
-                    )}
-                    {open.state !== 'spam' && (
-                      <Button isPending={busy === 'spam'} onPress={() => act('spam', open.id)}>
-                        {strings.markSpam}
-                      </Button>
-                    )}
-                    <Button variant="danger" icon="trash" onPress={() => setConfirmingDelete(true)}>
-                      {strings.deleteSubmission}
-                    </Button>
                   </>
                 ),
               }
@@ -696,34 +721,40 @@ export function SubmissionsTab({
   );
 }
 
-/** The field set's attribute type an answer shows as, where it has one: an email, a phone and a website as links. */
-const ANSWER_DISPLAY = { email: 'email', phone: 'phone', website: 'url' } as const;
-
-/** An answer's value as the panel shows it: through the field set for email, phone and website, else as words. */
+/**
+ * An answer's value as the panel shows it: a phone through the field set, spaced for reading; everything else as
+ * its words, which wrap whole. An email or a website stays plain text, never a link, since a visitor typed it.
+ */
 function answerValue(answer: SubmissionAnswer): ReactNode {
-  const type = (ANSWER_DISPLAY as Partial<Record<string, 'email' | 'phone' | 'url'>>)[answer.answerType];
   const text = answerText(answer);
-  if (type === undefined || text === '') return text === '' ? strings.noAnswer : text;
+  if (text === '') return strings.noAnswer;
+  if (answer.answerType !== 'phone') return text;
+  // A phone the field set can read is a stored { number, country }; anything else shows as its words.
+  const phone = PhoneValue.safeParse(answer.value);
+  if (!phone.success) return text;
   return (
     <AttributeDisplay
       attribute={{
         id: answer.questionId,
         name: answer.label,
-        type,
+        type: 'phone',
         allowMultiple: false,
         isRequired: false,
         isUnique: false,
         isReadOnly: true,
       }}
-      value={(type === 'phone' ? answer.value : text) as never}
+      value={phone.data}
       surface="panel"
     />
   );
 }
 
-/** What copying an answer copies: an email as typed, a phone as its full international number. */
+/** The answers worth copying (an email, a phone, a website), with what copying gives: a phone's full number. */
+const COPYABLE: ReadonlySet<string> = new Set(['email', 'phone', 'website']);
+
+/** What copying an answer copies, and its button's name. */
 function answerCopy(answer: SubmissionAnswer): { readonly value: string; readonly label: string } | undefined {
-  if (answer.answerType !== 'email' && answer.answerType !== 'phone') return undefined;
+  if (!COPYABLE.has(answer.answerType)) return undefined;
   const text = answerText(answer);
   return text === '' ? undefined : { value: text, label: strings.copyAnswer(answer.label) };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { FocusScope, useFocusVisible, useKeyboard } from 'react-aria';
 import { Dialog, Heading } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -28,6 +28,8 @@ export interface PanelProps {
   readonly actions?: ReactNode;
   /** A footer under the content, for a form's buttons. */
   readonly footer?: ReactNode;
+  /** At the footer's start, away from its other buttons: a destructive action such as Delete. */
+  readonly footerStart?: ReactNode;
   readonly width?: PanelWidth;
   readonly variant?: PanelVariant;
   /** The content runs to the edges and fills the height, for Tabs and lists that scroll themselves. */
@@ -80,12 +82,14 @@ export function Panel({
   onClose,
   actions,
   footer,
+  footerStart,
   width = 'md',
   variant = 'sheet',
   isFlush = false,
   isStacked = false,
 }: PanelProps) {
   const ref = useRef<HTMLElement>(null);
+  const subtitleId = useId();
   const phase = usePresence(isOpen, ref);
   const { isFocusVisible } = useFocusVisible();
   const [openedBy] = useState(() => (isFocusVisible ? 'keyboard' : 'pointer'));
@@ -110,7 +114,7 @@ export function Panel({
         data-opened-by={openedBy}
         {...keyboardProps}
       >
-        <Dialog className={styles.dialog}>
+        <Dialog className={styles.dialog} {...(subtitle === undefined ? {} : { 'aria-describedby': subtitleId })}>
           <header className={styles.head}>
             {leading}
             {subtitle === undefined ? (
@@ -122,7 +126,9 @@ export function Panel({
                 <Heading slot="title" className={styles.title}>
                   {title}
                 </Heading>
-                <span className={styles.subtitle}>{subtitle}</span>
+                <span id={subtitleId} className={styles.subtitle}>
+                  {subtitle}
+                </span>
               </span>
             )}
             <span className={styles.actions}>
@@ -134,7 +140,12 @@ export function Panel({
             {/* Opened from a settings page, its content keeps to the panel, never the page's edges. */}
             <PageEdge value={false}>{children}</PageEdge>
           </div>
-          {footer !== undefined && <footer className={styles.foot}>{footer}</footer>}
+          {(footer !== undefined || footerStart !== undefined) && (
+            <footer className={styles.foot}>
+              {footerStart !== undefined && <span className={styles.footStart}>{footerStart}</span>}
+              {footer}
+            </footer>
+          )}
         </Dialog>
       </section>
     </FocusScope>

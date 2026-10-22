@@ -120,7 +120,19 @@ export const Stacked: Story = {
 export const StackedSections: Story = {
   render: () => (
     <Stage>
-      <Panel title="Grace Hopper" subtitle="Website enquiry · 5 minutes ago" isOpen onClose={() => undefined} isStacked>
+      <Panel
+        title="Grace Hopper"
+        subtitle="Website enquiry · 5 minutes ago"
+        isOpen
+        onClose={() => undefined}
+        isStacked
+        footerStart={
+          <Button variant="danger" icon="trash">
+            Delete
+          </Button>
+        }
+        footer={<Button>Mark as spam</Button>}
+      >
         <DescriptionList
           items={[
             { term: 'State', description: 'Added' },

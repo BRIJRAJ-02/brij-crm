@@ -28,7 +28,8 @@ export function RelativeTime({ value }: RelativeTimeProps) {
     <Tooltip content={exact} isTextTrigger>
       <>
         <time className={styles.root} dateTime={value}>
-          {Math.abs(new Date(value).getTime() - now) < MINUTE
+          {/* "just now" is English; other languages keep their own word for now from Intl. */}
+          {locale.startsWith('en') && Math.abs(new Date(value).getTime() - now) < MINUTE
             ? strings.justNow
             : formatRelative(value, now, locale, timeZone, dateFormat)}
         </time>

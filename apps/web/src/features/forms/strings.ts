@@ -440,8 +440,7 @@ export const strings = {
     who === undefined ? 'Delete this submission?' : `Delete the submission from ${who}?`,
   deleteSubmissionText: 'Its answers are gone for good; the people and records it made stay.',
   deleteSubmissionAction: 'Delete submission',
-  /** Marks the answers that differ from the rest: saved on the record, or not. */
-  savedMark: 'Saved',
+  /** Marks the answers not saved on the record, when some were. */
   notSavedMark: 'Not saved',
   /** Names an answer's copy button. */
   copyAnswer: (label: string) => `Copy ${label}`,

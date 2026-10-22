@@ -20,7 +20,7 @@ New. The record panel (#17), notifications (#28) and the assistant (#54) open be
 ```
 
 - `isOpen` and `onClose` are the caller's; the close button and Esc call `onClose`.
-- `actions` go at the end of the header, before the close button; `footer` holds a form's buttons.
+- `actions` go at the end of the header, before the close button; `footer` holds a form's buttons, at its end. `footerStart` puts a destructive action at the footer's start, away from the main one (a submission's Delete beside Not spam invited a slip, 22 October 2026).
 - `width`: `md` (`size-panel`, 400px) for a record, `lg` (`size-panel-wide`, 520px) for notes, email and larger tasks.
 - `variant`: `sheet` (the default) runs the full height against the end of the page; `floating` sits `space-8` in from the edges on `radius-xl`, for the record panel (`RecordPanel`).
 - `leading` goes before the title, such as the record's avatar.
