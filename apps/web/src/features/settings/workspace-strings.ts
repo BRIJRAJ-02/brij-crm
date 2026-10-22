@@ -13,7 +13,7 @@ export const strings = {
   addressPrefix: '/w/',
   addressRule: 'Lowercase letters, digits and dashes.',
   addressChecking: 'Checking…',
-  addressFree: 'Available',
+  addressFree: 'Free',
   addressTaken: 'Taken',
   addressSuggestions: 'Free addresses',
   addressUnknown: 'Not checked. Save will check it.',
@@ -24,7 +24,7 @@ export const strings = {
   // Changing the address asks first.
   moveTitle: 'Change the web address?',
   moveText: (from: string, to: string) =>
-    `The workspace moves from /w/${from} to /w/${to}. Links and bookmarks with the old address keep working and open the new one, and no other workspace can take it.`,
+    `The workspace moves from /w/${from} to /w/${to}. Links and bookmarks with /w/${from} keep working and open the new address, and no other workspace can take /w/${from}.`,
   moveAction: 'Change address',
   moved: (to: string) => `The workspace is now at /w/${to}.`,
   nameMissing: 'Name the workspace.',

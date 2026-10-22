@@ -104,8 +104,9 @@ export interface UpdatedWorkspace {
  * that changes nothing writes nothing; otherwise one audit row with the
  * changed fields only. A new address follows the new workspace rule
  * (`CONFIG_INVALID` on `slug`) and must be free: one another workspace holds
- * or ever held is refused `SLUG_TAKEN` on `slug`. The old address stays the
- * workspace's, so links with it keep working.
+ * or ever held is refused `SLUG_TAKEN` on `slug`, and a 21st address
+ * `LIMIT_REACHED`. The old address stays the workspace's, so links with it
+ * keep working.
  */
 export async function updateWorkspace(
   scope: EngineScope,
@@ -189,7 +190,20 @@ function addressRefusal(error: unknown): unknown {
   if (pg?.code === '23505' && pg.constraint !== undefined && ADDRESS_TAKEN.has(pg.constraint)) {
     return refuseOn('SLUG_TAKEN', ADDRESS_TAKEN_MESSAGE, 'slug');
   }
+  // The claim keeps at most 20 addresses a workspace (migration 0082), so none can hoard names.
+  if (pg?.code === '54000' && error instanceof Error && /WORKSPACE_ADDRESS_LIMIT/.test(messageChain(error))) {
+    return refuseOn(
+      'LIMIT_REACHED',
+      'This workspace has changed its address too many times. Pick one it used before.',
+      'slug',
+    );
+  }
   return error;
+}
+
+/** An error's message and its causes', for a database message wrapped by the driver. */
+function messageChain(error: Error): string {
+  return error.cause instanceof Error ? `${error.message} ${messageChain(error.cause)}` : error.message;
 }
 
 /** What a delete did: the workspace as its owners see it in the window, and who to tell. */

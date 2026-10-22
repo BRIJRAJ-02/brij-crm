@@ -137,9 +137,11 @@ export function GeneralScreen({
       })
       .catch((error: unknown) => {
         setConfirming(false);
+        isLeaving.current = false;
         const message = isDataError(error) ? error.message : strings.somethingWrong;
-        if (isDataError(error) && error.code === 'SLUG_TAKEN') setSlugError(message);
-        else if (change.name !== undefined) setNameError(message);
+        const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+        if (isDataError(error) && (error.code === 'SLUG_TAKEN' || field === 'slug')) setSlugError(message);
+        else if (field === 'name') setNameError(message);
         else toasts.toast({ tone: 'danger', message });
       })
       .finally(() => {
@@ -323,6 +325,8 @@ function AddressField({ value, saved, address, mayManage, error, onChange, onSub
             ? strings.addressUnknown
             : undefined;
   const shown = error ?? (state === 'taken' ? strings.addressTaken : undefined);
+  // A refusal outranks the check's answer: no tick beside it, and no "Available" said.
+  const settled = error === undefined ? state : undefined;
   return (
     <>
       <Field
@@ -343,21 +347,23 @@ function AddressField({ value, saved, address, mayManage, error, onChange, onSub
         {...(suggestions.length === 0
           ? {}
           : { suggestions: { label: strings.addressSuggestions, items: suggestions, onPick: onChange } })}
-        {...(state === 'checking'
+        {...(settled === 'checking'
           ? { suffix: <Spinner size="sm" label={strings.addressChecking} /> }
-          : state === 'free'
+          : settled === 'free'
             ? { suffix: <Icon name="circle-check" size="sm" tone="success" /> }
             : {})}
       />
-      {/* The answer is said once it settles; the hint under the field carries it on screen. */}
+      {/* The answer is said once it settles, and a refusal when it comes; the field carries each on screen. */}
       <VisuallyHidden>
         <span role="status">
-          {state === 'free' || state === 'taken'
-            ? [
-                state === 'free' ? strings.addressFreeSaid(value) : strings.addressTakenSaid(value),
-                ...(suggestions.length > 0 ? [strings.addressOthers(suggestions)] : []),
-              ].join(' ')
-            : ''}
+          {error !== undefined
+            ? error
+            : settled === 'free' || settled === 'taken'
+              ? [
+                  settled === 'free' ? strings.addressFreeSaid(value) : strings.addressTakenSaid(value),
+                  ...(suggestions.length > 0 ? [strings.addressOthers(suggestions)] : []),
+                ].join(' ')
+              : ''}
         </span>
       </VisuallyHidden>
     </>

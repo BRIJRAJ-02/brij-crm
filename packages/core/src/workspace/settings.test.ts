@@ -252,6 +252,20 @@ describe('Workspace › General: the web address', () => {
   });
 });
 
+describe('Workspace › General: how many addresses a workspace keeps', () => {
+  it('refuses a 21st address LIMIT_REACHED, and still lets it go back to one it held', async () => {
+    const t = await team();
+    const scope = t.as(t.owner, 'owner');
+    const held = Array.from({ length: 19 }, (_, index) => `held-${String(index)}-${tag()}`);
+    for (const slug of held) await updateWorkspace(scope, { slug });
+    expect(await refusalOf(updateWorkspace(scope, { slug: `one-more-${tag()}` }))).toMatchObject({
+      code: 'LIMIT_REACHED',
+      field: 'slug',
+    });
+    expect((await updateWorkspace(scope, { slug: t.slug })).settings.slug).toBe(t.slug);
+  });
+});
+
 describe('deleting and restoring (AC-823)', () => {
   it('is owners only, and needs the name typed exactly', async () => {
     const t = await team(['admin']);
