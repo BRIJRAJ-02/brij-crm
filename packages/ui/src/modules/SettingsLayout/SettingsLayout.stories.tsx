@@ -352,6 +352,58 @@ export const RowsNarrow: Story = {
   ),
 };
 
+/** A section whose one action works on all of it: Sign out of all other devices over the devices list. */
+export const SectionActions: Story = {
+  render: () => (
+    <Stage>
+      <SettingsLayout titleLevel={1} title="Security">
+        <SettingsSection
+          title="Signed in devices"
+          description="Each browser signed in to your account."
+          actions={<Button variant="danger">Sign out of all other devices</Button>}
+        >
+          <Table
+            label="Signed in devices"
+            columns={[
+              { id: 'device', label: 'Device', isRowHeader: true },
+              { id: 'when', label: 'Last active' },
+            ]}
+            rows={[
+              { id: 'mac', device: 'Chrome on macOS', when: 'now' },
+              { id: 'phone', device: 'Safari on iPhone', when: '2 days ago' },
+            ]}
+            getRowId={(row) => row.id}
+            renderCell={(row, column) => (column === 'device' ? row.device : row.when)}
+          />
+        </SettingsSection>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const section = canvas.getByRole('region', { name: 'Signed in devices' });
+    await expect(section).toContainElement(canvas.getByRole('button', { name: 'Sign out of all other devices' }));
+  },
+};
+
+/** On a phone the section's action wraps under its heading. */
+export const SectionActionsNarrow: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <SettingsLayout titleLevel={1} title="Security">
+        <SettingsSection
+          title="Signed in devices"
+          description="Each browser signed in to your account."
+          actions={<Button variant="danger">Sign out of all other devices</Button>}
+        >
+          <Card>
+            <SettingsRow title="Chrome on macOS" description="now" />
+          </Card>
+        </SettingsSection>
+      </SettingsLayout>
+    </Stage>
+  ),
+};
+
 /** A row's other states: no description, and a control that is disabled or read only (the control's own states). */
 export const RowStates: Story = {
   render: () => (

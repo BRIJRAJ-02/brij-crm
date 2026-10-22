@@ -279,7 +279,12 @@ export interface SettingsSectionProps {
   readonly title: string;
   /** One short muted line, only when the heading alone doesn't say what the settings change. */
   readonly description?: ReactNode;
-  /** The section's settings: Cards (of SettingsRows, or a Form), a SettingsGrid of Cards, a Callout. */
+  /**
+   * At the heading's end: the one action that works on the whole section (Sign out of all other devices over
+   * the devices list). On a phone it wraps under the heading.
+   */
+  readonly actions?: ReactNode;
+  /** The section's settings: Cards (of SettingsRows, or a Form), a SettingsGrid of Cards, a Table, a Callout. */
   readonly children: ReactNode;
 }
 
@@ -287,21 +292,32 @@ export interface SettingsSectionProps {
  * One group of settings across the page's width: its heading, and a line of
  * description only when the heading needs one, above its cards (21 Oct 2026:
  * one column, no label column beside them), and a hairline before the next
- * section. A list (a Table) needs no section: it runs the full width.
+ * section. A list (a Table) needs no section: it runs the full width. With
+ * `actions`, the section's one action sits at the heading's end.
  */
-export function SettingsSection({ title, description, children }: SettingsSectionProps) {
+export function SettingsSection({ title, description, actions, children }: SettingsSectionProps) {
   const headingId = useId();
   // The page's h1 makes the body's headings h2 (SettingsLayout's CardTitleLevel); under a TopBar they are h3.
   const level = useContext(CardTitleLevel);
   const Heading = level === 2 ? 'h2' : 'h3';
+  const text = (
+    <div className={styles.sectionText}>
+      <Heading className={styles.sectionTitle} id={headingId}>
+        {title}
+      </Heading>
+      {description !== undefined && <p className={styles.sectionDescription}>{description}</p>}
+    </div>
+  );
   return (
     <section className={styles.section} aria-labelledby={headingId}>
-      <div className={styles.sectionText}>
-        <Heading className={styles.sectionTitle} id={headingId}>
-          {title}
-        </Heading>
-        {description !== undefined && <p className={styles.sectionDescription}>{description}</p>}
-      </div>
+      {actions === undefined ? (
+        text
+      ) : (
+        <div className={styles.sectionHead}>
+          {text}
+          <div className={styles.sectionActions}>{actions}</div>
+        </div>
+      )}
       <div className={styles.sectionBody}>
         {/* The cards sit under the section's heading. */}
         <CardTitleLevel value={level === 2 ? 3 : 4}>{children}</CardTitleLevel>
