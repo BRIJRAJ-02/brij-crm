@@ -776,7 +776,8 @@ const HIDDEN_LINK = 'This booking is linked to a record you can’t see.';
  * keep a link hidden from them (spec 0014, spec 0019). So when the record linked now is live on a live object and
  * hidden from the member (an object hidden from them, a record rule), taking the link off changes nothing and answers
  * nothing linked, as taking off a link that isn't there does, and naming another record refuses FORBIDDEN on
- * `recordId` without naming the one linked. A linked record in the trash, or on an archived object, gives way.
+ * `recordId` without naming the one linked. A linked record in the trash gives way; one on an archived object
+ * stays, as a relationship's does, since restoring the object shows it again.
  */
 export async function linkBookingRecord(
   scope: EngineScope,
@@ -822,14 +823,15 @@ export async function linkBookingRecord(
 
 /**
  * Whether the record a booking is linked to now is live on a live object and hidden from the member, so a link write
- * must keep it (spec 0009). One in the trash, on an archived object, or gone reads as absent and gives way.
+ * must keep it (spec 0009). One in the trash, or gone, reads as absent and gives way; one on an archived object
+ * stays hidden and kept, as relationships keep theirs.
  */
 async function isHiddenLink(tx: WorkspaceTx, scope: EngineScope, recordId: string): Promise<boolean> {
   if (isOpen(scope.access)) return false;
   const found = await tx.execute<{ id: string; object_id: string }>(sql`
     select r.id::text as id, r.object_id::text as object_id
     from records r join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
-    where r.id = ${recordId}::uuid and r.deleted_at is null and o.archived_at is null
+    where r.id = ${recordId}::uuid and r.deleted_at is null
   `);
   const [record] = found.rows;
   if (record === undefined) return false;

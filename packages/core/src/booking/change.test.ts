@@ -614,7 +614,7 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
     });
   });
 
-  it('lets a hidden link in the trash, or on an archived object, give way', async () => {
+  it('lets a hidden link in the trash give way, and keeps one on an archived object', async () => {
     const s = await setup();
     const { deals } = await objectsOf(s.workspaceId);
     const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
@@ -634,12 +634,12 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
       linkedRecord: { recordId: mine.recordId },
     });
     expect(await row(s.workspaceId, bookingId)).toHaveProperty('deal_record_id', mine.recordId);
-    // Another of Ada's deals, with Deals archived: taking it off works.
+    // Another of Ada's deals, with Deals archived: it stays, as a relationship's would, and shows again on restore.
     const orbit = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Orbit' } });
     await linkBookingRecord(s.host, { bookingId, recordId: orbit.recordId });
     await setObjectArchived(s.host, { objectId: deals.id, archived: true });
     expect(await linkBookingRecord(ruled, { bookingId, recordId: null })).toEqual({});
-    expect(await row(s.workspaceId, bookingId)).toHaveProperty('deal_record_id', null);
+    expect(await row(s.workspaceId, bookingId)).toHaveProperty('deal_record_id', orbit.recordId);
   });
 
   it('leaves out a deal on an archived object until the object is restored', async () => {
