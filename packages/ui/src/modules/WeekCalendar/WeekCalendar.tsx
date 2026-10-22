@@ -15,6 +15,7 @@ import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/Provid
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
+import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Popover, type PopoverPlacement } from '../../molecules/Popover/Popover.tsx';
 import type { Hue } from '../../hue.ts';
 import { placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
@@ -193,15 +194,20 @@ function closedRanges(open: readonly WeekCalendarRange[]): readonly WeekCalendar
   return closed;
 }
 
+/** Whether the week holding `element` is narrower than `bp-container-md`, so one day takes the width (a phone). */
+function isNarrowWeek(element: HTMLElement): boolean {
+  const week = element.closest('section');
+  if (week === null) return false;
+  const narrow = Number.parseFloat(getComputedStyle(week).getPropertyValue('--bp-container-md'));
+  return Number.isFinite(narrow) && week.clientWidth < narrow;
+}
+
 /**
  * Where a block's card opens: beside it while the week shows seven days, under it once its container is narrower
- * than `bp-container-md` and one day takes the width, where a card beside the block would leave the screen.
+ * than `bp-container-md` and one day takes the width (where the screen draws it as a sheet instead).
  */
 function placementBeside(block: HTMLElement): PopoverPlacement {
-  const week = block.closest('section');
-  if (week === null) return 'end top';
-  const narrow = Number.parseFloat(getComputedStyle(week).getPropertyValue('--bp-container-md'));
-  return Number.isFinite(narrow) && week.clientWidth < narrow ? 'bottom start' : 'end top';
+  return isNarrowWeek(block) ? 'bottom start' : 'end top';
 }
 
 /** A block with its slot: overlapping blocks side by side, or a later start indented over an earlier one. */
@@ -844,22 +850,42 @@ export function WeekCalendar({
           </Menu>
         </Popover>
       )}
-      {openId !== undefined && detail !== undefined && anchor !== null && (
-        <Popover
-          triggerRef={anchorRef}
-          isOpen
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              onClose();
-              focusDayLater(anchorDay.current, anchor);
-            }
-          }}
-          placement={cardPlacement}
-          label={strings.details}
-        >
-          <div className={styles.detail}>{detail}</div>
-        </Popover>
-      )}
+      {openId !== undefined &&
+        detail !== undefined &&
+        anchor !== null &&
+        // One day across (a phone), the card is a sheet at the window's foot, as Google Calendar's is, rather than
+        // a popover over the day it is about; seven days across, a popover beside the block.
+        (isNarrowWeek(anchor) ? (
+          <Modal
+            variant="sheet"
+            title={strings.details}
+            isOpen
+            isDismissable
+            onOpenChange={(isOpen) => {
+              if (!isOpen) {
+                onClose();
+                focusDayLater(anchorDay.current, anchor);
+              }
+            }}
+          >
+            <div className={styles.detail}>{detail}</div>
+          </Modal>
+        ) : (
+          <Popover
+            triggerRef={anchorRef}
+            isOpen
+            onOpenChange={(isOpen) => {
+              if (!isOpen) {
+                onClose();
+                focusDayLater(anchorDay.current, anchor);
+              }
+            }}
+            placement={cardPlacement}
+            label={strings.details}
+          >
+            <div className={styles.detail}>{detail}</div>
+          </Popover>
+        ))}
     </section>
   );
 }

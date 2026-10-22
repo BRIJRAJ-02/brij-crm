@@ -749,3 +749,38 @@ export const AllDayCapped: Story = {
     await waitFor(() => expect(more).toHaveFocus());
   },
 };
+
+/** On a phone a block's card is a sheet at the window's foot, not a popover over the day; Escape closes it. */
+export const PhoneCard: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { selectedDay: '2026-10-08' },
+  render: function Render(args) {
+    const [open, setOpen] = useState<string | undefined>(undefined);
+    return (
+      <Stage width="phone">
+        <WeekCalendar
+          {...args}
+          days={days()}
+          blocks={blocks()}
+          now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
+          scrollToMinute={15 * 60}
+          {...(open === undefined ? {} : { openId: open })}
+          detail={<p>Grace Hopper, 3:30 – 4:00 PM</p>}
+          onOpen={setOpen}
+          onClose={() => setOpen(undefined)}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /^Grace Hopper, 3:30 – 4:00 PM/ }));
+    const body = within(canvasElement.ownerDocument.body);
+    const sheet = await waitFor(() => body.getByRole('dialog', { name: 'Details' }));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    // The window's width, on its foot.
+    await expect(Math.round(sheet.getBoundingClientRect().width)).toBe(globalThis.innerWidth);
+    await expect(Math.round(sheet.getBoundingClientRect().bottom)).toBe(globalThis.innerHeight);
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(body.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument());
+  },
+};

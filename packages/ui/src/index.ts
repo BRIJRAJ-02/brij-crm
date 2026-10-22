@@ -221,6 +221,12 @@ export { Pagination, type PaginationProps } from './molecules/Pagination/Paginat
 export { RecordStats, type RecordStat, type RecordStatsProps } from './molecules/RecordStats/RecordStats.tsx';
 export { SpanCard, type SpanCardChoice, type SpanCardProps } from './modules/SpanCard/SpanCard.tsx';
 export {
+  MeetingCard,
+  type MeetingCardPerson,
+  type MeetingCardProps,
+  type MeetingCardRow,
+} from './modules/MeetingCard/MeetingCard.tsx';
+export {
   BookingDetails,
   type BookingDetailsOutcome,
   type BookingDetailsProps,

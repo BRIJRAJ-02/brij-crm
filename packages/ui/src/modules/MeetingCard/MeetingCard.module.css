@@ -1,0 +1,146 @@
+/* MeetingCard: one meeting's details with no surface of its own (the Popover, Panel or sheet around it is the
+   card). The title in text-title over its time, the status a quiet dot beside the time; then icon rows on one
+   rhythm (space-12 apart, the icon in a column of its own, as Google Calendar's event card has it); then the
+   footer, a hairline above it, the actions at its start and an ending one at its end. Its width comes from the
+   holder, at most size-panel. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    max-inline-size: var(--size-panel);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+    overflow-wrap: anywhere;
+  }
+
+  .when {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-12);
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin: 0;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: var(--size-icon) minmax(0, 1fr);
+    gap: var(--space-12);
+    align-items: start;
+  }
+
+  /* The icon sits on the first line's middle. */
+  .icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    block-size: var(--size-control);
+    color: var(--text-tertiary);
+  }
+
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    margin: 0;
+  }
+
+  .line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-control);
+    min-inline-size: 0;
+  }
+
+  .lineText,
+  .personText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .value {
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    overflow-wrap: anywhere;
+  }
+
+  .detail {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .detailLine {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .people {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .person {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-control);
+    min-inline-size: 0;
+  }
+
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    padding-block-start: var(--space-12);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+}
