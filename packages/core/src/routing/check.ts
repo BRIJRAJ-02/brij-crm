@@ -1,15 +1,18 @@
 // Checking a surface's routes before they are kept (spec 0043, AC-1605,
 // AC-1608): every booking page a form's rule sends to goes through the
 // access door like After someone sends it, hosts only on a round robin page,
-// and every host named must be in that page's rotations.
-import { and, eq, isNull } from 'drizzle-orm';
-import type { RoutingRule } from '@crm/contracts';
+// and every host named must be in that page's rotations. A team page's rules
+// may read only the record fields their writer can see.
+import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { isHiddenFact, NUMBER_OPS, RECORD_FACT, type RoutingRule } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
+import type { Access } from '../access/policy.ts';
+import { attributeVisible } from '../access/visibility.ts';
 import { bookingTargetProblem } from '../booking/pages.ts';
 import { refuseOn } from '../engine/refusals.ts';
 
-const { bookingPageRotations, bookingPages, rotationMembers, rotations } = schema;
+const { attributes, bookingPageRotations, bookingPages, rotationMembers, rotations } = schema;
 
 /** A rule's name in a sentence: "Rule 2" or "Rule 2, “Enterprise”,". */
 export function ruleName(rule: RoutingRule, index: number): string {
@@ -108,8 +111,58 @@ export async function checkFormRoutes(
   }
 }
 
-/** A team page's routes (AC-1608): only on a round robin page, each naming members of its rotations. */
-export async function checkPageRoutes(tx: WorkspaceTx, pageId: string, rules: readonly RoutingRule[]): Promise<void> {
+/**
+ * The record fields a team page's new or changed rules read must be ones the writer can see (security review, 23
+ * October 2026): a rule over a field hidden from them would tell them each visitor's value by who took the booking.
+ * Refused in words that never say whether the field exists. Rules kept exactly as they were stay, so someone who
+ * can't see a field can still edit a page another admin set up.
+ */
+async function checkRuleFields(
+  tx: WorkspaceTx,
+  access: Access,
+  rules: readonly RoutingRule[],
+  before: readonly RoutingRule[],
+): Promise<void> {
+  const kept = new Set(before.map((rule) => JSON.stringify(rule)));
+  // Each field read, with the first new or changed rule reading it.
+  const read = new Map<string, number>();
+  for (const [index, rule] of rules.entries()) {
+    if (kept.has(JSON.stringify(rule))) continue;
+    for (const condition of rule.when.rules) {
+      const attributeId = RECORD_FACT.exec(condition.key)?.[2];
+      if (attributeId !== undefined && !read.has(attributeId)) read.set(attributeId, index);
+    }
+  }
+  if (read.size === 0) return;
+  const found = await tx
+    .select({ id: attributes.id, objectId: attributes.objectId, listId: attributes.listId })
+    .from(attributes)
+    .where(inArray(attributes.id, [...read.keys()]));
+  const visible = new Set(found.filter((attribute) => attributeVisible(access, attribute)).map((each) => each.id));
+  for (const [attributeId, index] of read) {
+    const rule = rules[index];
+    if (!visible.has(attributeId) && rule !== undefined) {
+      throw refuseOn(
+        'CONFIG_INVALID',
+        `${ruleName(rule, index)} reads a field you can’t use. Pick another field.`,
+        'routing',
+      );
+    }
+  }
+}
+
+/**
+ * A team page's routes (AC-1608): only on a round robin page, each naming members of its rotations, comparing the
+ * visit's hidden fields as text, and reading only record fields the writer can see (`fields`, the rules before).
+ */
+export async function checkPageRoutes(
+  tx: WorkspaceTx,
+  pageId: string,
+  rules: readonly RoutingRule[],
+  fields: { readonly access: Access; readonly before: readonly RoutingRule[] },
+): Promise<void> {
+  // Always given, so no write path (a copy, an import) can keep a rule over a field its writer can't see.
+  await checkRuleFields(tx, fields.access, rules, fields.before);
   for (const [index, rule] of rules.entries()) {
     const name = ruleName(rule, index);
     if (rule.then.kind !== 'hosts') {
@@ -118,6 +171,10 @@ export async function checkPageRoutes(tx: WorkspaceTx, pageId: string, rules: re
         `${name} needs people to pick from. A team page’s rules only choose hosts.`,
         'routing',
       );
+    }
+    // A visit's hidden fields hold text, as a form's publish check says too.
+    if (rule.when.rules.some((condition) => isHiddenFact(condition.key) && NUMBER_OPS.includes(condition.op))) {
+      throw refuseOn('CONFIG_INVALID', `${name} compares a hidden field as a number, but it holds text.`, 'routing');
     }
     await checkHosts(tx, pageId, rule.then.hosts, name);
   }

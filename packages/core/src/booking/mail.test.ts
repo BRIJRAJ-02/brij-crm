@@ -88,6 +88,12 @@ describe('the confirmation (AC-636)', () => {
     expect(visitor?.ics?.method).toBe('REQUEST');
     expect(visitor?.ics?.content).toContain(`UID:${b.bookingId}@app.example`);
     expect(host).toMatchObject({ subject: 'New booking: Intro call with Grace Hopper' });
+    // The host is in the meeting by default (owner, 22 Oct 2026): both files list them, and the host gets one too.
+    expect(visitor?.ics?.content).toContain('MAILTO:ada@example.com');
+    expect(host?.ics?.method).toBe('REQUEST');
+    expect(host?.ics?.content).toContain(`UID:${b.bookingId}@app.example`);
+    expect(host?.ics?.content).toContain('MAILTO:grace@navy.example');
+    expect(host?.ics?.content).toContain('MAILTO:ada@example.com');
     expect(host?.rows).toContainEqual({ label: 'Note', value: 'About the compiler.' });
     // Each reader's footer says why they got it.
     expect(visitor?.why).toBe('You got this email because this address was used to book Intro call with Ada Host.');
@@ -102,8 +108,10 @@ describe('the confirmation (AC-636)', () => {
 
   it('leaves the calendar file out when the calendar event already invited them, and says where to join', async () => {
     const b = await booked(withEvent);
-    const [visitor] = (await b.prepare('confirmed')).messages;
+    const [visitor, host] = (await b.prepare('confirmed')).messages;
     expect(visitor?.ics).toBeUndefined();
+    // The event is already in the host's calendar, so their email carries no file either.
+    expect(host?.ics).toBeUndefined();
     expect(visitor?.rows).toContainEqual({ label: 'Where', value: 'https://meet.example/abc' });
   });
 });
@@ -120,11 +128,17 @@ describe('changes (AC-638 to AC-640)', () => {
       value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM (Europe/London)',
     });
     expect(moved.messages[0]?.ics?.content).not.toContain('SEQUENCE:0');
+    expect(moved.messages[1]?.ics?.method).toBe('REQUEST');
 
     await cancelBooking(hostTarget(b.host, b.bookingId), b.deps, { reason: 'I’m ill.' });
     const cancelled = await b.prepare('cancelled');
-    // The host did it, so only the visitor hears, with the reason and a way to book again.
-    expect(cancelled.messages).toHaveLength(1);
+    // The host did it: the visitor hears, with the reason and a way to book again, and the host gets only the
+    // calendar file that takes it off their calendar (no calendar event held it).
+    expect(cancelled.messages.map((mail) => [mail.to, mail.subject])).toEqual([
+      ['grace@navy.example', 'Cancelled: Intro call with Ada Host'],
+      ['ada@example.com', 'Cancelled: Intro call with Grace Hopper'],
+    ]);
+    expect(cancelled.messages[1]?.ics?.method).toBe('CANCEL');
     expect(cancelled.messages[0]).toMatchObject({
       heading: 'Ada Host cancelled your booking',
       button: { label: 'Book another time', url: `${ORIGIN}/b/${b.page.publicKey}` },

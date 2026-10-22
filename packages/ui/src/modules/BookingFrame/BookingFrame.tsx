@@ -4,6 +4,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { poweredByHref, type PoweredByPage } from '../../lib/powered-by.ts';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
 import styles from './BookingFrame.module.css';
 import { strings } from './strings.ts';
@@ -54,7 +55,10 @@ export interface BookingFrameProps {
   readonly aside?: ReactNode;
   /** A band across the card's foot: the Book bar. */
   readonly footer?: ReactNode;
-  /** Where "Claim your free page" goes. Leave it off to show the wordmark alone (a recognised visitor). */
+  /**
+   * Where "Claim your free page" goes: `claimPageHref('booking_page')`, tagged as the wordmark beside it is. Leave
+   * it off to show the wordmark alone (a recognised visitor).
+   */
   readonly claimHref?: string;
   readonly logo?: ProductLogo;
 }
@@ -172,16 +176,26 @@ export interface BookingFootProps {
    * on every screen, for a page with no rail.
    */
   readonly placement?: 'rail' | 'page' | 'always';
-  /** Where "Claim your free page" goes; leave it off for the wordmark alone. */
+  /**
+   * Which public page this is, which the wordmark's link carries as its `utm_medium`: the booking page (the
+   * default, the frame's own), a person's profile, or the guest's page. The claim link comes tagged in `claimHref`.
+   */
+  readonly page?: PoweredByPage;
+  /** Where "Claim your free page" goes (`claimPageHref` with the same page); leave it off for the wordmark alone. */
   readonly claimHref?: string;
   readonly logo?: ProductLogo;
 }
 
-/** "Powered by Timefix", and "Claim your free page" for a visitor we don't know. */
-export function BookingFoot({ placement = 'always', claimHref, logo = TIMEFIX_LOGO }: BookingFootProps) {
+/** "Powered by Timefix", tagged with the page it sits on, and "Claim your free page" for a visitor we don't know. */
+export function BookingFoot({
+  placement = 'always',
+  page = 'booking_page',
+  claimHref,
+  logo = TIMEFIX_LOGO,
+}: BookingFootProps) {
   return (
     <footer className={styles.foot} data-placement={placement}>
-      <a className={styles.brand} href="https://timefix.ai" rel="noopener noreferrer">
+      <a className={styles.brand} href={poweredByHref(page)} rel="noopener noreferrer">
         <span className={styles.powered}>{strings.poweredBy}</span>
         <img className={styles.wordmark} data-scheme="light" src={logo.light} alt={strings.product} />
         <img className={styles.wordmark} data-scheme="dark" src={logo.dark} alt={strings.product} />
@@ -211,7 +225,7 @@ export interface BookingProfileProps {
   readonly person?: BookingProfilePerson;
   /** Under the card: the person's booking links (LinkList), with their section headings and search. */
   readonly children?: ReactNode;
-  /** Where "Claim your free page" goes. */
+  /** Where "Claim your free page" goes: `claimPageHref('booking_profile')`. */
   readonly claimHref?: string;
 }
 
@@ -247,7 +261,7 @@ export function BookingProfile({ person, children, claimHref }: BookingProfilePr
           )}
         </header>
         {children}
-        <BookingFoot {...(claimHref === undefined ? {} : { claimHref })} />
+        <BookingFoot page="booking_profile" {...(claimHref === undefined ? {} : { claimHref })} />
       </div>
     </main>
   );
@@ -284,6 +298,8 @@ export interface BookingMessageProps {
   readonly onRetry?: () => void;
   /** While the page's facts load: a skeleton in the card. */
   readonly isLoading?: boolean;
+  /** Which public page shows the message, for the wordmark link's tags: the booking page (the default), a profile, or the guest's page. */
+  readonly page?: PoweredByPage;
 }
 
 /**
@@ -291,7 +307,13 @@ export interface BookingMessageProps {
  * no page, a paused page, or a load that failed with Try again. One small
  * card, centred, with the foot under it.
  */
-export function BookingMessage({ title, children, onRetry, isLoading = false }: BookingMessageProps) {
+export function BookingMessage({
+  title,
+  children,
+  onRetry,
+  isLoading = false,
+  page = 'booking_page',
+}: BookingMessageProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (!isLoading) heading.current?.focus();
@@ -321,7 +343,7 @@ export function BookingMessage({ title, children, onRetry, isLoading = false }: 
             </>
           )}
         </div>
-        <BookingFoot />
+        <BookingFoot page={page} />
       </div>
     </main>
   );

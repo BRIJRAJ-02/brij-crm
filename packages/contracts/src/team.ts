@@ -64,6 +64,8 @@ export const AUDIT_ACTIONS = [
   'booking.reassigned',
   // Lead routing (spec 0043, AC-1616): a form's or a team page's rules changed, and a booking marked or unmarked no show.
   'routing.changed',
+  // Spec 0029 milestone 3: who a form's new records go to changed (a member, a round robin rotation, or nobody).
+  'form.owner_changed',
   'booking.no_show',
   'booking.no_show_undone',
   // Spec 0033 (AC-899): an owner changed the workspace's sign in rules, or signed everyone out of it.

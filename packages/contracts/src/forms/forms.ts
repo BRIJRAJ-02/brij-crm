@@ -91,7 +91,9 @@ export const FormView = FormSummary.extend({
   live: FormDocument.optional(),
   /** Whether the draft differs from what is live (a publish would change something). */
   hasUnpublished: z.boolean(),
+  /** Who owns the records it creates: a fixed member, or (spec 0029 milestone 3) a round robin rotation; at most one. */
   ownerMemberId: Uuid.optional(),
+  ownerRotationId: Uuid.optional(),
   /** Who saved the draft last, when someone else may have (the "Bea changed this form" notice). */
   draftSavedByMemberId: Uuid.optional(),
   allowedOrigins: z.array(z.string()),
@@ -141,16 +143,25 @@ export const PublishFormInput = WorkspaceScoped.extend({
 /** Publishes the draft. */
 export type PublishFormInput = z.infer<typeof PublishFormInput>;
 
-/** The settings that apply at once: the name, the address, the owner, and the sites that may post. */
+/**
+ * The settings that apply at once: the name, the address, the owner, and the
+ * sites that may post. The owner is a member or a round robin rotation, never
+ * both: naming one clears the other, and `null` clears it.
+ */
 export const UpdateFormSettingsInput = WorkspaceScoped.extend({
   formId: Uuid,
   name: FormName.optional(),
   slug: FormSlug.optional(),
   /** `null` is nobody. */
   ownerMemberId: Uuid.nullable().optional(),
+  /** The rotation whose fairest member owns each new lead (spec 0029, AC-755); `null` is none. */
+  ownerRotationId: Uuid.nullable().optional(),
   allowedOrigins: z.array(FormOrigin).max(20, { error: 'List at most 20 sites.' }).optional(),
   requireSignature: z.boolean().optional(),
   mutationId: Uuid,
+}).refine((input) => !(typeof input.ownerMemberId === 'string' && typeof input.ownerRotationId === 'string'), {
+  error: 'Pick a teammate or a round robin group as the owner, not both.',
+  path: ['ownerRotationId'],
 });
 /** The settings that apply at once. */
 export type UpdateFormSettingsInput = z.infer<typeof UpdateFormSettingsInput>;
@@ -337,7 +348,8 @@ export const SubmissionView = SubmissionSummary.extend({
   records: z.array(SubmissionRecord),
   failure: z.string().optional(),
   refused: z.array(z.object({ questionId: z.string(), message: z.string() })),
-  assignment: z.object({ memberId: Uuid.optional(), reason: z.string() }).optional(),
+  /** Who was given the new record and why (AC-567); `rotationId` when a rotation chose them (AC-1050). */
+  assignment: z.object({ memberId: Uuid.optional(), rotationId: Uuid.optional(), reason: z.string() }).optional(),
 });
 /** One submission in full. */
 export type SubmissionView = z.infer<typeof SubmissionView>;

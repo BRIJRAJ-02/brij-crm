@@ -3,6 +3,8 @@ import { fitsAttribute, freeKey, keyFromLabel, slugFromName, FORM_SLUG } from '.
 import { checkAnswers, websiteOf, type CheckedForm } from './check.ts';
 import { DIAL_CODES, toE164 } from './dial-codes.ts';
 import { defaultQuestions, FormDocument, RedirectUrl } from './document.ts';
+import { SubmissionView, UpdateFormSettingsInput } from './forms.ts';
+import { AuditAction } from '../team.ts';
 import { publishProblem, type PublishAttribute } from './publish.ts';
 import { COUNTRY_CODES } from '../values/countries.ts';
 
@@ -201,5 +203,42 @@ describe('RedirectUrl (the after sending web address)', () => {
   it('takes a full https address', () => {
     expect(RedirectUrl.safeParse('https://example.com/thanks').success).toBe(true);
     expect(RedirectUrl.safeParse('http://example.com').success).toBe(false);
+  });
+});
+
+describe('a form owner from a rotation (spec 0029 milestone 3, AC-755, AC-1050)', () => {
+  const MEMBER = '0199f0a0-0000-7000-8000-0000000000a1';
+  const ROTATION = '0199f0a0-0000-7000-8000-0000000000c1';
+  const base = { workspace: 'acme', formId: '0199f0a0-0000-7000-8000-0000000000f1', mutationId: MEMBER };
+
+  it('takes a rotation, a member, or nobody as the owner, but never a member and a rotation at once', () => {
+    expect(UpdateFormSettingsInput.safeParse({ ...base, ownerRotationId: ROTATION }).success).toBe(true);
+    expect(UpdateFormSettingsInput.safeParse({ ...base, ownerMemberId: MEMBER, ownerRotationId: null }).success).toBe(
+      true,
+    );
+    expect(UpdateFormSettingsInput.safeParse({ ...base, ownerMemberId: null, ownerRotationId: null }).success).toBe(
+      true,
+    );
+    const both = UpdateFormSettingsInput.safeParse({ ...base, ownerMemberId: MEMBER, ownerRotationId: ROTATION });
+    expect(both.success).toBe(false);
+    expect(both.error?.issues[0]).toMatchObject({
+      path: ['ownerRotationId'],
+      message: 'Pick a teammate or a round robin group as the owner, not both.',
+    });
+    expect(UpdateFormSettingsInput.safeParse({ ...base, ownerRotationId: 'sales' }).success).toBe(false);
+  });
+
+  it('says on a submission which rotation chose its owner, and audits a change of owner', () => {
+    const assignment = SubmissionView.shape.assignment;
+    expect(assignment.parse({ memberId: MEMBER, rotationId: ROTATION, reason: 'fair' })).toEqual({
+      memberId: MEMBER,
+      rotationId: ROTATION,
+      reason: 'fair',
+    });
+    expect(assignment.parse({ rotationId: ROTATION, reason: 'none_available' })).toEqual({
+      rotationId: ROTATION,
+      reason: 'none_available',
+    });
+    expect(AuditAction.safeParse('form.owner_changed').success).toBe(true);
   });
 });

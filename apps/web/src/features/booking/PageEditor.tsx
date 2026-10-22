@@ -2,9 +2,9 @@
 // Purpose: one booking page's editor (spec 0025, 0025-experience.md, AC-623, AC-624, AC-679): its groups beside the page.
 // Main task: change the page, the meeting, its hours and limits, and Save from the bar that appears while anything is unsaved.
 // One tab per group (the owner, 22 Oct 2026: the cards stacked were too much to look through), the chosen one in
-// `?tab=`; a tab whose fields hold an error carries a dot. Each tab is one readable column of headed sections (Cards)
-// in the first two thirds, beside the page in a phone in the last third (the owner, 22 Oct 2026, after the masonry
-// columns: "bring back the visual on the side, with just mobile view").
+// `?tab=`; a tab whose fields hold an error carries a dot. Each tab's headed sections (Cards) fill the first two
+// thirds (the owner, 23 Oct 2026: "full width the left"), beside the page in a phone in the last third (the owner,
+// 22 Oct 2026, after the masonry columns: "bring back the visual on the side, with just mobile view").
 // The hours are a schedule's (spec 0035, AC-965): the tab picks one of the owner's and edits its week and days off in
 // place (the owner, 22 Oct 2026, like Calendly's and Cal.com's event Availability tab), saved by the same Save.
 // A round robin page (spec 0029, AC-732) adds Hosts: its fixed hosts, its rotations, and who reschedules go to.
@@ -523,11 +523,10 @@ export function PageEditor({
               selectedKey={shown}
               onSelectionChange={(id) => onTabChange(pageTabOf(id))}
             >
-              {/* One panel, the chosen tab's: the layout and its phone preview stay mounted as the tab changes. Each tab
-                  is one readable column of sections beside the phone (the owner, 22 Oct 2026). */}
+              {/* One panel, the chosen tab's: the layout and its phone preview stay mounted as the tab changes. Each tab's
+                  sections fill the width beside the phone (the owner, 23 Oct 2026). */}
               <TabPanel id={shown} variant="fill">
                 <PreviewLayout
-                  bodyWidth="form"
                   {...(isTimesStale ? { previewNote: <Callout tone="info">{strings.previewSavedTimes}</Callout> } : {})}
                   // The page in a phone beside every tab (the owner, 22 Oct 2026), showing the unsaved edits.
                   preview={
@@ -860,7 +859,7 @@ export function PageEditor({
                       <RulesCard
                         data={data}
                         slug={slug}
-                        surface={{ kind: 'page', pool: teamPool }}
+                        surface={{ kind: 'page', pageId: page.id, pool: teamPool }}
                         {...(isLocked ? {} : { report: { kind: 'booking_page' as const, pageId: page.id } })}
                         rules={page.routing?.rules ?? []}
                         facts={recordFields === undefined ? [] : recordFacts(recordFields.person, recordFields.company)}
@@ -1072,11 +1071,7 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
             selectedKey={shown}
           >
             <TabPanel id={shown} variant="fill">
-              <PreviewLayout
-                bodyWidth="form"
-                preview={<Skeleton shape="block" />}
-                {...(notices === undefined ? {} : { notices })}
-              >
+              <PreviewLayout preview={<Skeleton shape="block" />} {...(notices === undefined ? {} : { notices })}>
                 <Card isBusy>
                   <Skeleton lines={6} />
                 </Card>

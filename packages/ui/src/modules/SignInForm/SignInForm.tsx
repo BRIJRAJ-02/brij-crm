@@ -33,6 +33,11 @@ export interface SignInFormProps {
    * attempt starts.
    */
   readonly notice?: string;
+  /**
+   * The notice's tone: `danger` (the default) for a refusal or a session that ended, `success` for something the
+   * person chose that went through (their account deleted). Either is announced.
+   */
+  readonly noticeTone?: 'danger' | 'success';
   /** The address to start with: the one used last, coming back from "Use a different email". */
   readonly defaultEmail?: string;
   /** Signing in is off for now: the field and buttons are off. */
@@ -66,6 +71,7 @@ export function SignInForm({
   status = 'idle',
   error,
   notice,
+  noticeTone = 'danger',
   defaultEmail = '',
   isDisabled = false,
   disabledReason,
@@ -93,8 +99,13 @@ export function SignInForm({
   const hasReason = isDisabled && disabledReason !== undefined;
   return (
     <div className={styles.root}>
-      {/* Danger is announced as an alert: about the sign in, not the address, so never on the field. */}
-      {shownNotice !== undefined && <Callout tone="danger">{shownNotice}</Callout>}
+      {/* About the sign in, not the address, so never on the field: danger is announced as an alert, success as a
+          status. */}
+      {shownNotice !== undefined && (
+        <Callout tone={noticeTone} isAnnounced>
+          {shownNotice}
+        </Callout>
+      )}
       {onGoogle !== undefined && (
         <>
           <Button

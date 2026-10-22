@@ -6,7 +6,7 @@
 // surface: a form's in its version document, a team page's in
 // `booking_pages.routing`.
 import { sql } from 'drizzle-orm';
-import { boolean, check, foreignKey, index, pgTable, primaryKey, text, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, foreignKey, index, pgTable, primaryKey, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { bookingPages, bookings } from './booking.ts';
 import { id, timestamptz, workspaceId } from './common.ts';
 
@@ -52,10 +52,15 @@ export const routingDecisions = pgTable(
     }),
     // The report: one surface's decisions in a window.
     index('routing_decisions_by_surface').on(t.workspaceId, t.surfaceId, t.decidedAt),
-    // A hand off's booking finds its submission's decision.
-    index('routing_decisions_by_submission')
+    // One decision per submission (AC-1607), which a hand off's booking finds it by: a retried or doubled submit
+    // can never decide twice, nor count twice in a rule's report.
+    uniqueIndex('routing_decisions_one_per_submission')
       .on(t.workspaceId, t.submissionId)
       .where(sql`${t.submissionId} is not null`),
+    // One team page decision per booking (AC-1611).
+    uniqueIndex('routing_decisions_one_per_booking')
+      .on(t.workspaceId, t.bookingId)
+      .where(sql`${t.surfaceKind} = 'booking_page'`),
     check('routing_decisions_surface', sql`${t.surfaceKind} in ('form', 'booking_page')`),
     check('routing_decisions_submission', sql`(${t.surfaceKind} = 'form') = (${t.submissionId} is not null)`),
     check('routing_decisions_hosts', sql`${t.hosts} is null or cardinality(${t.hosts}) between 1 and 8`),

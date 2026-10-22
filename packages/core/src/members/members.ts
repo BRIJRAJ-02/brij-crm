@@ -36,7 +36,7 @@ import { REASSIGN_KIND } from './reassign.ts';
 import { countRemoval, runRemovalEffects } from './removal.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 
-const { members } = schema;
+const { members, workspaces } = schema;
 
 /** The columns a member is answered with, everywhere in this file. */
 const VIEW_COLUMNS = {
@@ -267,8 +267,18 @@ async function lockTarget(tx: WorkspaceTx, scope: EngineScope, memberId: string)
   return { target: { ...target, role: storedRole(target.role) }, acting };
 }
 
-/** Refuses LAST_OWNER when `memberId` is the live workspace's only active owner (the database checks it too). */
+/**
+ * Refuses LAST_OWNER when `memberId` is the live workspace's only active owner (the database checks it too). A
+ * deleted workspace needs no owner (account deletion leaves one, spec 0033): its row is read `for share`, so a
+ * restore committing meanwhile is waited for and seen, and a restore after this commits finds its owner gone.
+ */
 async function keepAnOwner(tx: WorkspaceTx, scope: EngineScope, memberId: string): Promise<void> {
+  const [workspace] = await tx
+    .select({ deletedAt: workspaces.deletedAt })
+    .from(workspaces)
+    .where(eq(workspaces.id, scope.workspaceId))
+    .for('share');
+  if (workspace !== undefined && workspace.deletedAt !== null) return;
   const [other] = await tx
     .select({ id: members.id })
     .from(members)

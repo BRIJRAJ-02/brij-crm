@@ -4,7 +4,7 @@
 // `booking.manage` lists the rotations they are in, with everyone's names but
 // only their own count (everyone's with `booking.admin`). Rotations are
 // settings, not CRM data: their writes store no outbox row.
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   PERMISSIONS,
   type CreateRotationInput,
@@ -28,6 +28,7 @@ const {
   bookingPageRotations,
   bookingPages,
   calendarConnections,
+  forms,
   members,
   rotationMembers,
   rotations,
@@ -402,8 +403,10 @@ async function replaceMembers(
 }
 
 /**
- * Deletes a rotation no live page books from (AC-758): refused IN_USE ("Used
- * by 2 pages") while one does. Its ledger stays, for the bookings it explains.
+ * Deletes a rotation no live page books from and no form gives owners from
+ * (AC-758): refused IN_USE ("Used by 2 pages and 1 form") while one does; an
+ * archived form doesn't hold it (restored, its leads get no owner until it
+ * names another). Its ledger stays, for the bookings and leads it explains.
  */
 export async function deleteRotation(
   scope: EngineScope,
@@ -425,11 +428,17 @@ export async function deleteRotation(
       )
       .where(and(eq(bookingPageRotations.rotationId, current.id), isNull(bookingPages.deletedAt)));
     const pages = used?.count ?? 0;
-    if (pages > 0) {
-      throw refuse(
-        'IN_USE',
-        `Used by ${String(pages)} ${pages === 1 ? 'page' : 'pages'}. Move them to another rotation first.`,
-      );
+    const [owning] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(forms)
+      .where(and(eq(forms.ownerRotationId, current.id), ne(forms.status, 'archived')));
+    const formCount = owning?.count ?? 0;
+    if (pages > 0 || formCount > 0) {
+      const named = [
+        ...(pages > 0 ? [`${String(pages)} ${pages === 1 ? 'page' : 'pages'}`] : []),
+        ...(formCount > 0 ? [`${String(formCount)} ${formCount === 1 ? 'form' : 'forms'}`] : []),
+      ];
+      throw refuse('IN_USE', `Used by ${named.join(' and ')}. Move them to another rotation first.`);
     }
     await tx
       .update(rotations)

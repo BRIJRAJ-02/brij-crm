@@ -149,6 +149,15 @@ export interface IdentityStore {
   findWorkspace(slug: string): Promise<DirectoryWorkspace | undefined>;
   /** The workspaces this user was added to, oldest first (by when the directory row was made); deleted ones left out. */
   workspacesOf(userId: string): Promise<readonly DirectoryWorkspace[]>;
+  /**
+   * Every workspace this user is noted in, deleted ones included, oldest
+   * first: for account deletion only, which leaves them all (spec 0033,
+   * AC-903), in one read, so a workspace deleted or restored meanwhile can't
+   * fall between two lists. Never a list to show, and it grants nothing: the
+   * door reads the tenant row, which decides whether it is live or inside its
+   * window.
+   */
+  allWorkspacesOf(userId: string): Promise<readonly DirectoryWorkspace[]>;
   /** The workspace this user last opened (spec 0031, AC-802), or undefined. Where to go, never access. */
   lastWorkspaceOf(userId: string): Promise<string | undefined>;
   /**
@@ -356,6 +365,16 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .from(workspaceMembership)
         .innerJoin(workspaceDirectory, eq(workspaceDirectory.workspaceId, workspaceMembership.workspaceId))
         .where(and(eq(workspaceMembership.userId, userId), isNull(workspaceDirectory.deletedAt)))
+        .orderBy(asc(workspaceDirectory.createdAt), asc(workspaceDirectory.workspaceId));
+    },
+
+    async allWorkspacesOf(userId) {
+      if (!UUID.test(userId)) return [];
+      return db
+        .select(directoryColumns)
+        .from(workspaceMembership)
+        .innerJoin(workspaceDirectory, eq(workspaceDirectory.workspaceId, workspaceMembership.workspaceId))
+        .where(eq(workspaceMembership.userId, userId))
         .orderBy(asc(workspaceDirectory.createdAt), asc(workspaceDirectory.workspaceId));
     },
 

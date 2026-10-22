@@ -13,7 +13,7 @@ import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
-import { createBookingPage, updateBookingPage } from './pages.ts';
+import { createBookingPage, deleteBookingPage, updateBookingPage } from './pages.ts';
 import { getPublicBookingPage, readAddressedPage, readBookingProfile } from './public.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
@@ -118,12 +118,13 @@ describe('a handle address', () => {
     const handle = fresh('ada');
     await updateMyMemberProfile(ada.scope, { handle });
     const entry = await enterBookingAddress({ db }, handle, made.slug);
-    expect(await readAddressedPage(entry)).toEqual({ publicKey: made.publicKey, handle });
+    expect(await readAddressedPage(entry)).toEqual({ publicKey: made.publicKey, handle, slug: made.slug });
     const renamed = fresh('lovelace');
     await updateMyMemberProfile(ada.scope, { handle: renamed });
     expect(await readAddressedPage(await enterBookingAddress({ db }, handle, made.slug))).toEqual({
       publicKey: made.publicKey,
       handle: renamed,
+      slug: made.slug,
     });
     expect(await refusalOf(enterBookingAddress({ db }, renamed, 'no-such-page'))).toBe('NOT_FOUND');
     expect(await refusalOf(enterBookingAddress({ db }, fresh('nobody'), made.slug))).toBe('NOT_FOUND');
@@ -178,6 +179,89 @@ describe('a handle address', () => {
     });
     expect((await page(ada.scope, 'Chat')).slug).toBe('chat');
     expect((await page(bob, 'Chat')).slug).toBe('chat');
+  });
+});
+
+/** The refusal message a promise rejects with. */
+async function refusalMessage(promise: Promise<unknown>): Promise<string | undefined> {
+  try {
+    await promise;
+    return undefined;
+  } catch (error) {
+    return isRefusal(error) ? error.refusal.message : 'thrown';
+  }
+}
+
+describe('slug history (22 Oct 2026)', () => {
+  const rename = (scope: ReturnType<typeof testScope>, pageId: string, slug: string) =>
+    updateBookingPage(scope, { pageId, settings: { slug } });
+
+  it('keeps an old slug’s address finding the page, which answers its current address', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('ada');
+    await updateMyMemberProfile(ada.scope, { handle });
+    const made = await page(ada.scope, 'Intro call');
+    await rename(ada.scope, made.id, 'meet');
+    const moved = { publicKey: made.publicKey, handle, slug: 'meet' };
+    expect(await readAddressedPage(await enterBookingAddress({ db }, handle, made.slug))).toEqual(moved);
+    expect(await readAddressedPage(await enterBookingAddress({ db }, handle, 'meet'))).toEqual(moved);
+    // An old handle and an old slug together still find it.
+    const renamed = fresh('lovelace');
+    await updateMyMemberProfile(ada.scope, { handle: renamed });
+    expect(await readAddressedPage(await enterBookingAddress({ db }, handle, made.slug))).toEqual({
+      ...moved,
+      handle: renamed,
+    });
+  });
+
+  it('refuses an old slug to another page of the person’s, in any workspace, but lets its own page take it back', async () => {
+    const ada = await person('Ada');
+    const elsewhere = await person('Ada', ada.userId);
+    const made = await page(ada.scope, 'Intro call');
+    await rename(ada.scope, made.id, 'meet');
+    const other = await page(elsewhere.scope, 'Other');
+    const refused = rename(elsewhere.scope, other.id, made.slug);
+    expect(await refusalMessage(refused)).toBe(
+      'Another of your booking pages used this address before, so it stays with that page. Pick another.',
+    );
+    expect(await refusalOf(rename(ada.scope, other.id, made.slug))).toBe('NOT_FOUND');
+    // A new page's default slug skips it too.
+    expect((await page(elsewhere.scope, 'Intro call')).slug).toBe(`${made.slug}-2`);
+    expect((await rename(ada.scope, made.id, made.slug)).slug).toBe(made.slug);
+  });
+
+  it('keeps 20 old slugs, then lets the oldest go', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('ada');
+    await updateMyMemberProfile(ada.scope, { handle });
+    const made = await page(ada.scope, 'Intro call');
+    for (let n = 1; n <= 21; n += 1) await rename(ada.scope, made.id, `intro-${String(n)}`);
+    expect(await refusalOf(enterBookingAddress({ db }, handle, made.slug))).toBe('NOT_FOUND');
+    expect((await readAddressedPage(await enterBookingAddress({ db }, handle, 'intro-1'))).slug).toBe('intro-21');
+    expect((await page(ada.scope, 'Again', { slug: made.slug })).slug).toBe(made.slug);
+  });
+
+  it('never answers an old slug of a Link only page', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('ada');
+    await updateMyMemberProfile(ada.scope, { handle });
+    const made = await page(ada.scope, 'Intro call');
+    await rename(ada.scope, made.id, 'meet');
+    await updateBookingPage(ada.scope, { pageId: made.id, settings: { isPrivate: true } });
+    expect(await refusalOf(enterBookingAddress({ db }, handle, made.slug))).toBe('NOT_FOUND');
+    expect(await refusalOf(enterBookingAddress({ db }, handle, 'meet'))).toBe('NOT_FOUND');
+  });
+
+  it('goes with the page when it is deleted, freeing its old slugs', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('ada');
+    await updateMyMemberProfile(ada.scope, { handle });
+    const made = await page(ada.scope, 'Intro call');
+    await rename(ada.scope, made.id, 'meet');
+    await deleteBookingPage(ada.scope, { pageId: made.id });
+    expect(await refusalOf(enterBookingAddress({ db }, handle, made.slug))).toBe('NOT_FOUND');
+    expect(await refusalOf(enterBookingAddress({ db }, handle, 'meet'))).toBe('NOT_FOUND');
+    expect((await page(ada.scope, 'Again', { slug: made.slug })).slug).toBe(made.slug);
   });
 });
 

@@ -47,12 +47,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The booking page editor: its sections in a readable column beside the page in a phone. */
+/** The booking page editor: its sections across the first two thirds, beside the page in a phone. */
 function PageEditorExample({ hasFooter = false }: { readonly hasFooter?: boolean }) {
   return (
     <Stage height="page" width="fill">
       <PreviewLayout
-        bodyWidth="form"
         preview={<PreviewFrame src="about:blank" title="Intro call" />}
         {...(hasFooter
           ? {
@@ -222,7 +221,7 @@ export const FullWidth: Story = {
   ),
 };
 
-/** No preview, a tab of fields (the booking page editor's Hosts): a readable column centred in the width. */
+/** No preview, a tab of fields in a readable column centred in the width (the `form` width, which no screen uses now). */
 export const FormWidth: Story = {
   render: () => (
     <Stage height="page" width="fill">

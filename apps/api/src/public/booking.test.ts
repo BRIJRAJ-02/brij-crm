@@ -150,7 +150,7 @@ describe('handle addresses (22 Oct 2026)', () => {
       links: [{ slug: 'intro-call', title: 'Intro call' }],
     });
     const address = await handles(`${handle}/intro-call`);
-    expect(await address.json()).toEqual({ publicKey: page.publicKey, handle });
+    expect(await address.json()).toEqual({ publicKey: page.publicKey, handle, slug: 'intro-call' });
     const facts = (await (await visit(page.publicKey)).json()) as { readonly path?: string };
     expect(facts.path).toBe(`/${handle}/intro-call`);
     expect((await handles(`${handle}/nothing-here`)).status).toBe(404);

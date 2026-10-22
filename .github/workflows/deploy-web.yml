@@ -111,12 +111,16 @@ jobs:
             token: VERCEL_TOKEN
             owner: DATABASE_URL_OWNER
             health: https://brij-crm-phi.vercel.app/api/health
+            # Beside its Neon database: brij-crm's is in Singapore.
+            region: sin1
           - target: timefix
             org: TIMEFIX_VERCEL_ORG_ID
             project: TIMEFIX_VERCEL_PROJECT_ID
             token: TIMEFIX_VERCEL_TOKEN
             owner: TIMEFIX_DATABASE_URL_OWNER
             health: https://app.timefix.ai/api/health
+            # Beside its Neon database: Timefix's is in us-east-1.
+            region: iad1
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -192,6 +196,16 @@ jobs:
             exit 1
           fi
           node packages/db/scripts/migrate.ts
+      - name: Run the functions in this target's region
+        if: steps.mode.outputs.deploy == 'true'
+        env:
+          REGION: ${{ matrix.region }}
+        run: |
+          set -euo pipefail
+          # apps/web/vercel.json pins brij-crm's region; each target's functions run beside its own database.
+          sed -i -E "s/\"regions\": \[[^]]*\]/\"regions\": [\"$REGION\"]/" apps/web/vercel.json
+          grep -Fq "\"regions\": [\"$REGION\"]" apps/web/vercel.json
+          echo "The functions run in $REGION."
       - name: Build and deploy
         if: steps.mode.outputs.deploy == 'true'
         env:

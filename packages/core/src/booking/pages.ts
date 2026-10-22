@@ -393,11 +393,30 @@ async function nextProfilePosition(tx: WorkspaceTx, ownerMemberId: string): Prom
   return last === null ? 0 : Math.min(last + 1, PROFILE_POSITION_MAX);
 }
 
-/** A slug refusal for a taken slug, on the `slug` field: the owner has another page at that address. */
-const slugTaken = () => refuseOn('SLUG_TAKEN', 'You have another booking page at that address.', 'slug');
-
 /** The unique indexes a taken slug is refused on: the owner's in this workspace, and the owner's everywhere. */
 const SLUG_CONSTRAINTS: ReadonlySet<string | undefined> = new Set(['booking_pages_slug', 'booking_pages_owner_slug']);
+
+/** The unique index an old slug of another of the owner's pages is refused on (slug history, migration 0087). */
+const OLD_SLUG_CONSTRAINT = 'booking_page_slugs_owner_slug';
+
+/**
+ * The refusal, on the `slug` field, for a slug the owner's other page holds now, or held and still redirects from;
+ * undefined for any other error.
+ */
+function slugRefusal(error: unknown) {
+  const constraint = postgresError(error)?.constraint;
+  if (SLUG_CONSTRAINTS.has(constraint)) {
+    return refuseOn('SLUG_TAKEN', 'You have another booking page at that address.', 'slug');
+  }
+  if (constraint === OLD_SLUG_CONSTRAINT) {
+    return refuseOn(
+      'SLUG_TAKEN',
+      'Another of your booking pages used this address before, so it stays with that page. Pick another.',
+      'slug',
+    );
+  }
+  return undefined;
+}
 
 /**
  * A new page for the caller (AC-623): the settings given, the rest
@@ -503,8 +522,7 @@ export async function createBookingPage(
       if (page === undefined) throw new Error('The booking page was not created.');
       return viewOf(scope, page, 0, undefined, await ownerHandle(tx, page));
     } catch (error) {
-      if (SLUG_CONSTRAINTS.has(postgresError(error)?.constraint)) throw slugTaken();
-      throw error;
+      throw slugRefusal(error) ?? error;
     }
   });
 }
@@ -548,7 +566,7 @@ export async function updateBookingPage(
       if (page.kind !== 'round_robin') {
         throw refuseOn('CONFIG_INVALID', 'Only a team page has routing rules.', 'routing');
       }
-      await checkPageRoutes(tx, page.id, routing.rules);
+      await checkPageRoutes(tx, page.id, routing.rules, { access: scope.access, before: page.routingRules ?? [] });
       const before = page.routingRules ?? [];
       if (rulesChanged(before, routing.rules)) {
         await writeAudit(tx, scope.workspaceId, scope.actor, {
@@ -597,8 +615,7 @@ export async function updateBookingPage(
       if (changed === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
       return await viewWithCounts(tx, scope, changed, now);
     } catch (error) {
-      if (SLUG_CONSTRAINTS.has(postgresError(error)?.constraint)) throw slugTaken();
-      throw error;
+      throw slugRefusal(error) ?? error;
     }
   });
 }

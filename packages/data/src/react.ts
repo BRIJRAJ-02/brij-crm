@@ -15,13 +15,14 @@ import type { CalendarListState, CalendarsHeld, PageDestinationState } from './c
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 import type { RoutingReportHeld, RoutingReportState } from './routing/reports.ts';
+import type { PageRulesHeld } from './routing/page-rules.ts';
 import type {
   EmailPreferencesState,
   EmailPreferencesStore,
   EmailUnsubscribeState,
   EmailUnsubscribeStore,
 } from './email-preferences.ts';
-import type { JobView } from '@crm/contracts';
+import type { JobView, RoutingRule } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { PreferencesHeld, PreferencesState } from './preferences/store.ts';
@@ -336,6 +337,14 @@ export function useTeamToday(view: HomeHeld<TeamTodayState>): TeamTodayState {
  */
 export function useRoutingReport(view: RoutingReportHeld): RoutingReportState {
   return useRetained(view);
+}
+
+/**
+ * A team page's routing rules as the data layer holds them (spec 0043, AC-1608), re-rendering when a write or a
+ * read changes the page: undefined until the held booking page list holds it. Held while the card is mounted.
+ */
+export function usePageRules(held: PageRulesHeld): readonly RoutingRule[] | undefined {
+  return useRetained(held);
 }
 
 /** Home's metrics row (spec 0041), re-rendering when it is read again. Held while the screen is mounted. */

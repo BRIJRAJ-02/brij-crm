@@ -10,7 +10,7 @@
 // form's `revision`; a save that started from another one is refused
 // `FORM_CHANGED`, so nobody's draft is overwritten.
 import { randomBytes } from 'node:crypto';
-import { and, desc, eq, max, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, max, ne, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import {
   defaultQuestions,
@@ -55,7 +55,7 @@ import {
   type FormRow,
 } from './shared.ts';
 
-const { forms, formSubmissions, formVersions, members, objects } = schema;
+const { forms, formSubmissions, formVersions, members, objects, rotationMembers, rotations } = schema;
 
 /** What a form the reader can't see, or one that doesn't exist, answers. */
 export const UNKNOWN_FORM = 'That form does not exist.';
@@ -151,6 +151,7 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
     draft: draft.document,
     hasUnpublished: form.draftVersionId !== form.liveVersionId,
     ...(form.ownerMemberId === null ? {} : { ownerMemberId: form.ownerMemberId }),
+    ...(form.ownerRotationId === null ? {} : { ownerRotationId: form.ownerRotationId }),
     ...(draft.updatedByMemberId === null ? {} : { draftSavedByMemberId: draft.updatedByMemberId }),
     allowedOrigins: [...form.allowedOrigins],
     requireSignature: form.requireSignature,
@@ -365,6 +366,55 @@ async function checkOwner(tx: WorkspaceTx, memberId: string): Promise<void> {
     .from(members)
     .where(and(eq(members.id, memberId), eq(members.status, 'active')));
   if (found === undefined) throw refuseOn('CONFIG_INVALID', 'That member isn’t in this workspace.', 'ownerMemberId');
+}
+
+/** What naming a rotation the member can't pick answers: gone, or one they can't see (on screen, a round robin group). */
+export const OWNER_ROTATION_UNSEEN = 'Pick a round robin group you can see.';
+
+/** What naming a member and a rotation as the owner at once answers. */
+export const OWNER_BOTH = 'Pick a teammate or a round robin group as the owner, not both.';
+
+/**
+ * Refuses a rotation the member can't pick as a form's owner (spec 0029,
+ * AC-755): one deleted, or one they can't see as Settings lists them (any with
+ * `booking.admin`, else those they are in with `booking.manage`, else none).
+ * Every refusal reads the same, so it never says whether a hidden one exists.
+ */
+async function checkOwnerRotation(tx: WorkspaceTx, scope: EngineScope, rotationId: string): Promise<void> {
+  const principal = scope.access.principal;
+  const me = principal.kind === 'member' ? principal.memberId : undefined;
+  const everyone = can(scope.access, 'booking.admin');
+  const theirs = !everyone && can(scope.access, 'booking.manage') && me !== undefined;
+  if (!everyone && !theirs) throw refuseOn('CONFIG_INVALID', OWNER_ROTATION_UNSEEN, 'ownerRotationId');
+  const [found] = await tx
+    .select({ id: rotations.id })
+    .from(rotations)
+    .where(
+      and(
+        eq(rotations.id, rotationId),
+        isNull(rotations.deletedAt),
+        everyone
+          ? undefined
+          : sql`exists (select 1 from ${rotationMembers} m where m.workspace_id = "rotations"."workspace_id"
+              and m.rotation_id = "rotations"."id" and m.member_id = ${me ?? null}::uuid)`,
+      ),
+    )
+    // Shared, so a delete running now waits for this change and then counts this form ("Used by 1 form").
+    .for('share');
+  if (found === undefined) throw refuseOn('CONFIG_INVALID', OWNER_ROTATION_UNSEEN, 'ownerRotationId');
+}
+
+/**
+ * The owner columns a settings change writes: a member or a rotation, never
+ * both, so naming one clears the other; `null` clears only its own.
+ */
+function ownerColumns(input: FormSettingsInput): PgUpdateSetSource<typeof forms> {
+  return {
+    ...(input.ownerMemberId === undefined ? {} : { ownerMemberId: input.ownerMemberId }),
+    ...(input.ownerRotationId === undefined ? {} : { ownerRotationId: input.ownerRotationId }),
+    ...(typeof input.ownerRotationId === 'string' ? { ownerMemberId: null } : {}),
+    ...(typeof input.ownerMemberId === 'string' ? { ownerRotationId: null } : {}),
+  };
 }
 
 /** The audit columns of a row this scope writes. */
@@ -692,6 +742,8 @@ export interface FormSettingsInput {
   readonly name?: string;
   readonly slug?: string;
   readonly ownerMemberId?: string | null;
+  /** The rotation whose fairest member owns each new lead (spec 0029 milestone 3); `null` is none. */
+  readonly ownerRotationId?: string | null;
   readonly allowedOrigins?: readonly string[];
   readonly requireSignature?: boolean;
 }
@@ -714,16 +766,36 @@ export async function updateFormSettings(
     async ({ tx }) => {
       const form = await visibleForm(tx, scope, input.formId, true);
       if (input.slug !== undefined) await takeSlug(tx, scope, form, input.slug.trim().toLowerCase());
+      if (typeof input.ownerMemberId === 'string' && typeof input.ownerRotationId === 'string') {
+        throw refuseOn('CONFIG_INVALID', OWNER_BOTH, 'ownerRotationId');
+      }
       if (input.ownerMemberId !== undefined && input.ownerMemberId !== null) await checkOwner(tx, input.ownerMemberId);
+      if (input.ownerRotationId !== undefined && input.ownerRotationId !== null) {
+        await checkOwnerRotation(tx, scope, input.ownerRotationId);
+      }
       const set: PgUpdateSetSource<typeof forms> = {
         ...(input.name === undefined ? {} : { name: input.name.trim() }),
-        ...(input.ownerMemberId === undefined ? {} : { ownerMemberId: input.ownerMemberId }),
+        ...ownerColumns(input),
         ...(input.allowedOrigins === undefined ? {} : { allowedOrigins: [...new Set(input.allowedOrigins)] }),
         ...(input.requireSignature === undefined ? {} : { requireSignature: input.requireSignature }),
       };
       if (Object.keys(set).length > 0) await touchForm(tx, scope, form.id, set, false);
+      // Who gets the form's new records is audited when it changes, as its routing rules are.
+      const owner = (row: { ownerMemberId: string | null; ownerRotationId: string | null }) => ({
+        ownerMemberId: row.ownerMemberId,
+        ownerRotationId: row.ownerRotationId,
+      });
       const changed = await loadForm(tx, form.id);
       if (changed === undefined) throw new Error('The form went away under its change.');
+      if (JSON.stringify(owner(form)) !== JSON.stringify(owner(changed))) {
+        await writeAudit(tx, scope.workspaceId, scope.actor, {
+          action: 'form.owner_changed',
+          targetType: 'form',
+          targetId: form.id,
+          before: owner(form),
+          after: owner(changed),
+        });
+      }
       return viewOf(tx, scope, changed);
     },
     hooks,

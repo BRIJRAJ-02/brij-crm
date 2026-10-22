@@ -5,16 +5,21 @@
 // the page. The evaluator is `matchesShowWhen` (`show-when.ts`, no Zod).
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { CONDITION_OPS, CONDITIONS_MAX, NUMBER_OPS, RECORD_FACT, VALUELESS_OPS } from './show-when.ts';
+import { CONDITION_OPS, CONDITIONS_MAX, isHiddenFact, NUMBER_OPS, RECORD_FACT, VALUELESS_OPS } from './show-when.ts';
 import { QUESTION_KEY } from './answer-types.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 
-/** A condition's fact key: a question key, or `person.<attributeId>` / `company.<attributeId>`. */
+/**
+ * A condition's fact key: a question key, `person.<attributeId>` / `company.<attributeId>`, or one of the visit's
+ * hidden fields (`hidden.utm_source`). Which of them a surface may read is the publish and save checks' call.
+ */
 export const FactKey = z
   .string()
   .max(80)
-  .refine((key) => QUESTION_KEY.test(key) || RECORD_FACT.test(key), { error: 'Pick a question or a field.' });
+  .refine((key) => QUESTION_KEY.test(key) || RECORD_FACT.test(key) || isHiddenFact(key), {
+    error: 'Pick a question or a field.',
+  });
 
 /** One condition (AC-1602): a value fitting its operator. */
 export const ConditionSchema = z

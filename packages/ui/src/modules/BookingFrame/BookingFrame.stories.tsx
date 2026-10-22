@@ -5,6 +5,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
 import { MonthTiles } from '../MonthTiles/MonthTiles.tsx';
 import { SlotList } from '../SlotList/SlotList.tsx';
@@ -30,6 +31,13 @@ const TIMES = ['9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '2:00 P
   name: `${label}, Thu Oct 8, 30 minutes`,
 }));
 
+/** "Claim your free page" as the booking page passes it, `claimPageHref('booking_page')`. */
+const PAGE_CLAIM =
+  'https://timefix.ai/?utm_source=timefix&utm_medium=booking_page&utm_campaign=powered_by&utm_content=claim_link';
+/** "Claim your free page" as a profile passes it, `claimPageHref('booking_profile')`. */
+const PROFILE_CLAIM =
+  'https://timefix.ai/?utm_source=timefix&utm_medium=booking_profile&utm_campaign=powered_by&utm_content=claim_link';
+
 const meta = {
   title: 'Modules/BookingFrame',
   component: BookingFrame,
@@ -38,7 +46,7 @@ const meta = {
     title: 'Intro call · 30 min',
     description: 'A first chat about what you need.',
     facts: FACTS,
-    claimHref: 'https://timefix.ai',
+    claimHref: PAGE_CLAIM,
   },
 } satisfies Meta<typeof BookingFrame>;
 
@@ -49,10 +57,17 @@ type Story = StoryObj<typeof meta>;
 export const ChooseATime: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => <Interactive {...args} />,
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Intro call · 30 min' })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
     await expect(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' })).toBeEnabled();
+    // Both feet, the rail's (wide screens) and the page's (phones): each link tagged as the booking page's.
+    await expect(timefixLinkTags(canvasElement)).toEqual([
+      timefixTags('booking_page', 'footer_logo'),
+      timefixTags('booking_page', 'claim_link'),
+      timefixTags('booking_page', 'footer_logo'),
+      timefixTags('booking_page', 'claim_link'),
+    ]);
   },
 };
 
@@ -116,8 +131,25 @@ export const Failed: Story = {
       </BookingMessage>
     </Stage>
   ),
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByRole('heading', { name: 'This page didn’t load' })).toHaveFocus();
+    // A message on the booking page keeps the page's tags, with the wordmark alone.
+    await expect(timefixLinkTags(canvasElement)).toEqual([timefixTags('booking_page', 'footer_logo')]);
+  },
+};
+
+/** A profile's address that names nobody: the same message, its Timefix link tagged as the profile's. */
+export const ProfileNotFound: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingMessage title="Page not found" page="booking_profile">
+        No one has this address.
+      </BookingMessage>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(timefixLinkTags(canvasElement)).toEqual([timefixTags('booking_profile', 'footer_logo')]);
   },
 };
 
@@ -142,7 +174,7 @@ export const Profile: Story = {
     <Stage width="fill" height="page">
       <BookingProfile
         person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme. Happy to talk about anything.' }}
-        claimHref="https://timefix.ai"
+        claimHref={PROFILE_CLAIM}
       >
         <BookingProfileSection>
           <LinkList
@@ -167,11 +199,16 @@ export const Profile: Story = {
       </BookingProfile>
     </Stage>
   ),
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Ada Lovelace' })).toBeVisible();
     await expect(canvas.getByRole('heading', { level: 2, name: 'Sales' })).toBeVisible();
     // Each row is a real link, so it opens in a new tab and crawlers follow it.
     await expect(canvas.getByRole('link', { name: /Intro call/ })).toHaveAttribute('href', '/ada/intro');
+    // The foot's links are tagged as the profile's, not the booking page's.
+    await expect(timefixLinkTags(canvasElement)).toEqual([
+      timefixTags('booking_profile', 'footer_logo'),
+      timefixTags('booking_profile', 'claim_link'),
+    ]);
   },
 };
 
@@ -191,13 +228,16 @@ export const ProfileLoading: Story = {
       </BookingProfile>
     </Stage>
   ),
+  play: async ({ canvasElement }) => {
+    await expect(timefixLinkTags(canvasElement)).toEqual([timefixTags('booking_profile', 'footer_logo')]);
+  },
 };
 
 /** A profile with nothing public to book yet. */
 export const ProfileEmpty: Story = {
   render: () => (
     <Stage width="fill" height="page">
-      <BookingProfile person={{ name: 'Ada Lovelace', id: 'ada' }} claimHref="https://timefix.ai">
+      <BookingProfile person={{ name: 'Ada Lovelace', id: 'ada' }} claimHref={PROFILE_CLAIM}>
         <EmptyState title="Nothing to book here yet" icon="calendar-clock">
           This person has no public booking links right now.
         </EmptyState>
