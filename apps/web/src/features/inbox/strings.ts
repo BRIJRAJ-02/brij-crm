@@ -7,6 +7,8 @@ export const strings = {
   /** The kind filter's name and its segments (AC-1170). */
   kindLabel: 'Kind of notification',
   all: 'All',
+  /** The kind menu's first choice, standing alone in the bar. */
+  allKinds: 'All kinds',
   mentions: 'Mentions',
   replies: 'Replies',
   assignments: 'Assignments',
