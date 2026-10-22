@@ -39,15 +39,25 @@ function actingMember(context: WriteContext): string | undefined {
 /**
  * Queues the email task for each of `memberIds` whose settings email `kind`
  * (no settings row: the defaults, mentions and assignments on, replies off).
+ * A mention queues nothing for a member who turned the `mentions` topic off
+ * from an email's preferences link: the email would hold nothing for them.
  */
 async function queueEmail(context: WriteContext, memberIds: readonly string[], kind: NotificationKind): Promise<void> {
   if (memberIds.length === 0) return;
   const column = sql.raw(`s.${EMAIL_COLUMN[kind]}`);
   const fallback = kind === 'reply' ? sql`false` : sql`true`;
+  const topicOff =
+    kind === 'mention'
+      ? sql` and not exists (
+          select 1 from email_preferences p
+          where p.workspace_id = m.workspace_id and p.member_id = m.id and p.topic = 'mentions'
+            and not p.subscribed
+        )`
+      : sql``;
   await context.tx.execute(sql`
     select crm_enqueue_notification_email(m.id)
     from members m left join notification_settings s on s.workspace_id = m.workspace_id and s.member_id = m.id
-    where m.id = any(${uuidList(memberIds)}) and coalesce(${column}, ${fallback})
+    where m.id = any(${uuidList(memberIds)}) and coalesce(${column}, ${fallback})${topicOff}
     order by m.id
   `);
 }

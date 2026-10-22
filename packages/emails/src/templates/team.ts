@@ -1,5 +1,6 @@
 // Emails for the lanes still to come, ready for them to queue: an import's
-// result (#30) and a mention (#29).
+// result (#30). A mention has no email of its own: it goes in the
+// notifications email (spec 0038), the one email a mention sends.
 import type { ImportFinishedEmail } from '@crm/contracts/emails';
 import { plural } from '../format.ts';
 import { workspaceOf, type Template } from '../template.ts';
