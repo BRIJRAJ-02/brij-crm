@@ -20,6 +20,10 @@ function harness(answers: (() => Promise<typeof DAY>)[]) {
         calls.push(`metrics:${weekStart}`);
         return Promise.resolve({ people: { thisWeek: 1, lastWeek: 0 } });
       },
+      recents: ({ workspace }) => {
+        calls.push(`recents:${workspace}`);
+        return Promise.resolve({ items: [] });
+      },
     },
     onReturn: (refresh) => {
       comeBack = refresh;
@@ -89,5 +93,19 @@ describe('the home store', () => {
     await view.ready();
     expect(view.getSnapshot()).toEqual({ status: 'ready', metrics: { people: { thisWeek: 1, lastWeek: 0 } } });
     expect(calls).toEqual(['metrics:2026-11-02T00:00:00.000Z']);
+  });
+
+  it('reads Recently viewed each time a screen first holds it, not while it stays held', async () => {
+    const { store, calls, comeBackSoon } = harness([]);
+    const view = store.recents('acme');
+    const release = view.retain();
+    await settle();
+    expect(view.getSnapshot()).toEqual({ status: 'ready', items: [] });
+    comeBackSoon();
+    await settle();
+    release();
+    view.retain();
+    await settle();
+    expect(calls).toEqual(['recents:acme', 'recents:acme']);
   });
 });

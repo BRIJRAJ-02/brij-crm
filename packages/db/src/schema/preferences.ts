@@ -1,6 +1,6 @@
 // Each member's own preferences in one workspace (Settings › Account ›
 // Preferences): the time zone dates show in, how a date is written, the day a
-// week starts on, and the page the workspace opens on. One row per member,
+// week starts on, the page the workspace opens on, and the Home sections put away. One row per member,
 // made on their first change; no row reads as every default. A member's own
 // setting like `member_view_state`: no outbox row (nobody else holds it), and
 // read and written only through the access door, for the caller alone.
@@ -25,6 +25,11 @@ export const memberPreferences = pgTable(
     landing: text('landing').notNull().default('home'),
     /** The object the workspace opens on, when `landing` is `object`. No foreign key: an archived object falls back to Home. */
     landingId: uuid('landing_id'),
+    /** The Home sections the member put away, by their registry key (`setup`); empty shows them all (spec 0041). */
+    homeHidden: text('home_hidden')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
@@ -38,6 +43,7 @@ export const memberPreferences = pgTable(
     check('member_preferences_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
     check('member_preferences_date_format', sql`${t.dateFormat} in ('auto', 'dmy', 'mdy', 'ymd')`),
     check('member_preferences_week_start', sql`${t.weekStart} in ('auto', 'monday', 'sunday', 'saturday')`),
+    check('member_preferences_home_hidden', sql`cardinality(${t.homeHidden}) <= 32`),
     check(
       'member_preferences_landing',
       sql`(${t.landing} in ('home', 'tasks') and ${t.landingId} is null) or (${t.landing} = 'object' and ${t.landingId} is not null)`,

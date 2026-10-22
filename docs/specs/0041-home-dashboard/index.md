@@ -48,7 +48,17 @@ Each step is shown only to a member who may do it. Done when:
 
 The first open step carries the primary button; every row opens the page where the step is done. A step the member may not take is never read. The card goes once every step shown is done. "Not now" (hiding it while steps are open) needs a per member preference the server doesn't keep yet, so it is left out.
 
-## Acceptance criteria
+## Revision, 22 October 2026: the section registry
+
+The owner looked at Home with setup nearly done and saw one card and nothing else: "fix this and make this more scalable". This revision replaces the rules above where they differ.
+
+- **One registry.** Home renders an ordered list of sections from `apps/web/src/features/home/sections.tsx`. Each entry has a key, a width (`full` or `half`), a visibility rule (a feature or permission check from what Home knows before reading), whether the member may hide it, and its component. A component reads its own data through `packages/data` and draws its own loading, empty and error states, so one slow section never holds the page. A new feature adds one entry.
+- **Layout.** A greeting ("Good morning, Ada", by the hour in the member's own time zone, and today's date), then the sections in order: a full one alone, a run of half ones in TileGrid's `columns="two"` (two columns from twice the panel's width, one below it, decided by the grid's own width). Full width, as every page.
+- **Sections are shown empty, not left out.** Today says "No meetings today", My tasks "Nothing due", and so on. This supersedes the 17 September rule above for Home: an empty Home read as broken. Team today keeps its rule (one member is not a team).
+- **Sections, in order:** Finish setting up (full), Today (today's meetings and the next one after today, from a read of the next 8 days), My tasks (due today or overdue, at most 5, from My tasks' open list), Recently viewed (the member's recent records as RecordChips, `recents.list` through `data.home.recents`), New captures (the forms with the latest submissions, at most 5, from Forms' own list; for `forms.manage`), Team today, This week (a quiet week says so).
+- **Finish setting up** is now the SetupChecklist module: a progress bar ("3 of 4 done"), the open steps with their buttons, the done steps folded into "3 done" with a check each, and a ⋯ menu with Hide setup. When every step is done it is one line, "You're all set", with Dismiss. Hide and Dismiss are remembered per member in their preferences (`member_preferences.home_hidden`, migration 0081, the keys of the sections put away), not in the browser; any registry entry marked hideable can use it.
+
+
 
 - AC-1041-1: `/w/$slug/home` draws Finish setting up, Today and Tasks due from the data layer, with no fetch in a screen.
 - AC-1041-2: each section is absent when it has nothing; with all absent, one EmptyState.
@@ -65,4 +75,4 @@ The first open step carries the primary button; every row opens the page where t
 
 ## Left out (no data source yet)
 
-- timefix's ask box (the assistant, #54), Team today's open hours and its link to a team calendar (spec 0030), the metrics' pipeline, win rate and window toggle (reporting, #52), the open hours line under Today (needs the slot engine per member), and "Not now" on the checklist (needs a member preference).
+- timefix's ask box (the assistant, #54), Team today's open hours and its link to a team calendar (spec 0030), the metrics' pipeline, win rate and window toggle (reporting, #52), and the open hours line under Today (needs the slot engine per member). "Not now" on the checklist arrived as Hide setup (revision above).

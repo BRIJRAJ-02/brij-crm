@@ -2,10 +2,15 @@
 export const strings = {
   home: 'Home',
 
+  // The greeting
+  greeting: {
+    morning: (name: string | undefined) => (name === undefined ? 'Good morning' : `Good morning, ${name}`),
+    afternoon: (name: string | undefined) => (name === undefined ? 'Good afternoon' : `Good afternoon, ${name}`),
+    evening: (name: string | undefined) => (name === undefined ? 'Good evening' : `Good evening, ${name}`),
+  },
+
   // Finish setting up
   setupTitle: 'Finish setting up',
-  setupLeft: (count: number) => `${count.toLocaleString('en')} left`,
-  done: 'Done',
   steps: {
     calendar: { title: 'Connect your calendar', action: 'Connect' },
     bookingPage: { title: 'Create a booking page', action: 'Create' },
@@ -22,21 +27,39 @@ export const strings = {
 
   // Today
   today: 'Today',
-  calendar: 'Calendar',
+  bookings: 'Bookings',
   earlier: 'Earlier',
   comingUp: 'Coming up',
+  later: 'Next',
   allDay: 'All day',
   minutes: (count: number) => `${String(count)} min`,
   hours: (hours: number, minutes: number) =>
     minutes === 0 ? `${String(hours)} hr` : `${String(hours)} hr ${String(minutes)} min`,
   todayFailed: 'Today’s meetings didn’t load',
+  noMeetings: 'No meetings today',
+  noMeetingsText: 'Meetings you host and your calendar’s events show here.',
 
-  // Tasks due
-  tasksDue: 'Tasks due',
+  // My tasks
+  myTasks: 'My tasks',
   allTasks: 'All tasks',
-  noTasksDue: 'No tasks due',
-  moreTasks: (count: number) => (count === 1 ? '1 more task' : `${count.toLocaleString('en')} more tasks`),
+  noTasksDue: 'Nothing due',
+  noTasksDueText: 'Tasks due today or overdue show here.',
+  moreDue: (count: number) => (count === 1 ? '1 more due' : `${count.toLocaleString('en')} more due`),
   moreInTasks: 'More in My tasks',
+
+  // Recently viewed
+  recent: 'Recently viewed',
+  noRecent: 'Nothing viewed yet',
+  noRecentText: 'Records you open show here.',
+
+  // New captures
+  captures: 'New captures',
+  allForms: 'Forms',
+  noCaptures: 'No submissions yet',
+  noCapturesText: 'Forms that take a submission show here, newest first.',
+  capturesFailed: 'Forms didn’t load',
+  captureLine: (count: number, when: string) =>
+    count === 0 ? `Last one ${when}` : `${count.toLocaleString('en')} this month, last one ${when}`,
 
   // Team today
   teamToday: 'Team today',
@@ -58,6 +81,8 @@ export const strings = {
   thisWeek: 'This week',
   againstLastWeek: 'Since Monday, compared with all of last week',
   metricsFailed: 'This week’s figures didn’t load',
+  quietWeek: 'Nothing new this week yet',
+  quietWeekText: 'Meetings booked, new people and deals, and form submissions show here.',
   metricLabels: {
     meetings: 'Meetings booked',
     people: 'New people',
@@ -69,7 +94,5 @@ export const strings = {
   otherCurrencies: 'Deals won in other currencies aren’t counted.',
 
   // The page
-  quietTitle: 'Nothing needs you right now',
-  quietText: 'Meetings today, tasks due and your team’s day show up here.',
   failedText: 'Check your connection and try again.',
 } as const;

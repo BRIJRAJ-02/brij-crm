@@ -5,6 +5,11 @@ import styles from './SectionBar.module.css';
 export interface SectionBarProps {
   /** The section's heading ("19 – 25 October 2026"), an h2. */
   readonly title?: string;
+  /**
+   * One quiet line after the heading, on its baseline (Home's greeting: "Thursday, 22 October"). It wraps under
+   * the heading on a narrow container.
+   */
+  readonly description?: string;
   /** Controls before the heading (a view switch). */
   readonly start?: ReactNode;
   /** Controls at the end (previous, Today, next, Filter). */
@@ -26,11 +31,19 @@ export type SectionBarVariant = 'inline' | 'bar';
  * list, spec 0025): what comes first, the heading, then what sits at the end;
  * it wraps on a narrow container, the end controls under the rest.
  */
-export function SectionBar({ title, start, end, variant = 'inline' }: SectionBarProps) {
+export function SectionBar({ title, description, start, end, variant = 'inline' }: SectionBarProps) {
   return (
     <div className={styles.root} data-variant={variant === 'bar' ? 'bar' : undefined}>
       {start !== undefined && <div className={styles.group}>{start}</div>}
-      {title !== undefined && <h2 className={styles.title}>{title}</h2>}
+      {title !== undefined &&
+        (description === undefined ? (
+          <h2 className={styles.title}>{title}</h2>
+        ) : (
+          <div className={styles.heading}>
+            <h2 className={styles.title}>{title}</h2>
+            <p className={styles.description}>{description}</p>
+          </div>
+        ))}
       {end !== undefined && <div className={styles.end}>{end}</div>}
     </div>
   );

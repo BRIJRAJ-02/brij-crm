@@ -110,7 +110,13 @@ import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
-import { createHomeStore, type HomeHeld, type HomeMetricsState, type TeamTodayState } from './home/store.ts';
+import {
+  createHomeStore,
+  type HomeHeld,
+  type HomeMetricsState,
+  type HomeRecentsState,
+  type TeamTodayState,
+} from './home/store.ts';
 import {
   createAccountSecurityStore,
   isFresh as isSessionFresh,
@@ -141,6 +147,8 @@ import {
 } from './preferences/store.ts';
 export type {
   DateFormat,
+  HomeHidden,
+  HomeSectionKey,
   LandingPage,
   MemberPreferences,
   PreferencesChange,
@@ -377,7 +385,7 @@ export type {
   MeetingAttendeeShape,
 } from './activity/feed.ts';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
-export type { HomeHeld, HomeMetricsState, TeamTodayState } from './home/store.ts';
+export type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -1717,6 +1725,7 @@ export function createDataLayer({
       teamToday: (input) =>
         beforeRead(input.workspace).then(() => call((options) => api.home.teamToday(input, options))),
       metrics: (input) => beforeRead(input.workspace).then(() => call((options) => api.home.metrics(input, options))),
+      recents: (input) => beforeRead(input.workspace).then(() => call((options) => api.recents.list(input, options))),
     },
   });
 
@@ -3066,6 +3075,12 @@ export function createDataLayer({
        */
       metrics: (workspace: string, weekStart: string): HomeHeld<HomeMetricsState> =>
         homeReads.metrics(workspace, weekStart),
+      /**
+       * Recently viewed (spec 0041): the member's recent records and views
+       * they may still see, newest first, the command menu's own list; held
+       * while Home shows it (`useHomeRecents`), read each time it is first held.
+       */
+      recents: (workspace: string): HomeHeld<HomeRecentsState> => homeReads.recents(workspace),
     },
     bookings: {
       /** Why a round robin booking went to its host (spec 0029, AC-742): for its host and admins. */

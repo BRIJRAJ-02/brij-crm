@@ -1,5 +1,6 @@
 // Settings › Account › Preferences: each member's own time zone, date
-// format, week start and landing page in one workspace. Only a member reads
+// format, week start and landing page in one workspace, and the Home sections
+// they put away (spec 0041). Only a member reads
 // or changes them, and only their own: there is no way to name another
 // member. A member who never changed anything has no row and reads the
 // defaults. A change writes its row and one audit entry in one transaction,
@@ -47,6 +48,7 @@ function viewOf(row: Row | undefined): MemberPreferences {
     dateFormat: row.dateFormat as DateFormat,
     weekStart: row.weekStart as WeekStart,
     landing: landingOf(row),
+    ...(row.homeHidden.length === 0 ? {} : { homeHidden: row.homeHidden }),
   };
 }
 
@@ -88,7 +90,7 @@ async function checkLanding(tx: WorkspaceTx, scope: EngineScope, landing: Landin
  */
 export async function updateMyPreferences(
   scope: EngineScope,
-  input: Pick<UpdatePreferencesInput, 'timeZone' | 'dateFormat' | 'weekStart' | 'landing'> = {},
+  input: Pick<UpdatePreferencesInput, 'timeZone' | 'dateFormat' | 'weekStart' | 'landing' | 'homeHidden'> = {},
   source: AuditSource = {},
 ): Promise<MemberPreferences> {
   checkScope(scope);
@@ -112,6 +114,7 @@ export async function updateMyPreferences(
       dateFormat: input.dateFormat ?? before.dateFormat,
       weekStart: input.weekStart ?? before.weekStart,
       landing: input.landing ?? before.landing,
+      ...homeHiddenOf(input.homeHidden ?? before.homeHidden),
     };
     const changed = changedFields(before, after);
     if (changed.length === 0) return before;
@@ -122,6 +125,7 @@ export async function updateMyPreferences(
       weekStart: after.weekStart,
       landing: after.landing.kind,
       landingId: after.landing.kind === 'object' ? after.landing.objectId : null,
+      homeHidden: [...(after.homeHidden ?? [])],
     };
     await tx
       .insert(memberPreferences)
@@ -148,7 +152,12 @@ export async function updateMyPreferences(
 }
 
 type Field = keyof MemberPreferences;
-const FIELDS: readonly Field[] = ['timeZone', 'dateFormat', 'weekStart', 'landing'];
+const FIELDS: readonly Field[] = ['timeZone', 'dateFormat', 'weekStart', 'landing', 'homeHidden'];
+
+/** The Home sections put away as the view holds them: absent when none, so an empty list reads as the defaults. */
+function homeHiddenOf(keys: readonly string[] | undefined): Pick<MemberPreferences, 'homeHidden'> {
+  return keys === undefined || keys.length === 0 ? {} : { homeHidden: [...keys] };
+}
 
 /** The fields whose values differ (the landing compared by its stored form). */
 export function changedFields(before: MemberPreferences, after: MemberPreferences): readonly Field[] {

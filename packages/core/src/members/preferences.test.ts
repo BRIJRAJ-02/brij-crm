@@ -101,6 +101,21 @@ describe('a member’s preferences', () => {
     expect(await readMyPreferences(w.member)).toMatchObject({ weekStart: 'saturday' });
   });
 
+  it('keeps the Home sections a member put away, theirs alone, and an empty list shows them all again', async () => {
+    const w = await workspace();
+    expect(await updateMyPreferences(w.member, { homeHidden: ['setup'] })).toMatchObject({ homeHidden: ['setup'] });
+    expect(await readMyPreferences(w.member)).toMatchObject({ homeHidden: ['setup'], landing: { kind: 'home' } });
+    // Another member's Home is untouched, and an API key can't put one away for anybody.
+    expect(await readMyPreferences(w.owner)).toEqual(DEFAULT_PREFERENCES);
+    const key = testScope({ db, workspaceId: w.workspaceId, actor: { type: 'api_key', id: newId() } });
+    expect(await refusalOf(updateMyPreferences(key, { homeHidden: ['setup'] }))).toEqual({
+      code: 'FORBIDDEN',
+      message: PREFERENCES_MEMBERS_ONLY,
+    });
+    expect(await updateMyPreferences(w.member, { homeHidden: [] })).not.toHaveProperty('homeHidden');
+    expect(await readMyPreferences(w.member)).toEqual(DEFAULT_PREFERENCES);
+  });
+
   it('refuses a principal that isn’t a member', async () => {
     const w = await workspace();
     const key = testScope({ db, workspaceId: w.workspaceId, actor: { type: 'api_key', id: newId() } });

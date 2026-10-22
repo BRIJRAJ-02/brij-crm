@@ -568,6 +568,13 @@
       "when": 1792621998154,
       "tag": "0080_known_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1792652504077,
+      "tag": "0081_home_hidden",
+      "breakpoints": true
     }
   ]
 }

@@ -35,6 +35,22 @@
     letter-spacing: var(--tracking-title);
   }
 
+  /* A heading with its quiet line after it, on one baseline, the line wrapping under it when narrow. */
+  .heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2) var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .description {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
   /* A switch wider than a phone scrolls inside the bar rather than past the page's edge; its thin scrollbar says so. */
   .root[data-variant='bar'] > .group {
     flex-wrap: nowrap;

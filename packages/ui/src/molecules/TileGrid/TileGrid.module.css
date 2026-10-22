@@ -13,4 +13,13 @@
   .root[data-fill='fill'] {
     grid-template-columns: repeat(auto-fill, minmax(min(var(--size-panel), 100%), 1fr));
   }
+
+  /* Two: at most two columns, each at least the panel's width, so the grid's own width decides (as a container
+     query would, with no breakpoint of its own): two side by side from twice the panel's width, one below it. */
+  .root[data-columns='two'] {
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, max(var(--size-panel), calc((100% - var(--space-16)) / 2))), 1fr)
+    );
+  }
 }

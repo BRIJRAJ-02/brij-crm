@@ -1,0 +1,2 @@
+ALTER TABLE "member_preferences" ADD COLUMN "home_hidden" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
+ALTER TABLE "member_preferences" ADD CONSTRAINT "member_preferences_home_hidden" CHECK (cardinality("member_preferences"."home_hidden") <= 32);
