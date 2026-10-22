@@ -5,7 +5,12 @@
 // routed hosts are busy, the report's counts, and the no show mark's door.
 // Then the leftovers: one decision per submission, is any of, a company read
 // only through the person's Company field, UTM and hidden field facts, and
-// record facts that never cross workspaces.
+// record facts that never cross workspaces. Last, hidden means absent: a team
+// page's rule over a field its reader can't see is in none of their answers,
+// their saves keep it in its place, and a booking still routes by it; and the
+// migration that rewrites a record fact key the contract now refuses.
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import {
@@ -17,11 +22,12 @@ import {
   type SubmitBody,
 } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import { enterBookingPage, enterPublicForm } from '../access/door.ts';
 import { saveDefaultHours } from '../availability/schedules.ts';
 import { markNoShow } from '../booking/change.ts';
 import type { BookingCalendar, BusyAnswer } from '../booking/calendar.ts';
-import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
+import { createBookingPage, getBookingPage, listBookingPages, updateBookingPage } from '../booking/pages.ts';
 import { bookPublicSlot, readPublicSlots } from '../booking/public.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -29,7 +35,7 @@ import { archiveAttribute } from '../engine/definitions.ts';
 import { postgresError } from '../engine/refusals.ts';
 import { createRecord, setValues } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
-import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
+import { createForm, getForm, publishForm, saveFormDraft } from '../forms/forms.ts';
 import { submitForm } from '../forms/public.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { createRotation } from '../rotation/rotations.ts';
@@ -39,7 +45,7 @@ import { decideRoute } from './decide.ts';
 import { routeSubmission } from './forms.ts';
 import { routingReport } from './report.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 const LINK_KEY = Buffer.alloc(32, 7);
 const registry = jobKinds({ environment: 'local' });
 let db: Database;
@@ -746,5 +752,228 @@ describe('routing leftovers', () => {
     );
     // B's field can't be read from A (skipped), and A holds no Grace: nothing matched.
     expect(row).toEqual({ rule_id: null, skipped: ['foreign'] });
+  });
+});
+
+describe('hidden means absent: a team page’s rule over a field its reader can’t see', () => {
+  /** Bea as an admin whose role sees People, but not the field `attributeId`. */
+  const blindTo = (w: World, attributeId: string) =>
+    rescope(w.owner, {
+      actor: { type: 'member', id: w.bea.id },
+      role: 'admin',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'admin' },
+            target: { type: 'attribute', objectId: w.people, attributeId },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+
+  /** A rule over one of the visit's hidden fields, which every reader sees. */
+  const plain = (id: string, value: string, host: string) =>
+    rule(id, {
+      when: { join: 'all', rules: [{ key: 'hidden.utm_source', op: 'is', value }] },
+      then: { kind: 'hosts', hosts: [host] },
+    });
+
+  /** The page's rules by id, as its owner (who sees every field) reads them. */
+  const storedIds = async (w: World) =>
+    ((await getBookingPage(w.owner, { pageId: w.page.id })).routing?.rules ?? []).map((each) => each.id);
+
+  it('leaves it out of the page, the list, a save’s answer and the report; saves keep it; a booking still routes by it', async () => {
+    const w = await world();
+    const jobTitle = w.attribute('people.job_title');
+    const secret = rule('secret-rule', {
+      name: 'Secret buyers',
+      when: { join: 'all', rules: [{ key: `person.${jobTitle}`, op: 'is', value: 'zebra cto' }] },
+      then: { kind: 'hosts', hosts: [w.cy.id] },
+      qualified: true,
+    });
+    const lead = plain('lead', 'google', w.bea.id);
+    const tail = plain('tail', 'bing', w.cy.id);
+    await updateBookingPage(w.owner, { pageId: w.page.id, settings: {}, routing: { rules: [lead, secret, tail] } });
+    const blind = blindTo(w, jobTitle);
+    /** Nothing of the hidden rule in an answer: not its field's id, nor the rule's id, name or value. */
+    const holdsNone = (answer: unknown) => {
+      const text = JSON.stringify(answer);
+      for (const kept of [jobTitle, 'secret-rule', 'Secret buyers', 'zebra']) expect(text).not.toContain(kept);
+    };
+    const idsOf = (page: { readonly routing?: { readonly rules: readonly RoutingRule[] } } | undefined) =>
+      page?.routing?.rules.map((each) => each.id);
+
+    expect(await storedIds(w)).toEqual(['lead', 'secret-rule', 'tail']);
+    const seen = await getBookingPage(blind, { pageId: w.page.id });
+    expect(idsOf(seen)).toEqual(['lead', 'tail']);
+    holdsNone(seen);
+    const listed = await listBookingPages(blind, NOW);
+    expect(idsOf(listed.find((page) => page.id === w.page.id))).toEqual(['lead', 'tail']);
+    holdsNone(listed);
+
+    // A save of settings alone answers the same and keeps every rule.
+    holdsNone(await updateBookingPage(blind, { pageId: w.page.id, settings: { description: 'Our team' } }));
+    expect(await storedIds(w)).toEqual(['lead', 'secret-rule', 'tail']);
+
+    // Reordered, with one added: the hidden rule stays just after the rule it followed.
+    const extra = plain('extra', 'duckduckgo', w.bea.id);
+    const reordered = await updateBookingPage(blind, {
+      pageId: w.page.id,
+      settings: {},
+      routing: { rules: [tail, lead, extra] },
+    });
+    expect(idsOf(reordered)).toEqual(['tail', 'lead', 'extra']);
+    holdsNone(reordered);
+    expect(await storedIds(w)).toEqual(['tail', 'lead', 'secret-rule', 'extra']);
+
+    // Every rule they see removed: the one they can't see stays, unchanged.
+    const emptied = await updateBookingPage(blind, { pageId: w.page.id, settings: {}, routing: { rules: [] } });
+    expect(emptied.routing).toEqual({ rules: [] });
+    expect((await getBookingPage(w.owner, { pageId: w.page.id })).routing?.rules).toEqual([secret]);
+    // Their saves changed only their own rules: the audit rows name what each save changed.
+    const audited = await w.query<{ after: { changed: string[] } }>(
+      sql`select after from audit_events where action = 'routing.changed' order by at`,
+    );
+    expect(audited.map((row) => row.after.changed)).toEqual([
+      ['lead', 'secret-rule', 'tail'],
+      ['extra'],
+      ['tail', 'lead', 'extra'],
+    ]);
+
+    // Routing still reads it on the server: a guest whose job title matches goes to Cy.
+    await createRecord(w.owner, {
+      objectId: w.people,
+      values: {
+        [w.attribute('people.name')]: { firstName: 'Grace' },
+        [w.attribute('people.email_addresses')]: ['grace@navy.example'],
+        [jobTitle]: 'Zebra CTO',
+      },
+    });
+    const entry = await enterBookingPage({ db }, w.page.publicKey);
+    const booked = await bookPublicSlot(entry, deps(), bookInput(at('09:00'), 'grace@navy.example'));
+    const [decided] = await w.query<{ host: string; rule_id: string | null }>(
+      sql`select b.host_member_id::text as host, d.rule_id from bookings b
+          join routing_decisions d on d.booking_id = b.id where b.id = ${booked.bookingId}::uuid`,
+    );
+    expect(decided).toEqual({ host: w.cy.id, rule_id: 'secret-rule' });
+    // The guest's answer names who they meet, never the rule or the field.
+    holdsNone(booked.booking);
+
+    // The report: the owner reads the rule's row; the blind admin gets no row for it.
+    const surface = { kind: 'booking_page' as const, pageId: w.page.id };
+    const report = await routingReport(w.owner, { surface, days: 30 });
+    expect(report.rows.map((row) => row.ruleId)).toEqual(['secret-rule']);
+    const blindReport = await routingReport(blind, { surface, days: 30 });
+    expect(blindReport.rows).toEqual([]);
+    holdsNone(blindReport);
+  });
+
+  it('refuses a save past 20 rules, counting those its writer can’t see, and keeps the rules as they were', async () => {
+    const w = await world();
+    const jobTitle = w.attribute('people.job_title');
+    const secret = rule('secret-rule', {
+      when: { join: 'all', rules: [{ key: `person.${jobTitle}`, op: 'is_answered' }] },
+      then: { kind: 'hosts', hosts: [w.cy.id] },
+    });
+    const nineteen = Array.from({ length: 19 }, (_, index) =>
+      plain(`r${String(index)}`, `s${String(index)}`, w.bea.id),
+    );
+    await updateBookingPage(w.owner, { pageId: w.page.id, settings: {}, routing: { rules: [secret, ...nineteen] } });
+    const blind = blindTo(w, jobTitle);
+    expect((await getBookingPage(blind, { pageId: w.page.id })).routing?.rules).toHaveLength(19);
+    const refused = await refusalOf(
+      updateBookingPage(blind, {
+        pageId: w.page.id,
+        settings: {},
+        routing: { rules: [...nineteen, plain('one-more', 'yahoo', w.cy.id)] },
+      }),
+    );
+    expect(refused).toEqual({
+      code: 'CONFIG_INVALID',
+      message: 'This page holds the most rules it can, 20. Remove one to add another.',
+      field: 'routing',
+    });
+    expect(await storedIds(w)).toEqual(['secret-rule', ...nineteen.map((each) => each.id)]);
+    // Without one of their own, the new rule fits.
+    const swapped = [...nineteen.slice(1), plain('one-more', 'yahoo', w.cy.id)];
+    await updateBookingPage(blind, { pageId: w.page.id, settings: {}, routing: { rules: swapped } });
+    expect(await storedIds(w)).toEqual(['secret-rule', ...swapped.map((each) => each.id)]);
+  });
+
+  it('shows every rule to a reader nothing restricts, even one over a field this workspace doesn’t hold', async () => {
+    const w = await world();
+    const other = await world();
+    const foreign = rule('foreign', {
+      when: { join: 'all', rules: [{ key: `person.${other.attribute('people.job_title')}`, op: 'is', value: 'cto' }] },
+      then: { kind: 'hosts', hosts: [w.cy.id] },
+    });
+    // Stored past the save's check, as before it existed: the owner can still see it, and so remove it.
+    await w.query(
+      sql`update booking_pages set routing = ${JSON.stringify({ rules: [foreign] })}::jsonb where id = ${w.page.id}::uuid`,
+    );
+    expect(await storedIds(w)).toEqual(['foreign']);
+    // A reader with any field hidden can't place it, so it stays out of their answers (fail closed).
+    const blind = blindTo(w, w.attribute('people.job_title'));
+    expect((await getBookingPage(blind, { pageId: w.page.id })).routing).toEqual({ rules: [] });
+    await updateBookingPage(w.owner, { pageId: w.page.id, settings: {}, routing: { rules: [] } });
+    expect(await storedIds(w)).toEqual([]);
+  });
+});
+
+describe('the record fact key migration (a malformed key stored before the contract refused it)', () => {
+  /** The migration's statements as written, run again as the owner: each touches only a key the contract refuses. */
+  const migrate = async () => {
+    const folder = fileURLToPath(new URL('../../../db/migrations/', import.meta.url));
+    const file = readdirSync(folder).find((name) => name.endsWith('_record_fact_keys.sql'));
+    if (file === undefined) throw new Error('The record fact key migration is missing.');
+    for (const statement of readFileSync(`${folder}${file}`, 'utf8').split('--> statement-breakpoint')) {
+      await testQuery(ownerUrl, statement);
+    }
+  };
+
+  it('rewrites it to a field that is never found, so the form and the page load again and a booking skips the rule', async () => {
+    const w = await world();
+    const dashes = `person.${'-'.repeat(36)}`;
+    const nil = 'person.00000000-0000-0000-0000-000000000000';
+    // Read as empty, the malformed key would match "is empty" by accident; as an unreadable field it is skipped.
+    const bad = rule('bad', {
+      when: { join: 'all', rules: [{ key: dashes, op: 'is_empty' }] },
+      then: { kind: 'hosts', hosts: [w.bea.id] },
+    });
+    const direct = rule('direct', {
+      when: { join: 'all', rules: [{ key: 'hidden.utm_source', op: 'is_empty' }] },
+      then: { kind: 'hosts', hosts: [w.cy.id] },
+    });
+    await w.query(
+      sql`update booking_pages set routing = ${JSON.stringify({ rules: [bad, direct] })}::jsonb where id = ${w.page.id}::uuid`,
+    );
+    const form = await createForm(w.owner, { id: newId(), name: 'Old draft' });
+    const formRule = { ...bad, then: { kind: 'message', message: 'Hello' } };
+    await w.query(
+      sql`update form_versions set document = jsonb_set(document, '{routing}', ${JSON.stringify({ rules: [formRule] })}::jsonb)
+          where form_id = ${form.id}::uuid`,
+    );
+    // Before: the page's rules no longer parse, so none read; the form's draft doesn't parse at all.
+    expect((await getBookingPage(w.owner, { pageId: w.page.id })).routing).toEqual({ rules: [] });
+    await expect(getForm(w.owner, { formId: form.id })).rejects.toThrow();
+
+    await migrate();
+    // A second run finds nothing left to change.
+    await migrate();
+    const keys = (rules: readonly RoutingRule[] | undefined) => rules?.map((each) => each.when.rules[0]?.key);
+    expect(keys((await getBookingPage(w.owner, { pageId: w.page.id })).routing?.rules)).toEqual([
+      nil,
+      'hidden.utm_source',
+    ]);
+    expect(keys((await getForm(w.owner, { formId: form.id })).draft.routing.rules)).toEqual([nil]);
+    const entry = await enterBookingPage({ db }, w.page.publicKey);
+    const booked = await bookPublicSlot(entry, deps(), bookInput(at('09:00'), 'nobody@else.example'));
+    const [row] = await w.query<{ host: string; rule_id: string | null; skipped: string[] }>(
+      sql`select b.host_member_id::text as host, d.rule_id, d.skipped from bookings b
+          join routing_decisions d on d.booking_id = b.id where b.id = ${booked.bookingId}::uuid`,
+    );
+    expect(row).toEqual({ host: w.cy.id, rule_id: 'direct', skipped: ['bad'] });
   });
 });

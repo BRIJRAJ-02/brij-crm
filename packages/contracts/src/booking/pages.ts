@@ -53,7 +53,10 @@ export const BookingPageView = BookingPageSettings.extend({
   pausedReason: z.literal('host_removed').optional(),
   /** A round robin page's hosts (spec 0037, AC-1319): its fixed hosts and the rotations it books one host from. */
   hosts: TeamHosts.optional(),
-  /** A round robin page's routing rules (spec 0043, AC-1608): each picks some of its hosts. */
+  /**
+   * A round robin page's routing rules (spec 0043, AC-1608): each picks some of its hosts. Only those the reader may
+   * see: a rule over a person's or company's field hidden from them is absent (spec 0009), and their save keeps it.
+   */
   routing: RoutingRules.optional(),
   /** Confirmed bookings starting this calendar month (UTC). */
   bookingsThisMonth: z.number().int().min(0),
@@ -115,7 +118,10 @@ export const UpdateBookingPageInput = WorkspaceScoped.extend({
   settings: BookingPageSettingsWrite,
   /** A round robin page's hosts, replacing them (`booking.admin`). */
   hosts: TeamHosts.optional(),
-  /** A round robin page's routing rules, replacing them (spec 0043, AC-1608; `booking.admin`). */
+  /**
+   * A round robin page's routing rules, replacing those the writer sees (spec 0043, AC-1608; `booking.admin`). A rule
+   * over a field hidden from them stays as it was, just after the rule it followed.
+   */
   routing: RoutingRules.optional(),
   mutationId: Uuid,
 });
