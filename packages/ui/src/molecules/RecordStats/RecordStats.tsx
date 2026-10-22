@@ -52,7 +52,7 @@ export function RecordStats({ label, stats }: RecordStatsProps) {
   const number = (value: number) => memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(value);
   return (
     <div className={styles.frame} role="group" aria-label={label}>
-      <dl className={styles.root}>
+      <dl className={styles.root} data-many={stats.length >= 4 || undefined}>
         {stats.map((stat) => {
           let value;
           if (stat.isLoading === true) value = <Skeleton width="short" />;

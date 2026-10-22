@@ -75,6 +75,16 @@ export function isCompactSurface(surface: Surface): boolean {
 }
 
 /**
+ * Whether a typed editor keeps Esc for itself (it puts the draft back). On a
+ * form (a create or edit dialog) Esc belongs to the dialog and closes it, as
+ * it does from every other field there, unless the caller asked for its own
+ * cancel. Everywhere else (a cell, a panel row, a filter) Esc cancels the edit.
+ */
+export function escapesHere(surface: Surface, onCancel: (() => void) | undefined): boolean {
+  return surface !== 'form' || onCancel !== undefined;
+}
+
+/**
  * Whether a display's chips are flat on `surface`: on a card (a board card, a
  * line of the timeline) a link is its text alone and a record's or member's
  * chip is grey with no edge, so values sit in the line like the words around

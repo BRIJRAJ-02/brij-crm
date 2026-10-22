@@ -53,6 +53,8 @@ interface SampleGridProps {
   readonly barFor?: (selection: GridSelection, clear: () => void) => ReactNode;
   /** `narrow` holds the grid to a phone's width less its gutters, or narrower. */
   readonly stageWidth?: 'auto' | 'narrow';
+  /** Every column read only, as the trash's are, with the headers' locks left out. */
+  readonly isAllReadOnly?: boolean;
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -78,13 +80,26 @@ function SampleGrid({
   floatingBar,
   barFor,
   stageWidth = 'auto',
+  isAllReadOnly = false,
 }: SampleGridProps) {
   const [data, setData] = useState(() =>
     sampleRows(count).map((row) =>
       unnamed.includes(row.id) ? { ...row, values: { ...row.values, name: null } } : row,
     ),
   );
-  const [layout, setLayout] = useState(() => ({ columns: sampleColumns(columnCount), pinnedCount: 1 }));
+  const [layout, setLayout] = useState(
+    (): { readonly columns: readonly GridColumn[]; readonly pinnedCount: number } => ({
+      columns: sampleColumns(columnCount).map((column) =>
+        isAllReadOnly
+          ? {
+              ...column,
+              attribute: { ...column.attribute, isReadOnly: true, readOnlyReason: 'Restore it to change it.' },
+            }
+          : column,
+      ),
+      pinnedCount: 1,
+    }),
+  );
   const [selection, setSelection] = useState<GridSelection>(() => withRows(noRows(), selected, true));
   const apply = (changes: readonly CellChange[]) => {
     setData((rows) =>
@@ -132,6 +147,7 @@ function SampleGrid({
         getValue={(row, id) => row.values[id] ?? null}
         getDisplay={(row, id) => row.displays[id]}
         rowHeader="name"
+        hideColumnLocks={isAllReadOnly}
         selection={selection}
         onSelectionChange={setSelection}
         onColumnsChange={(columns, pinnedCount) => {
@@ -339,6 +355,15 @@ function presser(keyboard: Keys) {
     if (at !== undefined) await waitFor(() => expect(focused()).toBe(at));
   };
 }
+
+/** Every column read only, as in the trash: the headers leave out their lock each, since every one would repeat it. */
+export const HideColumnLocks: Story = {
+  args: { isAllReadOnly: true, count: 12 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('grid', { name: 'Companies' })).toBeInTheDocument();
+    await expect(canvas.queryByLabelText('Read only')).not.toBeInTheDocument();
+  },
+};
 
 /** The keyboard model (AC-8): arrows, Home and End, Enter to edit and move down, typing to replace, Esc to cancel, Delete to clear. */
 export const Keyboard: Story = {

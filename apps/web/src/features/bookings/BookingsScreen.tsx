@@ -23,15 +23,15 @@ import {
 } from '@crm/data';
 import { useBookingsCalendar, useCalendarList, useMeetings } from '@crm/data/react';
 import {
-  Badge,
   BookingList,
   Button,
   ButtonLink,
   Callout,
   DescriptionList,
-  Disclosure,
   EmptyState,
   Link,
+  MeetingCard,
+  memoIntl,
   Menu,
   MenuItem,
   MenuSection,
@@ -51,8 +51,9 @@ import {
   type Hue,
   type Toasts,
   type WeekCalendarBlock,
+  type MeetingCardRow,
 } from '@crm/ui';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { offsetLabel, zoneDisplay } from '../../public/booking/time.ts';
 import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
@@ -70,7 +71,7 @@ import type { BookingsSearch } from './search.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { assignedItems } from './assignment.ts';
 import { ReassignDialog } from './ReassignDialog.tsx';
-import { BookingActions, BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
+import { BookingDialog, useBookingActions, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
 import {
@@ -83,6 +84,7 @@ import {
   piecesOf,
   rangeLabel,
   scrollMinute,
+  shownWeek,
   timeRange,
   weekBounds,
   weekDays,
@@ -99,17 +101,48 @@ export const TABS: readonly BookingsTab[] = ['upcoming', 'past', 'cancelled'];
 /** Each connection's hue, in the order they were connected. */
 const CALENDAR_HUES: readonly Hue[] = ['blue', 'green', 'purple', 'orange', 'sky', 'yellow', 'red', 'lime'];
 
-/** Where a booking happens, as a line. */
-function whereOf(booking: BookingListItem): string {
+/**
+ * Where, as the card's row: a call by its provider ("Google Meet", never its address; Join is in the footer), a
+ * phone call, or the place.
+ */
+function whereRowOf(booking: BookingListItem): Pick<MeetingCardRow, 'icon' | 'label' | 'value'> {
   switch (booking.location.type) {
     case 'video':
-      return booking.videoUrl ?? strings.video;
+      return {
+        icon: 'video',
+        label: strings.where,
+        value: booking.videoUrl === undefined ? strings.video : providerOf(booking.videoUrl),
+      };
     case 'phone':
-      return strings.phone;
+      return { icon: 'phone', label: strings.where, value: strings.phone };
     default:
-      return booking.location.value;
+      return { icon: 'map-pin', label: strings.where, value: booking.location.value };
   }
 }
+
+/** Where a booking stands, as the card's quiet dot beside its time. */
+function statusOf(booking: BookingListItem): { readonly label: string; readonly hue: Hue } {
+  if (booking.status === 'cancelled') return { label: strings.status.cancelled, hue: 'gray' };
+  if (booking.needsHost) return { label: strings.needsHost, hue: 'orange' };
+  if (booking.noShow === true) return { label: strings.noShow, hue: 'red' };
+  return { label: strings.status.confirmed, hue: 'green' };
+}
+
+/**
+ * A card with nothing to change (no host actions given): the footer hook still runs, as hooks must, and these are
+ * never called, since the card draws no footer then.
+ */
+const NO_ACTIONS: HostBookingActions = {
+  cancel: () => Promise.reject(new Error('no actions')),
+  move: () => Promise.reject(new Error('no actions')),
+  moveSlots: () => Promise.reject(new Error('no actions')),
+  guestLink: () => Promise.reject(new Error('no actions')),
+  assignments: () => Promise.resolve([]),
+  reassign: () => Promise.reject(new Error('no actions')),
+  rotations: () => Promise.resolve([]),
+  markNoShow: () => Promise.reject(new Error('no actions')),
+  notify: () => undefined,
+};
 
 /** The person's page, when the booking names one and the reader can open People. */
 function personHrefOf(booking: BookingListItem, link: RecordLink, people: ObjectSummary | undefined) {
@@ -230,15 +263,18 @@ function BookingCard({
   actions,
   onAsk,
   focusOnMount,
+  headingLevel = 4,
 }: {
   readonly booking: BookingListItem;
   readonly personHref: string | undefined;
   readonly locale: string;
   readonly actions?: HostBookingActions | undefined;
-  /** In the week's popover: Reschedule and Cancel booking are drawn by the screen (see BookingActions). */
+  /** In the week's popover: Reschedule and Cancel booking are drawn by the screen (see useBookingActions). */
   readonly onAsk?: ((ask: BookingAsk) => void) | undefined;
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk | undefined;
+  /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
+  readonly headingLevel?: 3 | 4;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
   const { timeZone } = useFormatSettings();
@@ -256,81 +292,137 @@ function BookingCard({
   // Admins reassign a round robin seat (AC-748; Manage over both hosts, today booking.admin's, AC-1337).
   const canReassign = useCan('booking.admin');
   const [reassigning, setReassigning] = useState(false);
-  return (
+  const [isChatOpen, setChatOpen] = useState(false);
+  const chatId = useId();
+  const footer = useBookingActions({
+    booking,
+    actions: actions ?? NO_ACTIONS,
+    locale,
+    ...(onAsk === undefined ? {} : { onAsk }),
+    ...(focusOnMount === undefined ? {} : { focusOnMount }),
+    ...(canReassign && seats.length > 0
+      ? {
+          onReassign: () => {
+            setReassigning(true);
+          },
+        }
+      : {}),
+  });
+  const hasActions = actions !== undefined;
+  const now = useNow();
+  const isConfirmed = booking.status === 'confirmed';
+  const hasNotice = booking.hostRemoved === true || (isConfirmed && (booking.eventFailed || booking.needsHost));
+  const notices = hasNotice ? (
     <>
-      <Badge text={strings.status[booking.status]} tone={booking.status === 'confirmed' ? 'accent' : 'neutral'} />
-      {booking.hostRemoved === true && <Badge text={strings.hostRemoved} />}
-      {booking.eventFailed && booking.status === 'confirmed' && <Callout tone="warning">{strings.eventFailed}</Callout>}
-      {booking.needsHost && booking.status === 'confirmed' && (
+      {booking.hostRemoved === true && <Callout tone="info">{strings.hostRemoved}</Callout>}
+      {booking.eventFailed && isConfirmed && <Callout tone="warning">{strings.eventFailed}</Callout>}
+      {booking.needsHost && isConfirmed && (
         <Callout tone="warning" title={strings.needsHost}>
           {strings.needsHostText}
         </Callout>
       )}
-      <DescriptionList
-        layout="stacked"
-        items={[
+    </>
+  ) : undefined;
+  // Join is the card's own, first and primary while the call can be joined, so a reader without host actions
+  // still joins.
+  const join =
+    booking.status === 'confirmed' && booking.videoUrl !== undefined && Date.parse(booking.endsAt) > now.getTime() ? (
+      <ButtonLink
+        variant="primary"
+        size="lg"
+        icon="video"
+        href={booking.videoUrl}
+        isExternal
+        label={strings.joinProvider(providerOf(booking.videoUrl))}
+      >
+        {strings.join}
+      </ButtonLink>
+    ) : undefined;
+  const footerActions =
+    join === undefined && (!hasActions || footer.actions === undefined) ? undefined : (
+      <>
+        {join}
+        {hasActions && footer.actions}
+      </>
+    );
+  return (
+    <>
+      <MeetingCard
+        headingLevel={headingLevel}
+        title={strings.cardTitle(booking.visitorName, booking.pageTitle)}
+        when={whenOf(booking.startsAt, booking.endsAt, locale, timeZone)}
+        status={statusOf(booking)}
+        {...(notices === undefined ? {} : { notices })}
+        peopleLabel={strings.cardPeople}
+        people={[
           {
-            term: booking.pageTitle,
-            description:
-              personHref === undefined ? booking.visitorName : <Link href={personHref}>{booking.visitorName}</Link>,
+            id: `${booking.id}-guest`,
+            name: booking.visitorName,
+            ...(personHref === undefined ? {} : { href: personHref }),
+            detail: booking.visitorEmail,
+            isDetailCopyable: true,
           },
-          { term: strings.when, description: whenOf(booking.startsAt, booking.endsAt, locale, timeZone) },
-          {
-            term: strings.who,
-            description: <Link href={`mailto:${booking.visitorEmail}`}>{booking.visitorEmail}</Link>,
-          },
-          ...(booking.guests.length === 0 ? [] : [{ term: strings.guests, description: booking.guests.join(', ') }]),
-          {
-            term: strings.where,
-            description:
-              booking.videoUrl === undefined ? (
-                whereOf(booking)
-              ) : (
-                <Link href={booking.videoUrl}>{booking.videoUrl}</Link>
-              ),
-          },
-          ...(booking.note === undefined ? [] : [{ term: strings.note, description: strings.quoted(booking.note) }]),
-          ...(booking.chat === undefined ? [] : [{ term: strings.bookedHow, description: strings.bookedByChat }]),
+          ...booking.guests.map((guest) => ({ id: `${booking.id}-${guest}`, name: guest })),
+        ]}
+        rows={[
+          { id: 'where', ...whereRowOf(booking) },
+          ...(booking.note === undefined
+            ? []
+            : [
+                {
+                  id: 'note',
+                  icon: 'message-square' as const,
+                  label: strings.note,
+                  value: strings.quoted(booking.note),
+                },
+              ]),
+          ...(booking.chat === undefined
+            ? []
+            : [
+                {
+                  id: 'chat',
+                  icon: 'bot' as const,
+                  label: strings.bookedHow,
+                  value: strings.bookedByChat,
+                  action: (
+                    <Button
+                      variant="ghost"
+                      isExpanded={isChatOpen}
+                      controls={chatId}
+                      onPress={() => setChatOpen((open) => !open)}
+                    >
+                      {isChatOpen ? strings.hideChat : strings.viewChat(booking.chat.length)}
+                    </Button>
+                  ),
+                  children: (
+                    <div id={chatId} hidden={!isChatOpen}>
+                      {isChatOpen && (
+                        <DescriptionList
+                          layout="stacked"
+                          items={booking.chat.map((line, index) => ({
+                            id: String(index),
+                            term: line.role === 'visitor' ? strings.chatVisitor : strings.chatAssistant,
+                            description: line.text,
+                          }))}
+                        />
+                      )}
+                    </div>
+                  ),
+                },
+              ]),
           ...(booking.cancelReason === undefined
             ? []
-            : [{ term: strings.cancelReason, description: booking.cancelReason }]),
-          ...assigned,
+            : [{ id: 'reason', icon: 'circle-x' as const, label: strings.cancelReason, value: booking.cancelReason }]),
+          ...assigned.map((item, index) => ({
+            id: `assigned-${String(index)}`,
+            icon: 'users-round' as const,
+            label: item.term,
+            value: item.description,
+          })),
         ]}
+        {...(footerActions === undefined ? {} : { actions: footerActions })}
       />
-      {booking.chat !== undefined && (
-        <Disclosure title={strings.showChat} count={booking.chat.length}>
-          <DescriptionList
-            layout="stacked"
-            items={booking.chat.map((line, index) => ({
-              id: String(index),
-              term: line.role === 'visitor' ? strings.chatVisitor : strings.chatAssistant,
-              description: line.text,
-            }))}
-          />
-        </Disclosure>
-      )}
-      {booking.status === 'confirmed' && booking.videoUrl !== undefined && (
-        <Link href={booking.videoUrl}>{`${strings.joinCall}: ${providerOf(booking.videoUrl)}`}</Link>
-      )}
-      {/* Its buttons show for a confirmed booking only; it stays mounted so a cancel's confirm outlives the
-          booking showing cancelled at once, until the server answers. */}
-      {/* Before the meeting: change it; once it has started: mark a no show (spec 0043). */}
-      {actions !== undefined && (
-        <BookingActions
-          booking={booking}
-          actions={actions}
-          locale={locale}
-          {...(onAsk === undefined ? {} : { onAsk })}
-          {...(focusOnMount === undefined ? {} : { focusOnMount })}
-          {...(canReassign && seats.length > 0
-            ? {
-                onReassign: () => {
-                  setReassigning(true);
-                },
-              }
-            : {})}
-        />
-      )}
+      {hasActions && footer.dialogs}
       {reassigning && actions !== undefined && (
         <ReassignDialog
           booking={booking}
@@ -387,33 +479,56 @@ function EventCard({
   event,
   connection,
   locale,
+  headingLevel = 4,
 }: {
   readonly event: CalendarEventItem;
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
+  /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
+  readonly headingLevel?: 3 | 4;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
   const { timeZone } = useFormatSettings();
+  const now = useNow();
   return (
-    <>
-      <DescriptionList
-        layout="stacked"
-        items={[
-          {
-            term: strings.when,
-            description: event.allDay
-              ? allDayWhenOf(event.startsAt, event.endsAt, locale)
-              : whenOf(event.startsAt, event.endsAt, locale, timeZone),
-          },
-          { term: event.title, description: strings.fromCalendar },
-          ...(connection === undefined ? [] : [{ term: strings.calendar, description: connection.accountEmail }]),
-          ...(event.location === undefined ? [] : [{ term: strings.where, description: event.location }]),
-        ]}
-      />
-      {event.videoUrl !== undefined && (
-        <Link href={event.videoUrl}>{`${strings.joinCall}: ${providerOf(event.videoUrl)}`}</Link>
-      )}
-    </>
+    <MeetingCard
+      headingLevel={headingLevel}
+      title={event.title}
+      when={
+        event.allDay
+          ? allDayWhenOf(event.startsAt, event.endsAt, locale)
+          : whenOf(event.startsAt, event.endsAt, locale, timeZone)
+      }
+      rows={[
+        ...(event.location === undefined
+          ? []
+          : [{ id: 'where', icon: 'map-pin' as const, label: strings.where, value: event.location }]),
+        ...(event.videoUrl === undefined
+          ? []
+          : [{ id: 'call', icon: 'video' as const, label: strings.call, value: providerOf(event.videoUrl) }]),
+        ...(connection === undefined
+          ? []
+          : [{ id: 'calendar', icon: 'calendar' as const, label: strings.calendar, value: connection.accountEmail }]),
+        // Why it has no actions here, with a connection or without.
+        { id: 'managed', icon: 'info' as const, label: strings.aboutEvent, value: strings.fromCalendar },
+      ]}
+      {...(event.videoUrl === undefined || Date.parse(event.endsAt) <= now.getTime()
+        ? {}
+        : {
+            actions: (
+              <ButtonLink
+                variant="primary"
+                size="lg"
+                icon="video"
+                href={event.videoUrl}
+                isExternal
+                label={strings.joinProvider(providerOf(event.videoUrl))}
+              >
+                {strings.join}
+              </ButtonLink>
+            ),
+          })}
+    />
   );
 }
 
@@ -422,20 +537,26 @@ function BusyCard({
   busy,
   connection,
   locale,
+  headingLevel = 4,
 }: {
   readonly busy: { readonly startsAt: string; readonly endsAt: string };
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
+  /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
+  readonly headingLevel?: 3 | 4;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
   const { timeZone } = useFormatSettings();
   return (
-    <DescriptionList
-      layout="stacked"
-      items={[
-        { term: strings.when, description: whenOf(busy.startsAt, busy.endsAt, locale, timeZone) },
-        { term: strings.busy, description: strings.busyNote },
-        ...(connection === undefined ? [] : [{ term: strings.calendar, description: connection.accountEmail }]),
+    <MeetingCard
+      headingLevel={headingLevel}
+      title={strings.busy}
+      when={whenOf(busy.startsAt, busy.endsAt, locale, timeZone)}
+      rows={[
+        ...(connection === undefined
+          ? []
+          : [{ id: 'calendar', icon: 'calendar' as const, label: strings.calendar, value: connection.accountEmail }]),
+        { id: 'why', icon: 'info' as const, label: strings.busy, value: strings.busyNote },
       ]}
     />
   );
@@ -493,11 +614,14 @@ function removeWords(
 function BlockCard({
   turn,
   locale,
+  headingLevel = 4,
   onRemove,
   isRemoveFocused = false,
 }: {
   readonly turn: TimeBlockOccurrence;
   readonly locale: string;
+  /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
+  readonly headingLevel?: 3 | 4;
   /** Asks to remove the block: the screen's confirm. */
   readonly onRemove: () => void;
   /** Focus Remove as the card opens: its confirm was just dismissed. */
@@ -513,24 +637,31 @@ function BlockCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
-    <>
-      <DescriptionList
-        layout="stacked"
-        items={[
-          { term: strings.when, description: whenOf(turn.startsAt, turn.endsAt, locale, timeZone) },
-          ...(turn.label === undefined ? [] : [{ term: strings.why, description: turn.label }]),
-          ...(turn.repeat === 'weekly' ? [{ term: strings.repeats, description: strings.everyWeek(weekday) }] : []),
-          { term: strings.bookingPages, description: turn.kind === 'hold' ? strings.heldNote : strings.blockedNote },
-        ]}
-      />
-      <Button ref={remove} variant="danger" icon="trash" onPress={onRemove}>
-        {turn.kind === 'hold'
-          ? strings.releaseHold
-          : turn.repeat === 'weekly'
-            ? strings.removeEvery(weekday)
-            : strings.removeBlock}
-      </Button>
-    </>
+    <MeetingCard
+      headingLevel={headingLevel}
+      title={turn.label ?? (turn.kind === 'hold' ? strings.held : strings.blocked)}
+      when={whenOf(turn.startsAt, turn.endsAt, locale, timeZone)}
+      rows={[
+        ...(turn.repeat === 'weekly'
+          ? [{ id: 'repeats', icon: 'refresh-cw' as const, label: strings.repeats, value: strings.everyWeek(weekday) }]
+          : []),
+        {
+          id: 'pages',
+          icon: 'link' as const,
+          label: strings.bookingPages,
+          value: turn.kind === 'hold' ? strings.heldNote : strings.blockedNote,
+        },
+      ]}
+      endAction={
+        <Button ref={remove} size="lg" variant="ghost-danger" icon="trash" onPress={onRemove}>
+          {turn.kind === 'hold'
+            ? strings.releaseHold
+            : turn.repeat === 'weekly'
+              ? strings.removeEvery(weekday)
+              : strings.removeBlock}
+        </Button>
+      }
+    />
   );
 }
 
@@ -802,6 +933,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
       jumpTo={{
         value: days.includes(search.day) ? search.day : (days[0] ?? search.week),
         onChange: (day) => onSearch({ week: weekOf(day, firstDay), day }),
+        // The week on screen, tinted on the month.
+        ...shownWeek(days),
       }}
     >
       {content}
@@ -1192,7 +1325,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
             minuteLabel={(minute) => {
               const at = new Date(2000, 0, 1);
               at.setMinutes(minute);
-              return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at);
+              // Built once per locale: half hour blocks ask for their start on every draw.
+              return memoIntl(
+                `bookings-minute:${locale}`,
+                () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }),
+              ).format(at);
             }}
           />
           {/* The week's count for screen readers; on screen the grid says it (the owner, 22 October 2026). */}
@@ -1236,7 +1373,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
       {meeting !== undefined && (
         <NewMeetingDialog
           span={meeting}
-          onSpanChange={setMeeting}
+          onSpanChange={(span) => {
+            setMeeting(span);
+            // A day outside the week on screen moves the week there, so the span still shows and focus has its day.
+            if (!days.includes(span.dayKey)) onSearch({ week: weekOf(span.dayKey, firstDay), day: span.dayKey });
+          }}
           locale={locale}
           hasCalendar={connections.length > 0}
           pages={bookable}
@@ -1629,13 +1770,14 @@ export function BookingsListScreen({
         <Panel title={strings.details} isOpen onClose={() => setOpenId(undefined)}>
           {open.kind === 'booking' ? (
             <BookingCard
+              headingLevel={4}
               booking={open.booking}
               personHref={personHref(open.booking)}
               locale={locale}
               actions={panelActions}
             />
           ) : (
-            <EventCard event={open.event} connection={undefined} locale={locale} />
+            <EventCard event={open.event} connection={undefined} locale={locale} headingLevel={4} />
           )}
         </Panel>
       )}

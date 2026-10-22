@@ -297,7 +297,8 @@ describe('cancelling a booking', () => {
   it('asks first, naming the booking; Esc and Keep booking change nothing', async () => {
     const week = await renderWeek([], [bookingOf()]);
     await openCard(/^Quick chat,/);
-    await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
+    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel booking' }));
     await confirmAlone();
     expect(alert()?.textContent).toContain('Cancel Quick chat with Ada Lovelace?');
     const labels = [...(alert()?.querySelectorAll('button') ?? [])].map((button) => button.textContent);
@@ -305,21 +306,24 @@ describe('cancelling a booking', () => {
     expect(labels.at(-1)).toBe('Cancel booking');
     await userEvent.keyboard('{Escape}');
     await expect.poll(alert).toBeNull();
-    // The card is back, and focus with it on Cancel booking.
+    // The card is back, and focus with it on More, which holds Cancel booking.
     await expect.poll(card).not.toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Cancel booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for this booking');
+    // Enter opens More again, from the keyboard.
     await userEvent.keyboard('{Enter}');
+    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel booking' }));
     await confirmAlone();
     await userEvent.click(page.getByRole('button', { name: /^Keep booking/ }));
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Cancel booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for this booking');
     expect(week.actions.cancel).not.toHaveBeenCalled();
   });
 
   it('stays busy while the booking already shows cancelled, cancels once, and keeps a refusal inside', async () => {
     const week = await renderWeek([], [bookingOf()]);
     await openCard(/^Quick chat,/);
-    await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
+    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel booking' }));
     await userEvent.fill(page.getByRole('textbox', { name: 'Reason' }), 'Ill today');
     await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel booking' }));
     await expect.poll(() => alert()?.textContent).toContain('Cancelling');
@@ -393,15 +397,17 @@ describe('cancelling from the list', () => {
     );
     // A booking's row is titled by its page, "You and Ada Lovelace" under it.
     await userEvent.click(page.getByRole('button', { name: 'Quick chat', exact: true }));
-    await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
+    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel booking' }));
     await expect.poll(alert).not.toBeNull();
     expect(alert()?.textContent).toContain('Cancel Quick chat with Ada Lovelace?');
     await userEvent.keyboard('{Escape}');
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Cancel booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for this booking');
     expect(cancel).not.toHaveBeenCalled();
 
     await userEvent.keyboard('{Enter}');
+    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel booking' }));
     await expect.poll(alert).not.toBeNull();
     await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel booking' }));
     // The booking already shows cancelled in the panel; the confirm stays, busy, until the server answers.

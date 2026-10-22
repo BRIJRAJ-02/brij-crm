@@ -77,7 +77,7 @@ export const session = auth.table(
     country: text('country'),
     /** City from the edge's geo header at sign in, as the edge spelled it. */
     city: text('city'),
-    /** "Chrome on macOS": the user agent read once at sign in, for Account › Security › Devices. */
+    /** "Chrome on macOS": the user agent read once at sign in, for Account › Sign in and devices › Devices. */
     deviceLabel: text('device_label'),
     /** When this session last proved who it is: at sign in, and on each step up (AC-896). */
     verifiedAt: timestamptz('verified_at'),
@@ -152,7 +152,9 @@ export const twoFactor = auth.table(
 );
 
 /**
- * A person's passkeys (spec 0033, milestone 3, Better Auth's passkey plugin):
+ * A person's passkeys (spec 0033, milestone 3, Better Auth's passkey plugin).
+ * Unused since 22 October 2026 (the owner took passkeys out); the table stays
+ * until a later migration drops it, and rows go with their user (cascade):
  * the public key only, never a secret. `credential_id` is unique across every
  * account, so one credential can't sign in two people. `name` is the person's
  * label (60 characters at most); `last_used_at` is ours, set on each passkey

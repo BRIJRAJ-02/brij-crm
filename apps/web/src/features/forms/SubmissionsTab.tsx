@@ -14,17 +14,24 @@ import {
   type SubmissionView,
 } from '@crm/data';
 import {
+  AttributeDisplay,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Avatar,
   BulkActionBar,
   Button,
   Callout,
   CopyButton,
   DescriptionList,
   EmptyState,
+  FieldGroup,
   Modal,
   Panel,
   RecordChip,
   RelativeTime,
   LinkListToolbar,
+  Separator,
   Select,
   Table,
   TruncatedText,
@@ -33,9 +40,11 @@ import {
 // eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
 import { StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
+import { PhoneValue } from '@crm/contracts/values';
+import { answerFiling } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
@@ -58,6 +67,8 @@ export interface SubmissionsTabProps {
   }[];
   /** The form's public link, for the empty state's Copy link. */
   readonly link: string;
+  /** The form's name, under a submission's sender in its panel. */
+  readonly formName: string;
   /** Follows a job this tab started to its end; the editor holds it, so a tab change never loses the result. */
   readonly followJob: (jobId: string, onDone: (job: JobView) => void) => void;
   /** The live form adds submissions to the CRM; one that keeps them only offers no Add to CRM or sync. */
@@ -126,6 +137,7 @@ export function SubmissionsTab({
   canManage,
   questions,
   link: formLink,
+  formName,
   followJob,
   isFiling,
   hasSubmissions,
@@ -231,6 +243,8 @@ export function SubmissionsTab({
     const text = answer === undefined ? '' : answerText(answer).trim();
     return text === '' ? undefined : text;
   };
+  // Who sent the open submission: their record's name, the name they gave, or their email.
+  const sender = open === undefined ? undefined : (open.mainRecord?.name ?? nameOf(open) ?? open.email);
   // Search narrows the rows loaded so far, by the person's name or email.
   const needle = query.trim().toLowerCase();
   const shown =
@@ -250,9 +264,10 @@ export function SubmissionsTab({
   const hasEmailColumn = nameQuestion !== undefined && shown.some((submission) => submission.email !== undefined);
   const columns: readonly TableColumn[] = [
     { id: 'person', label: strings.person, isRowHeader: true, isInline: true },
-    ...(hasEmailColumn ? [{ id: EMAIL_COLUMN, label: strings.email }] : []),
+    // When and State lead after the person, so a long email or answer scrolling the table sideways never hides them.
     { id: 'when', label: strings.when },
     { id: 'state', label: strings.state },
+    ...(hasEmailColumn ? [{ id: EMAIL_COLUMN, label: strings.email }] : []),
     // The questions the list carries answers for (the server sends each row's first answers), in the form's order,
     // but the one the Person column already says. A question earns a column when some row answered it.
     ...questions
@@ -387,7 +402,7 @@ export function SubmissionsTab({
 
   // One clear action for the rows: Export, only when there are rows. Form wide actions live in the top bar's menu.
   const exportButton = (
-    <Button size="sm" icon="download" onPress={exportCsv}>
+    <Button icon="download" label={strings.exportButton} isLabelCollapsible onPress={exportCsv}>
       {strings.exportButton}
     </Button>
   );
@@ -532,7 +547,9 @@ export function SubmissionsTab({
           rows={shown}
           getRowId={(submission) => submission.id}
           renderCell={cell}
-          isHeaderSticky
+          // A long email or answer widens the table: it scrolls sideways in its own frame (its far end fading), as
+          // Tally's and Typeform's response tables do, rather than pushing When and State off the page.
+          isScrollable
           {...(canManage
             ? {
                 selected,
@@ -568,13 +585,28 @@ export function SubmissionsTab({
       )}
       {open !== undefined && (
         <Panel
-          title={strings.submission}
+          title={sender ?? strings.submission}
+          {...(sender === undefined ? {} : { leading: <Avatar name={sender} isDecorative /> })}
+          subtitle={
+            <>
+              {formName} · <RelativeTime value={open.receivedAt} />
+            </>
+          }
+          actions={<StatusDot hue={stateHue(open, isFiling)}>{stateLabel(open, isFiling)}</StatusDot>}
+          isStacked
           isOpen
           onClose={() => {
             go(undefined);
           }}
           {...(canManage
             ? {
+                // Delete keeps the footer's start, away from the main action; a failed one keeps Retry in view and
+                // folds its other choices into More, so the footer never holds four buttons on a phone.
+                footerStart: (
+                  <Button variant="danger" icon="trash" onPress={() => setConfirmingDelete(true)}>
+                    {strings.deleteSubmission}
+                  </Button>
+                ),
                 footer: (
                   <>
                     {open.state === 'spam' && (
@@ -582,29 +614,41 @@ export function SubmissionsTab({
                         {strings.release}
                       </Button>
                     )}
-                    {open.crm.state === 'not_in_crm' && open.crm.canAddToCrm && (
-                      // Retry is the one primary on a failed enquiry; Add to CRM files it with today's settings.
-                      <Button
-                        {...(open.state === 'failed' ? {} : { variant: 'primary' as const })}
-                        isPending={busy === 'add'}
-                        onPress={() => addToCrm([open.id])}
-                      >
-                        {strings.addToCrm}
-                      </Button>
+                    {open.state === 'failed' ? (
+                      <>
+                        <MenuTrigger>
+                          <Button icon="ellipsis" label={strings.moreActions} />
+                          <Menu
+                            label={strings.moreActions}
+                            onAction={(key) => {
+                              if (key === 'add') addToCrm([open.id]);
+                              if (key === 'spam') act('spam', open.id);
+                            }}
+                          >
+                            {open.crm.state === 'not_in_crm' && open.crm.canAddToCrm ? (
+                              <MenuItem id="add">{strings.addToCrm}</MenuItem>
+                            ) : null}
+                            <MenuItem id="spam">{strings.markSpam}</MenuItem>
+                          </Menu>
+                        </MenuTrigger>
+                        <Button variant="primary" isPending={busy === 'retry'} onPress={() => act('retry', open.id)}>
+                          {strings.retry}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {open.state !== 'spam' && (
+                          <Button isPending={busy === 'spam'} onPress={() => act('spam', open.id)}>
+                            {strings.markSpam}
+                          </Button>
+                        )}
+                        {open.crm.state === 'not_in_crm' && open.crm.canAddToCrm && (
+                          <Button variant="primary" isPending={busy === 'add'} onPress={() => addToCrm([open.id])}>
+                            {strings.addToCrm}
+                          </Button>
+                        )}
+                      </>
                     )}
-                    {open.state === 'failed' && (
-                      <Button variant="primary" isPending={busy === 'retry'} onPress={() => act('retry', open.id)}>
-                        {strings.retry}
-                      </Button>
-                    )}
-                    {open.state !== 'spam' && (
-                      <Button isPending={busy === 'spam'} onPress={() => act('spam', open.id)}>
-                        {strings.markSpam}
-                      </Button>
-                    )}
-                    <Button variant="ghost" icon="trash" onPress={() => setConfirmingDelete(true)}>
-                      {strings.deleteSubmission}
-                    </Button>
                   </>
                 ),
               }
@@ -680,7 +724,48 @@ export function SubmissionsTab({
   );
 }
 
-/** One submission: its answers in question order (Not filed marked), where it came from, and the records it touched. */
+/**
+ * An answer's value as the panel shows it: a phone through the field set, spaced for reading; everything else as
+ * its words, which wrap whole. An email or a website stays plain text, never a link, since a visitor typed it.
+ */
+function answerValue(answer: SubmissionAnswer): ReactNode {
+  const text = answerText(answer);
+  if (text === '') return strings.noAnswer;
+  if (answer.answerType !== 'phone') return text;
+  // A phone the field set can read is a stored { number, country }; anything else shows as its words.
+  const phone = PhoneValue.safeParse(answer.value);
+  if (!phone.success) return text;
+  return (
+    <AttributeDisplay
+      attribute={{
+        id: answer.questionId,
+        name: answer.label,
+        type: 'phone',
+        allowMultiple: false,
+        isRequired: false,
+        isUnique: false,
+        isReadOnly: true,
+      }}
+      value={phone.data}
+      surface="panel"
+    />
+  );
+}
+
+/** The answers worth copying (an email, a phone, a website), with what copying gives: a phone's full number. */
+const COPYABLE: ReadonlySet<string> = new Set(['email', 'phone', 'website']);
+
+/** What copying an answer copies, and its button's name. */
+function answerCopy(answer: SubmissionAnswer): { readonly value: string; readonly label: string } | undefined {
+  if (!COPYABLE.has(answer.answerType)) return undefined;
+  const text = answerText(answer);
+  return text === '' ? undefined : { value: text, label: strings.copyAnswer(answer.label) };
+}
+
+/**
+ * One submission, every row stacked the same way: what went wrong when it did, its answers in question order
+ * (filing said once for the section, the exceptions marked), the records it touched, and where it came from.
+ */
 function SubmissionDetail({
   submission,
   link,
@@ -691,6 +776,7 @@ function SubmissionDetail({
   readonly isFiling: boolean;
 }) {
   const source = cameFromOf(submission);
+  const filing = answerFiling(submission.answers, submission.crm, isFiling);
   return (
     <>
       {submission.failure !== undefined && (
@@ -698,39 +784,59 @@ function SubmissionDetail({
           {submission.failure}
         </Callout>
       )}
-      <DescriptionList
-        items={[
-          { term: strings.state, description: stateLabel(submission, isFiling) },
-          { term: strings.when, description: <RelativeTime value={submission.receivedAt} /> },
-        ]}
-      />
-      <h3>{strings.answers}</h3>
-      <DescriptionList
-        layout="stacked"
-        items={submission.answers.map((answer) => ({
-          term: answer.attributeId === undefined ? `${answer.label} · ${strings.notFiledMark}` : answer.label,
-          description: answerText(answer),
-        }))}
-      />
-      {source.length > 0 && (
+      <FieldGroup
+        label={strings.answers}
+        tone="heading"
+        headingLevel={3}
+        {...(filing.note === undefined ? {} : { meta: filing.note })}
+      >
+        <DescriptionList
+          layout="stacked"
+          items={submission.answers.map((answer) => {
+            const copy = answerCopy(answer);
+            return {
+              id: answer.questionId,
+              term: filing.marked.has(answer.questionId) ? `${answer.label} · ${filing.mark}` : answer.label,
+              description: answerValue(answer),
+              ...(answerText(answer) === '' ? { isPlaceholder: true } : {}),
+              ...(copy === undefined ? {} : { copy }),
+            };
+          })}
+        />
+      </FieldGroup>
+      {(submission.records.length > 0 || submission.crm.state === 'filing') && (
         <>
-          <h3>{strings.cameFrom}</h3>
-          {/* Plain text, never links: a page's address came from the visitor's browser. */}
-          <DescriptionList items={[...source]} />
+          <Separator />
+          <FieldGroup
+            label={strings.records}
+            tone="heading"
+            headingLevel={3}
+            isLive
+            {...(submission.records.length > 0 ? {} : { hint: strings.answersFiling })}
+          >
+            {submission.records.length > 0 ? (
+              <DescriptionList
+                layout="stacked"
+                items={submission.records.map((touched) => {
+                  const href = link(touched.record.objectId, touched.record.recordId);
+                  return {
+                    id: `${touched.record.recordId}:${touched.action}`,
+                    term: strings.recordAction[touched.action],
+                    description: <RecordChip display={touched.record} {...(href === undefined ? {} : { href })} />,
+                  };
+                })}
+              />
+            ) : null}
+          </FieldGroup>
         </>
       )}
-      {submission.records.length > 0 && (
+      {source.length > 0 && (
         <>
-          <h3>{strings.records}</h3>
-          <DescriptionList
-            items={submission.records.map((touched) => {
-              const href = link(touched.record.objectId, touched.record.recordId);
-              return {
-                term: strings.recordAction[touched.action],
-                description: <RecordChip display={touched.record} {...(href === undefined ? {} : { href })} />,
-              };
-            })}
-          />
+          <Separator />
+          <FieldGroup label={strings.cameFrom} tone="heading" headingLevel={3}>
+            {/* Plain text, never links: a page's address came from the visitor's browser. */}
+            <DescriptionList layout="stacked" items={[...source]} />
+          </FieldGroup>
         </>
       )}
     </>

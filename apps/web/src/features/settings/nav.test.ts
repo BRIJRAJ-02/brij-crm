@@ -17,7 +17,7 @@ describe('settingsNav', () => {
     const groups = settingsNav('acme');
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Scheduling', 'Workspace']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
-      ['Profile', 'Preferences', 'Security', 'Notifications'],
+      ['Profile', 'Preferences', 'Sign in and devices', 'Notifications'],
       ['Calendars', 'Round robin'],
       ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'Trash'],
     ]);
@@ -31,7 +31,7 @@ describe('settingsNav', () => {
       calendars: '/w/acme/settings/scheduling/calendars',
       notifications: '/w/acme/settings/account/notifications',
       general: '/w/acme/settings/general',
-      security: '/w/acme/settings/account/security',
+      security: '/w/acme/settings/account/sign-in',
       members: '/w/acme/settings/members',
       'workspace-security': '/w/acme/settings/security',
       objects: '/w/acme/settings/objects',
@@ -104,6 +104,8 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/general')).toBe('general');
     expect(settingsPageOf('/w/acme/settings/scheduling/calendars')).toBe('calendars');
     expect(settingsPageOf('/w/acme/settings/account/calendars')).toBe('calendars');
+    expect(settingsPageOf('/w/acme/settings/account/sign-in')).toBe('security');
+    // The old address still marks the page while it redirects.
     expect(settingsPageOf('/w/acme/settings/account/security')).toBe('security');
     expect(settingsPageOf('/w/acme/settings/objects')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');

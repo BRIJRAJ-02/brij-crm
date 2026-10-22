@@ -327,11 +327,14 @@ export function FormEditor(props: FormEditorProps) {
       meta={<EditorStatus tone={status.tone} text={status.text} />}
     >
       <EditorActions
-        link={data.forms.hostedUrl(form.publicKey)}
-        {...(isPublished ? {} : { linkOffReason: strings.linkAfterPublish })}
+        // A draft has no link yet: Copy link shows from the first publish, as the forms list shows it.
+        {...(isPublished ? { link: data.forms.hostedUrl(form.publicKey) } : {})}
         preview={
           <Button
             icon="eye"
+            // On a phone the words go, so the form's name keeps its room in the header.
+            label={strings.previewOpen}
+            isLabelCollapsible
             onPress={() => {
               // The tab opens at once (a popup must come from the press), and loads once the draft is saved.
               const opened = window.open('', '_blank');
@@ -454,6 +457,7 @@ export function FormEditor(props: FormEditorProps) {
             canManage={canManage}
             questions={(form.live ?? form.draft).questions}
             link={data.forms.hostedUrl(form.publicKey)}
+            formName={form.name}
             followJob={jobs.follow}
             isFiling={form.live?.targets.main !== undefined}
             hasSubmissions={form.submissionCount > 0}

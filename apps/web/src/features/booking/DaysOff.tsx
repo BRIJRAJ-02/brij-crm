@@ -3,7 +3,7 @@
 // Main task: see the upcoming ones, open one again, or add one (Add day off opens a small popover: the date and a note only the member sees).
 // Leaves out: dates with different hours (the data keeps them; this lists days off only) and every week on a weekday (turn the day off in the week).
 import type { BookingAvailability } from '@crm/data';
-import { Button, Card, DatePicker, Field, Form, Popover, Table, type TableColumn } from '@crm/ui';
+import { Button, Card, DatePicker, EmptyState, Field, Form, Popover, Table, type TableColumn } from '@crm/ui';
 import { useId, useRef, useState } from 'react';
 import { dateLabel, openDay, todayIn, upcomingDaysOff, withDayOff } from './hours.ts';
 import { strings } from './strings.ts';
@@ -55,13 +55,18 @@ export function DaysOff({
     close();
   };
   const columns = isReadOnly ? COLUMNS.filter((column) => column.id !== 'actions') : COLUMNS;
+  // One card anatomy with Used by (the owner, 22 October 2026): the title, then the days off as rows (the date, its
+  // note, Remove), or one quiet line when there are none, then Add day off under them.
   return (
     <Card title={strings.daysOff}>
-      {upcoming.length > 0 && (
+      {upcoming.length === 0 ? (
+        <EmptyState layout="row" icon="calendar" title={strings.noDaysOff} />
+      ) : (
         <Table
           label={strings.daysOff}
           columns={columns}
           rows={upcoming}
+          isHeaderHidden
           getRowId={(day) => day.date}
           renderCell={(day, column) =>
             column === 'date' ? (
@@ -71,21 +76,21 @@ export function DaysOff({
             ) : (
               <Button
                 variant="ghost"
+                icon="x"
+                label={strings.removeDayOff(dateLabel(day.date))}
                 onPress={() => {
                   onChange(openDay(availability, day.date));
                   // The row goes with its button: focus lands on Add day off, which always stays.
                   focusLater(() => addRef.current);
                 }}
-              >
-                {strings.openDay}
-              </Button>
+              />
             )
           }
         />
       )}
       {!isReadOnly && (
         <>
-          <Button ref={addRef} icon="plus" size="sm" onPress={() => setAdding(true)}>
+          <Button ref={addRef} icon="plus" onPress={() => setAdding(true)}>
             {strings.addDayOff}
           </Button>
           <Popover

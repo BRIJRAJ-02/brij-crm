@@ -64,3 +64,29 @@ export const Compact: Story = {
     await expect(canvas.getByText('Thu')).toBeInTheDocument();
   },
 };
+
+/** A value with `copy`: its copy button after it, shown on hover or focus (always under a finger), copying the raw value. */
+export const Copy: Story = {
+  render: () => (
+    <Stage>
+      <DescriptionList
+        layout="stacked"
+        items={[
+          {
+            term: 'Work email',
+            description: 'grace@navy.mil',
+            copy: { value: 'grace@navy.mil', label: 'Copy Work email' },
+          },
+          { term: 'Phone', description: '+91 77109 86909', copy: { value: '+917710986909', label: 'Copy Phone' } },
+          { term: 'Budget', description: 'No answer', isPlaceholder: true },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const button = canvas.getByRole('button', { name: 'Copy Phone' });
+    await userEvent.tab();
+    await userEvent.tab();
+    await expect(button).toHaveFocus();
+  },
+};

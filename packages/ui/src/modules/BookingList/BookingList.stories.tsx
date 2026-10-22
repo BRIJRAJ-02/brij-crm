@@ -51,7 +51,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Two days: one booking with its Join link, note and linked guest; one cancelled. Pressing a title opens it. */
+/**
+ * Two days: one booking with its Join link, note and linked guest; one cancelled. Pressing a title, or anywhere
+ * on its row but its links and actions, opens it.
+ */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => (
@@ -65,6 +68,16 @@ export const Default: Story = {
     await expect(canvas.getByText('Cancelled')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Site visit' }));
     await expect(args.onOpen).toHaveBeenCalledWith('alan');
+    // Each title says which meeting it opens: its time and who it is with describe it.
+    await expect(canvas.getByRole('button', { name: 'Quick chat' })).toHaveAccessibleDescription(
+      /4:00 – 4:30 PM.*You and Grace Hopper/,
+    );
+    // A press anywhere on the row opens it, but its own actions stay their own.
+    await userEvent.click(canvas.getByText('4:00 – 4:30 PM'));
+    await expect(args.onOpen).toHaveBeenLastCalledWith('grace');
+    const opened = args.onOpen.mock.calls.length;
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit' }));
+    await expect(args.onOpen).toHaveBeenCalledTimes(opened);
     // The pointer leaves the title for the empty page, so the shot never catches its hover.
     await userEvent.hover(canvasElement);
   },

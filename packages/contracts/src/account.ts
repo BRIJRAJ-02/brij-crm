@@ -4,10 +4,9 @@
 // to take over a session, and a person reaches only their own.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { PASSKEY_NAME_MAX } from './account-limits.ts';
 import { Uuid } from './values/ids.ts';
 
-export { PASSKEY_NAME_MAX, STEP_UP_CODE_MINUTES, STEP_UP_MINUTES } from './account-limits.ts';
+export { STEP_UP_CODE_MINUTES, STEP_UP_MINUTES } from './account-limits.ts';
 
 /** The most sessions one page of `account.sessions.list` answers. */
 export const SESSION_PAGE_MAX = 50;
@@ -25,6 +24,7 @@ export const SECURITY_EVENT_KINDS = [
   'two_factor_off',
   'backup_codes_made',
   'backup_code_used',
+  // Passkeys were taken out on 22 October 2026; these two stay so the history recorded before reads back.
   'passkey_added',
   'passkey_removed',
   'alert_sent',
@@ -34,7 +34,7 @@ export const SecurityEventKind = z.enum(SECURITY_EVENT_KINDS);
 /** One kind of security event. */
 export type SecurityEventKind = z.infer<typeof SecurityEventKind>;
 
-/** How a sign in happened, as a security event records it. */
+/** How a sign in happened, as a security event records it (`passkey` only in history from before 22 October 2026). */
 export const SignInMethod = z.enum(['email_code', 'google', 'passkey']);
 /** How a sign in happened. */
 export type SignInMethod = z.infer<typeof SignInMethod>;
@@ -92,8 +92,7 @@ export type RevokedSessions = z.infer<typeof RevokedSessions>;
 
 /**
  * How a step up proves who it is by a code (AC-896): an app code or a backup
- * code when two factor is on, else an email code. A passkey has its own
- * procedure (`stepUp.verifyPasskey`).
+ * code when two factor is on, else an email code.
  */
 export const StepUpMethod = z.enum(['email', 'totp', 'backup']);
 /** How a step up proves who it is. */
@@ -117,90 +116,6 @@ export const StepUpVerifyInput = z.object({
 /** A step up's code. */
 export type StepUpVerifyInput = z.infer<typeof StepUpVerifyInput>;
 
-/** A base64url string, as WebAuthn's JSON forms carry bytes; capped so a body can't grow without end. */
-const Base64Url = (max: number) =>
-  z
-    .string()
-    .max(max)
-    .regex(/^[A-Za-z0-9_-]*$/);
-
-/** How a browser may reach a passkey (WebAuthn's transports). */
-export const PasskeyTransport = z.enum(['ble', 'cable', 'hybrid', 'internal', 'nfc', 'smart-card', 'usb']);
-/** How a browser may reach a passkey. */
-export type PasskeyTransport = z.infer<typeof PasskeyTransport>;
-
-/**
- * What the browser needs to ask for a passkey in a step up (WebAuthn's
- * request options, JSON form): a one time challenge for this session, and the
- * person's own passkeys.
- */
-export const PasskeyRequestOptions = z.object({
-  challenge: Base64Url(256),
-  rpId: z.string().max(253).optional(),
-  timeout: z.number().int().min(0).optional(),
-  userVerification: z.enum(['required', 'preferred', 'discouraged']).optional(),
-  allowCredentials: z
-    .array(
-      z.object({
-        id: Base64Url(1400),
-        type: z.literal('public-key'),
-        transports: z.array(PasskeyTransport).max(10).optional(),
-      }),
-    )
-    .max(100)
-    .optional(),
-});
-/** What the browser needs to ask for a passkey in a step up. */
-export type PasskeyRequestOptions = z.infer<typeof PasskeyRequestOptions>;
-
-/** A passkey's answer to a step up's challenge (WebAuthn's assertion, JSON form). Only signed data and ids. */
-export const PasskeyAssertion = z.object({
-  id: Base64Url(1400),
-  rawId: Base64Url(1400),
-  type: z.literal('public-key'),
-  response: z.object({
-    clientDataJSON: Base64Url(4096),
-    authenticatorData: Base64Url(4096),
-    signature: Base64Url(2048),
-    userHandle: Base64Url(512).optional(),
-  }),
-  authenticatorAttachment: z.enum(['platform', 'cross-platform']).optional(),
-  clientExtensionResults: z.record(z.string(), z.unknown()),
-});
-/** A passkey's answer to a step up's challenge. */
-export type PasskeyAssertion = z.infer<typeof PasskeyAssertion>;
-
-/** A step up by passkey: the browser's answer to `stepUp.passkeyOptions`. */
-export const StepUpPasskeyInput = z.object({ response: PasskeyAssertion });
-/** A step up by passkey. */
-export type StepUpPasskeyInput = z.infer<typeof StepUpPasskeyInput>;
-
-/** One of the person's passkeys (AC-887): its label, when it was made and last used. Never a key. */
-export const AccountPasskey = z.object({
-  id: Uuid,
-  /** The person's label; absent until they name it. */
-  name: z.string().optional(),
-  /** ISO 8601 UTC. */
-  createdAt: z.iso.datetime(),
-  /** ISO 8601 UTC; absent until it is first used. */
-  lastUsedAt: z.iso.datetime().optional(),
-});
-/** One of the person's passkeys. */
-export type AccountPasskey = z.infer<typeof AccountPasskey>;
-
-/** A passkey's new name: trimmed, 1 to 60 characters. */
-export const PasskeyName = z.string().trim().min(1).max(PASSKEY_NAME_MAX);
-
-/** Renaming one of the person's passkeys. */
-export const RenamePasskeyInput = z.object({ id: Uuid, name: PasskeyName });
-/** Renaming one of the person's passkeys. */
-export type RenamePasskeyInput = z.infer<typeof RenamePasskeyInput>;
-
-/** Removing one of the person's passkeys. */
-export const RemovePasskeyInput = z.object({ id: Uuid });
-/** Removing one of the person's passkeys. */
-export type RemovePasskeyInput = z.infer<typeof RemovePasskeyInput>;
-
 /** How this session stands for sensitive changes: fresh until when, and whether a second factor proved it. */
 export const SessionFreshness = z.object({
   /** ISO 8601 UTC; absent when the session isn't fresh. */
@@ -212,7 +127,7 @@ export const SessionFreshness = z.object({
 export type SessionFreshness = z.infer<typeof SessionFreshness>;
 
 /**
- * Account › Security's state (AC-881, AC-883): two factor on or off, how many
+ * Account › Sign in and devices' state (AC-881, AC-883): two factor on or off, how many
  * backup codes are left, and this session's freshness. Never a secret or a code.
  */
 export const AccountSecurity = z.object({
@@ -221,8 +136,6 @@ export const AccountSecurity = z.object({
     /** Unused backup codes left, while two factor is on. */
     backupCodesLeft: z.number().int().min(0).optional(),
   }),
-  /** The person's passkeys, oldest first (AC-887). */
-  passkeys: z.array(AccountPasskey),
   session: SessionFreshness,
   /**
    * The workspaces the person is in that require two factor (AC-885), by
@@ -230,7 +143,7 @@ export const AccountSecurity = z.object({
    */
   requiredBy: z.array(z.string()),
 });
-/** Account › Security's state. */
+/** Account › Sign in and devices' state. */
 export type AccountSecurity = z.infer<typeof AccountSecurity>;
 
 /** A workspace where the person is the last active owner: deleting the account waits until it has another (AC-902). */
@@ -252,7 +165,7 @@ export type DeleteAccountInput = z.infer<typeof DeleteAccountInput>;
 export const ACTIVITY_DAYS = 90;
 
 /**
- * One security event as Account › Security › Recent activity lists it
+ * One security event as Account › Sign in and devices › Recent activity lists it
  * (AC-898): what happened, when, and for a sign in how, on what and roughly
  * where. Never an IP, a code or a token.
  */
@@ -304,20 +217,6 @@ export const accountContract = {
   stepUp: {
     start: oc.input(StepUpStartInput).output(z.object({ sent: z.literal(true) })),
     verify: oc.input(StepUpVerifyInput).output(SessionFreshness),
-    /** A passkey step up's challenge, for this session only, 5 minutes; 400 INPUT_INVALID without a passkey. */
-    passkeyOptions: oc.output(z.object({ options: PasskeyRequestOptions })),
-    /** Checks the passkey's answer and makes this session fresh, as a second factor. 422 CODE_INVALID, 429. */
-    verifyPasskey: oc.input(StepUpPasskeyInput).output(SessionFreshness),
-  },
-  /**
-   * The person's passkeys (AC-887). Adding one goes through sign in's own
-   * routes (`/api/auth/passkey/*`). `rename` needs a session; `remove` a
-   * fresh step up (with two factor on, by a second factor). 404 NOT_FOUND for
-   * a passkey that isn't the caller's.
-   */
-  passkeys: {
-    rename: oc.input(RenamePasskeyInput).output(AccountPasskey),
-    remove: oc.input(RemovePasskeyInput).output(z.object({ ok: z.literal(true) })),
   },
   /**
    * Deleting the account (AC-902 to AC-907): `check` names the workspaces it

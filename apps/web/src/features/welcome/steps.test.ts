@@ -12,24 +12,22 @@ import {
 } from './steps.ts';
 
 describe('first run’s steps', () => {
-  it('are Your name, About you, Your workspace, Invite your team and the calendar, without it where sync is off', () => {
-    expect(welcomeSteps(true)).toEqual(['about', 'details', 'workspace', 'invite', 'calendar']);
-    expect(welcomeSteps(false)).toEqual(['about', 'details', 'workspace', 'invite']);
+  it('are Your name, Your workspace, Invite your team and the calendar, without it where sync is off', () => {
+    expect(welcomeSteps(true)).toEqual(['about', 'workspace', 'invite', 'calendar']);
+    expect(welcomeSteps(false)).toEqual(['about', 'workspace', 'invite']);
     // Another workspace counts its own steps.
     expect(welcomeSteps(true, true)).toEqual(['workspace', 'invite', 'calendar']);
   });
 
   it('go back from Your workspace only: the first step has nothing before it, and the workspace is made by then', () => {
     expect(previousStep('about')).toBeUndefined();
-    expect(previousStep('details')).toBe('about');
-    expect(previousStep('workspace')).toBe('details');
+    expect(previousStep('workspace')).toBe('about');
     expect(previousStep('invite')).toBeUndefined();
     expect(previousStep('calendar')).toBeUndefined();
   });
 
   it('go on in order, and end after the last', () => {
-    expect(nextStep(welcomeSteps(true), 'about')).toBe('details');
-    expect(nextStep(welcomeSteps(true), 'details')).toBe('workspace');
+    expect(nextStep(welcomeSteps(true), 'about')).toBe('workspace');
     expect(nextStep(welcomeSteps(true), 'workspace')).toBe('invite');
     expect(nextStep(welcomeSteps(true), 'invite')).toBe('calendar');
     expect(nextStep(welcomeSteps(false), 'invite')).toBeUndefined();
@@ -37,7 +35,6 @@ describe('first run’s steps', () => {
 
   it('show Invite your team and the calendar step once the workspace exists, and never before', () => {
     expect(shownStep(undefined, false)).toBe('about');
-    expect(shownStep('details', false)).toBe('details');
     expect(shownStep('workspace', false)).toBe('workspace');
     expect(shownStep('calendar', false)).toBe('about');
     expect(shownStep('invite', false)).toBe('about');
@@ -65,6 +62,11 @@ describe('first run’s search', () => {
   it('drops anything else: an unknown step, an address that breaks the rule, a result it doesn’t know', () => {
     expect(welcomeSearch({ step: 'nope', workspace: '../evil', calendar: 'pwned' })).toEqual({});
     expect(welcomeSearch({ step: 3, workspace: ['acme'], calendar: { connected: true } })).toEqual({});
+  });
+
+  it('drops the questionnaire step taken out on 22 October 2026, so an old link starts at Your name', () => {
+    expect(welcomeSearch({ step: 'details' })).toEqual({});
+    expect(shownStep(welcomeSearch({ step: 'details' }).step, false)).toBe('about');
   });
 
   it('knows exactly the results a calendar connect comes back with', () => {

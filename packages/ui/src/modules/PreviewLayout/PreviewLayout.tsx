@@ -55,11 +55,17 @@ const TONE_HUES = { live: 'green', changed: 'orange', draft: 'gray', paused: 'gr
 /**
  * The editor's status for the TopBar's meta, beside the name: a StatusDot,
  * green when live, orange when changed since it was published, gray when not
- * published or paused. The words always say it too.
+ * published or paused. The words say it too: in full from 480px, as one word on a phone's bar (Live, Edited,
+ * Draft, Paused), and in full to screen readers always.
  */
 export function EditorStatus({ tone, text }: { readonly tone: EditorStatusTone; readonly text: string }) {
   // An editor's own state, not an attribute value, so StatusDot draws it here.
-  return <StatusDot hue={TONE_HUES[tone]}>{text}</StatusDot>;
+  // On a phone's bar a short word replaces the full words, so the name keeps its room; screen readers read them all.
+  return (
+    <StatusDot hue={TONE_HUES[tone]} shortLabel={strings.shortStatus[tone]}>
+      {text}
+    </StatusDot>
+  );
 }
 
 /** The Phone, Tablet and Desktop switch for a `PreviewFrame`, for `previewControls`. */

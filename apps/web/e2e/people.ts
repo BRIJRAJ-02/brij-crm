@@ -56,12 +56,6 @@ export async function checkScreen(page: Page, name: string): Promise<void> {
   await page.emulateMedia({ colorScheme: 'light' });
 }
 
-/** First run's About you (spec 0036): every answer is optional, so Skip goes on to Your workspace. */
-export async function skipDetailsStep(page: Page): Promise<void> {
-  await expect(page.getByRole('heading', { level: 1, name: 'About you' })).toBeVisible();
-  await page.getByRole('button', { name: 'Skip', exact: true }).click();
-}
-
 /**
  * After Create workspace, first run asks to invite the team, then (where calendar sync is on) for a calendar (spec
  * 0036): Skip for now on each opens the workspace, on Home. This waits for whichever comes and goes on to Home.
@@ -86,14 +80,13 @@ export async function skipCalendarStep(page: Page): Promise<void> {
 }
 
 /**
- * First run (spec 0036) from its first step: Your name as `name`, About you skipped, then Your workspace at `slug` (its name following
+ * First run (spec 0036) from its first step: Your name as `name`, then Your workspace at `slug` (its name following
  * yours), then past the calendar step where there is one, landing on Home.
  */
 export async function firstRun(page: Page, slug: string, name = 'Ada Lovelace'): Promise<void> {
   await expect(page).toHaveURL(/\/welcome$/);
   await page.getByLabel('Your name').fill(name);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await skipDetailsStep(page);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await skipCalendarStep(page);

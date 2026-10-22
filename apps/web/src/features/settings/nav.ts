@@ -56,8 +56,8 @@ export const rotationsSettingsHref = (slug: string) => `/w/${slug}/settings/sche
 /** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
 export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
 
-/** Settings › Account › Security (spec 0033): the person's devices, two factor and passkeys. */
-export const securitySettingsHref = (slug: string) => `/w/${slug}/settings/account/security`;
+/** Settings › Account › Sign in and devices (spec 0033): two factor, the devices signed in and recent activity. */
+export const securitySettingsHref = (slug: string) => `/w/${slug}/settings/account/sign-in`;
 
 /** The settings navigation's pages: Account's, then Scheduling's and Workspace's. */
 export type SettingsPageId =
@@ -207,7 +207,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'general') return 'general';
   if (rest === 'scheduling/calendars' || rest === 'account/calendars' || rest === 'calendar') return 'calendars';
   if (rest === 'account/notifications') return 'notifications';
-  if (rest === 'account/security') return 'security';
+  if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
   if (rest === 'members') return 'members';

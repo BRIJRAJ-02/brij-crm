@@ -1,15 +1,16 @@
-// Settings › Account › Security: the page's copy (spec 0033), apart from the other settings pages' own.
+// Settings › Account › Sign in and devices: the page's copy (spec 0033), apart from the other settings pages' own.
 
-/** Settings › Account › Security: the page's copy (spec 0033, AC-890, AC-891, AC-896). */
+/** Settings › Account › Sign in and devices: the page's copy (spec 0033, AC-890, AC-891, AC-896). */
 export const strings = {
   /** The page's title, and its entry in the settings navigation. */
-  title: 'Security',
-  devices: 'Devices',
+  /** Not "Security": that is the workspace's page, and the sidebar showed it twice (the owner, 22 October 2026). */
+  title: 'Sign in and devices',
+  devices: 'Signed in devices',
+  devicesDescription: 'Each browser and app signed in to your account.',
   /** Recent activity (AC-898): the last 90 days of the account's security events. */
   activity: {
     section: 'Recent activity',
     description: 'Sign ins and changes to how you sign in, from the last 90 days.',
-    columns: { what: 'Activity', device: 'Device', place: 'Location', when: 'When' },
     kinds: {
       sign_in: 'Signed in',
       sign_out: 'Signed out',
@@ -19,6 +20,7 @@ export const strings = {
       two_factor_off: 'Turned off two factor sign in',
       backup_codes_made: 'Made new backup codes',
       backup_code_used: 'Used a backup code',
+      // From before passkeys were taken out (22 October 2026): kept so older history still reads.
       passkey_added: 'Added a passkey',
       passkey_removed: 'Removed a passkey',
       alert_sent: 'Emailed you about a new device',
@@ -29,17 +31,14 @@ export const strings = {
     failedMore: 'Couldn’t load older activity',
     showMore: 'Show more',
   },
-  columns: { device: 'Device', place: 'Location', lastActive: 'Last active', actions: 'Actions' },
   unknownDevice: 'Unknown device',
-  unknownPlace: 'Unknown',
   thisDevice: 'This device',
-  /** This device's last use, in RelativeTime's own word for the moment. */
-  now: 'now',
+  /** A device's line under its name: where, then when it was last used. */
+  activeNow: 'Active now',
+  active: 'Active',
   signOut: 'Sign out',
   signOutLabel: (device: string) => `Sign out ${device}`,
   signOutOthers: 'Sign out of all other devices',
-  signOutOthersInfo: (minutes: number) =>
-    `Every other device has to sign in again. If you haven't confirmed it's you in the last ${String(minutes)} minutes, you'll be asked first. Locations are approximate.`,
   showMore: 'Show more',
   failedTitle: 'Couldn’t load your devices',
   noDevices: 'No devices signed in',
@@ -49,7 +48,7 @@ export const strings = {
     `${place === undefined ? '' : `Signed in from ${place}. `}That device has to sign in again. Anything unsaved there is lost.`,
   signOutOthersTitle: 'Sign out of all other devices?',
   signOutOthersText: 'Every other device has to sign in again. You stay signed in here.',
-  signingOut: 'Signing out…',
+  signingOut: 'Signing out',
   cancel: 'Cancel',
   signedOut: (device: string) => `Signed out ${device}.`,
   signedOutOthers: (count: number) =>
@@ -70,8 +69,6 @@ export const strings = {
     emailLabel: 'Code from the email',
     useBackup: 'Use a backup code',
     useApp: 'Use your authenticator app',
-    usePasskey: 'Use a passkey',
-    withPasskey: 'Use one of your passkeys.',
     send: 'Email me a code',
     sendAgain: 'Send a new code',
     sent: 'Code sent. Check your email.',
@@ -80,14 +77,14 @@ export const strings = {
   /** Two factor sign in (AC-881, AC-883, AC-885). */
   twoFactor: {
     section: 'Two factor sign in',
-    description: 'A code from an app after your email code.',
-    info: 'After your email code or Google, you also enter a code from an authenticator app. Someone with your email alone can’t sign in.',
+    /** Says what the tip used to, so the section needs none. */
+    description: 'A code from an app after your email code or Google, so your email alone can’t sign you in.',
     app: 'Authenticator app',
     appOff: 'Off',
     appOn: 'On',
-    /** On, and a workspace requires it with no passkey to stand in (AC-885). */
+    /** On, and a workspace requires it (AC-885). */
     appRequired: (names: readonly string[]) =>
-      `On. ${names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`} ${names.length === 1 ? 'requires' : 'require'} two factor sign in, so it stays on. Add a passkey to turn the app off.`,
+      `On. ${names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`} ${names.length === 1 ? 'requires' : 'require'} two factor sign in, so it stays on.`,
     setUp: 'Set up',
     turnOff: 'Turn off',
     backupCodes: 'Backup codes',
@@ -101,7 +98,7 @@ export const strings = {
     copyKey: 'Copy the setup key',
     firstCode: 'Code from your authenticator app',
     turnOn: 'Turn on',
-    turningOn: 'Turning on…',
+    turningOn: 'Turning on',
     codesTitle: 'Save your backup codes',
     codesText: 'Each code signs you in once if you lose your phone. They won’t be shown again.',
     copyCodes: 'Copy the backup codes',
@@ -113,62 +110,24 @@ export const strings = {
     cancel: 'Cancel',
     turnOffTitle: 'Turn off two factor sign in?',
     turnOffText: 'Signing in will need only your email code or Google. Remembered devices are forgotten.',
-    turningOff: 'Turning off…',
+    turningOff: 'Turning off',
     turnedOff: 'Two factor sign in is off.',
     turnedOn: 'Two factor sign in is on.',
     newCodesTitle: 'Make new backup codes?',
     newCodesText: 'Your old codes stop working.',
-    making: 'Making codes…',
+    making: 'Making codes',
     fileName: 'timefix-backup-codes.txt',
-  },
-  /** Passkeys (milestone 3, AC-887). */
-  passkeys: {
-    section: 'Passkeys',
-    description: 'Sign in with your fingerprint, face or device PIN.',
-    info: 'A passkey lives on your device or in your password manager. It signs you in on its own, with no email code, and counts as two factor sign in. It only works on Timefix, so it can’t be phished.',
-    unnamed: 'Passkey',
-    added: (date: string) => `Added ${date}.`,
-    lastUsed: (date: string) => `Last used ${date}.`,
-    neverUsed: 'Not used yet.',
-    none: 'No passkeys yet',
-    another: 'Add one for another device',
-    addText: 'Add one for each device or password manager you use.',
-    unsupported: 'This browser can’t make passkeys.',
-    add: 'Add passkey',
-    addTitle: 'Add a passkey',
-    addDialogText: 'Your browser asks you to confirm with your fingerprint, face or device PIN.',
-    addDialogTwice:
-      'Your browser may ask twice: once to check it’s you, then to make the new passkey with your fingerprint, face or device PIN.',
-    nameLabel: 'Name',
-    nameHint: 'So you can tell your passkeys apart. Left empty, it takes this device’s name.',
-    namePlaceholder: 'Work laptop',
-    nameMissing: 'Enter a name.',
-    adding: 'Adding',
-    added_: 'Passkey added.',
-    addFailed: 'Couldn’t add the passkey. Try again.',
-    failedTitle: 'Couldn’t load your passkeys',
-    rename: 'Rename',
-    renameLabel: (name: string) => `Rename ${name}`,
-    renameTitle: 'Rename passkey',
-    save: 'Save',
-    remove: 'Remove',
-    removeLabel: (name: string) => `Remove ${name}`,
-    removeTitle: (name: string) => `Remove ${name}?`,
-    removeText: 'You won’t be able to sign in with it any more. Delete it from your device or password manager too.',
-    removing: 'Removing',
-    removed: (name: string) => `Removed ${name}.`,
-    cancel: 'Cancel',
   },
   /** Deleting the account (AC-902 to AC-907). */
   deletion: {
-    section: 'Delete account',
-    description: 'Leave every workspace and close your account.',
-    row: 'Records you made stay',
-    rowText: 'They’re credited to Deleted user.',
+    /** On Profile, the page's last section, as General's Delete workspace sits (the owner, 22 October 2026). */
+    section: 'Danger zone',
+    row: 'Delete account',
+    rowText: 'You leave every workspace. Records you made stay, credited to Deleted user.',
     action: 'Delete account',
     title: 'Delete your account?',
     blockedTitleOne: 'Can’t delete your account yet',
-    checking: 'Checking your workspaces…',
+    checking: 'Checking your workspaces',
     blockedText: (names: readonly string[]) =>
       names.length === 1
         ? `You’re the last owner of ${names[0] ?? ''}. Make someone else an owner, or delete the workspace.`

@@ -50,6 +50,26 @@ export interface AttributeListProps {
   readonly editorProps?: (attribute: FieldAttribute) => AttributeEditorExtras;
   /** The record is still coming: skeleton rows after the loading delay. */
   readonly isLoading?: boolean;
+  /**
+   * `show` (the default): every row. `fold`: rows with nothing in them wait behind "Show N empty values" at the
+   * list's foot, as Attio's Show all values and HubSpot's View all properties do, so the filled values read first.
+   * Required, toggled in place and errored rows always show. Shown empty rows keep their "Set Name…" quiet until
+   * the row is under a pointer or holds focus.
+   */
+  readonly emptyValues?: 'show' | 'fold';
+}
+
+/** At most this many rows with something in them and a folded list opens shown: a new record, still to fill in. */
+const SPARSE_ROWS = 3;
+
+/** Whether a row is folded away with the empty values: nothing in it, and nothing that must be seen. */
+function isFoldable(item: AttributeItem): boolean {
+  return (
+    isEmptyValue(item.value) &&
+    !item.attribute.isRequired &&
+    item.error === undefined &&
+    fieldTypeOf(item.attribute.type).togglesInPlace !== true
+  );
 }
 
 /**
@@ -60,8 +80,30 @@ export interface AttributeListProps {
  * the first line of its value, however tall the value or its editor grows.
  * Titled sections fold.
  */
-export function AttributeList({ label, sections, onCommit, editorProps, isLoading = false }: AttributeListProps) {
+export function AttributeList({
+  label,
+  sections,
+  onCommit,
+  editorProps,
+  isLoading = false,
+  emptyValues = 'show',
+}: AttributeListProps) {
   const showSkeleton = useDelayedLoading(isLoading);
+  // A record with almost nothing filled in (one just made) opens with every row shown: filling it in is the task.
+  const [isShowingEmpty, setShowingEmpty] = useState(
+    () => sections.flatMap((section) => section.items.filter((item) => !isFoldable(item))).length <= SPARSE_ROWS,
+  );
+  const listId = useId();
+  // Folded: empty rows wait behind the foot's button. A row that has shown with a value stays for good (until the
+  // list is given a new key), so clearing it, or emptying a list mid edit, never pulls the row out from under the
+  // editor and its focus.
+  const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
+  const shownNow = sections.flatMap((section) =>
+    section.items.filter((item) => !isFoldable(item)).map((item) => item.attribute.id),
+  );
+  if (emptyValues === 'fold' && shownNow.some((id) => !kept.has(id))) setKept(new Set([...kept, ...shownNow]));
+  const isFolded = (item: AttributeItem) => isFoldable(item) && !kept.has(item.attribute.id);
+  const isFolding = emptyValues === 'fold' && !isShowingEmpty;
   if (isLoading) {
     return (
       <div className={styles.root} aria-busy="true">
@@ -79,23 +121,50 @@ export function AttributeList({ label, sections, onCommit, editorProps, isLoadin
       </div>
     );
   }
+  const folded = emptyValues === 'fold' ? sections.flatMap((section) => section.items.filter(isFolded)).length : 0;
   const rows = (items: readonly AttributeItem[]): ReactNode => (
     <dl className={styles.rows}>
-      {items.map((item) => (
-        <Row key={item.attribute.id} item={item} onCommit={onCommit} editorProps={editorProps} />
-      ))}
+      {items
+        .filter((item) => !isFolding || !isFolded(item))
+        .map((item) => (
+          <Row
+            key={item.attribute.id}
+            item={item}
+            onCommit={onCommit}
+            editorProps={editorProps}
+            isQuietEmpty={emptyValues === 'fold'}
+          />
+        ))}
     </dl>
   );
   return (
-    <section className={styles.root} aria-label={label}>
-      {sections.map((section) =>
-        section.title === undefined ? (
-          <div key={section.id}>{rows(section.items)}</div>
-        ) : (
-          <Disclosure key={section.id} title={section.title} variant="label" defaultExpanded>
-            {rows(section.items)}
-          </Disclosure>
-        ),
+    <section id={listId} className={styles.root} aria-label={label}>
+      {sections
+        // A titled section with every row folded away draws nothing, rather than a heading over an empty list.
+        .filter((section) => !isFolding || section.title === undefined || section.items.some((item) => !isFolded(item)))
+        .map((section) =>
+          section.title === undefined ? (
+            <div key={section.id}>{rows(section.items)}</div>
+          ) : (
+            <Disclosure key={section.id} title={section.title} variant="label" defaultExpanded>
+              {rows(section.items)}
+            </Disclosure>
+          ),
+        )}
+      {folded > 0 && (
+        <span className={styles.more}>
+          <Button
+            variant="ghost"
+            icon={isShowingEmpty ? 'chevron-up' : 'chevron-down'}
+            isExpanded={isShowingEmpty}
+            controls={listId}
+            onPress={() => {
+              setShowingEmpty((was) => !was);
+            }}
+          >
+            {isShowingEmpty ? strings.hideEmpty : strings.showEmpty(folded)}
+          </Button>
+        </span>
       )}
     </section>
   );
@@ -105,10 +174,12 @@ interface RowProps {
   readonly item: AttributeItem;
   readonly onCommit: AttributeListProps['onCommit'];
   readonly editorProps: AttributeListProps['editorProps'];
+  /** An empty value's "Set Name…" shows only under a pointer or with focus in the row. */
+  readonly isQuietEmpty: boolean;
 }
 
 /** One attribute: its name, then its value, shown or being edited. */
-function Row({ item, onCommit, editorProps }: RowProps) {
+function Row({ item, onCommit, editorProps, isQuietEmpty }: RowProps) {
   const { attribute, value, display, error } = item;
   const [isEditing, setEditing] = useState(false);
   const nameId = useId();
@@ -220,7 +291,13 @@ function Row({ item, onCommit, editorProps }: RowProps) {
             if (!(event.target instanceof Element) || event.target.closest('a, button') === null) open();
           }}
         >
-          {isEmpty ? <span className={styles.placeholder}>{strings.set(attribute.name)}</span> : shown}
+          {isEmpty ? (
+            <span className={styles.placeholder} data-quiet={isQuietEmpty || undefined}>
+              {strings.set(attribute.name)}
+            </span>
+          ) : (
+            shown
+          )}
         </span>
         <span className={styles.action}>
           <Button variant="ghost" icon="pencil" label={strings.edit(attribute.name)} onPress={open} ref={pencil} />
@@ -232,7 +309,13 @@ function Row({ item, onCommit, editorProps }: RowProps) {
       // Focusable by script only: where focus goes when an open editor is taken away.
       <span ref={readOnlyValue} className={styles.value} data-readonly="" tabIndex={-1}>
         {/* Nothing here and nothing to set: said in words, quietly, never a lone dash. */}
-        {isEmpty ? <span className={styles.placeholder}>{strings.notSet}</span> : shown}
+        {isEmpty ? (
+          <span className={styles.placeholder} data-quiet={isQuietEmpty || undefined}>
+            {strings.notSet}
+          </span>
+        ) : (
+          shown
+        )}
       </span>
     );
   }

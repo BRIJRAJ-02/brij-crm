@@ -65,6 +65,36 @@ export const Week: Story = {
   },
 };
 
+/**
+ * At a phone's width: each day and its Copy on one line, the times under them; a day off keeps one line, its
+ * Unavailable in the times' column right after the day, never at the line's end.
+ */
+export const Phone: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    // Stretched across a narrow column (the editor is its own size container, so it needs a width given to it,
+    // as a phone's settings card gives it), under 480px.
+    <Stage width="narrow-fill">
+      <HoursEditor {...args} rows={weekRows()} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const [saturday, sunday] = canvas.getAllByText('Unavailable');
+    const day = canvas.getByRole('switch', { name: 'Saturday' }).closest('li');
+    const dayCell = day?.firstElementChild;
+    if (saturday === undefined || sunday === undefined || day === null || !(dayCell instanceof HTMLElement))
+      throw new Error('no day off');
+    const row = day.getBoundingClientRect();
+    const label = saturday.getBoundingClientRect();
+    // On the day's own line, right after the day's column (where the times start on a wide card), with the
+    // same start on every day off.
+    await expect(label.top).toBeLessThan(row.top + row.height / 2);
+    await expect(label.left - dayCell.getBoundingClientRect().right).toBeLessThanOrEqual(16);
+    await expect(label.left).toBeGreaterThanOrEqual(dayCell.getBoundingClientRect().right);
+    await expect(Math.round(label.left)).toBe(Math.round(sunday.getBoundingClientRect().left));
+  },
+};
+
 /** While the hours load: each day's row and Set all days in place, busy, with a skeleton where the times go. */
 export const Loading: Story = {
   parameters: { crm: { screenshot: false } },

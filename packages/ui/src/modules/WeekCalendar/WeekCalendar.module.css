@@ -124,10 +124,11 @@
     text-align: end;
   }
 
+  /* Chips 20px tall a 4px gap apart: each one's 24px target circle clears the next (WCAG 2.5.8, by spacing). */
   .allDayCell {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-4);
     min-inline-size: 0;
     padding: var(--space-2);
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
@@ -228,6 +229,8 @@
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+    /* Over the now line and the shading (both raised), so the note is never crossed out. */
+    z-index: var(--z-sticky);
     pointer-events: none;
     translate: -50% -50%;
   }
@@ -333,9 +336,14 @@
     color: var(--text-secondary);
   }
 
+  /* The ring is a keyboard's on the grid; a day handed focus back after a pointer's span shows none. */
   .column:focus-visible {
     outline: var(--border-width-thick) solid var(--accent-line);
     outline-offset: calc(-1 * var(--border-width-thick));
+  }
+
+  .column[data-quiet-focus] {
+    outline: none;
   }
 
   .block {
@@ -453,14 +461,18 @@
     box-shadow: 0 0 0 var(--border-width-hairline) var(--column-surface);
   }
 
-  /* "+N": blocks folded where a lane would be too narrow. */
+  /* "+N": blocks folded where a lane would be too narrow, and the all day row's "+N more" past its cap: one quiet look. */
+  .block[data-kind='more'],
+  .allDayItem[data-kind='more'] {
+    border: var(--border-width-hairline) solid var(--control-border);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
   .block[data-kind='more'] {
     align-items: center;
     justify-content: center;
     padding-inline: var(--space-2);
-    border: var(--border-width-hairline) solid var(--control-border);
-    background: var(--surface-subtle);
-    color: var(--text-secondary);
   }
 
   .block[data-cancelled] {
@@ -588,6 +600,19 @@
     .dayButton {
       margin-inline: 0;
       padding-inline: var(--space-2);
+    }
+
+    /* One day shows at a time, so each day's button says it has something on with a small dot under its date,
+       as Apple Calendar's and Fantastical's week strips do; every button keeps the dot's room. */
+    .dayButton::after {
+      inline-size: var(--space-4);
+      block-size: var(--space-4);
+      border-radius: var(--radius-full);
+      content: '';
+    }
+
+    .dayButton[data-busy]::after {
+      background: var(--text-tertiary);
     }
   }
 }

@@ -103,6 +103,15 @@ export function weekDays(monday: string): readonly string[] {
   return Array.from({ length: 7 }, (_, index) => addDays(monday, index));
 }
 
+/** The week on screen as the small month's tinted band, its first and last day; nothing for an empty week. */
+export function shownWeek(days: readonly string[]): {
+  readonly shown?: { readonly start: string; readonly end: string };
+} {
+  const start = days[0];
+  const end = days.at(-1);
+  return start === undefined || end === undefined ? {} : { shown: { start, end } };
+}
+
 /** The range a week reads, as ISO instants: its first day's midnight to the next week's, in `zone`. */
 export function weekRange(monday: string, zone: string): { readonly from: string; readonly to: string } {
   return { from: midnightIn(monday, zone).toISOString(), to: midnightIn(addDays(monday, 7), zone).toISOString() };

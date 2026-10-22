@@ -69,6 +69,6 @@ test('a visitor books by chat and the host sees the conversation (spec 0042)', a
   const row = page.getByRole('listitem').filter({ hasText: 'Grace Hopper' });
   await row.getByRole('button', { name: 'Intro call' }).click();
   await expect(page.getByText('By chat on the booking page')).toBeVisible();
-  await page.getByRole('button', { name: /^Chat/ }).click();
+  await page.getByRole('button', { name: /^View chat/ }).click();
   await expect(page.getByText('I’m Grace Hopper, grace@navy.example')).toBeVisible();
 });

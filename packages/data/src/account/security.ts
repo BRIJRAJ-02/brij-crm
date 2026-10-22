@@ -1,17 +1,10 @@
-// Account › Security's state (spec 0033, milestone 2): two factor on or off,
+// Account › Sign in and devices' state (spec 0033, milestone 2): two factor on or off,
 // backup codes left, and whether this session is fresh for a sensitive
 // change. One held value, read when a screen first holds it and again after
 // each change. A step up (AC-896) proves who the person is again and makes
 // the session fresh for 10 minutes; the screens ask for it inline, in the
 // change's own dialog, and then carry on.
-import type {
-  AccountPasskey,
-  AccountSecurity,
-  PasskeyAssertion,
-  PasskeyRequestOptions,
-  SessionFreshness,
-  StepUpMethod,
-} from '@crm/contracts';
+import type { AccountSecurity, SessionFreshness, StepUpMethod } from '@crm/contracts';
 import { refusalSummary, toDataError, type DataError } from '../errors.ts';
 
 /** The calls the store makes. */
@@ -19,16 +12,9 @@ export interface AccountSecurityApi {
   readonly get: () => Promise<AccountSecurity>;
   readonly startStepUp: () => Promise<unknown>;
   readonly verifyStepUp: (input: { readonly method: StepUpMethod; readonly code: string }) => Promise<SessionFreshness>;
-  /** A passkey step up's challenge (milestone 3). */
-  readonly passkeyOptions: () => Promise<{ readonly options: PasskeyRequestOptions }>;
-  /** Asks the browser for a passkey to answer it; `cancelled` when the person closed the prompt. */
-  readonly passkeyAssertion: (options: PasskeyRequestOptions) => Promise<PasskeyAssertion | 'cancelled'>;
-  readonly verifyPasskey: (input: { readonly response: PasskeyAssertion }) => Promise<SessionFreshness>;
-  readonly renamePasskey: (input: { readonly id: string; readonly name: string }) => Promise<AccountPasskey>;
-  readonly removePasskey: (input: { readonly id: string }) => Promise<unknown>;
 }
 
-/** Account › Security's state: loading, failed, or as the server last said. */
+/** Account › Sign in and devices' state: loading, failed, or as the server last said. */
 export type AccountSecurityState =
   | { readonly status: 'loading' }
   | { readonly status: 'error'; readonly message: string }
@@ -38,10 +24,7 @@ export type AccountSecurityState =
 export type StepUpResult =
   { readonly ok: true } | { readonly ok: false; readonly code: DataError['code']; readonly message: string };
 
-/** How a passkey step up went: as a code's, or the person closed the browser's prompt (nothing to show). */
-export type PasskeyStepUpResult = StepUpResult | { readonly ok: false; readonly code: 'CANCELLED' };
-
-/** Account › Security's state, as screens hold it. */
+/** Account › Sign in and devices' state, as screens hold it. */
 export interface AccountSecurityView {
   readonly subscribe: (listener: () => void) => () => void;
   readonly getSnapshot: () => AccountSecurityState;
@@ -118,66 +101,6 @@ export function createAccountSecurityStore(api: AccountSecurityApi) {
         return { ok: true };
       } catch (error) {
         return refused(error);
-      }
-    },
-    /** A step up by passkey: the challenge, the browser's prompt, then the check. Never throws. */
-    async verifyPasskey(): Promise<PasskeyStepUpResult> {
-      try {
-        const { options } = await api.passkeyOptions();
-        const response = await api.passkeyAssertion(options);
-        if (response === 'cancelled') return { ok: false, code: 'CANCELLED' };
-        const session = await api.verifyPasskey({ response });
-        if (state.status === 'ready') set({ ...state, session });
-        // The passkey's last use moved.
-        void read();
-        return { ok: true };
-      } catch (error) {
-        return refused(error);
-      }
-    },
-    /** Renames a passkey: shown at once, put back if refused. Never throws. */
-    async renamePasskey(id: string, name: string): Promise<StepUpResult> {
-      const before = state;
-      if (before.status === 'ready') {
-        set({ ...before, passkeys: before.passkeys.map((each) => (each.id === id ? { ...each, name } : each)) });
-      }
-      try {
-        const renamed = await api.renamePasskey({ id, name });
-        if (state.status === 'ready') {
-          set({ ...state, passkeys: state.passkeys.map((each) => (each.id === id ? renamed : each)) });
-        }
-        return { ok: true };
-      } catch (error) {
-        if (before.status === 'ready' && state.status === 'ready') {
-          const old = before.passkeys.find((each) => each.id === id);
-          set({ ...state, passkeys: state.passkeys.map((each) => (each.id === id && old !== undefined ? old : each)) });
-        }
-        return refused(error);
-      }
-    },
-    /**
-     * Removes a passkey (after a step up): gone at once, back in its place if
-     * refused (STEP_UP_REQUIRED included, for the dialog to ask). Never throws.
-     */
-    async removePasskey(id: string): Promise<StepUpResult> {
-      const before = state;
-      if (before.status === 'ready') set({ ...before, passkeys: before.passkeys.filter((each) => each.id !== id) });
-      try {
-        await api.removePasskey({ id });
-        return { ok: true };
-      } catch (error) {
-        const failure = refused(error);
-        if (before.status === 'ready' && state.status === 'ready') {
-          const gone = before.passkeys.find((each) => each.id === id);
-          // Back where it was, unless the server says it is gone already.
-          if (gone !== undefined && !failure.ok && failure.code !== 'NOT_FOUND') {
-            const at = before.passkeys.indexOf(gone);
-            const passkeys = [...state.passkeys];
-            passkeys.splice(Math.min(at, passkeys.length), 0, gone);
-            set({ ...state, passkeys });
-          }
-        }
-        return failure;
       }
     },
   };

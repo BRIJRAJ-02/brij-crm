@@ -14,7 +14,7 @@ import { FORM_SLUG, publishProblem, slugFromName } from '@crm/data/forms';
 import { Button, Callout, Field, Modal, Select } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { changeQuestion, fileByLabel, fittingAttributes, publishAttributesOf } from './draft.ts';
+import { changeQuestion, fileByLabel, fittingAttributes, publishAttributesOf, publishStart } from './draft.ts';
 import { firstRefusal } from './refusals.ts';
 import { embedSnippet } from './snippets.ts';
 import { strings } from './strings.ts';
@@ -64,9 +64,14 @@ export function PublishDialog(props: PublishDialogProps) {
     props;
   const { data } = useRouteContext({ from: '__root__' });
   const [step, setStep] = useState<1 | 2 | 'live'>(1);
-  const [name, setName] = useState(form.name === strings.untitledForm ? '' : form.name);
-  const [address, setAddress] = useState(form.publicKey);
+  // Until one is typed here, the name and address follow the form's own name, so a name given in the editor just
+  // before Publish (saved as the field is left) lands in the dialog too.
+  const start = publishStart(form.name, form.publicKey);
+  const [typedName, setTypedName] = useState<string | undefined>(undefined);
+  const [chosenAddress, setChosenAddress] = useState<string | undefined>(undefined);
   const [isAddressTyped, setAddressTyped] = useState(false);
+  const name = typedName ?? start.name;
+  const address = chosenAddress ?? start.address;
   const [taken, setTaken] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -74,10 +79,10 @@ export function PublishDialog(props: PublishDialogProps) {
 
   // The address follows the name until it is typed.
   const rename = (text: string) => {
-    setName(text);
+    setTypedName(text);
     if (isAddressTyped || text.trim() === '') return;
     const suggested = slugFromName(text);
-    if (FORM_SLUG.test(suggested)) setAddress(suggested);
+    if (FORM_SLUG.test(suggested)) setChosenAddress(suggested);
   };
 
   // The address is checked as it changes.
@@ -87,7 +92,11 @@ export function PublishDialog(props: PublishDialogProps) {
     const timer = setTimeout(() => {
       data.forms.slugAvailable(slug, form.id, address).then(
         (isFree) => {
-          if (isCurrent) setTaken(isFree ? undefined : address);
+          if (!isCurrent) return;
+          // An address made from the name that another form holds goes back to the form's own key, rather than
+          // showing an error the person never typed; one they typed says it is taken.
+          if (!isFree && !isAddressTyped) setChosenAddress(form.publicKey);
+          else setTaken(isFree ? undefined : address);
         },
         () => undefined,
       );
@@ -96,7 +105,7 @@ export function PublishDialog(props: PublishDialogProps) {
       isCurrent = false;
       clearTimeout(timer);
     };
-  }, [address, data, slug, form.id, form.publicKey]);
+  }, [address, data, slug, form.id, form.publicKey, isAddressTyped]);
 
   const addressError = !FORM_SLUG.test(address)
     ? strings.addressInvalid
@@ -297,7 +306,7 @@ export function PublishDialog(props: PublishDialogProps) {
             autoComplete="off"
             onChange={(text) => {
               setAddressTyped(true);
-              setAddress(text.toLowerCase());
+              setChosenAddress(text.toLowerCase());
             }}
             onSubmit={goToAnswers}
             {...(addressError === undefined || address === '' ? {} : { error: addressError })}

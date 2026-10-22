@@ -1,21 +1,14 @@
 // Brief
-// Purpose: Account › Security › Recent activity (spec 0033, AC-898): what happened to this account lately.
+// Purpose: Account › Sign in and devices › Recent activity (spec 0033, AC-898): what happened to this account lately.
 // Main task: scan the last 90 days of sign ins and sign in changes, newest first, and read further back on demand.
 // Leaves out: IP addresses (never shown), other people's activity, and anything older than 90 days.
 import { isDataError, type ActivityPage, type DataLayer, type SecurityActivity } from '@crm/data';
-import { Button, EmptyState, RelativeTime, SettingsSection, Table, type TableColumn } from '@crm/ui';
+import { Button, Card, EmptyState, RelativeTime, SettingsRow, SettingsSection, Skeleton } from '@crm/ui';
 import { Suspense, use, useState } from 'react';
-import { deviceName, devicePlace } from './security-lines.ts';
+import { devicePlace } from './security-lines.ts';
 import { strings } from './security-strings.ts';
 
 const copy = strings.activity;
-
-const COLUMNS: readonly TableColumn[] = [
-  { id: 'what', label: copy.columns.what, isRowHeader: true },
-  { id: 'device', label: copy.columns.device },
-  { id: 'place', label: copy.columns.place },
-  { id: 'when', label: copy.columns.when },
-];
 
 /** What happened, in words: the kind, and for a sign in how. */
 export function activityLine(event: SecurityActivity): string {
@@ -38,14 +31,11 @@ export function RecentActivitySection(props: RecentActivitySectionProps) {
     <SettingsSection title={copy.section} description={copy.description}>
       <Suspense
         fallback={
-          <Table
-            label={copy.section}
-            columns={COLUMNS}
-            rows={[]}
-            getRowId={() => ''}
-            renderCell={() => null}
-            isLoading
-          />
+          <Card isBusy>
+            {[0, 1, 2].map((index) => (
+              <SettingsRow key={index} title="" description={<Skeleton width="medium" />} />
+            ))}
+          </Card>
         }
       >
         <ActivityTable {...props} />
@@ -87,23 +77,30 @@ function ActivityRows({ data, page }: { readonly data: DataLayer; readonly page:
     }
   };
 
-  const renderCell = (event: SecurityActivity, column: string) => {
-    if (column === 'what') return activityLine(event);
-    if (column === 'device') return deviceName({ deviceLabel: event.deviceLabel ?? '' });
-    if (column === 'place') return devicePlace(event) ?? strings.unknownPlace;
-    return <RelativeTime value={event.at} />;
+  // One row per event, as the devices list them: what happened, then where from and when. A device or a place
+  // the edge didn't know is left out rather than said as "Unknown".
+  const eventRow = (event: SecurityActivity) => {
+    const from = [event.deviceLabel ?? '', devicePlace(event) ?? ''].filter((part) => part.trim() !== '');
+    return (
+      <SettingsRow
+        key={event.id}
+        title={activityLine(event)}
+        description={
+          <>
+            {from.length === 0 ? '' : `${from.join(', ')} · `}
+            <RelativeTime value={event.at} />
+          </>
+        }
+      />
+    );
   };
 
   return (
     <>
-      <Table
-        label={copy.section}
-        columns={COLUMNS}
-        rows={items}
-        getRowId={(event) => event.id}
-        renderCell={renderCell}
-        emptyState={<EmptyState icon="shield-check" title={copy.empty} />}
-      />
+      <Card>
+        {/* Nothing yet is one quiet line, not a block. */}
+        {items.length === 0 ? <EmptyState layout="row" icon="shield-check" title={copy.empty} /> : items.map(eventRow)}
+      </Card>
       {failure !== undefined && (
         <EmptyState layout="row" tone="error" title={copy.failedMore} onRetry={() => void showMore()}>
           {failure}

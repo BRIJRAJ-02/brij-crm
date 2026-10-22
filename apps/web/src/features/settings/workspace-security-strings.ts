@@ -1,4 +1,4 @@
-// Settings › Workspace › Security: the page's copy (spec 0033, milestone 4), apart from Account › Security's own.
+// Settings › Workspace › Security: the page's copy (spec 0033, milestone 4), apart from Account › Sign in and devices' own.
 
 /** Days as the session length Select says them. */
 const days = (count: number) => (count === 1 ? '1 day' : `${String(count)} days`);
@@ -11,7 +11,7 @@ export const strings = {
   twoFactor: 'Two factor sign in',
   twoFactorDescription: 'A second step at sign in, so access to someone’s email alone doesn’t open the workspace.',
   require: 'Require two factor sign in',
-  requireOff: 'When on, everyone signs in with an authenticator app or a passkey as well as their email.',
+  requireOff: 'When on, everyone signs in with an authenticator app as well as their email.',
   requireOn: (without: number) =>
     without === 0
       ? 'Everyone here has two factor sign in set up.'
@@ -41,7 +41,7 @@ export const strings = {
   signOutEveryoneTitle: 'Sign out everyone?',
   signOutEveryoneText: (workspace: string) =>
     `Everyone in ${workspace} has to sign in again to open it, on every device. Anything unsaved is lost. You stay signed in on this device.`,
-  signingOut: 'Signing out…',
+  signingOut: 'Signing out',
   sendCode: 'Email me a code',
   confirmLengthTitle: (count: number) => `Make sessions last ${days(count)}?`,
   confirmLengthText: (count: number, workspace: string) =>

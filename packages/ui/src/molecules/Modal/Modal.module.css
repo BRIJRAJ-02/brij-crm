@@ -180,6 +180,31 @@
     }
   }
 
+  /* The sheet (a phone's card for one thing on a page, as Google Calendar's event sheet): the window's width,
+     pinned to its foot with its top corners rounded, at most the window less a bar; it rises from the foot. Its
+     bar is quiet, Close alone, since what it shows has its own heading. */
+  .scrim:has(> .root[data-variant='sheet']) {
+    place-items: end stretch;
+    padding: 0;
+    padding-block-start: var(--size-bar);
+  }
+
+  .root[data-variant='sheet'] {
+    inline-size: 100%;
+    max-block-size: calc(100dvh - var(--size-bar));
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .root[data-variant='sheet'] .head {
+    min-block-size: var(--size-toolbar);
+    border-block-end-color: transparent;
+  }
+
+  .root[data-variant='sheet'] .body {
+    padding-block-start: 0;
+  }
+
   .root[data-variant='peek'] .dialog {
     block-size: 100%;
   }
@@ -212,6 +237,14 @@
     animation: shrink var(--duration-exit) var(--ease-out) forwards;
   }
 
+  .root[data-variant='sheet'][data-entering] {
+    animation: rise var(--duration-modal) var(--ease-drawer);
+  }
+
+  .root[data-variant='sheet'][data-exiting] {
+    animation: sink var(--duration-exit) var(--ease-out) forwards;
+  }
+
   /* Opened from the keyboard (the palette's ⌘K), it appears at once. */
   .scrim[data-opened-by='keyboard'][data-entering],
   .root[data-opened-by='keyboard'][data-entering] {
@@ -232,6 +265,18 @@
     }
   }
 
+  @keyframes rise {
+    from {
+      translate: 0 100%;
+    }
+  }
+
+  @keyframes sink {
+    to {
+      translate: 0 100%;
+    }
+  }
+
   @keyframes fade-in {
     from {
       opacity: 0;
@@ -245,11 +290,13 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .root[data-entering] {
+    .root[data-entering],
+    .root[data-variant='sheet'][data-entering] {
       animation-name: fade-in;
     }
 
-    .root[data-exiting] {
+    .root[data-exiting],
+    .root[data-variant='sheet'][data-exiting] {
       animation-name: fade-out;
     }
   }

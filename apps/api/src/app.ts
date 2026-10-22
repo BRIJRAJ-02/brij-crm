@@ -253,10 +253,7 @@ export function createApp({
   const calendarRoutes = createCalendarRoutes({
     // The same door the RPC's `member` base opens (orpc.ts), with the same rules.
     enter: (session, slug) =>
-      enterWorkspace(
-        { db, identity, log, rules },
-        { userId: session.user.id, slug, session: doorSession(session, identity) },
-      ),
+      enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
     auth,
     wakeRelay,
     analytics,
@@ -377,10 +374,9 @@ export function createApp({
         },
         signedOut,
         requiredBy: (userId) => twoFactorRequiredBy({ db, identity }, userId),
-        // Only these four calls, by ids, for the workspace security settings and the Members column (spec 0033).
+        // Only these three calls, by ids, for the workspace security settings and the Members column (spec 0033).
         factors: {
           secondFactorUsers: (userIds) => identity.secondFactorUsers(userIds),
-          hasPasskey: (userId) => identity.hasPasskey(userId),
           sessionVerification: (userId, sessionId) => identity.sessionVerification(userId, sessionId),
           markSessionVerified: (userId, sessionId, verifiedWith) =>
             identity.markSessionVerified(userId, sessionId, verifiedWith),
@@ -417,10 +413,7 @@ export function createApp({
   mountExports(app, {
     auth,
     enter: (session, slug) =>
-      enterWorkspace(
-        { db, identity, log, rules },
-        { userId: session.user.id, slug, session: doorSession(session, identity) },
-      ),
+      enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
   });
   // The form to booking hand off (spec 0023 AC-1057): one key, signing on the form's side and reading on the page's.
   const formsHandoffKey = handoffKey(env.BETTER_AUTH_SECRET);
@@ -494,10 +487,7 @@ export function createApp({
       auth,
       workspacesOf: (userId) => identity.workspacesOf(userId),
       enter: (session, slug) =>
-        enterWorkspace(
-          { db, identity, log, rules },
-          { userId: session.user.id, slug, session: doorSession(session, identity) },
-        ),
+        enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
       memberBusy: bookingBusy,
       ...(calendar === undefined
         ? {}

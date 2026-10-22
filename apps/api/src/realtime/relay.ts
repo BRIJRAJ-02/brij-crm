@@ -192,6 +192,12 @@ export interface RelayDeps {
   readonly selfDormant?: boolean;
   /** Hears every sign of work (a row found, a notification, a poke): the worker's idle clock starts again. */
   readonly onWork?: () => void;
+  /**
+   * The clock every wait, quiet spell, retry and prune round reads (default
+   * `Date.now`). A timer waits the gap this clock gives on the real one, so
+   * a test passes a clock it moves itself and asserts in its ticks.
+   */
+  readonly now?: () => number;
 }
 
 /** `active` while it holds a connection, `dormant` while it makes no database call, `stopped` otherwise. */
@@ -292,6 +298,7 @@ type SessionEnd =
 
 /** The relay, with everything it touches passed in. */
 export function createRelay(deps: RelayDeps): Relay {
+  const clock = deps.now ?? (() => Date.now());
   const schedule =
     deps.pollScheduleMs !== undefined && deps.pollScheduleMs.length > 0 ? deps.pollScheduleMs : POLL_SCHEDULE_MS;
   const dormantAfterMs = deps.dormantAfterMs ?? DORMANT_AFTER_MS;
@@ -306,7 +313,7 @@ export function createRelay(deps: RelayDeps): Relay {
   const workspacesPerPoll = deps.workspacesPerPoll ?? 500;
   const retryMs = deps.retryMs ?? 1_000;
   const maxRetryMs = deps.maxRetryMs ?? 60_000;
-  const stats = deps.stats ?? createRelayStats();
+  const stats = deps.stats ?? createRelayStats({ now: clock });
   const statsEveryMs = deps.statsEveryMs ?? 60_000;
   const selfDormant = deps.selfDormant ?? true;
   const { log } = deps;
@@ -328,8 +335,8 @@ export function createRelay(deps: RelayDeps): Relay {
     try {
       deps.lag(lagsMs);
     } catch (error) {
-      if (Date.now() - lagWarnedAt < WARN_EVERY_MS) return;
-      lagWarnedAt = Date.now();
+      if (clock() - lagWarnedAt < WARN_EVERY_MS) return;
+      lagWarnedAt = clock();
       log.warn('Recording the relay lag failed', errorFields(error));
     }
   };
@@ -352,7 +359,7 @@ export function createRelay(deps: RelayDeps): Relay {
       ...[...retries.values()].map((retry) => retry.since),
     );
     if (since === Number.POSITIVE_INFINITY) return snapshot;
-    return { ...snapshot, oldestPendingMs: Math.max(snapshot.oldestPendingMs ?? 0, Date.now() - since) };
+    return { ...snapshot, oldestPendingMs: Math.max(snapshot.oldestPendingMs ?? 0, clock() - since) };
   };
   const served = (): void => {
     unservedSince = undefined;
@@ -389,12 +396,12 @@ export function createRelay(deps: RelayDeps): Relay {
   let pruneRound: {
     readonly dueAt: number;
     readonly open: { readonly pruned: number; readonly batches: number } | undefined;
-  } = { dueAt: Date.now(), open: undefined };
+  } = { dueAt: clock(), open: undefined };
   // When each workspace last took a turn: one quiet for a whole quiet spell lets go of its audiences, so a busy
   // worker that never goes dormant holds only the workspaces that write.
   const audienceUsed = new Map<string, number>();
   function audiencesOf(workspaceId: string): Promise<readonly Audience[]> {
-    const now = Date.now();
+    const now = clock();
     for (const [id, at] of audienceUsed) {
       if (now - at < dormantAfterMs) continue;
       audienceUsed.delete(id);
@@ -427,7 +434,7 @@ export function createRelay(deps: RelayDeps): Relay {
 
   /** A sign of work: the quiet clock starts again and the poll goes back to its first wait. */
   function sawWork(): void {
-    lastWork = Date.now();
+    lastWork = clock();
     step = 0;
     deps.onWork?.();
   }
@@ -440,20 +447,20 @@ export function createRelay(deps: RelayDeps): Relay {
   // the worker's lifecycle owns the idle clock; then only sleep() sends it dormant.
   const quiet = (): boolean => {
     if (!selfDormant) return false;
-    const now = Date.now();
+    const now = clock();
     return now - lastWork >= dormantAfterMs && [...retries.values()].every((retry) => stuck(retry, now));
   };
   const sleeping = (): boolean => sleepRequested;
 
   /** True when the workspace may take a turn now: not waiting after a failure. */
-  const ready = (workspaceId: string): boolean => (retries.get(workspaceId)?.at ?? 0) <= Date.now();
+  const ready = (workspaceId: string): boolean => (retries.get(workspaceId)?.at ?? 0) <= clock();
 
   /**
    * Puts a workspace in its backoff after a failed publish or a database
    * error in its turn, and warns at most once a minute about it.
    */
   function failed(workspaceId: string, seq: number | undefined, error: unknown, what: 'publish' | 'database'): void {
-    const now = Date.now();
+    const now = clock();
     const before = retries.get(workspaceId);
     const failures = (before?.failures ?? 0) + 1;
     const retryInMs = Math.min(retryMs * 2 ** (failures - 1), maxRetryMs);
@@ -614,13 +621,13 @@ export function createRelay(deps: RelayDeps): Relay {
   async function pruneAfterPass(reader: OutboxReader, quietPass: boolean): Promise<void> {
     if (!pruning) return;
     const round = pruneRound;
-    const now = Date.now();
+    const now = clock();
     if (round.open === undefined && (now < round.dueAt || (!quietPass && now < round.dueAt + pruneEveryMs))) return;
     const before = round.open ?? { pruned: 0, batches: 0 };
     let full = false;
     let pruned = 0;
     let failure: unknown;
-    const started = Date.now();
+    const started = clock();
     try {
       pruned = await reader.prune(pruneBatch);
       full = pruned >= pruneBatch;
@@ -629,13 +636,13 @@ export function createRelay(deps: RelayDeps): Relay {
     }
     // A batch slower than PRUNE_SLOW_MS (dead index entries a long snapshot keeps, a cold cache) ends the round
     // even when full, so publishing waits behind at most one slow batch each round.
-    const slow = Date.now() - started > PRUNE_SLOW_MS;
+    const slow = clock() - started > PRUNE_SLOW_MS;
     const sofar = { pruned: before.pruned + pruned, batches: before.batches + 1 };
     if (full && !slow) {
       pruneRound = { dueAt: round.dueAt, open: sofar };
       return;
     }
-    pruneRound = { dueAt: Date.now() + pruneEveryMs, open: undefined };
+    pruneRound = { dueAt: clock() + pruneEveryMs, open: undefined };
     if (failure !== undefined) {
       log.warn('Pruning the outbox failed; the next round tries again', { ...sofar, ...errorFields(failure) });
     } else if (sofar.pruned > 0) {
@@ -658,7 +665,7 @@ export function createRelay(deps: RelayDeps): Relay {
       let holding = false;
       let lastPoll = Number.NEGATIVE_INFINITY;
       // The numbers go out a minute after taking the lock, then every minute while publishing.
-      let lastStats = Date.now();
+      let lastStats = clock();
       // Where the next poll starts: after the last workspace a full poll named, so with more waiting than one
       // poll returns, every workspace still gets its turn.
       let pollAfter: string | undefined;
@@ -669,9 +676,9 @@ export function createRelay(deps: RelayDeps): Relay {
         if (sleeping()) return { reason: 'quiet' };
         const error = dropped();
         if (error !== undefined) return { reason: 'lost', error };
-        const due = Date.now() >= lastPoll + pollWait();
+        const due = clock() >= lastPoll + pollWait();
         if (!holding && due) {
-          lastPoll = Date.now();
+          lastPoll = clock();
           holding = await reader.lock();
           // Another relay holds the lock: it serves the outbox.
           if (!holding) served();
@@ -699,7 +706,7 @@ export function createRelay(deps: RelayDeps): Relay {
           for (const workspaceId of notified) add(workspaceId);
           notified.clear();
           if (due) {
-            lastPoll = Date.now();
+            lastPoll = clock();
             const waiting = await reader.workspaces(workspacesPerPoll, pollAfter);
             served();
             pollAfter = waiting.length >= workspacesPerPoll ? waiting.at(-1) : undefined;
@@ -713,8 +720,8 @@ export function createRelay(deps: RelayDeps): Relay {
           // pass with nothing to publish is quiet, where a new round prefers to start.
           if ((due || workspaces.size > 0) && !halted()) await pruneAfterPass(reader, workspaces.size === 0);
           // From memory: the line costs no query, and only the publishing relay writes it.
-          if (Date.now() - lastStats >= statsEveryMs) {
-            lastStats = Date.now();
+          if (clock() - lastStats >= statsEveryMs) {
+            lastStats = clock();
             log.info('relay.stats', { ...report() });
           }
         }
@@ -732,7 +739,7 @@ export function createRelay(deps: RelayDeps): Relay {
         }
         const nextRetry = Math.min(...[...retries.values()].map((retry) => retry.at));
         const nextStats = holding ? lastStats + statsEveryMs : Number.POSITIVE_INFINITY;
-        await sleep(Math.min(lastPoll + pollWait(), lastWork + dormantAfterMs, nextRetry, nextStats) - Date.now());
+        await sleep(Math.min(lastPoll + pollWait(), lastWork + dormantAfterMs, nextRetry, nextStats) - clock());
       }
     } finally {
       open = false;
@@ -783,7 +790,7 @@ export function createRelay(deps: RelayDeps): Relay {
         current = 'active';
         failures = 0;
         // The workspaces it went dormant with are due at once.
-        const now = Date.now();
+        const now = clock();
         for (const [workspaceId, retry] of retries) retries.set(workspaceId, { ...retry, at: now });
         // A new awake period: a prune round is due from now.
         pruneRound = { dueAt: now, open: undefined };
@@ -794,7 +801,7 @@ export function createRelay(deps: RelayDeps): Relay {
       let connectedAt: number | undefined;
       try {
         reader = await deps.connect();
-        connectedAt = Date.now();
+        connectedAt = clock();
         ended = await session(reader);
       } catch (error) {
         if (!halted()) log.warn('Relay failed; reconnecting', errorFields(error));
@@ -818,7 +825,7 @@ export function createRelay(deps: RelayDeps): Relay {
         continue;
       }
       // Only a connection that stayed up a while proves the trouble passed.
-      if (connectedAt !== undefined && Date.now() - connectedAt >= healthyMs) failures = 0;
+      if (connectedAt !== undefined && clock() - connectedAt >= healthyMs) failures = 0;
       const delay = Math.min(backoffMs * 2 ** failures, maxBackoffMs);
       failures += 1;
       log.info('Relay reconnecting', { inMs: delay });
@@ -833,11 +840,11 @@ export function createRelay(deps: RelayDeps): Relay {
   return {
     start() {
       if (running !== undefined) return;
-      unservedSince = Date.now();
+      unservedSince = clock();
       unservedByWake = false;
       stopped = false;
       current = 'active';
-      pruneRound = { dueAt: Date.now(), open: undefined };
+      pruneRound = { dueAt: clock(), open: undefined };
       running = run();
     },
     wake() {
@@ -848,7 +855,7 @@ export function createRelay(deps: RelayDeps): Relay {
         sleepRequested = false;
         settleDormant();
       }
-      unservedSince ??= Date.now();
+      unservedSince ??= clock();
       unservedByWake = true;
       sawWork();
       woken = true;
@@ -867,7 +874,7 @@ export function createRelay(deps: RelayDeps): Relay {
     stats: report,
     cachedAudiences: () => audienceCache.size,
     stuckWorkspaces: () => {
-      const now = Date.now();
+      const now = clock();
       return [...retries].flatMap(([workspaceId, retry]) => (stuck(retry, now) ? [workspaceId] : []));
     },
     async stop() {

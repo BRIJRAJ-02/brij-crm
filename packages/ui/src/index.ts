@@ -188,6 +188,13 @@ export {
 } from './modules/AppShell/AppShell.tsx';
 export { AuthLayout, type AuthLayoutProps, type ProductLogo } from './modules/AuthLayout/AuthLayout.tsx';
 export {
+  InviteRows,
+  type InviteRole,
+  type InviteRowsHandle,
+  type InviteRowsProps,
+} from './modules/InviteRows/InviteRows.tsx';
+export { createInviteRow, type InviteRow } from './modules/InviteRows/invite-rows.ts';
+export {
   BookingList,
   type BookingListGroup,
   type BookingListProps,
@@ -220,6 +227,12 @@ export {
 export { Pagination, type PaginationProps } from './molecules/Pagination/Pagination.tsx';
 export { RecordStats, type RecordStat, type RecordStatsProps } from './molecules/RecordStats/RecordStats.tsx';
 export { SpanCard, type SpanCardChoice, type SpanCardProps } from './modules/SpanCard/SpanCard.tsx';
+export {
+  MeetingCard,
+  type MeetingCardPerson,
+  type MeetingCardProps,
+  type MeetingCardRow,
+} from './modules/MeetingCard/MeetingCard.tsx';
 export {
   BookingDetails,
   type BookingDetailsOutcome,

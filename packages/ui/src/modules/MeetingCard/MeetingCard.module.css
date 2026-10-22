@@ -1,0 +1,149 @@
+/* MeetingCard: one meeting's details with no surface of its own (the Popover, Panel or sheet around it is the
+   card). Google Calendar's alignment: every line of text starts on one text column; a gutter to its left
+   (space-24, an avatar's width, then space-12) holds each row's icon or avatar, centred on the row's first line
+   (the lead is one body line tall). The header and notices start on the text column; the footer and its hairline
+   span the content from the gutter's edge. One rhythm,
+   space-12, between the header, every row, and the footer's hairline, with space-12 under the hairline again.
+   Its width comes from the holder, at most size-panel. */
+@layer components {
+  .root {
+    --meeting-lead: var(--space-24);
+    --meeting-gutter: calc(var(--meeting-lead) + var(--space-12));
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    inline-size: var(--size-panel);
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* The header and notices: on the text column. */
+  .inset {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+    padding-inline-start: var(--meeting-gutter);
+  }
+
+  .title {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+    overflow-wrap: anywhere;
+  }
+
+  .when {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-12);
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: var(--meeting-lead) minmax(0, 1fr);
+    gap: var(--space-12);
+    align-items: start;
+  }
+
+  /* One body line tall, so its icon or avatar centres on the row's first line, whatever follows. */
+  .lead {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    block-size: 1lh;
+    margin: 0;
+    color: var(--text-tertiary);
+  }
+
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    margin: 0;
+  }
+
+  .line {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .lineText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  /* A row's control sits on its first line, a control's height centred on it. */
+  .rowAction {
+    display: flex;
+    flex: none;
+    align-items: center;
+    block-size: 1lh;
+  }
+
+  .value {
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  .detailLine {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  /* A quieter line in the time's style (text-secondary at the body size), so the card reads in two weights. */
+  .detail {
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
+
+  /* The copy button keeps its full target but takes only the email's line, so the row keeps its rhythm. */
+  .copy {
+    display: flex;
+    flex: none;
+    align-items: center;
+    block-size: 1lh;
+  }
+
+  /* The footer and its hairline span the content from the gutter's edge; the buttons stay on one row (the screen
+     passes at most Join, one more and an overflow menu). */
+  .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    padding-block-start: var(--space-12);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+}

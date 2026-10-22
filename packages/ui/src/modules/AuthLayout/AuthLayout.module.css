@@ -29,10 +29,6 @@
     .root {
       padding-block-start: max(calc(2 * var(--space-32)), calc((100dvh - var(--size-panel)) / 2));
     }
-
-    .root[data-split] {
-      padding-block-start: max(calc(2 * var(--space-32)), calc((100dvh - var(--size-page-card) - var(--size-bar)) / 2));
-    }
   }
 
   .brand {
@@ -44,6 +40,83 @@
   .name {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* The split screen (owner, 22 October 2026): two panels edge to edge, the full height of the window, with no
+     card, border or margin around them. On a phone the task's panel is the whole screen and the preview is left
+     out; from bp-page-compact up the task takes about 42% and the preview the rest. */
+  .screen {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-block-size: 100%;
+  }
+
+  /* The task's panel: the mark at its top start, the task in a readable column, who is signed in at its foot.
+     Generous room around everything, a quiet surface. */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    min-block-size: 100%;
+    padding: var(--space-24) var(--space-16);
+    background: var(--surface);
+  }
+
+  /* The task's column. It starts at an offset from the window's height alone, a little above the middle on a
+     wide screen and a fixed step under the mark on a phone, so it holds still between steps and as a refusal
+     makes it taller (centred on its own height, the form jumped under the pointer). */
+  .task {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    align-items: center;
+    padding-block: calc(2 * var(--space-32)) var(--space-32);
+  }
+
+  /* The readable column the task and the footer share, so they start on one line. */
+  .column {
+    inline-size: min(var(--size-panel), 100%);
+  }
+
+  .panelFoot {
+    display: flex;
+    justify-content: center;
+  }
+
+  .side {
+    display: none;
+  }
+
+  @media (width >= 1024px) {
+    .screen {
+      grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+      block-size: 100dvh;
+      min-block-size: 0;
+    }
+
+    .panel {
+      overflow-y: auto;
+      padding: var(--space-32) calc(2 * var(--space-24));
+    }
+
+    .task {
+      padding-block-start: max(calc(2 * var(--space-32)), calc((100dvh - var(--size-page-card)) / 2 - var(--size-bar)));
+    }
+
+    /* The preview's panel, on its own surface (surface-sunken: a tint in light, a step down in dark, so the
+       sketch on surface reads as lifted): the sketch anchors at a fixed offset from its top and start and runs
+       off its end and foot, cut by both on purpose, at every width. */
+    .side {
+      display: block;
+      position: relative;
+      min-inline-size: 0;
+      overflow: hidden;
+      border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+      background: var(--surface-sunken);
+    }
   }
 
   /* The footer: one quiet line, who is signed in at its start and the actions at its end. When both don't fit

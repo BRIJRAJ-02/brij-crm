@@ -45,7 +45,7 @@ export const Ranges: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('now')).toBeInTheDocument();
+    await expect(canvas.getByText('just now')).toBeInTheDocument();
     await expect(canvas.getByText('yesterday')).toBeInTheDocument();
     await expect(canvas.getByText('Sep 20, 2026')).toBeInTheDocument();
   },

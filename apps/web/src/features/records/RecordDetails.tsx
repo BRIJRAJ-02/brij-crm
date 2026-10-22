@@ -98,8 +98,12 @@ export function RecordDetails({
   });
   return (
     <AttributeList
+      // A new record starts its own fold: rows kept open for one record never carry over to the next.
+      key={record.id}
       label={strings.details}
       sections={[{ id: 'details', items }]}
+      // Filled values first, the empty ones behind Show N empty values (Attio's Show all values).
+      emptyValues="fold"
       editorProps={(attribute) => {
         const definition = byId.get(attribute.id);
         return (definition === undefined ? undefined : links.pickerFor(definition, record.id)) ?? {};

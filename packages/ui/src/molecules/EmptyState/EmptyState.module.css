@@ -97,6 +97,28 @@
     margin-block-start: 0;
   }
 
+  /* A row with a line of text: the text sits under the title, both beside the icon, rather than wrapping
+     into a block next to it (Home's cards). The icon stays level with the title. */
+  .root[data-layout='row']:has(> .text) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-8);
+    row-gap: var(--space-2);
+    align-items: center;
+    padding-block: var(--space-6);
+  }
+
+  /* In the grid (a row with text) the words and actions take the second column; a flex row ignores this. */
+  .root[data-layout='row'] :is(.title, .text, .actions) {
+    grid-column: 2;
+  }
+
+  .root[data-layout='row'] .text {
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   @media (forced-colors: active) {
     .icon {
       border-color: CanvasText;

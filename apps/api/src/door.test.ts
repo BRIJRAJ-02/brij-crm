@@ -48,10 +48,6 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   'account.activity.list',
   'account.stepUp.start',
   'account.stepUp.verify',
-  'account.stepUp.passkeyOptions',
-  'account.stepUp.verifyPasskey',
-  'account.passkeys.rename',
-  'account.passkeys.remove',
   'account.deletion.check',
   'account.deletion.confirm',
 ]);

@@ -46,10 +46,18 @@ test.describe('the session ending', () => {
     await expect(page.getByRole('main').getByText(UNSAVED)).toBeVisible();
     await expect(page.getByText(UNSAVED)).toHaveCount(1);
     await expect(page.getByLabel('Email')).toBeFocused();
-    // Nothing of the workspace stays on screen behind sign in.
+    // Nothing of the workspace stays on screen behind sign in. The split screen's sketch beside it (hidden from
+    // assistive tech) shows a sample workspace with sample people, so it is left out of what is read.
     await expect(page.getByRole('heading', { level: 1, name: 'Sign in or sign up' })).toBeVisible();
     await expect(page.getByRole('grid')).toHaveCount(0);
-    expect(await page.evaluate(() => document.body.innerText)).not.toContain('Grace Hopper');
+    const shown = await page.evaluate(() => {
+      const sketches = [...document.querySelectorAll<HTMLElement>('[aria-hidden="true"]')];
+      for (const sketch of sketches) sketch.style.setProperty('display', 'none');
+      const text = document.body.innerText;
+      for (const sketch of sketches) sketch.style.removeProperty('display');
+      return text;
+    });
+    expect(shown).not.toContain('Grace Hopper');
     await checkScreen(page, 'session-ended');
 
     // Signing in again lands on the same page, read fresh: the saved edit is there, the lost one isn't.

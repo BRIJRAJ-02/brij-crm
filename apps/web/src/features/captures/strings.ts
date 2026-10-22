@@ -10,6 +10,8 @@ export const strings = {
   formsCount: 'forms',
   /** The editors' shared header (22 Oct 2026): one set of words for a booking page and a form. */
   copyLink: 'Copy link',
+  /** Opens the live booking page in a new tab. */
+  viewPage: 'View page',
   linkCopied: 'Link copied',
   moreActions: 'More actions',
   pause: 'Pause',

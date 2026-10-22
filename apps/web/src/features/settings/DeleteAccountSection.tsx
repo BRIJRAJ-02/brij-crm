@@ -1,5 +1,6 @@
 // Brief
-// Purpose: Account › Security's danger zone (spec 0033, AC-902 to AC-907): delete your own account.
+// Purpose: Profile's danger zone (spec 0033, AC-902 to AC-907): delete your own account. It sat on Account › Security
+// until 22 October 2026; the person's own page holds it now, as Notion's account page does.
 // Main task: see what stands in the way (workspaces you are the last owner of), then confirm with your email and a step up.
 // Leaves out: deleting a workspace or handing ownership on (each workspace's Members settings), and any grace window.
 import { isDataError, type AccountSecurityState, type DataLayer, type DeletionBlocker } from '@crm/data';
@@ -40,7 +41,6 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
   const stepUp = useStepUp(data, security, {
     secondFactor: twoFactorOn,
     onComplete: () => commit.current(),
-    isBusy,
   });
 
   const check = () => {
@@ -144,7 +144,7 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
   if (isDeleting) label = copy.deleting;
   else if (stepUp.willSend) label = strings.stepUp.send;
   return (
-    <SettingsSection title={copy.section} description={copy.description}>
+    <SettingsSection title={copy.section}>
       <Card>
         <SettingsRow title={copy.row} description={copy.rowText}>
           <Button variant="danger" onPress={open}>
@@ -156,7 +156,7 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
         title={blocked ? copy.blockedTitleOne : copy.title}
         tone="danger"
         isOpen={isOpen}
-        isBusy={isBusy || stepUp.isAsking}
+        isBusy={isBusy}
         onOpenChange={(next) => {
           if (!next && !isBusy) setIsOpen(false);
         }}

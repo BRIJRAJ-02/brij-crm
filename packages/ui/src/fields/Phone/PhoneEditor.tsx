@@ -5,7 +5,7 @@ import { PHONE_PROBLEMS, PhoneField, type PhoneFieldValue } from '../../molecule
 import { useFormatSettings } from '../../provider/context.ts';
 import { ListEditor, type CheckedOne } from '../ListEditor.tsx';
 import type { EditorProps } from '../types.ts';
-import { asList, isCompactSurface, toCommittable } from '../values.ts';
+import { asList, escapesHere, isCompactSurface, toCommittable } from '../values.ts';
 import { formatPhone } from './PhoneDisplay.tsx';
 import {
   createPhoneParser,
@@ -129,7 +129,7 @@ function OnePhone({ attribute, value, surface, onCommit, onCancel, error, startT
       onSubmit={commit}
       // Leaving the whole field commits, not moving from the number to its country code (or the code's list).
       onLeave={commit}
-      onEscape={cancel}
+      {...(escapesHere(surface, onCancel) ? { onEscape: cancel } : {})}
       codeLabel={strings.code}
       {...(shownError === undefined ? {} : { error: shownError })}
     />

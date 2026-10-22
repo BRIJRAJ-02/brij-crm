@@ -109,9 +109,9 @@ export const signInAlert: Template<SignInAlertEmail> = (params, context) => {
       },
       {
         type: 'note',
-        text: 'If this was you, there’s nothing to do. If it wasn’t, go to Account › Security to sign that device out and turn on two factor.',
+        text: 'If this was you, there’s nothing to do. If it wasn’t, go to Account › Sign in and devices to sign that device out and turn on two factor.',
       },
-      { type: 'button', label: 'Open Account › Security', url: context.link(params.securityPath) },
+      { type: 'button', label: 'Open Sign in and devices', url: context.link(params.securityPath) },
     ],
     why: 'You got this email because a new device signed in to the Timefix account for this address.',
   };

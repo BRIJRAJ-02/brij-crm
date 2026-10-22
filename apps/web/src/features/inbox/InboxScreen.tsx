@@ -9,9 +9,11 @@ import {
   NotificationList,
   SectionBar,
   SegmentedControl,
+  Select,
   Switch,
   Tooltip,
   TopBar,
+  type IconName,
   type ListSource,
   type NotificationItem,
 } from '@crm/ui';
@@ -41,11 +43,12 @@ const TABS: readonly { readonly value: 'inbox' | 'done'; readonly label: string 
   { value: 'done', label: strings.done },
 ];
 
-const KINDS: readonly { readonly value: 'all' | InboxKind; readonly label: string }[] = [
-  { value: 'all', label: strings.all },
-  { value: 'mentions', label: strings.mentions },
-  { value: 'replies', label: strings.replies },
-  { value: 'assignments', label: strings.assignments },
+/** The kind filter's choices: a menu, so four kinds fit beside Inbox and Done on a phone (AC-1170). */
+const KINDS: readonly { readonly value: 'all' | InboxKind; readonly label: string; readonly icon?: IconName }[] = [
+  { value: 'all', label: strings.allKinds, icon: 'inbox' },
+  { value: 'mentions', label: strings.mentions, icon: 'at-sign' },
+  { value: 'replies', label: strings.replies, icon: 'message-square' },
+  { value: 'assignments', label: strings.assignments, icon: 'user-check' },
 ];
 
 /** The list's notifications as NotificationList's rows, each mapped once while the members stay, loading more near the end. */
@@ -184,13 +187,19 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
                     go(filtersOnly({ status: value === 'done' ? 'done' : undefined }));
                   }}
                 />
-                <SegmentedControl
+                <Select
                   label={strings.kindLabel}
-                  segments={KINDS}
+                  isLabelHidden
+                  size="sm"
+                  items={KINDS.map(({ value, label, icon }) => ({
+                    id: value,
+                    label,
+                    ...(icon === undefined ? {} : { icon }),
+                  }))}
                   value={search.kind ?? 'all'}
                   onChange={(value) => {
                     const picked = KINDS.find((each) => each.value === value)?.value;
-                    go(filtersOnly({ kind: picked === 'all' ? undefined : picked }));
+                    go(filtersOnly({ kind: picked === undefined || picked === 'all' ? undefined : picked }));
                   }}
                 />
               </>
@@ -220,6 +229,7 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
                 void data.inbox.mark(slug, [id], mark);
               }}
               {...(emptyTitle === undefined ? {} : { emptyTitle })}
+              {...(isFiltered || status === 'done' ? {} : { emptyBody: strings.emptyBody })}
               {...(isFiltered
                 ? { emptyIcon: 'list-filter' as const }
                 : status === 'done'

@@ -3,6 +3,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
 import { signInHref } from '../features/auth/redirect.ts';
 import { shownStep, welcomeLanding, welcomeSearch } from '../features/welcome/steps.ts';
+import { invitableRoles } from '../features/settings/members.ts';
 import { strings } from '../features/welcome/strings.ts';
 import { WelcomeScreen } from '../features/welcome/WelcomeScreen.tsx';
 import { homeWorkspace } from '../features/workspace/home.ts';
@@ -22,14 +23,43 @@ export const Route = createFileRoute('/welcome')({
     const me = await context.data.me.get();
     if (me === undefined)
       throw redirect({ href: signInHref(deps.another ? '/welcome?another=1' : '/welcome'), replace: true });
-    const calendarSync = await context.data.system.status().then(
-      (status) => status.calendarSync,
-      () => false,
-    );
     const home = homeWorkspace(me);
     const landing = welcomeLanding(me.workspaces, deps.workspace, home, deps.another);
     if (landing.kind === 'open') throw redirect({ to: '/w/$slug', params: { slug: landing.slug }, replace: true });
-    return { user: me.user, calendarSync, workspace: landing.workspace, leaveTo: deps.another ? home : undefined };
+    // Invite your team offers the roles its maker may invite as, as Settings › Members does; unread, everyone joins
+    // as a member and the step has no role column.
+    const made = landing.workspace;
+    // Read together, so the invite step's roles add no wait after Create workspace.
+    const calendarRead = context.data.system.status().then(
+      (status) => status.calendarSync,
+      () => false,
+    );
+    const rolesRead =
+      made === undefined
+        ? Promise.resolve(undefined)
+        : Promise.all([context.data.access.mine(made.slug), context.data.roles.list(made.slug)]).then(
+            ([access, roles]) => {
+              const allowed = invitableRoles(access.role);
+              const options = roles.roles.filter(
+                (each) => each.builtIn !== undefined && allowed.includes(each.builtIn),
+              );
+              return options.length === 0
+                ? undefined
+                : {
+                    roles: options,
+                    defaultRole: options.find((each) => each.builtIn === 'member')?.id ?? roles.defaultRole,
+                  };
+            },
+            () => undefined,
+          );
+    const [calendarSync, inviteRoles] = await Promise.all([calendarRead, rolesRead]);
+    return {
+      user: me.user,
+      calendarSync,
+      workspace: landing.workspace,
+      leaveTo: deps.another ? home : undefined,
+      inviteRoles,
+    };
   },
   pendingComponent: () => (
     <LoadingNow>
@@ -41,7 +71,7 @@ export const Route = createFileRoute('/welcome')({
 });
 
 function WelcomeRoute() {
-  const { user, calendarSync, workspace, leaveTo } = Route.useLoaderData();
+  const { user, calendarSync, workspace, leaveTo, inviteRoles } = Route.useLoaderData();
   const { step, calendar, another } = Route.useSearch();
   const { data } = Route.useRouteContext();
   return (
@@ -53,6 +83,7 @@ function WelcomeRoute() {
       workspace={workspace}
       calendarResult={calendar}
       leaveTo={leaveTo}
+      inviteRoles={inviteRoles}
     />
   );
 }

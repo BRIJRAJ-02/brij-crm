@@ -29,6 +29,45 @@ export function formatAmount(amount: string, currency: string, locale: string): 
   return formatDecimal(amount, locale, Math.min(minorUnits(currency), 4));
 }
 
+/** Whether Intl knows the code as a currency: anything else would throw, so it is written as the code and digits. */
+function isCurrencyCode(currency: string): boolean {
+  try {
+    minorUnits(currency);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether an exact decimal string has a fraction other than zero ("1234.50" yes, "1234.00" and "1234" no). */
+function hasFraction(amount: string): boolean {
+  const fraction = amount.split('.')[1] ?? '';
+  return /[1-9]/u.test(fraction);
+}
+
+/**
+ * An amount with its currency's symbol, grouped in the language, as Attio and HubSpot show money: "$58,500",
+ * "€1.234,50" in de-DE, "CA$12" for Canadian dollars beside US ones. A whole amount shows no decimals; one with
+ * a fraction shows at least the currency's minor units and at most 4, exact from the decimal string.
+ * `isFixedDecimals` always shows the minor units, so a column of amounts lines up on its digits.
+ */
+export function formatMoney(amount: string, currency: string, locale: string, isFixedDecimals = false): string {
+  const whole = !isFixedDecimals && !hasFraction(amount);
+  if (!isCurrencyCode(currency)) return `${currency} ${formatDecimal(amount, locale)}`;
+  const minimum = whole ? 0 : Math.min(minorUnits(currency), 4);
+  return memoIntl(
+    `money:${locale}:${currency}:${whole ? 'w' : 'f'}`,
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency,
+        currencyDisplay: 'symbol',
+        minimumFractionDigits: minimum,
+        maximumFractionDigits: whole ? 0 : 4,
+      }),
+  ).format(amount as DecimalString);
+}
+
 function parts(date: string): readonly [number, number, number] {
   const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
   return [year, month, day];
@@ -72,6 +111,29 @@ function writeDay(at: number, locale: string, timeZone: string, dateFormat: Date
 export function formatDate(date: string, locale: string, dateFormat: DateFormat = 'auto'): string {
   const [year, month, day] = parts(date);
   return writeDay(Date.UTC(year, month - 1, day), locale, 'UTC', dateFormat);
+}
+
+/**
+ * A calendar day within the current year, without its year, as lists of dates show them (Linear, Attio): "Oct 24",
+ * "24 Oct". The numeric format keeps its year, since "10-24" reads as nothing. The caller decides the year is the
+ * current one; a day in another year goes through `formatDate`.
+ */
+export function formatDateInYear(date: string, locale: string, dateFormat: DateFormat = 'auto'): string {
+  const [year, month, day] = parts(date);
+  if (dateFormat === 'ymd') return formatDate(date, locale, dateFormat);
+  const at = Date.UTC(year, month - 1, day);
+  if (dateFormat === 'auto') {
+    return memoIntl(
+      `dayInYear:${locale}`,
+      () => new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+    ).format(at);
+  }
+  const shown = memoIntl(
+    `partsInYear:${locale}`,
+    () => new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+  ).formatToParts(at);
+  const part = (type: Intl.DateTimeFormatPartTypes) => shown.find((each) => each.type === type)?.value ?? '';
+  return dateFormat === 'dmy' ? `${part('day')} ${part('month')}` : `${part('month')} ${part('day')}`;
 }
 
 /** An instant's day in the time zone and date format: "Oct 8, 2026". */

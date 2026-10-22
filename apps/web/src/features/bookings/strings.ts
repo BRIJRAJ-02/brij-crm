@@ -68,8 +68,10 @@ export const strings = {
   details: 'Booking',
   status: { confirmed: 'Confirmed', cancelled: 'Canceled' },
   when: 'When',
-  /** Under the new meeting's day, which the calendar chose. */
-  whenFixed: 'To change the day, close this and pick a time on the calendar.',
+  /** New meeting's day: the drawn span's, or the next free one, and changed in place. */
+  day: 'Day',
+  /** Under Their time zone: it doesn't move From and To, which are on the member's clock. */
+  theirTimeZoneHint: 'Only changes how their invitation shows the time.',
   who: 'Who',
   page: 'Booking page',
   guests: 'Also invited',
@@ -86,12 +88,26 @@ export const strings = {
   cancelReason: 'Why it was canceled',
   openPerson: 'Open their page',
   joinCall: 'Join call',
+  /** The card's Join: short on screen, its name the provider ("Join Google Meet"). */
+  join: 'Join',
+  joinProvider: (provider: string) => `Join ${provider}`,
+  /** The card's people row, for screen readers. */
+  cardPeople: 'Who',
+  /** Booked by chat: the transcript under the row. */
+  viewChat: (count: number) => `View chat (${String(count)})`,
+  hideChat: 'Hide chat',
+  /** A booking's card heading: who, then which page ("Grace Hopper · Intro call"). */
+  cardTitle: (guest: string, page: string) => `${guest} · ${page}`,
   // A removed host's booking stays for an admin to hand on (spec 0031, AC-815).
   hostRemoved: 'Host removed',
   eventFailed: 'This booking isn’t on your calendar: the event couldn’t be made. Add it by hand.',
   video: 'Video call',
   phone: 'Phone call to their number',
   calendar: 'Calendar',
+  /** An event's call, as the card's row. */
+  call: 'Call',
+  /** A calendar event card's note, for screen readers. */
+  aboutEvent: 'About this event',
   fromCalendar: 'From your calendar. Timefix keeps the time blocked but doesn’t manage this event.',
   // The member's own calendar time with nobody else invited (spec 0024, the owner's call on 20 October 2026).
   busy: 'Busy',
@@ -196,6 +212,8 @@ export const strings = {
   copyGuestLink: 'Copy guest link',
   guestLinkCopied: 'Guest link copied. It opens their booking, so share it only with them.',
   cancelBooking: 'Cancel booking',
+  /** The booking card's overflow menu. */
+  moreForBooking: 'More for this booking',
   rescheduleTitle: (title: string, name: string) => `Reschedule ${title} with ${name}`,
   tryAgain: 'Try again',
   copyFailed: 'Couldn’t copy the link. Try again.',

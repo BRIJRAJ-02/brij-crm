@@ -11,11 +11,13 @@ export function useTaskEntries(
   source: TaskListState['source'],
   members: readonly MemberSummary[],
   pageRecordId?: string,
+  /** Every task is the member's own (Assigned to me): the same face on every row says nothing, so it goes. */
+  withoutAssignee = false,
 ): ListSource<TaskEntry> {
   // One cache while the members and the page stay: unchanged bodies keep their entries across list changes.
   const cache = useMemo(
-    () => ({ entries: new WeakMap<TaskView, TaskEntry>(), members, pageRecordId }),
-    [members, pageRecordId],
+    () => ({ entries: new WeakMap<TaskView, TaskEntry>(), members, pageRecordId, withoutAssignee }),
+    [members, pageRecordId, withoutAssignee],
   );
   return useMemo(() => {
     return {
@@ -25,7 +27,9 @@ export function useTaskEntries(
         if (task === undefined) return undefined;
         const held = cache.entries.get(task);
         if (held !== undefined) return held;
-        const made = toTaskEntry(task, cache.members, cache.pageRecordId);
+        const entry = toTaskEntry(task, cache.members, cache.pageRecordId);
+        const { assignee: _assignee, ...own } = entry;
+        const made = cache.withoutAssignee ? own : entry;
         cache.entries.set(task, made);
         return made;
       },

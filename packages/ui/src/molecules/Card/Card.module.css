@@ -25,6 +25,20 @@
     box-shadow: none;
   }
 
+  /* No frame: the layout around it is the frame. A bare page card takes its slot's width and no margin, and its
+     content starts at its edges, so the heading lines up with what the layout puts above it (the logo). */
+  .root[data-tone='bare'] {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .root[data-placement='page'][data-tone='bare'] {
+    margin: 0;
+  }
+
   .head {
     display: flex;
     align-items: flex-start;
@@ -96,11 +110,6 @@
     letter-spacing: var(--tracking-body);
   }
 
-  /* Beside a preview, the body takes the column's spare height, so the footer sits at the card's foot. */
-  .root[data-preview] .body {
-    flex: 1;
-  }
-
   /* What a card holds stacks with a form's rhythm: a field, its hint, then air before the next. */
   .body > :not(:first-child) {
     margin-block-start: var(--space-16);
@@ -145,31 +154,19 @@
     padding-inline: var(--space-24);
   }
 
-  /* With a preview: the content in its own column, the preview beside it. Below bp-page-compact the preview is
-     left out and the card is its content alone. */
-  .column {
-    display: flex;
-    flex-direction: column;
-    min-inline-size: 0;
+  /* After the sizes, and as specific as the sm one, so a bare page card of either size takes its slot's width. */
+  .root[data-placement='page'][data-size][data-tone='bare'] {
+    inline-size: 100%;
   }
 
-  .preview {
-    display: none;
+  .root[data-placement='page'][data-tone='bare'] .head {
+    padding-block-start: 0;
+    padding-inline: 0;
   }
 
-  @media (width >= 1024px) {
-    .root[data-placement='page'][data-preview] {
-      display: grid;
-      grid-template-columns: var(--size-panel) minmax(0, 1fr);
-      inline-size: min(calc(var(--size-page-card) + var(--size-panel)), calc(100% - 2 * var(--space-16)));
-    }
-
-    .preview {
-      display: block;
-      min-inline-size: 0;
-      border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
-      background: var(--surface-subtle);
-    }
+  .root[data-placement='page'][data-tone='bare'] .body {
+    padding-inline: 0;
+    padding-block-end: 0;
   }
 
   @media (forced-colors: active) {

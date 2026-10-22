@@ -1,9 +1,19 @@
 // Brief
-// Purpose: the one header both Captures editors share (a booking page's, a form's): Copy link, Preview where it
-// applies, Publish changes where there are drafts, then a ⋯ menu.
+// Purpose: the one header both Captures editors share (a booking page's, a form's): Copy link once there is a link,
+// View page or Preview where it applies, Publish changes where there are drafts, then a ⋯ menu.
 // Main task: copy the link, and from the menu Pause or Resume, Duplicate, and Delete (which asks first in a Modal).
 // Leaves out: the editor's status (EditorStatus in the TopBar's meta) and what each action does (the editor's).
-import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip, type IconName } from '@crm/ui';
+import {
+  Button,
+  ButtonLink,
+  CopyButton,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+  Tooltip,
+  type IconName,
+} from '@crm/ui';
 import type { ReactNode, RefObject } from 'react';
 import { strings } from './strings.ts';
 
@@ -18,11 +28,16 @@ export interface EditorExtraAction {
 
 /** Props for EditorActions. */
 export interface EditorActionsProps {
-  /** The public link Copy link copies. */
-  readonly link: string;
-  /** Why Copy link can't copy yet (a form never published has no live link): it turns off and says this on hover. */
+  /** The public link Copy link copies; left out while there is none yet (a form never published), so Copy link hides. */
+  readonly link?: string;
+  /** Why Copy link can't copy yet: it turns off and says this on hover. */
   readonly linkOffReason?: string;
-  /** The editor's Preview button, where it applies (a form's; a booking page shows its preview beside the editor). */
+  /**
+   * The live page's address, for View page: it opens in a new tab, the way Calendly and Cal.com let an event type's
+   * editor open its booking page (a booking page's editor, which has no preview beside it).
+   */
+  readonly viewHref?: string;
+  /** The editor's Preview button, where it applies (a form's, which previews its unpublished changes). */
   readonly preview?: ReactNode;
   /** A primary action before the menu: a form's Publish changes, while there are unpublished edits. */
   readonly publish?: ReactNode;
@@ -43,19 +58,27 @@ export interface EditorActionsProps {
   };
 }
 
-/** The editors' header actions, in one order on both: Copy link, Preview, Publish changes, then ⋯. */
-export function EditorActions({ link, linkOffReason, preview, publish, menu }: EditorActionsProps) {
-  const copy = (
-    <CopyButton
-      value={link}
-      label={strings.copyLink}
-      announcement={strings.linkCopied}
-      isDisabled={linkOffReason !== undefined}
-    />
-  );
+/** The editors' header actions, in one order on both: Copy link, View page or Preview, Publish changes, then ⋯. */
+export function EditorActions({ link, linkOffReason, viewHref, preview, publish, menu }: EditorActionsProps) {
+  // On a phone the words fold to the icon, so the name keeps its room.
+  const copy =
+    link === undefined ? undefined : (
+      <CopyButton
+        value={link}
+        label={strings.copyLink}
+        announcement={strings.linkCopied}
+        isLabelCollapsible
+        isDisabled={linkOffReason !== undefined}
+      />
+    );
   return (
     <>
-      {linkOffReason === undefined ? copy : <Tooltip content={linkOffReason}>{copy}</Tooltip>}
+      {copy !== undefined && (linkOffReason === undefined ? copy : <Tooltip content={linkOffReason}>{copy}</Tooltip>)}
+      {viewHref !== undefined && (
+        <ButtonLink href={viewHref} isExternal icon="external-link" isLabelCollapsible label={strings.viewPage}>
+          {strings.viewPage}
+        </ButtonLink>
+      )}
       {preview}
       {publish}
       {menu !== undefined && (

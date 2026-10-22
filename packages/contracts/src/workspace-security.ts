@@ -32,8 +32,8 @@ export const SIGN_IN_AGAIN_MESSAGE = 'This workspace asks you to sign in again.'
 
 /**
  * A workspace's sign in rules, as Settings › Workspace › Security shows them:
- * the rules, how many active members have no second factor yet (an app or a
- * passkey), and whether the caller has one, since requiring it needs it.
+ * the rules, how many active members have no second factor yet (an
+ * authenticator app), and whether the caller has one, since requiring it needs it.
  */
 export const WorkspaceSecurity = z.object({
   requireTwoFactor: z.boolean(),
@@ -41,7 +41,7 @@ export const WorkspaceSecurity = z.object({
   sessionLengthDays: SessionLengthDays.optional(),
   /** When everyone was last signed out of the workspace, if ever. */
   signedOutEveryoneAt: z.iso.datetime({ offset: true }).optional(),
-  /** Active members with neither an authenticator app nor a passkey. */
+  /** Active members without an authenticator app. */
   membersWithout: z.number().int().min(0),
   /** Whether the caller has a second factor: requiring two factor waits until they do (AC-893). */
   youHaveTwoFactor: z.boolean(),

@@ -1,32 +1,35 @@
-/* WorkspacePreview: a sketch of the app in a window that starts space-32 in
-   from the top and the start of its slot and runs off the end and the foot,
-   which cut it. The window is twice size-panel wide: a third of it the
-   sidebar on surface-sidebar (about the app's own sidebar), the rest the page
-   on surface, with the app's head height (size-bar) and row heights
-   (size-nav-item, size-row). Words are what the person typed; everything else
-   is still Skeleton bars. The part a step is about takes the focus ring
-   (accent-line and the faint halo), easing to it as the step changes. */
+/* WorkspacePreview: a sketch of the app in a window anchored twice space-32
+   in from the top and the start of its slot and running off its end and its
+   foot, which cut it on purpose (so it bleeds off the edge at any width, at
+   least twice size-panel wide). Only its visible top start corner is round,
+   with a soft lifted shadow. The sidebar is a third of the window's least
+   width (about the app's own) on surface-sidebar, the page beside it on surface, with the
+   app's head height (size-bar) and row heights (size-nav-item, size-row).
+   Rows carry the app's labels; names are what the person typed, or the
+   sample workspace; the table is still Skeleton bars until there is a
+   sample. The part a step is about takes the focus ring (accent-line and
+   the faint halo), easing to it as the step changes. */
 @layer components {
   .root {
     position: relative;
     inline-size: 100%;
     block-size: 100%;
-    min-block-size: calc(var(--size-panel) + 2 * var(--space-32));
+    min-block-size: calc(var(--size-panel) + 3 * var(--space-32));
     overflow: hidden;
   }
 
   .window {
     position: absolute;
-    inset-block: var(--space-32) calc(-1 * var(--space-32));
-    inset-inline-start: var(--space-32);
+    inset-block: calc(2 * var(--space-32)) calc(-1 * var(--space-32));
+    inset-inline: calc(2 * var(--space-32)) calc(-1 * var(--space-32));
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-    inline-size: calc(2 * var(--size-panel));
+    grid-template-columns: calc(2 * var(--size-panel) / 3) minmax(0, 1fr);
+    min-inline-size: calc(2 * var(--size-panel));
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border-subtle);
-    border-radius: var(--radius-lg);
+    border-start-start-radius: var(--radius-lg);
     background: var(--surface);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-lg);
   }
 
   .sidebar {
@@ -122,10 +125,52 @@
       box-shadow var(--duration-move) var(--ease-out);
   }
 
-  .label {
+  /* The Records heading over the objects, as the app's sidebar labels its sections. */
+  .section {
     display: flex;
     padding-block: var(--space-12) var(--space-4);
     padding-inline: var(--space-12);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* A row's name, in the sidebar's type. */
+  .label {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .title {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* A sample row's name, then its company, quieter. */
+  .cell,
+  .muted {
+    overflow: hidden;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cell {
+    flex: 0 0 var(--size-column);
+    color: var(--text);
+  }
+
+  .muted {
+    flex: 1;
+    min-inline-size: 0;
+    color: var(--text-secondary);
   }
 
   .foot {
@@ -145,6 +190,7 @@
     display: flex;
     flex: none;
     align-items: center;
+    gap: var(--space-8);
     block-size: var(--size-bar);
     padding-inline: var(--space-16);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);

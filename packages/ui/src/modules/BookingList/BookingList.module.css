@@ -45,6 +45,18 @@
     border-block-end: var(--border-width-hairline) solid var(--border);
   }
 
+  /* A press anywhere on the row opens it (its title button is the keyboard's way in), so a fine pointer gets
+     the row's hover, as Cal.com's and Linear's rows do. */
+  @media (hover: hover) and (pointer: fine) {
+    .row {
+      transition: background-color var(--duration-hover) var(--ease-hover);
+    }
+
+    .row:hover {
+      background: var(--surface-hover);
+    }
+  }
+
   .rows > .row:last-child {
     border-block-end: none;
   }

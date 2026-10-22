@@ -28,6 +28,7 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { isDefaultSort } from './query.ts';
 import { strings } from './strings.ts';
 
 const NO_FILTER: FilterGroup = { conjunction: 'and', conditions: [] };
@@ -111,6 +112,9 @@ export function ViewToolbar({
   // The sort chip, or the dashed Sort button when the view has no sorts: the sort builder opens from either.
   const sortAnchor = useRef<HTMLElement>(null);
   const [isSortOpen, setSortOpen] = useState(false);
+  // The builder opened on the default order shows it empty; once someone edits there, it shows their rows as they
+  // are, so a row turned into Created at newest first stays put rather than vanishing under the pointer.
+  const [isSortEdited, setSortEdited] = useState(false);
   const [isFilterOpen, setFilterOpen] = useState(false);
   // What the builder holds while it is open: incomplete rows included, which filter nothing until complete.
   const [building, setBuilding] = useState<FilterGroup>(NO_FILTER);
@@ -171,7 +175,10 @@ export function ViewToolbar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterOn]);
 
-  const [first, ...rest] = query.sorts;
+  // The default order (Created at, newest first) applies silently: no chip, saved or not. A chip shows only for
+  // another order, and removing it goes back to the default.
+  const isDefaultOrder = isDefaultSort(query.sorts, attributes);
+  const [first, ...rest] = isDefaultOrder ? [] : query.sorts;
   const editorProps = (attribute: { readonly type: string }) =>
     attribute.type === 'actor_reference'
       ? {
@@ -287,14 +294,20 @@ export function ViewToolbar({
       <Popover
         triggerRef={sortAnchor}
         isOpen={isSortOpen}
-        onOpenChange={setSortOpen}
+        onOpenChange={(isOpen) => {
+          setSortOpen(isOpen);
+          if (!isOpen) setSortEdited(false);
+        }}
         label={strings.sorts}
         width="builder"
       >
         <SortBuilder
           attributes={sortFields}
-          value={query.sorts}
+          // The default order opens the builder empty, where it says "Newest records show first." (the order that
+          // runs), so Add sort starts a sort of its own rather than adding after a Created at nobody chose.
+          value={isDefaultOrder && !isSortEdited ? [] : query.sorts}
           onChange={(sorts) => {
+            setSortEdited(true);
             commit({ ...(query.filter === undefined ? {} : { filter: query.filter }), sorts });
           }}
         />

@@ -81,13 +81,6 @@ test.describe('the core loop by keyboard', () => {
     await focusedWithRing(page, page.getByLabel('Your name'), 'Your name');
     await page.keyboard.type('Ada Lovelace');
     await page.keyboard.press('Enter');
-    // About you: the first chip has focus; Space picks it, and Tab on to Continue goes on.
-    const founder = page.getByRole('radio', { name: 'Founder' });
-    await focusedWithRing(page, founder, 'Founder');
-    await page.keyboard.press('Space');
-    await expect(founder).toBeChecked();
-    await tabTo(page, page.getByRole('button', { name: 'Continue', exact: true }));
-    await page.keyboard.press('Enter');
     await focusedWithRing(page, page.getByLabel('Workspace name'), 'Workspace name');
     await tabTo(page, page.getByLabel('Web address'));
     await page.keyboard.press('ControlOrMeta+A');
@@ -98,11 +91,11 @@ test.describe('the core loop by keyboard', () => {
     // A primary's edge is already blue, so its ring is the 1px outline just outside it, not the faint halo alone.
     expect(await create.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
     await page.keyboard.press('Enter');
-    // Invite your team: the addresses field has focus; Tab on to Skip for now, and Enter.
+    // Invite your team: the first row's email has focus; Tab on to Skip for now, and Enter.
     await expect(page.getByRole('heading', { level: 1, name: 'Invite your team' })).toBeVisible({
       timeout: WORKSPACE_MADE_MS,
     });
-    await focusedWithRing(page, page.getByLabel('Emails'), 'Emails');
+    await focusedWithRing(page, page.getByRole('textbox', { name: 'Email', exact: true }), 'Email');
     await tabTo(page, page.getByRole('button', { name: 'Skip for now' }));
     await page.keyboard.press('Enter');
     // Where calendar sync is on, the calendar step's first button has focus: Tab on to Skip for now, and Enter.

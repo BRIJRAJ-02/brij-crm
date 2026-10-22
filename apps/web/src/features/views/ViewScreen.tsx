@@ -57,7 +57,15 @@ import {
   type BoardPatch,
   type ShownLayout,
 } from './layout.ts';
-import { farAttributesFrom, relationTarget, runningQuery, savableQuery, savedQuery, toViewQuery } from './query.ts';
+import {
+  farAttributesFrom,
+  relationTarget,
+  runningQuery,
+  savableQuery,
+  savedQuery,
+  toViewQuery,
+  withDefaultOrderAsNone,
+} from './query.ts';
 import { strings as importStrings } from '../imports/strings.ts';
 import { strings } from './strings.ts';
 import { useViewDraft } from './useViewDraft.ts';
@@ -210,6 +218,7 @@ export function ViewScreen(props: ViewScreenProps) {
       toasts.toast({ tone: 'info', message: strings.draftUnreadable });
       writeParam(undefined, true);
     },
+    normalize: (query) => withDefaultOrderAsNone(query, attributes),
   });
   // A link's draft that couldn't be read: say so once (StrictMode runs this twice in development), and show the
   // saved view.
@@ -481,16 +490,6 @@ export function ViewScreen(props: ViewScreenProps) {
     },
   };
   const storedBoard = view?.config.board;
-  // A board has no new record dialog: the command menu's request is dropped, so the address doesn't keep it.
-  const { isCreateRequested, onCreateRequestTaken } = props;
-  // Read through a ref, so a new callback each render never hands the request back twice.
-  const takeRequest = useRef(onCreateRequestTaken);
-  useEffect(() => {
-    takeRequest.current = onCreateRequestTaken;
-  });
-  useEffect(() => {
-    if (isCreateRequested === true && kind === 'board') takeRequest.current?.();
-  }, [isCreateRequested, kind]);
   const boardOutcome = useMemo(
     () => (kind === 'board' ? planBoard(attributes, storedBoard) : undefined),
     [kind, attributes, storedBoard],
@@ -823,6 +822,8 @@ export function ViewScreen(props: ViewScreenProps) {
     return (
       <>
         <BoardScreen
+          {...(props.isCreateRequested === true ? { isCreateRequested: true } : {})}
+          {...(props.onCreateRequestTaken === undefined ? {} : { onCreateRequestTaken: props.onCreateRequestTaken })}
           slug={slug}
           object={object}
           attributes={attributes}

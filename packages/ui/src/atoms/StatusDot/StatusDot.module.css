@@ -21,6 +21,27 @@
     text-overflow: ellipsis;
   }
 
+  /* With a short label: the label in a wide container, the short word in a narrow one (a phone's bar), whole. */
+  .label[data-width='narrow'] {
+    display: none;
+    flex: none;
+  }
+
+  @container (inline-size < 480px) {
+    /* The short word is whole: the dot and its word never shrink under a name beside them. */
+    .root[data-short] {
+      flex: none;
+    }
+
+    .label[data-width='wide'] {
+      display: none;
+    }
+
+    .label[data-width='narrow'] {
+      display: inline;
+    }
+  }
+
   .dot {
     flex: none;
     inline-size: var(--space-8);

@@ -71,8 +71,8 @@ export interface DoorDeps {
 /**
  * The session knocking, as far as a workspace's sign in rules ask (spec 0033,
  * milestone 4): when it last proved who it is (its sign in, or a step up
- * since), and whether its person has a second factor, an authenticator app or
- * a passkey. The door asks the second only in a workspace that requires two
+ * since), and whether its person has a second factor, an authenticator app.
+ * The door asks the second only in a workspace that requires two
  * factor, so it can cost a read.
  */
 export interface DoorSession {

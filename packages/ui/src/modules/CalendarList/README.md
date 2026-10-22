@@ -18,7 +18,7 @@ New. Nothing in the library lists checkable items under folding headings with a 
 ```
 
 - A small label heads the list ("My calendars", or `label`).
-- An account with one calendar is that calendar's row alone, never its address over the same name again; an account with two or more folds under its mark and address.
+- An account with one calendar is that calendar's row alone, never its address over the same name again, with its provider's mark (named, `isLabelled`) after the name, so where it comes from reads as it does on a folded account; an account with two or more folds under its mark and address.
 - Each row is the plain Checkbox, then the calendar's colour as a dot and its name (a StatusDot in the Checkbox's `leading`, so pressing the name toggles it); a long name is cut with an ellipsis. The options button keeps its room while hidden, so the name never reflows on hover. A box checks or clears a calendar (`onShownChange`); what that changes is the caller's (Bookings: the view only, `cal` in the address).
 - Each row's options button ("<name> options") offers Show only this, and is left out on the only calendar shown. With a fine pointer it shows while its row is hovered or holds focus (it stays in the tab order); on touch it always shows.
 - Show all follows the list while any calendar is hidden, at its end, so rows never move under the pointer.

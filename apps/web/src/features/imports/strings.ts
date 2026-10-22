@@ -115,6 +115,9 @@ export const strings = {
   rowColumn: 'Row',
   rowInfo: 'Row numbers match your file. The column names are row 1.',
   reasonColumn: 'Reason',
+  /** The preview's status column: "Ready", or what is wrong with the row. */
+  statusColumn: 'Status',
+  readyRow: 'Ready',
   noRows: 'No rows here',
   noRowsText: 'Choose another filter to see the rest.',
   downloadErrors: 'Download rows with errors',

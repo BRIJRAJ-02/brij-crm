@@ -33,6 +33,45 @@ export const Default: Story = {
   },
 };
 
+/** In one row across the top of a page (import); a slot under 480px turns it back into the column. */
+export const Horizontal: Story = {
+  args: { steps: STEPS.map(({ id, label }) => ({ id, label })), orientation: 'horizontal' },
+  render: (args) => (
+    <Stage>
+      <Steps {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('list', { name: 'Import progress' })).toHaveAttribute(
+      'data-orientation',
+      'horizontal',
+    );
+    await expect(canvas.getByRole('listitem', { current: 'step' })).toHaveTextContent('Map columns');
+  },
+};
+
+/** Horizontal on a phone: under 480px the row turns back into the column, a done step and a failed one among them. */
+export const HorizontalPhone: Story = {
+  args: {
+    steps: STEPS.map(({ id, label }) => ({ id, label })),
+    orientation: 'horizontal',
+    current: 'review',
+    failed: 'review',
+  },
+  render: (args) => (
+    <Stage width="phone">
+      <Steps {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const items = canvas.getAllByRole('listitem');
+    const [first, second] = items;
+    // A column: each step under the one before.
+    await expect((second?.getBoundingClientRect().top ?? 0) > (first?.getBoundingClientRect().top ?? 0)).toBe(true);
+    await expect(canvas.getByText('(failed)')).toBeInTheDocument();
+  },
+};
+
 /** A step that failed. */
 export const Failed: Story = {
   args: { current: 'review', failed: 'review' },

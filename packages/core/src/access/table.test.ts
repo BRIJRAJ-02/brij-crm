@@ -66,11 +66,6 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'accountDeletionCheck',
   'deleteMyAccount',
   'deletedEmail',
-  // Passkeys (spec 0033, milestone 3): the person's own, by session.
-  'passkeyStepUpOptions',
-  'verifyPasskeyStepUp',
-  'renameMyPasskey',
-  'removeMyPasskey',
   'createWorkspace',
   'createUserWorkspace',
   // Pure access functions.

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { flushSync } from 'react-dom';
-import { expect, fn, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { SAMPLE_RECORD, sampleDetails, sampleEditorProps } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { AttributeList } from './AttributeList.tsx';
@@ -14,6 +14,7 @@ interface SampleProps {
   readonly errorOn?: string;
   /** Saves as a data layer's store does: re-rendering at once, inside the commit's own event. */
   readonly isSyncSave?: boolean;
+  readonly emptyValues?: 'show' | 'fold';
 }
 
 /** The list holding the sample company's values, as a record page would through the data layer. */
@@ -24,6 +25,7 @@ function SampleList({
   width = 'auto',
   errorOn,
   isSyncSave = false,
+  emptyValues = 'show',
 }: SampleProps) {
   const [values, setValues] = useState(SAMPLE_RECORD.values);
   const sections = sampleDetails(values).map((section) => ({
@@ -38,6 +40,7 @@ function SampleList({
         label="Details"
         sections={sections}
         isLoading={isLoading}
+        emptyValues={emptyValues}
         editorProps={sampleEditorProps}
         {...(isReadOnly
           ? {}
@@ -72,6 +75,22 @@ export const Default: Story = {
     await expect(canvas.getByRole('button', { name: 'Edit Domain' })).toBeInTheDocument();
     await expect(canvas.getByRole('link', { name: /northwindtraders\.com/ })).toBeInTheDocument();
     await expect(canvas.getByText('Set Description…')).toBeInTheDocument();
+  },
+};
+
+/** Empty values folded (a record page's details): the filled ones first, then Show N empty values at the foot. */
+export const FoldedEmpty: Story = {
+  args: { onCommit: fn(), emptyValues: 'fold' },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText('Set Description…')).not.toBeInTheDocument();
+    const more = canvas.getByRole('button', { name: /^Show \d+ empty value/ });
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(more);
+    await expect(canvas.getByRole('button', { name: 'Hide empty values' })).toHaveAttribute('aria-expanded', 'true');
+    // Shown, an empty row is reachable by keyboard: its pencil names it, and focus there reveals its "Set" line.
+    const pencil = canvas.getByRole('button', { name: 'Edit Description' });
+    pencil.focus();
+    await expect(canvas.getByText('Set Description…')).toBeVisible();
   },
 };
 

@@ -61,7 +61,7 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
     expect(settingsCommands('acme', []).map((command) => command.name)).toEqual([
       'Settings › Profile',
       'Settings › Preferences',
-      'Settings › Security',
+      'Settings › Sign in and devices',
       'Settings › Notifications',
       'Settings › Calendars',
       'Settings › General',
@@ -89,7 +89,7 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
       'Settings',
       'Settings › Profile',
       'Settings › Preferences',
-      'Settings › Security',
+      'Settings › Sign in and devices',
       'Settings › Notifications',
       'Settings › Calendars',
       'Settings › General',

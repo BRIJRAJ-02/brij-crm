@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type MouseEvent, type ReactNode } from 'react';
 import { Badge, type BadgeTone } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -75,6 +75,21 @@ const hasDetails = (row: BookingListRow) =>
   (row.attendees !== undefined && row.attendees.length > 0) ||
   row.note !== undefined;
 
+/** What a press inside a row may land on that is its own control: a press there is that control's, not the row's. */
+const CONTROL = 'a, button, input, select, textarea, [role="button"], [role="link"]';
+
+/**
+ * Opens the row on a press anywhere in it that isn't one of its own controls (the guest link, Join, the actions)
+ * or the end of a text selection: the title button stays the keyboard's way in, so this adds a bigger target for
+ * a pointer only.
+ */
+function openOnPress(event: MouseEvent<HTMLElement>, open: () => void) {
+  const target = event.target instanceof Element ? event.target : null;
+  if (target === null || target.closest(CONTROL) !== null) return;
+  if ((window.getSelection()?.toString() ?? '') !== '') return;
+  open();
+}
+
 /**
  * Bookings as rows under day bands (spec 0025, the Cal.com alignment, 5.
  * Bookings list), two lines a row: a date column with the day in bold over the
@@ -83,62 +98,79 @@ const hasDetails = (row: BookingListRow) =>
  * at the end.
  */
 export function BookingList({ label, groups, onOpen, emptyState, placement = 'page' }: BookingListProps) {
+  const id = useId();
   if (groups.every((group) => group.rows.length === 0)) return <>{emptyState}</>;
   return (
     <section className={styles.root} aria-label={label} data-placement={placement === 'card' ? placement : undefined}>
-      {groups.map((group) => (
+      {groups.map((group, groupIndex) => (
         <div key={group.id} className={styles.group}>
           <h3 className={styles.band}>{group.label}</h3>
           <ul className={styles.rows} aria-label={group.label}>
-            {group.rows.map((row) => (
-              <li key={row.id} className={styles.row}>
-                <div className={styles.when}>
-                  <span className={styles.date}>{row.date}</span>
-                  {row.time !== '' && <span className={styles.time}>{row.time}</span>}
-                </div>
-                <div className={styles.main}>
-                  <div className={styles.titleLine}>
-                    <Button variant="ghost" onPress={() => onOpen(row.id)}>
-                      {row.title}
-                    </Button>
-                    {row.badge !== undefined && <Badge text={row.badge} tone={row.badgeTone ?? 'neutral'} />}
+            {group.rows.map((row, rowIndex) => {
+              const rowId = `${id}-${String(groupIndex)}-${String(rowIndex)}`;
+              return (
+                // The title button is the row's way in by keyboard; a press anywhere else on the row opens it too.
+                // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions
+                <li
+                  key={row.id}
+                  className={styles.row}
+                  data-pressable=""
+                  onClick={(event) => openOnPress(event, () => onOpen(row.id))}
+                >
+                  <div className={styles.when} id={`${rowId}-when`}>
+                    <span className={styles.date}>{row.date}</span>
+                    {row.time !== '' && <span className={styles.time}>{row.time}</span>}
                   </div>
-                  {hasDetails(row) && (
-                    // Everything else on one muted line: Join first so it never gets cut off, then who, then the rest.
-                    <div className={styles.details}>
-                      {row.join !== undefined && (
-                        <span className={styles.join}>
-                          <Icon name="video" size="sm" />
-                          <Link href={row.join.href}>{strings.join(row.join.provider)}</Link>
-                        </span>
-                      )}
-                      {row.guestName !== undefined && (
-                        <span className={`${styles.text} ${styles.who}`}>
-                          {row.hostName === undefined ? strings.youAnd : strings.hostAnd(row.hostName)}{' '}
-                          {row.guestHref === undefined ? (
-                            row.guestName
-                          ) : (
-                            <Link href={row.guestHref}>{row.guestName}</Link>
-                          )}
-                        </span>
-                      )}
-                      {row.calendar !== undefined && (
-                        <span className={styles.text}>
-                          <StatusDot hue={row.calendar.hue}>{row.calendar.name}</StatusDot>
-                        </span>
-                      )}
-                      {row.attendees !== undefined && row.attendees.length > 0 && (
-                        <span className={styles.text}>
-                          {strings.attendeesLine(row.attendees, row.moreAttendees ?? 0)}
-                        </span>
-                      )}
-                      {row.note !== undefined && <span className={styles.text}>{strings.quoted(row.note)}</span>}
+                  <div className={styles.main}>
+                    <div className={styles.titleLine}>
+                      {/* Named by its title, then described by its time and who it is with (not the note or Join),
+                        so each row's button says which meeting it opens. */}
+                      <Button
+                        variant="ghost"
+                        aria-describedby={row.guestName === undefined ? `${rowId}-when` : `${rowId}-when ${rowId}-who`}
+                        onPress={() => onOpen(row.id)}
+                      >
+                        {row.title}
+                      </Button>
+                      {row.badge !== undefined && <Badge text={row.badge} tone={row.badgeTone ?? 'neutral'} />}
                     </div>
-                  )}
-                </div>
-                {row.actions !== undefined && <div className={styles.actions}>{row.actions}</div>}
-              </li>
-            ))}
+                    {hasDetails(row) && (
+                      // Everything else on one muted line: Join first so it never gets cut off, then who, then the rest.
+                      <div className={styles.details}>
+                        {row.join !== undefined && (
+                          <span className={styles.join}>
+                            <Icon name="video" size="sm" />
+                            <Link href={row.join.href}>{strings.join(row.join.provider)}</Link>
+                          </span>
+                        )}
+                        {row.guestName !== undefined && (
+                          <span className={`${styles.text} ${styles.who}`} id={`${rowId}-who`}>
+                            {row.hostName === undefined ? strings.youAnd : strings.hostAnd(row.hostName)}{' '}
+                            {row.guestHref === undefined ? (
+                              row.guestName
+                            ) : (
+                              <Link href={row.guestHref}>{row.guestName}</Link>
+                            )}
+                          </span>
+                        )}
+                        {row.calendar !== undefined && (
+                          <span className={styles.text}>
+                            <StatusDot hue={row.calendar.hue}>{row.calendar.name}</StatusDot>
+                          </span>
+                        )}
+                        {row.attendees !== undefined && row.attendees.length > 0 && (
+                          <span className={styles.text}>
+                            {strings.attendeesLine(row.attendees, row.moreAttendees ?? 0)}
+                          </span>
+                        )}
+                        {row.note !== undefined && <span className={styles.text}>{strings.quoted(row.note)}</span>}
+                      </div>
+                    )}
+                  </div>
+                  {row.actions !== undefined && <div className={styles.actions}>{row.actions}</div>}
+                </li>
+              );
+            })}
           </ul>
         </div>
       ))}

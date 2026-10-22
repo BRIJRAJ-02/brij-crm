@@ -5,6 +5,9 @@ export const strings = {
   /** The pencil button's name: "Edit Stage". */
   edit: (name: string) => `Edit ${name}`,
   loading: 'Loading details',
+  /** The folded empty rows' way in, and out again. */
+  showEmpty: (count: number) => `Show ${String(count)} empty ${count === 1 ? 'value' : 'values'}`,
+  hideEmpty: 'Hide empty values',
   /** A read only value with nothing in it: said quietly, in words. */
   notSet: 'Not set',
 } as const;

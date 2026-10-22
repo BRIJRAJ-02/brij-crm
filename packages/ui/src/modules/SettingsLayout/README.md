@@ -51,7 +51,8 @@ Every settings page builds its body from three pieces, so Profile, Security, Wor
    - a **Card holding a `Form` with `columns={2}`**, its Save in the Card's `footer`: the fields sit two to a row, so none stretches across the page. Leave the Card's `title` out when the section's title already says it (an object's Names and look).
    - **`SettingsGrid`** for several cards of one kind (a card per calendar, per integration): as many columns as keep each card at least `size-panel` wide, one on a phone. It is TileGrid's `fill` variant (spec 0041), so the library has one grid of cards.
    - a **danger section last** (Archive, Delete): a Card with a `danger` Button in its `actions`.
-2. **Lists run the full width.** A `Table` (Objects, an object's attributes, Background jobs, Members) goes straight in the body with no section, so its columns get the room.
+   - `actions` puts the one action that works on the whole section at the heading's end, wrapping under it on a phone: Sign out of all other devices over the devices Table. Why a prop: the action belongs to that list, not to the page, and the page bar's end held it far from the rows it ends (22 October 2026).
+2. **Lists run the full width.** A `Table` (Objects, an object's attributes, Background jobs, Members) goes straight in the body with no section, so its columns get the room. A list that is one of several sections on its page sits in a `SettingsSection` instead, as a Card of `SettingsRow`s with a line under each name (Account › Sign in and devices: the signed in devices and recent activity, as GitHub lists sessions), so it reads like the sections around it.
 3. **Page level notes and states span the width too:** a read only `Callout`, a result `Callout`, and an `EmptyState` for empty and failed reads sit in the body outside any section.
 
 ```tsx

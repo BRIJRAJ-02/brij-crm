@@ -3,7 +3,16 @@
 // provider's language and time zone (AC-11).
 import { describe, expect, it } from 'vitest';
 import { parseLocaleDecimal } from './decimal.ts';
-import { formatAmount, formatDate, formatDecimal, formatExactTime, formatRelative, minorUnits } from './format.ts';
+import {
+  formatAmount,
+  formatDate,
+  formatDateInYear,
+  formatDecimal,
+  formatMoney,
+  formatExactTime,
+  formatRelative,
+  minorUnits,
+} from './format.ts';
 import { arraySource } from './list-source.ts';
 import { safeHref } from './safe-href.ts';
 import { safeImageSrc } from './safe-image-src.ts';
@@ -104,9 +113,30 @@ describe('formats', () => {
     expect(formatAmount('500', 'JPY', 'en-US')).toBe('500');
   });
 
+  it('formats money with its symbol, decimals only when the amount has them', () => {
+    expect(formatMoney('58500', 'USD', 'en-US')).toBe('$58,500');
+    expect(formatMoney('58500.00', 'USD', 'en-US')).toBe('$58,500');
+    expect(formatMoney('1234.5', 'USD', 'en-US')).toBe('$1,234.50');
+    expect(formatMoney('1234.5678', 'USD', 'en-US')).toBe('$1,234.5678');
+    expect(formatMoney('12', 'CAD', 'en-US')).toBe('CA$12');
+    expect(formatMoney('500', 'JPY', 'en-US')).toBe('¥500');
+    expect(formatMoney('-20.25', 'EUR', 'en-US')).toBe('-€20.25');
+    expect(formatMoney('1234.5', 'EUR', 'de-DE')).toBe('1.234,50\u00a0€');
+    expect(formatMoney('12', 'NOPE', 'en-US')).toBe('NOPE 12');
+    expect(formatMoney('58500', 'USD', 'en-US', true)).toBe('$58,500.00');
+    expect(formatMoney('500', 'JPY', 'en-US', true)).toBe('¥500');
+  });
+
   it('formats a calendar day without shifting it by any time zone', () => {
     expect(formatDate('2026-10-08', 'en-US')).toBe('Oct 8, 2026');
     expect(formatDate('2026-10-08', 'de-DE')).toBe('08.10.2026');
+  });
+
+  it('formats a day in the current year without its year, keeping it in the numeric format', () => {
+    expect(formatDateInYear('2026-10-24', 'en-US')).toBe('Oct 24');
+    expect(formatDateInYear('2026-10-24', 'en-US', 'dmy')).toBe('24 Oct');
+    expect(formatDateInYear('2026-10-24', 'en-US', 'mdy')).toBe('Oct 24');
+    expect(formatDateInYear('2026-10-24', 'en-US', 'ymd')).toBe('2026-10-24');
   });
 
   it('gives the exact time with its time zone', () => {

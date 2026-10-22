@@ -9,6 +9,7 @@ The load harness (spec 0011, feature #12): `pnpm load:run <scenario>` plays simu
 | File | Owns |
 |---|---|
 | `scripts/run.ts` | The `pnpm load:run` command: arguments, exit codes (0 pass, 1 a miss in a gate, 2 invalid, 3 setup refused) |
+| `src/preflight.ts` | `load:run`'s setup checks (arguments, the scenario, local addresses), run before the harness is imported so a refusal is quick; its tests call it in process |
 | `src/run.ts` | Setup checks before the warm up (local addresses, the sessions file's API, one session per 100 users, free record slots), learning the seeded objects as user 1, the threads, the collectors, the outbox reads after the window, the result file |
 | `src/plan.ts` | The open model: users ramp over the 60 second warm up, exponential gaps at the budget's rate, the mix held by a Weyl sequence; the storm's bursts and its reconnect moment (`planStorm`); the hub's renames (`planHubEdits`) |
 | `src/user.ts` | One simulated person: a view by position (`canJump`) or by cursor, its 100 row window and checkpoints, scroll, jump, filter or sort (aborting the old count), open, edit, create, a storm burst's edit, the hub's moves, opens and renames, and the `Holder` the live client reads and refetches through |

@@ -3,6 +3,7 @@
 // with no React or library imports, so the view route's loader (in the first
 // load) and the screen agree on what runs.
 import {
+  CREATED_AT_SLUG,
   effectiveQuery,
   type AttributeDefinition,
   type DraftQuery,
@@ -11,6 +12,32 @@ import {
   type View,
   type ViewQuery,
 } from '@crm/data';
+
+/**
+ * Whether sorts ask only what every view runs anyway, Created at newest first (AC-57): none at all, or exactly
+ * that one sort. Such a view shows no sort chip, as Attio, Notion and Linear leave their default order unsaid.
+ */
+export function isDefaultSort(
+  sorts: readonly { readonly attributeId: string; readonly direction: 'ascending' | 'descending' }[],
+  attributes: readonly Pick<AttributeDefinition, 'id' | 'isSystem' | 'apiSlug'>[],
+): boolean {
+  if (sorts.length === 0) return true;
+  const [only] = sorts;
+  if (sorts.length !== 1 || only === undefined || only.direction !== 'descending') return false;
+  const createdAt = attributes.find((attribute) => attribute.isSystem && attribute.apiSlug === CREATED_AT_SLUG);
+  return createdAt !== undefined && only.attributeId === createdAt.id;
+}
+
+/**
+ * A query in its one form for comparing: the default order written as no sorts, so a view that stores Created at
+ * newest first and a draft that asks none (or the other way round) are the same question, never a draft.
+ */
+export function withDefaultOrderAsNone(
+  query: DraftQuery,
+  attributes: readonly Pick<AttributeDefinition, 'id' | 'isSystem' | 'apiSlug'>[],
+): DraftQuery {
+  return query.sorts.length > 0 && isDefaultSort(query.sorts, attributes) ? { ...query, sorts: [] } : query;
+}
 
 /** A view's saved filter and sorts. */
 export function savedQuery(view: View): DraftQuery {

@@ -2,6 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { DescriptionList } from '../DescriptionList/DescriptionList.tsx';
+import { FieldGroup } from '../FieldGroup/FieldGroup.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Panel } from './Panel.tsx';
 
@@ -77,5 +79,52 @@ export const Floating: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('dialog', { name: 'Northwind Traders' })).toBeInTheDocument();
+  },
+};
+
+/** Stacked, with a subtitle: sections a set space apart, each a FieldGroup, as a form submission shows them. */
+export const Stacked: Story = {
+  render: () => (
+    <Stage>
+      <Panel
+        title="Grace Hopper"
+        subtitle="Website enquiry · 5 minutes ago"
+        isOpen
+        onClose={() => undefined}
+        isStacked
+        footerStart={
+          <Button variant="danger" icon="trash">
+            Delete
+          </Button>
+        }
+        footer={<Button>Mark as spam</Button>}
+      >
+        <DescriptionList
+          items={[
+            { term: 'State', description: 'Added' },
+            { term: 'When', description: '5 minutes ago' },
+          ]}
+        />
+        <FieldGroup label="Answers" tone="heading" headingLevel={3}>
+          <DescriptionList
+            layout="stacked"
+            items={[
+              { term: 'Your name', description: 'Grace Hopper' },
+              { term: 'Work email', description: 'grace@navy.mil' },
+            ]}
+          />
+        </FieldGroup>
+        <FieldGroup label="Where it came from" tone="heading" headingLevel={3}>
+          <DescriptionList items={[{ term: 'Sent from', description: 'The form’s own page' }]} />
+        </FieldGroup>
+      </Panel>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('dialog', { name: 'Grace Hopper' })).toHaveTextContent('Website enquiry');
+    const answers = canvas.getByRole('group', { name: 'Answers' });
+    const source = canvas.getByRole('group', { name: 'Where it came from' });
+    const gap = source.getBoundingClientRect().top - answers.getBoundingClientRect().bottom;
+    await expect(gap).toBeGreaterThan(12);
   },
 };

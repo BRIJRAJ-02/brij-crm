@@ -17,6 +17,13 @@ export interface Step {
  */
 export type StepsVariant = 'list' | 'count';
 
+/**
+ * The list's direction: `vertical` (the default), a column; `horizontal`, one
+ * row joined by hairlines across the top of a page (import), which turns back
+ * into the column when its slot is under 480px wide (a phone).
+ */
+export type StepsOrientation = 'vertical' | 'horizontal';
+
 /** Props for Steps. */
 export interface StepsProps {
   /** What the steps are for ("Import progress"). */
@@ -28,12 +35,14 @@ export interface StepsProps {
   readonly failed?: string;
   /** `list` (the default) or `count`. */
   readonly variant?: StepsVariant;
+  /** The list's direction: `vertical` (the default) or `horizontal`. */
+  readonly orientation?: StepsOrientation;
 }
 
 type StepState = 'done' | 'current' | 'upcoming' | 'failed';
 
 /** Numbered steps through a flow (import, two factor setup, onboarding): done, current and still to come, or failed. */
-export function Steps({ label, steps, current, failed, variant = 'list' }: StepsProps) {
+export function Steps({ label, steps, current, failed, variant = 'list', orientation = 'vertical' }: StepsProps) {
   const currentIndex = steps.findIndex((step) => step.id === current);
   if (variant === 'count') {
     // One line, read where it stands; the flow's title names the step. A step not in the list counts from the first.
@@ -45,8 +54,8 @@ export function Steps({ label, steps, current, failed, variant = 'list' }: Steps
     if (index < currentIndex) return 'done';
     return index === currentIndex ? 'current' : 'upcoming';
   };
-  return (
-    <ol className={styles.root} aria-label={label}>
+  const list = (
+    <ol className={styles.root} aria-label={label} data-orientation={orientation}>
       {steps.map((step, index) => {
         const state = stateOf(index, step.id);
         return (
@@ -75,4 +84,6 @@ export function Steps({ label, steps, current, failed, variant = 'list' }: Steps
       })}
     </ol>
   );
+  // The row reads its slot's width, so the frame is the container its query asks.
+  return orientation === 'horizontal' ? <div className={styles.frame}>{list}</div> : list;
 }

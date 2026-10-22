@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { EmptyState } from './EmptyState.tsx';
@@ -35,6 +35,43 @@ export const Row: Story = {
     const status = canvas.getByRole('status');
     await expect(status).toHaveTextContent('No open tasks.');
     await expect(Math.round(status.getBoundingClientRect().height)).toBe(34);
+  },
+};
+
+/** A row with a line of text (Home's cards): the text sits under the title, both beside the icon. */
+export const RowWithText: Story = {
+  args: {
+    title: 'No meetings today',
+    children: 'Meetings you host and your calendar’s events show here.',
+    icon: 'calendar',
+    layout: 'row',
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <EmptyState {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const title = canvas.getByText('No meetings today');
+    const text = canvas.getByText(/calendar’s events show here/);
+    // The text starts where the title does, on the line below it.
+    await expect(Math.round(text.getBoundingClientRect().left)).toBe(Math.round(title.getBoundingClientRect().left));
+    await expect(text.getBoundingClientRect().top).toBeGreaterThan(title.getBoundingClientRect().top);
+  },
+};
+
+/** A row that failed, with text and Try again: both under the title. */
+export const RowErrorWithText: Story = {
+  args: {
+    title: 'Recent records didn’t load',
+    children: 'Check your connection.',
+    tone: 'error',
+    layout: 'row',
+    onRetry: fn(),
+  },
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
+    await expect(args.onRetry).toHaveBeenCalled();
   },
 };
 

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { FocusScope, useFocusVisible, useKeyboard } from 'react-aria';
 import { Dialog, Heading } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import styles from './Panel.module.css';
 import { strings } from './strings.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
@@ -18,6 +19,8 @@ export interface PanelProps {
   readonly title: string;
   /** Before the title: the record's avatar. */
   readonly leading?: ReactNode;
+  /** One quiet line under the title: what the subject belongs to and when (a submission's form and time). */
+  readonly subtitle?: ReactNode;
   readonly children: ReactNode;
   readonly isOpen: boolean;
   /** Called when the close button or Esc asks it to close. */
@@ -26,10 +29,14 @@ export interface PanelProps {
   readonly actions?: ReactNode;
   /** A footer under the content, for a form's buttons. */
   readonly footer?: ReactNode;
+  /** At the footer's start, away from its other buttons: a destructive action such as Delete. */
+  readonly footerStart?: ReactNode;
   readonly width?: PanelWidth;
   readonly variant?: PanelVariant;
   /** The content runs to the edges and fills the height, for Tabs and lists that scroll themselves. */
   readonly isFlush?: boolean;
+  /** The content is a column of sections, space-20 apart: a submission's state, its answers, where it came from. */
+  readonly isStacked?: boolean;
 }
 
 type Phase = 'open' | 'exiting' | 'closed';
@@ -66,16 +73,20 @@ function usePresence(isOpen: boolean, element: { readonly current: HTMLElement |
 export function Panel({
   title,
   leading,
+  subtitle,
   children,
   isOpen,
   onClose,
   actions,
   footer,
+  footerStart,
   width = 'md',
   variant = 'sheet',
   isFlush = false,
+  isStacked = false,
 }: PanelProps) {
   const ref = useRef<HTMLElement>(null);
+  const subtitleId = useId();
   const phase = usePresence(isOpen, ref);
   const { isFocusVisible } = useFocusVisible();
   const [openedBy] = useState(() => (isFocusVisible ? 'keyboard' : 'pointer'));
@@ -100,22 +111,38 @@ export function Panel({
         data-opened-by={openedBy}
         {...keyboardProps}
       >
-        <Dialog className={styles.dialog}>
+        <Dialog className={styles.dialog} {...(subtitle === undefined ? {} : { 'aria-describedby': subtitleId })}>
           <header className={styles.head}>
             {leading}
-            <Heading slot="title" className={styles.title}>
-              {title}
-            </Heading>
+            {subtitle === undefined ? (
+              <Heading slot="title" className={styles.title}>
+                <TruncatedText>{title}</TruncatedText>
+              </Heading>
+            ) : (
+              <span className={styles.heading}>
+                <Heading slot="title" className={styles.title}>
+                  <TruncatedText>{title}</TruncatedText>
+                </Heading>
+                <span id={subtitleId} className={styles.subtitle}>
+                  {subtitle}
+                </span>
+              </span>
+            )}
             <span className={styles.actions}>
               {actions}
               <Button variant="ghost" icon="x" label={strings.close} onPress={onClose} />
             </span>
           </header>
-          <div className={styles.body} data-flush={isFlush || undefined}>
+          <div className={styles.body} data-flush={isFlush || undefined} data-stacked={isStacked || undefined}>
             {/* Opened from a settings page, its content keeps to the panel, never the page's edges. */}
             <PageEdge value={false}>{children}</PageEdge>
           </div>
-          {footer !== undefined && <footer className={styles.foot}>{footer}</footer>}
+          {(footer !== undefined || footerStart !== undefined) && (
+            <footer className={styles.foot}>
+              {footerStart !== undefined && <span className={styles.footStart}>{footerStart}</span>}
+              {footer}
+            </footer>
+          )}
         </Dialog>
       </section>
     </FocusScope>

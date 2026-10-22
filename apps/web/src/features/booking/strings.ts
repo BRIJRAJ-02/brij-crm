@@ -61,7 +61,8 @@ export const strings = {
   titlePlaceholder: 'Quick chat',
   titleRequired: 'Give the page a title.',
   whereRequired: 'Say where the meeting happens.',
-  pausedPreview: 'This page is off, so visitors see it closed. Turn it on to preview booking.',
+  /** Above a paused page's editor: what visitors see, and how to turn it back on. */
+  pausedNote: 'This page is off, so visitors see it closed. Resume it from More actions to take bookings again.',
   duration: 'Duration',
   durationRequired: 'Pick at least one length.',
   durationCustom: 'Custom',
@@ -91,6 +92,15 @@ export const strings = {
   addressOrRoom: 'Address or room',
   numberToCall: 'Number to call',
   where: 'Where',
+  /** The Hours tab's way to Availability, where every schedule is kept. */
+  manageSchedules: 'Manage schedules',
+  /** Under the Schedule picker when other pages book by the same schedule. */
+  sharedSchedule: (name: string, pages: number) =>
+    `${String(pages)} pages use ${name}. Changes here apply to all of them.`,
+  /** Why the week shows read only when the owner's schedules couldn't be read. */
+  hoursUnreadable: 'Couldn’t load the schedules, so these hours show read only. Reload to edit them.',
+  /** Why the Schedule picker waits: its hours have changes not saved yet. */
+  saveHoursFirst: 'Save or discard the changes to these hours first.',
   followOwnerHint: 'This page books by its owner’s schedule.',
   readOnlyTitle: 'You can view this page',
   readOnlyText: 'Only its owner or a workspace admin can change it.',
@@ -128,15 +138,15 @@ export const strings = {
   limitHelp: {
     before: {
       text: 'Free time kept before each meeting, so a booking can’t start right after another event.',
-      example: 'With 15 min, after a meeting ending at 10:00 the first slot is 10:15.',
+      example: 'With 15 minutes, after a meeting ending at 10:00 AM the first slot is 10:15 AM.',
     },
     after: {
       text: 'Free time kept after each meeting, to wrap up or get to the next one.',
-      example: 'With 10 min, a 9:00 to 9:30 booking keeps 9:30 to 9:40 free.',
+      example: 'With 10 minutes, a 9:00 to 9:30 AM booking keeps 9:30 to 9:40 AM free.',
     },
     notice: {
-      text: 'How soon someone can book.',
-      example: 'With 4 hours, at 13:00 the first slot offered is 17:00.',
+      text: 'How much warning you need before a meeting. Times sooner than this are hidden.',
+      example: 'With 4 hours, at 1:00 PM the first slot offered is 5:00 PM.',
     },
     ahead: {
       text: 'How many days ahead people can book.',
@@ -147,8 +157,8 @@ export const strings = {
       example: 'With 3, a day with three bookings is full.',
     },
     step: {
-      text: 'How often slots start.',
-      example: 'On Meeting length, a 30 min meeting offers 9:00, 9:30 and 10:00.',
+      text: 'How often a start time is offered. Meeting length starts one right after another.',
+      example: 'On Meeting length, a 30 minute meeting offers 9:00, 9:30 and 10:00 AM.',
     },
   },
   /**
@@ -236,7 +246,7 @@ export const strings = {
   destinationUnusableColleague: 'The owner’s pick can’t take bookings now, so they go on the owner’s default.',
   destinationFailed: 'Couldn’t load calendars. Reload the page to try again.',
   destinationOwnerOnly: 'Only the page’s owner sees their calendars.',
-  destinationLoading: 'Loading calendars…',
+  destinationLoading: 'Loading calendars',
   noCalendarTitle: 'No calendar connected',
   connectCalendar: 'Connect calendar',
   notNow: 'Not now',
@@ -253,8 +263,11 @@ export const strings = {
   bookings: 'Bookings',
   daysOff: 'Days off',
   daysOffText: 'Days you’re closed, whatever your weekly hours say.',
-  openDay: 'Open this day',
-  openDayOn: (date: string) => `Open ${date}`,
+  /** A day off row's remove button: the day opens again by the weekly hours. */
+  removeDayOff: (date: string) => `Remove the day off on ${date}`,
+  noDaysOff: 'No days off yet',
+  /** Days off while the schedules load, for screen readers. */
+  daysOffLoading: 'Loading days off',
   pickDate: 'Pick the day to close.',
   pickLaterDate: 'Pick today or a later day.',
   addDayOff: 'Add day off',

@@ -4,6 +4,7 @@
 **Status**: Proposed
 **Scope**: #25, Slice 6 ([Team and security](../../scope/team-and-security.md))
 **Numbering**: handed out by the coordinator (0031 to 0033 for Slice 6); this spec owns AC-881 to AC-920.
+**Amended 22 October 2026**: passkeys were taken out by the owner ("remove passkey right now not needed", then "from everywhere"): the plugin, its routes and procedures, the step up by passkey, the Passkeys section and the `@better-auth/passkey` and `@simplewebauthn/*` dependencies are gone, and two factor is the authenticator app alone (the runner up of decision 1). The `auth.passkey` table and its migration stay until a later migration drops them; the passkey event kinds and sign in method stay in the contracts so history recorded before reads back. The passkey ACs below (AC-887 to AC-889, and passkey parts of AC-885, AC-888 and AC-895) no longer apply.
 
 ## Owner decisions needed
 

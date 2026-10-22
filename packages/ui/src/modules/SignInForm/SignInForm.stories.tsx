@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, waitFor } from 'storybook/test';
-import { Button } from '../../atoms/Button/Button.tsx';
 import { AuthLayout } from '../AuthLayout/AuthLayout.tsx';
 import { SignInForm } from './SignInForm.tsx';
 
@@ -158,103 +157,6 @@ export const WithoutGoogle: Story = {
     await expect(canvas.queryByRole('button', { name: 'Continue with Google' })).toBeNull();
     await expect(canvas.queryByText('or')).toBeNull();
     await expect(canvas.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
-  },
-};
-
-/** The room under the email field (spec 0033's passkey sign in goes here), before the submit. */
-export const AfterEmail: Story = {
-  parameters: { crm: { screenshot: false } },
-  args: { afterEmail: <span>Sign in with a passkey</span> },
-  play: async ({ canvas, canvasElement }) => {
-    const slot = canvas.getByText('Sign in with a passkey');
-    const submit = canvas.getByRole('button', { name: 'Continue with email' });
-    await expect(canvasElement.querySelector('form')?.contains(slot)).toBe(true);
-    await expect(slot.compareDocumentPosition(submit)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-  },
-};
-
-/**
- * Spec 0033's passkey sign in, as the sign in screen fills the room: a ghost
- * button with the key, and the email field offering saved passkeys in its
- * suggestions (`webauthn` in its autocomplete).
- */
-export const WithPasskey: Story = {
-  args: {
-    isPasskeyAutofill: true,
-    afterEmail: (
-      <Button variant="ghost" icon="key" isFullWidth="center" onPress={fn()}>
-        Sign in with a passkey
-      </Button>
-    ),
-  },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole('textbox', { name: 'Email' })).toHaveAttribute('autocomplete', 'email webauthn');
-    await expect(canvas.getByRole('button', { name: 'Continue with email' })).toBeEnabled();
-    await expect(canvas.getByRole('button', { name: 'Sign in with a passkey' })).toBeEnabled();
-  },
-};
-
-/**
- * The other ways in, beside Google above the "or" (the sign in screen's passkey): grouped with Google, and the
- * email field still followed straight by its submit.
- */
-export const OtherWays: Story = {
-  parameters: { crm: { screenshot: false } },
-  args: {
-    isPasskeyAutofill: true,
-    otherWays: (
-      <Button size="lg" icon="key" isFullWidth="center" onPress={fn()}>
-        Sign in with a passkey
-      </Button>
-    ),
-  },
-  play: async ({ canvas, canvasElement }) => {
-    const google = canvas.getByRole('button', { name: 'Continue with Google' });
-    const passkey = canvas.getByRole('button', { name: 'Sign in with a passkey' });
-    const email = canvas.getByRole('textbox', { name: 'Email' });
-    const submit = canvas.getByRole('button', { name: 'Continue with email' });
-    // Outside the form, after Google and before the "or"; the field and its submit sit together.
-    await expect(canvasElement.querySelector('form')?.contains(passkey)).toBe(false);
-    const order = [...canvasElement.querySelectorAll('button, input')].filter((node) =>
-      [google, passkey, email, submit].includes(node as HTMLElement),
-    );
-    await expect(order).toEqual([google, passkey, email, submit]);
-    await expect(passkey.compareDocumentPosition(canvas.getByText('or'))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-  },
-};
-
-/** Without Google, another way in still brings the "or", and the submit keeps saying it is the email's. */
-export const OtherWaysWithoutGoogle: Story = {
-  parameters: { crm: { screenshot: false } },
-  args: {
-    onGoogle: undefined,
-    otherWays: (
-      <Button size="lg" icon="key" isFullWidth="center" onPress={fn()}>
-        Sign in with a passkey
-      </Button>
-    ),
-  },
-  play: async ({ canvas }) => {
-    await expect(canvas.queryByRole('button', { name: 'Continue with Google' })).toBeNull();
-    await expect(canvas.getByText('or')).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'Continue with email' })).toBeInTheDocument();
-  },
-};
-
-/** The browser's passkey prompt is open: Google and the email's submit are off until it answers. */
-export const PasskeyPending: Story = {
-  args: {
-    status: 'passkey',
-    isPasskeyAutofill: true,
-    afterEmail: (
-      <Button variant="ghost" icon="key" isFullWidth="center" isPending onPress={fn()}>
-        Sign in with a passkey
-      </Button>
-    ),
-  },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: 'Continue with email' })).toBeDisabled();
-    await expect(canvas.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
   },
 };
 

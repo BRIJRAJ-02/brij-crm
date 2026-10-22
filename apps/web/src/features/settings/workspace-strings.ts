@@ -6,13 +6,12 @@ export const strings = {
   name: 'Workspace name',
   timeZone: 'Time zone',
   timeZoneInfo: 'New booking pages and members start in this time zone. Each person can pick their own.',
-  address: 'Address',
   copyAddress: 'Copy address',
   /** The address row: the part after /w/, edited by owners and admins. */
   webAddress: 'Web address',
   addressPrefix: '/w/',
   addressRule: 'Lowercase letters, digits and dashes.',
-  addressChecking: 'Checking…',
+  addressChecking: 'Checking',
   addressFree: 'Free',
   addressTaken: 'Taken',
   addressSuggestions: 'Free addresses',
@@ -37,6 +36,8 @@ export const strings = {
   somethingWrong: 'Something went wrong. Try again in a moment.',
   // The danger zone (owners only).
   danger: 'Danger zone',
+  /** Profile's first section: the picture, name and sign in email. */
+  detailsSection: 'Your details',
   deleteRow: 'Delete workspace',
   deleteRowText: 'Nobody can open it, and after 30 days it’s gone for good.',
   deleteAction: 'Delete workspace',

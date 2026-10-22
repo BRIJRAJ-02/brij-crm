@@ -117,6 +117,18 @@ describe('account.sessions', () => {
     expect(fromPhone.items.find((item) => item.current)?.deviceLabel).toBe('Safari on iOS');
   });
 
+  it('names a session kept without a device label from its stored user agent, and never sends the agent', async () => {
+    const email = newEmail();
+    const cookie = await signInAs(email, { 'user-agent': IPHONE_SAFARI });
+    // A session from before labels were kept: no label, only the agent the browser sent.
+    await testQuery(identityUrl, 'update auth.session set device_label = null where user_id = $1', [
+      await userIdOf(cookie),
+    ]);
+    const page = await rpcClient(app, cookie).account.sessions.list();
+    expect(page.items[0]).toMatchObject({ deviceLabel: 'Safari on iOS', current: true });
+    expect(JSON.stringify(page)).not.toContain('Mozilla');
+  });
+
   it('keeps no place a request carried that isn’t a country and a printable city', async () => {
     const email = newEmail();
     const cookie = await signInAs(email, {

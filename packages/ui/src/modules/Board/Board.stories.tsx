@@ -47,13 +47,24 @@ interface SampleProps {
   readonly status?: LoadStatus;
   readonly onRetry?: () => void;
   readonly startShowingEmpty?: boolean;
+  /** A "No Stage" column first, empty, which stays a slim strip. */
+  readonly withNoValue?: boolean;
 }
 
 /** The board holding its own cards, as the data layer would: a move rewrites the card's stage. */
-function SampleBoard({ onMove, isReorderable, isReadOnly, status, onRetry, startShowingEmpty = false }: SampleProps) {
+function SampleBoard({
+  onMove,
+  isReorderable,
+  isReadOnly,
+  status,
+  onRetry,
+  startShowingEmpty = false,
+  withNoValue = false,
+}: SampleProps) {
   const [cards, setCards] = useState(CARDS);
   const [showEmpty, setShowEmpty] = useState(startShowingEmpty);
   const columns: readonly BoardColumn[] = [
+    ...(withNoValue ? [{ id: 'none', title: 'No Stage', isArchived: false, isCollapsedWhenEmpty: true }] : []),
     ...SAMPLE_STAGES.map((stage) => ({ id: stage.id, title: stage.label, hue: stage.hue, isArchived: stage.archived })),
     { id: 'lost', title: 'Lost', hue: 'red' as const, isArchived: false },
   ].map((column) => {
@@ -163,6 +174,17 @@ export const EmptyColumns: Story = {
     const lost = canvas.getByRole('grid', { name: /Lost/ });
     await expect(within(lost).getByText('No cards')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Hide empty columns' })).toBeInTheDocument();
+  },
+};
+
+/** An empty "No Stage" column is a slim strip with its title and count, out of the way until a card moves. */
+export const CollapsedNoValue: Story = {
+  args: { startShowingEmpty: true, withNoValue: true },
+  play: async ({ canvas }) => {
+    const strip = canvas.getByRole('region', { name: /No Stage/ });
+    await expect(within(strip).queryByRole('grid')).not.toBeInTheDocument();
+    await expect(strip.getBoundingClientRect().width).toBeLessThan(80);
+    await expect(within(strip).getByText('0')).toBeInTheDocument();
   },
 };
 

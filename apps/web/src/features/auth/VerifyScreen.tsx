@@ -58,11 +58,7 @@ export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
         if (outcome !== 'signed-in') {
           void navigate({
             to: '/two-factor',
-            search: {
-              ...(redirect === undefined ? {} : { redirect }),
-              // Only passkeys for a second factor (AC-888): the step is the passkey alone.
-              ...(outcome === 'second-step-passkey' ? { only: 'passkey' as const } : {}),
-            },
+            search: redirect === undefined ? {} : { redirect },
             replace: true,
           });
           return;

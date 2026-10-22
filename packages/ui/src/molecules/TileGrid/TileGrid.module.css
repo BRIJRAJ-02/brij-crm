@@ -23,5 +23,7 @@
       auto-fit,
       minmax(min(100%, max(var(--size-panel), calc((100% - var(--tile-gap)) / 2))), 1fr)
     );
+    /* Side by side, a pair shares one height, so two cards in a row end on one line (Home). */
+    align-items: stretch;
   }
 }

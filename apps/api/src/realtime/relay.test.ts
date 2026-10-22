@@ -138,6 +138,7 @@ interface RelayOptions extends Partial<
     | 'selfDormant'
     | 'onWork'
     | 'cutOff'
+    | 'now'
   >
 > {
   readonly applicationName?: string;
@@ -198,6 +199,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     ...(options.selfDormant === undefined ? {} : { selfDormant: options.selfDormant }),
     ...(options.onWork === undefined ? {} : { onWork: options.onWork }),
     ...(options.cutOff === undefined ? {} : { cutOff: options.cutOff }),
+    ...(options.now === undefined ? {} : { now: options.now }),
   });
   started.push(relay);
   relay.start();
@@ -255,6 +257,57 @@ async function unpublished(workspaceId: string): Promise<number[]> {
 }
 
 const WAIT = { timeout: 10_000, interval: 25 };
+
+/**
+ * The relay's clock in a test: it moves `tickMs` each time a poll asks for
+ * workspaces (through `tick`'s reader), and when the test calls `advance`,
+ * never on its own. The relay's quiet spells, retries and prune rounds then
+ * count polls and steps, however slow the machine; with `tickMs` at least the
+ * poll wait, the next poll is due at once. `pause` stops the ticks.
+ */
+function pollClock(tickMs: number) {
+  let at = 1_000_000;
+  let paused = false;
+  const tick =
+    (wrap: (reader: OutboxReader) => OutboxReader = (reader) => reader, before?: () => Promise<void>) =>
+    (reader: OutboxReader): OutboxReader => {
+      const inner = wrap(reader);
+      return {
+        ...inner,
+        workspaces: async (max, after) => {
+          await before?.();
+          if (!paused) at += tickMs;
+          return inner.workspaces(max, after);
+        },
+      };
+    };
+  return {
+    now: () => at,
+    tick,
+    advance: (ms: number) => {
+      at += ms;
+    },
+    pause: () => {
+      paused = true;
+    },
+    /** Ticks again, one tick on at once: a poll made while paused left the next due only a tick later. */
+    resume: () => {
+      paused = false;
+      at += tickMs;
+    },
+  };
+}
+
+/** Wraps a reader to note the clock at each turn `workspaceId` reads its rows (its `pending` calls). */
+function turnsOf(workspaceId: string, now: () => number, turns: number[]) {
+  return (reader: OutboxReader): OutboxReader => ({
+    ...reader,
+    pending: (id, max) => {
+      if (id === workspaceId) turns.push(now());
+      return reader.pending(id, max);
+    },
+  });
+}
 
 describe('the relay', () => {
   it('publishes each workspace’s rows in order to its channel, with the event and idempotency key, then marks them', async () => {
@@ -346,19 +399,23 @@ describe('the relay', () => {
     });
     servers.push(centrifugo);
     await events(failing, [1]);
-    // A poll every 20 ms would retry far sooner than the backoff lets it.
-    const { warnings } = relayTo(centrifugo.url, { pollScheduleMs: [20], retryMs: 100, maxRetryMs: 400 });
-    await expect.poll(() => centrifugo.refused.length, WAIT).toBeGreaterThanOrEqual(5);
-    const tries = centrifugo.calls.filter((call) => call.channel === `workspace:${failing}`).map((call) => call.start);
+    // A poll every 20 ms would retry far sooner than the backoff lets it. 20 ms a poll on the relay's clock, so the
+    // waits are counted in polls, not in a slow runner's timer slack.
+    const clock = pollClock(20);
+    const tries: number[] = [];
+    const { warnings } = relayTo(centrifugo.url, {
+      pollScheduleMs: [20],
+      retryMs: 100,
+      maxRetryMs: 400,
+      now: clock.now,
+      wrap: clock.tick(turnsOf(failing, clock.now, tries)),
+    });
+    await expect.poll(() => tries.length, WAIT).toBeGreaterThanOrEqual(5);
+    // Still from here on: the minute between warnings can't pass on a fast machine's polls.
+    clock.pause();
     const gaps = tries.slice(1).map((at, index) => at - (tries[index] ?? at));
-    // 100, 200, 400, then 400 again (the cap): never sooner, and late by at most a slow runner's timer slack
-    // (a 200 ms wait once took 260 ms on CI, so rounding to the nearest 100 was too tight).
-    const expected = [100, 200, 400, 400];
-    for (const [index, gap] of gaps.slice(0, 4).entries()) {
-      expect(gap).toBeGreaterThanOrEqual((expected[index] ?? 0) - 10);
-      expect(gap).toBeLessThan((expected[index] ?? 0) + 150);
-    }
-    expect(gaps.length).toBeGreaterThanOrEqual(4);
+    // 100, 200, 400, then 400 again (the cap), each to the poll.
+    expect(gaps.slice(0, 4)).toEqual([100, 200, 400, 400]);
 
     // Meanwhile other workspaces publish at once.
     await events(healthy, [1]);
@@ -370,6 +427,7 @@ describe('the relay', () => {
     expect(mine[0]?.fields).toMatchObject({ failures: 1, retryInMs: 100, seq: 1 });
 
     refusing = false;
+    clock.resume();
     await expect.poll(() => unpublished(failing), WAIT).toEqual([]);
     expect(centrifugo.seqs(failing)).toEqual([1]);
   });
@@ -642,14 +700,14 @@ describe('the relay', () => {
       /** What a prune answered. */
       pruned?: number;
     }
-    /** Records every database call the relay makes through its reader, in order. */
-    function recorder() {
+    /** Records every database call the relay makes through its reader, in order, timed by `clock`. */
+    function recorder(clock: () => number = () => Date.now()) {
       const calls: Call[] = [];
       const timed = <T>(name: Call['name'], work: () => Promise<T>): Promise<T> => {
-        const call: Call = { name, start: Date.now(), end: Number.NaN };
+        const call: Call = { name, start: clock(), end: Number.NaN };
         calls.push(call);
         return work().finally(() => {
-          call.end = Date.now();
+          call.end = clock();
         });
       };
       const wrap = (reader: OutboxReader): OutboxReader => ({
@@ -707,12 +765,15 @@ describe('the relay', () => {
       servers.push(centrifugo);
       const workspaceId = await workspace();
       await pastRetention(workspaceId, 1, 3);
-      const { wrap, prunes } = recorder();
+      // 100 ms a poll on the relay's clock: a round every 4 polls, dormant after 12 quiet ones.
+      const clock = pollClock(100);
+      const { wrap, prunes } = recorder(clock.now);
       const { relay, infos } = relayTo(centrifugo.url, {
         pollScheduleMs: [50],
         dormantAfterMs: 1_200,
         pruneEveryMs: 400,
-        wrap,
+        wrap: clock.tick(wrap),
+        now: clock.now,
       });
       // The first pass of the awake period starts a round, and the rows past retention go.
       await expect.poll(() => left(workspaceId), WAIT).toEqual([]);
@@ -724,11 +785,15 @@ describe('the relay', () => {
       expect(infos.some((line) => line.message === 'relay.prune' && Number(line.fields.pruned) >= 3)).toBe(true);
       await expect.poll(() => relay.mode(), WAIT).toBe('dormant');
       const whileAwake = prunes().length;
-      await sleep(600);
+      const asleepAt = clock.now();
+      await sleep(300);
+      // Dormant: no poll moved the clock, and nothing was pruned.
+      expect(clock.now()).toBe(asleepAt);
       expect(prunes()).toHaveLength(whileAwake);
-      // A new awake period: its first pass starts a round at once.
+      // A new awake period: its first pass starts a round at once, before a second poll.
       relay.wake();
-      await expect.poll(() => prunes().length, { timeout: 300, interval: 10 }).toBe(whileAwake + 1);
+      await expect.poll(() => prunes().length, WAIT).toBeGreaterThan(whileAwake);
+      expect(prunes()[whileAwake]?.start).toBe(asleepAt + 100);
     });
 
     it('starts a round on a busy pass once it has been due for another pruneEveryMs with no quiet pass', async () => {
@@ -737,29 +802,32 @@ describe('the relay', () => {
       const old = await workspace();
       await pastRetention(old, 1, 2);
       const busy = await workspace();
-      // A row to publish at every poll, stored just before the poll asks, so no pass is quiet however slow the
-      // machine: a writer on a timer of its own fell behind the 50 ms polls on a busy CI runner.
+      // A row to publish at every poll, stored just before the poll asks, so no pass is quiet; and 100 ms a poll on
+      // the relay's clock, so "another pruneEveryMs" is 3 polls however slow the machine (wall time flaked on CI).
       let seq = 0;
-      const { wrap: timed, prunes, calls } = recorder();
-      const wrap = (reader: OutboxReader): OutboxReader => {
-        const inner = timed(reader);
-        return {
-          ...inner,
-          workspaces: async (max, after) => {
-            seq += 1;
-            await events(busy, [seq]);
-            return inner.workspaces(max, after);
-          },
-        };
-      };
-      const startedAt = Date.now();
-      relayTo(centrifugo.url, { pollScheduleMs: [50], pruneEveryMs: 300, wrap });
+      const clock = pollClock(100);
+      const { wrap, prunes, calls } = recorder(clock.now);
+      const startedAt = clock.now();
+      relayTo(centrifugo.url, {
+        pollScheduleMs: [50],
+        pruneEveryMs: 300,
+        now: clock.now,
+        wrap: clock.tick(wrap, async () => {
+          seq += 1;
+          await events(busy, [seq]);
+        }),
+      });
       await expect.poll(() => left(old), WAIT).toEqual([]);
       const [first] = prunes();
       if (first === undefined) throw new Error('A prune was seen.');
-      // Due from the start, then another 300 ms with every pass busy.
-      expect(first.start - startedAt).toBeGreaterThanOrEqual(300);
-      expect(calls.filter((call) => call.name === 'advance' && call.end <= first.start).length).toBeGreaterThan(2);
+      // Due from the start, then another 300 ms (3 polls) with every pass busy: the prune follows the third poll.
+      expect(first.start - startedAt).toBe(300);
+      const polls = calls.filter((call) => call.name === 'workspaces' && call.start <= first.start);
+      expect(polls).toHaveLength(3);
+      // Each of those passes published a row: none was quiet.
+      expect(calls.filter((call) => call.name === 'advance' && call.end <= first.start).length).toBeGreaterThanOrEqual(
+        3,
+      );
     });
 
     it('ends a round at a slow batch, even a full one, so publishing waits behind one slow batch a round', async () => {
@@ -897,23 +965,32 @@ describe('the relay', () => {
 
   it('counts a failed publish once even when marking what landed fails too', async () => {
     const stuck = await workspace();
-    let refusing = true;
+    // Refuses row 2 once only: the retry, however soon the polls bring it, goes through.
+    let refused = false;
     const centrifugo = await fakeCentrifugo({
-      refuse: (publication) => refusing && publication.idempotencyKey === `${stuck}:2`,
+      refuse: (publication) => {
+        if (refused || publication.idempotencyKey !== `${stuck}:2`) return false;
+        refused = true;
+        return true;
+      },
     });
     servers.push(centrifugo);
     await events(stuck, [1, 2]);
+    // 100 ms a poll on the relay's clock: the retry's wait is counted in polls.
+    const clock = pollClock(100);
+    const tries: number[] = [];
     const { lines } = relayTo(centrifugo.url, {
-      pollScheduleMs: [60_000],
+      pollScheduleMs: [100],
       retryMs: 400,
-      wrap: (reader) => ({ ...reader, mark: () => Promise.reject(new Error('could not mark')) }),
+      now: clock.now,
+      wrap: clock.tick((reader) =>
+        turnsOf(stuck, clock.now, tries)({ ...reader, mark: () => Promise.reject(new Error('could not mark')) }),
+      ),
     });
-    await expect.poll(() => centrifugo.refused.length, WAIT).toBe(1);
-    refusing = false;
     await expect.poll(() => unpublished(stuck), WAIT).toEqual([]);
-    const tries = centrifugo.calls.filter((call) => call.channel === `workspace:${stuck}`).map((call) => call.start);
+    expect(centrifugo.refused).toHaveLength(1);
     // One failure waits 400 ms; counted twice it would wait 800.
-    expect((tries[1] ?? 0) - (tries[0] ?? 0)).toBeLessThan(700);
+    expect((tries[1] ?? 0) - (tries[0] ?? 0)).toBe(400);
     expect(lines).toContain('Marking the part of a failed batch that landed failed; it is sent again on the retry');
     expect(lines).not.toContain('Reading or marking changes failed; retrying the workspace with backoff');
   });
@@ -1401,13 +1478,16 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
     const quiet = await workspace();
     const busy = await workspace();
     await events(quiet, [1]);
-    const { relay } = relayTo(centrifugo.url, { pollScheduleMs: [50], dormantAfterMs: 600 });
+    // The relay's clock moves only by the test's steps, 150 ms a write: the quiet spell is 4 steps, however slow.
+    const clock = pollClock(0);
+    const { relay } = relayTo(centrifugo.url, { pollScheduleMs: [50], dormantAfterMs: 600, now: clock.now });
     await expect.poll(() => centrifugo.seqs(quiet), WAIT).toEqual([1]);
     // Busy keeps writing for longer than the quiet spell: the relay never sleeps, and drops quiet's audiences.
     for (let seq = 1; seq <= 8; seq += 1) {
       await events(busy, [seq]);
       await testQuery(ownerUrl, `select pg_notify('crm_outbox', $1)`, [busy]);
-      await sleep(150);
+      await expect.poll(() => centrifugo.seqs(busy).length, WAIT).toBe(seq);
+      clock.advance(150);
     }
     await expect.poll(() => centrifugo.seqs(busy).length, WAIT).toBe(8);
     expect(relay.mode()).toBe('active');
@@ -1422,11 +1502,19 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
     // Two audiences, as #24's rules would make: the relay refuses before it reads either policy.
     const one = { key: 'open', policy: {}, members: [] } as unknown as Audience;
     const two = { ...one, key: 'other' };
-    const { warnings } = relayTo(centrifugo.url, { audiences: () => Promise.resolve([one, two]) });
+    // 100 ms a poll on the relay's clock: its retries (50 ms, doubling) come every few polls, however slow.
+    const clock = pollClock(100);
+    const turns: number[] = [];
+    const { warnings } = relayTo(centrifugo.url, {
+      audiences: () => Promise.resolve([one, two]),
+      now: clock.now,
+      wrap: clock.tick(turnsOf(workspaceId, clock.now, turns)),
+    });
     await expect
       .poll(() => warnings.filter((line) => line.message.includes('more than one audience')).length, WAIT)
       .toBe(1);
-    await sleep(300);
+    // Four more failed turns, and still the one report.
+    await expect.poll(() => turns.length, WAIT).toBeGreaterThanOrEqual(5);
     expect(warnings.filter((line) => line.message.includes('more than one audience'))).toHaveLength(1);
     expect(centrifugo.seqs(workspaceId)).toEqual([]);
     expect(await unpublished(workspaceId)).toEqual([1]);

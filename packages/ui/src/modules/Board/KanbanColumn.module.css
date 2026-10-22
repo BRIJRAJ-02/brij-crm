@@ -63,6 +63,18 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* Collapsed: a slim strip two controls wide, the title and count running down it, top to bottom. */
+  .root[data-collapsed] {
+    inline-size: calc(2 * var(--size-control));
+  }
+
+  .root[data-collapsed] .head {
+    flex-direction: row;
+    padding-block: var(--space-4);
+    padding-inline: 0;
+    writing-mode: vertical-rl;
+  }
+
   .root[data-over] {
     background: var(--accent-soft);
     box-shadow: var(--shadow-focus-inset);
