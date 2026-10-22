@@ -1,36 +1,9 @@
-import { LoadingNow } from '@crm/ui';
-import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { SecurityLoading, SecurityScreen } from '../features/settings/SecurityScreen.tsx';
-import { strings } from '../features/settings/security-strings.ts';
-import { SettingsPage } from '../features/settings/SettingsPage.tsx';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
-// Settings › Account › Security (spec 0033): the person's own devices, held by
-// the data layer, which reads them from the top each time the page opens; and
-// the first page of Recent activity, started here and never waited for: its
-// section shows its own loading rows, and a failed read shows there with a
-// retry, never failing the page.
+// The old Settings › Account › Security address: Sign in and devices now (the owner, 22 October 2026: the sidebar
+// showed Security twice), kept for links and emails.
 export const Route = createFileRoute('/w/$slug/settings/account/security')({
-  loader: ({ context }) => ({ activity: context.data.account.activity().catch(() => undefined) }),
-  pendingComponent: () => (
-    <LoadingNow>
-      <SettingsPage title={strings.title}>
-        <SecurityLoading />
-      </SettingsPage>
-    </LoadingNow>
-  ),
-  component: SecurityRoute,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: '/w/$slug/settings/account/sign-in', params, replace: true });
+  },
 });
-
-function SecurityRoute() {
-  const { data, toasts } = Route.useRouteContext();
-  const { activity } = Route.useLoaderData();
-  const router = useRouter();
-  return (
-    <SecurityScreen
-      data={data}
-      toasts={toasts}
-      activity={activity}
-      onActivityRetry={() => void router.invalidate({ filter: (match) => match.routeId === Route.id })}
-    />
-  );
-}

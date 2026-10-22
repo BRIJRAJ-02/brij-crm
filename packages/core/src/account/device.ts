@@ -1,5 +1,5 @@
 // What device a session is on (spec 0033, AC-890): the browser's family and
-// its system, read once from the user agent at sign in, so Account › Security
+// its system, read once from the user agent at sign in, so Account › Sign in and devices
 // can say "Chrome on macOS". A best effort read of a header anyone can set: it
 // is shown to the account's own person and never trusted for anything.
 

@@ -719,7 +719,7 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
           },
         },
         delete: {
-          // Signing out on the device itself; a revoke from Account › Security keeps its own event.
+          // Signing out on the device itself; a revoke from Account › Sign in and devices keeps its own event.
           after: async (session, context) => {
             if (context?.path !== '/sign-out') return;
             await keepEvent({
