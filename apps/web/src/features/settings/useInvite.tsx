@@ -103,7 +103,15 @@ export function useInvite({
       : roles.some((each) => each.id === defaultRole)
         ? defaultRole
         : (roles.at(-1)?.id ?? defaultRole);
-  const known: InviteKnown = { members: memberEmails, invited: invitedEmails };
+  // Who this form invited since it opened: "Invite more" refuses them in their row too, rather than sending again
+  // (which would mint a new link and end the one just mailed).
+  const [justInvited, setJustInvited] = useState<ReadonlySet<string>>(new Set());
+  const known: InviteKnown = {
+    members: memberEmails,
+    invited: justInvited.size === 0 ? invitedEmails : new Set([...invitedEmails, ...justInvited]),
+  };
+  // A send in flight, held outside render so a second press can never start another.
+  const inFlight = useRef(false);
   const [rows, setRows] = useState<readonly InviteRow[]>(() => [createInviteRow(startRole)]);
   // Rows judged as they are left; every row once Send was pressed.
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
@@ -138,6 +146,7 @@ export function useInvite({
   };
 
   const send = () => {
+    if (inFlight.current) return;
     setChecking(true);
     setFailure(undefined);
     setNotice(undefined);
@@ -160,6 +169,7 @@ export function useInvite({
       return;
     }
     setBusy(true);
+    inFlight.current = true;
     // What went through so far, so a call failing part way never sends the earlier ones twice.
     let done: InviteSent = { invited: [], refused: [], unsent: [] };
     const handled = new Set<string>();
@@ -177,12 +187,16 @@ export function useInvite({
       .then(
         () => {
           setBusy(false);
+          inFlight.current = false;
+          setJustInvited((before) => new Set([...before, ...done.invited.map((each) => each.email.toLowerCase())]));
           setSent(done);
           if (done.invited.length > 0) onInvited?.();
         },
         (error: unknown) => {
           setBusy(false);
           const reason = isDataError(error) ? error.message : strings.somethingWrong;
+          inFlight.current = false;
+          setJustInvited((before) => new Set([...before, ...done.invited.map((each) => each.email.toLowerCase())]));
           if (handled.size === 0) {
             setFailure(reason);
             return;
@@ -190,7 +204,16 @@ export function useInvite({
           // Only the rows that didn't go stay, so Send again retries just those.
           const left = shown.filter((row) => !handled.has(row.email.trim().toLowerCase()));
           setRows(left.length > 0 ? left : [createInviteRow(startRole)]);
-          setFailure(strings.partlySent(handled.size, reason));
+          // What the calls that went through said too, since their rows leave the list.
+          setFailure(
+            [
+              strings.partlySent(handled.size, reason),
+              ...(done.refused.length > 0
+                ? [strings.alreadyMembers(done.refused.map((each) => each.email).join(', '))]
+                : []),
+              ...(done.unsent.length > 0 ? [strings.unsent(done.unsent.join(', '))] : []),
+            ].join(' '),
+          );
           if (done.invited.length > 0) onInvited?.();
         },
       );
@@ -217,7 +240,8 @@ export function useInvite({
     max: INVITE_BATCH_MAX,
     isDisabled: isBusy,
     onBlurRow: (id) => {
-      if (shown.some((row) => row.id === id && row.email.trim() !== '')) setTouched(new Set([...touched, id]));
+      if (shown.some((row) => row.id === id && row.email.trim() !== ''))
+        setTouched((before) => new Set([...before, id]));
     },
     onSubmit: send,
     onOverflow: (kept) => {

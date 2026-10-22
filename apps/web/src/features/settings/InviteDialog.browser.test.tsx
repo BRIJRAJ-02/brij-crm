@@ -97,6 +97,13 @@ describe('the Invite dialog', () => {
     await dialog.getByRole('button', { name: 'Invite 1 person' }).click();
     await expect.element(dialog.getByText(/Invited grace@acme.com/)).toBeVisible();
     expect(fake.invites).toEqual([{ emails: ['grace@acme.com'], role: 'admin' }]);
+    // Focus waits on Done, and Invite more refuses who was just invited rather than mailing a new link.
+    await expect.element(dialog.getByRole('button', { name: 'Done' })).toHaveFocus();
+    await dialog.getByRole('button', { name: 'Invite more' }).click();
+    await dialog.getByRole('textbox', { name: 'Email' }).fill('grace@acme.com');
+    await dialog.getByRole('button', { name: 'Invite', exact: true }).click();
+    await expect.element(dialog.getByText('Already invited.')).toBeVisible();
+    expect(fake.invites).toHaveLength(1);
   });
 });
 
