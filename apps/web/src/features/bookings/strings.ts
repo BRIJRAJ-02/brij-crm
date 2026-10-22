@@ -68,8 +68,8 @@ export const strings = {
   details: 'Booking',
   status: { confirmed: 'Confirmed', cancelled: 'Canceled' },
   when: 'When',
-  /** Under the new meeting's day, which the calendar chose. */
-  whenFixed: 'To change the day, close this and pick a time on the calendar.',
+  /** New meeting's day: the drawn span's, or the next free one, and changed in place. */
+  day: 'Day',
   who: 'Who',
   page: 'Booking page',
   guests: 'Also invited',

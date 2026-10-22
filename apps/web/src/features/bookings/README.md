@@ -9,6 +9,11 @@ A sidebar destination after Records, as Timefix's rail has it.
 - Bare `/bookings` goes to Calendar; an old `?view=list` link goes to List, keeping the rest of its address.
 - Availability is `bookings.availability`, unchanged: its own WorkspacePage draws only its body inside the layout's frame (`WorkspacePage` knows when it is nested).
 
+## New meeting (`NewMeetingDialog`)
+
+- Without a calendar connected, the note that nobody is invited yet comes first, above the fields, so it is read before they are filled in (it sat under the fold).
+- With (their name), Email and Their time zone together, since the zone only sets how their invitation reads the time; then Day (a DatePicker, changed in place: the day used to be read only with "close this and pick a time on the calendar", a dead end; Calendly and Basecamp change the day in their new event dialogs), From and To with the member's zone under them, the booking page, Also invite and Message. A drawn span's ghost follows the day while it is in the week on screen.
+
 ## Calendar (`/w/$slug/bookings/calendar`, BookingsCalendarScreen)
 
 - **Purpose**: the week: bookings beside the member's own calendar events.

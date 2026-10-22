@@ -32,6 +32,7 @@ import {
   Disclosure,
   EmptyState,
   Link,
+  memoIntl,
   Menu,
   MenuItem,
   MenuSection,
@@ -1195,7 +1196,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
             minuteLabel={(minute) => {
               const at = new Date(2000, 0, 1);
               at.setMinutes(minute);
-              return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at);
+              // Built once per locale: half hour blocks ask for their start on every draw.
+              return memoIntl(
+                `bookings-minute:${locale}`,
+                () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }),
+              ).format(at);
             }}
           />
           {/* The week's count for screen readers; on screen the grid says it (the owner, 22 October 2026). */}
@@ -1629,7 +1634,7 @@ export function BookingsListScreen({
         {body}
       </CalendarsFrame>
       {open !== undefined && (
-        <Panel title={strings.details} isOpen onClose={() => setOpenId(undefined)}>
+        <Panel title={strings.details} isOpen isStacked onClose={() => setOpenId(undefined)}>
           {open.kind === 'booking' ? (
             <BookingCard
               booking={open.booking}
