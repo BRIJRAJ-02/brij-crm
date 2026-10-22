@@ -48,6 +48,11 @@
     overflow-wrap: anywhere;
   }
 
+  /* A stand in for a missing value ("No answer"), quieter than real values. */
+  .description[data-placeholder] {
+    color: var(--text-tertiary);
+  }
+
   /* A value with its copy button after it, on its line; the button keeps its size. */
   .description[data-copy] {
     display: flex;

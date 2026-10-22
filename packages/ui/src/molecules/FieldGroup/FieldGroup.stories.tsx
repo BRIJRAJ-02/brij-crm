@@ -140,3 +140,16 @@ export const Strong: Story = {
     await expect(canvas.getByRole('heading', { level: 3, name: 'Answers' })).toBeInTheDocument();
   },
 };
+
+/** `isLive`: a polite live region, its hint said while the content is on its way. */
+export const Live: Story = {
+  args: { label: 'Records', tone: 'heading', headingLevel: 3, isLive: true, hint: 'Adding it to the CRM now.' },
+  render: (args) => (
+    <Stage>
+      <FieldGroup {...args}>{null}</FieldGroup>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Records' })).toHaveAttribute('aria-live', 'polite');
+  },
+};

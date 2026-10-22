@@ -18,6 +18,8 @@ export interface FieldGroupProps {
   readonly tone?: 'label' | 'heading';
   /** Draws the label as a heading of this level, so screen readers can move between sections by heading. */
   readonly headingLevel?: 2 | 3 | 4;
+  /** Its content changes under the reader (a submission's Records arriving): changes are said politely. */
+  readonly isLive?: boolean;
   readonly children: ReactNode;
 }
 
@@ -34,6 +36,7 @@ export function FieldGroup({
   layout = 'block',
   tone = 'label',
   headingLevel,
+  isLive = false,
   children,
 }: FieldGroupProps) {
   const labelId = useId();
@@ -50,6 +53,7 @@ export function FieldGroup({
       className={styles.root}
       data-tone={tone === 'heading' ? 'heading' : undefined}
       role="group"
+      {...(isLive ? { 'aria-live': 'polite' as const } : {})}
       aria-labelledby={labelId}
       {...(hint === undefined ? {} : { 'aria-describedby': hintId })}
     >

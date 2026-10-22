@@ -78,6 +78,7 @@ export const Copy: Story = {
             copy: { value: 'grace@navy.mil', label: 'Copy Work email' },
           },
           { term: 'Phone', description: '+91 77109 86909', copy: { value: '+917710986909', label: 'Copy Phone' } },
+          { term: 'Budget', description: 'No answer', isPlaceholder: true },
         ]}
       />
     </Stage>
