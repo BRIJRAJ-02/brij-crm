@@ -247,9 +247,9 @@ function MoveDialog({
   const [slots, setSlots] = useState<readonly string[] | undefined>(undefined);
   const [day, setDay] = useState<string | undefined>(undefined);
   const [time, setTime] = useState<string | undefined>(undefined);
-  const [hour12, setHour12] = useState(
-    () => new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hour12 ?? true,
-  );
+  // The member's own clock, as the rest of the app shows times; the 12h or 24h switch is the visitor's, on the
+  // public page (the host's Reschedule follows the language, as Google Calendar follows its settings).
+  const hour12 = new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hour12 ?? true;
   const [error, setError] = useState('');
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -386,7 +386,6 @@ function MoveDialog({
             value={time}
             onChange={setTime}
             hour12={hour12}
-            onHour12Change={setHour12}
             layout="grid"
             isLoading={slots === undefined}
           />
