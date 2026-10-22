@@ -8,7 +8,7 @@ import { strings as fieldStrings } from '../molecules/Field/strings.ts';
 import { useTextDraft } from './useTextDraft.ts';
 import type { EditorProps } from './types.ts';
 import type { Committable } from './values.ts';
-import { isCompactSurface } from './values.ts';
+import { escapesHere, isCompactSurface } from './values.ts';
 
 /** Props for TextLikeEditor. */
 export interface TextLikeEditorProps<T extends AttributeType> extends EditorProps<T> {
@@ -78,7 +78,7 @@ export function TextLikeEditor<T extends AttributeType>({
       isErrorFloating={surface === 'cell'}
       // A record's value, never the viewer's own: no browser autofill, and no password manager taking it for a login.
       autoComplete="off"
-      onEscape={cancel}
+      {...(escapesHere(surface, onCancel) ? { onEscape: cancel } : {})}
       {...fieldProps}
       {...(inputMode === undefined ? {} : { inputMode })}
       {...(type === undefined ? {} : { type })}

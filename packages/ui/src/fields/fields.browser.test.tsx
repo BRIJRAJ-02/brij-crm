@@ -7,6 +7,7 @@ import { AttributeType, parseAttributeValue } from '@crm/contracts/values';
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
+import { userEvent } from 'vitest/browser';
 import { createFixedClock } from '../provider/clock.ts';
 import { createToasts } from '../provider/toasts.tsx';
 import { UiProvider } from '../provider/UiProvider.tsx';
@@ -330,5 +331,49 @@ describe('text out and back in', () => {
       country: 'GB',
     });
     expect(isRefusal(fieldTypeOf('phone').fromText('+44 20 7123 4567', contextFor('phone')))).toBe(true);
+  });
+});
+
+describe('Esc in a typed editor', () => {
+  /** Renders a text and a phone editor on `surface` and answers how many Esc presses reached the element around them. */
+  async function escapesReaching(surface: Surface): Promise<number> {
+    let reached = 0;
+    const host = await render(
+      // A stand in for the dialog: it only listens for what bubbles up to it.
+      // eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- not a control, a listener in a test
+      <div
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') reached += 1;
+        }}
+      >
+        <AttributeEditor
+          attribute={attributeOf('text', 'Name')}
+          value={null}
+          surface={surface}
+          onCommit={() => undefined}
+        />
+        <AttributeEditor
+          attribute={attributeOf('phone', 'Phone numbers')}
+          value={null}
+          surface={surface}
+          onCommit={() => undefined}
+        />
+      </div>,
+    );
+    for (const input of host.querySelectorAll<HTMLInputElement>(
+      'input[type="text"], input:not([type]), input[type="tel"]',
+    )) {
+      input.focus();
+      await userEvent.keyboard('{Escape}');
+    }
+    return reached;
+  }
+
+  it('reaches the dialog around a form, so New company and New deal close on Esc', async () => {
+    expect(await escapesReaching('form')).toBeGreaterThanOrEqual(2);
+  });
+
+  it('stays in a panel row, where it puts the draft back', async () => {
+    expect(await escapesReaching('panel')).toBe(0);
   });
 });
