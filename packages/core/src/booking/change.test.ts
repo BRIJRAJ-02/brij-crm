@@ -9,6 +9,7 @@ import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { enterBookingByToken, enterBookingPage } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
+import { setObjectArchived } from '../engine/definitions.ts';
 import { deleteRecord } from '../engine/deletion.ts';
 import { newId } from '../engine/ids.ts';
 import { createRecord } from '../engine/records.ts';
@@ -369,6 +370,39 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
     return { people: of('people'), companies: of('companies'), deals: of('deals') };
   }
 
+  /** Deals' Owner (a member, the creator by default), which an `own` record rule reads. */
+  async function dealOwnerOf(workspaceId: string, deals: string) {
+    const found = await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute<{ id: string }>(
+        sql`select id::text as id from attributes where object_id = ${deals}::uuid and api_slug = 'owner'`,
+      ),
+    );
+    const [owner] = found.rows;
+    if (owner === undefined) throw new Error('No deal owner.');
+    return owner.id;
+  }
+
+  /** Bea, a member, and a booking on her own page, so it is hers to change. */
+  async function beaBooking(s: Awaited<ReturnType<typeof setup>>) {
+    const bea = await s.addMember('Bea', 'member');
+    const page = await createBookingPage(bea, { id: newId(), title: 'Bea’s call', timeZone: 'UTC' }, NOW);
+    const { bookingId } = await bookAsHost(
+      bea,
+      { calendar: { events: () => Promise.resolve({}) }, linkKey: LINK_KEY, now: () => NOW },
+      {
+        idempotencyKey: newId(),
+        pageId: page.id,
+        start: new Date('2026-11-02T12:00:00.000Z'),
+        minutes: 30,
+        name: 'Grace Hopper',
+        email: 'grace@navy.example',
+        timeZone: 'UTC',
+        guests: [],
+      },
+    );
+    return { bea, bookingId };
+  }
+
   /** Rules for the member role: Deals at `level`, every other object as it is. */
   const dealsAt = (deals: string, level: 'none' | 'read'): AccessRules => ({
     levels: [{ subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: deals }, level }],
@@ -438,23 +472,7 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
     const s = await setup();
     const { deals } = await objectsOf(s.workspaceId);
     const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
-    // Bea books on her own page, so the booking is hers to change.
-    const bea = await s.addMember('Bea', 'member');
-    const page = await createBookingPage(bea, { id: newId(), title: 'Bea’s call', timeZone: 'UTC' }, NOW);
-    const { bookingId } = await bookAsHost(
-      bea,
-      { calendar: { events: () => Promise.resolve({}) }, linkKey: LINK_KEY, now: () => NOW },
-      {
-        idempotencyKey: newId(),
-        pageId: page.id,
-        start: new Date('2026-11-02T12:00:00.000Z'),
-        minutes: 30,
-        name: 'Grace Hopper',
-        email: 'grace@navy.example',
-        timeZone: 'UTC',
-        guests: [],
-      },
-    );
+    const { bea, bookingId } = await beaBooking(s);
     const blind = rescope(bea, { rules: dealsAt(deals.id, 'none') });
     expect(await refusalOf(linkBookingRecord(blind, { bookingId, recordId: navy.recordId }))).toMatchObject({
       code: 'NOT_FOUND',
@@ -474,6 +492,79 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
     // And a linked deal moved to the trash leaves the booking unlinked in every read until it is restored.
     await deleteRecord(s.host, { recordId: navy.recordId });
     expect((await readBookingsCalendar(bea, week)).bookings[0]).not.toHaveProperty('linkedRecord');
+  });
+
+  it('hides a linked deal a record rule keeps from the member, as if nothing were linked', async () => {
+    const s = await setup();
+    const { deals } = await objectsOf(s.workspaceId);
+    // Ada's deal (Owner defaults to whoever makes it); members see only the deals they own.
+    const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
+    const { bea, bookingId } = await beaBooking(s);
+    await linkBookingRecord(bea, { bookingId, recordId: navy.recordId });
+    const ruled = rescope(bea, {
+      rules: {
+        levels: [],
+        records: [
+          {
+            subject: { type: 'role', role: 'member' },
+            objectId: deals.id,
+            kind: 'own',
+            attributeId: await dealOwnerOf(s.workspaceId, deals.id),
+          },
+        ],
+      },
+    });
+    const [shown] = (await readBookingsCalendar(ruled, week)).bookings;
+    expect(shown?.id).toBe(bookingId);
+    expect(shown).not.toHaveProperty('linkedRecord');
+    const [listed] = await listWorkspaceBookings(ruled, { when: 'upcoming' }, NOW);
+    expect(listed?.id).toBe(bookingId);
+    expect(listed).not.toHaveProperty('linkedRecord');
+    // Linking it again answers as a record that doesn't exist.
+    expect(await refusalOf(linkBookingRecord(ruled, { bookingId, recordId: navy.recordId }))).toMatchObject({
+      code: 'NOT_FOUND',
+      field: 'recordId',
+      message: 'That record doesn’t exist, or you can’t see it.',
+    });
+  });
+
+  it('lets a member who can’t see the current link replace it or take it off, so a refusal never says one is there', async () => {
+    const s = await setup();
+    const { deals } = await objectsOf(s.workspaceId);
+    const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
+    const { bea, bookingId } = await beaBooking(s);
+    const own = await dealOwnerOf(s.workspaceId, deals.id);
+    const ruled = rescope(bea, {
+      rules: {
+        levels: [],
+        records: [{ subject: { type: 'role', role: 'member' }, objectId: deals.id, kind: 'own', attributeId: own }],
+      },
+    });
+    const mine = await createRecord(ruled, { objectId: deals.id, values: { [deals.name_id]: 'Bea’s deal' } });
+    // Linked to Ada's deal, which Bea can't see: her own deal replaces it.
+    await linkBookingRecord(bea, { bookingId, recordId: navy.recordId });
+    expect(await linkBookingRecord(ruled, { bookingId, recordId: mine.recordId })).toMatchObject({
+      linkedRecord: { recordId: mine.recordId, name: 'Bea’s deal' },
+    });
+    expect(await row(s.workspaceId, bookingId)).toHaveProperty('deal_record_id', mine.recordId);
+    // Linked to Ada's deal again: taking it off works too, and answers nothing linked.
+    await linkBookingRecord(bea, { bookingId, recordId: navy.recordId });
+    expect(await linkBookingRecord(ruled, { bookingId, recordId: null })).toEqual({});
+    expect(await row(s.workspaceId, bookingId)).toHaveProperty('deal_record_id', null);
+  });
+
+  it('leaves out a deal on an archived object until the object is restored', async () => {
+    const s = await setup();
+    const booked = await s.book();
+    const { deals } = await objectsOf(s.workspaceId);
+    const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
+    await linkBookingRecord(s.host, { bookingId: booked.bookingId, recordId: navy.recordId });
+    await setObjectArchived(s.host, { objectId: deals.id, archived: true });
+    expect((await readBookingsCalendar(s.host, week)).bookings[0]).not.toHaveProperty('linkedRecord');
+    await setObjectArchived(s.host, { objectId: deals.id, archived: false });
+    expect((await readBookingsCalendar(s.host, week)).bookings[0]?.linkedRecord).toMatchObject({
+      recordId: navy.recordId,
+    });
   });
 });
 

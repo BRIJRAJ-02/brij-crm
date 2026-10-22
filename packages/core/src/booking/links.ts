@@ -56,9 +56,9 @@ export interface HandLink {
 }
 
 /**
- * The hand linked records among `rows` the reader may see, live on a live object, as chips show them, by id: one
- * statement for the live ones and one read of their displays (which keeps only what the reader may see), however
- * many rows.
+ * The hand linked records among `rows` the reader may see, live on a live object, as chips show them, by id: one read
+ * of their displays, which keeps only what the reader may see, skips the trash, and leaves out an archived object's
+ * records from the object rows it loads anyway (no statement of its own for that), however many rows.
  */
 export async function linkedRecords(
   tx: WorkspaceTx,
@@ -67,17 +67,7 @@ export async function linkedRecords(
 ): Promise<ReadonlyMap<string, RecordRefDisplay>> {
   const ids = [...new Set(rows.flatMap((row) => (row.dealRecordId === null ? [] : [row.dealRecordId])))];
   if (ids.length === 0) return new Map();
-  const live = await tx.execute<{ id: string }>(sql`
-    select r.id::text as id from records r
-    join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
-    where r.id = any(${uuidList(ids)}) and r.deleted_at is null and o.archived_at is null
-  `);
-  const views = await readRecords(
-    tx,
-    access,
-    live.rows.map((row) => row.id),
-    { attributeIds: [] },
-  );
+  const views = await readRecords(tx, access, ids, { attributeIds: [], liveObjectsOnly: true });
   return new Map(views.map((view) => [view.id, view.display]));
 }
 

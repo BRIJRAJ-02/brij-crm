@@ -1407,9 +1407,16 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'bookings.link': async (m, mutationId) => {
     const bookingId = await hostBooking(m);
     const deals = (await m.client.objects.list({ workspace: m.slug })).find((object) => object.standardKey === 'deals');
-    if (deals === undefined) throw new Error('The template has no Deals.');
+    if (deals?.primaryAttributeId === undefined) throw new Error('The template has no Deals.');
     const recordId = newId();
-    await m.client.records.create({ workspace: m.slug, objectId: deals.id, id: recordId, mutationId: newId() });
+    // Named, since a deal's Name is required.
+    await m.client.records.create({
+      workspace: m.slug,
+      objectId: deals.id,
+      id: recordId,
+      values: { [deals.primaryAttributeId]: 'Navy rollout' },
+      mutationId: newId(),
+    });
     await m.client.bookings.link({ workspace: m.slug, bookingId, recordId, mutationId });
     return [
       { kind: 'records', object_id: m.people.id },

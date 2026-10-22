@@ -768,6 +768,11 @@ const NO_SUCH_RECORD = 'That record doesn’t exist, or you can’t see it.';
  * doesn't exist) and may change (else FORBIDDEN, as linking a task, AC-447); a person or a company is refused
  * (CONFIG_INVALID): those are the guest's, filed when it was made. A past or cancelled booking may be filed too.
  * Kept in `deal_record_id`, audited; the same link again changes nothing. Answers the record as a chip shows it.
+ *
+ * Only the new record is checked, never the one linked now: a member who may change the booking but can't see its
+ * current link (an object hidden from them, a record rule) may still replace it or take it off. That is on purpose.
+ * Refusing would tell them a link is there, and a hidden record is absent (spec 0009); the booking is theirs to file,
+ * and the audit row keeps what it was linked to before.
  */
 export async function linkBookingRecord(
   scope: EngineScope,
