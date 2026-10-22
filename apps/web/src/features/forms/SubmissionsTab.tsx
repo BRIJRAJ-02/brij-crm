@@ -264,9 +264,10 @@ export function SubmissionsTab({
   const hasEmailColumn = nameQuestion !== undefined && shown.some((submission) => submission.email !== undefined);
   const columns: readonly TableColumn[] = [
     { id: 'person', label: strings.person, isRowHeader: true, isInline: true },
-    ...(hasEmailColumn ? [{ id: EMAIL_COLUMN, label: strings.email }] : []),
+    // When and State lead after the person, so a long email or answer scrolling the table sideways never hides them.
     { id: 'when', label: strings.when },
     { id: 'state', label: strings.state },
+    ...(hasEmailColumn ? [{ id: EMAIL_COLUMN, label: strings.email }] : []),
     // The questions the list carries answers for (the server sends each row's first answers), in the form's order,
     // but the one the Person column already says. A question earns a column when some row answered it.
     ...questions
@@ -546,7 +547,9 @@ export function SubmissionsTab({
           rows={shown}
           getRowId={(submission) => submission.id}
           renderCell={cell}
-          isHeaderSticky
+          // A long email or answer widens the table: it scrolls sideways in its own frame (its far end fading), as
+          // Tally's and Typeform's response tables do, rather than pushing When and State off the page.
+          isScrollable
           {...(canManage
             ? {
                 selected,
