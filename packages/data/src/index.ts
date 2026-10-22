@@ -973,6 +973,9 @@ export function createDataLayer({
   let ended = false;
   // Whether `me.get` has answered a person since the last sign in or out: a 401 then always ends their session.
   let seenPerson = false;
+  // While this tab deletes its own account (spec 0033): the server ends the session before it answers, so another
+  // call's 401 meanwhile (the live connection asking again) is that ending, which the deletion's own page explains.
+  let deletingAccount = false;
   // Live updates: loaded with the first watched workspace, and this tab's writes waiting for their echo.
   let live: Promise<Live> | undefined;
   const mutations = createMutationLog();
@@ -1107,7 +1110,7 @@ export function createDataLayer({
       if (failure.code === 'UNAUTHENTICATED' && !ended && !seenPerson && me !== undefined && (await nobodyAsked(me))) {
         throw failure;
       }
-      if (failure.code === 'UNAUTHENTICATED' && !ended) {
+      if (failure.code === 'UNAUTHENTICATED' && !ended && !deletingAccount) {
         ended = true;
         // A write still waiting for its answer is lost with the session (its layer leaves with the records), so
         // sign in says so; read before forget() clears the log.
@@ -4513,13 +4516,23 @@ export function createDataLayer({
        * Deleting the account (AC-902 to AC-907): `check` names the workspaces
        * it is the last owner of; `confirm` deletes it (after a step up and the
        * email typed in full), then forgets everything cached for the person.
-       * Refusals throw a DataError.
+       * A 401 from another call while it runs, or after, signs nobody out: the
+       * deleting screen goes to sign in itself and says why. Refusals throw a
+       * DataError.
        */
       deletion: {
         check: () => call((options) => api.account.deletion.check(undefined, options)),
         confirm: async (email: string): Promise<void> => {
-          await call((options) => api.account.deletion.confirm({ email }, options));
+          deletingAccount = true;
+          try {
+            await call((options) => api.account.deletion.confirm({ email }, options));
+          } finally {
+            deletingAccount = false;
+          }
           reset();
+          // The session is gone and sign in says the account was deleted: a call still out that answers 401 now
+          // ends nothing more (sign in again starts afresh).
+          ended = true;
         },
       },
       twoFactor: {

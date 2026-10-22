@@ -92,17 +92,21 @@ function WorkspaceRoute() {
   const isPreview = useMatch({ from: '/w/$slug/captures_/forms/$formId_/preview', shouldThrow: false }) !== undefined;
   // The frame is mounted here, once, so moving between the pages inside never remounts the sidebar or a menu or
   // confirm open in it; each page fills its bars (WorkspaceLayout).
-  const { data, toasts } = Route.useRouteContext();
+  const { data, toasts, me } = Route.useRouteContext();
   const router = useRouter();
   if (deleted !== undefined) {
     return (
       <WorkspaceLayout>
         <WorkspacePage
-          page={deletedPage(deleted, () =>
-            data.workspace.restore(deleted.slug).then(async () => {
-              await router.invalidate();
-              toasts.toast({ tone: 'success', message: strings.restored(deleted.name) });
-            }),
+          page={deletedPage(
+            deleted,
+            () =>
+              data.workspace.restore(deleted.slug).then(async () => {
+                await router.invalidate();
+                toasts.toast({ tone: 'success', message: strings.restored(deleted.name) });
+              }),
+            // The list leaves deleted workspaces out: none left means Settings can't open anywhere.
+            { data, hasOther: me.workspaces.length > 0 },
           )}
         />
       </WorkspaceLayout>

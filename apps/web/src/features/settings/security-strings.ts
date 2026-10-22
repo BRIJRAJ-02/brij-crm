@@ -123,6 +123,8 @@ export const strings = {
     /** On Profile, the page's last section, as General's Delete workspace sits (the owner, 22 October 2026). */
     section: 'Danger zone',
     row: 'Delete account',
+    /** On the page of a deleted workspace that was the person's last, where Settings can't open. */
+    pageAction: 'Delete your account',
     rowText: 'You leave every workspace. Records you made stay, credited to Deleted user.',
     action: 'Delete account',
     title: 'Delete your account?',
