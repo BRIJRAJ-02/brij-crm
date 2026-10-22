@@ -41,9 +41,9 @@ export const scheduleStrings = {
   deleteCommit: 'Delete schedule',
   deleting: 'Deleting',
   deleteUnused: 'No booking pages use it, and this can’t be undone.',
-  /** "Intro call and Demo will use Working hours, your default." */
+  /** "Intro call and Demo will use Working hours, your default, and this can’t be undone." */
   deleteUsed: (pages: string, fallback: string, isOwn = true) =>
-    `${pages} will use ${fallback}, ${isOwn ? 'your' : 'their'} default.`,
+    `${pages} will use ${fallback}, ${isOwn ? 'your' : 'their'} default, and this can’t be undone.`,
   deleted: (name: string) => `Deleted the ${name} schedule.`,
   cantDeleteDefault: 'Set another schedule as default first.',
   alreadyDefault: 'It’s your default.',
