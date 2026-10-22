@@ -40,6 +40,11 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  .check {
+    display: flex;
+    flex: none;
+  }
+
   .title {
     flex: 1;
     min-inline-size: 0;
@@ -165,6 +170,11 @@
 
     .record {
       max-inline-size: var(--size-column-min);
+    }
+
+    /* No due day: its column gives its room to the title, since a phone has none to keep rows lined up with. */
+    .due:empty {
+      min-inline-size: 0;
     }
   }
 

@@ -23,6 +23,8 @@ export interface CopyButtonProps {
   readonly isDisabled?: boolean;
   /** What screen readers hear once it copied ("Link copied"); "Copied" by default. */
   readonly announcement?: string;
+  /** The toast when the browser refuses, where the default's "Select the link" doesn't fit (no link shown). */
+  readonly failureMessage?: string;
 }
 
 function selectText(element: HTMLElement | null | undefined) {
@@ -53,6 +55,7 @@ export function CopyButton({
   sourceRef,
   isDisabled = false,
   announcement = strings.copiedAnnouncement,
+  failureMessage = strings.copyFailed,
 }: CopyButtonProps) {
   const toasts = useToasts();
   // Bumped on each copy, so a second press restarts the two seconds.
@@ -69,7 +72,7 @@ export function CopyButton({
       setCopiedAt((count) => count + 1);
     } catch {
       selectText(sourceRef?.current);
-      toasts.toast({ tone: 'danger', message: strings.copyFailed });
+      toasts.toast({ tone: 'danger', message: failureMessage });
     }
   };
   const onPress = () => {

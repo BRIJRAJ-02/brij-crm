@@ -357,15 +357,18 @@ function TaskListContent({
         data-pressable={onAction === undefined ? undefined : ''}
       >
         <RowShown index={row.index} onShown={onShown} />
-        <Checkbox
-          label={strings.markDone(task.title)}
-          isLabelHidden
-          isSelected={task.isDone}
-          isReadOnly={isReadOnly || task.readOnlyReason !== undefined}
-          onChange={(isDone) => {
-            onToggle(task, isDone);
-          }}
-        />
+        {/* Its own box that never shrinks: in a narrow row the checkbox was squeezed and drew over the title. */}
+        <span className={styles.check}>
+          <Checkbox
+            label={strings.markDone(task.title)}
+            isLabelHidden
+            isSelected={task.isDone}
+            isReadOnly={isReadOnly || task.readOnlyReason !== undefined}
+            onChange={(isDone) => {
+              onToggle(task, isDone);
+            }}
+          />
+        </span>
         {task.readOnlyReason !== undefined && <LockReason reason={task.readOnlyReason} />}
         <span className={styles.title}>
           {task.title}

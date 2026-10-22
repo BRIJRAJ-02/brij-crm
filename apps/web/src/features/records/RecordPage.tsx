@@ -751,7 +751,7 @@ function RecordScreen({
                     value={pageLink}
                     label={strings.copyLink}
                     announcement={strings.linkCopied}
-                    isLabelCollapsible
+                    failureMessage={strings.copyFailed}
                   />
                 </RecordHeader>
               }
