@@ -68,6 +68,12 @@ export function useScheduleDraft({
   const [isSaving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const newId = useRef<string | undefined>(undefined);
+  // The schedule and version the unsaved hours started from. A save checks against it, not against whatever the
+  // list shows by then: another tab's save, a deleted schedule or a moved default mark mean the hours were meant for
+  // something that is gone, and saying so beats writing them over it (STALE).
+  const base = useRef<{ readonly id: string | null; readonly updatedAt: string | null } | undefined>(undefined);
+  // The unsaved hours as last drawn: a save's answer keeps any change made while it was out.
+  const latest = useRef<BookingAvailability | undefined>(undefined);
   // A save's answer may land after the editor went (another schedule opened): it then says nothing more.
   const isMounted = useRef(true);
   useEffect(() => {
@@ -78,8 +84,12 @@ export function useScheduleDraft({
     };
   }, []);
   const shown = unsaved ?? schedule.availability;
+  useEffect(() => {
+    latest.current = unsaved;
+  }, [unsaved]);
 
   const change = (next: (current: BookingAvailability) => BookingAvailability) => {
+    base.current ??= { id: schedule.id, updatedAt: schedule.updatedAt };
     setError(undefined);
     setUnsaved((current) => next(current ?? schedule.availability));
   };
@@ -87,6 +97,15 @@ export function useScheduleDraft({
   const save = () => {
     const hours = unsaved;
     if (hours === undefined || isSaving || !availabilityIsValid(hours)) return;
+    const from = base.current ?? { id: schedule.id, updatedAt: schedule.updatedAt };
+    if (from.id !== schedule.id) {
+      // What the hours were meant for changed under them (another tab stored, deleted or moved it).
+      setUnsaved(undefined);
+      base.current = undefined;
+      reload();
+      onNotice({ tone: 'danger', message: scheduleStrings.stale });
+      return;
+    }
     setSaving(true);
     setError(undefined);
     let saving: Promise<ScheduleView>;
@@ -102,13 +121,24 @@ export function useScheduleDraft({
         forMember,
       });
     } else {
-      saving = data.schedules.update(slug, schedule, { availability: hours });
+      // Against the version the changes started from, so a save another tab made meanwhile answers STALE.
+      saving = data.schedules.update(
+        slug,
+        { ...schedule, updatedAt: from.updatedAt ?? schedule.updatedAt },
+        { availability: hours },
+      );
     }
     saving.then(
       (stored) => {
         if (!isMounted.current) return;
         setSaving(false);
-        setUnsaved(undefined);
+        // Changes made while it was out stay unsaved, now on top of the stored version.
+        if (latest.current === hours) {
+          setUnsaved(undefined);
+          base.current = undefined;
+        } else {
+          base.current = { id: stored.id, updatedAt: stored.updatedAt };
+        }
         onNotice({ tone: 'success', message: scheduleStrings.hoursSaved(stored.name) });
       },
       (failure: unknown) => {
@@ -117,6 +147,7 @@ export function useScheduleDraft({
         if (isDataError(failure) && failure.code === 'STALE') {
           // Another tab or person saved first: theirs shows, and saying so beats replacing it unseen.
           setUnsaved(undefined);
+          base.current = undefined;
           reload();
           onNotice({ tone: 'danger', message: scheduleStrings.stale });
           return;
@@ -129,6 +160,7 @@ export function useScheduleDraft({
 
   const discard = () => {
     setUnsaved(undefined);
+    base.current = undefined;
     setError(undefined);
   };
 

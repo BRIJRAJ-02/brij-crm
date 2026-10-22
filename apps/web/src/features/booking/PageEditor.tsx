@@ -215,11 +215,16 @@ export function PageEditor({
     schedule: hours.schedule ?? standIn(page),
     forMember: ownerMember !== undefined,
     reload: () => schedules?.reload(),
+    // Saved shows only for a save that landed; a refused one (another tab saved first) says so and clears it.
     onNotice: (notice) => {
-      if (notice.tone === 'success') setJustSaved(true);
-      else toasts.toast(notice);
+      setJustSaved(notice.tone === 'success');
+      if (notice.tone !== 'success') toasts.toast(notice);
     },
   });
+  const changeWeek: typeof week.change = (next) => {
+    setJustSaved(false);
+    week.change(next);
+  };
   const isWeekDirty = !isLocked && hours.schedule !== undefined && week.isDirty;
   const isDirty = isPageDirty || isWeekDirty;
   const [justSaved, setJustSaved] = useState(false);
@@ -751,10 +756,10 @@ export function PageEditor({
                           </FieldGroup>
                         ) : (
                           <>
-                            <WeekCard availability={week.shown} onChange={week.change} isReadOnly={isLocked} />
+                            <WeekCard availability={week.shown} onChange={changeWeek} isReadOnly={isLocked} />
                             <DaysOff
                               availability={week.shown}
-                              onChange={(next) => week.change(() => next)}
+                              onChange={(next) => changeWeek(() => next)}
                               isReadOnly={isLocked}
                             />
                           </>
