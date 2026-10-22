@@ -1,13 +1,16 @@
-// Who heads the rail (spec 0037, AC-1339): a personal page's host by name, as
-// it always was; a team page's faces (initials only, never names) stacked
-// over "Intro call with Acme", and named "Team of 6" for screen readers.
+// Who heads the rail (spec 0037, AC-1339): a personal page's host by name, with
+// their account picture from our origin when they have one (23 Oct 2026); a team
+// page's faces (initials only, never names) stacked over "Intro call with Acme",
+// and named "Team of 6" for screen readers.
 import type { PublicBookingPage } from '@crm/data/booking';
 import type { BookingHost } from '@crm/ui/public-booking';
 import { strings } from './strings.ts';
 
-/** The rail's host. A personal page gets exactly `{ name }`, so it draws as it did before team pages. */
-export function railHost(page: Pick<PublicBookingPage, 'hostName' | 'team'>): BookingHost {
-  if (page.team === undefined) return { name: page.hostName };
+/** The rail's host. A personal page gets `{ name }`, and `image` when the host has a picture (initials if it fails). */
+export function railHost(page: Pick<PublicBookingPage, 'hostName' | 'hostImage' | 'team'>): BookingHost {
+  if (page.team === undefined) {
+    return { name: page.hostName, ...(page.hostImage === undefined ? {} : { image: page.hostImage }) };
+  }
   const total = page.team.avatars.length + page.team.more;
   return {
     name: page.hostName,

@@ -27,7 +27,7 @@ The foot's two links go to timefix.ai with the campaign tags from `@crm/contract
 
 `aside` adds the end pane; leave it off for one wide pane (the details step). `footer` is the band across the card's foot. A fact's `children` may be a control (the time zone's Select). `banner` sits above the card (the visitor's calendar, spec 0028). Without `host` and `title` the frame draws skeletons.
 
-A team page (spec 0037, AC-1339) passes `host.team`: up to 4 faces stack in place of the large picture, with "+N" for the rest and the stack named by `label` ("Team of 6"); the host's name line is left out, since the page passes the title as "Intro call with Acme". A personal page leaves `team` off and draws exactly as before.
+A team page (spec 0037, AC-1339) passes `host.team`: up to 4 faces stack in place of the large picture, with "+N" for the rest and the stack named by `label` ("Team of 6"); the host's name line is left out, since the page passes the title as "Intro call with Acme". A personal page leaves `team` off and draws exactly as before; its `host.image` is the host's picture from our own origin (the page's `hostImage`, 23 Oct 2026), and the initials show without one or when it fails.
 
 ### BookingProfile (22 October 2026)
 
@@ -47,7 +47,7 @@ Without `person` the card draws as a skeleton. Its foot's links are tagged as th
 
 ## States
 
-Three panes, two panes, a team page, loading; BookingMessage's loading, message and Try again; BookingProfile's loaded, with sections (a row with no address shows none), empty, and loading.
+Three panes, two panes, a personal page with the host's picture (initials if it fails), a team page, loading; BookingMessage's loading, message and Try again; BookingProfile's loaded, with sections (a row with no address shows none), empty, and loading.
 
 ## Keyboard
 

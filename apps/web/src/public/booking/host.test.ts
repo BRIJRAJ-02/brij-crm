@@ -1,11 +1,22 @@
-// The rail's host (spec 0037, AC-1339): personal pages are unchanged, team
-// pages stack initials under the workspace's name.
+// The rail's host (spec 0037, AC-1339): personal pages by name and their
+// picture when they have one, team pages stack initials under the workspace's name.
 import { describe, expect, it } from 'vitest';
 import { railHost, railTitle } from './host.ts';
 
 describe('railHost', () => {
   it('gives a personal page exactly its host, as before team pages', () => {
     expect(railHost({ hostName: 'Ada Lovelace' })).toStrictEqual({ name: 'Ada Lovelace' });
+  });
+
+  it('gives a personal page its host’s picture when the page names one', () => {
+    const image = '/api/public/booking/abcdefghijklmnop/picture';
+    expect(railHost({ hostName: 'Ada Lovelace', hostImage: image })).toStrictEqual({ name: 'Ada Lovelace', image });
+  });
+
+  it('never puts a picture on a team page’s host: its faces stay as the server gave them', () => {
+    const host = railHost({ hostName: 'Acme', hostImage: '/x.png', team: { avatars: [{ initials: 'SL' }], more: 0 } });
+    expect(host.image).toBeUndefined();
+    expect(host.team?.people[0]?.src).toBeUndefined();
   });
 
   it('stacks a team page under the workspace, counting the rest and naming the team', () => {

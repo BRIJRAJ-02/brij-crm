@@ -8,6 +8,7 @@ import {
   enterWorkspace,
   jobKinds,
   NO_CALENDAR,
+  servedPicture,
   twoFactorRequiredBy,
   type BookingCalendar,
   type JobRegistry,
@@ -43,6 +44,12 @@ import type { Mailer } from './mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
+import {
+  createPictureFetch,
+  pictureResponse,
+  PRIVATE_PICTURE_CACHE_CONTROL,
+  type PictureFetch,
+} from './public/picture.ts';
 import { EMAIL_UNSUBSCRIBE_PATH, mountEmailPreferences } from './public/email-preferences.ts';
 import { emailLinkKey } from './email-link.ts';
 import { guestKeys } from './public/visitor.ts';
@@ -101,6 +108,9 @@ interface AppVariables {
 function errorResponse(code: ErrorCode, message: string): Response {
   return Response.json({ code, message }, { status: errorStatus(code) });
 }
+
+/** A person's own picture: 60 reads a minute each, in this process. */
+const MY_PICTURE_LIMIT = { max: 60, windowMs: 60_000 } as const;
 
 /** Work after the answer on a long running server: nothing holds it, and it runs on (it never rejects). */
 const RUNS_ON = (work: Promise<unknown>): void => {
@@ -176,6 +186,8 @@ export interface AppServices {
   readonly bookingLimiter?: PublicLimiter;
   /** The email preferences routes' limiter (the emails lane): this process's memory unless a test passes its own. */
   readonly emailPreferenceLimiter?: PublicLimiter;
+  /** Fetches a host's account picture from Google's picture hosts (23 Oct 2026): the real one unless a test passes its own. */
+  readonly pictureFetch?: PictureFetch;
   /** The clock the public booking routes read, for tests. */
   readonly now?: () => Date;
   /** Where invitation emails go (spec 0031): the server's mailer; absent, every send fails and is reported unsent. */
@@ -260,6 +272,8 @@ export function createApp({
           isFreeDomain: calendar.isFreeDomain,
           events: calendarEvents,
         }));
+  // Account pictures from Google's picture hosts (23 Oct 2026), for the public pages and the person's own.
+  const pictureFetch = services.pictureFetch ?? createPictureFetch();
   // The key every booking's guest page token derives from, shared with the worker's emails.
   const linkKey = bookingLinkKey(env);
   const calendarRoutes = createCalendarRoutes({
@@ -499,6 +513,16 @@ export function createApp({
       organizerName: 'Bookings',
     },
     wakeRelay,
+    pictures: {
+      // Only the one read of schema auth, so a public route holds nothing else of global identity. A failure is no
+      // picture: the page's facts never fail for it.
+      pictureOf: (userId) =>
+        identity.userImage(userId).catch((error: unknown) => {
+          log.warn('booking.picture.unread', errorFields(error));
+          return undefined;
+        }),
+      fetch: pictureFetch,
+    },
     ...(services.now === undefined ? {} : { now: services.now }),
     // Knowing the visitor (spec 0028): their session through the member door, or a guest's own Google for the visit.
     visitor: {
@@ -516,6 +540,28 @@ export function createApp({
       appUrl: env.APP_URL,
       secure: env.APP_ENV !== 'local',
     },
+  });
+
+  // The signed in person's own picture (23 Oct 2026), for Settings › Profile: Google's, from our own origin (the
+  // app's policy loads nothing from Google), only its current version, kept in their browser alone.
+  const myPictureLimiter = createMemoryLimiter();
+  app.get('/me/picture', async (c) => {
+    const session = await auth.session(c.req.raw.headers, c.get('clientIp'));
+    if (session === undefined) return errorResponse('UNAUTHENTICATED', 'Sign in to continue.');
+    const picture = servedPicture(session.user.id, session.user.image);
+    if (picture === undefined || c.req.query('v') !== picture.version) {
+      return errorResponse('NOT_FOUND', 'There’s no picture here.');
+    }
+    const decision = myPictureLimiter(`me-picture:${session.user.id}`, MY_PICTURE_LIMIT);
+    if (!decision.allowed) return errorResponse('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');
+    const fetched = await pictureFetch(picture.url);
+    if (!fetched.ok) {
+      log.warn('me.picture.missed', { requestId: c.get('requestId'), reason: fetched.reason });
+      return errorResponse('NOT_FOUND', 'There’s no picture here.');
+    }
+    const answered = pictureResponse(fetched, PRIVATE_PICTURE_CACHE_CONTROL);
+    for (const cookie of session.setCookies) answered.headers.append('set-cookie', cookie);
+    return answered;
   });
 
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
