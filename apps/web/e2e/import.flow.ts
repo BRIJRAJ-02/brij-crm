@@ -34,7 +34,8 @@ test('a People CSV imports through the four steps, and its summary says what it 
   const slug = `import-${stamp}`;
   await newWorkspace(page, `import-${stamp}@example.com`, slug);
 
-  await page.getByRole('button', { name: 'More view actions' }).click();
+  // The view's actions live in its switcher's menu (it was the More view actions button).
+  await page.getByRole('button', { name: 'All People', exact: true }).first().click();
   await page.getByRole('menuitem', { name: 'Import CSV' }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people/import$`));
   await expect(page.getByRole('heading', { level: 1, name: 'Import people' })).toBeVisible();
@@ -78,7 +79,8 @@ test('a People CSV imports through the four steps, and its summary says what it 
   await expect(page.getByText(`person${String(rows - 1)}@import.test`)).toBeVisible();
 
   // Export CSV (AC-1130, AC-1131): the view comes back as a file, the name first, ready to import again.
-  await page.getByRole('button', { name: 'More view actions' }).click();
+  // The view's actions live in its switcher's menu (it was the More view actions button).
+  await page.getByRole('button', { name: 'All People', exact: true }).first().click();
   await page.getByRole('menuitem', { name: 'Export CSV' }).click();
   const ready = page.getByRole('alertdialog', { name: /People - .* is ready/u });
   await expect(ready).toBeVisible({ timeout: IMPORT_MS });
