@@ -33,7 +33,8 @@ function blocks(): WeekCalendarBlock[] {
       time: '3:30 – 4:00 PM',
       detail: 'Quick chat',
       kind: 'booking',
-      provider: 'timefix',
+      // Its booking link's colour; no mark and no status while confirmed.
+      hue: 'purple',
     },
     {
       id: 'standup',
@@ -74,8 +75,21 @@ function blocks(): WeekCalendarBlock[] {
       time: '10:00 – 11:00 AM',
       detail: 'Site visit',
       kind: 'booking',
-      provider: 'timefix',
+      hue: 'orange',
       isCancelled: true,
+    },
+    {
+      id: 'ada',
+      dayKey: '2026-10-06',
+      startMinute: 11 * 60,
+      endMinute: 12 * 60,
+      title: 'Ada Lovelace',
+      time: '11:00 AM – 12:00 PM',
+      detail: 'Intro call',
+      kind: 'booking',
+      hue: 'sky',
+      // Status shows only when it is news.
+      status: 'No show',
     },
   ];
 }
@@ -635,42 +649,25 @@ const nineToFive = (dayKey: string) => {
   return weekday === 0 || weekday === 6 ? [] : [{ startMinute: 9 * 60, endMinute: 17 * 60 }];
 };
 
-/** All day items in their row over the hours, and the hours outside 9 to 5 shaded; an all day chip opens its card. */
-export const AllDayAndHours: Story = {
-  render: function Render(args) {
-    const [openId, setOpenId] = useState<string | undefined>(undefined);
-    return (
-      <Stage width="fill">
-        <WeekCalendar
-          {...args}
-          days={days()}
-          blocks={blocks()}
-          scrollToMinute={8 * 60}
-          now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
-          allDay={[
-            { id: 'offsite-9', dayKey: '2026-10-09', title: 'Team offsite', hue: 'blue' },
-            { id: 'offsite-10', dayKey: '2026-10-10', title: 'Team offsite', hue: 'blue' },
-            { id: 'holiday', dayKey: '2026-10-06', title: 'Holiday', hue: 'purple' },
-          ]}
-          openHours={nineToFive}
-          {...(openId === undefined ? {} : { openId })}
-          detail={<p>Team offsite</p>}
-          onOpen={setOpenId}
-          onClose={() => setOpenId(undefined)}
-        />
-      </Stage>
-    );
-  },
-  play: async ({ canvas, canvasElement }) => {
-    await expect(canvas.getByText('All day')).toBeInTheDocument();
+/** The hours outside 9 to 5 shaded, a day off shaded whole. */
+export const OpenHours: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar
+        {...args}
+        days={days()}
+        blocks={blocks()}
+        scrollToMinute={8 * 60}
+        now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
+        openHours={nineToFive}
+      />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
     // Saturday is a day off: one shaded stretch, the whole day; a weekday has two, before 9 and after 5.
     const columns = canvasElement.querySelectorAll('[role="group"]');
     await expect(columns[5]?.querySelectorAll('[data-off-hours]').length).toBe(1);
     await expect(columns[0]?.querySelectorAll('[data-off-hours]').length).toBe(2);
-    await userEvent.click(canvas.getByRole('button', { name: /^Holiday, all day/ }));
-    const body = within(canvasElement.ownerDocument.body);
-    await waitFor(() => expect(body.getByRole('dialog')).toHaveTextContent('Team offsite'));
-    await userEvent.keyboard('{Escape}');
   },
 };
 
@@ -683,65 +680,6 @@ export const EmptyWeek: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No meetings this week')).toBeVisible();
-  },
-};
-
-/**
- * A busy all day row: a day over three items shows two and "+N more", which lists the rest (a Menu in a Popover);
- * choosing one opens its card on the chip. The chips are in the day's arrow key order, above its blocks.
- */
-export const AllDayCapped: Story = {
-  parameters: { crm: { screenshot: false } },
-  render: function Render(args) {
-    const [openId, setOpenId] = useState<string | undefined>(undefined);
-    return (
-      <Stage width="fill">
-        <WeekCalendar
-          {...args}
-          days={days()}
-          blocks={blocks()}
-          allDay={[
-            { id: 'mon-1', dayKey: '2026-10-05', title: 'Conference', hue: 'blue' },
-            { id: 'mon-2', dayKey: '2026-10-05', title: 'Out of office', hue: 'purple' },
-            { id: 'mon-3', dayKey: '2026-10-05', title: 'Release week', hue: 'green' },
-            { id: 'mon-4', dayKey: '2026-10-05', title: 'Birthday', hue: 'orange' },
-            { id: 'mon-5', dayKey: '2026-10-05', title: 'On call', hue: 'red' },
-            { id: 'thu-1', dayKey: '2026-10-08', title: 'Team offsite', hue: 'blue' },
-          ]}
-          {...(openId === undefined ? {} : { openId })}
-          detail={<p>{openId}</p>}
-          onOpen={setOpenId}
-          onClose={() => setOpenId(undefined)}
-        />
-      </Stage>
-    );
-  },
-  play: async ({ canvas, canvasElement }) => {
-    const body = within(canvasElement.ownerDocument.body);
-    // The chips are not tab stops; the day's column is.
-    const offsite = canvas.getByRole('button', { name: /^Team offsite, all day/ });
-    await expect(offsite).toHaveAttribute('tabindex', '-1');
-    // Down from Thursday's column: its all day chip first, then its blocks by start.
-    canvas.getByRole('group', { name: 'Thursday, 8 October, 3 items' }).focus();
-    await userEvent.keyboard('{ArrowDown}');
-    await expect(offsite).toHaveFocus();
-    await userEvent.keyboard('{ArrowDown}');
-    await expect(canvas.getByRole('button', { name: 'Team standup, 3:00 – 4:00 PM' })).toHaveFocus();
-    await userEvent.keyboard('{ArrowUp}');
-    await expect(offsite).toHaveFocus();
-    // Monday holds five: two show, the rest fold into "+3 more".
-    await expect(canvas.queryByRole('button', { name: /^Release week/ })).not.toBeInTheDocument();
-    const more = canvas.getByRole('button', { name: '3 more all day items on Monday, 5 October' });
-    await expect(more).toHaveTextContent('+3 more');
-    // Left from a chip moves to the day before, as from its column.
-    await userEvent.keyboard('{ArrowLeft}');
-    await waitFor(() => expect(canvas.getByRole('group', { name: 'Wednesday, 7 October, 1 item' })).toHaveFocus());
-    await userEvent.click(more);
-    await userEvent.click(await body.findByRole('menuitem', { name: 'Birthday' }));
-    await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toHaveTextContent('mon-4'));
-    await expect(more).toHaveAttribute('aria-expanded', 'true');
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(more).toHaveFocus());
   },
 };
 

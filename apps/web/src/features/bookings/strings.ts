@@ -39,6 +39,8 @@ export const strings = {
   weekLoading: 'Loading this week…',
   /** The week grid's quiet line when nothing is on it. */
   noMeetingsWeek: 'No meetings this week',
+  nothingOnWeek: (calendar: string) => `Nothing on ${calendar} this week`,
+  calendarsRetry: 'Calendars didn’t load. Try again',
   /** The calendars panel's small month. */
   goToDate: 'Go to date',
   cancelled: 'Canceled',
@@ -51,6 +53,10 @@ export const strings = {
   links: 'Link',
   allLinks: 'All links',
   calendars: 'Calendars',
+  allCalendars: 'All calendars',
+  bookingsOnly: 'Bookings',
+  moreCalendars: 'More calendars',
+  moreCount: (count: number) => (count === 1 ? '1 more calendar' : `${String(count)} more calendars`),
   calendarsFailed: 'Couldn’t load your calendars.',
   connectCalendar: 'Connect a calendar',
   connectCalendarShort: 'Connect calendar',

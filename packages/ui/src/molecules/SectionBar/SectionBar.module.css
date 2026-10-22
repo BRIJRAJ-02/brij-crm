@@ -35,6 +35,12 @@
     letter-spacing: var(--tracking-title);
   }
 
+  /* A quiet heading: a place in time (the week's dates), so the controls round it lead. */
+  .root[data-quiet-title] .title {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
   /* A heading with its quiet line after it, on one baseline, the line wrapping under it when narrow. */
   .heading {
     display: flex;

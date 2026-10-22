@@ -54,6 +54,8 @@ export { Separator, type SeparatorProps } from './atoms/Separator/Separator.tsx'
 export { Skeleton, type SkeletonProps, type SkeletonShape, type SkeletonWidth } from './atoms/Skeleton/Skeleton.tsx';
 export { Spinner, type SpinnerProps } from './atoms/Spinner/Spinner.tsx';
 export { StatusDot, type StatusDotProps } from './atoms/StatusDot/StatusDot.tsx';
+/** A booking link's colour from its id, the same on its card and its bookings on the week (grey and red left out). */
+export { linkHue } from './lib/stable-hue.ts';
 export { Switch, type SwitchProps } from './atoms/Switch/Switch.tsx';
 export { Tag, TagList, type TagItem, type TagListProps, type TagProps } from './atoms/Tag/Tag.tsx';
 export { LockReason, type LockReasonProps } from './atoms/Tooltip/LockReason.tsx';

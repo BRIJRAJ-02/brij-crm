@@ -1,9 +1,11 @@
-// Google Calendar style lanes for a day's blocks: side by side when they start together, indented over an earlier
-// one when they start well after it, and "+N" when a lane would be too narrow.
+// Google Calendar style lanes for a day's blocks: side by side when they start within a quarter hour, indented over an
+// earlier one when they start later, and "+N" when a lane would be too narrow.
 import { describe, expect, it } from 'vitest';
 import { placeBlocks, type Timed } from './placeBlocks.ts';
 
 const at = (id: string, from: number, to: number): Timed => ({ id, startMinute: from * 60, endMinute: to * 60 });
+/** The same in minutes, for starts closer than a quarter hour. */
+const atMinute = (id: string, from: number, to: number): Timed => ({ id, startMinute: from, endMinute: to });
 
 const slot = (layout: ReturnType<typeof placeBlocks>, id: string) => {
   const found = layout.blocks.find((block) => block.id === id);
@@ -25,9 +27,15 @@ describe('placeBlocks', () => {
   });
 
   it('puts blocks that start together side by side', () => {
-    const layout = placeBlocks([at('a', 9, 10), at('b', 9.5, 10.5)]);
+    const layout = placeBlocks([atMinute('a', 540, 600), atMinute('b', 550, 610)]);
     expect(slot(layout, 'a')).toMatchObject({ lane: 0, lanes: 2, span: 1, indent: 0 });
     expect(slot(layout, 'b')).toMatchObject({ lane: 1, lanes: 2, span: 1, indent: 0 });
+  });
+
+  it('cascades a block that starts a quarter hour after the one it overlaps, so both titles show', () => {
+    const layout = placeBlocks([atMinute('first', 570, 615), atMinute('second', 585, 630)]);
+    expect(slot(layout, 'first')).toMatchObject({ lanes: 1, indent: 0 });
+    expect(slot(layout, 'second')).toMatchObject({ lanes: 1, indent: 1 });
   });
 
   it('indents a block that starts well after the one it overlaps, over it', () => {
@@ -45,7 +53,12 @@ describe('placeBlocks', () => {
   });
 
   it('widens a block into lanes free for its whole time', () => {
-    const layout = placeBlocks([at('a', 9, 10), at('b', 9, 9.5), at('c', 9.25, 9.5), at('d', 9.5, 10)]);
+    const layout = placeBlocks([
+      atMinute('a', 540, 600),
+      atMinute('b', 540, 550),
+      atMinute('c', 545, 550),
+      atMinute('d', 550, 600),
+    ]);
     // a, b, c take three lanes; d starts after b and c end, in lane 1, and lane 2 stays free under it.
     expect(slot(layout, 'd')).toMatchObject({ lane: 1, lanes: 3, span: 2 });
     expect(slot(layout, 'a')).toMatchObject({ lane: 0, span: 1 });

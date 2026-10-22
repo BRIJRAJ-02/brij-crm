@@ -2,12 +2,11 @@
    axis column then seven day columns. An hour is --size-toolbar tall; a
    block's place comes from its minutes (--start, --length) and its slot
    (placeBlocks.ts): a region (--left, --width, fractions of the column),
-   pushed in --indent steps of --nest, then --lane of --lanes, --span wide. Bookings are accent, the member's own calendar events
-   quieter in their calendar's hue, the time they closed hatched (a solid
+   pushed in --indent steps of --nest, then --lane of --lanes, --span wide. Bookings are a soft fill in their link's
+   hue with a bar of it, the member's own calendar events neutral with a thin edge in their calendar's hue, the time they closed hatched (a solid
    edge for a block, dashed for a hold), cancelled ones struck through; today's
    date is a small accent circle (Google Calendar's), its column untinted.
-   Hours outside the member's open hours are a step darker. An all day row
-   sits over the hours when something is all day. Below 480px of its
+   Hours outside the member's open hours are sunken. Below 480px of its
    container only the selected day's column shows. */
 @layer components {
   .root {
@@ -34,7 +33,6 @@
   }
 
   .head,
-  .allDay,
   .body {
     display: grid;
     grid-template-columns: calc(var(--axis) * 2) repeat(7, minmax(0, 1fr));
@@ -110,108 +108,31 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
-  /* The all day row: its label in the axis, each day's items stacked as small chips in their calendar's hue. */
-  .allDay {
-    border-block-end: var(--border-width-hairline) solid var(--border);
-  }
-
-  .allDayLabel {
-    align-self: center;
-    padding-inline-end: var(--space-6);
-    color: var(--text-tertiary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-    text-align: end;
-  }
-
-  /* Chips 20px tall a 4px gap apart: each one's 24px target circle clears the next (WCAG 2.5.8, by spacing). */
-  .allDayCell {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    min-inline-size: 0;
-    padding: var(--space-2);
-    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
-  }
-
-  .allDayItem {
-    overflow: hidden;
-    min-inline-size: 0;
-    min-block-size: var(--size-chip);
-    padding: 0 var(--space-6);
-    border: none;
-    border-radius: var(--radius-sm);
-    background: var(--tag-gray-bg);
-    color: var(--tag-gray-text);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
-    text-align: start;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .allDayItem[data-hue='blue'] {
-    background: var(--tag-blue-bg);
-    color: var(--tag-blue-text);
-  }
-
-  .allDayItem[data-hue='green'] {
-    background: var(--tag-green-bg);
-    color: var(--tag-green-text);
-  }
-
-  .allDayItem[data-hue='purple'] {
-    background: var(--tag-purple-bg);
-    color: var(--tag-purple-text);
-  }
-
-  .allDayItem[data-hue='orange'] {
-    background: var(--tag-orange-bg);
-    color: var(--tag-orange-text);
-  }
-
-  .allDayItem[data-hue='sky'] {
-    background: var(--tag-sky-bg);
-    color: var(--tag-sky-text);
-  }
-
-  .allDayItem[data-hue='yellow'] {
-    background: var(--tag-yellow-bg);
-    color: var(--tag-yellow-text);
-  }
-
-  .allDayItem[data-hue='red'] {
-    background: var(--tag-red-bg);
-    color: var(--tag-red-text);
-  }
-
-  .allDayItem[data-hue='lime'] {
-    background: var(--tag-lime-bg);
-    color: var(--tag-lime-text);
-  }
-
-  .allDayItem[data-open],
-  .allDayItem:focus-visible {
-    outline: var(--border-width-hairline) solid var(--accent-line);
-    outline-offset: var(--border-width-hairline);
-    box-shadow: var(--shadow-focus);
-  }
-
   /* Outside the member's open hours: a step darker than the grid, under everything drawn on it. */
   .offHours {
     position: absolute;
     inset-block-start: calc(var(--start) / 60 * var(--hour));
     inset-inline: 0;
     block-size: calc(var(--length) / 60 * var(--hour));
-    /* The hour lines carry on through it, lined up with the column's. */
-    background-color: var(--surface-subtle);
-    background-image: repeating-linear-gradient(
-      to bottom,
-      var(--border-subtle) 0,
-      var(--border-subtle) var(--border-width-hairline),
-      transparent var(--border-width-hairline),
-      transparent var(--hour)
-    );
+    /* The hour lines carry on through it, lined up with the column's. Sunken, so the open hours read at a glance. */
+    background-color: var(--surface-sunken);
+    background-image:
+      repeating-linear-gradient(
+        to bottom,
+        var(--border-subtle) 0,
+        var(--border-subtle) var(--border-width-hairline),
+        transparent var(--border-width-hairline),
+        transparent var(--hour)
+      ),
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(var(--hour) / 2),
+        var(--border-subtle) calc(var(--hour) / 2),
+        var(--border-subtle) calc(var(--hour) / 2 + var(--border-width-hairline)),
+        transparent calc(var(--hour) / 2 + var(--border-width-hairline)),
+        transparent var(--hour)
+      );
     background-position: 0 calc(var(--start) / -60 * var(--hour));
     pointer-events: none;
   }
@@ -260,6 +181,7 @@
   }
 
   .axis {
+    position: relative;
     display: grid;
     grid-template-rows: repeat(24, var(--hour));
   }
@@ -279,13 +201,24 @@
 
     position: relative;
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
-    background-image: repeating-linear-gradient(
-      to bottom,
-      var(--border-subtle) 0,
-      var(--border-subtle) var(--border-width-hairline),
-      transparent var(--border-width-hairline),
-      transparent var(--hour)
-    );
+    /* Hour lines in the lightest border, and fainter half hour ticks between them. */
+    background-image:
+      repeating-linear-gradient(
+        to bottom,
+        var(--border-subtle) 0,
+        var(--border-subtle) var(--border-width-hairline),
+        transparent var(--border-width-hairline),
+        transparent var(--hour)
+      ),
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(var(--hour) / 2),
+        var(--surface-hover) calc(var(--hour) / 2),
+        var(--surface-hover) calc(var(--hour) / 2 + var(--border-width-hairline)),
+        transparent calc(var(--hour) / 2 + var(--border-width-hairline)),
+        transparent var(--hour)
+      );
   }
 
   .column[data-drawable] {
@@ -347,6 +280,11 @@
   }
 
   .block {
+    /* Without a hue: accent for a booking, grey for an event. */
+    --hue-fill: var(--accent-soft);
+    --hue-bar: var(--accent-line);
+    --hue-text: var(--text);
+
     position: absolute;
     inset-block-start: calc(var(--start) / 60 * var(--hour));
     --region-start: calc(var(--left) * 100% + var(--indent) * var(--nest));
@@ -358,7 +296,8 @@
     align-items: flex-start;
     overflow: hidden;
     inline-size: calc(var(--span) / var(--lanes) * var(--region-size) - var(--space-4));
-    block-size: calc(var(--length) / 60 * var(--hour) - var(--border-width-hairline));
+    /* Never shorter than one line of its words, so a quarter hour still reads (it may run past its end). */
+    block-size: max(calc(var(--length) / 60 * var(--hour) - var(--border-width-hairline)), var(--size-chip));
     padding: var(--space-2) var(--space-6);
     border: none;
     border-inline-start: var(--border-width-thick) solid var(--accent-line);
@@ -378,58 +317,80 @@
     }
   }
 
+  /* A block's colour: its booking link's, or its calendar's. Each hue sets three parts, which the kinds use. */
+  .block[data-hue='gray'] {
+    --hue-fill: var(--tag-gray-bg);
+    --hue-bar: var(--dot-gray);
+    --hue-text: var(--tag-gray-text);
+  }
+
+  .block[data-hue='red'] {
+    --hue-fill: var(--tag-red-bg);
+    --hue-bar: var(--dot-red);
+    --hue-text: var(--tag-red-text);
+  }
+
+  .block[data-hue='orange'] {
+    --hue-fill: var(--tag-orange-bg);
+    --hue-bar: var(--dot-orange);
+    --hue-text: var(--tag-orange-text);
+  }
+
+  .block[data-hue='yellow'] {
+    --hue-fill: var(--tag-yellow-bg);
+    --hue-bar: var(--dot-yellow);
+    --hue-text: var(--tag-yellow-text);
+  }
+
+  .block[data-hue='lime'] {
+    --hue-fill: var(--tag-lime-bg);
+    --hue-bar: var(--dot-lime);
+    --hue-text: var(--tag-lime-text);
+  }
+
+  .block[data-hue='green'] {
+    --hue-fill: var(--tag-green-bg);
+    --hue-bar: var(--dot-green);
+    --hue-text: var(--tag-green-text);
+  }
+
+  .block[data-hue='sky'] {
+    --hue-fill: var(--tag-sky-bg);
+    --hue-bar: var(--dot-sky);
+    --hue-text: var(--tag-sky-text);
+  }
+
+  .block[data-hue='blue'] {
+    --hue-fill: var(--tag-blue-bg);
+    --hue-bar: var(--dot-blue);
+    --hue-text: var(--tag-blue-text);
+  }
+
+  .block[data-hue='purple'] {
+    --hue-fill: var(--tag-purple-bg);
+    --hue-bar: var(--dot-purple);
+    --hue-text: var(--tag-purple-text);
+  }
+
+  /* A booking: a soft fill in its link's colour, a bar of it at the start, its words in the hue's text. */
+  .block[data-kind='booking'] {
+    border-inline-start-color: var(--hue-bar);
+    background: var(--hue-fill);
+    color: var(--hue-text);
+  }
+
+  /* The member's own calendar events: quieter than bookings, neutral with a thin edge in their calendar's colour
+     and its mark, so bookings stand out (Notion Calendar and Google Calendar draw others' time this way). */
   .block[data-kind='event'] {
-    border-inline-start-color: var(--tag-gray-border);
-    background: var(--tag-gray-bg);
-    color: var(--tag-gray-text);
+    border: var(--border-width-hairline) solid var(--border);
+    border-inline-start: var(--border-width-thick) solid var(--hue-bar);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
   }
 
-  .block[data-kind='event'][data-hue='blue'] {
-    border-inline-start-color: var(--tag-blue-border);
-    background: var(--tag-blue-bg);
-    color: var(--tag-blue-text);
-  }
-
-  .block[data-kind='event'][data-hue='green'] {
-    border-inline-start-color: var(--tag-green-border);
-    background: var(--tag-green-bg);
-    color: var(--tag-green-text);
-  }
-
-  .block[data-kind='event'][data-hue='purple'] {
-    border-inline-start-color: var(--tag-purple-border);
-    background: var(--tag-purple-bg);
-    color: var(--tag-purple-text);
-  }
-
-  .block[data-kind='event'][data-hue='orange'] {
-    border-inline-start-color: var(--tag-orange-border);
-    background: var(--tag-orange-bg);
-    color: var(--tag-orange-text);
-  }
-
-  .block[data-kind='event'][data-hue='sky'] {
-    border-inline-start-color: var(--tag-sky-border);
-    background: var(--tag-sky-bg);
-    color: var(--tag-sky-text);
-  }
-
-  .block[data-kind='event'][data-hue='yellow'] {
-    border-inline-start-color: var(--tag-yellow-border);
-    background: var(--tag-yellow-bg);
-    color: var(--tag-yellow-text);
-  }
-
-  .block[data-kind='event'][data-hue='red'] {
-    border-inline-start-color: var(--tag-red-border);
-    background: var(--tag-red-bg);
-    color: var(--tag-red-text);
-  }
-
-  .block[data-kind='event'][data-hue='lime'] {
-    border-inline-start-color: var(--tag-lime-border);
-    background: var(--tag-lime-bg);
-    color: var(--tag-lime-text);
+  /* An event with no calendar colour: a grey edge. */
+  .block[data-kind='event']:not([data-hue]) {
+    --hue-bar: var(--dot-gray);
   }
 
   .block[data-kind='blocked'],
@@ -461,15 +422,11 @@
     box-shadow: 0 0 0 var(--border-width-hairline) var(--column-surface);
   }
 
-  /* "+N": blocks folded where a lane would be too narrow, and the all day row's "+N more" past its cap: one quiet look. */
-  .block[data-kind='more'],
-  .allDayItem[data-kind='more'] {
+  /* "+N": blocks folded where a lane would be too narrow, in one quiet look. */
+  .block[data-kind='more'] {
     border: var(--border-width-hairline) solid var(--control-border);
     background: var(--surface-subtle);
     color: var(--text-secondary);
-  }
-
-  .block[data-kind='more'] {
     align-items: center;
     justify-content: center;
     padding-inline: var(--space-2);
@@ -511,6 +468,13 @@
     letter-spacing: var(--tracking-label-strong);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* A state other than the usual (No show, Needs a host): a strong word before the time. */
+  .blockStatus {
+    margin-inline-end: var(--space-4);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
   }
 
   .blockTime,
@@ -557,6 +521,35 @@
     pointer-events: none;
   }
 
+  /* A dot where the now line starts, as Google Calendar marks it. */
+  .now::before {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 0;
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--danger);
+    content: '';
+    translate: -50% -50%;
+  }
+
+  /* The time now on the axis, level with the line, over the hour label it may cross. */
+  .nowLabel {
+    position: absolute;
+    inset-block-start: calc(var(--start) / 60 * var(--hour));
+    inset-inline-end: 0;
+    z-index: var(--z-raised);
+    padding-inline: var(--space-2) var(--space-6);
+    background: var(--surface-raised);
+    color: var(--danger);
+    font: var(--text-label-strong);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-label-strong);
+    white-space: nowrap;
+    translate: 0 -50%;
+  }
+
   .corner {
     display: block;
   }
@@ -580,17 +573,13 @@
     }
 
     .column:not([data-selected]),
-    .allDayCell:not([data-selected]) {
+    .nowLabel:not([data-on-day]) {
       display: none;
     }
 
     /* "GMT" over "+5:30" fits the head row's height there. */
     .zone {
       padding-block-end: var(--space-2);
-    }
-
-    .allDay {
-      grid-template-columns: calc(var(--axis) * 2) minmax(0, 1fr);
     }
 
     .weekday {

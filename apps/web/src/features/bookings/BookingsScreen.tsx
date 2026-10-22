@@ -37,11 +37,14 @@ import {
   MenuSection,
   MenuTrigger,
   Modal,
+  MonthCalendar,
+  Popover,
   PageColumn,
   VisuallyHidden,
   Panel,
   SectionBar,
   SegmentedControl,
+  linkHue,
   useFormatSettings,
   useKeyboardPlatform,
   focusLater,
@@ -62,7 +65,21 @@ import { newLinkOnlyPageHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
-import { CalendarsFrame, CalendarsToggle, useCalendarsPanel, type CalendarsPanel } from './CalendarsAside.tsx';
+import {
+  accountsOnWeek,
+  CalendarsFrame,
+  CalendarsToggle,
+  useCalendarsPanel,
+  type CalendarsPanel,
+} from './CalendarsAside.tsx';
+import {
+  ALL_CALENDARS,
+  BOOKINGS_ONLY,
+  CalendarSwitch,
+  showsOf,
+  switchCalendars,
+  useCalendarChoice,
+} from './CalendarSwitch.tsx';
 import { calendarSettingsHref } from '../settings/nav.ts';
 import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
@@ -76,7 +93,6 @@ import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
 import {
   addDays,
-  allDayKeys,
   bookingPieces,
   dayKeyOf,
   minuteOfDay,
@@ -269,8 +285,9 @@ function BookingCard({
   readonly personHref: string | undefined;
   readonly locale: string;
   readonly actions?: HostBookingActions | undefined;
-  /** In the week's popover: Reschedule and Cancel booking are drawn by the screen (see useBookingActions). */
-  readonly onAsk?: ((ask: BookingAsk) => void) | undefined;
+  /** In the week's popover: Reschedule, Cancel booking and Reassign are drawn by the screen (see useBookingActions),
+   * Reassign with the booking's live seats. */
+  readonly onAsk?: ((ask: BookingAsk, seats: readonly BookingAssignment[]) => void) | undefined;
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk | undefined;
   /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
@@ -298,7 +315,7 @@ function BookingCard({
     booking,
     actions: actions ?? NO_ACTIONS,
     locale,
-    ...(onAsk === undefined ? {} : { onAsk }),
+    ...(onAsk === undefined ? {} : { onAsk: (kind: BookingAsk) => onAsk(kind, seats) }),
     ...(focusOnMount === undefined ? {} : { focusOnMount }),
     ...(canReassign && seats.length > 0
       ? {
@@ -808,7 +825,8 @@ function weekDayItems(days: readonly string[], today: string, locale: string) {
   });
 }
 
-/** A dialog a card on the week asked for: removing its block's time, or rescheduling or cancelling its booking. */
+/** A dialog a card on the week asked for: removing its block's time, or rescheduling, cancelling or reassigning its
+ * booking (Reassign with the seats the card read). */
 type CardQuestion =
   | {
       readonly kind: 'remove';
@@ -819,6 +837,7 @@ type CardQuestion =
   | {
       readonly kind: BookingAsk;
       readonly booking: BookingListItem;
+      readonly seats?: readonly BookingAssignment[];
       readonly pieceId: string;
       readonly dayKey: string;
     };
@@ -905,6 +924,19 @@ function WeekView(props: BookingsCalendarScreenProps) {
     name: strings.timesIn(zoneDisplay(timeZone, shownAt)),
   };
   const isThisWeek = weekOf(today, firstDay) === search.week;
+  // The time now on the hour axis, without its day period so it fits the axis ("10:15").
+  const nowLabel = memoIntl(
+    `bookings-now:${locale}:${timeZone}`,
+    () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone }),
+  )
+    .formatToParts(now)
+    .filter((part) => part.type !== 'dayPeriod')
+    .map((part) => part.value)
+    .join('')
+    .trim();
+  // Go to date: the small month the calendars panel held, now from the week's bar (the panel stays folded here).
+  const [isJumpOpen, setJumpOpen] = useState(false);
+  const jumpRef = useRef<HTMLButtonElement>(null);
   const range = rangeLabel(search.week, locale);
   // Each event in its calendar's colour (the member's pick, else the provider's); before the list reads, its account's.
   const connectionHue = new Map(
@@ -913,30 +945,30 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const calendarById = new Map(
     accounts.flatMap((account) => account.calendars.map((calendar) => [calendar.id, calendar] as const)),
   );
-  // The calendars the panel shows (`cal`, the view only), of those on the member's week.
-  const pickedCalendars = search.cal === undefined ? undefined : new Set(search.cal);
+  // The week shows one calendar at a time, or all (the switch in its bar, kept per workspace in this browser), of
+  // those on the member's week; the List tab's panel picks several.
+  const switchable = calendarList.status === 'ready' ? switchCalendars(accountsOnWeek(calendarList)) : undefined;
+  const { choice, choose } = useCalendarChoice(slug, switchable);
+  const shows = showsOf(choice);
   const isShownEvent = (item: { readonly calendarId: string }) =>
-    calendarById.get(item.calendarId)?.showInWeek !== false &&
-    (pickedCalendars === undefined || pickedCalendars.has(item.calendarId));
+    calendarById.get(item.calendarId)?.showInWeek !== false && shows.calendar(item.calendarId);
   const panel = useCalendarsPanel(calendarList.status === 'ready' ? accounts.length > 0 : undefined);
   const hasNoCalendar = calendarList.status === 'ready' && accounts.length === 0;
+  // The week's own bar sits over its days, under the Bookings tabs, and the calendars panel stays folded: the
+  // switch in the bar replaces its boxes (the owner, 22 October 2026).
   const framed = (content: ReactNode) => (
     <CalendarsFrame
       isFill
       isFlush
+      isHidden
       slug={slug}
       search={search}
       calendars={props.calendars}
       panel={panel}
       onSearch={onSearch}
       onDismissNotice={props.onDismissNotice}
-      jumpTo={{
-        value: days.includes(search.day) ? search.day : (days[0] ?? search.week),
-        onChange: (day) => onSearch({ week: weekOf(day, firstDay), day }),
-        // The week on screen, tinted on the month.
-        ...shownWeek(days),
-      }}
     >
+      {toolbar}
       {content}
     </CalendarsFrame>
   );
@@ -945,18 +977,13 @@ function WeekView(props: BookingsCalendarScreenProps) {
       (connection) => [connection.id, connection.provider === 'google' ? 'google-calendar' : 'outlook'] as const,
     ),
   );
+  // Today and the arrows lead, then the week's dates (quiet), then the calendar switch; Filter at the end.
   const toolbar = (
     <SectionBar
-      title={range}
-      end={
+      variant="bar"
+      isTitleQuiet
+      start={
         <>
-          <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={hasNoCalendar} />
-          <Button
-            variant="ghost"
-            icon="chevron-left"
-            label={strings.previousWeek}
-            onPress={() => onSearch({ week: addDays(search.week, -7), day: addDays(search.day, -7) })}
-          />
           {/* Secondary: the page's one primary is New (the owner, 22 October 2026). */}
           <Button variant="secondary" onPress={() => onSearch({ week: weekOf(today, firstDay), day: today })}>
             {isThisWeek
@@ -967,20 +994,63 @@ function WeekView(props: BookingsCalendarScreenProps) {
           </Button>
           <Button
             variant="ghost"
+            icon="chevron-left"
+            label={strings.previousWeek}
+            onPress={() => onSearch({ week: addDays(search.week, -7), day: addDays(search.day, -7) })}
+          />
+          <Button
+            variant="ghost"
             icon="chevron-right"
             label={strings.nextWeek}
             onPress={() => onSearch({ week: addDays(search.week, 7), day: addDays(search.day, 7) })}
           />
-          <FilterMenu search={search} pages={pages} onSearch={onSearch} />
+          <Button
+            ref={jumpRef}
+            variant="ghost"
+            icon="calendar-days"
+            label={strings.goToDate}
+            isExpanded={isJumpOpen}
+            onPress={() => setJumpOpen((open) => !open)}
+          />
+          <Popover
+            triggerRef={jumpRef}
+            isOpen={isJumpOpen}
+            onOpenChange={setJumpOpen}
+            label={strings.goToDate}
+            placement="bottom start"
+          >
+            <MonthCalendar
+              label={strings.goToDate}
+              value={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
+              onChange={(day) => {
+                setJumpOpen(false);
+                onSearch({ week: weekOf(day, firstDay), day });
+              }}
+              {...shownWeek(days)}
+            />
+          </Popover>
         </>
       }
+      title={range}
+      after={
+        hasNoCalendar ? (
+          <CalendarsToggle panel={panel} slug={slug} hasNoCalendar />
+        ) : calendarList.status === 'error' ? (
+          // The switch can't draw without the calendars: say so, with a retry, rather than leave a gap.
+          <Button variant="ghost" icon="refresh-cw" onPress={() => props.calendars.reload()}>
+            {strings.calendarsRetry}
+          </Button>
+        ) : switchable === undefined || switchable.length === 0 ? undefined : (
+          <CalendarSwitch calendars={switchable} choice={choice} onChoose={choose} />
+        )
+      }
+      end={<FilterMenu search={search} pages={pages} onSearch={onSearch} />}
     />
   );
   if (state.status === 'loading') {
     // The week itself, busy and empty, so it arrives in place.
     return (
       <>
-        <Toolbar>{toolbar}</Toolbar>
         {framed(
           <WeekCalendar
             label={strings.weekLabel(range)}
@@ -994,7 +1064,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             hourLabel={(hour) =>
               new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour))
             }
-            now={{ dayKey: today, minute: nowMinute }}
+            now={{ dayKey: today, minute: nowMinute, label: nowLabel }}
             scrollToMinute={scrollMinute(days, now, timeZone, [], workingStart(today))}
             {...(props.openHours === undefined ? {} : { openHours: props.openHours })}
             onOpen={() => undefined}
@@ -1007,7 +1077,6 @@ function WeekView(props: BookingsCalendarScreenProps) {
   if (state.status === 'error') {
     return (
       <>
-        <Toolbar>{toolbar}</Toolbar>
         {framed(
           <EmptyState tone="error" title={strings.failedTitle} onRetry={() => week.reload()}>
             {state.message === '' ? strings.failedText : state.message}
@@ -1016,21 +1085,10 @@ function WeekView(props: BookingsCalendarScreenProps) {
       </>
     );
   }
-  const bookings = state.bookings.filter((booking) => search.link === undefined || booking.pageId === search.link);
+  const bookings = state.bookings.filter(
+    (booking) => shows.bookings && (search.link === undefined || booking.pageId === search.link),
+  );
   const events = state.events.filter(isShownEvent);
-  // All day events, one chip a day in the row over the hours (by their dates, never moved into the local zone).
-  const allDay = events
-    .filter((event) => event.allDay)
-    .flatMap((event) =>
-      allDayKeys(event, days).map((dayKey) => ({
-        id: `allday:${event.id}:${dayKey}`,
-        eventId: event.id,
-        dayKey,
-        title: event.title,
-        hue: calendarById.get(event.calendarId)?.hue ?? connectionHue.get(event.connectionId),
-      })),
-    );
-  const byAllDay = new Map(allDay.map((item) => [item.id, item]));
   const byBooking = new Map(bookings.map((booking) => [booking.id, booking]));
   const byEvent = new Map(events.map((event) => [event.id, event]));
   const byTurn = new Map(state.blocks.map((turn) => [turn.key, turn]));
@@ -1061,8 +1119,17 @@ function WeekView(props: BookingsCalendarScreenProps) {
           time: timeRange(booking.startsAt, booking.endsAt, locale, timeZone),
           detail: booking.visitorName,
           kind: 'booking',
-          provider: 'timefix',
+          // Its booking link's colour, as on Links; no mark (every booking is one) and no status while confirmed, so
+          // a block says only what is news: a no show, a booking with no host, or struck through when cancelled.
+          hue: linkHue(booking.pageId),
           isCancelled: booking.status === 'cancelled',
+          ...(booking.status !== 'confirmed'
+            ? {}
+            : booking.noShow === true
+              ? { status: strings.noShow }
+              : booking.needsHost
+                ? { status: strings.needsHost }
+                : {}),
         },
       ];
     }
@@ -1140,40 +1207,35 @@ function WeekView(props: BookingsCalendarScreenProps) {
     setFocusDay({ dayKey: asked.dayKey, ...(asked.kind === 'remove' ? {} : { blockId: asked.pieceId }) });
   };
   const openBooking = open?.kind === 'booking' ? byBooking.get(open.piece.sourceId) : undefined;
-  const openAllDay = openId === undefined ? undefined : byAllDay.get(openId);
-  const openEvent =
-    open?.kind === 'event'
-      ? byEvent.get(open.piece.sourceId)
-      : openAllDay === undefined
-        ? undefined
-        : byEvent.get(openAllDay.eventId);
+  const openEvent = open?.kind === 'event' ? byEvent.get(open.piece.sourceId) : undefined;
   const openTurn = open?.kind === 'closed' ? byTurn.get(open.piece.sourceId) : undefined;
   const openBusy = open?.kind === 'busy' ? byBusy.get(open.piece.sourceId) : undefined;
   const live = bookings.filter((booking) => booking.status === 'confirmed').length;
   const hourFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric' });
   return (
     <>
-      <Toolbar>{toolbar}</Toolbar>
       {framed(
         <>
           <WeekCalendar
             label={strings.weekLabel(range)}
             days={weekDayItems(days, today, locale)}
             blocks={blocks}
-            allDay={allDay.map(({ id, dayKey, title, hue }) => ({
-              id,
-              dayKey,
-              title,
-              ...(hue === undefined ? {} : { hue }),
-            }))}
             {...(props.openHours === undefined ? {} : { openHours: props.openHours })}
-            emptyHint={strings.noMeetingsWeek}
+            emptyHint={
+              choice === ALL_CALENDARS
+                ? strings.noMeetingsWeek
+                : strings.nothingOnWeek(
+                    choice === BOOKINGS_ONLY
+                      ? strings.bookingsOnly
+                      : (switchable?.find((calendar) => calendar.id === choice)?.name ?? strings.calendars),
+                  )
+            }
             isFill
             selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
             onSelectDay={(day) => onSearch({ day })}
             zone={zone}
             hourLabel={(hour) => hourFormat.format(new Date(2000, 0, 1, hour))}
-            now={{ dayKey: today, minute: nowMinute }}
+            now={{ dayKey: today, minute: nowMinute, label: nowLabel }}
             scrollToMinute={scrollMinute(
               days,
               now,
@@ -1216,8 +1278,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
                   {...(open === undefined
                     ? {}
                     : {
-                        onAsk: (kind: BookingAsk) => {
-                          ask({ kind, booking: openBooking, pieceId: open.piece.id, dayKey: open.piece.dayKey });
+                        onAsk: (kind: BookingAsk, seats: readonly BookingAssignment[]) => {
+                          ask({ kind, booking: openBooking, seats, pieceId: open.piece.id, dayKey: open.piece.dayKey });
                         },
                         focusOnMount:
                           refocus?.pieceId === open.piece.id && refocus.button !== 'remove'
@@ -1354,22 +1416,40 @@ function WeekView(props: BookingsCalendarScreenProps) {
           }}
         />
       )}
-      {lastAsked !== undefined && lastAsked.kind !== 'remove' && props.actions !== undefined && (
-        <BookingDialog
+      {/* Reassign mounts afresh per opening and has no exit of its own, so it shows only while asked. */}
+      {lastAsked?.kind === 'reassign' && asking === lastAsked && props.actions !== undefined && (
+        <ReassignDialog
           key={lastAsked.opening}
-          // The booking as the week holds it now (cancelled at once behind its confirm), or as it was asked about.
           booking={byBooking.get(lastAsked.booking.id) ?? lastAsked.booking}
+          seats={lastAsked.seats ?? []}
           actions={props.actions}
-          locale={locale}
-          ask={asking === lastAsked ? lastAsked.kind : undefined}
           onClose={() => {
             dismiss(lastAsked);
           }}
-          onDone={() => {
+          onReassigned={() => {
             done(lastAsked);
           }}
         />
       )}
+      {lastAsked !== undefined &&
+        lastAsked.kind !== 'remove' &&
+        lastAsked.kind !== 'reassign' &&
+        props.actions !== undefined && (
+          <BookingDialog
+            key={lastAsked.opening}
+            // The booking as the week holds it now (cancelled at once behind its confirm), or as it was asked about.
+            booking={byBooking.get(lastAsked.booking.id) ?? lastAsked.booking}
+            actions={props.actions}
+            locale={locale}
+            ask={asking === lastAsked ? lastAsked.kind : undefined}
+            onClose={() => {
+              dismiss(lastAsked);
+            }}
+            onDone={() => {
+              done(lastAsked);
+            }}
+          />
+        )}
       {meeting !== undefined && (
         <NewMeetingDialog
           span={meeting}

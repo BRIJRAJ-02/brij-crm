@@ -5,9 +5,9 @@ import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
-import { HUES, type Hue } from '../../hue.ts';
+import type { Hue } from '../../hue.ts';
 import { safeHref } from '../../lib/safe-href.ts';
-import { stableHue } from '../../lib/stable-hue.ts';
+import { linkHue } from '../../lib/stable-hue.ts';
 import styles from './LinkCard.module.css';
 import { strings } from './strings.ts';
 
@@ -86,7 +86,7 @@ export function LinkCard({
 }: LinkCardProps) {
   const titleId = useId();
   const addressRef = useRef<HTMLParagraphElement>(null);
-  const edge = hue ?? (colourKey === undefined ? undefined : stableHue(colourKey, EDGE_HUES));
+  const edge = hue ?? (colourKey === undefined ? undefined : linkHue(colourKey));
   const Heading = titleLevel === 2 ? 'h2' : 'h3';
   const safe = href === undefined || isPending ? undefined : safeHref(href);
   const hasFoot = copyValue !== undefined || (actions !== undefined && actions !== null && actions !== false);
@@ -145,9 +145,6 @@ export function LinkCard({
     </article>
   );
 }
-
-/** The hues a link's edge may take from its `colourKey`: every data hue but grey (neutral) and red (an error). */
-const EDGE_HUES = HUES.filter((hue) => hue !== 'gray' && hue !== 'red');
 
 /** The card's switch, with the reason it is off limits in a tooltip when it is. */
 function CardSwitch({ toggle, isPending }: { readonly toggle: LinkCardToggle; readonly isPending: boolean }) {

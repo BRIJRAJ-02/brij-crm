@@ -17,14 +17,20 @@ export interface StatusDotProps {
    * editor's "Live · edited" becomes Edited in the TopBar.
    */
   readonly shortLabel?: string;
+  /**
+   * Takes its colour and type from where it sits rather than its own: a dot inside a control that sets them (a
+   * SegmentedControl's segment, a menu item), so it reads like the words beside it, chosen or not.
+   */
+  readonly isInherited?: boolean;
 }
 
 /** A status as a dot in its hue and its label: the status attribute's one display. */
-export function StatusDot({ children, hue, isArchived = false, shortLabel }: StatusDotProps) {
+export function StatusDot({ children, hue, isArchived = false, shortLabel, isInherited = false }: StatusDotProps) {
   return (
     <span
       className={styles.root}
       data-archived={isArchived || undefined}
+      data-inherit={isInherited || undefined}
       data-short={shortLabel === undefined ? undefined : ''}
     >
       <span className={styles.dot} data-hue={isArchived ? 'gray' : hue} aria-hidden="true" />

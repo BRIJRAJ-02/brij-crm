@@ -58,6 +58,11 @@ export function Popover({
       offset={0}
       data-width={width}
       data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
+      // React Aria sets z-index 100000 inline on every popover, which drew a card's popover over the dialog its menu
+      // opened (the owner, 22 October 2026). Only an inline style beats it, so it takes the dialogs' own layer:
+      // whichever opened last is on top, a dialog over the card it came from, a select over the dialog it sits in.
+      // eslint-disable-next-line no-restricted-syntax -- a token, not a raw value, overriding React Aria's inline one
+      style={{ zIndex: 'var(--z-modal)' }}
       {...(triggerRef === undefined ? {} : { triggerRef })}
       {...(isOpen === undefined ? {} : { isOpen })}
       {...(onOpenChange === undefined ? {} : { onOpenChange })}

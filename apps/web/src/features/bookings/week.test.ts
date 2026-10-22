@@ -5,7 +5,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
-  allDayKeys,
   bookingPieces,
   dayKeyOf,
   instantAt,
@@ -91,23 +90,6 @@ describe('the week', () => {
     // The member's own day start, on the hour, outside the working day and on another week.
     expect(scrollMinute(days, localDate('2026-10-21', 6, 0), ZONE, [], 9 * 60 + 30)).toBe(540);
     expect(scrollMinute(days, later, ZONE, [{ startMinute: 425, endMinute: 450 }], 9 * 60)).toBe(360);
-  });
-});
-
-describe('allDayKeys', () => {
-  it('reads an all day event by its dates, the end day left out, never moved into the local zone', () => {
-    const days = weekDays('2026-10-19');
-    expect(allDayKeys({ startsAt: '2026-10-21T00:00:00.000Z', endsAt: '2026-10-22T00:00:00.000Z' }, days)).toEqual([
-      '2026-10-21',
-    ]);
-    expect(allDayKeys({ startsAt: '2026-10-17T00:00:00.000Z', endsAt: '2026-10-21T00:00:00.000Z' }, days)).toEqual([
-      '2026-10-19',
-      '2026-10-20',
-    ]);
-    expect(allDayKeys({ startsAt: '2026-10-25T00:00:00.000Z', endsAt: '2026-10-25T00:00:00.000Z' }, days)).toEqual([
-      '2026-10-25',
-    ]);
-    expect(allDayKeys({ startsAt: '2026-10-26T00:00:00.000Z', endsAt: '2026-10-27T00:00:00.000Z' }, days)).toEqual([]);
   });
 });
 
