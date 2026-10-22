@@ -131,6 +131,7 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
       <Card
         title={strings.shareTitle}
         description={link}
+        actions={<InfoTip label={strings.shareTitle}>{strings.shareTip}</InfoTip>}
         footer={
           <>
             <CopyButton value={link} label={strings.copyLink} variant="primary" />

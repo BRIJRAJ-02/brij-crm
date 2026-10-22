@@ -226,6 +226,8 @@ export const strings = {
   readOnlyTitle: 'You can view this form',
   readOnlyText: 'Only people who manage forms can change it.',
   shareTitle: 'Share',
+  shareTip:
+    'Use the link in an email, a chat or a post: it opens the form on a page of its own. To keep people on your site, put the form there with the snippet below.',
   link: 'Link',
   copy: 'Copy',
   copyLink: 'Copy link',
