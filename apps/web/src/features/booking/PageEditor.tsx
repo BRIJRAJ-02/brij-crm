@@ -78,6 +78,7 @@ import {
   pageTabOf,
   publicBookingOrigin,
   publicBookingUrl,
+  withHandle,
   type PageTab,
 } from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
@@ -224,6 +225,15 @@ export function PageEditor({
   onTabChange,
 }: PageEditorProps) {
   const [page, setPage] = useState(loaded);
+  // The route shows its cached read first and reads again behind it, so the owner's handle claimed in Profile
+  // arrives as a newer `loaded` (owner, 23 Oct 2026: Copy link kept giving /b/<key>). The handle is the one fact
+  // here the editor never changes itself, so a newer read hands over only that; a save's answer stays the truth
+  // for the rest.
+  const [lastLoaded, setLastLoaded] = useState(loaded);
+  if (loaded !== lastLoaded) {
+    setLastLoaded(loaded);
+    if (loaded.handle !== page.handle) setPage(withHandle(page, loaded.handle));
+  }
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   // A page the reader can't change shows as it is, every control read only, with no Save.
