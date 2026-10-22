@@ -304,10 +304,14 @@ export function Select({
     <ListBoxItem
       key={item.id}
       id={item.id}
+      // The item itself, so the closed field draws the chosen one's face, never the option's text run together
+      // ("Your default (ada@acme.dev)Follows your default"): a grouped list's static items carry no value otherwise.
+      value={item}
       textValue={item.label}
       className={styles.option}
       data-clear={item.id === CLEAR || item.id === CREATE || undefined}
       data-apart={item.isApart === true || undefined}
+      data-description={item.description === undefined ? undefined : optionDescription}
     >
       {({ isSelected }) => (
         <>
@@ -437,8 +441,11 @@ export function Select({
       <AriaButton className={styles.trigger} {...(triggerRef === undefined ? {} : { ref: triggerRef })}>
         <SelectValue<SelectItem> className={styles.value}>
           {({ selectedItems, isPlaceholder, defaultChildren }) => {
-            const selected = selectedItems[0];
-            if (isPlaceholder || selected === undefined || selected === null)
+            // A static (grouped) option without its value still names the chosen item by the field's own value:
+            // React Aria types the entry as always there, but a static item's is null.
+            const first = selectedItems[0];
+            const selected = first ?? chosen;
+            if (isPlaceholder || selected === undefined)
               return <span className={styles.placeholder}>{defaultChildren}</span>;
             return variant === 'prefix' && selected.short !== undefined ? (
               <>
