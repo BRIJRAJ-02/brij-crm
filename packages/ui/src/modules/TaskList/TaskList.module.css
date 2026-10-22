@@ -12,6 +12,8 @@
     min-block-size: 0;
     overflow: auto;
     outline: none;
+    /* Rows read their own width: a phone, or a narrow card, drops the record chips before the title. */
+    container-type: inline-size;
   }
 
   .row {
@@ -78,9 +80,11 @@
     min-inline-size: 0;
   }
 
+  /* The list takes the height its rows need and no more, so a short list has Completed right under it rather
+     than at the foot of the slot; a long one stops at what the toolbar and Completed leave and scrolls inside. */
   .body {
     display: flex;
-    flex: 1;
+    flex: 0 1 auto;
     flex-direction: column;
     min-block-size: 0;
   }
@@ -146,6 +150,14 @@
 
   .due[data-overdue] {
     color: var(--danger);
+  }
+
+  /* Under 480px the title would be squeezed to nothing by the chip and the due day (a record's Overview on a
+     phone): the chips step aside, since opening the task shows them, and the title keeps the row. */
+  @container (inline-size < 480px) {
+    .record {
+      display: none;
+    }
   }
 
   .assignee {

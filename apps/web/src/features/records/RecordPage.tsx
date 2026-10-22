@@ -196,8 +196,8 @@ function PendingTab({ tab }: { readonly tab: RecordTab }) {
         title={taskStrings.openTasks}
         isBusy
         actions={
-          <Button variant="ghost" isDisabled>
-            {taskStrings.viewAllTasks}
+          <Button variant="ghost" label={taskStrings.viewAllTasks} isDisabled>
+            {taskStrings.viewAll}
           </Button>
         }
       >

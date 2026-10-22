@@ -25,7 +25,7 @@ New (13 Oct reference batch 4, the record panel and lists). The owner's referenc
 
 ## States
 
-Default, loading (skeleton values), none (a stat with no value), pressable (hover takes `surface-hover`, focus the inset ring), narrow (as many to a row as fit at 140px each, a short last row stretching).
+Default, loading (skeleton values), none (a stat with no value), pressable (hover takes `surface-hover`, focus the inset ring), narrow (as many to a row as fit at 140px each, a short last row stretching; under 480px of box the values step down to body strong type, so a relative time like "13 minutes ago" reads whole on a phone).
 
 ## Keyboard
 
