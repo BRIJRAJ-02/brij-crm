@@ -39,7 +39,12 @@ export interface PreferencesDeps {
   readonly api: PreferencesApi;
   readonly mintId: () => string;
   readonly notify: (notice: Notice) => void;
+  /** The clock, in milliseconds; tests pass their own. */
+  readonly now?: () => number;
 }
+
+/** A read this recent serves a new holder as it is: the route's loader and the screen it opens hold them together. */
+export const PREFERENCES_FRESH_MS = 1_000;
 
 /** Applies a change to the preferences it names, as the server will. */
 export function applyChange(preferences: MemberPreferences, change: PreferencesChange): MemberPreferences {
@@ -59,10 +64,12 @@ export function applyChange(preferences: MemberPreferences, change: PreferencesC
 /** The member's preferences in each workspace. */
 export function createPreferencesStore(deps: PreferencesDeps) {
   const held = new Map<string, ReturnType<typeof make>>();
+  const now = deps.now ?? Date.now;
 
   function make(workspace: string) {
     let state: PreferencesState = { status: 'loading' };
     let reading: Promise<MemberPreferences> | undefined;
+    let readAt: number | undefined;
     // What the server last said, and the changes still on their way, oldest first. The screen shows the changes
     // over the server's copy; changes go out one after another, so the server applies them in the order made, and
     // a refusal drops only its own change.
@@ -89,6 +96,7 @@ export function createPreferencesStore(deps: PreferencesDeps) {
           (answer) => {
             // A change on its way keeps what it shows: it is laid over the answer.
             confirmed = answer;
+            readAt = now();
             show();
             return answer;
           },
@@ -110,8 +118,9 @@ export function createPreferencesStore(deps: PreferencesDeps) {
       },
       getSnapshot: () => state,
       retain() {
-        // Read again whenever a screen holds them, so another device's change shows on the next visit.
-        void read().catch(() => undefined);
+        // Read again whenever a screen holds them, so another device's change shows on the next visit; a read that
+        // just landed (the loader's, for the screen it opens) already is that visit's.
+        if (readAt === undefined || now() - readAt >= PREFERENCES_FRESH_MS) void read().catch(() => undefined);
         return () => undefined;
       },
       /** The preferences, read once: a route loader awaits it (and the opening redirect reads it). */
