@@ -92,16 +92,17 @@ export const Guidance: Story = {
 const submitted = fn();
 
 /** Several emails in a form, as New meeting's Also invite. */
-function SeveralForm({ onSubmit }: { readonly onSubmit: () => void }) {
+function SeveralForm({ onSubmit, isSending = false }: { readonly onSubmit: () => void; readonly isSending?: boolean }) {
   const several = sample.several?.attribute ?? sample.attribute;
   const [value, setValue] = useState<readonly string[]>(['ada@example.com', 'ada@work.example.com']);
   return (
     <Stage width="narrow">
-      <Form label="Invite" submitLabel="Send" onSubmit={onSubmit}>
+      <Form label="Invite" submitLabel="Send" onSubmit={onSubmit} isBusy={isSending}>
         <AttributeEditor
           attribute={several}
           value={value}
           surface="form"
+          isDisabled={isSending}
           onCommit={(next) => {
             setValue(Array.isArray(next) ? next.filter((item): item is string => typeof item === 'string') : []);
           }}
@@ -131,5 +132,15 @@ export const SeveralInAForm: Story = {
     await expect(submitted).not.toHaveBeenCalled();
     await userEvent.keyboard('{Enter}');
     await expect(submitted).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** While the form around it sends: the chips and the add field show faded, and nothing is added or removed. */
+export const SeveralWhileSending: Story = {
+  render: () => <SeveralForm onSubmit={submitted} isSending />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Emails' })).toBeInTheDocument();
+    await expect(canvas.getByRole('textbox', { name: 'Emails' })).toBeDisabled();
+    for (const remove of canvas.getAllByRole('button', { name: /^Remove/ })) await expect(remove).toBeDisabled();
   },
 };

@@ -2,12 +2,12 @@
 // domains, URLs): the values as removable chips, and a Field to add one more.
 // Each change commits the whole list, checked with the attribute's schema.
 import type { AttributeType } from '@crm/contracts/values';
-import { useId, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
-import { FieldLabel } from '../atoms/FieldLabel/FieldLabel.tsx';
 import { LinkChip } from '../atoms/LinkChip/LinkChip.tsx';
 import type { ProviderName } from '../atoms/ProviderMark/ProviderMark.tsx';
 import { Field, type FieldProps } from '../molecules/Field/Field.tsx';
+import { FieldGroup } from '../molecules/FieldGroup/FieldGroup.tsx';
 import { strings as fieldStrings } from '../molecules/Field/strings.ts';
 import styles from './ListEditor.module.css';
 import { strings } from './strings.ts';
@@ -52,6 +52,8 @@ export interface AddFieldProps {
   readonly onEscape?: () => void;
   readonly error?: string;
   readonly autoFocus: boolean;
+  /** The form around it is sending: the field takes nothing until the answer. */
+  readonly isDisabled: boolean;
 }
 
 /** Removable chips and an add Field; every change commits the whole list. */
@@ -74,10 +76,10 @@ export function ListEditor<T extends AttributeType, V>({
   renderAdd,
   autoOpen = false,
   startText,
+  isDisabled = false,
 }: ListEditorProps<T, V>) {
   // Opened from a grid cell by typing: the add field starts with that key.
   const [draft, setDraft] = useState(startText ?? '');
-  const labelId = useId();
   const [message, setMessage] = useState<string | undefined>(undefined);
   const commitList = (next: readonly V[]) => {
     const result = toCommittable<T>(attribute, next);
@@ -105,14 +107,11 @@ export function ListEditor<T extends AttributeType, V>({
   };
   const emptyPlaceholder =
     isCompact || placeholder === undefined ? fieldStrings.setAttribute(attribute.name) : placeholder;
-  // On a form the name leads, over the chips (as every field's label sits over its value); the add field under them
-  // keeps the name for screen readers. A cell or a panel row names it already.
+  // On a form the name leads, over the chips, as FieldGroup labels what a form shows (as every field's label sits over
+  // its value); the add field under them keeps the name for screen readers. A cell or a panel row names it already.
   const isLabelledAbove = !isCompact && values.length > 0;
   const chips = values.length > 0 && (
-    <ul
-      className={styles.list}
-      {...(isLabelledAbove ? { 'aria-labelledby': labelId } : { 'aria-label': attribute.name })}
-    >
+    <ul className={styles.list} aria-label={attribute.name}>
       {values.map((value, index) => (
         <li key={`${String(index)}-${labelOf(value)}`} className={styles.item}>
           <LinkChip href={hrefOf(value)} {...chipExtras(value)}>
@@ -122,6 +121,7 @@ export function ListEditor<T extends AttributeType, V>({
             variant="ghost"
             icon="x"
             label={strings.remove(labelOf(value))}
+            isDisabled={isDisabled}
             onPress={() => {
               commitList(values.filter((_, at) => at !== index));
             }}
@@ -132,14 +132,7 @@ export function ListEditor<T extends AttributeType, V>({
   );
   return (
     <div className={styles.root}>
-      {isLabelledAbove ? (
-        <div className={styles.labelled}>
-          <FieldLabel label={attribute.name} as="text" id={labelId} />
-          {chips}
-        </div>
-      ) : (
-        chips
-      )}
+      {isLabelledAbove ? <FieldGroup label={attribute.name}>{chips}</FieldGroup> : chips}
       {renderAdd === undefined ? (
         <Field
           label={attribute.name}
@@ -164,6 +157,7 @@ export function ListEditor<T extends AttributeType, V>({
           // Opened from a grid cell: keys go to the add field, never to a chip's link.
           // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the editor was opened on purpose, from the cell
           autoFocus={autoOpen}
+          isDisabled={isDisabled}
           {...(onCancel === undefined ? {} : { onEscape: onCancel })}
           {...((message ?? error) === undefined ? {} : { error: message ?? error })}
           {...(inputMode === undefined ? {} : { inputMode })}
@@ -184,6 +178,7 @@ export function ListEditor<T extends AttributeType, V>({
           },
           onAdd: add,
           autoFocus: autoOpen,
+          isDisabled,
           ...(onCancel === undefined ? {} : { onEscape: onCancel }),
           ...((message ?? error) === undefined ? {} : { error: message ?? error }),
         })

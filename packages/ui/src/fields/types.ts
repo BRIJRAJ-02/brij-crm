@@ -93,6 +93,12 @@ export interface EditorProps<T extends AttributeType> {
   /** The grid started the edit: a list, menu or search opens at once, so one key reaches the choices. */
   readonly autoOpen?: boolean;
   /**
+   * The form around it is sending (a dialog's commit in flight): the value shows as it is, in Field's disabled look,
+   * and takes no change until the answer. The list editors (several emails, phones, domains or URLs) and the member
+   * and record pickers honour it, the editors a dialog's form uses today.
+   */
+  readonly isDisabled?: boolean;
+  /**
    * Selects and statuses: offers "Create "<typed>"" when what is typed in the
    * search matches no live option, and hands the label over (spec 0012,
    * AC-238). Only for someone who may shape the schema; nothing is offered

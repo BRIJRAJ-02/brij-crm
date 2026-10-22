@@ -89,6 +89,8 @@ export interface ReferencePickerProps<D extends Reference> {
    * its check, and picking it again on a side of many changes nothing.
    */
   readonly describeResult?: (display: D) => ResultState | undefined;
+  /** The form around it is sending: the chips show in Field's disabled look, and neither the box nor a Remove acts. */
+  readonly isDisabled?: boolean;
 }
 
 /**
@@ -115,6 +117,7 @@ export function ReferencePicker<D extends Reference>({
   onObjectChange,
   showLabel = false,
   describeResult,
+  isDisabled = false,
 }: ReferencePickerProps<D>) {
   const labelId = useId();
   const errorId = useId();
@@ -255,6 +258,7 @@ export function ReferencePicker<D extends Reference>({
               size={isInline ? 'md' : 'sm'}
               icon="x"
               label={strings.remove(display.name === '' ? name : display.name)}
+              isDisabled={isDisabled}
               onPress={() => {
                 const place = chosen.findIndex((item) => keyOf(item) === keyOf(display));
                 onChange(chosen.filter((item) => keyOf(item) !== keyOf(display)));
@@ -304,19 +308,24 @@ export function ReferencePicker<D extends Reference>({
         className={styles.box}
         data-size={isCompact ? 'sm' : 'md'}
         data-invalid={error === undefined ? undefined : ''}
-        data-open={isOpen || undefined}
+        data-open={(isOpen && !isDisabled) || undefined}
+        data-disabled={isDisabled || undefined}
+        // The whole field is off while its form sends, chips included (and so out of the contrast rule, as a disabled
+        // Field's text is).
+        aria-disabled={isDisabled || undefined}
         // In a popover (a grid cell's editor) its focus is the accent edge alone, as a Field's there.
         data-in-popover={isInPopover || undefined}
         onClick={(event) => {
-          if (event.target instanceof Element && event.target.closest('button, a') !== null) return;
+          if (isDisabled || (event.target instanceof Element && event.target.closest('button, a') !== null)) return;
           setOpen(true);
         }}
       >
         {/* The field's own button comes first for Tab (a reflexive Enter never removes a chip); CSS draws it last. */}
-        <MenuTrigger isOpen={isOpen} onOpenChange={setOpen}>
+        <MenuTrigger isOpen={isOpen && !isDisabled} onOpenChange={setOpen}>
           <AriaButton
             ref={triggerRef}
             className={styles.trigger}
+            isDisabled={isDisabled}
             {...(triggerLabel === undefined ? {} : { 'aria-label': triggerLabel })}
             {...(error === undefined ? {} : { 'aria-invalid': true, 'aria-describedby': errorId })}
           >

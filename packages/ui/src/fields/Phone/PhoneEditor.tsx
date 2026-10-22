@@ -171,6 +171,7 @@ function SeveralPhones(props: EditorProps<'phone'>) {
           autoComplete="off"
           // eslint-disable-next-line jsx-a11y-x/no-autofocus -- opened from a grid cell: keys go to the add field
           autoFocus={field.autoFocus}
+          isDisabled={field.isDisabled}
           guess={start}
           codeLabel={strings.code}
           showsExample
