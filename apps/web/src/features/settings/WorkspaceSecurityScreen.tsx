@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Settings › Workspace › Security (spec 0033, milestone 4): how people sign in to this workspace, owners only.
 // Main task: require two factor sign in for everyone, set how long a sign in lasts here, or sign everyone out.
-// Leaves out: sign in methods and SSO (later), and each person's own devices (Account › Security has those).
+// Leaves out: sign in methods and SSO (later), and each person's own devices (Account › Sign in and devices has those).
 import {
   isDataError,
   SESSION_LENGTH_DAYS,

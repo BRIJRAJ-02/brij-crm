@@ -36,6 +36,8 @@ export const strings = {
   somethingWrong: 'Something went wrong. Try again in a moment.',
   // The danger zone (owners only).
   danger: 'Danger zone',
+  /** Profile's first section: the picture, name and sign in email. */
+  detailsSection: 'Your details',
   deleteRow: 'Delete workspace',
   deleteRowText: 'Nobody can open it, and after 30 days it’s gone for good.',
   deleteAction: 'Delete workspace',
