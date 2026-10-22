@@ -277,18 +277,16 @@ export function createCalendarsStore(deps: CalendarsDeps) {
     async setPageDestination(workspace: string, pageId: string, calendarId: string | null): Promise<boolean> {
       const held = pageOf(workspace, pageId);
       const undo = held.patch(({ destination }) => {
-        const { calendarId: _was, ...rest } = destination;
+        const { calendarId: _was, removedName: _gone, ...rest } = destination;
         return {
           destination: calendarId === null ? { ...rest, status: 'default' } : { ...rest, calendarId, status: 'page' },
         };
       });
       try {
-        const landed = await deps.api.setPageDestination({
-          workspace,
-          pageId,
-          calendarId,
-          mutationId: deps.mintId(),
-        });
+        // Through `writing`, so a read started while it is in flight can't bring the old view (a gone pick's note) back.
+        const landed = await writing(workspace, () =>
+          deps.api.setPageDestination({ workspace, pageId, calendarId, mutationId: deps.mintId() }),
+        );
         held.patch(() => ({ destination: landed }));
         return true;
       } catch (error) {

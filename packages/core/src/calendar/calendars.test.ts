@@ -7,8 +7,11 @@
 // carry no names.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { PERMISSIONS } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { systemScope } from '../access/door.ts';
+import { mintScope } from '../access/mint.ts';
+import { NO_RULES, roleAccess } from '../access/policy.ts';
 import { listMeetings, readBookingsCalendar } from '../booking/list.ts';
 import { createBookingPage } from '../booking/pages.ts';
 import { newId } from '../engine/ids.ts';
@@ -484,6 +487,29 @@ describe('Bookings’ list of every meeting (the owner’s ask of 21 October 202
     });
     expect(await listMeetings(key, { when: 'upcoming' })).toEqual({ items: [] });
   });
+
+  it('refuses a member whose access lacks booking.manage, before reading anything', async () => {
+    const w = await world();
+    const conn = await withTeam(w);
+    w.fake.put('ada@acme.dev', event('main-b', day(3), [self('ada@acme.dev'), guest('cy@globex.com')]));
+    await w.sync(conn.id);
+    // Every role holds booking.manage today, so the member is minted with it taken away, as a role without it would be.
+    const full = roleAccess({ kind: 'member', memberId: w.ownerId, role: 'owner', teamIds: [] }, NO_RULES);
+    const without = mintScope({
+      db,
+      workspaceId: w.workspaceId,
+      actor: { type: 'member', id: w.ownerId },
+      access: { ...full, permissions: full.permissions.filter((each) => each !== 'booking.manage') },
+    });
+    for (const when of ['upcoming', 'past', 'cancelled'] as const) {
+      expect(await refusalOf(listMeetings(without, { when }))).toEqual({
+        code: 'FORBIDDEN',
+        message: PERMISSIONS['booking.manage'].message,
+      });
+    }
+    // The same member with it reads their meetings.
+    expect((await listMeetings(w.owner, { when: 'upcoming' })).items.length).toBeGreaterThan(0);
+  });
 });
 
 describe('free and busy per calendar (AC-994, AC-995)', () => {
@@ -592,9 +618,70 @@ describe('where bookings go (AC-996 to AC-998, AC-1004, AC-1005)', () => {
     const list = await listMemberCalendars(w.owner);
     expect(list.destinationId).toBe(main.id);
     expect(list.fellBack).toEqual({ removedName: 'Team' });
-    expect(await readPageDestination(w.owner, { pageId: page.id })).toEqual({ status: 'default', isOwner: true });
+    // The page falls back too, and its owner is told which calendar went.
+    expect(await readPageDestination(w.owner, { pageId: page.id })).toEqual({
+      status: 'unusable',
+      isOwner: true,
+      removedName: 'Team',
+    });
     expect(await dismissCalendarNotice(w.owner)).toEqual({ destinationId: main.id });
     expect((await listMemberCalendars(w.owner)).fellBack).toBeUndefined();
+  });
+
+  it('falls back from a page calendar that stopped or went, for free and busy and for new bookings', async () => {
+    const w = await world();
+    const first = await w.connect(w.ownerId, 'ada@acme.dev');
+    const work = await w.connect(w.ownerId, 'ada@work.dev');
+    await w.sync(first.id);
+    await w.sync(work.id);
+    const main = await w.calendar('ada@acme.dev');
+    const workMain = await w.calendar('ada@work.dev');
+    // The member's default stays on the first account; this page's bookings go on the work account.
+    expect((await listMemberCalendars(w.owner)).destinationId).toBe(main.id);
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'Intro', timeZone: 'UTC' });
+    await setPageDestination(w.owner, { pageId: page.id, calendarId: workMain.id });
+    const input = {
+      memberId: w.ownerId,
+      title: 'Intro',
+      start: day(5, 10),
+      end: day(5, 11),
+      attendees: [{ email: 'cy@globex.com' }],
+      timeZone: 'UTC',
+      video: false,
+      pageId: page.id,
+    };
+    expect((await w.events.createEvent(w.system, { ...input, requestId: newId() })).calendarId).toBe(workMain.id);
+    // The work account's grant is revoked: the page reads unusable but keeps its pick, new bookings go on the
+    // default, and free and busy still reads the member (the page's calendar never closes them).
+    await w.query(sql`update calendar_connections set status = 'revoked' where id = ${work.id}::uuid`);
+    expect(await readPageDestination(w.owner, { pageId: page.id })).toEqual({
+      calendarId: workMain.id,
+      status: 'unusable',
+      isOwner: true,
+    });
+    expect((await w.events.createEvent(w.system, { ...input, requestId: newId() })).calendarId).toBe(main.id);
+    const [busy] = await w.events.freeBusy(
+      w.system,
+      { memberIds: [w.ownerId], from: day(0, 0), to: day(7, 0) },
+      { fresh: true },
+    );
+    expect(busy?.status).toBe('read');
+    // The account is disconnected: its calendars go, the page still falls back, and its owner reads which one went.
+    await removeCalendarConnection(w.owner, { connectionId: work.id });
+    expect(await readPageDestination(w.owner, { pageId: page.id })).toEqual({
+      status: 'unusable',
+      isOwner: true,
+      removedName: 'ada@work.dev',
+    });
+    expect((await w.events.createEvent(w.system, { ...input, requestId: newId() })).calendarId).toBe(main.id);
+    // An admin changing the page learns it fell back, never the calendar's name (spec 0037).
+    const admin = rescope(w.owner, { actor: { type: 'member', id: w.bea }, role: 'admin' });
+    expect(await readPageDestination(admin, { pageId: page.id })).toEqual({ status: 'unusable', isOwner: false });
+    // Setting the page again clears the notice.
+    expect(await setPageDestination(w.owner, { pageId: page.id, calendarId: null })).toEqual({
+      status: 'default',
+      isOwner: true,
+    });
   });
 
   it('answers another member’s page by id only, and refuses a calendar that isn’t its owner’s', async () => {

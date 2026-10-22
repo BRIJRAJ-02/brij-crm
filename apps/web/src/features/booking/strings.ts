@@ -222,11 +222,17 @@ export const strings = {
   followsDefault: 'Follows your default in Settings',
   ownersDefault: 'Owner’s default',
   ownersPick: 'A calendar the owner picked',
-  /** The page's pick stopped taking bookings: the page uses the owner's default until it can again. */
-  destinationFellBack: (name: string | undefined) =>
-    name === undefined
-      ? 'Your pick can’t take bookings now, so this page uses your default.'
-      : `${name} can’t take bookings now, so this page uses your default.`,
+  /**
+   * The page's pick stopped taking bookings (or went): the page uses the owner's default, named when they have one,
+   * until the pick can again or they choose another.
+   */
+  destinationFellBack: (name: string | undefined, fallback: string | undefined) => {
+    const stopped =
+      name === undefined ? 'Your calendar stopped taking bookings' : `Your calendar ${name} stopped taking bookings`;
+    return fallback === undefined
+      ? `${stopped}, so new bookings on this page aren’t added to any calendar until you pick one.`
+      : `${stopped}, so this page uses your default calendar ${fallback}.`;
+  },
   destinationUnusableColleague: 'The owner’s pick can’t take bookings now, so they go on the owner’s default.',
   destinationFailed: 'Couldn’t load calendars. Reload the page to try again.',
   destinationOwnerOnly: 'Only the page’s owner sees their calendars.',

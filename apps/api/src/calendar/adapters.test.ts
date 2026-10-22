@@ -528,6 +528,17 @@ describe('Outlook’s own (AC-1007 to AC-1011)', () => {
     expect(await codeOf(provider.listChanges(TOKENS, 'cal-2', foreign, WINDOW))).toBe('CALENDAR_SYNC_TOKEN_GONE');
   });
 
+  it('asks who an access token is for once, keyed by its hash, and again for a new token', async () => {
+    const { provider, calls } = make(SUBJECTS[1]?.changes ?? []);
+    const asked = () => calls.filter((each) => /\/me\?/.test(each.url)).length;
+    await provider.listChanges(TOKENS, 'cal-2', undefined, WINDOW);
+    await provider.listChanges(TOKENS, 'cal-2', undefined, WINDOW);
+    expect(asked()).toBe(1);
+    // A refreshed token is another key: the cache never matches by anything but the whole token's hash.
+    await provider.listChanges({ ...TOKENS, accessToken: 'access-2' }, 'cal-2', undefined, WINDOW);
+    expect(asked()).toBe(2);
+  });
+
   it('refuses a grant without Calendars.ReadWrite, and blames our app, not the member, for a refused client', async () => {
     const declined = make([
       {

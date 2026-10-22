@@ -95,6 +95,12 @@ export const bookingPages = pgTable(
      * the calendar goes.
      */
     destinationCalendarId: uuid('destination_calendar_id'),
+    /**
+     * The name of the page's own calendar when it went (removed at the provider, or its account disconnected or
+     * revoked), kept by the trigger crm_booking_pages_destination_gone (0085) so the editor can say the page fell
+     * back to the owner's default. Cleared when the page's "Add bookings to" is set again. Shown to the owner only.
+     */
+    destinationRemovedName: text('destination_removed_name'),
     ...auditColumns(),
     deletedAt: timestamptz('deleted_at'),
   },
@@ -123,6 +129,7 @@ export const bookingPages = pgTable(
     check('booking_pages_paused_reason', sql`${t.pausedReason} is null or ${t.pausedReason} = 'host_removed'`),
     check('booking_pages_hours_mode', sql`${t.hoursMode} in ('mine', 'own')`),
     check('booking_pages_reschedule_host', sql`${t.rescheduleHost} in ('same', 'rotation')`),
+    check('booking_pages_destination_removed_name', sql`char_length(${t.destinationRemovedName}) <= 255`),
     check('booking_pages_title', sql`char_length(${t.title}) between 1 and 120`),
     check('booking_pages_description', sql`char_length(${t.description}) <= 2000`),
     check(
