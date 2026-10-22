@@ -483,7 +483,7 @@ export const CompactPending: Story = {
             title: 'Intro call (copy)',
             address: '/acme/intro-call-copy',
             chips: ['30 min'],
-            badge: 'Copying…',
+            badge: 'Copying',
             toggle: { label: 'Intro call (copy) is on', isSelected: true, onChange: () => undefined },
             actions: icons('Intro call (copy)', true),
             isPending: true,

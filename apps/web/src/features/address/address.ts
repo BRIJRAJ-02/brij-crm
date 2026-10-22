@@ -117,3 +117,15 @@ export function addressCandidates(name: string, email: string): readonly string[
   ];
   return [...new Set(words.filter((word) => SLUG_RULE.test(word)))];
 }
+
+/**
+ * The same page at the workspace's new address: `/w/<from>/…` with `to` in
+ * its place, the rest of the path, the query and the hash kept. Any other
+ * href comes back as it was.
+ */
+export function atAddress(href: string, from: string, to: string): string {
+  const prefix = `/w/${from}`;
+  if (!href.startsWith(prefix)) return href;
+  const rest = href.slice(prefix.length);
+  return rest === '' || /^[/?#]/.test(rest) ? `/w/${to}${rest}` : href;
+}

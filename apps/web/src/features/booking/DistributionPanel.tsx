@@ -1,10 +1,12 @@
 // Brief
 // Purpose: a rotation's Distribution tab (spec 0037, AC-1329, AC-1330): who got how many meetings in its window against their fair share by weight, how, and the last 12 weeks.
 // Main task: see whether the share is fair, and (admins) adjust a member's count with a note, or undo an adjustment.
-// Leaves out: changing weights and caps (Edit rotation), reassigning a booking (Bookings), and a drawn chart (the weeks show as a table).
+// Leaves out: changing weights and caps (Edit rotation), reassigning a booking (Bookings), and chart axes (the weeks are a
+// small bar chart per member on one shared scale, with a table of the same numbers a switch away).
 import { isDataError, type DataLayer, type RotationDistribution, type RotationView } from '@crm/data';
 import {
   Badge,
+  BarStrip,
   Button,
   Callout,
   EmptyState,
@@ -13,6 +15,7 @@ import {
   RecordChip,
   RelativeTime,
   SectionBar,
+  SegmentedControl,
   Select,
   SettingsStack,
   Skeleton,
@@ -77,6 +80,7 @@ export function DistributionPanel({ data, slug, rotation, onNotice }: Distributi
   const [version, setVersion] = useState(0);
   const [isAdjusting, setAdjusting] = useState(false);
   const [undoing, setUndoing] = useState<string | undefined>(undefined);
+  const [weeksAs, setWeeksAs] = useState<'chart' | 'table'>('chart');
   useEffect(() => {
     let isCurrent = true;
     data.rotations.distribution(slug, rotation.id).then(
@@ -107,6 +111,39 @@ export function DistributionPanel({ data, slug, rotation, onNotice }: Distributi
     { id: 'member', label: strings.columns.member, isRowHeader: true },
     ...value.weekStarts.map((start) => ({ id: start, label: weekLabel(start), align: 'end' as const })),
   ];
+  const firstWeek = value.weekStarts[0];
+  const lastWeek = value.weekStarts.at(-1);
+  const chartColumns: readonly TableColumn[] = [
+    { id: 'member', label: strings.columns.member, isRowHeader: true },
+    {
+      id: 'weeks',
+      label:
+        firstWeek === undefined || lastWeek === undefined
+          ? strings.distribution.weeksTitle
+          : strings.distribution.weeksRange(weekLabel(firstWeek), weekLabel(lastWeek)),
+    },
+    { id: 'total', label: strings.distribution.total, align: 'end' },
+  ];
+  // One scale for every member's strip, so a quieter member's bars stay short beside a busier one's.
+  const weekMax = Math.max(0, ...value.rows.flatMap((row) => row.weeks));
+  const weekCell = (row: Row, column: string) => {
+    if (column === 'member') return chip(row);
+    if (column === 'weeks') {
+      return (
+        <BarStrip
+          label={strings.distribution.memberWeeks(row.name)}
+          max={weekMax}
+          bars={value.weekStarts.map((start, index) => {
+            const count = row.weeks[index] ?? 0;
+            return { id: start, label: strings.distribution.weekBar(weekLabel(start), count), value: count };
+          })}
+        />
+      );
+    }
+    if (column === 'total') return numberText(row.weeks.reduce((sum, count) => sum + count, 0));
+    const index = value.weekStarts.indexOf(column);
+    return String(row.weeks[index] ?? 0);
+  };
   const chip = (row: { readonly memberId: string; readonly name: string }) => (
     <RecordChip display={{ type: 'member', id: row.memberId, name: row.name }} isFlat />
   );
@@ -196,17 +233,29 @@ export function DistributionPanel({ data, slug, rotation, onNotice }: Distributi
         renderCell={shareCell}
         isScrollable
       />
-      <SectionBar title={strings.distribution.weeksTitle} />
+      <SectionBar
+        title={strings.distribution.weeksTitle}
+        end={
+          <SegmentedControl
+            label={strings.distribution.weeksShow}
+            size="compact"
+            value={weeksAs}
+            onChange={(next) => {
+              setWeeksAs(next === 'table' ? 'table' : 'chart');
+            }}
+            segments={[
+              { value: 'chart', label: strings.distribution.weeksChart, icon: 'chart-bar' },
+              { value: 'table', label: strings.distribution.weeksTable, icon: 'table' },
+            ]}
+          />
+        }
+      />
       <Table
         label={strings.distribution.weeksLabel(rotation.name)}
-        columns={weekColumns}
+        columns={weeksAs === 'chart' ? chartColumns : weekColumns}
         rows={value.rows}
         getRowId={(row) => row.memberId}
-        renderCell={(row, column) => {
-          if (column === 'member') return chip(row);
-          const index = value.weekStarts.indexOf(column);
-          return String(row.weeks[index] ?? 0);
-        }}
+        renderCell={weekCell}
         isScrollable
       />
       {value.adjustments.length > 0 && (

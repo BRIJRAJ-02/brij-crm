@@ -2,7 +2,7 @@ import { isDataError } from '@crm/data';
 import { useCalendar } from '@crm/data/react';
 import { EmptyState, Link, PageColumn, TopBar, LoadingNow } from '@crm/ui';
 import { createFileRoute, useParams, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { browserZone } from '../features/booking/zone.ts';
+import { memberZone } from '../features/booking/zone.ts';
 import { linksHref } from '../features/booking/links.ts';
 import { CalendarNote, readDismissed } from '../features/booking/CalendarNote.tsx';
 import { PageEditor } from '../features/booking/PageEditor.tsx';
@@ -31,7 +31,7 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
           .ready()
           .catch(() => undefined),
         context.data.schedules
-          .view(params.slug, undefined, browserZone())
+          .view(params.slug, undefined, memberZone(context.data, params.slug))
           .ready()
           .catch(() => undefined),
       ]);
@@ -40,7 +40,7 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
       const mayRead = isMine || mine.permissions.includes('booking.admin');
       if (mayRead && !isMine) {
         await context.data.schedules
-          .view(params.slug, ownerMember, browserZone())
+          .view(params.slug, ownerMember, memberZone(context.data, params.slug))
           .ready()
           .catch(() => undefined);
       }
@@ -143,7 +143,7 @@ function EditorRoute() {
       slug={slug}
       page={page}
       locale={navigator.languages[0] ?? 'en-US'}
-      {...(mayRead ? { schedules: data.schedules.view(slug, ownerMember, browserZone()) } : {})}
+      {...(mayRead ? { schedules: data.schedules.view(slug, ownerMember, memberZone(data, slug)) } : {})}
       {...(ownerMember === undefined ? {} : { ownerMember })}
       {...(people === undefined ? {} : { people })}
       {...(fields === undefined ? {} : { recordFields: fields })}

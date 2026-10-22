@@ -1,5 +1,6 @@
 // Brief
-// Purpose: the tooltip that shows a Button's whole label when it is cut short (`tooltipWhenCut`).
+// Purpose: the tooltip that shows a Button's whole label when it is cut short (`tooltipWhenCut`), or hidden
+// by `isLabelCollapsible` in a narrow bar.
 // Main task: open only when the label really is cut, around the very same button element.
 // Leaves out: the button itself (Button draws it); this file loads on demand, so Tooltip stays out of the first load.
 import { useState, type ReactElement, type RefObject } from 'react';
@@ -22,7 +23,9 @@ export function CutButton({ label, labelClass, target, children }: CutButtonProp
   const [isOpen, setOpen] = useState(false);
   const isCut = () => {
     const span = target.current?.querySelector<HTMLElement>(`.${labelClass}`);
-    return span !== null && span !== undefined && span.scrollWidth > span.clientWidth;
+    if (span === null || span === undefined) return false;
+    // A collapsible label hidden in a narrow bar (the icon alone) counts as cut: the tooltip names the icon.
+    return span.getClientRects().length === 0 || span.scrollWidth > span.clientWidth;
   };
   return (
     <Tooltip

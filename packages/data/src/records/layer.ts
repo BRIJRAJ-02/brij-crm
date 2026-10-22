@@ -559,8 +559,8 @@ export interface RecordsLayerOptions {
   readonly onReplaced?: (notice: ReplacedNotice) => void;
   /** The object's primary attribute and its attributes' kinds (spec 0005's `attributes.list` cache until milestone 3). */
   readonly describe?: (workspace: string, objectId: string) => Promise<ObjectShape>;
-  /** The browser's time zone, which relative date filters resolve in (AC-51). */
-  readonly timeZone?: () => string;
+  /** The member's time zone in a workspace (their Preferences, else the browser's), which relative date filters resolve in (AC-51). */
+  readonly timeZone?: (workspace: string) => string;
   /**
    * An object's attribute definitions, with their rules inline, from the
    * definitions store (spec 0013, AC-257): at once when they are held, else
@@ -1189,6 +1189,8 @@ export function createRecordsLayer({
     let mode: WindowMode = 'position';
     // The window's clock (spec 0006, AC-51): one `now` for every block and count, refreshed at each settle.
     let clock = now();
+    // The zone is frozen with the clock, so every block and count of one window agree on "today".
+    let zone = timeZone(workspace);
     // A refused cursor restarts the chain once; a read that lands allows it again.
     let hasRestarted = false;
     const isOpen = () => views.get(key)?.view === view;
@@ -1273,7 +1275,7 @@ export function createRecordsLayer({
     };
 
     /** The clock and filter every block and count of this window carries. */
-    const clockInput = () => ({ now: new Date(clock).toISOString(), timeZone: timeZone() });
+    const clockInput = () => ({ now: new Date(clock).toISOString(), timeZone: zone });
 
     const windows = createWindows({
       mode: () => mode,
@@ -1444,6 +1446,7 @@ export function createRecordsLayer({
       dirtySince = undefined;
       isSettling = true;
       clock = now();
+      zone = timeZone(workspace);
       const controller = new AbortController();
       settleController = controller;
       // Rows the member edited here and can see now: each keeps the screen row it is at.
@@ -2061,14 +2064,14 @@ export function createRecordsLayer({
       const [only] = live;
       if (live.length === 1 && only !== undefined) {
         const answer = await delivered(() =>
-          api.setValues({ workspace, mutationId, timeZone: timeZone(), ...itemOf(only) }),
+          api.setValues({ workspace, mutationId, timeZone: timeZone(workspace), ...itemOf(only) }),
         );
         const { echoes, written, ...row } = answer;
         mutations.answered(mutationId, echoes);
         return [...outcomes, landedAs(only, row, written)];
       }
       const answer = await delivered(() =>
-        api.setValuesBatch({ workspace, mutationId, timeZone: timeZone(), items: live.map(itemOf) }),
+        api.setValuesBatch({ workspace, mutationId, timeZone: timeZone(workspace), items: live.map(itemOf) }),
       );
       mutations.answered(mutationId, answer.echoes);
       const results = new Map(answer.results.map((result) => [result.recordId, result]));
@@ -2268,7 +2271,7 @@ export function createRecordsLayer({
           written: new Set(cells.map((cell) => cell.attributeId)),
           isCreate: false,
           now: at,
-          timeZone: timeZone(),
+          timeZone: timeZone(workspace),
           pattern: check.pattern,
         });
         if (failures.length > 0) refusedByRules.set(recordId, failures);
@@ -2852,7 +2855,7 @@ export function createRecordsLayer({
           op: request.op,
           ...(request.value === undefined ? {} : { value: request.value }),
         },
-        timeZone: timeZone(),
+        timeZone: timeZone(workspace),
         mutationId,
       }),
     );
@@ -3385,7 +3388,7 @@ export function createRecordsLayer({
         },
         beforeRead: () => beforeRead(workspace),
         now,
-        timeZone,
+        timeZone: () => timeZone(workspace),
       });
       const entry: { readonly board: BoardStore<RecordsView>; unused?: ReturnType<typeof setTimeout> } = { board };
       const letGo = () => {
@@ -3462,7 +3465,7 @@ export function createRecordsLayer({
           written: new Set(Object.keys(values)),
           isCreate: true,
           now: new Date(now()).toISOString(),
-          timeZone: timeZone(),
+          timeZone: timeZone(workspace),
           pattern: check.pattern,
         });
         if (failures.length > 0) {
@@ -3504,7 +3507,9 @@ export function createRecordsLayer({
           echoes,
           written: _written,
           ...row
-        } = await delivered(() => api.create({ workspace, objectId, id, values, timeZone: timeZone(), mutationId }));
+        } = await delivered(() =>
+          api.create({ workspace, objectId, id, values, timeZone: timeZone(workspace), mutationId }),
+        );
         mutations.answered(mutationId, echoes);
         layer.confirm(row);
         settle(true);

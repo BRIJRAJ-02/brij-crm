@@ -26,7 +26,6 @@ export const strings = {
   failedText: 'Try again in a moment.',
   /** How many accounts may be connected, when the limit is reached. */
   limitReached: (max: string) => `You’ve connected ${max} calendars, the most you can. Disconnect one to add another.`,
-  defaultBadge: 'Default',
   /** The one word of help on the page: how the default works across accounts. */
   defaultHelpLabel: 'How your default calendar works',
   defaultHelp:
@@ -34,34 +33,53 @@ export const strings = {
   defaultHelpExample:
     'With Google and Outlook connected, bookings go on the one default. Every calendar with Check for conflicts on, in either account, keeps its busy times from being booked.',
   calendarsGroup: 'Calendars',
+  /** Where new bookings go (the member's destination), one Select across every account. */
+  addBookingsTo: 'Add bookings to',
+  addBookingsHelp: 'New bookings from your booking pages go on this calendar.',
+  chooseCalendar: 'Choose a calendar',
+  noWritable: 'None of your calendars can take bookings. Connect one you can add events to.',
+  calendarsLoadingShort: 'Loading calendars',
+  calendarsFailedAll: 'Couldn’t load your calendars. Try again below.',
+  logsBadge: 'Logs to CRM',
+  /** Each account's calendars, a compact table: the column headers once, above the rows. */
+  calendarsIn: (account: string) => `Calendars in ${account}`,
+  otherCalendarsIn: (account: string) => `Other calendars in ${account}`,
+  calendarColumn: 'Calendar',
+  conflictsColumn: 'Check for conflicts',
+  weekColumn: 'Show on my week',
+  optionsColumn: 'Options',
+  checkFor: (name: string) => `Check ${name} for conflicts`,
+  showOn: (name: string) => `Show ${name} on my week`,
+  calendarOptions: (name: string) => `${name} options`,
+  logMeetings: 'Log meetings to CRM',
+  otherCalendars: 'Other calendars in this account',
+  searchCalendars: 'Search calendars',
+  noCalendarMatches: 'No calendars match',
+  /** A calendar that couldn't be read, said once under the account's list. */
+  warningLine: (name: string, message: string) => `${name}: ${message}`,
   calendarsLoading: 'Loading this account’s calendars',
   calendarsFailed: 'Couldn’t load this account’s calendars.',
   tryAgain: 'Try again',
   noCalendars: 'No calendars found in this account yet.',
   /** A calendar's row. */
   colour: (name: string) => `${name} colour`,
-  readOnly: 'Read only, so it can’t take bookings',
-  checkConflicts: 'Check for conflicts',
-  showInWeek: 'Show on my week',
-  sync: 'Sync meetings',
-  /** What screen readers hear after each switch's name, so the rows' switches tell apart. */
-  switchOn: (name: string) => `on ${name}`,
   /** The quiet toasts a switch raises once saved, each with Undo. */
   saved: {
     checkConflicts: (name: string, on: boolean) =>
       on ? `${name} is checked for conflicts` : `${name} is no longer checked for conflicts`,
     showInWeek: (name: string, on: boolean) => (on ? `${name} shows on your week` : `${name} is hidden from your week`),
-    sync: (name: string, on: boolean) => (on ? `${name}’s meetings sync` : `${name}’s meetings stop syncing`),
+    sync: (name: string, on: boolean) =>
+      on ? `${name}’s meetings are logged to the CRM` : `${name}’s meetings are no longer logged to the CRM`,
   },
   colourSaved: (name: string) => `${name}’s colour changed`,
   defaultSaved: (name: string) => `New bookings now go to ${name}`,
   sharingSaved: (account: string) => `What teammates see of ${account}’s meetings changed`,
   undo: 'Undo',
   /** New bookings moved off a calendar the provider removed (AC-1005). */
-  fellBackTitle: 'Your default calendar changed',
+  fellBackTitle: 'Where bookings go changed',
   fellBackText: (now: string, was: string) => `New bookings now go to ${now}. ${was} stopped taking them.`,
   fellBackNone: (was: string) =>
-    `${was} stopped taking bookings and no other calendar can take them. Make one of your calendars the default.`,
+    `${was} stopped taking bookings and no other calendar can take them. Pick a calendar under Add bookings to.`,
   /** A connection's "···" menu. */
   rowActions: (account: string) => `Actions for ${account}`,
   status: {
@@ -83,7 +101,6 @@ export const strings = {
   },
   sharingInfo:
     'Controls what other members of this workspace see of meetings from this calendar account, on their calendar and in Bookings. You always see everything.',
-  makeDefault: 'Make default',
   reconnect: 'Reconnect',
   /** Local development only: Google's notices can't reach a laptop, so sync waits for the 15 minute poll. */
   syncNow: 'Sync now',

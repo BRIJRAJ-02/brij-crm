@@ -75,6 +75,7 @@ const MERGED: Readonly<Record<Kind, readonly IdField[]>> = {
   jobs: ['jobIds'],
   comments: ['recordIds', 'threadIds'],
   notifications: ['memberIds'],
+  calendars: ['memberIds'],
 };
 
 /** The id lists a coarse event empties (past `CHANGE_CAP`, or a coarse row merged in); kinds with none never go coarse. */
@@ -93,6 +94,7 @@ const CAPPED: Readonly<Record<Kind, readonly IdField[]>> = {
   jobs: ['jobIds'],
   comments: ['recordIds', 'threadIds'],
   notifications: [],
+  calendars: [],
 };
 
 interface Group {

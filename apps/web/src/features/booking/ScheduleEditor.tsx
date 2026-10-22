@@ -3,12 +3,11 @@
 // Main task: change the hours (add, remove or copy a day's ranges), the zone or the days off; each change saves on its own, with Undo.
 // Leaves out: which schedule is open and what to do with it (the switcher handed in), and which schedule a page uses (each page picks in its own editor).
 import type { BookingAvailability, DataLayer, ScheduleView } from '@crm/data';
-import { Badge, Card, HoursEditor, Link, PageColumn, SectionBar, Select, Skeleton } from '@crm/ui';
+import { Badge, Card, HoursEditor, Link, PageColumn, SectionBar, Select, Skeleton, useFormatSettings } from '@crm/ui';
 import { useMemo, type ReactNode } from 'react';
 import { DaysOff } from './DaysOff.tsx';
 import { weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
 import { pageEditorHref } from './links.ts';
-import { browserZone } from './zone.ts';
 import { useScheduleAutosave, type ScheduleSaveNotice } from './scheduleDraft.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
@@ -171,11 +170,11 @@ function UsedBy({ slug, schedule }: { readonly slug: string; readonly schedule: 
 
 /** The editor while the schedules load: its row, its week and its side cards in their places. */
 export function ScheduleEditorPending({ switcher }: { readonly switcher: ReactNode }) {
+  // The member's zone (Preferences), as the schedule will show once it loads.
+  const { timeZone } = useFormatSettings();
   return (
     <Layout
-      bar={
-        <SectionBar start={switcher} end={<ZoneSelect value={browserZone()} onChange={() => undefined} isDisabled />} />
-      }
+      bar={<SectionBar start={switcher} end={<ZoneSelect value={timeZone} onChange={() => undefined} isDisabled />} />}
       week={
         <Card title={strings.weeklyHours} isBusy>
           <HoursEditor

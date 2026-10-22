@@ -49,6 +49,18 @@
     }
   }
 
+  /* Against an edge that clips (a settings table's gutter), the hit area starts on the handle and grows toward
+     the end instead, so it keeps its 24px. */
+  .root[data-reach='end']::after {
+    inset-inline: 0 calc(-1 * var(--space-8));
+  }
+
+  @media (pointer: coarse) {
+    .root[data-reach='end']::after {
+      inset-inline: 0 calc(-1 * var(--space-12));
+    }
+  }
+
   .root[data-lifted] {
     color: var(--accent);
     cursor: grabbing;

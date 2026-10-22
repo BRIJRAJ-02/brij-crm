@@ -15,7 +15,6 @@ import {
   type StagedRow,
   type StageResult,
 } from '@crm/contracts';
-import { parseAttributeValue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -41,6 +40,7 @@ import {
   undoRefusal,
   importable,
 } from './shared.ts';
+import { parseAttributeInput } from '../engine/parse-value.ts';
 
 const { importRows, imports, objects } = schema;
 
@@ -207,7 +207,7 @@ export async function createImport(
 /** A row's normalised keys on the match attribute: none when it has no value there, or one that doesn't parse. */
 export function matchKeysOf(attribute: AttributeDef | undefined, values: Readonly<Record<string, unknown>>): string[] {
   if (attribute === undefined || !Object.hasOwn(values, attribute.id)) return [];
-  const parsed = parseAttributeValue(attribute.type, values[attribute.id], { allowMultiple: attribute.isMulti });
+  const parsed = parseAttributeInput(attribute, values[attribute.id]);
   if (!parsed.ok || parsed.value === null) return [];
   const keys = encodeValue(attribute.type, parsed.value).flatMap((item) => {
     const key = uniqueKeyOf(attribute.type, item);

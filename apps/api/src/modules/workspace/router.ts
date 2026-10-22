@@ -68,6 +68,8 @@ export const workspaceRouter = member.workspace.router({
         {
           ...(input.name === undefined ? {} : { name: input.name }),
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          // A new address moves the directory inside the same transaction (migration 0082), so nothing follows it.
+          ...(input.slug === undefined ? {} : { slug: input.slug }),
         },
         hooks,
         sourceOf(context),

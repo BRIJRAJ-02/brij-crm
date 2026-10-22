@@ -169,7 +169,11 @@ interface FailureRow extends Record<string, unknown> {
  * of those, its member is told by email (`calendar_disconnected`), queued in
  * the same transaction, once per failing spell and reason.
  */
-async function recordFailure(scope: EngineScope, connectionId: string, code: CalendarErrorCode): Promise<string> {
+async function recordFailure(
+  scope: EngineScope,
+  connectionId: string,
+  code: CalendarErrorCode,
+): Promise<{ readonly since: string; readonly movedFor?: string }> {
   const rows = await inWorkspace(scope, async (tx) => {
     const stored = await tx.execute<FailureRow>(sql`
       with before as (
@@ -212,7 +216,27 @@ async function recordFailure(scope: EngineScope, connectionId: string, code: Cal
     if (row?.status === 'expired' || row?.status === 'failed') await moveDestinationOff(tx, connectionId);
     return stored;
   });
-  return rows.rows[0]?.failing_since ?? new Date().toISOString();
+  const [row] = rows.rows;
+  return {
+    since: row?.failing_since ?? new Date().toISOString(),
+    ...(row !== undefined && row.was !== row.status ? { movedFor: row.member_id } : {}),
+  };
+}
+
+/**
+ * Tells the member's own tabs that their calendar connections changed (the `calendars` live kind): a write with
+ * nothing in it but the member, so the outbox hook in `hooks` stores the one row. Only when something they see
+ * moved (a status, a listing), never on each quiet poll, so a team's channel isn't a stream of stubs.
+ */
+async function tellCalendars(scope: EngineScope, hooks: readonly AfterWrite[], memberId: string): Promise<void> {
+  await runWrite(
+    scope,
+    (context) => {
+      context.record({ calendars: [memberId] });
+      return Promise.resolve();
+    },
+    hooks,
+  );
 }
 
 /** The wait before trying again: the time failures have lasted, at least a minute, at most the poll interval. */
@@ -406,7 +430,8 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   const window = syncWindow(now);
   const connection = { id: row.id, memberId: row.member_id };
   const failed = async (code: CalendarErrorCode): Promise<CalendarSyncOutcome> => {
-    const since = await recordFailure(scope, row.id, code);
+    const { since, movedFor } = await recordFailure(scope, row.id, code);
+    if (movedFor !== undefined) await tellCalendars(scope, deps.hooks, movedFor);
     if (code === 'CALENDAR_AUTH_REVOKED') return { kind: 'stopped', reason: 'expired' };
     return { kind: 'retry', code, nextInMs: retryDelay(since, now) };
   };
@@ -425,7 +450,7 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
         scope,
         async (context) => {
           const result = await storeCalendars(context, connection, listed);
-          context.record({ meetings: result.meetings });
+          context.record({ meetings: result.meetings, calendars: [connection.memberId] });
           return result;
         },
         deps.hooks,
@@ -519,14 +544,24 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   // Every pulled calendar failing is the connection's failure: it backs off, and fails after 6 hours (AC-620).
   if (pulled.length > 0 && failures === pulled.length && lastCode !== undefined) return failed(lastCode);
   const stored = await inWorkspace(scope, (tx) =>
-    tx.execute(sql`
-      update calendar_connections set
+    tx.execute<{ was: string }>(sql`
+      with before as (
+        select id, status from calendar_connections
+        where id = ${row.id}::uuid and status in ('syncing', 'connected', 'failed')
+        for update
+      )
+      update calendar_connections c set
         status = 'connected', last_synced_at = now(), last_error = null, failing_since = null,
         updated_at = now(), updated_by_type = 'calendar', updated_by_id = null, updated_by_member_id = null
-      where id = ${row.id}::uuid and status in ('syncing', 'connected', 'failed')
+      from before
+      where c.id = before.id
+      returning before.status::text as was
     `),
   );
-  if (stored.rowCount === 0) return { kind: 'stopped', reason: 'gone' };
+  const [synced] = stored.rows;
+  if (synced === undefined) return { kind: 'stopped', reason: 'gone' };
+  // Connected again (a first sync, or healed): the member's other tabs show it.
+  if (synced.was !== 'connected') await tellCalendars(scope, deps.hooks, row.member_id);
   return {
     kind: 'synced',
     full,

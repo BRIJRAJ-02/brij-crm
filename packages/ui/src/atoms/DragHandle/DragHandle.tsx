@@ -30,6 +30,12 @@ export interface DragHandleProps {
   readonly drag?: DragGrip;
   /** Outside the drag wrapper: the list hands the handle its keys and pointer (see `DragHandleManual`). */
   readonly manual?: DragHandleManual;
+  /**
+   * Where the 24px hit area grows. `around` (the default) grows it evenly; `end` keeps its start on the
+   * handle's and grows it toward the inline end, for a handle against an edge that clips (a settings table's
+   * gutter handle, whose frame cut an even hit area to 21px).
+   */
+  readonly reach?: 'around' | 'end';
 }
 
 /**
@@ -39,7 +45,8 @@ export interface DragHandleProps {
  * wrapper (dnd-kit); with `manual`, a list outside it drives it. A row that
  * can't move draws no grip at all.
  */
-export function DragHandle({ label, drag, manual }: DragHandleProps) {
+export function DragHandle({ label, drag, manual, reach = 'around' }: DragHandleProps) {
+  const reachAttr = reach === 'end' ? 'end' : undefined;
   if (drag !== undefined) {
     const { bind, id, isDisabled, isLifted, describedBy, onKeyDown, onPointerDown, onClick } = drag;
     if (isDisabled) return null;
@@ -52,6 +59,7 @@ export function DragHandle({ label, drag, manual }: DragHandleProps) {
         aria-pressed={isLifted}
         {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
         data-lifted={isLifted || undefined}
+        data-reach={reachAttr}
         data-drag-grip={id}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
@@ -70,6 +78,7 @@ export function DragHandle({ label, drag, manual }: DragHandleProps) {
       aria-pressed={manual.isLifted}
       {...(manual.describedBy === undefined ? {} : { 'aria-describedby': manual.describedBy })}
       data-lifted={manual.isLifted || undefined}
+      data-reach={reachAttr}
       onKeyDown={manual.onKeyDown}
       onPointerDown={manual.onPointerDown}
       onBlur={manual.onBlur}

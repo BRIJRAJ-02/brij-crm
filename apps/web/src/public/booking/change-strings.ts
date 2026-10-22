@@ -6,7 +6,7 @@ export const changeStrings = {
   pickNewTime: 'Pick a new time',
   timesIn: (zone: string) => `Times in ${zone}`,
   moveTo: (time: string, day: string) => `Move to ${time} on ${day}`,
-  moving: 'Moving…',
+  moving: 'Moving',
   finding: (host: string) => `Finding ${host}’s free times…`,
   noTimes: (host: string) =>
     `${host} has no free times in the next three weeks. Cancelling and booking again later may be easier.`,

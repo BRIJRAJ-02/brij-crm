@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { expect, fn, screen, waitFor } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
+import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -175,5 +177,75 @@ export const Scrollable: Story = {
     const box = table.parentElement;
     await expect(box).not.toBeNull();
     await expect(canvas.getByRole('columnheader', { name: 'Seats' })).toBeInTheDocument();
+  },
+};
+
+const CALENDARS = [
+  { id: 'c1', name: 'ada@acme.dev' },
+  { id: 'c2', name: 'Team offsites, launches and the long running quarterly planning calendar' },
+  { id: 'c3', name: 'Holidays in the United Kingdom' },
+];
+
+/**
+ * Control columns (`size`, `showsOnHover`): the name fills and truncates, the two checkbox columns fit their
+ * labels, and each row's options button shows on hover or focus (Settings › Calendars).
+ */
+export const ControlColumns: Story = {
+  render: () => (
+    <Stage width="phone">
+      <Table<(typeof CALENDARS)[number]>
+        label="Calendars"
+        columns={[
+          { id: 'name', label: 'Calendar', isRowHeader: true, size: 'fill' },
+          { id: 'conflicts', label: 'Conflicts', size: 'fit' },
+          { id: 'week', label: 'Show on my week', size: 'fit' },
+          { id: 'more', label: 'Options', isLabelHidden: true, size: 'fit', align: 'end', showsOnHover: true },
+        ]}
+        rows={CALENDARS}
+        getRowId={(row) => row.id}
+        renderCell={(row, column) => {
+          if (column === 'name') return <TruncatedText>{row.name}</TruncatedText>;
+          if (column === 'more') return <Button variant="ghost" icon="ellipsis" label={`${row.name} options`} />;
+          return <Checkbox label={`${column === 'week' ? 'Show' : 'Check'} ${row.name}`} isLabelHidden />;
+        }}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const grid = canvas.getByRole('grid', { name: 'Calendars' });
+    // The long name truncates inside the slot rather than widening the table past it.
+    await expect(grid.getBoundingClientRect().width).toBeLessThanOrEqual(
+      (grid.parentElement?.parentElement?.getBoundingClientRect().width ?? 0) + 1,
+    );
+  },
+};
+
+/** `isHeaderHidden`: a table continuing the one above draws no header, its columns still sized by their labels. */
+export const HeaderHidden: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="phone">
+      <Table<(typeof CALENDARS)[number]>
+        label="Other calendars"
+        isHeaderHidden
+        columns={[
+          { id: 'name', label: 'Calendar', isRowHeader: true, size: 'fill' },
+          { id: 'conflicts', label: 'Conflicts', size: 'fit' },
+        ]}
+        rows={CALENDARS}
+        getRowId={(row) => row.id}
+        renderCell={(row, column) =>
+          column === 'name' ? (
+            <TruncatedText>{row.name}</TruncatedText>
+          ) : (
+            <Checkbox label={`Check ${row.name}`} isLabelHidden />
+          )
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Holidays in the United Kingdom')).toBeVisible();
+    await expect(canvas.queryByText('Conflicts')).not.toBeVisible();
   },
 };

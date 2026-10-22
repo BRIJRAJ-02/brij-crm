@@ -5,6 +5,7 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 import { PageEdge } from '../../lib/page-edge.ts';
+import { useScrollEdges } from '../../lib/scroll-edges.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { strings } from './strings.ts';
 import styles from './Table.module.css';
@@ -26,6 +27,17 @@ export interface TableColumn {
   readonly isInline?: boolean;
   /** Help beside the label, an InfoTip, where the header alone isn't clear (what each role may do). */
   readonly info?: ReactNode;
+  /**
+   * `fit` shrinks the column to its widest content (its label, a checkbox), so columns of controls keep one width
+   * from table to table; `fill` takes the room the rest leave and lets its text truncate (TruncatedText) rather
+   * than widen the table. Left out, the browser shares the width as usual.
+   */
+  readonly size?: 'fit' | 'fill';
+  /**
+   * The cell's content shows only while its row is hovered or holds focus (or its menu is open), so a list of
+   * calendars isn't a column of identical buttons; always shown on touch, where nothing hovers.
+   */
+  readonly showsOnHover?: boolean;
 }
 
 /** Rows that can be moved, and each one's name for its handle; or neither. */
@@ -77,6 +89,12 @@ interface TableBase<T> {
    * `isHeaderSticky`, whose header sticks to the page.
    */
   readonly isScrollable?: boolean;
+  /**
+   * Draws no header row, while the columns keep the widths their labels give them: a second table that continues
+   * one above it (a folded "Other calendars" under the shown ones), so the headers appear once. Each cell's
+   * control names itself in full ("Check Team for conflicts"), since its column header is no longer read.
+   */
+  readonly isHeaderHidden?: boolean;
 }
 
 /** The handle column's id, kept apart from any column the caller names. */
@@ -108,8 +126,13 @@ export function Table<T>({
   getSelectLabel,
   isHeaderSticky = false,
   isScrollable = false,
+  isHeaderHidden = false,
 }: TableProps<T>) {
   const isSelectable = selected !== undefined && onSelectedChange !== undefined;
+  // A scrollable frame fades the end that hides columns, so it shows there is more to scroll to.
+  const scrolls = isScrollable && !isHeaderSticky;
+  const { edges, ref: frameRef } = useScrollEdges(scrolls);
+  const fade = edges.start ? (edges.end ? 'both' : 'start') : edges.end ? 'end' : undefined;
   const ids = rows.map(getRowId);
   const showSkeleton = useDelayedLoading(isLoading);
   // Directly in a settings page's body the rows run out into the page's gutter, the first column's text on the
@@ -141,7 +164,7 @@ export function Table<T>({
           }
         : {})}
     >
-      <TableHeader className={styles.header} columns={shown}>
+      <TableHeader className={styles.header} columns={shown} data-hidden={isHeaderHidden || undefined}>
         {(column) => (
           <Column
             id={column.id}
@@ -151,6 +174,7 @@ export function Table<T>({
             textValue={column.label}
             {...(column.info === undefined ? {} : { 'aria-label': column.label })}
             data-align={column.align ?? 'start'}
+            data-size={column.size}
             data-handle={column.id === HANDLE || column.id === SELECT || undefined}
             data-sticky={isHeaderSticky || undefined}
           >
@@ -209,14 +233,17 @@ export function Table<T>({
                 <Cell
                   className={styles.cell}
                   data-align={column.align ?? 'start'}
+                  data-size={column.size}
                   data-gutter-handle={(handleInGutter && column.id === firstColumnId) || undefined}
                 >
                   {handleInGutter && column.id === firstColumnId && (
                     <span className={styles.gutter}>
-                      <SortableRowGrip id={item.id} label={strings.move(getRowLabel(item.row))} />
+                      <SortableRowGrip id={item.id} label={strings.move(getRowLabel(item.row))} reach="end" />
                     </span>
                   )}
-                  {column.isInline === true ? (
+                  {column.showsOnHover === true ? (
+                    <span className={styles.reveal}>{renderCell(item.row, column.id)}</span>
+                  ) : column.isInline === true ? (
                     <span className={styles.inline}>{renderCell(item.row, column.id)}</span>
                   ) : (
                     renderCell(item.row, column.id)
@@ -231,9 +258,11 @@ export function Table<T>({
   );
   return (
     <div
+      ref={frameRef}
       className={styles.frame}
       data-sticky={isHeaderSticky || undefined}
-      data-scrollable={(isScrollable && !isHeaderSticky) || undefined}
+      data-scrollable={scrolls || undefined}
+      data-fade={fade}
       data-edge={atPageEdge ? 'page' : undefined}
     >
       {onReorder === undefined ? (

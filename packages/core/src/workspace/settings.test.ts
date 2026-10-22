@@ -5,7 +5,7 @@
 import { sql } from 'drizzle-orm';
 import { PERMISSIONS, type Role } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { createDatabase, type Database } from '@crm/db';
+import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { createTestUser, testQuery } from '@crm/db/testing';
 import { enterAsActor, enterDeletedWorkspace, NO_RULE_SOURCE } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
@@ -19,13 +19,16 @@ import { deleteWorkspace, getWorkspaceSettings, restoreWorkspace, updateWorkspac
 const { appUrl, identityUrl, ownerUrl, workerUrl } = inject('testDatabase');
 let db: Database;
 let worker: Database;
+let identity: IdentityStore;
 beforeAll(() => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-settings-tests' });
   worker = createDatabase({ url: workerUrl, applicationName: 'crm-settings-tests-worker' });
+  identity = createIdentityStore({ url: identityUrl, applicationName: 'crm-settings-tests-identity' });
 });
 afterAll(async () => {
   await db.close();
   await worker.close();
+  await identity.close();
 });
 
 const tag = () => newId().slice(-12);
@@ -170,6 +173,96 @@ describe('Workspace › General (AC-822)', () => {
         actor_member_id: t.ids[1],
       },
     ]);
+  });
+});
+
+describe('Workspace › General: the web address', () => {
+  it('moves it for owners and admins, with one audit row, and the old address still finds the workspace', async () => {
+    const t = await team(['member', 'admin']);
+    const moved = `moved-${tag()}`;
+    expect(await refusalOf(updateWorkspace(t.as(t.ids[0] ?? '', 'member'), { slug: moved }))).toEqual({
+      code: 'FORBIDDEN',
+      message: PERMISSIONS['workspace.manage'].message,
+    });
+    const updated = await updateWorkspace(t.as(t.ids[1] ?? '', 'admin'), { slug: moved });
+    expect(updated.settings).toMatchObject({ id: t.workspaceId, slug: moved, name: 'Acme' });
+    expect(updated.renamed).toBe(false);
+    expect(await getWorkspaceSettings(t.as(t.owner, 'owner'))).toMatchObject({ slug: moved });
+    expect(await auditOf(t.workspaceId)).toEqual([
+      {
+        action: 'workspace.updated',
+        target_id: t.workspaceId,
+        before: { slug: t.slug },
+        after: { slug: moved },
+        actor_member_id: t.ids[1],
+      },
+    ]);
+    // Both addresses find it, each answering the one it has now; neither is free for anyone else.
+    const wanted = { id: t.workspaceId, slug: moved, name: 'Acme' };
+    expect(await identity.findWorkspace(moved)).toEqual(wanted);
+    expect(await identity.findWorkspace(t.slug)).toEqual(wanted);
+    // The same address again writes nothing.
+    expect((await updateWorkspace(t.as(t.owner, 'owner'), { slug: moved })).settings.slug).toBe(moved);
+    expect(await auditOf(t.workspaceId)).toHaveLength(1);
+  });
+
+  it('refuses an address that breaks the rule before anything is written', async () => {
+    const t = await team();
+    for (const slug of ['ab', 'Upper-Case', 'two--dashes', '-edge', 'a'.repeat(41)]) {
+      expect(await refusalOf(updateWorkspace(t.as(t.owner, 'owner'), { slug }))).toMatchObject({
+        code: 'CONFIG_INVALID',
+        field: 'slug',
+      });
+    }
+    expect(await getWorkspaceSettings(t.as(t.owner, 'owner'))).toMatchObject({ slug: t.slug });
+    expect(await auditOf(t.workspaceId)).toEqual([]);
+  });
+
+  it('refuses SLUG_TAKEN for another workspace’s address, now or before, and lets it take back its own', async () => {
+    const a = await team();
+    const b = await team();
+    const later = `later-${tag()}`;
+    await updateWorkspace(b.as(b.owner, 'owner'), { slug: later });
+    // B's current address, and the one it left: both stay B's.
+    for (const slug of [later, b.slug]) {
+      expect(await refusalOf(updateWorkspace(a.as(a.owner, 'owner'), { slug }))).toEqual({
+        code: 'SLUG_TAKEN',
+        message: 'That address is taken. Try another.',
+        field: 'slug',
+      });
+    }
+    expect(await getWorkspaceSettings(a.as(a.owner, 'owner'))).toMatchObject({ slug: a.slug });
+    expect(await identity.findWorkspace(b.slug)).toMatchObject({ id: b.workspaceId, slug: later });
+    // A new workspace can't take B's old address either.
+    const user = await createTestUser(identityUrl, { email: `new-${tag()}@example.com`, name: 'New' });
+    expect(
+      await refusalOf(
+        createUserWorkspace(db, {
+          id: newId(),
+          name: 'Copycat',
+          slug: b.slug,
+          firstMember: { userId: user, name: 'New', email: 'new@example.com' },
+        }),
+      ),
+    ).toMatchObject({ code: 'SLUG_TAKEN' });
+    // B may go back to the address it left.
+    const back = await updateWorkspace(b.as(b.owner, 'owner'), { slug: b.slug });
+    expect(back.settings.slug).toBe(b.slug);
+    expect(await identity.findWorkspace(later)).toMatchObject({ id: b.workspaceId, slug: b.slug });
+  });
+});
+
+describe('Workspace › General: how many addresses a workspace keeps', () => {
+  it('refuses a 21st address LIMIT_REACHED, and still lets it go back to one it held', async () => {
+    const t = await team();
+    const scope = t.as(t.owner, 'owner');
+    const held = Array.from({ length: 19 }, (_, index) => `held-${String(index)}-${tag()}`);
+    for (const slug of held) await updateWorkspace(scope, { slug });
+    expect(await refusalOf(updateWorkspace(scope, { slug: `one-more-${tag()}` }))).toMatchObject({
+      code: 'LIMIT_REACHED',
+      field: 'slug',
+    });
+    expect((await updateWorkspace(scope, { slug: t.slug })).settings.slug).toBe(t.slug);
   });
 });
 

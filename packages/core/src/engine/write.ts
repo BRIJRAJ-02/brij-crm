@@ -190,6 +190,8 @@ export interface Change {
   readonly comments: readonly CommentChange[];
   /** Members whose notifications or notification settings the write changed (spec 0038): one `notifications` row. */
   readonly notifications: readonly string[];
+  /** Members whose own calendar connections or calendars the write changed: one `calendars` row names them. */
+  readonly calendars: readonly string[];
 }
 
 /**
@@ -339,6 +341,7 @@ const LIST_KEYS = [
   'nav',
   'comments',
   'notifications',
+  'calendars',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -461,6 +464,7 @@ export async function runWrite<T>(
           nav: [] as string[],
           comments: [] as CommentChange[],
           notifications: [] as string[],
+          calendars: [] as string[],
         };
         const context: WriteContext = {
           tx,
@@ -496,6 +500,7 @@ export async function runWrite<T>(
             append(collected.nav, part.nav);
             append(collected.comments, part.comments);
             append(collected.notifications, part.notifications);
+            append(collected.calendars, part.calendars);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -546,6 +551,7 @@ export async function runWrite<T>(
           nav: [...new Set(collected.nav)],
           comments: [...collected.comments],
           notifications: [...new Set(collected.notifications)],
+          calendars: [...new Set(collected.calendars)],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

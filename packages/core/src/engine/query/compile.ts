@@ -16,6 +16,7 @@ import {
   FilterGroup,
   SortRules,
   toCanonicalDecimal,
+  urlContainsNeedles,
   type FilterCondition,
   type RelativeRange,
   type SortRule,
@@ -416,7 +417,9 @@ function compileThrough(context: CompileContext, level: Level, condition: Filter
     }
     const objectId = next.objectId;
     // On the last hop, a search's far ids go on the link alone; the join to the far record already holds them.
-    const farIds = rest.length === 0 ? searchHit(context, positive) : undefined;
+    // An @ handle's hits are a superset that needs its recheck, so it walks to the far value instead.
+    const farIds =
+      rest.length === 0 && !isHandleSearch(next, valueOf(positive)) ? searchHit(context, positive) : undefined;
     return hopExists(
       context,
       at,
@@ -521,6 +524,14 @@ function valuePredicate(context: CompileContext, attribute: AttributeDef, condit
   const { type } = attribute;
   const op = condition.operator;
   const json = (key: string) => sql`lower(v.json_value->>${key})`;
+  if (op === 'contains' && type === 'url') {
+    // A handle typed with @ ("@ada") also finds the profile link it is stored as (https://x.com/ada).
+    const needles = urlContainsNeedles(operandText(valueOf(condition)));
+    return sql`(${sql.join(
+      needles.map((needle) => sql`lower(left(v.text_value, 2048)) like ${`%${likeLiteral(needle)}%`}`),
+      sql` or `,
+    )})`;
+  }
   if (op === 'contains' && CONTAINS.has(type)) {
     return sql`lower(left(v.text_value, 2048)) like ${containsPattern(valueOf(condition))}`;
   }
@@ -619,9 +630,16 @@ function searchTermOf(context: CompileContext, condition: FilterCondition): Sear
     (positive.operator === 'name_contains' && attribute.type === 'file');
   const value = valueOf(positive);
   if (!searchable || typeof value !== 'string') return undefined;
-  const text = value.trim().toLowerCase();
+  // A url contains with an @ handle searches for the handle alone, which both its needles hold ("ada" in "@ada"
+  // and "/ada"): a superset the value predicate then checks on the ids found (`isHandleSearch`).
+  const text = isHandleSearch(attribute, value) ? value.trim().toLowerCase().slice(1) : value.trim().toLowerCase();
   if (text === '' || value.length > MAX_OPERAND || !TRIGRAM_RUN.test(text)) return undefined;
   return { attributeId: attribute.id, text };
+}
+
+/** A url contains typed as an @ handle: its search term is a superset, so its hits are checked again. */
+function isHandleSearch(attribute: AttributeDef, value: unknown): boolean {
+  return attribute.type === 'url' && typeof value === 'string' && urlContainsNeedles(value).length > 1;
 }
 
 /** The ids the search function found for a contains, when it found them all. */
@@ -733,7 +751,13 @@ function compilePositive(context: CompileContext, level: Level, condition: Filte
     // On a list's entries, a record attribute's ids go on the entry's own record column, which its index covers.
     const owner = ownerOf(level, attribute);
     const column = level.row !== level.record && attribute.listId === null ? sql`${raw(level.row)}.record_id` : owner;
-    return sql`${column} = any(${uuidList(found)})`;
+    const among = sql`${column} = any(${uuidList(found)})`;
+    // An @ handle's hits are a superset (the handle alone): each is checked against the needles too.
+    if (condition.operator === 'contains' && isHandleSearch(attribute, valueOf(condition))) {
+      const recheck = valuePredicate(context, attribute, condition);
+      if (recheck !== undefined) return sql`(${among} and ${valueExists(context, level, attribute, recheck)})`;
+    }
+    return among;
   }
   const onKey = keyPredicate(attribute, condition);
   if (onKey !== undefined) return keyExists(context, level, attribute, onKey);

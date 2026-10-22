@@ -48,7 +48,7 @@ export interface LinkRow {
    * ("Default"), read with the name. States that come and go (`badge`) stay at the row's end.
    */
   readonly titleBadge?: string;
-  /** A grey badge before the switch, only when it isn't taking people ("Off", "Not published", "Copying…"). */
+  /** A grey badge before the switch, only when it isn't taking people ("Off", "Not published", "Copying"). */
   readonly badge?: string;
   /** Off (not taking people): the title reads in the secondary colour, as the switch says. */
   readonly isOff?: boolean;

@@ -130,6 +130,8 @@ const FOLLOW_SPREAD_MS = 600;
 /** One view of an object: the bars, the Toolbar with its draft, and the table running the view. */
 export function ViewScreen(props: ViewScreenProps) {
   const { slug, object, attributes, members, records, opened, param, writeParam } = props;
+  // The object's key, so a url field (here and in the filter's value editor) checks a company's handle as its page.
+  const objectKey = object.standardKey ?? object.apiSlug;
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const body = useSavedView(props.view);
@@ -370,13 +372,13 @@ export function ViewScreen(props: ViewScreenProps) {
         ? []
         : [
             {
-              attribute: toFieldAttribute(definition),
+              attribute: toFieldAttribute(definition, undefined, objectKey),
               isShown: !column.isHidden,
               ...(definition.id === object.primaryAttributeId ? { isLocked: true } : {}),
             },
           ];
     });
-  }, [layout, attributes, object.primaryAttributeId]);
+  }, [layout, attributes, object.primaryAttributeId, objectKey]);
 
   // Create view, and Save as new view (the Save menu, the clash dialog, a locked view's only Save).
   const [createMode, setCreateMode] = useState<'create' | 'save-as' | undefined>(undefined);
@@ -543,11 +545,18 @@ export function ViewScreen(props: ViewScreenProps) {
       (each) => !each.isArchived && !each.isPrimary && each.id !== boardPlan.groupBy.id && !shown.has(each.id),
     );
     return [
-      ...primary.map((each) => ({ attribute: toFieldAttribute(each), isShown: true, isLocked: true })),
-      ...boardPlan.cardFields.map((each) => ({ attribute: toFieldAttribute(each), isShown: true })),
-      ...rest.map((each) => ({ attribute: toFieldAttribute(each), isShown: false })),
+      ...primary.map((each) => ({
+        attribute: toFieldAttribute(each, undefined, objectKey),
+        isShown: true,
+        isLocked: true,
+      })),
+      ...boardPlan.cardFields.map((each) => ({
+        attribute: toFieldAttribute(each, undefined, objectKey),
+        isShown: true,
+      })),
+      ...rest.map((each) => ({ attribute: toFieldAttribute(each, undefined, objectKey), isShown: false })),
     ];
-  }, [boardPlan, attributes]);
+  }, [boardPlan, attributes, objectKey]);
   const changeCardFields = (next: readonly ViewField[]) => {
     if (boardPlan === undefined) return;
     const ids = next.flatMap((field) => (field.isShown && field.isLocked !== true ? [field.attribute.id] : []));
@@ -632,6 +641,7 @@ export function ViewScreen(props: ViewScreenProps) {
         query={draft.query}
         filter={running?.filter}
         attributes={attributes}
+        objectKey={objectKey}
         sortable={sortable}
         members={memberDisplays}
         me={me}

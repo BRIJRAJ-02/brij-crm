@@ -24,6 +24,7 @@ const def = (type: AttributeDef['type'], isMulti = false): AttributeDef => {
     objectId: OBJECT,
     listId: null,
     apiSlug: `a${String(counter)}`,
+    objectKey: null,
     title: type,
     type,
     isMulti,

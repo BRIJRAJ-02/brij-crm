@@ -248,3 +248,29 @@ describe('milestone 2: the workspace setting and Add as person', () => {
     expect(statuses.map((status) => needsReconnect({ status }))).toEqual([false, false, true, true, true]);
   });
 });
+
+describe('the calendars live kind', () => {
+  it('reads the held list again when the member’s connections changed in another tab', async () => {
+    const { store, reads } = setup([listed([connection(A)]), listed([connection(A), connection(B)])]);
+    const release = store.view(WS).retain();
+    await flush();
+    expect(reads()).toBe(1);
+    store.changed(WS);
+    await flush();
+    expect(reads()).toBe(2);
+    const state = store.view(WS).getSnapshot();
+    expect(state.status === 'ready' ? state.connections.map((each) => each.id) : []).toEqual([A, B]);
+    release();
+  });
+
+  it('reads nothing while no screen holds the list', async () => {
+    const { store, reads } = setup([listed([connection(A)])]);
+    const release = store.view(WS).retain();
+    await flush();
+    release();
+    store.changed(WS);
+    store.changed('elsewhere');
+    await flush();
+    expect(reads()).toBe(1);
+  });
+});

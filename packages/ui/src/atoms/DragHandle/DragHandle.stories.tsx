@@ -8,18 +8,18 @@ import { DragHandle } from './DragHandle.tsx';
 const NAMES = ['Name', 'Stage', 'Owner'];
 
 /** One row: its grip (none for the locked first row) and its name. */
-function SampleRow({ id }: { readonly id: string }) {
+function SampleRow({ id, reach }: { readonly id: string; readonly reach?: 'around' | 'end' }) {
   const { bind, grip } = useSortableItem(id, { isDisabled: id === 'Name' });
   return (
     <li ref={bind}>
-      <DragHandle label={`Move ${id}`} drag={grip} />
+      <DragHandle label={`Move ${id}`} drag={grip} {...(reach === undefined ? {} : { reach })} />
       {id}
     </li>
   );
 }
 
 /** Three rows that sort by their handles; the first can't move. */
-function SampleRows() {
+function SampleRows({ reach }: { readonly reach?: 'around' | 'end' }) {
   const [names, setNames] = useState<readonly string[]>(NAMES);
   return (
     <Stage width="narrow">
@@ -33,7 +33,7 @@ function SampleRows() {
       >
         <ul aria-label="Columns">
           {names.map((id) => (
-            <SampleRow key={id} id={id} />
+            <SampleRow key={id} id={id} {...(reach === undefined ? {} : { reach })} />
           ))}
         </ul>
       </SortableList>
@@ -89,5 +89,19 @@ export const PutBack: Story = {
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(canvas.getAllByRole('listitem').map((row) => row.textContent)).toEqual(NAMES));
+  },
+};
+
+/** `reach="end"`: the 24px hit area starts on the handle and grows toward the end, for a handle by an edge that clips. */
+export const ReachEnd: Story = {
+  args: { reach: 'end' },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    const handle = canvas.getByRole('button', { name: 'Move Stage' });
+    const hit = getComputedStyle(handle, '::after');
+    await expect(hit.insetInlineStart).toBe('0px');
+    await expect(
+      handle.getBoundingClientRect().width + Number.parseFloat(hit.insetInlineEnd) * -1,
+    ).toBeGreaterThanOrEqual(24);
   },
 };

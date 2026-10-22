@@ -31,8 +31,6 @@ import type {
   RotationMemberInput,
   RotationSettings,
   RotationView,
-  RoutingReport,
-  RoutingReportInput,
   RoutingRules,
   TeamHosts,
   TaskMine,
@@ -111,6 +109,12 @@ import { stageChunks } from './imports/stage.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
 import { createHomeStore, type HomeHeld, type HomeMetricsState, type TeamTodayState } from './home/store.ts';
+import {
+  createRoutingReports,
+  type RoutingReportDays,
+  type RoutingReportHeld,
+  type RoutingReportSurface,
+} from './routing/reports.ts';
 import {
   createAccountSecurityStore,
   isFresh as isSessionFresh,
@@ -378,6 +382,12 @@ export type {
 } from './activity/feed.ts';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 export type { HomeHeld, HomeMetricsState, TeamTodayState } from './home/store.ts';
+export type {
+  RoutingReportDays,
+  RoutingReportHeld,
+  RoutingReportState,
+  RoutingReportSurface,
+} from './routing/reports.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -1720,6 +1730,13 @@ export function createDataLayer({
     },
   });
 
+  // Routing reports (spec 0043, AC-1612): held per workspace, surface and window, read again on return and after a
+  // no show mark lands.
+  const routingReports = createRoutingReports({
+    report: (workspace, surface, days) =>
+      beforeRead(workspace).then(() => call((options) => api.routing.report({ workspace, surface, days }, options))),
+  });
+
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
   // a `schedules` event.
   const schedules = lazySchedules(() =>
@@ -1772,6 +1789,15 @@ export function createDataLayer({
     mintId,
     notify,
   });
+  /**
+   * The member's time zone in a workspace: their Preferences once read (the workspace's pages read them first),
+   * else the browser's. Relative dates in filters, rules, bulk targets and exports resolve in it.
+   */
+  const zoneOf = (workspace: string): string => {
+    const held = preferences.of(workspace).getSnapshot();
+    const chosen = held.status === 'ready' ? held.preferences.timeZone : undefined;
+    return chosen ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  };
 
   // Account security (spec 0033): two factor's state and this session's freshness, one held value.
   const accountSecurity = createAccountSecurityStore({
@@ -1828,6 +1854,20 @@ export function createDataLayer({
     mintId,
     notify,
     onShownChange: (workspace) => reloadBookings(workspace),
+  });
+
+  // A member's own calendar connections or calendars changed (the `calendars` live kind): only the person's own tabs
+  // read their connections and calendars again; every other member's tab drops the event.
+  router.on('calendars', (workspace, event) => {
+    void namesMe(workspace, event.memberIds).then((named) => {
+      if (!named) return;
+      calendar.changed(workspace);
+      calendars.changed(workspace);
+    });
+  });
+  router.onResync((workspace) => {
+    calendar.changed(workspace);
+    calendars.changed(workspace);
   });
 
   // Captures › Links and Forms: one held list per workspace each, patched by every write below (the list's menu, the
@@ -2647,6 +2687,8 @@ export function createDataLayer({
         },
         describe: describeObject,
         definitionsOf,
+        // Relative dates ("today", "this week") and rules resolve in the member's Preferences time zone.
+        timeZone: zoneOf,
         // A cell's new option (spec 0012, AC-238): its label shows while it is made, on every try. Landed, the
         // object's attributes are read again (its own definitions echo is skipped) and the pages reload.
         cellOptions: {
@@ -3045,11 +3087,12 @@ export function createDataLayer({
     },
     routing: {
       /**
-       * A form's or a team page's per rule report (spec 0043, AC-1612): read when its card opens and when the window
-       * changes. Counts, not records, so nothing here is held between reads.
+       * A form's or a team page's per rule report (spec 0043, AC-1612), held while its card shows it
+       * (`useRoutingReport`): read when first held, again when the person comes back to the page, and again after
+       * this tab marks a booking no show.
        */
-      report: (workspace: string, surface: RoutingReportInput['surface'], days: 30 | 90): Promise<RoutingReport> =>
-        call((options) => api.routing.report({ workspace, surface, days }, options)),
+      report: (workspace: string, surface: RoutingReportSurface, days: RoutingReportDays): RoutingReportHeld =>
+        routingReports.view(workspace, surface, days),
     },
     home: {
       /**
@@ -3125,6 +3168,8 @@ export function createDataLayer({
           await call((options) =>
             api.bookings.markNoShow({ workspace, bookingId, noShow, mutationId: mintId() }, options),
           );
+          // The routing report counts no shows per rule, and no change event names a booking yet.
+          routingReports.reloadWorkspace(workspace);
         } catch (error) {
           restore();
           throw error;
@@ -3567,15 +3612,26 @@ export function createDataLayer({
     workspace: {
       get: (workspace: string): Promise<WorkspaceSettings> =>
         call((options) => api.workspace.get({ workspace }, options)),
-      /** Renames it or changes its time zone. Refusals: `FORBIDDEN`, `INPUT_INVALID`. */
+      /**
+       * Renames it, changes its time zone, or moves it to a new address (the
+       * answer's `slug`). Refusals: `FORBIDDEN`, `INPUT_INVALID`, `SLUG_TAKEN`
+       * (field `slug`). A new address drops what was cached under the old one
+       * and reads the person's workspaces again, so the switcher and every
+       * page take the new one; the old address still finds the workspace.
+       */
       async update(
         workspace: string,
-        change: { readonly name?: string; readonly timeZone?: string },
+        change: { readonly name?: string; readonly timeZone?: string; readonly slug?: string },
       ): Promise<WorkspaceSettings> {
         const updated = await call((options) =>
           api.workspace.update({ workspace, ...change, mutationId: mintId() }, options),
         );
-        if (change.name !== undefined) me = undefined;
+        if (updated.slug !== workspace) {
+          objects.delete(workspace);
+          access.delete(workspace);
+          members.delete(workspace);
+        }
+        if (change.name !== undefined || updated.slug !== workspace) me = undefined;
         return updated;
       },
       /** Deletes it, softly, for 30 days. Refusals: `FORBIDDEN`, `CONFIRM_MISMATCH`. */
@@ -4072,7 +4128,7 @@ export function createDataLayer({
                     action: input.action,
                     target: input.target,
                     ...(input.edit === undefined ? {} : { edit: input.edit }),
-                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    timeZone: zoneOf(workspace),
                   },
                   options,
                 ),
@@ -4906,7 +4962,7 @@ export function createDataLayer({
                 workspace,
                 ...input,
                 attributeIds: [...input.attributeIds],
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                timeZone: zoneOf(workspace),
                 mutationId,
               },
               options,

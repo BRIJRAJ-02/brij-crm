@@ -2,7 +2,13 @@
 // compiler turns into SQL, worked out over plain objects. Tests run both on
 // the same sample and expect the same ids in the same order, so the compiler
 // can't quietly drift from what each operator means.
-import type { FilterCondition, FilterGroup, RelativeRange, SortRule } from '@crm/contracts/values';
+import {
+  urlContainsNeedles,
+  type FilterCondition,
+  type FilterGroup,
+  type RelativeRange,
+  type SortRule,
+} from '@crm/contracts/values';
 import type { Actor } from '../scope.ts';
 import type { AttributeDef } from '../values.ts';
 import { splitNegation, type WeekStart } from './compile.ts';
@@ -204,8 +210,15 @@ function itemMatches(
       if (attribute.type === 'phone') return text === operandText(condition);
       return text !== null && key(text) === key(operandText(condition));
     case 'contains':
-    case 'name_contains':
-      return text !== null && text.slice(0, 2048).toLowerCase().includes(operandText(condition).toLowerCase());
+    case 'name_contains': {
+      if (text === null) return false;
+      const haystack = text.slice(0, 2048).toLowerCase();
+      // On a url, a handle typed with @ ("@ada") also finds the profile link it is stored as (https://x.com/ada).
+      if (op === 'contains' && attribute.type === 'url') {
+        return urlContainsNeedles(operandText(condition)).some((needle) => haystack.includes(needle));
+      }
+      return haystack.includes(operandText(condition).toLowerCase());
+    }
     case 'eq':
     case 'gt':
     case 'gte':

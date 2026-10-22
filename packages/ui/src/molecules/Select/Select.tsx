@@ -3,7 +3,6 @@ import {
   Autocomplete,
   Button as AriaButton,
   FieldError,
-  Label,
   Header,
   ListBox,
   ListBoxItem,
@@ -21,6 +20,7 @@ import { Tag } from '../../atoms/Tag/Tag.tsx';
 import type { Hue } from '../../hue.ts';
 import { Field } from '../Field/Field.tsx';
 import { InPopover, Popover, type PopoverPlacement } from '../Popover/Popover.tsx';
+import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import styles from './Select.module.css';
 import { strings } from './strings.ts';
 
@@ -254,15 +254,7 @@ export function Select({
   if (isReadOnly) {
     return (
       <span className={styles.root} data-size={size} data-readonly="">
-        {!isLabelHidden &&
-          (info === undefined ? (
-            <span className={styles.label}>{label}</span>
-          ) : (
-            <span className={styles.labelRow}>
-              <span className={styles.label}>{label}</span>
-              <span className={styles.info}>{info}</span>
-            </span>
-          ))}
+        {!isLabelHidden && <FieldLabel label={label} info={info} as="text" />}
         <span className={styles.trigger} role="group" aria-label={label}>
           <span className={styles.value}>
             {chosen === undefined ? (
@@ -304,10 +296,14 @@ export function Select({
     <ListBoxItem
       key={item.id}
       id={item.id}
+      // The item itself, so the closed field draws the chosen one's face, never the option's text run together
+      // ("Your default (ada@acme.dev)Follows your default"): a grouped list's static items carry no value otherwise.
+      value={item}
       textValue={item.label}
       className={styles.option}
       data-clear={item.id === CLEAR || item.id === CREATE || undefined}
       data-apart={item.isApart === true || undefined}
+      data-description={item.description === undefined ? undefined : optionDescription}
     >
       {({ isSelected }) => (
         <>
@@ -409,36 +405,15 @@ export function Select({
         onChange?.(next === CLEAR || next === null ? null : String(next));
       }}
     >
-      {!isLabelHidden &&
-        (info === undefined ? (
-          <Label className={styles.label}>
-            {label}
-            {labelAside !== undefined && (
-              <>
-                {' '}
-                <span className={styles.aside}>{labelAside}</span>
-              </>
-            )}
-          </Label>
-        ) : (
-          <span className={styles.labelRow}>
-            <Label className={styles.label}>
-              {label}
-              {labelAside !== undefined && (
-                <>
-                  {' '}
-                  <span className={styles.aside}>{labelAside}</span>
-                </>
-              )}
-            </Label>
-            <span className={styles.info}>{info}</span>
-          </span>
-        ))}
+      {!isLabelHidden && <FieldLabel label={label} aside={labelAside} info={info} isDisabled={isDisabled} />}
       <AriaButton className={styles.trigger} {...(triggerRef === undefined ? {} : { ref: triggerRef })}>
         <SelectValue<SelectItem> className={styles.value}>
           {({ selectedItems, isPlaceholder, defaultChildren }) => {
-            const selected = selectedItems[0];
-            if (isPlaceholder || selected === undefined || selected === null)
+            // A static (grouped) option without its value still names the chosen item by the field's own value:
+            // React Aria types the entry as always there, but a static item's is null.
+            const first = selectedItems[0];
+            const selected = first ?? chosen;
+            if (isPlaceholder || selected === undefined)
               return <span className={styles.placeholder}>{defaultChildren}</span>;
             return variant === 'prefix' && selected.short !== undefined ? (
               <>

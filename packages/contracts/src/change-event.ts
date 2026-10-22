@@ -244,6 +244,19 @@ export const NavEvent = z.object({
   mutationId,
 });
 
+/**
+ * A member's own calendar connections or calendars changed (spec 0024, spec 0036): connected, refreshed, synced,
+ * expired, a calendar turned on or off, or where new bookings go. Names the members, and nothing else; only the
+ * audience a named member is in receives it (any other gets the stub), and a client acts only on its own member id,
+ * reading its calendar connections and calendars again, so another tab of theirs follows live.
+ */
+export const CalendarsEvent = z.object({
+  ...place,
+  kind: z.literal('calendars'),
+  memberIds: ids,
+  mutationId,
+});
+
 /** Background jobs changed (spec 0008): refetch them, or when `coarse` the unfinished jobs you hold. */
 export const JobsEvent = z.object({
   ...place,
@@ -280,6 +293,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   AccessEvent,
   JobsEvent,
   NavEvent,
+  CalendarsEvent,
   CommentsEvent,
   NotificationsEvent,
   RestrictedEvent,
@@ -303,6 +317,7 @@ export const CHANGE_EVENT_KINDS = [
   'nav',
   'comments',
   'notifications',
+  'calendars',
   'restricted',
 ] as const satisfies readonly ChangeEvent['kind'][];
 

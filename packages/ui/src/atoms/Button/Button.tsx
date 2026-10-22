@@ -187,7 +187,10 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
  * pressed. One `primary` per surface.
  */
 export function Button(props: ButtonProps) {
-  if (props.tooltipWhenCut === true && props.children !== undefined) return <CutButton {...props} />;
+  // A label that collapses to the icon in a narrow bar names the icon in the same tooltip a cut label gets.
+  if ((props.tooltipWhenCut === true || props.isLabelCollapsible === true) && props.children !== undefined) {
+    return <CutButton {...props} />;
+  }
   return <PlainButton {...props} />;
 }
 

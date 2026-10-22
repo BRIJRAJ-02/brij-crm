@@ -31,6 +31,31 @@
     min-inline-size: 100%;
   }
 
+  /* Where a scrollable table hides columns past an end, that end fades over space-24, so the frame shows it
+     scrolls (only the mask's alpha counts, so the surface token stands in for opaque). */
+  /* Keyboard scrolling stops a focused cell clear of the faded band. */
+  .frame[data-fade] {
+    scroll-padding-inline: var(--space-24);
+  }
+
+  .frame[data-fade='end'] {
+    mask-image: linear-gradient(to right, var(--surface) calc(100% - var(--space-24)), transparent);
+  }
+
+  .frame[data-fade='start'] {
+    mask-image: linear-gradient(to left, var(--surface) calc(100% - var(--space-24)), transparent);
+  }
+
+  .frame[data-fade='both'] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      var(--surface) var(--space-24),
+      var(--surface) calc(100% - var(--space-24)),
+      transparent
+    );
+  }
+
   .column {
     block-size: var(--size-table-header);
     padding-inline: var(--space-8);
@@ -125,6 +150,11 @@
     inline-size: var(--space-16);
   }
 
+  /* A hidden header: collapsed, so its labels still size the columns and a table continuing one above lines up. */
+  .header[data-hidden] {
+    visibility: collapse;
+  }
+
   /* A sticky header stays in view while the page scrolls under it, on the page's surface. */
   .column[data-sticky] {
     position: sticky;
@@ -139,6 +169,34 @@
     gap: var(--space-6);
     align-items: center;
     min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  /* A fitted column takes its widest content and no more, so control columns line up from table to table; a
+     filling one takes the rest, and its text truncates instead of widening the table. */
+  .column[data-size='fit'],
+  .cell[data-size='fit'] {
+    inline-size: 1%;
+    white-space: nowrap;
+  }
+
+  .column[data-size='fill'],
+  .cell[data-size='fill'] {
+    inline-size: 100%;
+    max-inline-size: 0;
+  }
+
+  .reveal {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* A column shown on hover: its content waits for the row's hover or focus (or an open menu) where a pointer
+     can hover; on touch it is always there. */
+  @media (hover: hover) and (pointer: fine) {
+    .row:not([data-hovered], [data-focus-visible], :focus-within, :has([aria-expanded='true'])) .reveal {
+      opacity: 0;
+    }
   }
 
   /* The row being moved: lifted above the rest, which slide out of its way. */

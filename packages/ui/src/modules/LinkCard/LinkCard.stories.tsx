@@ -182,7 +182,7 @@ export const ReadOnly: Story = {
 
 /** A copy on its way: quieter still, not a link yet, and its controls wait. */
 export const Pending: Story = {
-  args: { title: 'Intro call (copy)', badge: 'Copying…', isPending: true },
+  args: { title: 'Intro call (copy)', badge: 'Copying', isPending: true },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('link')).not.toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Copy link' })).toBeDisabled();

@@ -26,6 +26,7 @@ import {
   user,
   userPrefs,
   verification,
+  workspaceAddresses,
   workspaceDirectory,
   workspaceMembership,
 } from '../schema/auth.ts';
@@ -166,7 +167,11 @@ export interface SessionFacts {
 
 /** Global identity: the directory, users, and Better Auth's storage. Reads no tenant data. */
 export interface IdentityStore {
-  /** The workspace at this address, or undefined. Lookup only: it grants nothing. */
+  /**
+   * The workspace at this address, or the one that held it before it changed
+   * address (its `slug` is then the current one, so the caller can send
+   * people on), or undefined. Lookup only: it grants nothing.
+   */
   findWorkspace(slug: string): Promise<DirectoryWorkspace | undefined>;
   /** The workspaces this user was added to, oldest first (by when the directory row was made); deleted ones left out. */
   workspacesOf(userId: string): Promise<readonly DirectoryWorkspace[]>;
@@ -376,7 +381,15 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .from(workspaceDirectory)
         .where(eq(workspaceDirectory.slug, slug))
         .limit(1);
-      return row;
+      if (row !== undefined) return row;
+      // An address it held before (migration 0083): never another workspace's, by the claim's key.
+      const [held] = await db
+        .select(directoryColumns)
+        .from(workspaceAddresses)
+        .innerJoin(workspaceDirectory, eq(workspaceDirectory.workspaceId, workspaceAddresses.workspaceId))
+        .where(eq(workspaceAddresses.slug, slug))
+        .limit(1);
+      return held;
     },
 
     async workspacesOf(userId) {

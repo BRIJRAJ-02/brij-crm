@@ -47,6 +47,12 @@ export interface ViewToolbarProps {
   readonly filter: FilterGroup | undefined;
   /** The object's live attributes. */
   readonly attributes: readonly AttributeDefinition[];
+  /**
+   * The object's key (its standard key, else its API name), so a filter's
+   * value editor checks a handle as the record editor does: a company's
+   * LinkedIn handle is its company page.
+   */
+  readonly objectKey?: string;
   /** The ones a view may sort by. */
   readonly sortable: readonly AttributeDefinition[];
   readonly members: readonly ActorDisplay[];
@@ -74,6 +80,7 @@ export function ViewToolbar({
   query,
   filter,
   attributes,
+  objectKey,
   sortable,
   members,
   me,
@@ -89,10 +96,16 @@ export function ViewToolbar({
   focusRequest,
 }: ViewToolbarProps) {
   const { data } = useRouteContext({ from: '__root__' });
-  const fields = useMemo(() => attributes.map((attribute) => toFieldAttribute(attribute)), [attributes]);
+  const fields = useMemo(
+    () => attributes.map((attribute) => toFieldAttribute(attribute, undefined, objectKey)),
+    [attributes, objectKey],
+  );
   // The builder offers what it can edit: a record reference waits for record search (spec 0014); its chips still show.
   const builderFields = useMemo(() => fields.filter((field) => field.type !== 'record_reference'), [fields]);
-  const sortFields = useMemo(() => sortable.map((attribute) => toFieldAttribute(attribute)), [sortable]);
+  const sortFields = useMemo(
+    () => sortable.map((attribute) => toFieldAttribute(attribute, undefined, objectKey)),
+    [sortable, objectKey],
+  );
   const titleOf = (id: string) => attributes.find((attribute) => attribute.id === id)?.title ?? id;
   const filterAnchor = useRef<HTMLButtonElement>(null);
   // The sort chip, or the dashed Sort button when the view has no sorts: the sort builder opens from either.

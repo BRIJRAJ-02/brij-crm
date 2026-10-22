@@ -568,6 +568,27 @@
       "when": 1792621998154,
       "tag": "0080_known_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1792648889136,
+      "tag": "0081_calendars_live_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1792650628908,
+      "tag": "0082_booking_four_durations",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1792651652016,
+      "tag": "0083_workspace_addresses",
+      "breakpoints": true
     }
   ]
 }

@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { useBookingsActionSlot, useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
-import { browserZone } from './zone.ts';
+import { memberZone } from './zone.ts';
 import { availabilityHref, scheduleHref } from './links.ts';
 import { NewScheduleDialog } from './NewScheduleDialog.tsx';
 import { RenameScheduleDialog } from './RenameScheduleDialog.tsx';
@@ -39,7 +39,7 @@ export interface AvailabilityScreenProps {
 export function AvailabilityScreen({ data, slug, scheduleId, member, members, me }: AvailabilityScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
-  const view = data.schedules.view(slug, member, browserZone());
+  const view = data.schedules.view(slug, member, memberZone(data, slug));
   // A reader who reaches colleagues (the server's `canActFor`; today `booking.admin`, AC-971) picks whose show.
   const reachesColleagues = useCan('booking.admin');
   const isAdmin = members.length > 1 || reachesColleagues;

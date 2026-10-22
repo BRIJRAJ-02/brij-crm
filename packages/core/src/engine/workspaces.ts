@@ -9,7 +9,7 @@
 // request returns the workspace it already made.
 import type { OnboardingAnswers } from '@crm/contracts';
 import { and, eq, sql } from 'drizzle-orm';
-import { addWorkspaceToDirectory, DIRECTORY_SLUG_CONSTRAINT, schema } from '@crm/db';
+import { ADDRESS_CLAIM_CONSTRAINT, addWorkspaceToDirectory, DIRECTORY_SLUG_CONSTRAINT, schema } from '@crm/db';
 import { STANDARD_OBJECTS, STANDARD_RELATIONSHIPS, STANDARD_TEMPLATE_VERSION } from '../templates/standard-v1.ts';
 import { insertAttribute, insertObject } from './definitions.ts';
 import { isUuidV7, newId } from './ids.ts';
@@ -38,8 +38,12 @@ export interface CreatedWorkspace {
   readonly objects: Readonly<Record<string, string>>;
 }
 
-/** The unique indexes a taken workspace address trips: live workspaces, and every slug the directory ever held. */
-const SLUG_CONSTRAINTS: ReadonlySet<string> = new Set(['workspaces_slug', DIRECTORY_SLUG_CONSTRAINT]);
+/** The unique indexes a taken workspace address trips: live workspaces, the directory, and every address ever held. */
+const SLUG_CONSTRAINTS: ReadonlySet<string> = new Set([
+  'workspaces_slug',
+  DIRECTORY_SLUG_CONSTRAINT,
+  ADDRESS_CLAIM_CONSTRAINT,
+]);
 const WORKSPACE_KEY = 'workspaces_pkey';
 /** A workspace address (spec 0005): lowercase letters and digits in single dash runs, 3 to 40 characters. */
 const WORKSPACE_SLUG = /^(?=.{3,40}$)[a-z0-9]+(?:-[a-z0-9]+)*$/;

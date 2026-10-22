@@ -7,7 +7,7 @@ import {
   type Ref,
   type SyntheticEvent,
 } from 'react';
-import { FieldError, Input, Label, Text, TextArea, TextField } from 'react-aria-components';
+import { FieldError, Input, Text, TextArea, TextField } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -15,6 +15,7 @@ import type { IconName } from '../../atoms/Icon/icons.ts';
 import { keepInside } from '../../lib/float-inside.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import { InPopover } from '../Popover/Popover.tsx';
+import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import styles from './Field.module.css';
 import { strings } from './strings.ts';
 
@@ -378,31 +379,7 @@ export function Field({
         );
         return (
           <>
-            {!isLabelHidden &&
-              (info === undefined ? (
-                <Label className={styles.label}>
-                  {label}
-                  {labelAside !== undefined && (
-                    <>
-                      {' '}
-                      <span className={styles.aside}>{labelAside}</span>
-                    </>
-                  )}
-                </Label>
-              ) : (
-                <span className={styles.labelRow}>
-                  <Label className={styles.label}>
-                    {label}
-                    {labelAside !== undefined && (
-                      <>
-                        {' '}
-                        <span className={styles.aside}>{labelAside}</span>
-                      </>
-                    )}
-                  </Label>
-                  <span className={styles.info}>{info}</span>
-                </span>
-              ))}
+            {!isLabelHidden && <FieldLabel label={label} aside={labelAside} info={info} isDisabled={isDisabled} />}
             {after === undefined ? (
               box
             ) : (

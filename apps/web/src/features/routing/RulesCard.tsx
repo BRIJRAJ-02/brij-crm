@@ -2,7 +2,8 @@
 // Purpose: a form's or a team page's routing rules (spec 0043, AC-1601, AC-1604, AC-1608, AC-1612), and how each has done.
 // Main task: read the rules in order, add or change one in its dialog, reorder or remove one, and check each rule's report to tune it.
 // Leaves out: the fallback itself (a form's After someone sends it, a page's rotation, each set in its own card).
-import type { DataLayer, RoutingReport, RoutingRule } from '@crm/data';
+import type { DataLayer, RoutingRule } from '@crm/data';
+import { useRoutingReport } from '@crm/data/react';
 import {
   Button,
   Callout,
@@ -22,7 +23,7 @@ import {
   Table,
   type TableColumn,
 } from '@crm/ui';
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { conditionsLine, type Fact } from './facts.ts';
 import { RuleDialog, type RuleSurface } from './RuleDialog.tsx';
 import { strings } from './strings.ts';
@@ -265,36 +266,20 @@ interface RuleReportProps {
   readonly rules: readonly RoutingRule[];
 }
 
-/** A read's answer, named by what it read, so a newer read shows loading until it lands. */
-type ReportRead =
-  | { readonly key: string; readonly status: 'ready'; readonly report: RoutingReport }
-  | { readonly key: string; readonly status: 'error' };
-
-/** Each rule's counts over the last 30 or 90 days (AC-1612), read when shown and when the window changes. */
+/** Each rule's counts over the last 30 or 90 days (AC-1612), held in the data layer while shown. */
 function RuleReport({ data, slug, surface, rules }: RuleReportProps) {
   const [days, setDays] = useState<30 | 90>(30);
-  const [read, setRead] = useState<ReportRead | undefined>();
-  const [attempt, setAttempt] = useState(0);
   const surfaceId = surface.kind === 'form' ? surface.formId : surface.pageId;
-  const key = `${surfaceId}:${String(days)}:${String(attempt)}`;
-  const state = read?.key === key ? read : { status: 'loading' as const };
-
-  useEffect(() => {
-    let isCurrent = true;
-    const asked: ReportSurface =
-      surface.kind === 'form' ? { kind: 'form', formId: surfaceId } : { kind: 'booking_page', pageId: surfaceId };
-    data.routing.report(slug, asked, days).then(
-      (report) => {
-        if (isCurrent) setRead({ key, status: 'ready', report });
-      },
-      () => {
-        if (isCurrent) setRead({ key, status: 'error' });
-      },
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [data, slug, surface.kind, surfaceId, days, key]);
+  const view = useMemo(
+    () =>
+      data.routing.report(
+        slug,
+        surface.kind === 'form' ? { kind: 'form', formId: surfaceId } : { kind: 'booking_page', pageId: surfaceId },
+        days,
+      ),
+    [data, slug, surface.kind, surfaceId, days],
+  );
+  const state = useRoutingReport(view);
 
   const nameOf = (ruleId: string | undefined) => {
     if (ruleId === undefined) return strings.fallback;
@@ -326,7 +311,7 @@ function RuleReport({ data, slug, surface, rules }: RuleReportProps) {
         onChange={(value) => setDays(value === '90' ? 90 : 30)}
       />
       {state.status === 'error' ? (
-        <EmptyState tone="error" title={strings.reportFailed} onRetry={() => setAttempt((at) => at + 1)} />
+        <EmptyState tone="error" title={strings.reportFailed} onRetry={view.reload} />
       ) : state.status === 'loading' ? (
         <Skeleton width="long" />
       ) : (

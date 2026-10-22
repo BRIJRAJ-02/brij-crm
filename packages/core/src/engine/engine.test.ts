@@ -271,3 +271,45 @@ describe('records and values', () => {
     );
   });
 });
+
+describe('a network url attribute (polish item 8)', () => {
+  it('stores a handle as the canonical profile link, a company page on Companies, and refuses another network', async () => {
+    const { scope, objects } = await workspace();
+    const companies = objects.companies ?? '';
+    const people = objects.people ?? '';
+    const { attributeId: wellfound } = await defineAttribute(scope, {
+      objectId: companies,
+      apiSlug: 'wellfound',
+      title: 'Wellfound',
+      type: 'url',
+    });
+    const { attributeId: github } = await defineAttribute(scope, {
+      objectId: people,
+      apiSlug: 'github',
+      title: 'GitHub',
+      type: 'url',
+    });
+    const { recordId: acme } = await createRecord(scope, { objectId: companies, values: { [wellfound]: 'acme' } });
+    const { recordId: ada } = await createRecord(scope, {
+      objectId: people,
+      values: { [github]: 'https://www.github.com/ada/' },
+    });
+    const both = await getRecords(scope, { ids: [acme, ada] });
+    const company = both.find((each) => each.display.recordId === acme);
+    const person = both.find((each) => each.display.recordId === ada);
+    expect(company?.values[wellfound]).toBe('https://wellfound.com/company/acme');
+    expect(person?.values[github]).toBe('https://github.com/ada');
+
+    await setValues(scope, { recordId: ada, values: { [github]: { value: '@octocat' } } });
+    const [updated] = await getRecords(scope, { ids: [ada] });
+    expect(updated?.values[github]).toBe('https://github.com/octocat');
+
+    const refused = await refusalOf(
+      setValues(scope, { recordId: ada, values: { [github]: { value: 'https://x.com/ada' } } }),
+    );
+    expect(refused[0]).toMatchObject({
+      code: 'ATTRIBUTE_VALUE_INVALID',
+      message: 'That is a link to X. Enter a handle on GitHub, or a link to the profile.',
+    });
+  });
+});

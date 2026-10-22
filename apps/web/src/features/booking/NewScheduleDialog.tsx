@@ -5,7 +5,7 @@
 import { isDataError, type DataLayer, type ScheduleView } from '@crm/data';
 import { Button, Callout, Field, Modal } from '@crm/ui';
 import { useState } from 'react';
-import { browserZone } from './zone.ts';
+import { memberZone } from './zone.ts';
 import { SCHEDULE_NAME_MAX } from './scheduleDraft.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
@@ -55,7 +55,7 @@ export function NewScheduleDialog({
     setBusy(true);
     setNameError(undefined);
     setFailure(undefined);
-    data.schedules.create(slug, memberId, { id, name: trimmed, timeZone: browserZone(), forMember }).then(
+    data.schedules.create(slug, memberId, { id, name: trimmed, timeZone: memberZone(data, slug), forMember }).then(
       (schedule) => {
         setBusy(false);
         reset();

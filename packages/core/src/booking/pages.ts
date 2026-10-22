@@ -19,6 +19,7 @@ import {
   type TeamHosts,
   type UpdateBookingPageInput,
   BOOKINGS_PAGE_MAX,
+  BOOKING_DURATIONS_MAX,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
@@ -304,6 +305,22 @@ function checkTeamSchedule(kind: PageRecord['kind'], scheduleId: string | null |
   }
 }
 
+/**
+ * A page offers one to `BOOKING_DURATIONS_MAX` (4) lengths, each once: the
+ * database's `booking_pages_durations` check, refused here first as a typed
+ * `CONFIG_INVALID` on `durations` for a caller that skipped the contract.
+ */
+export function checkDurations(durations: readonly number[] | undefined): void {
+  if (durations === undefined) return;
+  if (durations.length < 1) throw refuseOn('CONFIG_INVALID', 'Offer at least one meeting length.', 'durations');
+  if (durations.length > BOOKING_DURATIONS_MAX) {
+    throw refuseOn('CONFIG_INVALID', `A page offers at most ${String(BOOKING_DURATIONS_MAX)} lengths.`, 'durations');
+  }
+  if (new Set(durations).size !== durations.length) {
+    throw refuseOn('CONFIG_INVALID', 'Offer each length once.', 'durations');
+  }
+}
+
 /** A slug free among the workspace's live pages: the wanted one, else it with -2, -3 … */
 async function freeSlug(tx: WorkspaceTx, wanted: string): Promise<string> {
   const base = wanted.slice(0, 56).replace(/-+$/, '');
@@ -343,6 +360,7 @@ export async function createBookingPage(
     throw refuseOn('VALUE_REQUIRED', 'Pick the rotation this page books from.', 'hosts');
   }
   checkTeamSchedule(kind, input.settings?.scheduleId);
+  checkDurations(input.settings?.durations);
   return inWorkspace(scope, async (tx) => {
     const [existing] = await tx.select().from(bookingPages).where(eq(bookingPages.id, input.id));
     if (existing !== undefined) {
@@ -438,6 +456,7 @@ export async function updateBookingPage(
     const page = await pageToChange(tx, scope, input.pageId, true);
     const { settings } = input;
     checkTeamSchedule(page.kind, settings.scheduleId);
+    checkDurations(settings.durations);
     if (settings.scheduleId !== undefined && settings.scheduleId !== null) {
       await checkPageSchedule(tx, page.ownerMemberId, settings.scheduleId);
     }

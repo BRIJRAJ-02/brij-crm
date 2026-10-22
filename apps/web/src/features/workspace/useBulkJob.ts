@@ -49,7 +49,7 @@ export interface BulkJob {
   readonly job: JobView | undefined;
   /** A job is starting or followed: the bar shows its progress in the actions' place. */
   readonly isRunning: boolean;
-  /** Its start is out, nothing to cancel yet ("Starting…"). */
+  /** Its start is out, nothing to cancel yet ("Starting"). */
   readonly isStarting: boolean;
   /** The bar's progress ("Counting…", "12,345 people counted", "Deleting 4,500 of 12,345"), while it runs. */
   readonly progress: { readonly label: string; readonly value?: number } | undefined;

@@ -46,6 +46,7 @@ export const EVENT_KINDS = [
   'nav',
   'comments',
   'notifications',
+  'calendars',
 ] as const satisfies readonly EventRow['kind'][];
 
 /** One member of an audience: who, and what they may do. */
@@ -369,8 +370,9 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       return row;
     // A member's own sidebar (spec 0034) names one member id and nothing else. Only the audience that member is in
     // receives it (their own clients act on it); any other gets the stub, so a sidebar click is no feed of when a
-    // colleague is about.
+    // colleague is about. A member's own calendar connections and calendars (`calendars`) follow the same rule.
     case 'nav':
+    case 'calendars':
       return audience.members.some((member) => row.memberIds.includes(member.memberId)) ? row : undefined;
     case 'jobs': {
       const { actorMemberId, ...event } = row;

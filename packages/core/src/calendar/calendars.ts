@@ -412,6 +412,7 @@ export async function updateMemberCalendar(
     async (context) => {
       const { tx } = context;
       const row = await ownCalendar(tx, memberId, input.calendarId);
+      context.record({ calendars: [memberId] });
       const next = {
         check_conflicts: input.checkConflicts ?? row.check_conflicts,
         show_in_week: input.showInWeek ?? row.show_in_week,
@@ -470,9 +471,11 @@ export async function setCalendarDestination(
 ): Promise<{ readonly destinationId: string }> {
   checkScope(scope);
   const memberId = actingMember(scope);
-  const { result } = await runWrite(scope, async ({ tx }) => {
+  const { result } = await runWrite(scope, async (context) => {
+    const { tx } = context;
     const row = await ownCalendar(tx, memberId, input.calendarId);
     if (!isWritable(row)) throw refuse('CALENDAR_NOT_WRITABLE', NOT_WRITABLE);
+    context.record({ calendars: [memberId] });
     await tx.execute(sql`
       update calendar_calendars set is_destination = false, fell_back_from = null, ${touchedBy(memberId)}
       where member_id = ${memberId}::uuid and (is_destination or fell_back_from is not null) and id <> ${row.id}::uuid

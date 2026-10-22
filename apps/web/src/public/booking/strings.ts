@@ -50,7 +50,7 @@ export const strings = {
   bookingAs: (name: string) => `Booking as ${name}.`,
   notYou: 'Not you?',
   confirm: 'Confirm booking',
-  booking: 'Booking…',
+  booking: 'Booking',
   nameRequired: 'Give your name.',
   emailRequired: 'Give an email address such as name@example.com.',
   guestInvalid: 'Give each guest’s email address.',

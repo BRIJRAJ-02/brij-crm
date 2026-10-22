@@ -29,6 +29,12 @@ export interface HuePickerProps {
    * options editor). Named "<label>: <hue>".
    */
   readonly isCompact?: boolean;
+  /**
+   * With `isCompact`, how the one control looks: `swatch` (the default), a tag coloured square, or `dot`, a small
+   * round dot in the hue's dot colour, for a list of calendars beside checkboxes, where a square read as one more
+   * empty checkbox (the owner, 22 October 2026).
+   */
+  readonly look?: 'swatch' | 'dot';
 }
 
 /** One of the nine hues, as named swatches: an option's colour, an object's tile. A radio group, so the arrow keys move. */
@@ -41,10 +47,12 @@ export function HuePicker({
   isLabelShown = false,
   isReadOnly = false,
   isCompact = false,
+  look = 'swatch',
 }: HuePickerProps) {
   if (isCompact) {
     return (
       <HueButton
+        look={look}
         label={label}
         hue={value ?? defaultValue ?? 'gray'}
         isDisabled={isDisabled}
@@ -80,12 +88,14 @@ export function HuePicker({
 
 /** The compact HuePicker: one swatch that opens the nine, closing on a choice. */
 function HueButton({
+  look,
   label,
   hue,
   onChange,
   isDisabled,
   isReadOnly,
 }: {
+  readonly look: 'swatch' | 'dot';
   readonly label: string;
   readonly hue: Hue;
   readonly onChange?: (hue: Hue) => void;
@@ -96,12 +106,27 @@ function HueButton({
   const name = strings.chosen(label, strings[hue]);
   if (isReadOnly) {
     return (
-      <span className={styles.swatch} data-hue={hue} data-compact="" data-static="" role="img" aria-label={name} />
+      <span
+        className={styles.swatch}
+        data-hue={hue}
+        data-compact=""
+        data-look={look}
+        data-static=""
+        role="img"
+        aria-label={name}
+      />
     );
   }
   return (
     <DialogTrigger isOpen={isOpen} onOpenChange={setOpen}>
-      <AriaButton className={styles.swatch} data-hue={hue} data-compact="" aria-label={name} isDisabled={isDisabled} />
+      <AriaButton
+        className={styles.swatch}
+        data-hue={hue}
+        data-compact=""
+        data-look={look}
+        aria-label={name}
+        isDisabled={isDisabled}
+      />
       <Popover label={label}>
         <HuePicker
           label={label}

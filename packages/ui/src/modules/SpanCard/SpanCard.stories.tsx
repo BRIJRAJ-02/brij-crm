@@ -74,7 +74,7 @@ export const Pending: Story = {
       <SpanCard {...args}>
         <Field label="Why" hint="Only you see this." value="Gym" isDisabled />
         <Button variant="primary" isPending>
-          Blocking…
+          Blocking
         </Button>
       </SpanCard>
     </Stage>

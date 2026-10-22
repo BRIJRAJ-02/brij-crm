@@ -214,6 +214,10 @@ export function createCalendarStore(deps: CalendarDeps) {
       reload() {
         void read();
       },
+      /** Changed elsewhere (the member's other tab, a sync): reads again while a screen shows it; the next one reads anyway. */
+      changed() {
+        if (held > 0) void read();
+      },
       /** Shows `change` at once on one connection; answers how to put it back. */
       patch(connectionId: string, change: (connection: CalendarConnectionView) => readonly CalendarConnectionView[]) {
         if (state.status !== 'ready') return undefined;
@@ -356,6 +360,13 @@ export function createCalendarStore(deps: CalendarDeps) {
 
   return {
     view: (workspace: string): CalendarView => viewOf(workspace),
+    /**
+     * The member's connections changed elsewhere (the `calendars` live kind: another tab of theirs, a sync that
+     * connected or stopped one): the held list reads again, so every tab shows it with no reload.
+     */
+    changed(workspace: string): void {
+      views.get(workspace)?.changed();
+    },
     /** Brings a connection's next sync forward (Sync now); the list reads again shortly after. Answers whether it queued. */
     async syncNow(workspace: string, connectionId: string): Promise<boolean> {
       try {

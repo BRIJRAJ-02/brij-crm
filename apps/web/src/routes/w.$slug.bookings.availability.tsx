@@ -2,7 +2,7 @@ import { isDataError } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
-import { browserZone } from '../features/booking/zone.ts';
+import { memberZone } from '../features/booking/zone.ts';
 import { availabilitySearch } from '../features/booking/links.ts';
 import { scheduleStrings } from '../features/booking/schedule-strings.ts';
 import { strings } from '../features/booking/strings.ts';
@@ -27,7 +27,7 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
       deps.member !== undefined && deps.member !== access.memberId && members.some((each) => each.id === deps.member)
         ? deps.member
         : undefined;
-    await context.data.schedules.view(params.slug, member, browserZone()).ready();
+    await context.data.schedules.view(params.slug, member, memberZone(context.data, params.slug)).ready();
     return { member, members, me: access.memberId };
   },
   // Shown only once the loading delay passed: its skeletons show at once.
