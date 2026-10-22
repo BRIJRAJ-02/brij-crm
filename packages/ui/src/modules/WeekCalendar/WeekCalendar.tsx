@@ -1,6 +1,7 @@
 import {
   Fragment,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -386,10 +387,13 @@ export function WeekCalendar({
     else if (day.key !== selectedDay) onSelectDay(day.key);
   };
 
+  const zoneId = useId();
   return (
     <section
       className={styles.root}
       aria-label={label}
+      // The zone is read as focus enters the week, not only in reading order: blocks name times without it.
+      {...(zone === undefined ? {} : { 'aria-describedby': zoneId })}
       aria-busy={isLoading || undefined}
       data-fill={isFill || undefined}
     >
@@ -397,8 +401,8 @@ export function WeekCalendar({
         {zone === undefined ? (
           <span className={styles.corner} aria-hidden="true" />
         ) : (
-          <span className={styles.corner} title={zone.name}>
-            <span className={styles.zone} aria-hidden="true">
+          <span className={styles.corner}>
+            <span className={styles.zone} aria-hidden="true" title={zone.name}>
               {/* "GMT+5:30" is wider than the axis: it may break before its sign, "GMT" over "+5:30". */}
               {zone.short.split(/(?=[+\-\u2212])/).map((part, index) => (
                 <Fragment key={part}>
@@ -407,7 +411,7 @@ export function WeekCalendar({
                 </Fragment>
               ))}
             </span>
-            <VisuallyHidden>{zone.name}</VisuallyHidden>
+            <VisuallyHidden id={zoneId}>{zone.name}</VisuallyHidden>
           </span>
         )}
         {days.map((day) => (

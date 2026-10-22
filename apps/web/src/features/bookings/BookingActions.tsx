@@ -384,7 +384,12 @@ function MoveDialog({
             layout="grid"
             isLoading={slots === undefined}
           />
-          <p>{strings.timesIn(zoneDisplay(zone, openedAt))}</p>
+          {/* The offset as it is on the day shown, which may be past a daylight saving change. */}
+          <p>
+            {strings.timesIn(
+              zoneDisplay(zone, shown === undefined ? openedAt : Date.parse(byDay.get(shown)?.[0] ?? '') || openedAt),
+            )}
+          </p>
         </>
       )}
       {!failed && error !== '' && (

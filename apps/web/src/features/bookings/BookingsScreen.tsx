@@ -766,10 +766,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const bounds = useMemo(() => weekBounds(weekDays(search.week), timeZone), [search.week, timeZone]);
   const today = dayKeyOf(now, timeZone);
   const nowMinute = minuteOfDay(now, timeZone);
-  // The zone the hours are in, over the hour axis: the member's may not be the device's clock.
+  // The zone the hours are in, over the hour axis: the member's may not be the device's clock. Its offset as it is in
+  // the week on screen (the picked day's noon), so a week past a daylight saving change names the offset it is in.
+  const shownAt = instantOf(days.includes(search.day) ? search.day : search.week, 12 * 60, timeZone).getTime();
   const zone = {
-    short: offsetLabel(timeZone, now.getTime()),
-    name: strings.timesIn(zoneDisplay(timeZone, now.getTime())),
+    short: offsetLabel(timeZone, shownAt),
+    name: strings.timesIn(zoneDisplay(timeZone, shownAt)),
   };
   const isThisWeek = weekOf(today, firstDay) === search.week;
   const range = rangeLabel(search.week, locale);
@@ -1482,6 +1484,7 @@ export function BookingsListScreen({
   const personHref = usePersonHref(slug, objects);
   // The member's zone (their Preferences, else the browser's): each row's day band and time.
   const { timeZone } = useFormatSettings();
+  const listNow = useNow();
   const calendarList = useCalendarList(calendars);
   const byCalendar = new Map(
     (calendarList.status === 'ready' ? calendarList.accounts : []).flatMap((account) =>
@@ -1550,7 +1553,8 @@ export function BookingsListScreen({
     ) : (
       <>
         <BookingList
-          label={strings.listLabel[tab]}
+          // Rows' times are on the member's clock: the list's name says so for screen readers.
+          label={`${strings.listLabel[tab]}, ${strings.timesIn(zoneDisplay(timeZone, listNow.getTime()))}`}
           groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), personHref, locale, me, timeZone)}
           onOpen={setOpenId}
           emptyState={

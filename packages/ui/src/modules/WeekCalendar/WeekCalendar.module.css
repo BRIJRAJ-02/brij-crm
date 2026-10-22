@@ -572,6 +572,11 @@
       display: none;
     }
 
+    /* "GMT" over "+5:30" fits the head row's height there. */
+    .zone {
+      padding-block-end: var(--space-2);
+    }
+
     .allDay {
       grid-template-columns: calc(var(--axis) * 2) minmax(0, 1fr);
     }

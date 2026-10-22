@@ -15,6 +15,8 @@ export interface SpanTimesProps {
   /** Lengths beside To's times ("2:00 PM (1 hr)"), for a meeting. */
   readonly showsLength?: boolean;
   readonly isDisabled?: boolean;
+  /** A note under the times: which zone they are in ("Times in Kolkata time (GMT+5:30)"). */
+  readonly hint?: string;
 }
 
 /** The span's start and end, in 15 minute steps within its day. */
@@ -25,6 +27,7 @@ export function SpanTimes({
   maxMinutes = 1440,
   showsLength = false,
   isDisabled,
+  hint,
 }: SpanTimesProps) {
   // The times on the member's clock, the zone the week is drawn in.
   const { timeZone } = useFormatSettings();
@@ -54,6 +57,7 @@ export function SpanTimes({
           label: showsLength ? `${label(minute)} (${lengthLabel(minute - span.startMinute)})` : label(minute),
         }))}
         value={String(span.endMinute)}
+        {...(hint === undefined ? {} : { hint })}
         {...(isDisabled === undefined ? {} : { isDisabled })}
         onChange={(id) => onChange({ ...span, endMinute: Number(id ?? span.endMinute) })}
       />

@@ -6,6 +6,7 @@ import { isDataError, type BookingPageView } from '@crm/data';
 import { Button, Callout, Field, Form, InfoTip, Modal, Select, useFormatSettings, type FormRefusal } from '@crm/ui';
 import { useId, useState, useMemo } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
+import { zoneDisplay } from '../../public/booking/time.ts';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { SpanTimes } from './SpanTimes.tsx';
 import { strings } from './strings.ts';
@@ -179,6 +180,8 @@ export function NewMeetingDialog({
           onChange={onSpanChange}
           maxMinutes={MAX_MINUTES}
           showsLength
+          // From and To are on the member's clock; Their time zone below only sets the guest's invite.
+          hint={strings.timesIn(zoneDisplay(memberTimeZone, start.getTime()))}
           isDisabled={busy}
         />
         {pages.length > 1 && (
