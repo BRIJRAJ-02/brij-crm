@@ -13,13 +13,13 @@ Ported from the artifact's StatusDot card. It is the status attribute's one disp
 <StatusDot hue="orange" isArchived>Paused</StatusDot>
 ```
 
-- The label always shows; the dot's colour is never the only cue, apart from `isLabelCollapsible` on a phone's bar (below).
+- The label always shows (or its `shortLabel` in a narrow container); the dot's colour is never the only cue.
 - `isArchived` turns the dot gray and adds "(archived)" for screen readers.
-- `isLabelCollapsible`: in a narrow container (under 480px, a phone's bar) only the dot shows, and the label stays in the accessibility tree as a visually hidden copy (read at every width; the shown words are `aria-hidden`). Why a variant: an editor's status in the TopBar was cut to "D." beside the name on a phone, which said nothing (22 October 2026); only the dot can hide its own words, as Button's `isLabelCollapsible` does. EditorStatus (PreviewLayout) uses it. Open for the owner: on a phone this makes the dot's colour the only visible cue, and Draft and Paused share a gray dot (the coordinator asked for the dot alone, 22 October 2026; design-system-guardian would rather show a short word, such as Draft, under 480px).
+- `shortLabel`: a word or two shown in place of the label in a narrow container (under 480px, a phone's bar), so the dot never stands alone; the full label stays in the accessibility tree as a visually hidden copy (read at every width; the shown words are `aria-hidden`). Why a variant: an editor's status in the TopBar was cut to "D." beside the name on a phone, which said nothing (22 October 2026). The dot alone was tried and turned down: colour would be the only cue, and Draft and Paused share a gray dot (WCAG 1.4.1; decided 22 October 2026). EditorStatus (PreviewLayout) passes Live, Changed, Draft or Paused.
 
 ## States
 
-Archived, and LabelCollapsible (wide and narrow).
+Archived, ShortLabel (wide and narrow) and ArchivedShortLabel.
 
 ## Keyboard
 

@@ -36,11 +36,11 @@ export const Archived: Story = {
 };
 
 /**
- * `isLabelCollapsible`: in a wide bar the dot and its words; in a narrow one (a phone) the dot alone, its words still
- * read by screen readers.
+ * `shortLabel`: in a wide bar the dot and its label; in a narrow one (a phone) the dot and the short word, the full
+ * label still read by screen readers.
  */
-export const LabelCollapsible: Story = {
-  args: { children: 'Draft', hue: 'gray', isLabelCollapsible: true },
+export const ShortLabel: Story = {
+  args: { children: 'Published · Unpublished changes', hue: 'orange', shortLabel: 'Changed' },
   render: (args) => (
     <Stage direction="column">
       <span data-testid="wide">
@@ -56,20 +56,24 @@ export const LabelCollapsible: Story = {
   play: async ({ canvas }) => {
     const wide = canvas.getByTestId('wide');
     const narrow = canvas.getByTestId('narrow');
-    const shown = (root: HTMLElement) => root.querySelector('[data-collapsible]');
-    await expect(shown(wide)).toBeVisible();
-    await expect(shown(narrow)).not.toBeVisible();
-    // The name stays in the accessibility tree at both widths: one hidden copy, never aria-hidden.
+    const shown = (root: HTMLElement, width: string) => root.querySelector(`[data-width="${width}"]`);
+    await expect(shown(wide, 'wide')).toBeVisible();
+    await expect(shown(wide, 'narrow')).not.toBeVisible();
+    await expect(shown(narrow, 'wide')).not.toBeVisible();
+    await expect(shown(narrow, 'narrow')).toBeVisible();
+    await expect(shown(narrow, 'narrow')).toHaveTextContent('Changed');
+    // The full label stays in the accessibility tree at both widths: one copy, never aria-hidden.
     for (const root of [wide, narrow]) {
-      const copies = Array.from(root.querySelectorAll('*')).filter(
-        (element) => element.textContent === 'Draft' && element.closest('[aria-hidden="true"]') === null,
+      const readable = Array.from(root.querySelectorAll('*')).filter(
+        (element) =>
+          element.textContent === 'Published · Unpublished changes' && element.closest('[aria-hidden="true"]') === null,
       );
-      await expect(copies).toHaveLength(1);
+      await expect(readable).toHaveLength(1);
     }
   },
 };
 
-/** Archived and collapsible: on a phone a gray dot, its words and "(archived)" read by screen readers. */
-export const ArchivedCollapsible: Story = {
-  args: { children: 'Paused', hue: 'orange', isArchived: true, isLabelCollapsible: true },
+/** Archived with a short label: on a phone a gray dot and the short word, "(archived)" read by screen readers. */
+export const ArchivedShortLabel: Story = {
+  args: { children: 'Paused', hue: 'orange', isArchived: true, shortLabel: 'Paused' },
 };
