@@ -54,7 +54,9 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
         description={strings.invalidText}
         {...signInFrame()}
       >
-        <ButtonLink href="/">{strings.goHome}</ButtonLink>
+        <ButtonLink size="lg" isFullWidth="center" href="/">
+          {strings.goHome}
+        </ButtonLink>
       </AuthLayout>
     );
   }
@@ -145,7 +147,7 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
         {message}
         {user === undefined ? (
           <>
-            <ButtonLink variant="primary" href={signInHref(here)}>
+            <ButtonLink variant="primary" size="lg" isFullWidth="center" href={signInHref(here)}>
               {strings.signInToAccept}
             </ButtonLink>
             <p>{strings.newHere}</p>
@@ -153,14 +155,14 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
         ) : isMismatch ? (
           <>
             <p>{strings.signedInAs(user.email)}</p>
-            <Button variant="primary" onPress={askSignInAgain}>
+            <Button variant="primary" size="lg" isFullWidth="center" onPress={askSignInAgain}>
               {strings.useAnother}
             </Button>
           </>
         ) : (
           <>
             <p>{strings.signedInAs(user.email)}</p>
-            <Button variant="primary" onPress={accept} isPending={isBusy}>
+            <Button variant="primary" size="lg" isFullWidth="center" onPress={accept} isPending={isBusy}>
               {strings.accept}
             </Button>
           </>
