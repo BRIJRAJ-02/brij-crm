@@ -1036,8 +1036,21 @@ export interface PageEditorPendingProps {
 }
 
 /**
- * The editor while its page loads: the tabs where the editor's will stand, and the chosen one's fields as skeletons.
- * Hosts waits for the page, since only a round robin page has it.
+ * Each tab's sections as its loading state draws them, by title: the ones a page shows there whatever it holds, so the
+ * editor lands where they stood (the owner, 20 Oct 2026). Profile and Reserved time wait for the page, which says
+ * whether it has them; Hours draws a one on one page's, the usual kind.
+ */
+const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
+  page: [strings.details, strings.sharing],
+  meeting: [strings.meeting, strings.location, strings.calendarSection],
+  hosts: [rotationStrings.hosts, routingStrings.routing],
+  hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff],
+  limits: [strings.limitGroups.buffers, strings.limitGroups.window, strings.limitGroups.pace],
+};
+
+/**
+ * The editor while its page loads: the tabs where the editor's will stand, and the chosen one's sections, titled and
+ * busy, with skeleton fields. Hosts waits for the page, since only a round robin page has it.
  */
 export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
   // Hosts only when it is the tab asked for (a round robin page's); the page says whether it has it.
@@ -1065,9 +1078,11 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
           >
             <TabPanel id={shown} variant="fill">
               <PreviewLayout preview={<Skeleton shape="block" />} {...(notices === undefined ? {} : { notices })}>
-                <Card isBusy>
-                  <Skeleton lines={6} />
-                </Card>
+                {PENDING_SECTIONS[shown].map((title) => (
+                  <Card key={title} title={title} isBusy>
+                    <Skeleton lines={3} />
+                  </Card>
+                ))}
               </PreviewLayout>
             </TabPanel>
           </Tabs>
