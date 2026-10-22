@@ -87,6 +87,7 @@ import type {
   WorkspaceSettings,
 } from '@crm/contracts';
 import type { GlobalSearch } from './search/global.ts';
+import type { RecordRefDisplay as LinkedRecordDisplay } from '@crm/contracts/values';
 import type { InviteLinkDays } from '@crm/contracts/team-limits';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
@@ -211,6 +212,7 @@ import { MEMBERS_PAGE_MAX } from '@crm/contracts/team-limits';
 import type { UndoKind } from './records/history.ts';
 import type { RecordAttributes, RecordSubscription } from './records/one.ts';
 import { createRecordSearch, type RecordSearch } from './records/search.ts';
+import { createBookingLink } from './bookings/link.ts';
 import type { BoardQuery, BoardStore } from './records/board.ts';
 import type { PurgeSummary, RestoreSummary, Trash, TrashView } from './trash/store.ts';
 import type {
@@ -1785,6 +1787,13 @@ export function createDataLayer({
     bookingsLists.reloadAll(workspace);
     meetings.reloadAll(workspace);
   };
+  // A booking linked to a record by hand (polish F2): at once everywhere it shows, back on a refusal.
+  const linkBooking = createBookingLink({
+    lists: bookingsLists,
+    meetings,
+    send: (workspace, bookingId, recordId) =>
+      call((options) => api.bookings.link({ workspace, bookingId, recordId, mutationId: mintId() }, options)),
+  });
 
   // Settings › Account › Preferences: the member's own, one copy per workspace.
   const preferences = createPreferencesStore({
@@ -3241,6 +3250,14 @@ export function createDataLayer({
       },
       /** A new booking's idempotency key: mint it once per dialog. */
       newKey: () => mintId(),
+      /**
+       * Links a booking to a record by hand, or takes the link off with `null` (polish F2): the chip shows at once
+       * in every list, range and page of meetings, and goes back on a refusal (`NOT_FOUND` on `recordId` for a
+       * record the member can't see, `FORBIDDEN` for one they may not change, `CONFIG_INVALID` for a person or
+       * company), which it throws on.
+       */
+      link: (workspace: string, bookingId: string, record: LinkedRecordDisplay | null): Promise<void> =>
+        linkBooking(workspace, bookingId, record),
       /**
        * Cancels a booking (AC-640): shown cancelled at once, back on a
        * refusal; the guest is emailed, with the reason when there is one.

@@ -72,7 +72,7 @@ function List({ objects, pages }: ListLoaded) {
   const navigate = useNavigate();
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
-  const actions = useMemo(() => hostActions(data, toasts, slug), [data, toasts, slug]);
+  const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
   return (
     <BookingsListScreen
       slug={slug}

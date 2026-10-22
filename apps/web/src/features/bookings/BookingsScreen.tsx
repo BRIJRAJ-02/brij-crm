@@ -18,6 +18,7 @@ import {
   type CalendarsHeld,
   type CalendarEventItem,
   type PageDestinationState,
+  type RecordRefDisplay,
   type RecordSearch,
   type ObjectSummary,
   type CreateTimeBlockInput,
@@ -42,6 +43,7 @@ import {
   MonthCalendar,
   Popover,
   PageColumn,
+  RecordChip,
   VisuallyHidden,
   Panel,
   SectionBar,
@@ -154,6 +156,9 @@ const NO_ACTIONS: HostBookingActions = {
   markNoShow: () => Promise.reject(new Error('no actions')),
   notify: () => undefined,
 };
+
+/** A chip's link, when there is a page to open. */
+const hrefProps = (href: string | undefined) => (href === undefined ? {} : { href });
 
 /** The person's page, when the booking names one and the reader can open People. */
 function personHrefOf(booking: BookingListItem, link: RecordLink, people: ObjectSummary | undefined) {
@@ -323,6 +328,51 @@ function BookingCard({
   const hasActions = actions !== undefined;
   const now = useNow();
   const isConfirmed = booking.status === 'confirmed';
+  // The record it was linked to by hand (polish F2): its chip opens it; Remove takes the link off at once, with Undo.
+  const linking = actions?.linking;
+  const record = booking.linkedRecord;
+  const unlink = (shown: RecordRefDisplay) => {
+    if (linking === undefined || actions === undefined) return;
+    const name = shown.name === '' ? strings.linkedRecordField : shown.name;
+    linking.link(booking.id, null).then(
+      () => {
+        actions.notify('success', strings.unlinkedToast(name), {
+          label: strings.undo,
+          onAction: () => {
+            linking.link(booking.id, shown).catch(() => {
+              actions.notify('danger', strings.linkFailed);
+            });
+          },
+        });
+      },
+      () => {
+        actions.notify('danger', strings.linkFailed);
+      },
+    );
+  };
+  const linked: MeetingCardRow | undefined =
+    record === undefined
+      ? undefined
+      : {
+          id: 'linked',
+          icon: 'briefcase',
+          label: strings.linkedTo,
+          value: <RecordChip display={record} {...hrefProps(linking?.hrefOf(record))} />,
+          ...(linking === undefined
+            ? {}
+            : {
+                action: (
+                  <Button
+                    variant="ghost"
+                    icon="x"
+                    label={strings.unlink(record.name === '' ? strings.linkedRecordField : record.name)}
+                    onPress={() => {
+                      unlink(record);
+                    }}
+                  />
+                ),
+              }),
+        };
   const hasNotice = booking.hostRemoved === true || (isConfirmed && (booking.eventFailed || booking.needsHost));
   const notices = hasNotice ? (
     <>
@@ -378,6 +428,7 @@ function BookingCard({
         ]}
         rows={[
           { id: 'where', ...whereRowOf(booking) },
+          ...(linked === undefined ? [] : [linked]),
           ...(booking.note === undefined
             ? []
             : [

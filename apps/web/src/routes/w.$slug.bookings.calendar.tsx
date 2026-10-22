@@ -104,7 +104,7 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
   const navigate = useNavigate();
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
-  const actions = useMemo(() => hostActions(data, toasts, slug), [data, toasts, slug]);
+  const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
   const week = heldWeek(search.week, data, slug, timeZone);
   // The member's zone changed in Preferences while the page is open: the loader primed the weeks either side in the
   // old one, so prime them again in the new one (each held read is the same one for the same range).

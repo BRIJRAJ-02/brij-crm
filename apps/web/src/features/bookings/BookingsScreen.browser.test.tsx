@@ -18,6 +18,9 @@ import {
   type DataLayer,
   type MeetingsHeld,
   type MeetingsState,
+  type RecordRefDisplay,
+  type RecordSearch,
+  type RecordSearchState,
   type TimeBlockOccurrence,
 } from '@crm/data';
 import { createToasts, FormatScope } from '@crm/ui';
@@ -596,5 +599,155 @@ describe('the member zone', () => {
     await renderWeek([late]);
     // Half an hour on Tuesday night, then half an hour on Wednesday from midnight.
     await expect.poll(() => columnsOf(/^Blocked, 23:30/)).toEqual(['Tuesday', 'Wednesday']);
+  });
+});
+
+describe('linking a booking to a record by hand (polish F2)', () => {
+  const deals = {
+    id: '0199f0a0-0000-7000-8000-0000000000a1',
+    apiSlug: 'deals',
+    singularName: 'Deal',
+    pluralName: 'Deals',
+    icon: 'handshake',
+    hue: 'green',
+    standardKey: 'deals',
+    primaryAttributeId: '0199f0a0-0000-7000-8000-0000000000a2',
+    position: 2,
+    isStandard: true,
+    isArchived: false,
+    access: 'write',
+  } as const;
+  const navy: RecordRefDisplay = {
+    objectId: deals.id,
+    recordId: '0199f0a0-0000-7000-8000-0000000000a3',
+    name: 'Navy rollout',
+    kind: 'other',
+  };
+
+  /** A search over Deals that answers at once with Navy rollout. */
+  function dealSearch(): RecordSearch {
+    let state: RecordSearchState = { query: '', status: 'idle', results: [] };
+    const listeners = new Set<() => void>();
+    return {
+      ask: (asked) => {
+        const query = asked.trim();
+        if (query === state.query && state.status === 'ready') return;
+        state = { query, status: 'ready', results: [{ ref: navy, linked: false }] };
+        queueMicrotask(() => {
+          for (const listener of listeners) listener();
+        });
+      },
+      getSnapshot: () => state,
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      resultOf: (recordId) => (recordId === navy.recordId ? { ref: navy, linked: false } : undefined),
+      dispose: () => undefined,
+    };
+  }
+
+  /** The List with one booking open in its panel, linked to `linked`, and linking that changes it as the layer does. */
+  async function openWith(linked: RecordRefDisplay | undefined) {
+    let state: MeetingsState = {
+      ...ready,
+      items: [
+        { kind: 'booking', booking: { ...bookingOf(), ...(linked === undefined ? {} : { linkedRecord: linked }) } },
+      ],
+    };
+    const listeners = new Set<() => void>();
+    const upcoming: MeetingsHeld = {
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      getSnapshot: () => state,
+      retain: () => () => undefined,
+      ready: () => Promise.resolve(),
+      loadMore: () => undefined,
+      reload: () => undefined,
+    };
+    const link = vi.fn((_bookingId: string, record: RecordRefDisplay | null) => {
+      const first = state.status === 'ready' ? state.items[0] : undefined;
+      if (first?.kind === 'booking') {
+        const { linkedRecord: _was, ...rest } = first.booking;
+        state = {
+          ...ready,
+          items: [{ kind: 'booking', booking: record === null ? rest : { ...rest, linkedRecord: record } }],
+        };
+        for (const listener of listeners) listener();
+      }
+      return Promise.resolve();
+    });
+    const notify = vi.fn<HostBookingActions['notify']>();
+    shown = await renderInApp(
+      () => (
+        <BookingsListScreen
+          slug="acme"
+          search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
+          meetings={() => upcoming}
+          calendars={noCalendars}
+          onDismissNotice={() => undefined}
+          objects={[deals]}
+          pages={[]}
+          locale="en-GB"
+          actions={{
+            cancel: vi.fn(),
+            move: vi.fn(),
+            moveSlots: vi.fn(),
+            guestLink: vi.fn(),
+            notify,
+            assignments: vi.fn(() => Promise.resolve([])),
+            reassign: vi.fn(),
+            rotations: vi.fn(() => Promise.resolve([])),
+            markNoShow: vi.fn(() => Promise.resolve()),
+            linking: {
+              objects: [deals],
+              search: dealSearch,
+              link,
+              hrefOf: (record) => `/w/acme/objects/deals/${record.recordId}/overview`,
+            },
+          }}
+          onSearch={() => undefined}
+        />
+      ),
+      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
+    );
+    await userEvent.click(page.getByRole('button', { name: 'Quick chat', exact: true }));
+    return { link, notify };
+  }
+
+  it('shows the linked record on the card, opening its page, and takes the link off in one press with Undo', async () => {
+    const { link, notify } = await openWith(navy);
+    const chip = page.getByRole('link', { name: 'Navy rollout' });
+    await expect.element(chip).toHaveAttribute('href', `/w/acme/objects/deals/${navy.recordId}/overview`);
+    await userEvent.click(page.getByRole('button', { name: 'Remove link to Navy rollout' }));
+    expect(link).toHaveBeenCalledWith(bookingOf().id, null);
+    await expect.element(page.getByRole('link', { name: 'Navy rollout' })).not.toBeInTheDocument();
+    expect(notify).toHaveBeenCalledWith(
+      'success',
+      'Unlinked from Navy rollout.',
+      expect.objectContaining({ label: 'Undo' }),
+    );
+    // Undo links it again.
+    const undo = notify.mock.calls[0]?.[2];
+    undo?.onAction();
+    expect(link).toHaveBeenLastCalledWith(bookingOf().id, navy);
+  });
+
+  it('links one from More: the picker over Deals, then Link', async () => {
+    const { link, notify } = await openWith(undefined);
+    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Link to a record' }));
+    const dialog = page.getByRole('dialog', { name: 'Link Ada Lovelace · Quick chat to a record' });
+    await expect.element(dialog).toBeVisible();
+    const linkButton = dialog.getByRole('button', { name: 'Link', exact: true });
+    await expect.element(linkButton).toBeDisabled();
+    await userEvent.click(dialog.getByRole('button', { name: /Choose Record/ }));
+    await userEvent.click(page.getByRole('menuitem', { name: /Navy rollout/ }));
+    await userEvent.click(linkButton);
+    expect(link).toHaveBeenCalledWith(bookingOf().id, navy);
+    expect(notify).toHaveBeenCalledWith('success', 'Linked to Navy rollout.');
+    await expect.element(page.getByRole('link', { name: 'Navy rollout' })).toBeVisible();
   });
 });
