@@ -18,7 +18,7 @@ describe('settingsNav', () => {
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Scheduling', 'Workspace']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Security', 'Notifications'],
-      ['Calendars', 'Rotations'],
+      ['Calendars', 'Round robin'],
       ['General', 'Members', 'Security', 'Objects', 'Background jobs'],
     ]);
   });
@@ -36,7 +36,7 @@ describe('settingsNav', () => {
       'workspace-security': '/w/acme/settings/security',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
-      rotations: '/w/acme/settings/scheduling/rotations',
+      rotations: '/w/acme/settings/scheduling/round-robin',
     });
     expect(entries.every((entry) => entry.href.startsWith('/w/acme/settings/'))).toBe(true);
     expect(entries.filter((entry) => entry.meta !== undefined)).toEqual([]);
@@ -62,7 +62,7 @@ describe('visibleSettingsNav', () => {
     },
   ];
 
-  it('shows Rotations only to someone who makes booking pages, and Workspace › Security only to owners', () => {
+  it('shows Round robin only to someone who makes booking pages, and Workspace › Security only to owners', () => {
     expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage'])).toEqual(
       settingsNav('acme').map((group) => ({
         ...group,
@@ -71,7 +71,7 @@ describe('visibleSettingsNav', () => {
     );
     // Workspace › Security only for those who change sign in rules (spec 0033).
     expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'])).toEqual(settingsNav('acme'));
-    // Without it, Scheduling keeps Calendars and loses only Rotations.
+    // Without it, Scheduling keeps Calendars and loses only Round robin.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications'],
       ['calendars'],
@@ -105,6 +105,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/jobs/')).toBe('jobs');
     expect(settingsPageOf('/w/acme/settings/members')).toBe('members');
+    expect(settingsPageOf('/w/acme/settings/scheduling/round-robin')).toBe('rotations');
     expect(settingsPageOf('/w/acme/settings/scheduling/rotations')).toBe('rotations');
   });
 
