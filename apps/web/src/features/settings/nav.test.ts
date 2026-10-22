@@ -19,7 +19,7 @@ describe('settingsNav', () => {
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Security', 'Notifications'],
       ['Calendars', 'Rotations'],
-      ['General', 'Members', 'Security', 'Objects', 'Background jobs'],
+      ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'Trash'],
     ]);
   });
 
@@ -37,8 +37,12 @@ describe('settingsNav', () => {
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
       rotations: '/w/acme/settings/scheduling/rotations',
+      // The trash keeps its own address (the owner, 22 October 2026): the one entry outside Settings.
+      trash: '/w/acme/trash',
     });
-    expect(entries.every((entry) => entry.href.startsWith('/w/acme/settings/'))).toBe(true);
+    expect(
+      entries.filter((entry) => entry.id !== 'trash').every((entry) => entry.href.startsWith('/w/acme/settings/')),
+    ).toBe(true);
     expect(entries.filter((entry) => entry.meta !== undefined)).toEqual([]);
     expect(preferencesHref('acme')).toBe('/w/acme/settings/account/preferences');
     expect(calendarSettingsHref('acme')).toBe('/w/acme/settings/scheduling/calendars');
@@ -75,7 +79,7 @@ describe('visibleSettingsNav', () => {
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications'],
       ['calendars'],
-      ['general', 'members', 'objects', 'jobs'],
+      ['general', 'members', 'objects', 'jobs', 'trash'],
     ]);
   });
 

@@ -268,13 +268,15 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page');
   await expect(nav.getByText('Ada’s workspace')).toBeAttached();
   // The sidebar (spec 0034, AC-921; owner, 21 and 22 October 2026): Home, Records, then Bookings and Captures in a
-  // group with no label, Tasks, then the foot's Trash, Settings and Help and shortcuts, inside the sidebar at every
+  // group with no label, Tasks, then the foot's Settings and Help and shortcuts, inside the sidebar at every
   // width (on the rail, each a named icon in its group). The theme switch left the sidebar for Settings ›
   // Preferences (spec 0026).
   await expect(nav.getByRole('group', { name: 'Scheduling' })).toBeVisible();
-  for (const name of ['Home', 'Tasks', 'Bookings', 'Captures', 'Trash']) {
+  for (const name of ['Home', 'Tasks', 'Bookings', 'Captures']) {
     await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
   }
+  // The trash left the sidebar for Settings, under Workspace (the owner, 22 October 2026).
+  await expect(nav.getByRole('link', { name: 'Trash', exact: true })).toHaveCount(0);
   const settings = nav.getByRole('link', { name: 'Settings', exact: true });
   const [settingsBox, navBox] = [await settings.boundingBox(), await nav.boundingBox()];
   expect(settingsBox !== null && navBox !== null && settingsBox.x + settingsBox.width <= navBox.x + navBox.width).toBe(

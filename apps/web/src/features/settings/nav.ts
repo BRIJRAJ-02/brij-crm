@@ -3,7 +3,7 @@
 // imports, so the routes' loaders (in the first load) can use them without
 // pulling a screen in.
 import type { ObjectSummary, Permission } from '@crm/data';
-import { jobsHref, settingsHomeHref } from '../workspace/objects.ts';
+import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
 import { strings as calendar } from './calendar-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as rotations } from '../booking/rotation-strings.ts';
@@ -71,6 +71,7 @@ export type SettingsPageId =
   | 'workspace-security'
   | 'objects'
   | 'jobs'
+  | 'trash'
   | 'rotations';
 
 /** Settings › Workspace › Security (spec 0033, milestone 4): the workspace's sign in rules, owners only. */
@@ -99,8 +100,9 @@ export interface SettingsNavEntry {
     | 'lock'
     | 'box'
     | 'list-checks'
-    | 'users-round';
-  /** A quiet word after the name. Every entry opens a page in Settings, so none leaves it (20 Oct 2026). */
+    | 'users-round'
+    | 'trash';
+  /** A quiet word after the name. Every entry but Trash opens a page in Settings (20 and 22 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
   readonly requires?: Permission;
@@ -169,6 +171,9 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
+        // The trash left the sidebar for here (the owner, 22 October 2026). The one entry outside Settings: it opens
+        // the trash's own page, at its own address, which deletes' Undo toasts and ⌘K's Open trash also reach.
+        { id: 'trash', label: strings.trash, href: trashHref(slug), icon: 'trash' },
       ],
     },
   ];

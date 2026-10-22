@@ -22,7 +22,7 @@ interface SampleSidebarProps {
 
 /**
  * The sidebar as the app draws it: the fixed destinations, then Favorites, Records and Lists, then Bookings and
- * Captures in a group of their own, and the trash, Settings and Help at the foot (owner, 22 October 2026).
+ * Captures in a group of their own, and Settings and Help at the foot (owner, 22 October 2026; the trash moved to Settings).
  */
 function SampleSidebar({
   isCollapsed = false,
@@ -57,9 +57,6 @@ function SampleSidebar({
         onCollapsedChange={setCollapsed}
         footer={
           <>
-            <NavItem icon="trash" href="/trash">
-              Trash
-            </NavItem>
             <NavItem icon="settings" href="/settings" kbd="⌘,">
               Settings
             </NavItem>
@@ -159,7 +156,7 @@ export const Keyboard: Story = {
  * Collapsed (owner, 22 October 2026): a calm rail. Every item a plain icon in a size-nav-item square (object tiles are the
  * open sidebar's), Expand at the top where Collapse sits when open, then Quick actions with its shortcut in the
  * tooltip rather than a keycap, a hairline only where the open sidebar has a section label, the current item
- * highlighted as when open, and the foot's trash, Settings and Help alike. Every icon is named in a tooltip.
+ * highlighted as when open, and the foot's Settings and Help alike. Every icon is named in a tooltip.
  */
 export const Collapsed: Story = {
   args: { isCollapsed: true },
@@ -177,7 +174,7 @@ export const Collapsed: Story = {
       const box = canvas.getByRole('button', { name }).getBoundingClientRect();
       await expect([name, Math.round(box.width), Math.round(box.height)]).toEqual([name, side, side]);
     }
-    for (const name of ['Companies', 'People', 'Bookings', 'Trash', 'Settings']) {
+    for (const name of ['Companies', 'People', 'Bookings', 'Settings']) {
       const box = canvas.getByRole('link', { name }).getBoundingClientRect();
       await expect([name, Math.round(box.width), Math.round(box.height)]).toEqual([name, side, side]);
     }

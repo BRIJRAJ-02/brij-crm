@@ -40,7 +40,7 @@ import { COMMAND_MENU_KEYS, SEARCH_KEYS } from '../command/keys.ts';
 import { strings as commandStrings } from '../command/strings.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
-import { homeHref, newWorkspaceHref, settingsHomeHref, trashHref, workspaceHref } from './objects.ts';
+import { homeHref, newWorkspaceHref, settingsHomeHref, workspaceHref } from './objects.ts';
 import { keepRailHint, readRailHint } from './rail.ts';
 import { PAGE_LINKS, topEntries, universeOf, type SidebarPage } from './sidebar.ts';
 import { itemMenu, SidebarSections } from './SidebarSections.tsx';
@@ -296,16 +296,11 @@ export function WorkspaceFrame({
           // the buttons wait for their sidebar, so a press never lands on a guess.
           isCollapsed={isRail}
           {...(nav === undefined || isMissing ? {} : { onCollapsedChange: setRail })}
-          // The foot (AC-930): the trash (out of the main list and the workspace menu, the owner, 22 October 2026),
-          // Settings with ⌘, (spec 0026, AC-685), and Help, which opens the keyboard shortcuts until a help centre
+          // The foot (AC-930): Settings with ⌘, (spec 0026, AC-685); the trash left the sidebar for Settings, Workspace
+          // and ⌘K's Open trash (the owner, 22 October 2026), and Help, which opens the keyboard shortcuts until a help centre
           // exists. Invite teammates joins with spec 0031's invite flow.
           footer={
             <>
-              {!isMissing && (
-                <NavItem icon="trash" href={trashHref(slug)} isCurrent={currentPage === 'trash'}>
-                  {strings.trash}
-                </NavItem>
-              )}
               <NavItem icon="settings" href={settingsHomeHref(slug)} kbd="⌘,">
                 {strings.settings}
               </NavItem>

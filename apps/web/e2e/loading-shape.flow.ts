@@ -81,7 +81,7 @@ const ALL_SCREENS: readonly Screen[] = [
     target: tab('Configuration'),
   },
   { name: 'settings jobs', start: at('settings/account/preferences'), target: sidebar('Background jobs') },
-  { name: 'trash', start: at('captures/links'), target: sidebar('Trash') },
+  { name: 'trash', start: at('settings/account/preferences'), target: sidebar('Trash') },
 ];
 
 const ONLY = process.env.FLOW_SCREEN;

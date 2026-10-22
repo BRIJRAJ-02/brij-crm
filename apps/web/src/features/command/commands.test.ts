@@ -39,7 +39,7 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
       'Availability',
       'Booking pages',
       'Forms',
-      'Trash',
+      'Open trash',
       'Settings',
     ]);
   });
@@ -78,7 +78,7 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
 
   it('finds a page by another word for it', () => {
     expect(names('theme')).toEqual(['Use light theme', 'Use dark theme', 'Use system theme', 'Settings › Preferences']);
-    expect(names('deleted')).toEqual(['Trash']);
+    expect(names('deleted')).toEqual(['Open trash']);
     expect(names('fields')).toEqual(['Settings › Objects']);
     expect(names('appearance')).toContain('Settings › Preferences');
   });

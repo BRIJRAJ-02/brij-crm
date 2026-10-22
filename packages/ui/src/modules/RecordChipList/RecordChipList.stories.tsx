@@ -14,21 +14,24 @@ const meta = {
     records: [
       {
         display: { objectId: 'companies', recordId: 'c1', name: 'Northwind Traders', kind: 'company', hue: 'blue' },
-        href: '#c1',
+        href: '/records/c1',
       },
       {
         display: { objectId: 'people', recordId: 'p1', name: 'Ada Lovelace', kind: 'person', hue: 'orange' },
-        href: '#p1',
+        href: '/records/p1',
       },
       {
         display: { objectId: 'deals', recordId: 'd1', name: 'Renewal for the year ahead', kind: 'other', hue: 'green' },
-        href: '#d1',
+        href: '/records/d1',
       },
       {
         display: { objectId: 'people', recordId: 'p2', name: 'Grace Hopper', kind: 'person', hue: 'purple' },
-        href: '#p2',
+        href: '/records/p2',
       },
-      { display: { objectId: 'companies', recordId: 'c2', name: 'Contoso', kind: 'company', hue: 'red' }, href: '#c2' },
+      {
+        display: { objectId: 'companies', recordId: 'c2', name: 'Contoso', kind: 'company', hue: 'red' },
+        href: '/records/c2',
+      },
     ],
   },
   render: (args) => (
@@ -47,7 +50,7 @@ export const Default: Story = {
   play: async ({ canvas }) => {
     const list = canvas.getByRole('list', { name: 'Recently viewed' });
     await expect(list.querySelectorAll('li')).toHaveLength(5);
-    await expect(canvas.getByRole('link', { name: /Northwind Traders/ })).toHaveAttribute('href', '#c1');
+    await expect(canvas.getByRole('link', { name: /Northwind Traders/ })).toHaveAttribute('href', '/records/c1');
   },
 };
 

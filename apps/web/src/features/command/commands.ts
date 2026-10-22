@@ -106,14 +106,17 @@ const SETTINGS_TERMS: Readonly<Record<string, readonly string[]>> = {
 
 /** The Settings pages this member may open (`visibleSettingsNav`), named "Settings › <page>" (AC-1082). */
 export function settingsCommands(slug: string, permissions: readonly Permission[] | undefined): readonly Command[] {
+  // The trash's entry opens its own page, which "Open trash" already reaches.
   return visibleSettingsNav(settingsNav(slug), permissions).flatMap((group) =>
-    group.entries.map((entry): Command => ({
-      id: `settings:${entry.id}`,
-      name: strings.settingsPage(entry.label),
-      icon: entry.icon,
-      terms: SETTINGS_TERMS[entry.id] ?? [],
-      run: go(entry.href),
-    })),
+    group.entries
+      .filter((entry) => entry.id !== 'trash')
+      .map((entry): Command => ({
+        id: `settings:${entry.id}`,
+        name: strings.settingsPage(entry.label),
+        icon: entry.icon,
+        terms: SETTINGS_TERMS[entry.id] ?? [],
+        run: go(entry.href),
+      })),
   );
 }
 

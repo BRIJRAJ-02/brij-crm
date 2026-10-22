@@ -10,6 +10,7 @@ export const strings = {
   preferences: 'Preferences',
   /** The settings navigation's entries. */
   objects: 'Objects',
+  trash: 'Trash',
   newObject: 'New object',
   creatingObject: 'Creating object',
   createObject: 'Create object',
