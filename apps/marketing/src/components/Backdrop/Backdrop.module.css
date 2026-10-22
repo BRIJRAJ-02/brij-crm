@@ -51,8 +51,9 @@
     fill: currentcolor;
   }
 
+  /* The canvas keeps its box while hidden, so it is measured and drawn before it shows. */
   .live {
-    display: none;
+    visibility: hidden;
     color: inherit;
   }
 
@@ -61,7 +62,7 @@
   }
 
   .root[data-live] .live {
-    display: block;
+    visibility: visible;
   }
 
   @keyframes uncover {
