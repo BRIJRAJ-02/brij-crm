@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { rotationsSettingsHref } from '../settings/nav.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { lengthOf } from './durations.ts';
-import { browserZone } from './zone.ts';
+import { memberZone } from './zone.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
@@ -39,7 +39,7 @@ export function NewPageDialog({ data, slug, canBookTeams = false, isOpen, onClos
   // `default` follows the member's default schedule (spec 0035); any other id names one of their schedules.
   const [schedule, setSchedule] = useState('default');
   // The member's schedules, held only while the dialog is open: it is mounted, closed, under all of Captures.
-  const schedules = useSchedules(isOpen ? data.schedules.view(slug, undefined, browserZone()) : undefined);
+  const schedules = useSchedules(isOpen ? data.schedules.view(slug, undefined, memberZone(data, slug)) : undefined);
   const choices = schedules.status === 'ready' ? schedules.schedules : [];
   const [who, setWho] = useState<'me' | 'rotation'>('me');
   const [rotationId, setRotationId] = useState<string | null>(null);
@@ -87,7 +87,7 @@ export function NewPageDialog({ data, slug, canBookTeams = false, isOpen, onClos
       .create(slug, {
         id,
         title: title.trim(),
-        timeZone: browserZone(),
+        timeZone: memberZone(data, slug),
         // A round robin page books by each host's own hours, so it names no schedule.
         settings: isTeam
           ? { durations: [minutes] }

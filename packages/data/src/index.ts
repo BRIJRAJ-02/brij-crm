@@ -1772,6 +1772,15 @@ export function createDataLayer({
     mintId,
     notify,
   });
+  /**
+   * The member's time zone in a workspace: their Preferences once read (the workspace's pages read them first),
+   * else the browser's. Relative dates in filters, rules, bulk targets and exports resolve in it.
+   */
+  const zoneOf = (workspace: string): string => {
+    const held = preferences.of(workspace).getSnapshot();
+    const chosen = held.status === 'ready' ? held.preferences.timeZone : undefined;
+    return chosen ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  };
 
   // Account security (spec 0033): two factor's state and this session's freshness, one held value.
   const accountSecurity = createAccountSecurityStore({
@@ -2661,6 +2670,8 @@ export function createDataLayer({
         },
         describe: describeObject,
         definitionsOf,
+        // Relative dates ("today", "this week") and rules resolve in the member's Preferences time zone.
+        timeZone: zoneOf,
         // A cell's new option (spec 0012, AC-238): its label shows while it is made, on every try. Landed, the
         // object's attributes are read again (its own definitions echo is skipped) and the pages reload.
         cellOptions: {
@@ -4086,7 +4097,7 @@ export function createDataLayer({
                     action: input.action,
                     target: input.target,
                     ...(input.edit === undefined ? {} : { edit: input.edit }),
-                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    timeZone: zoneOf(workspace),
                   },
                   options,
                 ),
@@ -4920,7 +4931,7 @@ export function createDataLayer({
                 workspace,
                 ...input,
                 attributeIds: [...input.attributeIds],
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                timeZone: zoneOf(workspace),
                 mutationId,
               },
               options,
