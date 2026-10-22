@@ -5,6 +5,8 @@
 // and put focus back on that button; the commit runs once and stays busy until
 // the server answers, though the change shows behind it at once; a refusal
 // shows inside the confirm; and once the change lands, focus goes to the day.
+// The week draws in the member's zone (UTC here, as renderInApp's UiProvider
+// gives it, or a FormatScope's), never the browser's.
 import {
   dataError,
   type BookingListItem,
@@ -17,22 +19,18 @@ import {
   type MeetingsState,
   type TimeBlockOccurrence,
 } from '@crm/data';
-import { createToasts } from '@crm/ui';
+import { createToasts, FormatScope } from '@crm/ui';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { deferred, openDialog, renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import type { HostBookingActions } from './BookingActions.tsx';
 import { BookingsCalendarScreen, BookingsListScreen } from './BookingsScreen.tsx';
-import { addDays, dayKeyOf, dayStart, weekOf } from './week.ts';
+import { addDays, dayKeyOf, instantAt, weekOf } from './week.ts';
 
-// Next week, so every booking is still to come: its Wednesday, 10:00 to 11:00, local time.
-const week = weekOf(addDays(dayKeyOf(new Date()), 7));
+// Next week, so every booking is still to come: its Wednesday, 10:00 to 11:00, in UTC (the member's zone here).
+const week = weekOf(addDays(dayKeyOf(new Date(), 'UTC'), 7));
 const wednesday = addDays(week, 2);
-const at = (hour: number) => {
-  const date = dayStart(wednesday);
-  date.setHours(hour);
-  return date.toISOString();
-};
+const at = (hour: number) => instantAt(wednesday, hour * 60, 'UTC').toISOString();
 
 function blockOf(overrides: Partial<TimeBlockOccurrence>): TimeBlockOccurrence {
   return {
@@ -114,7 +112,11 @@ afterEach(() => {
 });
 
 /** The week with these blocks and bookings; removals and cancels show at once and wait for the test's answer. */
-async function renderWeek(blocks: readonly TimeBlockOccurrence[], bookings: readonly BookingListItem[] = []) {
+async function renderWeek(
+  blocks: readonly TimeBlockOccurrence[],
+  bookings: readonly BookingListItem[] = [],
+  zone?: string,
+) {
   const { held, patch } = weekOfItems(blocks, bookings);
   const removals: ReturnType<typeof deferred<undefined>>[] = [];
   const onRemoveBlock = vi.fn((blockId: string) => {
@@ -156,25 +158,27 @@ async function renderWeek(blocks: readonly TimeBlockOccurrence[], bookings: read
   const toasts = createToasts();
   shown = await renderInApp(
     () => (
-      <BookingsCalendarScreen
-        slug="acme"
-        search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
-        week={held}
-        objects={[]}
-        pages={[]}
-        connections={[]}
-        calendars={noCalendars}
-        onDismissNotice={() => undefined}
-        locale="en-GB"
-        onSearch={() => undefined}
-        onRemoveBlock={onRemoveBlock}
-        onBlock={() => Promise.resolve({ id: 'x' })}
-        onBookAsHost={() => Promise.resolve()}
-        newBookingKey={() => 'key'}
-        workingStart={() => 9 * 60}
-        toasts={toasts}
-        actions={actions}
-      />
+      <FormatScope timeZone={zone}>
+        <BookingsCalendarScreen
+          slug="acme"
+          search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
+          week={held}
+          objects={[]}
+          pages={[]}
+          connections={[]}
+          calendars={noCalendars}
+          onDismissNotice={() => undefined}
+          locale="en-GB"
+          onSearch={() => undefined}
+          onRemoveBlock={onRemoveBlock}
+          onBlock={() => Promise.resolve({ id: 'x' })}
+          onBookAsHost={() => Promise.resolve()}
+          newBookingKey={() => 'key'}
+          workingStart={() => 9 * 60}
+          toasts={toasts}
+          actions={actions}
+        />
+      </FormatScope>
     ),
     { data, toasts, pattern: '/w/$slug/bookings/calendar', at: '/w/acme/bookings/calendar' },
   );
@@ -303,12 +307,12 @@ describe('cancelling a booking', () => {
     await expect.poll(alert).toBeNull();
     // The card is back, and focus with it on Cancel booking.
     await expect.poll(card).not.toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Cancel booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
     await userEvent.keyboard('{Enter}');
     await confirmAlone();
     await userEvent.click(page.getByRole('button', { name: /^Keep booking/ }));
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Cancel booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
     expect(week.actions.cancel).not.toHaveBeenCalled();
   });
 
@@ -394,7 +398,7 @@ describe('cancelling from the list', () => {
     expect(alert()?.textContent).toContain('Cancel Quick chat with Ada Lovelace?');
     await userEvent.keyboard('{Escape}');
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Cancel booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
     expect(cancel).not.toHaveBeenCalled();
 
     await userEvent.keyboard('{Enter}');
@@ -508,5 +512,32 @@ describe('the list rows', () => {
     );
     await expect.element(page.getByRole('link', { name: 'Connect a calendar' }).first()).toBeVisible();
     expect(document.querySelector('aside[aria-label="Calendars"]')).toBeNull();
+  });
+});
+
+describe('the member zone', () => {
+  // 23:30 UTC on the Tuesday is 05:00 on the Wednesday in Kolkata (UTC+5:30), whatever zone the browser is in.
+  const late = blockOf({ startsAt: at(-0.5), endsAt: at(0.5) });
+  /** The day columns a block's buttons sit in, by its name (a block past midnight has a piece each day). */
+  const columnsOf = (name: RegExp) =>
+    page
+      .getByRole('button', { name })
+      .elements()
+      .map((element) => element.closest('[role="group"]')?.getAttribute('aria-label')?.split(' ')[0]);
+
+  it('draws a block on the member’s day and hour, from their Preferences zone', async () => {
+    await renderWeek([late], [], 'Asia/Kolkata');
+    await expect.poll(() => columnsOf(/^Blocked, 5:00/)).toEqual(['Wednesday']);
+    // The hour axis says which zone its hours are in, in full for screen readers and on hover.
+    const corner = document.querySelector('[title="Times in Kolkata time (GMT+5:30)"]');
+    expect(corner?.textContent).toContain('GMT+5:30');
+    await openCard(/^Blocked, 5:00/);
+    expect(card()?.textContent).toMatch(/Wednesday \d+ \w+ · 5:00\s*–\s*6:00/);
+  });
+
+  it('draws the same block from Tuesday night when the member’s zone is UTC', async () => {
+    await renderWeek([late]);
+    // Half an hour on Tuesday night, then half an hour on Wednesday from midnight.
+    await expect.poll(() => columnsOf(/^Blocked, 23:30/)).toEqual(['Tuesday', 'Wednesday']);
   });
 });

@@ -1,8 +1,9 @@
-// A span drawn on Bookings' week (spec 0027), in the member's own zone (the
-// browser's): its instants, and its name for the card. Pure: the locale comes in.
+// A span drawn on Bookings' week (spec 0027), in the member's own zone (their
+// Preferences, else the browser's): its instants, and its name for the card.
+// Pure: the zone and the locale come in.
 import type { BookingAvailability } from '@crm/data';
 import { strings } from './strings.ts';
-import { dayStart } from './week.ts';
+import { dayStart, instantAt } from './week.ts';
 
 /** A span drawn on one day, in the member's own zone. */
 export interface DrawnSpan {
@@ -11,11 +12,9 @@ export interface DrawnSpan {
   readonly endMinute: number;
 }
 
-/** The minute of a day as an instant in the member's zone (1440 is the next midnight). */
-export function instantOf(dayKey: string, minute: number): Date {
-  const date = dayStart(dayKey);
-  date.setMinutes(minute);
-  return date;
+/** The minute of a day as an instant in `zone`, the member's (1440 is the next midnight). */
+export function instantOf(dayKey: string, minute: number, zone: string): Date {
+  return instantAt(dayKey, minute, zone);
 }
 
 /** "45 min", "1 hr", "1 hr 30 min". */
@@ -26,12 +25,16 @@ export function lengthLabel(minutes: number): string {
   return rest === 0 ? strings.hours(hours) : `${strings.hours(hours)} ${strings.minutes(rest)}`;
 }
 
-/** The span's name: its times, and its day and length. */
-export function spanNames(span: DrawnSpan, locale: string): { readonly title: string; readonly meta: string } {
-  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
-  const day = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' });
-  const start = instantOf(span.dayKey, span.startMinute);
-  const end = instantOf(span.dayKey, span.endMinute);
+/** The span's name: its times on the clock of `zone`, and its day and length. */
+export function spanNames(
+  span: DrawnSpan,
+  locale: string,
+  zone: string,
+): { readonly title: string; readonly meta: string } {
+  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: zone });
+  const day = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone });
+  const start = instantOf(span.dayKey, span.startMinute, zone);
+  const end = instantOf(span.dayKey, span.endMinute, zone);
   return {
     title: `${clock.format(start)} – ${clock.format(end)}`,
     meta: `${day.format(start)} · ${lengthLabel(span.endMinute - span.startMinute)}`,

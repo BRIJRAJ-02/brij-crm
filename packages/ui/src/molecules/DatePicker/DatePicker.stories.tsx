@@ -121,6 +121,30 @@ export const Inline: Story = {
   },
 };
 
+/** MonthCalendar with `shown`: the week the view beside it shows, 12 to 18 October, tinted as one band. */
+export const InlineWeekShown: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render() {
+    const [day, setDay] = useState('2026-10-15');
+    return (
+      <Stage width="narrow">
+        <MonthCalendar
+          label="Go to date"
+          value={day}
+          onChange={setDay}
+          shown={{ start: '2026-10-12', end: '2026-10-18' }}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const shown = [...canvasElement.querySelectorAll<HTMLElement>('[data-shown]')];
+    await expect(shown.map((day) => day.textContent)).toEqual(['12', '13', '14', '15', '16', '17', '18']);
+    await expect(canvasElement.querySelector('[data-shown-start]')).toHaveTextContent('12');
+    await expect(canvasElement.querySelector('[data-shown-end]')).toHaveTextContent('18');
+  },
+};
+
 /** In a form, Enter in the date submits it, as in any text field. */
 export const SubmitsOnEnter: Story = {
   args: { onChange: fn() },

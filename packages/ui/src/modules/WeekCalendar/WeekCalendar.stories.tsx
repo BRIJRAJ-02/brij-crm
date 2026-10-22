@@ -215,6 +215,12 @@ export const ShortBlocks: Story = {
     if (start === null) throw new Error('a drawn span without its start');
     await expect(start).toHaveTextContent('4:00 PM');
     await expect(wordsInside(ghost, start).centred).toBe(true);
+    // Half an hour shows its start alone, so the title keeps its room, but still reads the whole time.
+    const half = within(canvasElement).getByRole('button', { name: 'Ada Lovelace, 10:00 – 10:30 AM' });
+    await expect(half.querySelector('[class*="block-time"]')).toHaveTextContent(/^10:00 AM$/);
+    // A longer block shows the whole time, and says who it is with in its name.
+    const long = within(canvasElement).getByRole('button', { name: 'Alan Turing, 11:00 – 11:45 AM, Intro' });
+    await expect(long.querySelector('[class*="block-time"]')).toHaveTextContent('11:00 – 11:45 AM');
   },
 };
 
@@ -226,6 +232,31 @@ export const Default: Story = {
       <WeekCalendar {...args} days={days()} blocks={blocks()} now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }} />
     </Stage>
   ),
+};
+
+/**
+ * The zone the hours are in, over the hour axis ("GMT+5:30"), read out in full: the member's zone from their
+ * Preferences, which may not be the device's. Out of the screenshots until its baseline is taken in the pinned
+ * image; Default shows the same grid.
+ */
+export const Zone: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { zone: { short: 'GMT+5:30', name: 'Times in Kolkata time (GMT+5:30)' } },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={blocks()} now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const corner = canvasElement.querySelector('[title^="Times in"]');
+    await expect(corner?.textContent).toContain('GMT+5:30');
+    await expect(corner?.getAttribute('title')).toBe('Times in Kolkata time (GMT+5:30)');
+    // Read out as focus enters the week: the section is described by the zone's full name.
+    const described = canvasElement.querySelector('section')?.getAttribute('aria-describedby') ?? '';
+    await expect(canvasElement.ownerDocument.getElementById(described)?.textContent).toBe(
+      'Times in Kolkata time (GMT+5:30)',
+    );
+  },
 };
 
 /** The week while its blocks load: the grid in place, busy, each day saying it is loading. */
@@ -265,7 +296,12 @@ export const OpenCard: Story = {
           onSelectDay={setDay}
           now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
           {...(open === undefined ? {} : { openId: open })}
-          detail={<p>Grace Hopper, 3:30 – 4:00 PM</p>}
+          detail={
+            <>
+              <p>Grace Hopper, 3:30 – 4:00 PM</p>
+              <p>Quick chat</p>
+            </>
+          }
           onOpen={setOpen}
           onClose={() => setOpen(undefined)}
         />
@@ -273,9 +309,19 @@ export const OpenCard: Story = {
     );
   },
   play: async ({ canvas, canvasElement }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Grace Hopper, 3:30 – 4:00 PM' }));
+    // A cancelled block says so in its name, not by its strike alone.
+    await expect(
+      canvas.getByRole('button', { name: 'Alan Turing, 10:00 – 11:00 AM, Site visit, canceled' }),
+    ).toBeInTheDocument();
+    // Its name says who and when, and what it is about (the block's detail).
+    await userEvent.click(canvas.getByRole('button', { name: 'Grace Hopper, 3:30 – 4:00 PM, Quick chat' }));
     const body = within(canvasElement.ownerDocument.body);
     await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toBeInTheDocument());
+    // The card's pieces sit apart, not flush (measured while the card may still be growing in, so not exact).
+    const card = within(body.getByRole('dialog', { name: 'Details' }));
+    const first = card.getByText('Grace Hopper, 3:30 – 4:00 PM').getBoundingClientRect();
+    const second = card.getByText('Quick chat').getBoundingClientRect();
+    await expect(second.top - first.bottom).toBeGreaterThan(8);
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(body.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument());
   },
@@ -642,5 +688,99 @@ export const EmptyWeek: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No meetings this week')).toBeVisible();
+  },
+};
+
+/**
+ * A busy all day row: a day over three items shows two and "+N more", which lists the rest (a Menu in a Popover);
+ * choosing one opens its card on the chip. The chips are in the day's arrow key order, above its blocks.
+ */
+export const AllDayCapped: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render(args) {
+    const [openId, setOpenId] = useState<string | undefined>(undefined);
+    return (
+      <Stage width="fill">
+        <WeekCalendar
+          {...args}
+          days={days()}
+          blocks={blocks()}
+          allDay={[
+            { id: 'mon-1', dayKey: '2026-10-05', title: 'Conference', hue: 'blue' },
+            { id: 'mon-2', dayKey: '2026-10-05', title: 'Out of office', hue: 'purple' },
+            { id: 'mon-3', dayKey: '2026-10-05', title: 'Release week', hue: 'green' },
+            { id: 'mon-4', dayKey: '2026-10-05', title: 'Birthday', hue: 'orange' },
+            { id: 'mon-5', dayKey: '2026-10-05', title: 'On call', hue: 'red' },
+            { id: 'thu-1', dayKey: '2026-10-08', title: 'Team offsite', hue: 'blue' },
+          ]}
+          {...(openId === undefined ? {} : { openId })}
+          detail={<p>{openId}</p>}
+          onOpen={setOpenId}
+          onClose={() => setOpenId(undefined)}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    // The chips are not tab stops; the day's column is.
+    const offsite = canvas.getByRole('button', { name: /^Team offsite, all day/ });
+    await expect(offsite).toHaveAttribute('tabindex', '-1');
+    // Down from Thursday's column: its all day chip first, then its blocks by start.
+    canvas.getByRole('group', { name: 'Thursday, 8 October, 3 items' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(offsite).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getByRole('button', { name: 'Team standup, 3:00 – 4:00 PM' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowUp}');
+    await expect(offsite).toHaveFocus();
+    // Monday holds five: two show, the rest fold into "+3 more".
+    await expect(canvas.queryByRole('button', { name: /^Release week/ })).not.toBeInTheDocument();
+    const more = canvas.getByRole('button', { name: '3 more all day items on Monday, 5 October' });
+    await expect(more).toHaveTextContent('+3 more');
+    // Left from a chip moves to the day before, as from its column.
+    await userEvent.keyboard('{ArrowLeft}');
+    await waitFor(() => expect(canvas.getByRole('group', { name: 'Wednesday, 7 October, 1 item' })).toHaveFocus());
+    await userEvent.click(more);
+    await userEvent.click(await body.findByRole('menuitem', { name: 'Birthday' }));
+    await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toHaveTextContent('mon-4'));
+    await expect(more).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(more).toHaveFocus());
+  },
+};
+
+/** On a phone a block's card is a sheet at the window's foot, not a popover over the day; Escape closes it. */
+export const PhoneCard: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { selectedDay: '2026-10-08' },
+  render: function Render(args) {
+    const [open, setOpen] = useState<string | undefined>(undefined);
+    return (
+      <Stage width="phone">
+        <WeekCalendar
+          {...args}
+          days={days()}
+          blocks={blocks()}
+          now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
+          scrollToMinute={15 * 60}
+          {...(open === undefined ? {} : { openId: open })}
+          detail={<p>Grace Hopper, 3:30 – 4:00 PM</p>}
+          onOpen={setOpen}
+          onClose={() => setOpen(undefined)}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /^Grace Hopper, 3:30 – 4:00 PM/ }));
+    const body = within(canvasElement.ownerDocument.body);
+    const sheet = await waitFor(() => body.getByRole('dialog', { name: 'Details' }));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    // The window's width, on its foot.
+    await expect(Math.round(sheet.getBoundingClientRect().width)).toBe(globalThis.innerWidth);
+    await expect(Math.round(sheet.getBoundingClientRect().bottom)).toBe(globalThis.innerHeight);
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(body.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument());
   },
 };

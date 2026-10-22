@@ -86,6 +86,8 @@ export { isRefusal } from './fields/values.ts';
 export { HUES, type Hue } from './hue.ts';
 export { arraySource, type ListRange, type ListSource } from './lib/list-source.ts';
 export { focusLater } from './lib/focus-later.ts';
+/** One Intl formatter per key (kind, language, zone, options), built once and reused: for screens that format many values each render. */
+export { memoIntl } from './lib/intl-memo.ts';
 export { safeHref } from './lib/safe-href.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
@@ -218,6 +220,12 @@ export {
 export { Pagination, type PaginationProps } from './molecules/Pagination/Pagination.tsx';
 export { RecordStats, type RecordStat, type RecordStatsProps } from './molecules/RecordStats/RecordStats.tsx';
 export { SpanCard, type SpanCardChoice, type SpanCardProps } from './modules/SpanCard/SpanCard.tsx';
+export {
+  MeetingCard,
+  type MeetingCardPerson,
+  type MeetingCardProps,
+  type MeetingCardRow,
+} from './modules/MeetingCard/MeetingCard.tsx';
 export {
   BookingDetails,
   type BookingDetailsOutcome,

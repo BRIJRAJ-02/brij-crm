@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, waitFor } from 'storybook/test';
-import { Button } from '../../atoms/Button/Button.tsx';
+import { expect, waitFor, within } from 'storybook/test';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
+import { Button, ButtonGroup } from '../../atoms/Button/Button.tsx';
+import { DescriptionList } from '../DescriptionList/DescriptionList.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Panel } from './Panel.tsx';
 
@@ -77,5 +79,38 @@ export const Floating: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('dialog', { name: 'Northwind Traders' })).toBeInTheDocument();
+  },
+};
+
+/** Stacked: a booking's details from library parts, each piece `space-12` below the one before; the Badge keeps its width. */
+export const Stacked: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Panel title="Booking" isOpen onClose={() => undefined} isStacked>
+        <Badge text="Confirmed" tone="accent" />
+        <DescriptionList
+          layout="stacked"
+          items={[
+            { term: 'Intro call', description: 'Grace Hopper' },
+            { term: 'When', description: 'Friday, October 23 · 1:00 PM – 1:45 PM' },
+          ]}
+        />
+        <ButtonGroup label="Booking actions">
+          <Button>Reschedule</Button>
+          <Button variant="danger">Cancel booking</Button>
+        </ButtonGroup>
+      </Panel>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const panel = canvas.getByRole('dialog', { name: 'Booking' });
+    const badge = within(panel).getByText('Confirmed');
+    const actions = within(panel).getByRole('button', { name: 'Reschedule' });
+    const list = within(panel).getByText('When');
+    // The badge keeps its own width rather than stretching across the panel.
+    await expect(badge.getBoundingClientRect().width).toBeLessThan(panel.getBoundingClientRect().width / 2);
+    // The actions sit apart from the last value, not against it.
+    await expect(actions.getBoundingClientRect().top - list.getBoundingClientRect().bottom).toBeGreaterThan(12);
   },
 };

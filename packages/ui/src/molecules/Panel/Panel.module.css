@@ -76,6 +76,12 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* Pieces with no layout of their own, apart in one rhythm. A margin rather than a flex gap, so an inline
+     piece (a Badge) keeps its own width. */
+  .body[data-stacked] > :not(:first-child) {
+    margin-block-start: var(--space-12);
+  }
+
   .body[data-flush] {
     display: flex;
     flex-direction: column;

@@ -7,8 +7,8 @@ import {
   type DataLayer,
   type ObjectSummary,
 } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
-import { useMemo } from 'react';
+import { LoadingNow, useFormatSettings } from '@crm/ui';
+import { useEffect, useMemo, useRef } from 'react';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { BookingsCalendarScreen, BookingsFailed } from '../features/bookings/BookingsScreen.tsx';
 import { bookingsSearchOf, parseBookingsSearch, rawOf } from '../features/bookings/search.ts';
@@ -16,7 +16,7 @@ import { strings } from '../features/bookings/strings.ts';
 import { hostActions } from '../features/bookings/hostActions.ts';
 import { openHoursOf, workingStartOf } from '../features/bookings/span.ts';
 import { addDays, weekRange } from '../features/bookings/week.ts';
-import { browserZone } from '../features/booking/zone.ts';
+import { memberZone } from '../features/booking/zone.ts';
 import { firstDayFor, useFirstDay } from '../features/workspace/first-day.ts';
 
 // Bookings › Calendar (spec 0025, AC-646): the week (`w`, its Monday; `d`, the day picked) with the reader's own
@@ -32,15 +32,18 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
     const { data } = context;
     // The member's week start (read by the workspace frame already); a failed read starts on Monday's rule.
     const preferences = await data.preferences.load(params.slug).catch(() => undefined);
+    // The member's zone (their Preferences, else the browser's): the week's days, its range and its hours.
+    const zone = memberZone(data, params.slug);
     const shown = bookingsSearchOf(
       parseBookingsSearch(location.search),
       new Date(),
       firstDayFor(preferences?.weekStart),
+      zone,
     ).week;
-    const week = heldWeek(shown, data, params.slug);
+    const week = heldWeek(shown, data, params.slug, zone);
     // The weeks either side, read behind, so Previous and Next show at once.
     for (const step of [-7, 7])
-      heldWeek(addDays(shown, step), data, params.slug)
+      heldWeek(addDays(shown, step), data, params.slug, zone)
         .ready()
         .catch(() => undefined);
     const calendar = data.calendar.view(params.slug);
@@ -49,7 +52,7 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
       // The Link filter's choices; a member without booking pages has none.
       data.bookingPages.held(params.slug).catch(() => []),
       // Where a day starts when time is drawn from the keyboard; without it, 9:00.
-      data.bookings.hours(params.slug, browserZone()).catch(() => undefined),
+      data.bookings.hours(params.slug, zone).catch(() => undefined),
       week.ready(),
       calendar.ready().catch(() => undefined),
     ]);
@@ -62,9 +65,9 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
   component: CalendarRoute,
 });
 
-/** The data layer's held read of the week starting on `monday`: the same one for the same week, every time. */
-function heldWeek(monday: string, data: DataLayer, slug: string): BookingsCalendarHeld {
-  const range = weekRange(monday);
+/** The data layer's held read of the week starting on `monday` in `zone`: the same one for the same week, every time. */
+function heldWeek(monday: string, data: DataLayer, slug: string, zone: string): BookingsCalendarHeld {
+  const range = weekRange(monday, zone);
   return data.bookings.calendar(slug, range.from, range.to);
 }
 
@@ -94,12 +97,25 @@ function CalendarPending() {
 
 function Calendar({ objects, pages, connections, availability }: CalendarLoaded) {
   const { slug } = Route.useParams();
-  const search = bookingsSearchOf(Route.useSearch(), new Date(), useFirstDay());
+  // The member's zone, as the workspace frame's FormatScope holds it (their Preferences, else the browser's).
+  const { timeZone } = useFormatSettings();
+  const search = bookingsSearchOf(Route.useSearch(), new Date(), useFirstDay(), timeZone);
   const navigate = useNavigate();
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
   const actions = useMemo(() => hostActions(data, toasts, slug), [data, toasts, slug]);
-  const week = heldWeek(search.week, data, slug);
+  const week = heldWeek(search.week, data, slug, timeZone);
+  // The member's zone changed in Preferences while the page is open: the loader primed the weeks either side in the
+  // old one, so prime them again in the new one (each held read is the same one for the same range).
+  const primedZone = useRef(timeZone);
+  useEffect(() => {
+    if (primedZone.current === timeZone) return;
+    primedZone.current = timeZone;
+    for (const step of [-7, 7])
+      heldWeek(addDays(search.week, step), data, slug, timeZone)
+        .ready()
+        .catch(() => undefined);
+  }, [data, slug, timeZone, search.week]);
   return (
     <BookingsCalendarScreen
       slug={slug}
@@ -114,7 +130,7 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
       onRemoveBlock={(blockId) => data.bookings.blocks.remove(slug, blockId)}
       onBlock={(draft, preview) => data.bookings.blocks.create(slug, draft, preview)}
       workingStart={(dayKey) => workingStartOf(availability, dayKey)}
-      openHours={(dayKey) => openHoursOf(availability, dayKey, browserZone())}
+      openHours={(dayKey) => openHoursOf(availability, dayKey, timeZone)}
       onBookAsHost={async (meeting) => {
         await data.bookings.bookAsHost(slug, { ...meeting, guests: [...meeting.guests] });
       }}

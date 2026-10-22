@@ -2,7 +2,7 @@
 // week is drawn in.
 import type { BookingAvailability } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { openHoursOf } from './span.ts';
+import { instantOf, openHoursOf, spanNames } from './span.ts';
 
 const hours: BookingAvailability = {
   timeZone: 'Europe/London',
@@ -33,5 +33,14 @@ describe('openHoursOf', () => {
     // Another name for the same clock still shades.
     expect(openHoursOf({ ...hours, timeZone: 'Asia/Kolkata' }, '2026-10-20', 'Asia/Calcutta')).toHaveLength(2);
     expect(openHoursOf(undefined, '2026-10-20', 'Europe/London')).toBeUndefined();
+  });
+});
+
+describe('a drawn span in the member zone', () => {
+  it('is the instant on the member’s clock, and named on it', () => {
+    const span = { dayKey: '2026-10-21', startMinute: 5 * 60, endMinute: 6 * 60 };
+    expect(instantOf(span.dayKey, span.startMinute, 'Asia/Kolkata').toISOString()).toBe('2026-10-20T23:30:00.000Z');
+    expect(spanNames(span, 'en-GB', 'Asia/Kolkata').title.replace(/[\u2009\u202f]/g, ' ')).toBe('5:00 – 6:00');
+    expect(spanNames(span, 'en-GB', 'Asia/Kolkata').meta).toMatch(/^Wednesday 21 October/);
   });
 });

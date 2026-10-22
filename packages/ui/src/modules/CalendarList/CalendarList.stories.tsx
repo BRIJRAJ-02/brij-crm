@@ -100,6 +100,10 @@ export const OneCalendarAccount: Story = {
     await expect(canvas.getByRole('heading', { name: 'My calendars' })).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: /ada@lovelace\.example/ })).not.toBeInTheDocument();
     await expect(canvas.getByRole('checkbox', { name: 'Calendar' })).toBeChecked();
+    // The one calendar row carries its provider's mark, named, as a folded account's heading does.
+    const single = canvas.getByRole('checkbox', { name: 'Calendar' }).closest('li');
+    if (single === null) throw new Error('no row for the one calendar account');
+    await expect(within(single).getByRole('img', { name: 'Outlook' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: /ada@acme\.dev/ })).toBeInTheDocument();
     await expect(canvas.queryByText('Default')).not.toBeInTheDocument();
   },

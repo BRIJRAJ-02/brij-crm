@@ -3,11 +3,22 @@
 // Main task: name who it is with and their email, set the time, then Book it: a confirmed booking in the member's own time.
 // Leaves out: picking a person from the workspace as you type, and the email invitation (the calendar invites them).
 import { isDataError, type BookingPageView } from '@crm/data';
-import { Button, Callout, Field, Form, InfoTip, Modal, Select, type FormRefusal } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  DatePicker,
+  Field,
+  Form,
+  InfoTip,
+  Modal,
+  Select,
+  useFormatSettings,
+  type FormRefusal,
+} from '@crm/ui';
 import { useId, useState, useMemo } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
-import { browserZone } from '../booking/zone.ts';
-import { instantOf, spanNames, type DrawnSpan } from './span.ts';
+import { zoneDisplay } from '../../public/booking/time.ts';
+import { instantOf, type DrawnSpan } from './span.ts';
 import { SpanTimes } from './SpanTimes.tsx';
 import { strings } from './strings.ts';
 
@@ -74,14 +85,15 @@ export function NewMeetingDialog({
   const [idempotencyKey] = useState(newKey);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [timeZone, setTimeZone] = useState(browserZone);
+  // The member's zone draws the span; the guest's zone starts as theirs too, until it is picked.
+  const { timeZone: memberTimeZone } = useFormatSettings();
+  const [timeZone, setTimeZone] = useState(memberTimeZone);
   const [pageId, setPageId] = useState(pages[0]?.id ?? '');
   const [guests, setGuests] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
-  const { meta } = spanNames(span, locale);
-  const start = instantOf(span.dayKey, span.startMinute);
+  const start = instantOf(span.dayKey, span.startMinute, memberTimeZone);
   const minutes = span.endMinute - span.startMinute;
   // Once anything is typed, a stray click outside won't throw it away; Cancel and Esc still do.
   const isDirty = [name, email, guests, message].some((value) => value.trim() !== '');
@@ -150,6 +162,8 @@ export function NewMeetingDialog({
         label={strings.newMeeting}
         focusesFirstField
       >
+        {/* First, so it is read before the form is filled in, and never below the dialog's fold. */}
+        {!hasCalendar && <Callout tone="info">{strings.noCalendar}</Callout>}
         <Field
           label={strings.with}
           name="name"
@@ -171,13 +185,36 @@ export function NewMeetingDialog({
           value={email}
           onChange={setEmail}
         />
-        <Field label={strings.when} value={meta} isReadOnly readOnlyReason={strings.whenFixed} />
+        {/* Who it is with, then their zone, together: the zone only sets how their invitation reads the time. */}
+        <Select
+          label={strings.theirTimeZone}
+          items={zones}
+          filter={zoneMatches}
+          isSearchable
+          value={timeZone}
+          isDisabled={busy}
+          onChange={(zone) => {
+            if (zone !== null) setTimeZone(zone);
+          }}
+        />
+        {/* The day moves in place (Calendly's and Basecamp's new event): closing to pick another was a dead end. */}
+        <DatePicker
+          label={strings.day}
+          value={span.dayKey}
+          isRequired
+          isDisabled={busy}
+          onChange={(day) => {
+            if (day !== null) onSpanChange({ ...span, dayKey: day });
+          }}
+        />
         <SpanTimes
           span={span}
           locale={locale}
           onChange={onSpanChange}
           maxMinutes={MAX_MINUTES}
           showsLength
+          // From and To are on the member's clock; Their time zone above only sets the guest's invite.
+          hint={strings.timesIn(zoneDisplay(memberTimeZone, start.getTime()))}
           isDisabled={busy}
         />
         {pages.length > 1 && (
@@ -214,18 +251,6 @@ export function NewMeetingDialog({
           value={message}
           onChange={setMessage}
         />
-        <Select
-          label={strings.theirTimeZone}
-          items={zones}
-          filter={zoneMatches}
-          isSearchable
-          value={timeZone}
-          isDisabled={busy}
-          onChange={(zone) => {
-            if (zone !== null) setTimeZone(zone);
-          }}
-        />
-        {!hasCalendar && <Callout tone="info">{strings.noCalendar}</Callout>}
       </Form>
     </Modal>
   );

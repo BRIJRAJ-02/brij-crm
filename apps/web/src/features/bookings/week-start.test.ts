@@ -14,12 +14,21 @@ describe('the week start', () => {
   });
 
   it('opens Bookings on the week holding today from the chosen day', () => {
-    expect(bookingsSearchOf({ d: '2026-10-22' }, new Date(), 0).week).toBe('2026-10-18');
+    expect(bookingsSearchOf({ d: '2026-10-22' }, new Date(), 0, 'UTC').week).toBe('2026-10-18');
   });
 
   it('reads Automatic, or no choice yet, as Monday, as in round 6; a chosen day wins', () => {
     expect(weekStartOf('auto')).toBe('monday');
     expect(weekStartOf(undefined)).toBe('monday');
     expect(weekStartOf('sunday')).toBe('sunday');
+  });
+});
+
+describe('today in the member zone', () => {
+  it('opens on the week holding today as the member’s clock reads it, not the runner’s', () => {
+    // 20:00 UTC on Sunday 18 October is already Monday 19 October in Kolkata.
+    const now = new Date('2026-10-18T20:00:00.000Z');
+    expect(bookingsSearchOf({}, now, 1, 'Asia/Kolkata')).toMatchObject({ week: '2026-10-19', day: '2026-10-19' });
+    expect(bookingsSearchOf({}, now, 1, 'UTC')).toMatchObject({ week: '2026-10-12', day: '2026-10-18' });
   });
 });

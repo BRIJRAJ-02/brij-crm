@@ -23,15 +23,15 @@ import {
 } from '@crm/data';
 import { useBookingsCalendar, useCalendarList, useMeetings } from '@crm/data/react';
 import {
-  Badge,
   BookingList,
   Button,
   ButtonLink,
   Callout,
   DescriptionList,
-  Disclosure,
   EmptyState,
   Link,
+  MeetingCard,
+  memoIntl,
   Menu,
   MenuItem,
   MenuSection,
@@ -42,6 +42,7 @@ import {
   Panel,
   SectionBar,
   SegmentedControl,
+  useFormatSettings,
   useKeyboardPlatform,
   focusLater,
   Skeleton,
@@ -50,12 +51,13 @@ import {
   type Hue,
   type Toasts,
   type WeekCalendarBlock,
+  type MeetingCardRow,
 } from '@crm/ui';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { offsetLabel, zoneDisplay } from '../../public/booking/time.ts';
 import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { createPortal } from 'react-dom';
-import { browserZone } from '../booking/zone.ts';
 import { newLinkOnlyPageHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
@@ -69,7 +71,7 @@ import type { BookingsSearch } from './search.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { assignedItems } from './assignment.ts';
 import { ReassignDialog } from './ReassignDialog.tsx';
-import { BookingActions, BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
+import { BookingDialog, useBookingActions, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
 import {
@@ -77,11 +79,14 @@ import {
   allDayKeys,
   bookingPieces,
   dayKeyOf,
+  minuteOfDay,
   eventPieces,
   piecesOf,
   rangeLabel,
   scrollMinute,
+  shownWeek,
   timeRange,
+  weekBounds,
   weekDays,
   weekOf,
 } from './week.ts';
@@ -96,17 +101,48 @@ export const TABS: readonly BookingsTab[] = ['upcoming', 'past', 'cancelled'];
 /** Each connection's hue, in the order they were connected. */
 const CALENDAR_HUES: readonly Hue[] = ['blue', 'green', 'purple', 'orange', 'sky', 'yellow', 'red', 'lime'];
 
-/** Where a booking happens, as a line. */
-function whereOf(booking: BookingListItem): string {
+/**
+ * Where, as the card's row: a call by its provider ("Google Meet", never its address; Join is in the footer), a
+ * phone call, or the place.
+ */
+function whereRowOf(booking: BookingListItem): Pick<MeetingCardRow, 'icon' | 'label' | 'value'> {
   switch (booking.location.type) {
     case 'video':
-      return booking.videoUrl ?? strings.video;
+      return {
+        icon: 'video',
+        label: strings.where,
+        value: booking.videoUrl === undefined ? strings.video : providerOf(booking.videoUrl),
+      };
     case 'phone':
-      return strings.phone;
+      return { icon: 'phone', label: strings.where, value: strings.phone };
     default:
-      return booking.location.value;
+      return { icon: 'map-pin', label: strings.where, value: booking.location.value };
   }
 }
+
+/** Where a booking stands, as the card's quiet dot beside its time. */
+function statusOf(booking: BookingListItem): { readonly label: string; readonly hue: Hue } {
+  if (booking.status === 'cancelled') return { label: strings.status.cancelled, hue: 'gray' };
+  if (booking.needsHost) return { label: strings.needsHost, hue: 'orange' };
+  if (booking.noShow === true) return { label: strings.noShow, hue: 'red' };
+  return { label: strings.status.confirmed, hue: 'green' };
+}
+
+/**
+ * A card with nothing to change (no host actions given): the footer hook still runs, as hooks must, and these are
+ * never called, since the card draws no footer then.
+ */
+const NO_ACTIONS: HostBookingActions = {
+  cancel: () => Promise.reject(new Error('no actions')),
+  move: () => Promise.reject(new Error('no actions')),
+  moveSlots: () => Promise.reject(new Error('no actions')),
+  guestLink: () => Promise.reject(new Error('no actions')),
+  assignments: () => Promise.resolve([]),
+  reassign: () => Promise.reject(new Error('no actions')),
+  rotations: () => Promise.resolve([]),
+  markNoShow: () => Promise.reject(new Error('no actions')),
+  notify: () => undefined,
+};
 
 /** The person's page, when the booking names one and the reader can open People. */
 function personHrefOf(booking: BookingListItem, link: RecordLink, people: ObjectSummary | undefined) {
@@ -116,11 +152,14 @@ function personHrefOf(booking: BookingListItem, link: RecordLink, people: Object
 }
 
 /** "Monday, 19 October · 9:00 – 9:30 AM". */
-function whenOf(startsAt: string, endsAt: string, locale: string): string {
-  const day = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(
-    new Date(startsAt),
-  );
-  return `${day} · ${timeRange(startsAt, endsAt, locale)}`;
+function whenOf(startsAt: string, endsAt: string, locale: string, zone: string): string {
+  const day = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: zone,
+  }).format(new Date(startsAt));
+  return `${day} · ${timeRange(startsAt, endsAt, locale, zone)}`;
 }
 
 /**
@@ -229,11 +268,13 @@ function BookingCard({
   readonly personHref: string | undefined;
   readonly locale: string;
   readonly actions?: HostBookingActions | undefined;
-  /** In the week's popover: Reschedule and Cancel booking are drawn by the screen (see BookingActions). */
+  /** In the week's popover: Reschedule and Cancel booking are drawn by the screen (see useBookingActions). */
   readonly onAsk?: ((ask: BookingAsk) => void) | undefined;
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk | undefined;
 }) {
+  // The member's zone (their Preferences, else the browser's), as the week is drawn in.
+  const { timeZone } = useFormatSettings();
   // Read again when its host changes (a reassign or a move through the rotation lands).
   // Read again after a reassign here (a second rotation's seat leaves the organiser as it was).
   const [reads, setReads] = useState(0);
@@ -248,81 +289,112 @@ function BookingCard({
   // Admins reassign a round robin seat (AC-748; Manage over both hosts, today booking.admin's, AC-1337).
   const canReassign = useCan('booking.admin');
   const [reassigning, setReassigning] = useState(false);
+  const [isChatOpen, setChatOpen] = useState(false);
+  const chatId = useId();
+  const footer = useBookingActions({
+    booking,
+    actions: actions ?? NO_ACTIONS,
+    locale,
+    ...(onAsk === undefined ? {} : { onAsk }),
+    ...(focusOnMount === undefined ? {} : { focusOnMount }),
+    ...(canReassign && seats.length > 0
+      ? {
+          onReassign: () => {
+            setReassigning(true);
+          },
+        }
+      : {}),
+  });
+  const hasActions = actions !== undefined;
   return (
     <>
-      <Badge text={strings.status[booking.status]} tone={booking.status === 'confirmed' ? 'accent' : 'neutral'} />
-      {booking.hostRemoved === true && <Badge text={strings.hostRemoved} />}
-      {booking.eventFailed && booking.status === 'confirmed' && <Callout tone="warning">{strings.eventFailed}</Callout>}
-      {booking.needsHost && booking.status === 'confirmed' && (
-        <Callout tone="warning" title={strings.needsHost}>
-          {strings.needsHostText}
-        </Callout>
-      )}
-      <DescriptionList
-        layout="stacked"
-        items={[
+      <MeetingCard
+        title={strings.cardTitle(booking.visitorName, booking.pageTitle)}
+        when={whenOf(booking.startsAt, booking.endsAt, locale, timeZone)}
+        status={statusOf(booking)}
+        notices={
+          <>
+            {booking.hostRemoved === true && <Callout tone="info">{strings.hostRemoved}</Callout>}
+            {booking.eventFailed && booking.status === 'confirmed' && (
+              <Callout tone="warning">{strings.eventFailed}</Callout>
+            )}
+            {booking.needsHost && booking.status === 'confirmed' && (
+              <Callout tone="warning" title={strings.needsHost}>
+                {strings.needsHostText}
+              </Callout>
+            )}
+          </>
+        }
+        peopleLabel={strings.cardPeople}
+        people={[
           {
-            term: booking.pageTitle,
-            description:
-              personHref === undefined ? booking.visitorName : <Link href={personHref}>{booking.visitorName}</Link>,
+            id: `${booking.id}-guest`,
+            name: booking.visitorName,
+            ...(personHref === undefined ? {} : { href: personHref }),
+            detail: booking.visitorEmail,
+            isDetailCopyable: true,
           },
-          { term: strings.when, description: whenOf(booking.startsAt, booking.endsAt, locale) },
-          {
-            term: strings.who,
-            description: <Link href={`mailto:${booking.visitorEmail}`}>{booking.visitorEmail}</Link>,
-          },
-          ...(booking.guests.length === 0 ? [] : [{ term: strings.guests, description: booking.guests.join(', ') }]),
-          {
-            term: strings.where,
-            description:
-              booking.videoUrl === undefined ? (
-                whereOf(booking)
-              ) : (
-                <Link href={booking.videoUrl}>{booking.videoUrl}</Link>
-              ),
-          },
-          ...(booking.note === undefined ? [] : [{ term: strings.note, description: strings.quoted(booking.note) }]),
-          ...(booking.chat === undefined ? [] : [{ term: strings.bookedHow, description: strings.bookedByChat }]),
+          ...booking.guests.map((guest) => ({ id: `${booking.id}-${guest}`, name: guest })),
+        ]}
+        rows={[
+          { id: 'where', ...whereRowOf(booking) },
+          ...(booking.note === undefined
+            ? []
+            : [
+                {
+                  id: 'note',
+                  icon: 'message-square' as const,
+                  label: strings.note,
+                  value: strings.quoted(booking.note),
+                },
+              ]),
+          ...(booking.chat === undefined
+            ? []
+            : [
+                {
+                  id: 'chat',
+                  icon: 'bot' as const,
+                  label: strings.bookedHow,
+                  value: strings.bookedByChat,
+                  action: (
+                    <Button
+                      variant="ghost"
+                      isExpanded={isChatOpen}
+                      controls={chatId}
+                      onPress={() => setChatOpen((open) => !open)}
+                    >
+                      {isChatOpen ? strings.hideChat : strings.viewChat(booking.chat.length)}
+                    </Button>
+                  ),
+                  children: isChatOpen ? (
+                    <div id={chatId}>
+                      <DescriptionList
+                        layout="stacked"
+                        items={booking.chat.map((line, index) => ({
+                          id: String(index),
+                          term: line.role === 'visitor' ? strings.chatVisitor : strings.chatAssistant,
+                          description: line.text,
+                        }))}
+                      />
+                    </div>
+                  ) : undefined,
+                },
+              ]),
           ...(booking.cancelReason === undefined
             ? []
-            : [{ term: strings.cancelReason, description: booking.cancelReason }]),
-          ...assigned,
+            : [{ id: 'reason', icon: 'circle-x' as const, label: strings.cancelReason, value: booking.cancelReason }]),
+          ...assigned.map((item, index) => ({
+            id: `assigned-${String(index)}`,
+            icon: 'users-round' as const,
+            label: item.term,
+            value: item.description,
+            detail: item.term,
+          })),
         ]}
+        {...(hasActions && footer.actions !== undefined ? { actions: footer.actions } : {})}
+        {...(hasActions && footer.endAction !== undefined ? { endAction: footer.endAction } : {})}
       />
-      {booking.chat !== undefined && (
-        <Disclosure title={strings.showChat} count={booking.chat.length}>
-          <DescriptionList
-            layout="stacked"
-            items={booking.chat.map((line, index) => ({
-              id: String(index),
-              term: line.role === 'visitor' ? strings.chatVisitor : strings.chatAssistant,
-              description: line.text,
-            }))}
-          />
-        </Disclosure>
-      )}
-      {booking.status === 'confirmed' && booking.videoUrl !== undefined && (
-        <Link href={booking.videoUrl}>{`${strings.joinCall}: ${providerOf(booking.videoUrl)}`}</Link>
-      )}
-      {/* Its buttons show for a confirmed booking only; it stays mounted so a cancel's confirm outlives the
-          booking showing cancelled at once, until the server answers. */}
-      {/* Before the meeting: change it; once it has started: mark a no show (spec 0043). */}
-      {actions !== undefined && (
-        <BookingActions
-          booking={booking}
-          actions={actions}
-          locale={locale}
-          {...(onAsk === undefined ? {} : { onAsk })}
-          {...(focusOnMount === undefined ? {} : { focusOnMount })}
-          {...(canReassign && seats.length > 0
-            ? {
-                onReassign: () => {
-                  setReassigning(true);
-                },
-              }
-            : {})}
-        />
-      )}
+      {hasActions && footer.dialogs}
       {reassigning && actions !== undefined && (
         <ReassignDialog
           booking={booking}
@@ -384,26 +456,48 @@ function EventCard({
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
 }) {
+  // The member's zone (their Preferences, else the browser's), as the week is drawn in.
+  const { timeZone } = useFormatSettings();
+  const now = useNow();
   return (
-    <>
-      <DescriptionList
-        layout="stacked"
-        items={[
-          {
-            term: strings.when,
-            description: event.allDay
-              ? allDayWhenOf(event.startsAt, event.endsAt, locale)
-              : whenOf(event.startsAt, event.endsAt, locale),
-          },
-          { term: event.title, description: strings.fromCalendar },
-          ...(connection === undefined ? [] : [{ term: strings.calendar, description: connection.accountEmail }]),
-          ...(event.location === undefined ? [] : [{ term: strings.where, description: event.location }]),
-        ]}
-      />
-      {event.videoUrl !== undefined && (
-        <Link href={event.videoUrl}>{`${strings.joinCall}: ${providerOf(event.videoUrl)}`}</Link>
-      )}
-    </>
+    <MeetingCard
+      title={event.title}
+      when={
+        event.allDay
+          ? allDayWhenOf(event.startsAt, event.endsAt, locale)
+          : whenOf(event.startsAt, event.endsAt, locale, timeZone)
+      }
+      rows={[
+        ...(event.location === undefined
+          ? []
+          : [{ id: 'where', icon: 'map-pin' as const, label: strings.where, value: event.location }]),
+        ...(event.videoUrl === undefined
+          ? []
+          : [{ id: 'call', icon: 'video' as const, label: strings.where, value: providerOf(event.videoUrl) }]),
+        {
+          id: 'calendar',
+          icon: 'calendar' as const,
+          label: strings.calendar,
+          value: connection?.accountEmail ?? strings.calendar,
+          detail: strings.fromCalendar,
+        },
+      ]}
+      {...(event.videoUrl === undefined || Date.parse(event.endsAt) <= now.getTime()
+        ? {}
+        : {
+            actions: (
+              <ButtonLink
+                variant="primary"
+                icon="video"
+                href={event.videoUrl}
+                isExternal
+                label={strings.joinProvider(providerOf(event.videoUrl))}
+              >
+                {strings.join}
+              </ButtonLink>
+            ),
+          })}
+    />
   );
 }
 
@@ -417,13 +511,20 @@ function BusyCard({
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
 }) {
+  // The member's zone (their Preferences, else the browser's), as the week is drawn in.
+  const { timeZone } = useFormatSettings();
   return (
-    <DescriptionList
-      layout="stacked"
-      items={[
-        { term: strings.when, description: whenOf(busy.startsAt, busy.endsAt, locale) },
-        { term: strings.busy, description: strings.busyNote },
-        ...(connection === undefined ? [] : [{ term: strings.calendar, description: connection.accountEmail }]),
+    <MeetingCard
+      title={strings.busy}
+      when={whenOf(busy.startsAt, busy.endsAt, locale, timeZone)}
+      rows={[
+        {
+          id: 'calendar',
+          icon: 'calendar' as const,
+          label: strings.calendar,
+          value: connection?.accountEmail ?? strings.calendar,
+          detail: strings.busyNote,
+        },
       ]}
     />
   );
@@ -433,13 +534,19 @@ function BusyCard({
 function removeWords(
   turn: Pick<TimeBlockOccurrence, 'kind' | 'repeat' | 'label' | 'startsAt' | 'endsAt'>,
   locale: string,
+  zone: string,
 ): { readonly title: string; readonly text: string; readonly action: string; readonly busy: string } {
   const start = new Date(turn.startsAt);
-  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: zone });
   const from = clock.format(start);
   const to = clock.format(new Date(turn.endsAt));
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(start);
-  const day = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(start);
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: zone }).format(start);
+  const day = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: zone,
+  }).format(start);
   if (turn.kind === 'hold') {
     return {
       title: strings.releaseHoldTitle(turn.label),
@@ -485,7 +592,9 @@ function BlockCard({
   /** Focus Remove as the card opens: its confirm was just dismissed. */
   readonly isRemoveFocused?: boolean;
 }) {
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(new Date(turn.startsAt));
+  // The member's zone (their Preferences, else the browser's), as the week is drawn in.
+  const { timeZone } = useFormatSettings();
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone }).format(new Date(turn.startsAt));
   const remove = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (isRemoveFocused) focusLater(() => remove.current);
@@ -493,24 +602,30 @@ function BlockCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
-    <>
-      <DescriptionList
-        layout="stacked"
-        items={[
-          { term: strings.when, description: whenOf(turn.startsAt, turn.endsAt, locale) },
-          ...(turn.label === undefined ? [] : [{ term: strings.why, description: turn.label }]),
-          ...(turn.repeat === 'weekly' ? [{ term: strings.repeats, description: strings.everyWeek(weekday) }] : []),
-          { term: strings.bookingPages, description: turn.kind === 'hold' ? strings.heldNote : strings.blockedNote },
-        ]}
-      />
-      <Button ref={remove} variant="danger" icon="trash" onPress={onRemove}>
-        {turn.kind === 'hold'
-          ? strings.releaseHold
-          : turn.repeat === 'weekly'
-            ? strings.removeEvery(weekday)
-            : strings.removeBlock}
-      </Button>
-    </>
+    <MeetingCard
+      title={turn.label ?? (turn.kind === 'hold' ? strings.held : strings.blocked)}
+      when={whenOf(turn.startsAt, turn.endsAt, locale, timeZone)}
+      rows={[
+        ...(turn.repeat === 'weekly'
+          ? [{ id: 'repeats', icon: 'refresh-cw' as const, label: strings.repeats, value: strings.everyWeek(weekday) }]
+          : []),
+        {
+          id: 'pages',
+          icon: 'link' as const,
+          label: strings.bookingPages,
+          value: turn.kind === 'hold' ? strings.heldNote : strings.blockedNote,
+        },
+      ]}
+      endAction={
+        <Button ref={remove} variant="ghost-danger" icon="trash" onPress={onRemove}>
+          {turn.kind === 'hold'
+            ? strings.releaseHold
+            : turn.repeat === 'weekly'
+              ? strings.removeEvery(weekday)
+              : strings.removeBlock}
+        </Button>
+      }
+    />
   );
 }
 
@@ -534,9 +649,11 @@ function RemoveBlockDialog({
   /** Dismissed: Cancel or Esc. */
   readonly onClose: () => void;
 }) {
+  // The member's zone (their Preferences, else the browser's), as the week is drawn in.
+  const { timeZone } = useFormatSettings();
   const [isBusy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
-  const words = removeWords(turn, locale);
+  const words = removeWords(turn, locale, timeZone);
   const remove = () => {
     if (isBusy) return;
     setBusy(true);
@@ -686,6 +803,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const state = useBookingsCalendar(week);
   const now = useNow();
   const firstDay = useFirstDay();
+  // The member's zone (their Preferences, else the browser's): the week's days, hours, blocks and now line.
+  const { timeZone } = useFormatSettings();
   const [openId, setOpenId] = useState<string | undefined>(undefined);
   // A dialog a card asked for, drawn here rather than over the card's popover (React Aria draws popovers above every
   // dialog): the card closes while it is open, opens again when it is dismissed, and once its change went through
@@ -738,7 +857,17 @@ function WeekView(props: BookingsCalendarScreenProps) {
     return () => document.removeEventListener('keydown', listener, true);
   }, [platform]);
   const days = weekDays(search.week);
-  const today = dayKeyOf(now);
+  // The week's midnights in the member's zone, worked out once per week and zone rather than per block.
+  const bounds = useMemo(() => weekBounds(weekDays(search.week), timeZone), [search.week, timeZone]);
+  const today = dayKeyOf(now, timeZone);
+  const nowMinute = minuteOfDay(now, timeZone);
+  // The zone the hours are in, over the hour axis: the member's may not be the device's clock. Its offset as it is in
+  // the week on screen (the picked day's noon), so a week past a daylight saving change names the offset it is in.
+  const shownAt = instantOf(days.includes(search.day) ? search.day : search.week, 12 * 60, timeZone).getTime();
+  const zone = {
+    short: offsetLabel(timeZone, shownAt),
+    name: strings.timesIn(zoneDisplay(timeZone, shownAt)),
+  };
   const isThisWeek = weekOf(today, firstDay) === search.week;
   const range = rangeLabel(search.week, locale);
   // Each event in its calendar's colour (the member's pick, else the provider's); before the list reads, its account's.
@@ -768,6 +897,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
       jumpTo={{
         value: days.includes(search.day) ? search.day : (days[0] ?? search.week),
         onChange: (day) => onSearch({ week: weekOf(day, firstDay), day }),
+        // The week on screen, tinted on the month.
+        ...shownWeek(days),
       }}
     >
       {content}
@@ -794,7 +925,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
           <Button variant="secondary" onPress={() => onSearch({ week: weekOf(today, firstDay), day: today })}>
             {isThisWeek
               ? strings.today
-              : strings.todayOn(new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(now))}
+              : strings.todayOn(
+                  new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone }).format(now),
+                )}
           </Button>
           <Button
             variant="ghost"
@@ -821,11 +954,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
             isFill
             selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
             onSelectDay={(day) => onSearch({ day })}
+            zone={zone}
             hourLabel={(hour) =>
               new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour))
             }
-            now={{ dayKey: today, minute: now.getHours() * 60 + now.getMinutes() }}
-            scrollToMinute={scrollMinute(days, now, [], workingStart(today))}
+            now={{ dayKey: today, minute: nowMinute }}
+            scrollToMinute={scrollMinute(days, now, timeZone, [], workingStart(today))}
             {...(props.openHours === undefined ? {} : { openHours: props.openHours })}
             onOpen={() => undefined}
             onClose={() => undefined}
@@ -868,13 +1002,13 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const busyTimes = state.busy.filter(isShownEvent);
   const byBusy = new Map(busyTimes.map((busy) => [`busy:${busy.connectionId}:${busy.startsAt}:${busy.endsAt}`, busy]));
   const pieces = [
-    ...bookingPieces(bookings, days).map((piece) => ({ piece, kind: 'booking' as const })),
-    ...eventPieces(events, days).map((piece) => ({ piece, kind: 'event' as const })),
+    ...bookingPieces(bookings, bounds).map((piece) => ({ piece, kind: 'booking' as const })),
+    ...eventPieces(events, bounds).map((piece) => ({ piece, kind: 'event' as const })),
     ...state.blocks
-      .flatMap((turn) => piecesOf(turn.key, turn.startsAt, turn.endsAt, days))
+      .flatMap((turn) => piecesOf(turn.key, turn.startsAt, turn.endsAt, bounds))
       .map((piece) => ({ piece, kind: 'closed' as const })),
     ...[...byBusy]
-      .flatMap(([key, busy]) => piecesOf(key, busy.startsAt, busy.endsAt, days))
+      .flatMap(([key, busy]) => piecesOf(key, busy.startsAt, busy.endsAt, bounds))
       .map((piece) => ({ piece, kind: 'busy' as const })),
   ];
   const blocks: WeekCalendarBlock[] = pieces.flatMap(({ piece, kind }): WeekCalendarBlock[] => {
@@ -888,7 +1022,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           startMinute: piece.startMinute,
           endMinute: piece.endMinute,
           title: booking.pageTitle,
-          time: timeRange(booking.startsAt, booking.endsAt, locale),
+          time: timeRange(booking.startsAt, booking.endsAt, locale, timeZone),
           detail: booking.visitorName,
           kind: 'booking',
           provider: 'timefix',
@@ -907,7 +1041,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           startMinute: piece.startMinute,
           endMinute: piece.endMinute,
           title: strings.busy,
-          time: timeRange(busy.startsAt, busy.endsAt, locale),
+          time: timeRange(busy.startsAt, busy.endsAt, locale, timeZone),
           kind: 'busy',
           ...(provider === undefined ? {} : { provider }),
         },
@@ -923,7 +1057,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           startMinute: piece.startMinute,
           endMinute: piece.endMinute,
           title: turn.kind === 'hold' ? strings.held : strings.blocked,
-          time: timeRange(turn.startsAt, turn.endsAt, locale),
+          time: timeRange(turn.startsAt, turn.endsAt, locale, timeZone),
           ...(turn.label === undefined ? {} : { detail: turn.label }),
           kind: turn.kind === 'hold' ? 'held' : 'blocked',
         },
@@ -940,7 +1074,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
         startMinute: piece.startMinute,
         endMinute: piece.endMinute,
         title: event.title,
-        time: timeRange(event.startsAt, event.endsAt, locale),
+        time: timeRange(event.startsAt, event.endsAt, locale, timeZone),
         kind: 'event',
         ...(hue === undefined ? {} : { hue }),
         ...(provider === undefined ? {} : { provider }),
@@ -1001,11 +1135,13 @@ function WeekView(props: BookingsCalendarScreenProps) {
             isFill
             selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
             onSelectDay={(day) => onSearch({ day })}
+            zone={zone}
             hourLabel={(hour) => hourFormat.format(new Date(2000, 0, 1, hour))}
-            now={{ dayKey: today, minute: now.getHours() * 60 + now.getMinutes() }}
+            now={{ dayKey: today, minute: nowMinute }}
             scrollToMinute={scrollMinute(
               days,
               now,
+              timeZone,
               pieces.map(({ piece }) => piece),
               workingStart(today),
             )}
@@ -1072,12 +1208,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
             }}
             {...(meeting !== undefined
               ? // The span stays drawn behind New meeting, so the week shows where it will go.
-                { draft: meeting, draftLabel: strings.drawCard(spanNames(meeting, locale).title) }
+                { draft: meeting, draftLabel: strings.drawCard(spanNames(meeting, locale, timeZone).title) }
               : draft === undefined
                 ? {}
                 : {
                     draft,
-                    draftLabel: strings.drawCard(spanNames(draft, locale).title),
+                    draftLabel: strings.drawCard(spanNames(draft, locale, timeZone).title),
                     draftCard: (
                       <DrawCard
                         key={drawCount}
@@ -1087,7 +1223,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
                           .filter((page) => page.isPrivate)
                           .map((page) => ({ id: page.id, title: page.title }))}
                         createLinkOnlyHref={newLinkOnlyPageHref(slug)}
-                        overlapping={overlapping(bookings, draft)}
+                        overlapping={overlapping(bookings, draft, timeZone)}
                         onSpanChange={setDraft}
                         onClose={({ kind, repeat, label, pageId }) => {
                           const drawn = draft;
@@ -1095,8 +1231,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
                             kind,
                             repeat,
                             ...(label === undefined ? {} : { label }),
-                            startsAt: instantOf(drawn.dayKey, drawn.startMinute).toISOString(),
-                            endsAt: instantOf(drawn.dayKey, drawn.endMinute).toISOString(),
+                            startsAt: instantOf(drawn.dayKey, drawn.startMinute, timeZone).toISOString(),
+                            endsAt: instantOf(drawn.dayKey, drawn.endMinute, timeZone).toISOString(),
                           };
                           return onBlock(
                             {
@@ -1105,7 +1241,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
                               date: drawn.dayKey,
                               startMinute: drawn.startMinute,
                               endMinute: drawn.endMinute,
-                              timeZone: browserZone(),
+                              timeZone,
                               ...(label === undefined ? {} : { label }),
                               ...(pageId === undefined ? {} : { pageId }),
                             },
@@ -1136,7 +1272,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
                             },
                           );
                         }}
-                        {...(bookable.length === 0 || instantOf(draft.dayKey, draft.startMinute) < now
+                        {...(bookable.length === 0 || instantOf(draft.dayKey, draft.startMinute, timeZone) < now
                           ? {}
                           : {
                               onBook: () => {
@@ -1153,7 +1289,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
             minuteLabel={(minute) => {
               const at = new Date(2000, 0, 1);
               at.setMinutes(minute);
-              return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at);
+              // Built once per locale: half hour blocks ask for their start on every draw.
+              return memoIntl(
+                `bookings-minute:${locale}`,
+                () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }),
+              ).format(at);
             }}
           />
           {/* The week's count for screen readers; on screen the grid says it (the owner, 22 October 2026). */}
@@ -1217,17 +1357,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
 }
 
 /** How many confirmed bookings a drawn span overlaps (they stay booked; the card says so). */
-function overlapping(bookings: readonly BookingListItem[], span: DrawnSpan): number {
-  const start = instantOf(span.dayKey, span.startMinute).getTime();
-  const end = instantOf(span.dayKey, span.endMinute).getTime();
+function overlapping(bookings: readonly BookingListItem[], span: DrawnSpan, zone: string): number {
+  const start = instantOf(span.dayKey, span.startMinute, zone).getTime();
+  const end = instantOf(span.dayKey, span.endMinute, zone).getTime();
   return bookings.filter(
     (booking) =>
       booking.status === 'confirmed' && Date.parse(booking.startsAt) < end && Date.parse(booking.endsAt) > start,
   ).length;
 }
-
-/** The local day a meeting starts on, as a key. */
-const dayKeyOfInstant = (instant: string) => dayKeyOf(new Date(instant));
 
 /** A meeting's start and end, whichever kind it is. */
 const spanOf = (item: MeetingListItem) =>
@@ -1249,24 +1386,27 @@ function groupsOf(
   personHref: (booking: BookingListItem) => string | undefined,
   locale: string,
   me: string | undefined,
+  zone: string,
 ): readonly BookingListGroup[] {
   const now = new Date();
-  const today = dayKeyOf(now);
+  // Days and times in the member's zone, the one the week is drawn in.
+  const today = dayKeyOf(now, zone);
   const tomorrow = addDays(today, 1);
-  const shortDate = (date: Date) =>
+  // A band's date, named from its day key alone (noon UTC read in UTC), so no zone moves it.
+  const shortDate = (key: string) =>
     new Intl.DateTimeFormat(locale, {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
-      ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
-    }).format(date);
+      timeZone: 'UTC',
+      ...(key.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }),
+    }).format(new Date(`${key}T12:00:00Z`));
   const groups: { id: string; label: string; rows: BookingListGroup['rows'][number][] }[] = [];
   for (const item of items) {
     const { startsAt, endsAt } = spanOf(item);
     // An all day event's dates are calendar dates (midnight UTC): read by date, never moved into the local zone.
     const isAllDay = item.kind === 'event' && item.event.allDay;
-    const id = isAllDay ? startsAt.slice(0, 10) : dayKeyOfInstant(startsAt);
-    const start = isAllDay ? new Date(`${id}T12:00:00`) : new Date(startsAt);
+    const id = isAllDay ? startsAt.slice(0, 10) : dayKeyOf(new Date(startsAt), zone);
     const videoUrl = item.kind === 'booking' ? item.booking.videoUrl : item.event.videoUrl;
     const isCancelled =
       item.kind === 'booking' ? item.booking.status === 'cancelled' : item.event.status === 'cancelled';
@@ -1274,7 +1414,7 @@ function groupsOf(
       id: rowIdOf(item),
       // Under its day's band, a row says its time alone (the band says the day): the time on the date's line, bold,
       // and nothing under it; an all day event says All day.
-      date: isAllDay ? strings.allDay : timeRange(startsAt, endsAt, locale),
+      date: isAllDay ? strings.allDay : timeRange(startsAt, endsAt, locale, zone),
       time: '',
       // Join only while it can still be joined: not once cancelled, nor once it has ended.
       ...(videoUrl === undefined || isCancelled || Date.parse(endsAt) <= now.getTime()
@@ -1327,7 +1467,7 @@ function groupsOf(
     else
       groups.push({
         id,
-        label: id === today ? strings.today : id === tomorrow ? strings.tomorrow : shortDate(start),
+        label: id === today ? strings.today : id === tomorrow ? strings.tomorrow : shortDate(id),
         rows: [row],
       });
   }
@@ -1443,6 +1583,9 @@ export function BookingsListScreen({
   actions,
 }: BookingsListScreenProps) {
   const personHref = usePersonHref(slug, objects);
+  // The member's zone (their Preferences, else the browser's): each row's day band and time.
+  const { timeZone } = useFormatSettings();
+  const listNow = useNow();
   const calendarList = useCalendarList(calendars);
   const byCalendar = new Map(
     (calendarList.status === 'ready' ? calendarList.accounts : []).flatMap((account) =>
@@ -1511,8 +1654,9 @@ export function BookingsListScreen({
     ) : (
       <>
         <BookingList
-          label={strings.listLabel[tab]}
-          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), personHref, locale, me)}
+          // Rows' times are on the member's clock: the list's name says so for screen readers.
+          label={`${strings.listLabel[tab]}, ${strings.timesIn(zoneDisplay(timeZone, listNow.getTime()))}`}
+          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), personHref, locale, me, timeZone)}
           onOpen={setOpenId}
           emptyState={
             search.link !== undefined || search.cal !== undefined || source !== 'all' ? (
@@ -1583,7 +1727,7 @@ export function BookingsListScreen({
         {body}
       </CalendarsFrame>
       {open !== undefined && (
-        <Panel title={strings.details} isOpen onClose={() => setOpenId(undefined)}>
+        <Panel title={strings.details} isOpen isStacked onClose={() => setOpenId(undefined)}>
           {open.kind === 'booking' ? (
             <BookingCard
               booking={open.booking}

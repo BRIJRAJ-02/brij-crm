@@ -357,3 +357,25 @@ export const Peek: Story = {
     await expect(dialog.querySelector('[role="status"]')).toHaveTextContent('Saved');
   },
 };
+
+/** A sheet: a phone's card for one thing, the window's width at its foot, Close alone in its bar. */
+export const Sheet: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Modal variant="sheet" title="Booking" isOpen isDismissable>
+        Grace Hopper · Intro call, Friday, October 23 at 9:00 AM.
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveAccessibleName('Booking');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const panel = dialog.getBoundingClientRect();
+    // The window's width, sitting on its foot.
+    await expect(Math.round(panel.width)).toBe(globalThis.innerWidth);
+    await expect(Math.round(panel.bottom)).toBe(globalThis.innerHeight);
+    await expect(within(dialog as HTMLElement).getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  },
+};

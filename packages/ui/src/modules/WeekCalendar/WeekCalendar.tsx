@@ -1,5 +1,7 @@
 import {
+  Fragment,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -10,8 +12,10 @@ import {
   type Ref,
 } from 'react';
 import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
+import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Popover, type PopoverPlacement } from '../../molecules/Popover/Popover.tsx';
 import type { Hue } from '../../hue.ts';
 import { placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
@@ -39,9 +43,9 @@ export interface WeekCalendarBlock {
   readonly startMinute: number;
   readonly endMinute: number;
   readonly title: string;
-  /** "9:00 – 9:30 AM". */
+  /** "9:00 – 9:30 AM". A block of half an hour or less shows its start alone (`minuteLabel`), but reads this. */
   readonly time: string;
-  /** A third line when the block is tall enough (the page's title). */
+  /** A third line when the block is tall enough (who it is with); read out in the block's name at any size. */
   readonly detail?: string;
   /**
    * `booking` is accent; `event` quieter, in its calendar's hue; `blocked` and
@@ -53,6 +57,7 @@ export interface WeekCalendarBlock {
   readonly kind: 'booking' | 'event' | 'blocked' | 'held' | 'busy';
   /** An event's calendar hue (each connection keeps one). */
   readonly hue?: Hue;
+  /** Drawn struck through and quieter, and read out as canceled. */
   readonly isCancelled?: boolean;
   /** Where the block came from, as a small mark before its title: Timefix for a booking, the calendar's brand for an event. */
   readonly provider?: ProviderName;
@@ -112,6 +117,11 @@ export interface WeekCalendarProps {
   readonly onSelectDay: (key: string) => void;
   /** The hour axis's labels, 0 to 23 ("9 AM"). */
   readonly hourLabel: (hour: number) => string;
+  /**
+   * The zone the hours are in, over the hour axis: `short` shows ("GMT+5:30"), `name` is read out and shows on
+   * hover ("Times in Kolkata time (GMT+5:30)"). Absent leaves the corner empty.
+   */
+  readonly zone?: { readonly short: string; readonly name: string };
   /** Today's column and the minute now, for the now line. */
   readonly now?: { readonly dayKey: string; readonly minute: number };
   /** The minute the grid opens with at its top (an hour before now, or 8 AM). */
@@ -137,7 +147,7 @@ export interface WeekCalendarProps {
   readonly drawMinutes?: number;
   /** Where Enter on a day starts its span (the member's working start). Default 9:00. */
   readonly drawStartMinute?: (dayKey: string) => number;
-  /** A minute of the day as a time ("10:15 AM"), for the drawn span's corners. */
+  /** A minute of the day as a time ("10:15 AM"), for the drawn span's corners, a "+N" chip, and the start a block of half an hour or less shows. */
   readonly minuteLabel?: (minute: number) => string;
   /**
    * The week's blocks are still loading: the grid itself shows (the days, the hours, today), busy, so the week
@@ -184,19 +194,39 @@ function closedRanges(open: readonly WeekCalendarRange[]): readonly WeekCalendar
   return closed;
 }
 
+/** Whether the week holding `element` is narrower than `bp-container-md`, so one day takes the width (a phone). */
+function isNarrowWeek(element: HTMLElement): boolean {
+  const week = element.closest('section');
+  if (week === null) return false;
+  const narrow = Number.parseFloat(getComputedStyle(week).getPropertyValue('--bp-container-md'));
+  return Number.isFinite(narrow) && week.clientWidth < narrow;
+}
+
 /**
  * Where a block's card opens: beside it while the week shows seven days, under it once its container is narrower
- * than `bp-container-md` and one day takes the width, where a card beside the block would leave the screen.
+ * than `bp-container-md` and one day takes the width (where the screen draws it as a sheet instead).
  */
 function placementBeside(block: HTMLElement): PopoverPlacement {
-  const week = block.closest('section');
-  if (week === null) return 'end top';
-  const narrow = Number.parseFloat(getComputedStyle(week).getPropertyValue('--bp-container-md'));
-  return Number.isFinite(narrow) && week.clientWidth < narrow ? 'bottom start' : 'end top';
+  return isNarrowWeek(block) ? 'bottom start' : 'end top';
 }
 
 /** A block with its slot: overlapping blocks side by side, or a later start indented over an earlier one. */
 type Placed = PlacedSlot<WeekCalendarBlock>;
+
+/**
+ * How many all day items a day shows before the rest fold into a "+N more" chip: a busy week keeps the row to
+ * three chips' height, so the hours stay on screen. A day over the cap shows two and the chip.
+ */
+const ALL_DAY_CAP = 3;
+
+/** A day's all day items as they show: every one up to the cap, else one under it and the rest folded. */
+function allDayShown(items: readonly WeekCalendarAllDay[]): {
+  readonly shown: readonly WeekCalendarAllDay[];
+  readonly hidden: readonly WeekCalendarAllDay[];
+} {
+  if (items.length <= ALL_DAY_CAP) return { shown: items, hidden: [] };
+  return { shown: items.slice(0, ALL_DAY_CAP - 1), hidden: items.slice(ALL_DAY_CAP - 1) };
+}
 
 /** Closed time's slot: the whole column, under bookings and events. */
 const WHOLE: Slot = { left: 0, width: 1, indent: 0, lane: 0, lanes: 1, span: 1 };
@@ -221,6 +251,7 @@ export function WeekCalendar({
   selectedDay,
   onSelectDay,
   hourLabel,
+  zone,
   now,
   scrollToMinute,
   openId,
@@ -258,12 +289,15 @@ export function WeekCalendar({
     drag.current = next;
     setDraggingState(next);
   };
-  // The "+N" list that is open: the blocks folded there, and its chip, which the list and then a block's card anchor to.
+  // The "+N" list that is open: the items folded there, and its chip, which the list and then an item's card anchor to.
+  // All day items fold the same way, their card opening under the chip.
   const [moreList, setMoreList] = useState<{
     readonly id: string;
     readonly dayKey: string;
-    readonly hidden: readonly WeekCalendarBlock[];
+    readonly hidden: readonly { readonly id: string; readonly title: string; readonly time?: string }[];
     readonly anchor: HTMLButtonElement;
+    readonly label: string;
+    readonly placement: PopoverPlacement;
   } | null>(null);
   const moreRef = useMemo(() => ({ current: moreList?.anchor ?? null }), [moreList]);
   const [ghost, setGhost] = useState<HTMLDivElement | null>(null);
@@ -343,20 +377,18 @@ export function WeekCalendar({
     return () => cancelAnimationFrame(frame);
   }, [scrollToMinute]);
 
-  const index = Math.max(
-    0,
-    days.findIndex((day) => day.key === selectedDay),
-  );
-  const moveDay = (delta: number) => {
-    const next = days[index + delta];
+  /** Left and Right: the day before or after `from` (the one the key was pressed on), selected and focused. */
+  const moveDay = (from: string, delta: number) => {
+    const next = days[days.findIndex((day) => day.key === from) + delta];
     if (next === undefined) return;
     onSelectDay(next.key);
     requestAnimationFrame(() => columns.current.get(next.key)?.focus());
   };
   const onColumnKey = (
-    event: KeyboardEvent<HTMLDivElement>,
+    event: KeyboardEvent<HTMLElement>,
     day: WeekCalendarDay,
-    dayBlocks: readonly { readonly id: string; readonly startMinute: number }[],
+    /** What Up and Down walk, in order: the day's all day items, then its blocks and "+N" chips by start. */
+    order: readonly string[],
   ) => {
     if (onDraw !== undefined && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
@@ -365,28 +397,78 @@ export function WeekCalendar({
     }
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault();
-      moveDay(event.key === 'ArrowLeft' ? -1 : 1);
+      moveDay(day.key, event.key === 'ArrowLeft' ? -1 : 1);
       return;
     }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
     event.preventDefault();
-    const order = [...dayBlocks].sort((a, b) => a.startMinute - b.startMinute);
-    const at = order.findIndex((block) => blockRefs.current.get(block.id) === document.activeElement);
+    const at = order.findIndex((id) => blockRefs.current.get(id) === document.activeElement);
     const next =
       order[at === -1 ? (event.key === 'ArrowDown' ? 0 : order.length - 1) : at + (event.key === 'ArrowDown' ? 1 : -1)];
-    if (next !== undefined) blockRefs.current.get(next.id)?.focus();
+    if (next !== undefined) blockRefs.current.get(next)?.focus();
     else if (day.key !== selectedDay) onSelectDay(day.key);
+  };
+
+  const zoneId = useId();
+  /** An all day chip's keys: the arrows walk the week as on its day's column; Enter and Space stay the chip's own. */
+  const onChipKey = (event: KeyboardEvent<HTMLButtonElement>, day: WeekCalendarDay) => {
+    if (!event.key.startsWith('Arrow')) return;
+    onColumnKey(event, day, orderOf(day.key));
+  };
+  /** A day's all day items, split at the cap. */
+  const allDayOf = (dayKey: string) => allDayShown(allDay.filter((item) => item.dayKey === dayKey));
+  /** A day's timed blocks as laid out: closed time full width under the rest, then bookings and events in lanes. */
+  const layoutOf = (dayKey: string) => {
+    const ofDay = blocks.filter((block) => block.dayKey === dayKey);
+    // Closed time sits under bookings and events, full width, out of their lanes (AC-705).
+    const closed: Placed[] = ofDay.filter((block) => isClosed(block)).map((block) => ({ ...block, ...WHOLE }));
+    const layout = placeBlocks(ofDay.filter((block) => !isClosed(block)));
+    const dayBlocks = [...closed, ...layout.blocks];
+    // Up and Down walk what shows, "+N" chips among the blocks, by start.
+    const stops = [...dayBlocks, ...layout.more].sort(
+      (a, b) => a.startMinute - b.startMinute || a.indent - b.indent || a.lane - b.lane,
+    );
+    return { ofDay, dayBlocks, more: layout.more, stops };
+  };
+  /**
+   * What Up and Down walk on a day: its all day chips first (the row above the hours, top to bottom, the "+N more"
+   * chip last), then its blocks and "+N" chips by start, as they read down the screen.
+   */
+  const orderOf = (dayKey: string): readonly string[] => {
+    const { shown, hidden } = allDayOf(dayKey);
+    return [
+      ...shown.map((item) => item.id),
+      ...(hidden.length > 0 ? [`all-day-more-${dayKey}`] : []),
+      ...layoutOf(dayKey).stops.map((stop) => stop.id),
+    ];
   };
 
   return (
     <section
       className={styles.root}
       aria-label={label}
+      // The zone is read as focus enters the week, not only in reading order: blocks name times without it.
+      {...(zone === undefined ? {} : { 'aria-describedby': zoneId })}
       aria-busy={isLoading || undefined}
       data-fill={isFill || undefined}
     >
       <div className={styles.head}>
-        <span className={styles.corner} aria-hidden="true" />
+        {zone === undefined ? (
+          <span className={styles.corner} aria-hidden="true" />
+        ) : (
+          <span className={styles.corner}>
+            <span className={styles.zone} aria-hidden="true" title={zone.name}>
+              {/* "GMT+5:30" is wider than the axis: it may break before its sign, "GMT" over "+5:30". */}
+              {zone.short.split(/(?=[+\-\u2212])/).map((part, index) => (
+                <Fragment key={part}>
+                  {index > 0 && <wbr />}
+                  {part}
+                </Fragment>
+              ))}
+            </span>
+            <VisuallyHidden id={zoneId}>{zone.name}</VisuallyHidden>
+          </span>
+        )}
         {days.map((day) => (
           <button
             key={day.key}
@@ -406,16 +488,18 @@ export function WeekCalendar({
       {allDay.length > 0 && (
         <div className={styles.allDay}>
           <span className={styles.allDayLabel}>{strings.allDay}</span>
-          {days.map((day) => (
-            <div
-              key={day.key}
-              className={styles.allDayCell}
-              data-selected={day.key === selectedDay || undefined}
-              data-today={day.isToday || undefined}
-            >
-              {allDay
-                .filter((item) => item.dayKey === day.key)
-                .map((item) => (
+          {days.map((day) => {
+            const { shown, hidden } = allDayOf(day.key);
+            const moreId = `all-day-more-${day.key}`;
+            const isMoreOpen = moreList?.id === moreId || hidden.some((item) => item.id === openId);
+            return (
+              <div
+                key={day.key}
+                className={styles.allDayCell}
+                data-selected={day.key === selectedDay || undefined}
+                data-today={day.isToday || undefined}
+              >
+                {shown.map((item) => (
                   <button
                     key={item.id}
                     ref={(element) => {
@@ -423,12 +507,15 @@ export function WeekCalendar({
                       else blockRefs.current.set(item.id, element);
                     }}
                     type="button"
+                    // In the day's arrow key order with its blocks, never a tab stop of its own.
+                    tabIndex={-1}
                     className={styles.allDayItem}
                     data-hue={item.hue}
                     data-open={item.id === openId || undefined}
                     aria-haspopup="dialog"
                     aria-expanded={item.id === openId}
                     aria-label={strings.blockName(item.title, strings.allDayOn(day.label))}
+                    onKeyDown={(event) => onChipKey(event, day)}
                     onClick={(event) => {
                       if (item.id === openId) {
                         onClose();
@@ -443,8 +530,42 @@ export function WeekCalendar({
                     {item.title}
                   </button>
                 ))}
-            </div>
-          ))}
+                {hidden.length > 0 && (
+                  <button
+                    ref={(element) => {
+                      if (element === null) blockRefs.current.delete(moreId);
+                      else blockRefs.current.set(moreId, element);
+                    }}
+                    type="button"
+                    tabIndex={-1}
+                    className={styles.allDayItem}
+                    data-kind="more"
+                    data-open={isMoreOpen || undefined}
+                    aria-haspopup="menu"
+                    aria-expanded={isMoreOpen}
+                    aria-label={strings.allDayMoreName(hidden.length, day.label)}
+                    onKeyDown={(event) => onChipKey(event, day)}
+                    onClick={(event) =>
+                      setMoreList(
+                        moreList?.id === moreId
+                          ? null
+                          : {
+                              id: moreId,
+                              dayKey: day.key,
+                              hidden,
+                              anchor: event.currentTarget,
+                              label: strings.allDayList(day.label),
+                              placement: 'bottom start',
+                            },
+                      )
+                    }
+                  >
+                    {strings.allDayMore(hidden.length)}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
       <div ref={scroller} className={styles.scroller}>
@@ -457,15 +578,8 @@ export function WeekCalendar({
             ))}
           </div>
           {days.map((day) => {
-            const ofDay = blocks.filter((block) => block.dayKey === day.key);
-            // Closed time sits under bookings and events, full width, out of their lanes (AC-705).
-            const closed: Placed[] = ofDay.filter((block) => isClosed(block)).map((block) => ({ ...block, ...WHOLE }));
-            const layout = placeBlocks(ofDay.filter((block) => !isClosed(block)));
-            const dayBlocks = [...closed, ...layout.blocks];
-            // Up and Down walk what shows, "+N" chips among the blocks, by start.
-            const stops = [...dayBlocks, ...layout.more].sort(
-              (a, b) => a.startMinute - b.startMinute || a.indent - b.indent || a.lane - b.lane,
-            );
+            const { ofDay, dayBlocks, more: dayMore } = layoutOf(day.key);
+            const allDayCount = allDay.filter((item) => item.dayKey === day.key).length;
             return (
               // A composite: the day takes focus, and the arrow keys move between days and their blocks.
               // eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions
@@ -476,7 +590,9 @@ export function WeekCalendar({
                   else columns.current.set(day.key, element);
                 }}
                 role="group"
-                aria-label={isLoading ? strings.dayLoading(day.label) : strings.dayBlocks(day.label, ofDay.length)}
+                aria-label={
+                  isLoading ? strings.dayLoading(day.label) : strings.dayBlocks(day.label, ofDay.length + allDayCount)
+                }
                 {...(onDraw === undefined
                   ? {}
                   : { 'aria-description': strings.drawHint, 'aria-keyshortcuts': 'Enter' })}
@@ -486,7 +602,7 @@ export function WeekCalendar({
                 data-today={day.isToday || undefined}
                 data-past={day.isPast || undefined}
                 data-drawable={onDraw === undefined ? undefined : true}
-                onKeyDown={(event) => onColumnKey(event, day, stops)}
+                onKeyDown={(event) => onColumnKey(event, day, orderOf(day.key))}
                 {...(onDraw === undefined
                   ? {}
                   : {
@@ -582,6 +698,13 @@ export function WeekCalendar({
                 )}
                 {dayBlocks.map((block) => {
                   const length = block.endMinute - block.startMinute;
+                  const size = sizeOf(length);
+                  // On one line (half an hour or less) the start alone, as Google Calendar and Klaviyo write it, so
+                  // the title keeps its room; "10:00 AM – 10:30 AM" was cut to "10:00 A…".
+                  const shownTime =
+                    (size === 'tiny' || size === 'compact') && minuteLabel !== undefined
+                      ? minuteLabel(block.startMinute)
+                      : block.time;
                   return (
                     <button
                       key={block.id}
@@ -598,10 +721,10 @@ export function WeekCalendar({
                       data-nested={block.indent > 0 || undefined}
                       data-narrow={(block.span / block.lanes) * block.width < 0.5 || undefined}
                       data-open={block.id === openId || undefined}
-                      data-size={sizeOf(length)}
+                      data-size={size}
                       aria-haspopup="dialog"
                       aria-expanded={block.id === openId}
-                      aria-label={strings.blockName(block.title, block.time)}
+                      aria-label={strings.blockName(block.title, block.time, block.detail, block.isCancelled)}
                       style={{
                         '--start': String(block.startMinute),
                         '--length': String(Math.max(block.endMinute - block.startMinute, 15)),
@@ -631,12 +754,12 @@ export function WeekCalendar({
                         )}
                         <span className={styles.blockTitle}>{block.title}</span>
                       </span>
-                      <span className={styles.blockTime}>{block.time}</span>
+                      <span className={styles.blockTime}>{shownTime}</span>
                       {block.detail !== undefined && <span className={styles.blockDetail}>{block.detail}</span>}
                     </button>
                   );
                 })}
-                {layout.more.map((more) => (
+                {dayMore.map((more) => (
                   <MoreChip
                     key={more.id}
                     more={more}
@@ -650,7 +773,14 @@ export function WeekCalendar({
                       setMoreList(
                         more.id === moreList?.id
                           ? null
-                          : { id: more.id, dayKey: day.key, hidden: more.hidden, anchor: element },
+                          : {
+                              id: more.id,
+                              dayKey: day.key,
+                              hidden: more.hidden,
+                              anchor: element,
+                              label: strings.moreList,
+                              placement: 'end top',
+                            },
                       )
                     }
                   />
@@ -690,7 +820,7 @@ export function WeekCalendar({
           onOpenChange={(isOpen) => {
             if (!isOpen) setMoreList(null);
           }}
-          placement="end top"
+          placement={moreList.placement}
           width="menu"
         >
           {/* The Menu is the popover's content (no dialog around it), focused on its first item: a list it opened. */}
@@ -698,41 +828,64 @@ export function WeekCalendar({
             isInline
             // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the list the chip just opened, as a MenuTrigger's would
             autoFocus="first"
-            label={strings.moreList}
+            label={moreList.label}
             onAction={(key) => {
               const chosen = moreList.hidden.find((block) => block.id === key);
               if (chosen === undefined) return;
               // The block's card opens where its list did, on the chip.
               setAnchor(moreList.anchor);
+              setCardPlacement(
+                moreList.placement === 'end top' ? placementBeside(moreList.anchor) : moreList.placement,
+              );
               anchorDay.current = moreList.dayKey;
               setMoreList(null);
               onOpen(chosen.id);
             }}
           >
             {moreList.hidden.map((block) => (
-              <MenuItem key={block.id} id={block.id} description={block.time}>
+              <MenuItem key={block.id} id={block.id} {...(block.time === undefined ? {} : { description: block.time })}>
                 {block.title}
               </MenuItem>
             ))}
           </Menu>
         </Popover>
       )}
-      {openId !== undefined && detail !== undefined && anchor !== null && (
-        <Popover
-          triggerRef={anchorRef}
-          isOpen
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              onClose();
-              focusDayLater(anchorDay.current, anchor);
-            }
-          }}
-          placement={cardPlacement}
-          label={strings.details}
-        >
-          {detail}
-        </Popover>
-      )}
+      {openId !== undefined &&
+        detail !== undefined &&
+        anchor !== null &&
+        // One day across (a phone), the card is a sheet at the window's foot, as Google Calendar's is, rather than
+        // a popover over the day it is about; seven days across, a popover beside the block.
+        (isNarrowWeek(anchor) ? (
+          <Modal
+            variant="sheet"
+            title={strings.details}
+            isOpen
+            isDismissable
+            onOpenChange={(isOpen) => {
+              if (!isOpen) {
+                onClose();
+                focusDayLater(anchorDay.current, anchor);
+              }
+            }}
+          >
+            <div className={styles.detail}>{detail}</div>
+          </Modal>
+        ) : (
+          <Popover
+            triggerRef={anchorRef}
+            isOpen
+            onOpenChange={(isOpen) => {
+              if (!isOpen) {
+                onClose();
+                focusDayLater(anchorDay.current, anchor);
+              }
+            }}
+            placement={cardPlacement}
+            label={strings.details}
+          >
+            <div className={styles.detail}>{detail}</div>
+          </Popover>
+        ))}
     </section>
   );
 }

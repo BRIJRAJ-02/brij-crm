@@ -124,10 +124,11 @@
     text-align: end;
   }
 
+  /* Chips 20px tall a 4px gap apart: each one's 24px target circle clears the next (WCAG 2.5.8, by spacing). */
   .allDayCell {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-4);
     min-inline-size: 0;
     padding: var(--space-2);
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
@@ -453,14 +454,18 @@
     box-shadow: 0 0 0 var(--border-width-hairline) var(--column-surface);
   }
 
-  /* "+N": blocks folded where a lane would be too narrow. */
+  /* "+N": blocks folded where a lane would be too narrow, and the all day row's "+N more" past its cap: one quiet look. */
+  .block[data-kind='more'],
+  .allDayItem[data-kind='more'] {
+    border: var(--border-width-hairline) solid var(--control-border);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
   .block[data-kind='more'] {
     align-items: center;
     justify-content: center;
     padding-inline: var(--space-2);
-    border: var(--border-width-hairline) solid var(--control-border);
-    background: var(--surface-subtle);
-    color: var(--text-secondary);
   }
 
   .block[data-cancelled] {
@@ -499,6 +504,12 @@
     letter-spacing: var(--tracking-label-strong);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* A block's card: its pieces (a badge, a description list, a callout, the actions) apart in one rhythm, as a
+     Panel with isStacked spaces them. A margin rather than a gap, so an inline Badge keeps its width. */
+  .detail > :not(:first-child) {
+    margin-block-start: var(--space-12);
   }
 
   .blockTime,
@@ -549,6 +560,19 @@
     display: block;
   }
 
+  /* The zone the hours are in, over the hour axis as calendars put it: quiet, like the hour labels, at its foot. */
+  .zone {
+    display: block;
+    align-content: end;
+    block-size: 100%;
+    padding-inline-end: var(--space-6);
+    padding-block-end: var(--space-4);
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-align: end;
+  }
+
   @container (inline-size < 480px) {
     .body {
       grid-template-columns: calc(var(--axis) * 2) minmax(0, 1fr);
@@ -557,6 +581,11 @@
     .column:not([data-selected]),
     .allDayCell:not([data-selected]) {
       display: none;
+    }
+
+    /* "GMT" over "+5:30" fits the head row's height there. */
+    .zone {
+      padding-block-end: var(--space-2);
     }
 
     .allDay {

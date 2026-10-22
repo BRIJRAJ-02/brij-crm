@@ -33,7 +33,7 @@ New. The alignment asks for rows under grey day bands ("TODAY"), each with a dat
 />
 ```
 
-- The title is a ghost Button; `onOpen` gets the row's id.
+- The title is a ghost Button; `onOpen` gets the row's id. Its name is the title, and the row's time and its muted line describe it, so a screen reader hears which meeting each button opens ("Intro call, 6:00 PM – 6:30 PM, You and Ethan Brooks"). A press anywhere else on the row opens it too (`data-pressable`, and the row takes `surface-hover` under a fine pointer), except on its own links and actions or at the end of a text selection, as Cal.com's and Linear's rows open (22 October 2026: the title alone was a small target in a wide row). Why not a GridList: the row's guest link, Join and actions stay plain tab stops, and the keyboard path is unchanged.
 - `guestHref` links the guest's name to their person; without it the name is text.
 - `badge` ("Cancelled") is a Badge after the title.
 - `placement="card"` (Home's Today, spec 0041) leaves the box to the Card around it: no border of its own, rows inset by `space-8`, the bands as plain small labels in the tertiary colour rather than grey bars, and a narrower date column (`size-column-min`, 80px) with the Join link moved under the title, where it has room, since it holds a time alone; the rows stack only under 320px of card. Why a variant: in a Card the list's own frame drew a box inside a box, and at a tile's width every row stacked into four lines. An empty `time` draws nothing (an all day event).
@@ -50,7 +50,7 @@ Rows, empty (the caller's EmptyState); the buttons' and links' own hover, focus 
 
 ## Keyboard
 
-Tab moves through each row's title button, Join link, guest link and actions in order.
+Tab moves through each row's title button (the keyboard's way to open a row), Join link, guest link and actions in order.
 
 ## Differences from the artifact
 

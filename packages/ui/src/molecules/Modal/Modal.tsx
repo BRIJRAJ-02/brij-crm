@@ -41,7 +41,7 @@ export function ModalTrigger({ children, isOpen, defaultOpen, onOpenChange }: Mo
  * context first as a crumb and no title drawn (the page shows its own), and
  * the body a centred writing column.
  */
-export type ModalVariant = 'dialog' | 'window' | 'palette' | 'peek';
+export type ModalVariant = 'dialog' | 'window' | 'palette' | 'peek' | 'sheet';
 
 /** Props for Modal. */
 export interface ModalProps {
@@ -113,7 +113,7 @@ export function Modal({
   const isAlert = tone === 'danger';
   // The palette and a peek name themselves for screen readers only: the palette's field and the peek's page
   // (a note's own title) say what they are on screen.
-  const isTitleHidden = variant === 'palette' || variant === 'peek';
+  const isTitleHidden = variant === 'palette' || variant === 'peek' || variant === 'sheet';
   const bodyId = useId();
   return (
     <ModalOverlay

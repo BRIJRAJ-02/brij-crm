@@ -273,6 +273,22 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* The days the view beside it shows: one band in the selected surface, its ends rounded, the chosen day still accent. */
+  .calendar[data-inline] .day[data-shown]:not([data-selected]) {
+    border-radius: 0;
+    background: var(--surface-selected);
+  }
+
+  .calendar[data-inline] .day[data-shown-start]:not([data-selected]) {
+    border-start-start-radius: var(--radius-sm);
+    border-end-start-radius: var(--radius-sm);
+  }
+
+  .calendar[data-inline] .day[data-shown-end]:not([data-selected]) {
+    border-start-end-radius: var(--radius-sm);
+    border-end-end-radius: var(--radius-sm);
+  }
+
   .quick {
     display: flex;
     flex-wrap: wrap;
@@ -288,6 +304,11 @@
   @media (forced-colors: active) {
     .box {
       border-color: CanvasText;
+    }
+
+    .calendar[data-inline] .day[data-shown]:not([data-selected]) {
+      outline: var(--border-width-hairline) solid CanvasText;
+      outline-offset: calc(-1 * var(--border-width-hairline));
     }
 
     .day[data-selected] {
