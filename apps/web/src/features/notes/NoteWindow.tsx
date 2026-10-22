@@ -80,7 +80,7 @@ interface Confirming {
 }
 
 /**
- * The bar's word on the note: its save state while it saves ("Saving",
+ * The bar's word on the note: its save state while it saves ("Saving…",
  * "Saved", "Not saved. Retrying…", "Not saved."), else when it was last edited.
  * The edit time ticks on quietly (aria-live off), so the bar's status announces
  * only the save state's changes.

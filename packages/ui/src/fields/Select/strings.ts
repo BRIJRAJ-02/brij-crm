@@ -1,7 +1,7 @@
 /** The select field's built in copy. */
 export const strings = {
   /** An option id the attribute's list doesn't hold yet (options are archived, never deleted): one just made elsewhere. */
-  unknown: 'Updating',
+  unknown: 'Updating…',
   choose: (name: string) => `Set ${name}…`,
   search: (name: string) => `Search ${name}`,
   clear: 'Clear',

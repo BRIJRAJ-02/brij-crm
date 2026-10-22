@@ -12,7 +12,7 @@ export const strings = {
   webAddress: 'Web address',
   addressPrefix: '/w/',
   addressRule: 'Lowercase letters, digits and dashes.',
-  addressChecking: 'Checking',
+  addressChecking: 'Checking…',
   addressFree: 'Free',
   addressTaken: 'Taken',
   addressSuggestions: 'Free addresses',

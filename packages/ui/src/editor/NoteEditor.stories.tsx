@@ -162,7 +162,7 @@ export const New: Story = {
 
 /** Typing: Enter in the title goes on to the text, and the bar says the note is saving. */
 export const Typing: Story = {
-  args: { autoFocus: 'title', status: 'Saving' },
+  args: { autoFocus: 'title', status: 'Saving…' },
   play: async ({ args, userEvent }) => {
     await waitFor(() => expect(titleField()).toHaveFocus());
     await userEvent.keyboard('Kickoff call{Enter}');
@@ -171,7 +171,7 @@ export const Typing: Story = {
     await userEvent.keyboard('They want 40 seats by March.');
     await waitFor(() => expect(args.onChange).toHaveBeenCalled());
     await expect(args.onTitleChange).toHaveBeenLastCalledWith('Kickoff call');
-    await expect(document.querySelector('[role="status"]')).toHaveTextContent('Saving');
+    await expect(document.querySelector('[role="status"]')).toHaveTextContent('Saving…');
   },
 };
 

@@ -108,7 +108,7 @@ export const NothingSelected: Story = {
 
 /**
  * Delete from the keyboard starts a background change: the button goes with
- * its progress ("Starting", nothing to press yet), and focus reaches Cancel
+ * its progress ("Starting…", nothing to press yet), and focus reaches Cancel
  * as soon as there is one, so it never stays on the page.
  */
 export const Starting: Story = {
@@ -131,7 +131,7 @@ export const Starting: Story = {
           {...args}
           isAllMatching
           count={1234}
-          {...(step === 'idle' ? {} : { progress: { label: step === 'starting' ? 'Starting' : 'Counting…' } })}
+          {...(step === 'idle' ? {} : { progress: { label: step === 'starting' ? 'Starting…' : 'Counting…' } })}
           {...(step === 'counting' && onCancel !== undefined ? { onCancel } : {})}
         >
           <Button

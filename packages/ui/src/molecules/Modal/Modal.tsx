@@ -64,7 +64,7 @@ export interface ModalProps {
   /**
    * A short word about what the dialog shows, before the header actions, in
    * the secondary colour and announced politely when it changes: a note's
-   * "Saving" or "Saved".
+   * "Saving…" or "Saved".
    */
   readonly status?: ReactNode;
   /**

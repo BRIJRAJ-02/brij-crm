@@ -108,7 +108,7 @@ export const bulkStrings = {
     restore: (done: string, total: string) => `Restoring ${done} of ${total}`,
     purge: (done: string, total: string) => `Deleting ${done} of ${total} forever`,
   },
-  starting: 'Starting',
+  starting: 'Starting…',
   confirmEditTitle: (records: string) => `Update ${records}?`,
   confirmEditText: 'This can’t be undone.',
   /**

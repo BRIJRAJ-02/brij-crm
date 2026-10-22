@@ -28,7 +28,7 @@ export const strings = {
   undo: 'Undo',
   notDeleted: 'The note wasn’t deleted.',
   notRestored: 'Couldn’t restore the note.',
-  saving: 'Saving',
+  saving: 'Saving…',
   saved: 'Saved',
   retrying: 'Not saved. Retrying…',
   notSaved: 'Not saved.',
