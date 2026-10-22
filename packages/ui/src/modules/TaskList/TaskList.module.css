@@ -40,9 +40,20 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
-  .check {
+  /* The parts beside the title never shrink (React Aria's row holds them in a display: contents cell, so they are
+     flex items of the row and each carries its own rule): the checkbox, a lock, the New badge and the assignee. */
+  .check,
+  .keep {
     display: flex;
     flex: none;
+  }
+
+  /* The assignee in a size-chip column, so rows line up when one has none. */
+  .assignee {
+    display: flex;
+    flex: none;
+    justify-content: center;
+    inline-size: var(--size-chip);
   }
 
   .title {
@@ -160,10 +171,6 @@
   /* Under 480px (My tasks on a phone, a record's Overview) the title comes first: it keeps a narrow column at
      least, the record chip holds to the smallest column and is cut short, and nothing else in the row shrinks. */
   @container (inline-size < 480px) {
-    .row > :not(.title, .record) {
-      flex-shrink: 0;
-    }
-
     .title {
       min-inline-size: var(--size-column-narrow);
     }

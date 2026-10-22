@@ -168,6 +168,10 @@ export const InANarrowCard: Story = {
   args: { isNarrowCard: true },
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas }) => {
+    // The assignee keeps a size-chip column, with or without an avatar, so the rows' ends line up.
+    const ends = canvas.getAllByRole('row').map((row) => row.querySelector('[class*="task-list-assignee"]'));
+    const widths = new Set(ends.map((end) => Math.round(end?.getBoundingClientRect().width ?? 0)));
+    await expect(widths.size).toBe(1);
     for (const row of canvas.getAllByRole('row')) {
       const box = within(row).getByRole('checkbox').closest('label')?.getBoundingClientRect();
       const title = row.querySelector('[class*="task-list-title"]')?.getBoundingClientRect();

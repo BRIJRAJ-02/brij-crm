@@ -5,9 +5,9 @@ export const strings = {
   noComments: 'No comments yet',
   /** Under No comments yet, for someone who can write one. */
   noCommentsText: 'Start the conversation.',
-  loadFailed: 'Comments didn’t load.',
+  loadFailed: 'Comments didn’t load',
   loadFailedText: 'Check your connection and try again.',
-  unavailable: 'Comments aren’t available for this record.',
+  unavailable: 'Comments aren’t available for this record',
   /** AC-1161: a link to a thread that is gone or hidden. */
   threadUnavailable: 'That comment isn’t available.',
   dismiss: 'Dismiss',

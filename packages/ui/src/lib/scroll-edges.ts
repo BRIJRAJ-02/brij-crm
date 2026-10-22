@@ -49,8 +49,8 @@ export function useScrollEdges(isOn: boolean): {
     element.addEventListener('scroll', measure, { passive: true });
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
     observer?.observe(element);
-    const first = element.firstElementChild;
-    if (first !== null) observer?.observe(first);
+    // Every child: a tab list's tabs grow as their counts arrive, and any of them may push the row past its end.
+    for (const child of element.children) observer?.observe(child);
     return () => {
       element.removeEventListener('scroll', measure);
       observer?.disconnect();

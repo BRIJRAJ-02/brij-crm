@@ -15,7 +15,8 @@ New (spec 0019). No list in the library shows a document summary (a title, a two
   onAction={(id) => openNote(id)}
   status={status}
   onRetry={retry}
-  emptyTitle="No notes yet. Write the first one."
+  emptyTitle="No notes yet"
+  emptyBody="Write the first one."
   toolbar={
     <Button variant="primary" onPress={newNote}>
       New note

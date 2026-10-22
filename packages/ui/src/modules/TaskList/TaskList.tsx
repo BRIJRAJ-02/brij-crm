@@ -369,12 +369,20 @@ function TaskListContent({
             }}
           />
         </span>
-        {task.readOnlyReason !== undefined && <LockReason reason={task.readOnlyReason} />}
+        {task.readOnlyReason !== undefined && (
+          <span className={styles.keep}>
+            <LockReason reason={task.readOnlyReason} />
+          </span>
+        )}
         <span className={styles.title}>
           {task.title}
           {task.isDone && <VisuallyHidden>{`, ${strings.done}`}</VisuallyHidden>}
         </span>
-        {isNew && <Badge text={strings.isNew} tone="accent" />}
+        {isNew && (
+          <span className={styles.keep}>
+            <Badge text={strings.isNew} tone="accent" />
+          </span>
+        )}
         {!hideRecord && records.length > 0 && (
           <span className={styles.record}>
             {/* The field set's one row of records: the first chip, then "+N", which opens every one as a link. */}
