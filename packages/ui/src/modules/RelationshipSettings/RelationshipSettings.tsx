@@ -14,6 +14,7 @@ import type { Hue } from '../../hue.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
+import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
 import { strings } from './strings.ts';
@@ -293,6 +294,15 @@ function RelationshipForm({
       <Select
         autoFocus={choosable === side}
         label={side === 'from' ? strings.object : strings.relatedObject}
+        {...(side === 'to'
+          ? {
+              info: (
+                <InfoTip label={strings.relatedObject} example={strings.aboutRelatedExample}>
+                  {strings.aboutRelated}
+                </InfoTip>
+              ),
+            }
+          : {})}
         items={itemsWith(id)}
         value={id}
         placeholder={strings.chooseObject}
@@ -327,6 +337,11 @@ function RelationshipForm({
         isRequired
         maxLength={100}
         {...(side === 'from' ? { hint: strings.nameHint } : {})}
+        info={
+          <InfoTip label={strings.nameOn(on)} example={strings.aboutNameExample}>
+            {strings.aboutName(on)}
+          </InfoTip>
+        }
         autoFocus={side === (isEditing ? focusSide : 'from') && choosable === undefined && !isReadOnly}
         value={side === 'from' ? fromName : toName}
         onChange={(next) => {
@@ -368,6 +383,11 @@ function RelationshipForm({
         isShaped && (
           <RadioGroup
             label={strings.cardinality}
+            info={
+              <InfoTip label={strings.cardinality} example={strings.aboutCardinalityExample}>
+                {strings.aboutCardinality}
+              </InfoTip>
+            }
             value={cardinality}
             onChange={(next) => {
               const found = CARDINALITIES.find((each) => each === next);

@@ -68,7 +68,10 @@ async function newRelationship(page: Page, name: string) {
 
 /** Picks the related object in the relationship dialog. */
 async function relatedObject(page: Page, dialog: ReturnType<Page['getByRole']>, plural: string) {
-  await dialog.getByRole('button', { name: /Related object/ }).click();
+  await dialog
+    .getByRole('button', { name: /Related object/ })
+    .and(dialog.locator('[aria-haspopup="listbox"]'))
+    .click();
   await page.getByRole('option', { name: plural, exact: true }).click();
 }
 
@@ -118,7 +121,9 @@ test.describe('relations', () => {
     await page.keyboard.press('Enter');
     const handedOver = page.getByRole('dialog', { name: 'New relationship' });
     await expect(handedOver).toBeVisible();
-    await expect(handedOver.getByRole('button', { name: /Related object/ })).toBeFocused();
+    await expect(
+      handedOver.getByRole('button', { name: /Related object/ }).and(handedOver.locator('[aria-haspopup="listbox"]')),
+    ).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(handedOver).toBeHidden();
     await expect(viewSettings).toBeFocused();
@@ -130,9 +135,9 @@ test.describe('relations', () => {
     await expect(
       dialog.getByRole('radio', { name: 'Each company has many people, each person has many companies' }),
     ).toBeChecked();
-    await expect(dialog.getByLabel('Name on Companies')).toHaveValue('Investors');
-    await expect(dialog.getByLabel('Name on People')).toHaveValue('Companies');
-    await dialog.getByLabel('Name on People').fill('Investments');
+    await expect(dialog.getByLabel('Name on Companies', { exact: true })).toHaveValue('Investors');
+    await expect(dialog.getByLabel('Name on People', { exact: true })).toHaveValue('Companies');
+    await dialog.getByLabel('Name on People', { exact: true }).fill('Investments');
     await expect(dialog).toContainText(
       'Companies get “Investors”, holding many people. People get “Investments”, holding many companies.',
     );
@@ -152,10 +157,10 @@ test.describe('relations', () => {
     await expect(page.getByRole('grid', { name: 'People' })).toBeVisible();
     const self = await newRelationship(page, 'Manager');
     await relatedObject(page, self, 'People');
-    await self.getByLabel('Reverse name on People').fill('manager');
+    await self.getByLabel('Reverse name on People', { exact: true }).fill('manager');
     await self.getByRole('button', { name: 'Create relationship' }).click();
     await expect(self.getByText('Give each side its own name.')).toBeVisible();
-    await self.getByLabel('Reverse name on People').fill('Reports');
+    await self.getByLabel('Reverse name on People', { exact: true }).fill('Reports');
     await self.getByRole('button', { name: 'Create relationship' }).click();
     await expect(self).toBeHidden();
     await expect(page.getByText('Manager added.')).toBeVisible();
@@ -163,11 +168,11 @@ test.describe('relations', () => {
     // A name People already has is refused on that side by the server, and nothing is made (AC-284).
     const taken = await newRelationship(page, '');
     await relatedObject(page, taken, 'Companies');
-    await expect(taken.getByLabel('Name on People')).toHaveValue('Company');
+    await expect(taken.getByLabel('Name on People', { exact: true })).toHaveValue('Company');
     await taken.getByRole('button', { name: 'Create relationship' }).click();
     await expect(taken.getByText('People already has an attribute with this name. Pick another.')).toBeVisible();
     await checkScreen(page, 'relations-refused');
-    await taken.getByLabel('Name on People').fill('Employer');
+    await taken.getByLabel('Name on People', { exact: true }).fill('Employer');
     await taken.getByRole('button', { name: 'Create relationship' }).click();
     await expect(taken).toBeHidden();
     await expect(page.getByText('Employer added.')).toBeVisible();
@@ -181,12 +186,12 @@ test.describe('relations', () => {
     const edit = page.getByRole('dialog', { name: 'Edit relationship' });
     await expect(edit).toBeVisible();
     await expect(edit.getByRole('radio')).toHaveCount(0);
-    await expect(edit.getByLabel('How records link')).toHaveValue(
+    await expect(edit.getByLabel('How records link', { exact: true })).toHaveValue(
       'Each company has many people, each person has many companies',
     );
     await expect(edit).toContainText('The objects and how records link can’t change once the relationship exists.');
-    await edit.getByLabel('Name on Companies').fill('Backers');
-    await edit.getByLabel('Name on People').fill('Holdings');
+    await edit.getByLabel('Name on Companies', { exact: true }).fill('Backers');
+    await edit.getByLabel('Name on People', { exact: true }).fill('Holdings');
     await checkScreen(page, 'relations-edit');
     await edit.getByRole('button', { name: 'Save' }).click();
     await expect(edit).toBeHidden();

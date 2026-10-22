@@ -98,6 +98,7 @@ export const Empty: Story = {
   args: { initial: [] },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No rules yet, so any value is accepted.')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'About Rules' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Add rule' })).toBeEnabled();
   },
 };
@@ -192,6 +193,9 @@ export const ReorderByKeyboard: Story = {
   args: { onChange: fn() },
   parameters: { crm: { screenshot: false } },
   play: async ({ args, canvas, userEvent }) => {
+    // The label's ⓘ comes first, then the rules.
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'About Rules' })).toHaveFocus();
     await userEvent.tab();
     await userEvent.keyboard('{ArrowDown}{ArrowDown}');
     await userEvent.tab();

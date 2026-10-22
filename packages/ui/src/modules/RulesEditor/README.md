@@ -31,6 +31,7 @@ New, for AttributeSettings' Validation section (spec 0013, milestone 1). Nothing
 - `hint` sits under the group's label (AttributeSettings says rules save with Save, unlike its options, which save as they change).
 - Each row's handle and menu are named by its place and kind ("Actions for rule 2, Email domains"), since a message runs to 200 characters. A closed row with its own message and a condition says when it applies under it ("Only when Stage is Won", from `summarizeCondition`). A new Format rule picks no format, so it reads as unfinished and refuses nothing until one is chosen; Ignore case shows only where case can matter (Starts with, Ends with, a custom pattern).
 - `limit` (20) shows "N of 20" and stops Add rule there, with a line saying why.
+- The group's label carries an ⓘ (InfoTip, owner 22 October 2026: "make the rules … much more easy to understand … with some info icons"): what a rule does and an example. Add rule lists each kind with a few words of what it checks under its name ("The fewest or most characters"). A row's message field is "Message when it’s broken".
 - `isReadOnly` shows the rules as sentences, a condition as "Only when its conditions are met.", with no handle, menu or Add rule.
 
 ## States

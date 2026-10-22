@@ -12,6 +12,22 @@ export const strings = {
     date_range: 'Date range',
     count: 'Number of values',
   },
+  /** Under each kind in Add rule: what it checks, in a few plain words. */
+  kindHelp: {
+    length: 'The fewest or most characters',
+    pattern: 'Digits only, starts with, or your own pattern',
+    email_domain: 'Allow or block addresses at some domains',
+    phone_country: 'Only numbers from the countries you list',
+    range: 'The smallest and largest number allowed',
+    integer: 'No decimals',
+    currency_in: 'Only amounts in the currencies you list',
+    date_range: 'The earliest and latest date allowed',
+    count: 'The fewest or most values',
+  },
+  /** The ⓘ beside the group's label: what a rule does, with an example. */
+  aboutRules:
+    'Rules check a value before it saves. A value that breaks a rule is refused, and the person sees the rule’s message.',
+  aboutRulesExample: 'A Length rule of at most 12 characters keeps every customer code short.',
   addRule: 'Add rule',
   ruleKinds: 'Kinds of rule',
   noRules: 'No rules yet, so any value is accepted.',
@@ -79,8 +95,8 @@ export const strings = {
   latestDays: 'Latest, in days from today',
   daysHint: 'A negative number counts days before today.',
   integerNote: 'Values must be whole numbers.',
-  message: 'Message',
-  messageHint: 'Shown to anyone whose change breaks this rule. Leave it empty to use the message above.',
+  message: 'Message when it’s broken',
+  messageHint: 'What someone sees when their value breaks this rule. Leave it empty to use the message above.',
   onlyWhen: 'Only when…',
   conditionHint: 'The rule applies only to records that match, using this object’s own attributes.',
 } as const;

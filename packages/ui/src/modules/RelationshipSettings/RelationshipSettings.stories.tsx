@@ -103,6 +103,10 @@ export const Create: Story = {
     ).toBeChecked();
     await expect(inDialog(dialog, 'Name on People')).toHaveValue('Company');
     await expect(inDialog(dialog, 'Name on Companies')).toHaveValue('People');
+    // Each setting that needs a word of help has its ⓘ (owner, 22 October 2026).
+    for (const about of ['Related object', 'How records link', 'Name on People', 'Name on Companies']) {
+      await expect(within(dialog).getByRole('button', { name: `About ${about}` })).toBeInTheDocument();
+    }
     await expect(dialog).toHaveTextContent(
       'People get “Company”, holding one company. Companies get “People”, holding many people.',
     );

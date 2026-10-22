@@ -39,6 +39,7 @@ New (spec 0014 names it). The table's "Add attribute" (through AttributeSettings
 - `readOnlyReason` shows every setting read only, the reason once in a Callout above them, and Close alone (a member who can't change the schema).
 - `relationshipStep({ ...props, formId })` answers the same dialog's title, footer and body (`DialogStep`) for a Modal that is already open: AttributeSettings shows it in its own Modal once Relationship is chosen (its `step`), so the scrim stays and focus still returns to what opened the dialog. RelationshipSettings is that step in a Modal of its own (edit mode, the schema map).
 - Refusals land on the setting they name by `attributeId` (`from.title`, `to.title`, `from.objectId`, `to.objectId`, `cardinality`); anything else (`LIMIT_REACHED`, `NOT_FOUND`) shows above the settings.
+- Related object, How records link and each side's name carry an ⓘ (InfoTip, owner 22 October 2026: "make the … relations … much more easy to understand … with some info icons"): what the setting decides, with a worked example (people and companies).
 
 ## States
 

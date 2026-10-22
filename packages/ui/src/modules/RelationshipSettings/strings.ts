@@ -19,6 +19,17 @@ export const strings = {
   /** Under the related object in edit mode: the objects and the cardinality are fixed (#14 widens it). */
   shapeFixed: 'The objects and how records link can’t change once the relationship exists.',
   cardinality: 'How records link',
+  /** The ⓘ beside How records link. */
+  aboutCardinality: 'How many records each side can link to. One shows a single record; many shows a list.',
+  aboutCardinalityExample:
+    'Each person has one company and each company has many people: a person shows one Company, a company shows a list of People.',
+  /** The ⓘ beside Related object. */
+  aboutRelated:
+    'The object on the other side. Records of the two objects can then link to each other. It can be the same object, such as a person’s manager.',
+  aboutRelatedExample: 'Companies and People: link each person to the company they work at.',
+  /** The ⓘ beside a side's name: "Name on People". */
+  aboutName: (plural: string) => `The column this adds to ${plural}, and the name it shows on their pages.`,
+  aboutNameExample: 'On People “Company”, on Companies “Team”.',
   /**
    * One cardinality as a plain choice, phrased with both objects (spec 0014,
    * AC-282): "Each person has one company, each company has many people".
