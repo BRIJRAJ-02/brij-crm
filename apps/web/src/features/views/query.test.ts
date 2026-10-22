@@ -2,7 +2,6 @@ import type { AttributeDefinition, View } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import {
   createView,
-  defaultSorts,
   isDefaultSort,
   landingView,
   relationTarget,
@@ -123,10 +122,5 @@ describe('isDefaultSort', () => {
         [CREATED, NAME],
       ),
     ).toBe(false);
-  });
-
-  it('names the default sort, or none for an object with no Created at', () => {
-    expect(defaultSorts([CREATED, NAME])).toEqual([{ attributeId: 'created', direction: 'descending' }]);
-    expect(defaultSorts([NAME])).toEqual([]);
   });
 });

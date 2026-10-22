@@ -28,14 +28,6 @@ export function isDefaultSort(
   return createdAt !== undefined && only.attributeId === createdAt.id;
 }
 
-/** The sort every view runs when it asks none: Created at, newest first; none when the object has no Created at. */
-export function defaultSorts(
-  attributes: readonly Pick<AttributeDefinition, 'id' | 'isSystem' | 'apiSlug'>[],
-): readonly { readonly attributeId: string; readonly direction: 'descending' }[] {
-  const createdAt = attributes.find((attribute) => attribute.isSystem && attribute.apiSlug === CREATED_AT_SLUG);
-  return createdAt === undefined ? [] : [{ attributeId: createdAt.id, direction: 'descending' }];
-}
-
 /** A view's saved filter and sorts. */
 export function savedQuery(view: View): DraftQuery {
   return { ...(view.config.filter === undefined ? {} : { filter: view.config.filter }), sorts: view.config.sorts };

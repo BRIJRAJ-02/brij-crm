@@ -28,7 +28,7 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { defaultSorts, isDefaultSort } from './query.ts';
+import { isDefaultSort } from './query.ts';
 import { strings } from './strings.ts';
 
 const NO_FILTER: FilterGroup = { conjunction: 'and', conditions: [] };
@@ -297,8 +297,9 @@ export function ViewToolbar({
       >
         <SortBuilder
           attributes={sortFields}
-          // With no sorts asked, the builder shows the default that runs, so the order is never a mystery.
-          value={query.sorts.length === 0 ? defaultSorts(attributes) : query.sorts}
+          // The default order opens the builder empty, where it says "Newest records show first." (the order that
+          // runs), so Add sort starts a sort of its own rather than adding after a Created at nobody chose.
+          value={isDefaultOrder ? [] : query.sorts}
           onChange={(sorts) => {
             commit({ ...(query.filter === undefined ? {} : { filter: query.filter }), sorts });
           }}
