@@ -17,18 +17,20 @@ New (22 October 2026, the owner's "fix this UI" on the week's booking card). The
   rows={[{ id: 'where', icon: 'video', label: 'Where', value: 'Google Meet' }]}
   actions={
     <>
-      <ButtonLink variant="primary" icon="video" href={url} isExternal label="Join Google Meet">
+      <ButtonLink variant="primary" size="lg" icon="video" href={url} isExternal label="Join Google Meet">
         Join
       </ButtonLink>
-      <Button>Reschedule</Button>
+      <Button size="lg">Reschedule</Button>
+      <MenuTrigger>
+        <Button size="lg" variant="ghost" icon="ellipsis" label="More for this booking" />
+        <Menu label="More for this booking">{/* Copy guest link, Cancel booking (isDanger) */}</Menu>
+      </MenuTrigger>
     </>
   }
-  endAction={
-    <Button variant="ghost-danger" size="lg" icon="circle-x">
-      Cancel booking
-    </Button>
-  }
 />
+
+// Closed time: its ending action apart at the footer's end.
+<MeetingCard title="Dentist" when={when} rows={rows} endAction={<Button size="lg" variant="ghost-danger" icon="trash">Remove block</Button>} />
 ```
 
 - `title` is the card's heading (`headingLevel`, 2 by default) and names the card (an `article`). Lead with who and what, never a status.
@@ -37,12 +39,12 @@ New (22 October 2026, the owner's "fix this UI" on the week's booking card). The
 - `people` is the first row: each person with their avatar, their name (a link with `href`), and a muted `detail` under it (an email, or their part, "Host"), which `isDetailCopyable` follows with an icon only copy button. Emails are never drawn as mailto links.
 - `rows` are the other facts, each `{ icon, label, value, detail?, action?, children? }`: the icon in its column (the `label` is read in its place, so the list stays a real `<dl>`), the value in the text colour, a quieter `detail` line, a quiet control at the row's end (`action`, "View chat (3)") and anything it opens under the row (`children`, the transcript). A long email wraps inside the card rather than being cut.
 - `headingLevel`: 2 by default; 4 under a dialog's own heading (a Panel's or the sheet's, level 3), 3 in a popover with none.
-- `actions` are one row that never wraps (22 October 2026: the owner's "fix" on a wrapped footer), the primary first: at most Join, one more and an overflow menu, as Google Calendar and Cal.com keep theirs (Join, Reschedule, More holding Copy guest link and Cancel booking). `endAction` sits apart at its end (closed time's Remove), a quiet ending action such as a `ghost-danger` Cancel booking in words (as Calendly and Cal.com write it; an icon alone read as a close on a phone's sheet), which still asks first in a Modal. The footer wraps rather than stretching a button.
-- It has no surface or padding: the Popover, Panel (`isStacked`) or Modal (`variant="sheet"`) around it is the card. Its width is its holder's, at most `size-panel`.
+- `actions` are one row that never wraps (22 October 2026: the owner's "fix" on a wrapped footer), the primary first: at most Join, one more and an overflow menu, as Google Calendar and Cal.com keep theirs (Join, Reschedule, More holding Copy guest link and Cancel booking). `endAction` sits apart at its end: a quiet ending action in words, such as closed time's `ghost-danger` Remove block, which still asks first in a Modal.
+- It has no surface or padding: the Popover, Panel or Modal (`variant="sheet"`) around it is the card. Its width is its holder's, at most `size-panel`.
 
 ## Layout
 
-Google Calendar's alignment (the owner, 22 October 2026: "better alignment"): every line of text starts on one text column, the header's, the rows', the notices' and the footer's buttons alike. A gutter to its left (`space-24`, an avatar's width, then `space-12`) holds each row's icon or avatar, one per row, centred on the row's first line (the lead is one body line tall). One rhythm, `space-12`, between the header, every row and the footer's hairline, and under it. The footer and its hairline span the content from the gutter's edge, its buttons `size="lg"` (30px, pressed at 32px) on one row. The avatar fills the gutter (`md`, 24px) and icons are `md` (16px); every quieter line (the time, an email, a row's detail) is `text-secondary` at the body size. The email's copy button keeps its 26px target but takes only the email's line, with its name in a Tooltip.
+Google Calendar's alignment (the owner, 22 October 2026: "better alignment"): every line of text starts on one text column, the header's, the rows' and the notices' alike. A gutter to its left (`space-24`, an avatar's width, then `space-12`) holds each row's icon or avatar, one per row, centred on the row's first line (the lead is one body line tall). One rhythm, `space-12`, between the header, every row and the footer's hairline, and under it. The footer and its hairline span the content from the gutter's edge, its buttons `size="lg"` (30px, pressed at 32px) on one row. The avatar fills the gutter (`md`, 24px) and icons are `md` (16px); every quieter line (the time, an email, a row's detail) is `text-secondary` at the body size. The email's copy button keeps its 26px target but takes only the email's line, with its name in a Tooltip.
 
 ## States
 
