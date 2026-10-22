@@ -334,9 +334,14 @@
     color: var(--text-secondary);
   }
 
+  /* The ring is a keyboard's on the grid; a day handed focus back after a pointer's span shows none. */
   .column:focus-visible {
     outline: var(--border-width-thick) solid var(--accent-line);
     outline-offset: calc(-1 * var(--border-width-thick));
+  }
+
+  .column[data-quiet-focus] {
+    outline: none;
   }
 
   .block {
@@ -504,12 +509,6 @@
     letter-spacing: var(--tracking-label-strong);
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  /* A block's card: its pieces (a badge, a description list, a callout, the actions) apart in one rhythm, as a
-     Panel with isStacked spaces them. A margin rather than a gap, so an inline Badge keeps its width. */
-  .detail > :not(:first-child) {
-    margin-block-start: var(--space-12);
   }
 
   .blockTime,

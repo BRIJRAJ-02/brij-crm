@@ -1,22 +1,30 @@
 /* MeetingCard: one meeting's details with no surface of its own (the Popover, Panel or sheet around it is the
-   card). The title in text-title over its time, the status a quiet dot beside the time; then icon rows on one
-   rhythm (space-12 apart, the icon in a column of its own, as Google Calendar's event card has it); then the
-   footer, a hairline above it, the actions at its start and an ending one at its end. Its width comes from the
-   holder, at most size-panel. */
+   card). Google Calendar's alignment: every line of text starts on one text column; a gutter to its left
+   (size-chip, an avatar's width, then space-12) holds each row's icon or avatar, centred on the row's first line
+   (the lead is one body line tall). The header, notices and footer start on the text column too. One rhythm,
+   space-12, between the header, every row, and the footer's hairline, with space-12 under the hairline again.
+   Its width comes from the holder, at most size-panel. */
 @layer components {
   .root {
+    --meeting-gutter: calc(var(--size-chip) + var(--space-12));
+
     display: flex;
     flex-direction: column;
-    gap: var(--space-16);
-    max-inline-size: var(--size-panel);
+    gap: var(--space-12);
+    inline-size: var(--size-panel);
+    max-inline-size: 100%;
     min-inline-size: 0;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
   }
 
-  .head {
+  /* The header and notices: on the text column. */
+  .inset {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
     min-inline-size: 0;
+    padding-inline-start: var(--meeting-gutter);
   }
 
   .title {
@@ -34,30 +42,31 @@
     gap: var(--space-4) var(--space-12);
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
   }
 
-  .rows {
+  .list {
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
     margin: 0;
+    padding: 0;
+    list-style: none;
   }
 
   .row {
     display: grid;
-    grid-template-columns: var(--size-icon) minmax(0, 1fr);
+    grid-template-columns: var(--size-chip) minmax(0, 1fr);
     gap: var(--space-12);
     align-items: start;
   }
 
-  /* The icon sits on the first line's middle. */
-  .icon {
+  /* One body line tall, so its icon or avatar centres on the row's first line, whatever follows. */
+  .lead {
     display: flex;
     align-items: center;
     justify-content: center;
-    block-size: var(--size-control);
+    block-size: 1lh;
+    margin: 0;
     color: var(--text-tertiary);
   }
 
@@ -71,71 +80,67 @@
 
   .line {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-8);
-    min-block-size: var(--size-control);
     min-inline-size: 0;
   }
 
-  .lineText,
-  .personText {
+  .lineText {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-inline-size: 0;
   }
 
-  .value {
-    color: var(--text);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
-    overflow-wrap: anywhere;
+  /* A row's control sits on its first line, a control's height centred on it. */
+  .rowAction {
+    display: flex;
+    flex: none;
+    align-items: center;
+    block-size: 1lh;
   }
 
-  .detail {
-    min-inline-size: 0;
-    overflow: hidden;
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .value {
+    color: var(--text);
+    overflow-wrap: anywhere;
   }
 
   .detailLine {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-4);
     min-inline-size: 0;
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
-  .people {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  .detail {
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    overflow-wrap: anywhere;
   }
 
-  .person {
+  /* The copy button keeps its full target but takes only the email's line, so the row keeps its rhythm. */
+  .copy {
     display: flex;
+    flex: none;
     align-items: center;
-    gap: var(--space-8);
-    min-block-size: var(--size-control);
-    min-inline-size: 0;
+    block-size: 1lh;
   }
 
-  /* The actions wrap among themselves; the ending action keeps the first line's end. */
   .foot {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-8);
     padding-block-start: var(--space-12);
+    padding-inline-start: var(--meeting-gutter);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* The actions wrap among themselves; the ending action keeps the first line's end. */
   .actions {
     display: flex;
     flex: 1;

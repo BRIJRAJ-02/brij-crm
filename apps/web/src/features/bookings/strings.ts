@@ -70,6 +70,8 @@ export const strings = {
   when: 'When',
   /** New meeting's day: the drawn span's, or the next free one, and changed in place. */
   day: 'Day',
+  /** Under Their time zone: it doesn't move From and To, which are on the member's clock. */
+  theirTimeZoneHint: 'Only changes how their invitation shows the time.',
   who: 'Who',
   page: 'Booking page',
   guests: 'Also invited',
@@ -102,6 +104,8 @@ export const strings = {
   video: 'Video call',
   phone: 'Phone call to their number',
   calendar: 'Calendar',
+  /** An event's call, as the card's row. */
+  call: 'Call',
   fromCalendar: 'From your calendar. Timefix keeps the time blocked but doesn’t manage this event.',
   // The member's own calendar time with nobody else invited (spec 0024, the owner's call on 20 October 2026).
   busy: 'Busy',

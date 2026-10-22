@@ -188,6 +188,7 @@ export function NewMeetingDialog({
         {/* Who it is with, then their zone, together: the zone only sets how their invitation reads the time. */}
         <Select
           label={strings.theirTimeZone}
+          hint={strings.theirTimeZoneHint}
           items={zones}
           filter={zoneMatches}
           isSearchable

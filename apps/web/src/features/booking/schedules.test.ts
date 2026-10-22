@@ -1,6 +1,6 @@
 // Schedules' words (spec 0035, AC-967): the pages a delete moves, named as a sentence says them.
 import { describe, expect, it } from 'vitest';
-import { deleteSentence, listOfNames, scheduleChoices } from './schedules.ts';
+import { deleteSentence, listOfNames, scheduleChoices, showsViewing } from './schedules.ts';
 
 describe('listOfNames', () => {
   it('joins one, two and three names as a sentence says them, and counts the rest', () => {
@@ -54,5 +54,13 @@ describe('scheduleChoices', () => {
 
   it('says Default schedule before the schedules are read', () => {
     expect(scheduleChoices([], null)).toEqual([{ id: 'default', label: 'Default schedule' }]);
+  });
+});
+
+describe('showsViewing', () => {
+  it('shows only with a colleague to pick, or while a colleague is open', () => {
+    expect(showsViewing([{ id: 'me' }], undefined)).toBe(false);
+    expect(showsViewing([{ id: 'me' }, { id: 'sam' }], undefined)).toBe(true);
+    expect(showsViewing([{ id: 'me' }], 'sam')).toBe(true);
   });
 });

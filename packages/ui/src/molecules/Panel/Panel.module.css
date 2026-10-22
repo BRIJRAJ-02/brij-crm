@@ -95,11 +95,11 @@
     letter-spacing: var(--tracking-body);
   }
 
-  /* Stacked: a column of pieces with no layout of their own (a Badge, a DescriptionList, FieldGroups, a row of
-     buttons), each set apart in one rhythm. A margin rather than a flex gap, so an inline piece (a Badge) keeps
-     its own width. */
-  .body[data-stacked] > :not(:first-child) {
-    margin-block-start: var(--space-20);
+  /* Stacked: a column of sections (a DescriptionList, FieldGroups), each set apart without markup of the caller's. */
+  .body[data-stacked] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
   }
 
   .body[data-flush] {

@@ -194,6 +194,28 @@ function closedRanges(open: readonly WeekCalendarRange[]): readonly WeekCalendar
   return closed;
 }
 
+/**
+ * Marks a day focused after a pointer's span closed, so it shows no ring (`data-quiet-focus`) until the next key
+ * or press anywhere, or until it loses focus: the next Tab onto it rings it as usual. The listeners wait a tick,
+ * so the Escape that closed the card doesn't count.
+ */
+function quietFocus(column: HTMLElement) {
+  if (column.dataset.quietFocus !== undefined) return;
+  column.dataset.quietFocus = '';
+  const clear = () => {
+    delete column.dataset.quietFocus;
+    document.removeEventListener('keydown', clear, true);
+    document.removeEventListener('pointerdown', clear, true);
+    column.removeEventListener('blur', clear);
+  };
+  setTimeout(() => {
+    if (column.dataset.quietFocus === undefined) return;
+    document.addEventListener('keydown', clear, true);
+    document.addEventListener('pointerdown', clear, true);
+    column.addEventListener('blur', clear);
+  }, 0);
+}
+
 /** Whether the week holding `element` is narrower than `bp-container-md`, so one day takes the width (a phone). */
 function isNarrowWeek(element: HTMLElement): boolean {
   const week = element.closest('section');
@@ -280,6 +302,8 @@ export function WeekCalendar({
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   // Beside the block on a week of seven days; under it on one day, whose block takes the width.
   const [cardPlacement, setCardPlacement] = useState<PopoverPlacement>('end top');
+  // Decided as a card opens (a phone's sheet or a popover), so a resize while it is open never remounts it.
+  const [isCardSheet, setCardSheet] = useState(false);
   const anchorRef = useMemo(() => ({ current: anchor }), [anchor]);
   // The span being dragged, before it is drawn; and the drawn span's ghost, the draft card's anchor.
   // The drag lives in a ref as well: pointer events can come faster than renders, and each must see the last.
@@ -308,6 +332,8 @@ export function WeekCalendar({
   }, [ghost, draft?.dayKey, draft?.startMinute, draft?.endMinute]);
   // A finger's touch until it lifts: a tap draws, a scroll doesn't.
   const tap = useRef<{ readonly dayKey: string; readonly minute: number; readonly y: number } | null>(null);
+  // How the open span was drawn: a pointer's hands focus back to its day without a ring.
+  const drawnBy = useRef<'pointer' | 'keyboard'>('keyboard');
   // The open block's day, so focus has somewhere to go when the block is gone (removed from its card).
   const anchorDay = useRef(selectedDay);
   /**
@@ -316,10 +342,17 @@ export function WeekCalendar({
    * anchored to is gone (a drawn span, a removed block).
    */
   const focusDayLater = (dayKey: string, from: HTMLElement | null) => {
+    // A span drawn with the pointer hands its day focus back without the column's ring: the ring is for a
+    // keyboard on the grid, and around a whole day it read as a stray highlight once Escape closed the card. The
+    // ring comes back with the next key on the day.
+    const isQuiet = from === null && drawnBy.current === 'pointer';
     focusLater(() => {
       const active = document.activeElement;
       if (active !== null && active !== document.body) return undefined;
-      return from?.isConnected === true ? from : columns.current.get(dayKey);
+      if (from?.isConnected === true) return from;
+      const column = columns.current.get(dayKey);
+      if (column !== undefined && isQuiet) quietFocus(column);
+      return column;
     });
   };
   // A card closed by the screen (a removal, Done) rather than by Escape: focus the day when its anchor is gone.
@@ -333,7 +366,12 @@ export function WeekCalendar({
           : null;
     const closed = shownCard.current;
     shownCard.current = card;
-    if (card === null && closed !== null) focusDayLater(closed.day, closed.from);
+    if (card === null && closed !== null) {
+      // A drawn span's dialog (New meeting) closing hands focus back to the day too: quiet after a pointer.
+      const column = columns.current.get(closed.day);
+      if (closed.from === null && column !== undefined && drawnBy.current === 'pointer') quietFocus(column);
+      focusDayLater(closed.day, closed.from);
+    }
   });
   // A block or day the screen asks focus for: after any closing overlay (its dialog), never taking focus the person moved.
   useEffect(() => {
@@ -392,6 +430,7 @@ export function WeekCalendar({
   ) => {
     if (onDraw !== undefined && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
+      drawnBy.current = 'keyboard';
       onDraw(defaultSpan(day.key, drawStartMinute?.(day.key) ?? 9 * 60));
       return;
     }
@@ -523,6 +562,7 @@ export function WeekCalendar({
                       }
                       setAnchor(event.currentTarget);
                       setCardPlacement('bottom start');
+                      setCardSheet(isNarrowWeek(event.currentTarget));
                       anchorDay.current = day.key;
                       onOpen(item.id);
                     }}
@@ -641,6 +681,7 @@ export function WeekCalendar({
                         const tapped = tap.current;
                         tap.current = null;
                         if (tapped?.dayKey === day.key && event.pointerType === 'touch') {
+                          drawnBy.current = 'pointer';
                           onDraw(defaultSpan(day.key, tapped.minute));
                           return;
                         }
@@ -650,6 +691,7 @@ export function WeekCalendar({
                         const startMinute = Math.min(current.from, at);
                         const endMinute = Math.max(current.from, at);
                         setDragging(null);
+                        drawnBy.current = 'pointer';
                         // A click is not an empty span: it means "here", so it draws the default length.
                         onDraw(
                           endMinute - startMinute < SNAP
@@ -742,6 +784,7 @@ export function WeekCalendar({
                         }
                         setAnchor(event.currentTarget);
                         setCardPlacement(placementBeside(event.currentTarget));
+                        setCardSheet(isNarrowWeek(event.currentTarget));
                         anchorDay.current = block.dayKey;
                         onOpen(block.id);
                       }}
@@ -802,6 +845,9 @@ export function WeekCalendar({
           isOpen
           onOpenChange={(isOpen) => {
             if (!isOpen) {
+              // The popover gives focus back to the day itself, so it is marked quiet before that happens.
+              const column = columns.current.get(draft.dayKey);
+              if (column !== undefined && drawnBy.current === 'pointer') quietFocus(column);
               onDraftClose?.();
               focusDayLater(draft.dayKey, null);
             }
@@ -834,6 +880,7 @@ export function WeekCalendar({
               if (chosen === undefined) return;
               // The block's card opens where its list did, on the chip.
               setAnchor(moreList.anchor);
+              setCardSheet(isNarrowWeek(moreList.anchor));
               setCardPlacement(
                 moreList.placement === 'end top' ? placementBeside(moreList.anchor) : moreList.placement,
               );
@@ -855,7 +902,7 @@ export function WeekCalendar({
         anchor !== null &&
         // One day across (a phone), the card is a sheet at the window's foot, as Google Calendar's is, rather than
         // a popover over the day it is about; seven days across, a popover beside the block.
-        (isNarrowWeek(anchor) ? (
+        (isCardSheet ? (
           <Modal
             variant="sheet"
             title={strings.details}
@@ -868,7 +915,7 @@ export function WeekCalendar({
               }
             }}
           >
-            <div className={styles.detail}>{detail}</div>
+            {detail}
           </Modal>
         ) : (
           <Popover
@@ -883,7 +930,7 @@ export function WeekCalendar({
             placement={cardPlacement}
             label={strings.details}
           >
-            <div className={styles.detail}>{detail}</div>
+            {detail}
           </Popover>
         ))}
     </section>

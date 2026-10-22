@@ -35,11 +35,7 @@ export interface PanelProps {
   readonly variant?: PanelVariant;
   /** The content runs to the edges and fills the height, for Tabs and lists that scroll themselves. */
   readonly isFlush?: boolean;
-  /**
-   * The content's pieces sit `space-20` apart (a badge, a description list, FieldGroups, a row of buttons), for
-   * details made of library parts with no layout of their own: a booking's card on Bookings › List, a form
-   * submission's state, answers and source.
-   */
+  /** The content is a column of sections, space-20 apart: a submission's state, its answers, where it came from. */
   readonly isStacked?: boolean;
 }
 

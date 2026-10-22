@@ -317,11 +317,6 @@ export const OpenCard: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Grace Hopper, 3:30 – 4:00 PM, Quick chat' }));
     const body = within(canvasElement.ownerDocument.body);
     await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toBeInTheDocument());
-    // The card's pieces sit apart, not flush (measured while the card may still be growing in, so not exact).
-    const card = within(body.getByRole('dialog', { name: 'Details' }));
-    const first = card.getByText('Grace Hopper, 3:30 – 4:00 PM').getBoundingClientRect();
-    const second = card.getByText('Quick chat').getBoundingClientRect();
-    await expect(second.top - first.bottom).toBeGreaterThan(8);
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(body.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument());
   },
@@ -782,5 +777,57 @@ export const PhoneCard: Story = {
     await expect(Math.round(sheet.getBoundingClientRect().bottom)).toBe(globalThis.innerHeight);
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(body.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument());
+  },
+};
+
+/**
+ * Escape after drawing (the owner's stray highlight, 22 October 2026): the span and its card go, focus goes back
+ * to the day, and a span drawn with the pointer gives the day no ring; one drawn with Enter does, for the keyboard.
+ */
+export const DrawThenEscape: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { selectedDay: '2026-10-05' },
+  render: function Render(args) {
+    const [draft, setDraft] = useState<WeekCalendarSpan | undefined>(undefined);
+    return (
+      <Stage width="fill">
+        <WeekCalendar
+          {...args}
+          days={days()}
+          blocks={[]}
+          scrollToMinute={8 * 60}
+          onDraw={setDraft}
+          {...(draft === undefined ? {} : { draft })}
+          draftCard={<button type="button">Book someone in</button>}
+          onDraftClose={() => setDraft(undefined)}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, canvasElement }) => {
+    const column = canvas.getByRole('group', { name: 'Monday, 5 October, nothing on' });
+    const box = column.getBoundingClientRect();
+    const at = { clientX: box.left + box.width / 2, clientY: box.top + (10 / 24) * box.height };
+    const mouse = (type: string) =>
+      column.dispatchEvent(
+        new PointerEvent(type, { bubbles: true, button: 0, pointerId: 3, pointerType: 'mouse', ...at }),
+      );
+    mouse('pointerdown');
+    mouse('pointerup');
+    const body = within(canvasElement.ownerDocument.body);
+    await waitFor(() => expect(body.getByRole('button', { name: 'Book someone in' })).toBeInTheDocument());
+    await expect(canvasElement.querySelector('[class*="ghost"]')).not.toBeNull();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(body.queryByRole('button', { name: 'Book someone in' })).toBeNull());
+    // Nothing of the span is left, focus is on its day, and the day draws no ring.
+    await expect(canvasElement.querySelector('[class*="ghost"]')).toBeNull();
+    await waitFor(() => expect(column).toHaveFocus());
+    await expect(getComputedStyle(column).outlineStyle).toBe('none');
+    // Enter draws from the keyboard; Escape then hands focus back with the ring.
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(body.getByRole('button', { name: 'Book someone in' })).toBeInTheDocument());
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(column).toHaveFocus());
+    await expect(getComputedStyle(column).outlineStyle).toBe('solid');
   },
 };

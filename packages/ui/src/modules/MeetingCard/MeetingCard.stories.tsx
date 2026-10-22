@@ -23,6 +23,7 @@ function Actions() {
     <>
       <ButtonLink
         variant="primary"
+        size="lg"
         icon="video"
         href="https://meet.google.com/abc-defg-hij"
         isExternal
@@ -30,8 +31,12 @@ function Actions() {
       >
         Join
       </ButtonLink>
-      <Button icon="calendar-clock">Reschedule</Button>
-      <Button icon="link">Copy guest link</Button>
+      <Button size="lg" icon="calendar-clock">
+        Reschedule
+      </Button>
+      <Button size="lg" icon="link">
+        Copy guest link
+      </Button>
     </>
   );
 }
@@ -55,11 +60,15 @@ export const Default: Story = {
         ]}
         rows={[where, { id: 'note', icon: 'message-square', label: 'Note', value: '“Can we talk about the pilot?”' }]}
         actions={<Actions />}
-        endAction={<Button variant="ghost-danger" icon="circle-x" label="Cancel booking" />}
+        endAction={
+          <Button variant="ghost-danger" size="lg" icon="circle-x">
+            Cancel booking
+          </Button>
+        }
       />
     </Stage>
   ),
-  play: async ({ canvas }) => {
+  play: async ({ canvas, args }) => {
     const card = canvas.getByRole('article', { name: 'Grace Hopper · Intro call' });
     await expect(within(card).getByRole('heading', { level: 2 })).toHaveTextContent('Grace Hopper · Intro call');
     // Each row's icon is named for screen readers: the list pairs "Where" with "Google Meet".
@@ -68,10 +77,33 @@ export const Default: Story = {
     // No raw address: Join names the provider.
     await expect(within(card).queryByText(/meet\.google\.com/)).toBeNull();
     await expect(within(card).getByRole('link', { name: 'Join Google Meet' })).toBeInTheDocument();
-    // The ending action sits apart, at the footer's end, after the rest.
+    // The ending action sits apart, at the footer's end.
     const cancel = within(card).getByRole('button', { name: 'Cancel booking' });
-    const copy = within(card).getByRole('button', { name: 'Copy guest link' });
-    await expect(cancel.getBoundingClientRect().left).toBeGreaterThan(copy.getBoundingClientRect().right);
+    await expect(Math.round(cancel.getBoundingClientRect().right)).toBeGreaterThanOrEqual(
+      Math.round(card.getBoundingClientRect().right) - 1,
+    );
+    // Every line of text starts on one column: the title, the time, the guest, the place, the note and the footer.
+    const left = (element: Element) => Math.round(element.getBoundingClientRect().left);
+    const column = left(within(card).getByRole('heading'));
+    await expect(left(within(card).getByText(args.when))).toBe(column);
+    await expect(left(within(card).getByRole('link', { name: 'Grace Hopper' }))).toBe(column);
+    await expect(left(within(card).getByText('Google Meet'))).toBe(column);
+    await expect(left(within(card).getByRole('link', { name: 'Join Google Meet' }))).toBe(column);
+    // Each lead (avatar or icon) centres on its row's first line.
+    const middle = (element: Element) => {
+      const box = element.getBoundingClientRect();
+      return box.top + box.height / 2;
+    };
+    for (const lead of card.querySelectorAll('[class*="lead"]')) {
+      const first = lead.nextElementSibling?.querySelector('[class*="value"]');
+      if (first === null || first === undefined) throw new Error('a row without its value');
+      const line = Number.parseFloat(getComputedStyle(first).lineHeight);
+      const firstLine = first.getBoundingClientRect().top + line / 2;
+      await expect(Math.abs(middle(lead) - firstLine), `lead of ${first.textContent}`).toBeLessThanOrEqual(1);
+    }
+    // The ending action sits on the footer's first line, centred on Join.
+    const join = within(card).getByRole('link', { name: 'Join Google Meet' });
+    await expect(Math.abs(middle(cancel) - middle(join)), 'the ending action').toBeLessThanOrEqual(1);
   },
 };
 
@@ -98,7 +130,8 @@ export const Cancelled: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Canceled')).toBeInTheDocument();
-    await expect(canvas.queryByRole('contentinfo')).toBeNull();
+    // Nothing is left to do: no footer and no buttons but the copy.
+    await expect(canvas.queryByRole('button', { name: /Reschedule|Cancel/ })).toBeNull();
   },
 };
 
@@ -173,7 +206,11 @@ export const LongAndNoCall: Story = {
           { id: 'ada', name: 'ada@example.com' },
         ]}
         rows={[{ id: 'where', icon: 'map-pin', label: 'Where', value: '221B Baker Street, London NW1 6XE' }]}
-        actions={<Button icon="users-round">Reassign</Button>}
+        actions={
+          <Button size="lg" icon="users-round">
+            Reassign
+          </Button>
+        }
       />
     </Stage>
   ),
@@ -196,7 +233,11 @@ export const Phone: Story = {
         people={[{ id: 'grace', name: 'Grace Hopper', detail: 'grace@navy.mil', isDetailCopyable: true }]}
         rows={[where]}
         actions={<Actions />}
-        endAction={<Button variant="ghost-danger" icon="circle-x" label="Cancel booking" />}
+        endAction={
+          <Button variant="ghost-danger" size="lg" icon="circle-x">
+            Cancel booking
+          </Button>
+        }
       />
     </Stage>
   ),
@@ -206,5 +247,85 @@ export const Phone: Story = {
     await expect(Math.abs(cancel.top - join.top)).toBeLessThanOrEqual(1);
     const card = canvas.getByRole('article');
     await expect(cancel.right).toBeLessThanOrEqual(card.getBoundingClientRect().right + 1);
+  },
+};
+
+/** Confirmed with no call: where is the place, and the footer has no Join. */
+export const NoCall: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <MeetingCard
+        {...args}
+        status={{ label: 'Confirmed', hue: 'green' }}
+        people={[{ id: 'grace', name: 'Grace Hopper', detail: 'grace@navy.mil' }]}
+        rows={[{ id: 'where', icon: 'map-pin', label: 'Where', value: '221B Baker Street, London' }]}
+        actions={
+          <Button size="lg" icon="calendar-clock">
+            Reschedule
+          </Button>
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('link', { name: /Join/ })).toBeNull();
+    await expect(canvas.getByText('221B Baker Street, London')).toBeInTheDocument();
+  },
+};
+
+/** Read only (a colleague's booking without host actions): the call can still be joined, nothing else changes it. */
+export const ReadOnly: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <MeetingCard
+        {...args}
+        status={{ label: 'Confirmed', hue: 'green' }}
+        people={[{ id: 'grace', name: 'Grace Hopper', detail: 'grace@navy.mil' }]}
+        rows={[where]}
+        actions={
+          <ButtonLink
+            variant="primary"
+            size="lg"
+            icon="video"
+            href="https://meet.google.com/abc"
+            isExternal
+            label="Join Google Meet"
+          >
+            Join
+          </ButtonLink>
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('link', { name: 'Join Google Meet' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: /Reschedule|Cancel/ })).toBeNull();
+  },
+};
+
+/** Closed time: its reason as the title, what it does to the pages, and Remove at the end, which asks first. */
+export const ClosedTime: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <MeetingCard
+        title="Dentist"
+        when="Wednesday, October 21 · 2:00 – 3:00 PM"
+        rows={[
+          { id: 'repeats', icon: 'refresh-cw', label: 'Repeats', value: 'Every Wednesday' },
+          { id: 'pages', icon: 'link', label: 'Booking pages', value: 'None of them offers this time.' },
+        ]}
+        endAction={
+          <Button size="lg" variant="ghost-danger" icon="trash">
+            Remove every Wednesday
+          </Button>
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Remove every Wednesday' })).toBeInTheDocument();
   },
 };
