@@ -87,8 +87,10 @@ test.describe('availability schedules', () => {
     await page.getByRole('button', { name: 'Create page' }).click();
     await expect(page).toHaveURL(/captures\/links\/[0-9a-f-]{36}/, { timeout: 60_000 });
     const pageUrl = page.url();
-    await expect(page.getByRole('button', { name: /Working hours.*Default/ }).first()).toBeVisible();
     const key = /\/b\/([A-Za-z0-9_-]{16})/.exec((await page.getByLabel('Public link').inputValue()) || '')?.[1];
+    // The schedule is on the Hours tab.
+    await page.getByRole('tab', { name: 'Hours', exact: true }).click();
+    await expect(page.getByRole('button', { name: /Working hours.*Default/ }).first()).toBeVisible();
     expect(key).toBeDefined();
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(9, 17));
 
@@ -111,7 +113,7 @@ test.describe('availability schedules', () => {
     await expect(page.getByText('Saved Evenings.').first()).toBeVisible();
 
     // The page picks Evenings, and its public slots follow.
-    await page.goto(pageUrl);
+    await page.goto(`${pageUrl}?tab=hours`);
     await pick(page, 'Schedule', 'Evenings');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('Saved', { exact: true })).toBeVisible();
