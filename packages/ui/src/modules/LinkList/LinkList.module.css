@@ -320,6 +320,11 @@
     display: flex;
   }
 
+  /* In a Card no hairline under the last loading row either, though the loading words for screen readers follow it. */
+  .frame[data-placement='card'] .row[data-last] {
+    border-block-end: none;
+  }
+
   /* Compact rows that move: the grips take a column of their own, first. */
   .frame[data-density='compact'][data-reorderable] .root {
     grid-template-columns: auto minmax(0, 1fr) minmax(0, max-content) auto;

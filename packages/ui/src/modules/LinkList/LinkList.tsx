@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { GridList, GridListItem } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -15,8 +15,9 @@ import type { RowGrip } from './RowOrder.tsx';
 import { strings } from './strings.ts';
 
 // The drag wrapper loads only for a list whose rows move: a public profile's links never do, so its page never loads
-// dnd-kit. Until it arrives the rows stand as they will, each grip's place held, so nothing shifts when it does.
-const LazyRowOrder = lazy(() => import('./RowOrder.tsx').then((module) => ({ default: module.RowOrder })));
+// dnd-kit. A list that moves asks for it as soon as it draws, while its own rows still load, so they arrive together.
+const loadRowOrder = () => import('./RowOrder.tsx');
+const LazyRowOrder = lazy(() => loadRowOrder().then((module) => ({ default: module.RowOrder })));
 
 /** A row's on or off switch: a booking page's visibility, a form's Accepting. */
 export interface LinkToggle {
@@ -121,8 +122,8 @@ export interface LinkListProps {
   /**
    * The rows move (owner ask A102, Settings › Profile's order): a grip starts each row, dragged, or Space on it,
    * the arrows and Space again, and a drop calls this with the row's id and its new index among `rows`. Not while
-   * the search narrows the rows, nor with `rowsAreLinks`. A pending row keeps its place and has no grip. Left out,
-   * the rows hold still.
+   * the search narrows the rows, nor with `rowsAreLinks`. A row alone in the list, or pending, keeps its grip's place
+   * with no grip in it. Left out, the rows hold still.
    */
   readonly onMove?: (id: string, toIndex: number) => void;
 }
@@ -217,6 +218,10 @@ export function LinkList({
   const setQuery = onQueryChange ?? setOwnQuery;
   // A narrowed list can't say where a row goes among the ones it hides, so a search puts the grips away.
   const moves = onMove !== undefined && !rowsAreLinks && query.trim() === '' ? onMove : undefined;
+  const canMove = onMove !== undefined && !rowsAreLinks;
+  useEffect(() => {
+    if (canMove) void loadRowOrder();
+  }, [canMove]);
   const frameProps = {
     className: styles.frame,
     'data-density': density,
@@ -266,23 +271,9 @@ export function LinkList({
       <div {...frameProps}>
         {toolbar}
         <div className={styles.root} aria-busy="true">
-          {showSkeleton &&
-            Array.from({ length: SKELETON_ROWS }, (_, index) => (
-              <div key={index} className={styles.row} data-loading="">
-                {/* The grip's place, so the titles that follow land where these lines stood. */}
-                {moves !== undefined && <span className={styles.grip} />}
-                <div className={styles.main}>
-                  <span className={styles.skeletonTitle}>
-                    <Skeleton width="medium" />
-                  </span>
-                  {!isCompact && (
-                    <span className={styles.skeletonChips}>
-                      <Skeleton width="short" />
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+          {showSkeleton && (
+            <SkeletonRows count={SKELETON_ROWS} isCompact={isCompact} hasGrip={moves !== undefined} isShown />
+          )}
           <VisuallyHidden>{strings.loading(label)}</VisuallyHidden>
         </div>
       </div>
@@ -312,7 +303,10 @@ export function LinkList({
           data-href={row.isPending === true ? undefined : row.href}
         >
           {moves !== undefined && (
-            <span className={styles.grip}>{grip?.(row.id, strings.move(row.title), row.isPending === true)}</span>
+            <span className={styles.grip}>
+              {/* A row alone has nowhere to go, and a pending one isn't made yet: their grips' places stay empty. */}
+              {grip?.(row.id, strings.move(row.title), row.isPending === true || shown.length < 2)}
+            </span>
           )}
           <RowContent row={row} isCompact={isCompact} />
         </GridListItem>
@@ -351,7 +345,8 @@ export function LinkList({
       ) : moves === undefined ? (
         grid(undefined)
       ) : (
-        <Suspense fallback={grid(undefined)}>
+        // Until the drag wrapper arrives the rows' places wait, with nothing to press that would then be replaced.
+        <Suspense fallback={<WaitingRows count={shown.length} isCompact={isCompact} label={label} />}>
           <LazyRowOrder
             ids={shown.map((row) => row.id)}
             nameOf={(id) => shown.find((row) => row.id === id)?.title ?? id}
@@ -361,6 +356,63 @@ export function LinkList({
           </LazyRowOrder>
         </Suspense>
       )}
+    </div>
+  );
+}
+
+/** Rows standing in for rows on their way: each row's box (and its grip's place), with skeleton lines when shown. */
+function SkeletonRows({
+  count,
+  isCompact,
+  hasGrip,
+  isShown,
+}: {
+  readonly count: number;
+  readonly isCompact: boolean;
+  readonly hasGrip: boolean;
+  readonly isShown: boolean;
+}) {
+  return Array.from({ length: count }, (_, index) => (
+    // The last one is marked: the loading words for screen readers follow it, so it isn't the last child.
+    <div key={index} className={styles.row} data-loading="" data-last={index === count - 1 || undefined}>
+      {/* The grip's place, so the titles that follow land where these lines stood. */}
+      {hasGrip && <span className={styles.grip} />}
+      <div className={styles.main}>
+        {isShown && (
+          <>
+            <span className={styles.skeletonTitle}>
+              <Skeleton width="medium" />
+            </span>
+            {!isCompact && (
+              <span className={styles.skeletonChips}>
+                <Skeleton width="short" />
+              </span>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  ));
+}
+
+/**
+ * The rows of a list that moves, while the drag wrapper is still on its way (the first such list a visit draws):
+ * one box per row at once, so nothing below them moves, and skeleton lines in them after the loading delay.
+ */
+function WaitingRows({
+  count,
+  isCompact,
+  label,
+}: {
+  readonly count: number;
+  readonly isCompact: boolean;
+  readonly label: string;
+}) {
+  const isShown = useDelayedLoading(true);
+  return (
+    <div className={styles.root} aria-busy="true">
+      <SkeletonRows count={count} isCompact={isCompact} hasGrip isShown={isShown} />
+      <VisuallyHidden>{strings.loading(label)}</VisuallyHidden>
     </div>
   );
 }

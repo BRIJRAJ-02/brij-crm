@@ -15,6 +15,7 @@ import {
   LinkList,
   Menu,
   MenuItem,
+  MenuSeparator,
   MenuTrigger,
   SectionList,
   SettingsSection,
@@ -24,7 +25,7 @@ import {
   type SectionListSection,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { linksHref, pageEditorHref, publicProfileUrl } from '../booking/links.ts';
 import { useMyAccess } from '../workspace/WorkspacePage.tsx';
 import {
@@ -81,7 +82,7 @@ export function ProfilePagesSection({ data, slug, profile }: ProfilePagesSection
         ? {}
         : {
             actions: (
-              <ButtonLink variant="ghost" icon="external-link" href={publicProfileUrl(handle)} isExternal>
+              <ButtonLink icon="external-link" href={publicProfileUrl(handle)} isExternal>
                 {strings.viewProfile}
               </ButtonLink>
             ),
@@ -122,26 +123,34 @@ function Note({ children, ...props }: Pick<EmptyStateProps, 'title' | 'icon' | '
   );
 }
 
-/** Move up and Move down, only the moves there is room for: the way to move without dragging (WCAG 2.5.7). */
+/**
+ * Move up and Move down, only the moves there is room for: the way to move without dragging (WCAG 2.5.7). A page's
+ * menu ends with Change section, which opens its editor, where its Section is, since a page never leaves its section
+ * here.
+ */
 function MoveMenu({
   label,
   at,
   count,
   onMove,
+  onChangeSection,
 }: {
   /** The menu button's name: "More for Intro call", "Sales options". */
   readonly label: string;
   readonly at: number;
   readonly count: number;
   readonly onMove: (toIndex: number) => void;
+  readonly onChangeSection?: () => void;
 }) {
+  const canMove = count > 1;
   return (
     <MenuTrigger>
       <Button variant="ghost" icon="ellipsis" label={label} />
       <Menu
         label={label}
         onAction={(key) => {
-          onMove(key === 'up' ? at - 1 : at + 1);
+          if (key === 'section') onChangeSection?.();
+          else onMove(key === 'up' ? at - 1 : at + 1);
         }}
       >
         {at > 0 && (
@@ -152,6 +161,12 @@ function MoveMenu({
         {at < count - 1 && (
           <MenuItem id="down" icon="chevron-down">
             {strings.moveDown}
+          </MenuItem>
+        )}
+        {onChangeSection !== undefined && canMove && <MenuSeparator />}
+        {onChangeSection !== undefined && (
+          <MenuItem id="section" icon="pencil">
+            {strings.changeSection}
           </MenuItem>
         )}
       </Menu>
@@ -181,13 +196,14 @@ function ProfilePages({
   const groups = useMemo(() => profileGroupsOf(pages), [pages]);
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
-  // The order as it stands, for a Try again pressed later, and the refusal's toast, which the next move closes.
-  const current = useRef<readonly string[]>([]);
-  useEffect(() => {
-    current.current = orderOf(groups);
-  }, [groups]);
+  // The refusal's toast, which the next move closes: its Try again would send an older order over the new one.
   const refusal = useRef<string | undefined>(undefined);
 
+  /** The whole order as the held list stands now, read when a Try again is pressed, however long after. */
+  const orderNow = (): readonly string[] => {
+    const now = view.getSnapshot();
+    return now.status === 'ready' ? orderOf(profileGroupsOf(profilePagesOf(now.items, memberId))) : [];
+  };
   const send = (ids: readonly string[]) => {
     if (refusal.current !== undefined) toasts.dismiss(refusal.current);
     refusal.current = undefined;
@@ -200,7 +216,8 @@ function ProfilePages({
         action: {
           label: strings.tryAgain,
           onAction: () => {
-            send(fittedOrder(ids, current.current));
+            const now = orderNow();
+            if (now.length > 0) send(fittedOrder(ids, now));
           },
         },
       });
@@ -261,20 +278,17 @@ function ProfilePages({
       // Paused: visitors don't see it until it is resumed, and it keeps its place meanwhile.
       ...(page.status === 'paused' ? { badge: strings.paused, isOff: true } : {}),
       href: pageEditorHref(slug, page.id),
-      ...(count > 1
-        ? {
-            actions: (
-              <MoveMenu
-                label={strings.moreFor(page.title)}
-                at={index}
-                count={count}
-                onMove={(toIndex) => {
-                  movePage(page, toIndex, count);
-                }}
-              />
-            ),
-          }
-        : {}),
+      actions: (
+        <MoveMenu
+          label={strings.moreFor(page.title)}
+          at={index}
+          count={count}
+          onMove={(toIndex) => {
+            movePage(page, toIndex, count);
+          }}
+          onChangeSection={() => void navigate({ href: pageEditorHref(slug, page.id) })}
+        />
+      ),
     }));
     const label = title === undefined ? strings.pages : strings.pagesUnder(title);
     return {
