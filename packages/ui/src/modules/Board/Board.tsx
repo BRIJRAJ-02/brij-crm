@@ -214,7 +214,12 @@ export function Board({
             isReorderable={isReorderable}
             draggingFrom={draggingFrom}
             isOver={overGroup === column.id}
-            isCollapsed={column.isCollapsedWhenEmpty === true && column.count === 0 && !isMoving}
+            // A strip opens while a card moves, to take it; one that refuses drops stays a strip, so nothing shifts.
+            isCollapsed={
+              column.isCollapsedWhenEmpty === true &&
+              column.count === 0 &&
+              (!isMoving || refusalOf(column) !== undefined)
+            }
             {...(onOpen === undefined
               ? {}
               : {

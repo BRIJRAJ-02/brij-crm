@@ -97,7 +97,7 @@
       background: var(--surface-hover);
     }
 
-    .editable:hover > .action {
+    .row:hover .action {
       opacity: 1;
     }
   }

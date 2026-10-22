@@ -29,6 +29,16 @@ export function formatAmount(amount: string, currency: string, locale: string): 
   return formatDecimal(amount, locale, Math.min(minorUnits(currency), 4));
 }
 
+/** Whether Intl knows the code as a currency: anything else would throw, so it is written as the code and digits. */
+function isCurrencyCode(currency: string): boolean {
+  try {
+    minorUnits(currency);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Whether an exact decimal string has a fraction other than zero ("1234.50" yes, "1234.00" and "1234" no). */
 function hasFraction(amount: string): boolean {
   const fraction = amount.split('.')[1] ?? '';
@@ -42,6 +52,7 @@ function hasFraction(amount: string): boolean {
  */
 export function formatMoney(amount: string, currency: string, locale: string): string {
   const whole = !hasFraction(amount);
+  if (!isCurrencyCode(currency)) return `${currency} ${formatDecimal(amount, locale)}`;
   const minimum = whole ? 0 : Math.min(minorUnits(currency), 4);
   return memoIntl(
     `money:${locale}:${currency}:${whole ? 'w' : 'f'}`,

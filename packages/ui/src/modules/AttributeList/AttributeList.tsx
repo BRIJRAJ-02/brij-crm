@@ -87,7 +87,15 @@ export function AttributeList({
 }: AttributeListProps) {
   const showSkeleton = useDelayedLoading(isLoading);
   const [isShowingEmpty, setShowingEmpty] = useState(false);
-  // Folded: empty rows wait behind the foot's button. One filled after Show is no longer empty, so it stays.
+  // Folded: empty rows wait behind the foot's button. A row that has shown with a value stays for good (until the
+  // list is given a new key), so clearing it, or emptying a list mid edit, never pulls the row out from under the
+  // editor and its focus.
+  const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
+  const shownNow = sections.flatMap((section) =>
+    section.items.filter((item) => !isFoldable(item)).map((item) => item.attribute.id),
+  );
+  if (emptyValues === 'fold' && shownNow.some((id) => !kept.has(id))) setKept(new Set([...kept, ...shownNow]));
+  const isFolded = (item: AttributeItem) => isFoldable(item) && !kept.has(item.attribute.id);
   const isFolding = emptyValues === 'fold' && !isShowingEmpty;
   if (isLoading) {
     return (
@@ -106,11 +114,11 @@ export function AttributeList({
       </div>
     );
   }
-  const folded = emptyValues === 'fold' ? sections.flatMap((section) => section.items.filter(isFoldable)).length : 0;
+  const folded = emptyValues === 'fold' ? sections.flatMap((section) => section.items.filter(isFolded)).length : 0;
   const rows = (items: readonly AttributeItem[]): ReactNode => (
     <dl className={styles.rows}>
       {items
-        .filter((item) => !isFolding || !isFoldable(item))
+        .filter((item) => !isFolding || !isFolded(item))
         .map((item) => (
           <Row
             key={item.attribute.id}
@@ -124,15 +132,18 @@ export function AttributeList({
   );
   return (
     <section className={styles.root} aria-label={label}>
-      {sections.map((section) =>
-        section.title === undefined ? (
-          <div key={section.id}>{rows(section.items)}</div>
-        ) : (
-          <Disclosure key={section.id} title={section.title} variant="label" defaultExpanded>
-            {rows(section.items)}
-          </Disclosure>
-        ),
-      )}
+      {sections
+        // A titled section with every row folded away draws nothing, rather than a heading over an empty list.
+        .filter((section) => !isFolding || section.title === undefined || section.items.some((item) => !isFolded(item)))
+        .map((section) =>
+          section.title === undefined ? (
+            <div key={section.id}>{rows(section.items)}</div>
+          ) : (
+            <Disclosure key={section.id} title={section.title} variant="label" defaultExpanded>
+              {rows(section.items)}
+            </Disclosure>
+          ),
+        )}
       {folded > 0 && (
         <span className={styles.more}>
           <Button
