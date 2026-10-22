@@ -5,6 +5,7 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Link } from '../../atoms/Link/Link.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
+import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import styles from './MeetingCard.module.css';
@@ -53,19 +54,23 @@ export interface MeetingCardProps {
   /** What the people row is called for screen readers. Default "Guests". */
   readonly peopleLabel?: string;
   readonly rows?: readonly MeetingCardRow[];
-  /** The footer's actions, primary first (Join, Reschedule, Copy guest link). */
+  /** The footer's actions, primary first (Join, Reschedule, Copy guest link), each a `size="lg"` Button. */
   readonly actions?: ReactNode;
-  /** The footer's far end: a quiet ending action (Cancel booking), apart from the rest. */
+  /** The footer's far end: a quiet ending action (Cancel booking), apart from the rest, `size="lg"` too. */
   readonly endAction?: ReactNode;
-  /** The heading's level where the card sits. Default 2 (a popover or sheet of its own). */
-  readonly headingLevel?: 2 | 3;
+  /**
+   * The heading's level where the card sits. Default 2; under a dialog's own heading (a Panel's or a sheet's,
+   * level 3) pass 4, beside one with none (a popover) 3.
+   */
+  readonly headingLevel?: 2 | 3 | 4;
 }
 
 /**
- * One meeting's details, as Google Calendar's and Calendly's cards lay them out: a title and its time first,
- * the status a quiet dot beside the time; then icon rows (who, where, notes) on one rhythm; then the actions in a
- * footer, primary first and an ending one apart at the end. It has no surface of its own: the Popover beside a
- * week's block, a Panel or a sheet holds it.
+ * One meeting's details, as Google Calendar's card lays them out: every line of text starts on one text column,
+ * with a gutter to its left holding each row's icon or avatar, centred on the row's first line. The title and its
+ * time first, the status a quiet dot beside the time; then the people (an avatar each) and the facts (an icon
+ * each), all on one rhythm; then the actions in a footer, primary first and an ending one apart at the end. It has
+ * no surface of its own: the Popover beside a week's block, a Panel or a sheet holds it.
  */
 export function MeetingCard({
   title,
@@ -80,10 +85,10 @@ export function MeetingCard({
   headingLevel = 2,
 }: MeetingCardProps) {
   const id = useId();
-  const Heading = headingLevel === 2 ? 'h2' : 'h3';
+  const Heading = headingLevel === 2 ? 'h2' : headingLevel === 3 ? 'h3' : 'h4';
   return (
     <article className={styles.root} aria-labelledby={`${id}-title`}>
-      <header className={styles.head}>
+      <header className={styles.inset}>
         <Heading id={`${id}-title`} className={styles.title}>
           {title}
         </Heading>
@@ -92,48 +97,45 @@ export function MeetingCard({
           {status !== undefined && <StatusDot hue={status.hue}>{status.label}</StatusDot>}
         </p>
       </header>
-      {notices}
-      {(people.length > 0 || rows.length > 0) && (
-        <dl className={styles.rows}>
-          {people.length > 0 && (
-            <div className={styles.row}>
-              <dt className={styles.icon}>
-                <Icon name={people.length > 1 ? 'users' : 'user'} size="sm" />
-                <VisuallyHidden>{peopleLabel}</VisuallyHidden>
-              </dt>
-              <dd className={styles.content}>
-                <ul className={styles.people}>
-                  {people.map((person) => (
-                    <li key={person.id} className={styles.person}>
-                      <Avatar name={person.name} id={person.id} size="sm" isDecorative />
-                      <span className={styles.personText}>
-                        <span className={styles.value}>
-                          {person.href === undefined ? person.name : <Link href={person.href}>{person.name}</Link>}
-                        </span>
-                        {person.detail !== undefined && (
-                          <span className={styles.detailLine}>
-                            <span className={styles.detail}>{person.detail}</span>
-                            {person.isDetailCopyable === true && (
-                              <CopyButton
-                                value={person.detail}
-                                label={strings.copy(person.detail)}
-                                isIconOnly
-                                variant="ghost"
-                                size="sm"
-                              />
-                            )}
-                          </span>
-                        )}
+      {notices !== undefined && <div className={styles.inset}>{notices}</div>}
+      {people.length > 0 && (
+        <ul className={styles.list} aria-label={peopleLabel}>
+          {people.map((person) => (
+            <li key={person.id} className={styles.row}>
+              <span className={styles.lead}>
+                <Avatar name={person.name} id={person.id} size="sm" isDecorative />
+              </span>
+              <span className={styles.content}>
+                <span className={styles.value}>
+                  {person.href === undefined ? person.name : <Link href={person.href}>{person.name}</Link>}
+                </span>
+                {person.detail !== undefined && (
+                  <span className={styles.detailLine}>
+                    <span className={styles.detail}>{person.detail}</span>
+                    {person.isDetailCopyable === true && (
+                      <span className={styles.copy}>
+                        <Tooltip content={strings.copy(person.detail)}>
+                          <CopyButton
+                            value={person.detail}
+                            label={strings.copy(person.detail)}
+                            isIconOnly
+                            variant="ghost"
+                          />
+                        </Tooltip>
                       </span>
-                    </li>
-                  ))}
-                </ul>
-              </dd>
-            </div>
-          )}
+                    )}
+                  </span>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {rows.length > 0 && (
+        <dl className={styles.list}>
           {rows.map((row) => (
             <div key={row.id} className={styles.row}>
-              <dt className={styles.icon}>
+              <dt className={styles.lead}>
                 <Icon name={row.icon} size="sm" />
                 <VisuallyHidden>{row.label}</VisuallyHidden>
               </dt>
@@ -143,7 +145,7 @@ export function MeetingCard({
                     <span className={styles.value}>{row.value}</span>
                     {row.detail !== undefined && <span className={styles.detail}>{row.detail}</span>}
                   </span>
-                  {row.action}
+                  {row.action !== undefined && <span className={styles.rowAction}>{row.action}</span>}
                 </span>
                 {row.children}
               </dd>

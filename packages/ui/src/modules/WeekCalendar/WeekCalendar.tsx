@@ -868,7 +868,7 @@ export function WeekCalendar({
               }
             }}
           >
-            <div className={styles.detail}>{detail}</div>
+            {detail}
           </Modal>
         ) : (
           <Popover
@@ -883,7 +883,7 @@ export function WeekCalendar({
             placement={cardPlacement}
             label={strings.details}
           >
-            <div className={styles.detail}>{detail}</div>
+            {detail}
           </Popover>
         ))}
     </section>

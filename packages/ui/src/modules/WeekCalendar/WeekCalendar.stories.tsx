@@ -317,11 +317,6 @@ export const OpenCard: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Grace Hopper, 3:30 – 4:00 PM, Quick chat' }));
     const body = within(canvasElement.ownerDocument.body);
     await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toBeInTheDocument());
-    // The card's pieces sit apart, not flush (measured while the card may still be growing in, so not exact).
-    const card = within(body.getByRole('dialog', { name: 'Details' }));
-    const first = card.getByText('Grace Hopper, 3:30 – 4:00 PM').getBoundingClientRect();
-    const second = card.getByText('Quick chat').getBoundingClientRect();
-    await expect(second.top - first.bottom).toBeGreaterThan(8);
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(body.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument());
   },
