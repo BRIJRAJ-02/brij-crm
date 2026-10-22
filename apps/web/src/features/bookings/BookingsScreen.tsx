@@ -263,7 +263,7 @@ function BookingCard({
   actions,
   onAsk,
   focusOnMount,
-  headingLevel = 3,
+  headingLevel = 4,
 }: {
   readonly booking: BookingListItem;
   readonly personHref: string | undefined;
@@ -273,7 +273,7 @@ function BookingCard({
   readonly onAsk?: ((ask: BookingAsk) => void) | undefined;
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk | undefined;
-  /** 3 in the week's popover or sheet; 4 under the List's panel title. */
+  /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
   readonly headingLevel?: 3 | 4;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
@@ -479,12 +479,12 @@ function EventCard({
   event,
   connection,
   locale,
-  headingLevel = 3,
+  headingLevel = 4,
 }: {
   readonly event: CalendarEventItem;
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
-  /** 3 in the week's popover or sheet; 4 under the List's panel title. */
+  /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
   readonly headingLevel?: 3 | 4;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
@@ -510,7 +510,7 @@ function EventCard({
           ? []
           : [{ id: 'calendar', icon: 'calendar' as const, label: strings.calendar, value: connection.accountEmail }]),
         // Why it has no actions here, with a connection or without.
-        { id: 'managed', icon: 'info' as const, label: strings.calendar, value: strings.fromCalendar },
+        { id: 'managed', icon: 'info' as const, label: strings.aboutEvent, value: strings.fromCalendar },
       ]}
       {...(event.videoUrl === undefined || Date.parse(event.endsAt) <= now.getTime()
         ? {}
@@ -537,12 +537,12 @@ function BusyCard({
   busy,
   connection,
   locale,
-  headingLevel = 3,
+  headingLevel = 4,
 }: {
   readonly busy: { readonly startsAt: string; readonly endsAt: string };
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
-  /** 3 in the week's popover or sheet; 4 under the List's panel title. */
+  /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
   readonly headingLevel?: 3 | 4;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
@@ -614,13 +614,13 @@ function removeWords(
 function BlockCard({
   turn,
   locale,
-  headingLevel = 3,
+  headingLevel = 4,
   onRemove,
   isRemoveFocused = false,
 }: {
   readonly turn: TimeBlockOccurrence;
   readonly locale: string;
-  /** 3 in the week's popover or sheet; 4 under the List's panel title. */
+  /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
   readonly headingLevel?: 3 | 4;
   /** Asks to remove the block: the screen's confirm. */
   readonly onRemove: () => void;

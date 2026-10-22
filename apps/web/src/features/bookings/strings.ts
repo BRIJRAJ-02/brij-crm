@@ -106,6 +106,8 @@ export const strings = {
   calendar: 'Calendar',
   /** An event's call, as the card's row. */
   call: 'Call',
+  /** A calendar event card's note, for screen readers. */
+  aboutEvent: 'About this event',
   fromCalendar: 'From your calendar. Timefix keeps the time blocked but doesn’t manage this event.',
   // The member's own calendar time with nobody else invited (spec 0024, the owner's call on 20 October 2026).
   busy: 'Busy',
