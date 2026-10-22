@@ -26,8 +26,6 @@ export const strings = {
 
   inviteTitle: 'Invite your team',
   inviteDescription: 'They get an email with a link to join.',
-  sendInvites: 'Send invites',
-  sendingInvites: 'Sending invites',
   noEmails: 'Add an email address, or skip this step.',
   invited: (count: number) =>
     count === 0 ? 'No invites sent.' : count === 1 ? 'Invite sent.' : `${String(count)} invites sent.`,

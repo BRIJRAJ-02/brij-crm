@@ -13,18 +13,27 @@ export function createInviteRow(roleId?: string, email = ''): InviteRow {
   return { id: crypto.randomUUID(), email, ...(roleId === undefined ? {} : { roleId }) };
 }
 
+/** Anything shaped like an address: a mail client's "Ada Lovelace <ada@acme.com>" gives ada@acme.com. */
+const ADDRESS = /[^\s<>,;"'()]+@[^\s<>,;"'()]+/g;
+
 /**
- * The parts of a pasted list: split on commas, semicolons, spaces and line
- * breaks, empty parts dropped, nothing else judged (the screen decides what
- * is an address).
+ * The parts of a pasted list. With an `@` in it, the addresses alone (a
+ * mail client copies "Ada Lovelace <ada@acme.com>, Bob <bob@x.com>", and the
+ * names are dropped); else split on commas, semicolons, spaces and line
+ * breaks. Nothing else is judged (the screen decides what is an address).
  */
 export function splitList(text: string): readonly string[] {
+  if (text.includes('@')) return text.match(ADDRESS) ?? [];
   return text.split(/[\s,;]+/).filter((part) => part !== '');
 }
 
-/** True when `value` holds more than one part, so typing it means a pasted list rather than one address. */
-export function isList(value: string): boolean {
-  return /[\s,;]/.test(value.trim()) && splitList(value).length > 1;
+/**
+ * True when a change from `before` to `value` is a pasted list: several
+ * characters arrived at once and they hold more than one part. A key typed
+ * (a stray space, "ada l") never splits a row.
+ */
+export function isList(value: string, before = ''): boolean {
+  return value.length - before.length > 1 && /[\s,;]/.test(value.trim()) && splitList(value).length > 1;
 }
 
 /** The rows with a new one after `afterId` (after the last when unknown), taking that row's role. */

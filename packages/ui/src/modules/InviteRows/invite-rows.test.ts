@@ -34,10 +34,18 @@ describe('splitList and isList', () => {
   it('splits on commas, semicolons, spaces and line breaks, dropping empties', () => {
     expect(splitList('a@x.com, b@y.com;c@z.com\nd@w.com  ')).toEqual(['a@x.com', 'b@y.com', 'c@z.com', 'd@w.com']);
   });
+  it('takes the addresses alone from what a mail client copies', () => {
+    expect(splitList('Ada Lovelace <ada@acme.com>, Bob <bob@x.com>')).toEqual(['ada@acme.com', 'bob@x.com']);
+  });
   it('treats one address, even with spaces round it, as typing', () => {
     expect(isList(' ada@x.com ')).toBe(false);
     expect(isList('ada@x.com,')).toBe(false);
     expect(isList('ada@x.com, grace@y.com')).toBe(true);
+  });
+  it('splits only when several characters arrive at once, never on a key typed', () => {
+    expect(isList('ada l', 'ada ')).toBe(false);
+    expect(isList('ada@x.com b', 'ada@x.com ')).toBe(false);
+    expect(isList('ada@x.com, grace@y.com', '')).toBe(true);
   });
 });
 

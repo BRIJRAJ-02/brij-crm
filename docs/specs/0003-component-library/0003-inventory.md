@@ -150,7 +150,7 @@ One display and one editor per attribute type: text, long text, number, currency
 | AttributeSettings, OptionsEditor | New | 13, 14, 18 | Field, HuePicker, `GridList` | type, required, unique, default; options with hue, reorder, archive |
 | RulesEditor | New (spec 0013) | 14 | Field, Select, DatePicker, Disclosure, FilterBuilder, `GridList` | an attribute's validation rules: each read as its message, opened in place, reordered, deleted |
 | AccessRuleEditor | New | 24 | Table, Select | object, field and record rules per role |
-| MemberInvite, RolePicker | New | 23 | Field, Select | |
+| InviteRows (was MemberInvite, RolePicker) | Built 22 Oct 2026 | 23 | Field, Select, Button, FieldLabel | a row per person with its role, + Add another, paste into rows; the Members dialog and first run share it |
 | TwoFactorSetup | New | 25 | Steps, CodeInput | QR image comes from #25 |
 | SecretReveal | New | 34 | Callout, Code, CopyButton | shown once |
 | UsagePanel | New | 38 | Meter, Card | |

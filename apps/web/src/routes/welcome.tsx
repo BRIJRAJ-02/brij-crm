@@ -23,20 +23,21 @@ export const Route = createFileRoute('/welcome')({
     const me = await context.data.me.get();
     if (me === undefined)
       throw redirect({ href: signInHref(deps.another ? '/welcome?another=1' : '/welcome'), replace: true });
-    const calendarSync = await context.data.system.status().then(
-      (status) => status.calendarSync,
-      () => false,
-    );
     const home = homeWorkspace(me);
     const landing = welcomeLanding(me.workspaces, deps.workspace, home, deps.another);
     if (landing.kind === 'open') throw redirect({ to: '/w/$slug', params: { slug: landing.slug }, replace: true });
     // Invite your team offers the roles its maker may invite as, as Settings › Members does; unread, everyone joins
     // as a member and the step has no role column.
     const made = landing.workspace;
-    const inviteRoles =
+    // Read together, so the invite step's roles add no wait after Create workspace.
+    const calendarRead = context.data.system.status().then(
+      (status) => status.calendarSync,
+      () => false,
+    );
+    const rolesRead =
       made === undefined
-        ? undefined
-        : await Promise.all([context.data.access.mine(made.slug), context.data.roles.list(made.slug)]).then(
+        ? Promise.resolve(undefined)
+        : Promise.all([context.data.access.mine(made.slug), context.data.roles.list(made.slug)]).then(
             ([access, roles]) => {
               const allowed = invitableRoles(access.role);
               const options = roles.roles.filter(
@@ -51,6 +52,7 @@ export const Route = createFileRoute('/welcome')({
             },
             () => undefined,
           );
+    const [calendarSync, inviteRoles] = await Promise.all([calendarRead, rolesRead]);
     return {
       user: me.user,
       calendarSync,
