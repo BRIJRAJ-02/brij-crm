@@ -421,7 +421,7 @@ export function GeneralPending() {
           <SettingsRow title={strings.name} control="field">
             <Skeleton shape="field" />
           </SettingsRow>
-          <SettingsRow title={strings.webAddress} control="field">
+          <SettingsRow title={strings.webAddress} control="field" description={<Skeleton width="long" />}>
             <Skeleton shape="field" />
           </SettingsRow>
           <SettingsRow title={strings.timeZone} control="field">

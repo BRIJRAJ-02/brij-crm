@@ -292,7 +292,9 @@ export interface SettingsSectionProps {
  * One group of settings across the page's width: its heading, and a line of
  * description only when the heading needs one, above its cards (21 Oct 2026:
  * one column, no label column beside them), and a hairline before the next
- * section. A list (a Table) needs no section: it runs the full width. With
+ * section. A page's main list (a Table) needs no section: it runs the full
+ * width; a list that is one of several sections (a person's devices) sits in
+ * one. With
  * `actions`, the section's one action sits at the heading's end.
  */
 export function SettingsSection({ title, description, actions, children }: SettingsSectionProps) {

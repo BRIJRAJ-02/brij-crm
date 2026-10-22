@@ -138,6 +138,8 @@
   }
 
   .description {
+    /* A long value in the line (a workspace's whole link) breaks rather than run out of the row on a phone. */
+    overflow-wrap: anywhere;
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);

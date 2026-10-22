@@ -176,64 +176,62 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
   const isSignOut = confirm === 'signOut';
   return (
     <SettingsPage title={strings.title} titleRef={titleRef}>
-      <>
-        {error !== undefined && (
-          <Callout tone="danger" isAnnounced>
-            {error}
+      {error !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {error}
+        </Callout>
+      )}
+      <SettingsSection title={strings.twoFactor} description={strings.twoFactorDescription}>
+        {!mayRequire && (
+          <Callout actions={<Link href={securitySettingsHref(slug)}>{strings.setUpYours}</Link>}>
+            {strings.youFirst}
           </Callout>
         )}
-        <SettingsSection title={strings.twoFactor} description={strings.twoFactorDescription}>
-          {!mayRequire && (
-            <Callout actions={<Link href={securitySettingsHref(slug)}>{strings.setUpYours}</Link>}>
-              {strings.youFirst}
-            </Callout>
-          )}
-          <Card isBusy={saving === 'require'}>
-            <SettingsRow
-              title={strings.require}
-              description={rules.requireTwoFactor ? strings.requireOn(rules.membersWithout) : strings.requireOff}
-            >
-              <Switch
-                label={strings.require}
-                isLabelHidden
-                isSelected={rules.requireTwoFactor}
-                isDisabled={!mayRequire || saving === 'require'}
-                onChange={setRequire}
-              />
-            </SettingsRow>
-          </Card>
-        </SettingsSection>
-        <SettingsSection title={strings.sessions} description={strings.sessionsDescription}>
-          <Card isBusy={saving === 'length'}>
-            <SettingsRow title={strings.sessionLength} description={strings.sessionLengthDescription}>
-              <Select
-                label={strings.sessionLength}
-                isLabelHidden
-                items={LENGTHS}
-                value={lengthId(rules.sessionLengthDays)}
-                isDisabled={saving === 'length'}
-                onChange={(id) => {
-                  const next = lengthOf(id);
-                  if (lengthId(next ?? undefined) === lengthId(rules.sessionLengthDays)) return;
-                  setLength(next);
-                }}
-              />
-            </SettingsRow>
-            <SettingsRow
-              title={strings.signOutEveryone}
-              description={
-                rules.signedOutEveryoneAt === undefined
-                  ? strings.signOutEveryoneDescription
-                  : `${strings.signOutEveryoneDescription} ${strings.lastSignedOut(dayOf(rules.signedOutEveryoneAt))}`
-              }
-            >
-              <Button variant="danger" onPress={() => ask('signOut')}>
-                {strings.signOutEveryone}
-              </Button>
-            </SettingsRow>
-          </Card>
-        </SettingsSection>
-      </>
+        <Card isBusy={saving === 'require'}>
+          <SettingsRow
+            title={strings.require}
+            description={rules.requireTwoFactor ? strings.requireOn(rules.membersWithout) : strings.requireOff}
+          >
+            <Switch
+              label={strings.require}
+              isLabelHidden
+              isSelected={rules.requireTwoFactor}
+              isDisabled={!mayRequire || saving === 'require'}
+              onChange={setRequire}
+            />
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
+      <SettingsSection title={strings.sessions} description={strings.sessionsDescription}>
+        <Card isBusy={saving === 'length'}>
+          <SettingsRow title={strings.sessionLength} description={strings.sessionLengthDescription}>
+            <Select
+              label={strings.sessionLength}
+              isLabelHidden
+              items={LENGTHS}
+              value={lengthId(rules.sessionLengthDays)}
+              isDisabled={saving === 'length'}
+              onChange={(id) => {
+                const next = lengthOf(id);
+                if (lengthId(next ?? undefined) === lengthId(rules.sessionLengthDays)) return;
+                setLength(next);
+              }}
+            />
+          </SettingsRow>
+          <SettingsRow
+            title={strings.signOutEveryone}
+            description={
+              rules.signedOutEveryoneAt === undefined
+                ? strings.signOutEveryoneDescription
+                : `${strings.signOutEveryoneDescription} ${strings.lastSignedOut(dayOf(rules.signedOutEveryoneAt))}`
+            }
+          >
+            <Button variant="danger" onPress={() => ask('signOut')}>
+              {strings.signOutEveryone}
+            </Button>
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
       <Modal
         title={
           isSignOut
@@ -286,27 +284,25 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
 export function WorkspaceSecurityPending() {
   return (
     <SettingsPage title={strings.title} isLoading>
-      <>
-        <SettingsSection title={strings.twoFactor} description={strings.twoFactorDescription}>
-          <Card isBusy>
-            <SettingsRow title={strings.require}>
-              <Skeleton shape="field" />
-            </SettingsRow>
-          </Card>
-        </SettingsSection>
-        <SettingsSection title={strings.sessions} description={strings.sessionsDescription}>
-          <Card isBusy>
-            <SettingsRow title={strings.sessionLength}>
-              <Skeleton shape="field" />
-            </SettingsRow>
-            <SettingsRow title={strings.signOutEveryone}>
-              <Button variant="danger" isDisabled>
-                {strings.signOutEveryone}
-              </Button>
-            </SettingsRow>
-          </Card>
-        </SettingsSection>
-      </>
+      <SettingsSection title={strings.twoFactor} description={strings.twoFactorDescription}>
+        <Card isBusy>
+          <SettingsRow title={strings.require}>
+            <Skeleton shape="field" />
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
+      <SettingsSection title={strings.sessions} description={strings.sessionsDescription}>
+        <Card isBusy>
+          <SettingsRow title={strings.sessionLength}>
+            <Skeleton shape="field" />
+          </SettingsRow>
+          <SettingsRow title={strings.signOutEveryone}>
+            <Button variant="danger" isDisabled>
+              {strings.signOutEveryone}
+            </Button>
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
     </SettingsPage>
   );
 }

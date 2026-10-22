@@ -161,10 +161,13 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   if (state.status === 'loading') {
     body = <SecurityLoading />;
   } else if (state.status === 'error') {
+    // The section keeps its heading when the list fails, so the page holds its shape in every state.
     body = (
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => view.reload()}>
-        {state.message}
-      </EmptyState>
+      <SettingsSection title={strings.devices} description={strings.devicesDescription}>
+        <EmptyState tone="error" title={strings.failedTitle} onRetry={() => view.reload()}>
+          {state.message}
+        </EmptyState>
+      </SettingsSection>
     );
   } else {
     body = (
