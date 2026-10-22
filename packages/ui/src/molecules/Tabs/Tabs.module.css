@@ -93,9 +93,14 @@
 
   /* Directly in a settings page's body (PageEdge): the strip runs out through the page's space-16 gutter to its
      edges, the bar's height, so its hairline meets the sidebar's like the TopBar's above it, and the first tab's
-     label (its own space-8 padding makes up the rest) and the tools' end sit on the content edge. */
+     label (its own space-8 padding makes up the rest) and the tools' end sit on the content edge. Like Bookings'
+     second bar, it stays at the top of the view on the surface while the page under it scrolls. */
   .bar[data-edge='page'] {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--z-sticky);
     margin-inline: calc(-1 * var(--space-16));
+    background: var(--surface);
   }
 
   .bar[data-edge='page'] .list {
