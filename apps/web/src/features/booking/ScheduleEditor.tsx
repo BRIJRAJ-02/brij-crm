@@ -5,6 +5,7 @@
 import type { BookingAvailability, DataLayer, ScheduleView } from '@crm/data';
 import {
   Card,
+  EmptyState,
   HoursEditor,
   LinkList,
   PageColumn,
@@ -78,27 +79,7 @@ export function ScheduleEditor({ data, slug, member, schedule, onReload, onAdopt
           onDiscard={draft.discard}
         />
       }
-      week={
-        <Card
-          title={strings.weeklyHours}
-          // The zone the week reads in, at the card's head (the switcher is in the tab strip, as the other tabs'
-          // tools are: the owner, 22 October 2026).
-          actions={
-            <ZoneSelect
-              value={shown.timeZone}
-              onChange={(zone) => draft.change((current) => ({ ...current, timeZone: zone }))}
-            />
-          }
-        >
-          <HoursEditor
-            label={strings.weeklyHours}
-            rows={weekRows(shown)}
-            onChange={(day, ranges) => {
-              draft.change((current) => withDay(current, day, ranges));
-            }}
-          />
-        </Card>
-      }
+      week={<WeekCard availability={shown} onChange={draft.change} />}
       aside={
         <>
           <DaysOff availability={shown} onChange={change} />
@@ -123,6 +104,45 @@ function Layout({
     <PageColumn stack="main-first" aside={aside} {...(footer === undefined ? {} : { footer })}>
       {week}
     </PageColumn>
+  );
+}
+
+/**
+ * A schedule's week in its Card: the zone it reads in at the card's head, the day rows under it. Availability's
+ * schedule editor and a booking page's Hours tab draw the same one, so the hours edit the same way in both.
+ */
+export function WeekCard({
+  availability,
+  onChange,
+  isReadOnly = false,
+}: {
+  readonly availability: BookingAvailability;
+  /** Changes the hours from what is shown now, so several changes in one event all land (Copy to days). */
+  readonly onChange: (next: (current: BookingAvailability) => BookingAvailability) => void;
+  /** Shows the week with nothing to change (a page the reader can't change). */
+  readonly isReadOnly?: boolean;
+}) {
+  return (
+    <Card
+      title={strings.weeklyHours}
+      // The zone the week reads in, at the card's head, said once.
+      actions={
+        <ZoneSelect
+          value={availability.timeZone}
+          isDisabled={isReadOnly}
+          onChange={(zone) => onChange((current) => ({ ...current, timeZone: zone }))}
+        />
+      }
+    >
+      <HoursEditor
+        label={strings.weeklyHours}
+        rows={weekRows(availability)}
+        isReadOnly={isReadOnly}
+        onChange={(day, ranges) => {
+          onChange((current) => withDay(current, day, ranges));
+        }}
+      />
+    </Card>
   );
 }
 
@@ -168,12 +188,17 @@ function usedByNames(pages: ScheduleView['pages']): readonly { readonly id: stri
 /** The booking pages that book by the schedule, each a quiet link to its editor; none says so. */
 function UsedBy({ slug, schedule }: { readonly slug: string; readonly schedule: ScheduleView }) {
   const navigate = useNavigate();
+  // One card anatomy with Days off: the title, then its content in the body, a quiet line when there is none.
   if (schedule.pages.length === 0) {
-    return <Card title={scheduleStrings.usedByLabel} description={scheduleStrings.usedByNone} />;
+    return (
+      <Card title={scheduleStrings.usedByLabel}>
+        <EmptyState layout="row" icon="link" title={scheduleStrings.usedByNone} />
+      </Card>
+    );
   }
   const hrefOf = (id: string) => pageEditorHref(slug, id);
-  // Clean rows, not a bulleted list of links (the owner, 22 October 2026): each page's title, Live (only live pages
-  // book by a schedule), and the row opens its editor.
+  // Clean rows, not a bulleted list of links (the owner, 22 October 2026): each page's title, and the row opens its
+  // editor. No Live chip: only live pages book by a schedule, so every row would say it.
   return (
     <Card title={scheduleStrings.usedByLabel}>
       <LinkList
@@ -186,7 +211,7 @@ function UsedBy({ slug, schedule }: { readonly slug: string; readonly schedule: 
           id: page.id,
           title: page.name,
           address: '',
-          chips: [strings.live],
+          chips: [],
           href: hrefOf(page.id),
         }))}
         onOpen={(id) => void navigate({ href: hrefOf(id) })}

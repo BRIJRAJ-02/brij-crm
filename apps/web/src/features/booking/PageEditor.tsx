@@ -1,17 +1,21 @@
 // Brief
-// Purpose: one booking page's editor (spec 0025, 0025-experience.md, AC-623, AC-624, AC-679): its groups beside a live preview.
+// Purpose: one booking page's editor (spec 0025, 0025-experience.md, AC-623, AC-624, AC-679): its groups, full width.
 // Main task: change the page, the meeting, its hours and limits, and Save from the bar that appears while anything is unsaved.
 // One tab per group (the owner, 22 Oct 2026: the cards stacked were too much to look through), the chosen one in
 // `?tab=`; a tab whose fields hold an error carries a dot. Every setting shows; nothing folds away (the owner).
-// The hours are a schedule's (spec 0035, AC-965): the tab picks one of the owner's, says its week, and links to it.
+// No preview beside it (the owner, 22 Oct 2026): View page in the header opens the live page in a new tab, as
+// Calendly's and Cal.com's event editors do.
+// The hours are a schedule's (spec 0035, AC-965): the tab picks one of the owner's and edits its week and days off in
+// place (the owner, 22 Oct 2026, like Calendly's and Cal.com's event Availability tab), saved by the same Save.
 // A round robin page (spec 0029, AC-732) adds Hosts: its fixed hosts, its rotations, and who reschedules go to.
-// Leaves out: questions and the deal step (milestone 2), collective members, and scrolling to a group from the preview.
+// Leaves out: questions and the deal step (milestone 2), collective members, and a preview (View page opens the page).
 import {
   isDataError,
   type BookingPageSettings,
   type BookingPageView,
   type DataLayer,
   type MemberSummary,
+  type ScheduleView,
   type SchedulesView,
 } from '@crm/data';
 import { useCalendar, useCaptureList, useSchedules } from '@crm/data/react';
@@ -25,8 +29,6 @@ import {
   Field,
   FieldGroup,
   InfoTip,
-  PreviewDeviceSwitch,
-  PreviewFrame,
   PreviewLayout,
   Popover,
   SaveBar,
@@ -39,7 +41,6 @@ import {
   Tabs,
   TopBar,
   type SaveBarStatus,
-  type PreviewDevice,
   type SelectItem,
 } from '@crm/ui';
 import { useBlocker, useNavigate, useRouteContext } from '@tanstack/react-router';
@@ -57,17 +58,20 @@ import { RulesCard } from '../routing/RulesCard.tsx';
 import { strings as routingStrings } from '../routing/strings.ts';
 import { weekGroups } from './hours.ts';
 import { zoneDisplay } from '../../public/booking/time.ts';
+import { DaysOff } from './DaysOff.tsx';
+import { WeekCard } from './ScheduleEditor.tsx';
+import { useScheduleDraft } from './scheduleDraft.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { bookingsTabHref } from '../bookings/tabs.ts';
 import { strings as capturesStrings } from '../captures/strings.ts';
 import { DeletePageDialog } from './DeletePageDialog.tsx';
 import {
+  availabilityHref,
   linksHref,
   pageEditorHref,
   PAGE_TABS,
   pageTabOf,
   publicBookingUrl,
-  scheduleHref,
   type PageTab,
 } from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
@@ -99,15 +103,6 @@ export interface PageEditorProps {
 }
 
 const LOCATIONS = ['video', 'address', 'phone', 'custom'] as const;
-
-/** The help beside a setting's label, from its `strings.tips` entry. */
-function tipFor(label: string, tip: { readonly text: string; readonly example: string }) {
-  return (
-    <InfoTip label={label} example={tip.example}>
-      {tip.text}
-    </InfoTip>
-  );
-}
 
 const minutesItems = (values: readonly number[]): SelectItem[] =>
   values.map((value) => ({ id: String(value), label: value === 0 ? strings.none : strings.minutes(value) }));
@@ -210,7 +205,23 @@ export function PageEditor({
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
   const dirty = changed(saved, draft);
-  const isDirty = !isLocked && Object.keys(dirty).length > 0;
+  const isPageDirty = !isLocked && Object.keys(dirty).length > 0;
+  const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember);
+  // The chosen schedule's week and days off, edited in place and saved by the same Save as the page's settings
+  // (through the data layer: shown at once, put back if the server refuses).
+  const week = useScheduleDraft({
+    data,
+    slug,
+    schedule: hours.schedule ?? standIn(page),
+    forMember: ownerMember !== undefined,
+    reload: () => schedules?.reload(),
+    onNotice: (notice) => {
+      if (notice.tone === 'success') setJustSaved(true);
+      else toasts.toast(notice);
+    },
+  });
+  const isWeekDirty = !isLocked && hours.schedule !== undefined && week.isDirty;
+  const isDirty = isPageDirty || isWeekDirty;
   const [justSaved, setJustSaved] = useState(false);
   const change = (patch: Partial<BookingPageSettings>) => {
     setJustSaved(false);
@@ -235,7 +246,6 @@ export function PageEditor({
     setLengthError(undefined);
     setAddingLength(false);
   };
-  const [device, setDevice] = useState<PreviewDevice>('phone');
   // When the editor opened: the zone's offset ("GMT+5:30") is read for then.
   const [openedAt] = useState(() => Date.now());
   // The calendar note shows only to someone with no calendar connected yet (their own connections, spec 0024).
@@ -313,19 +323,18 @@ export function PageEditor({
     );
   };
   // The save bar speaks for the groups' changes; the Live switch saves on its own.
-  const barError = failure?.message;
+  const barError = failure?.message ?? (isWeekDirty ? week.error : undefined);
   const barStatus: SaveBarStatus = !isDirty
     ? justSaved
       ? 'saved'
       : 'hidden'
-    : isSaving
+    : isSaving || week.isSaving
       ? 'saving'
       : barError === undefined
         ? 'unsaved'
         : 'error';
   const location = draft.location;
   const isTeam = page.kind === 'round_robin';
-  const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember);
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
   // The people a routing rule may pick: the members of the page's rotations, each once (spec 0043).
@@ -349,7 +358,7 @@ export function PageEditor({
       isWhereMissing ||
       chipsError !== undefined,
     hosts: refusedTab === 'hosts',
-    hours: refusedTab === 'hours',
+    hours: refusedTab === 'hours' || (isWeekDirty && !week.isValid),
     limits: refusedTab === 'limits',
   };
   const tabLabel: Readonly<Record<PageTab, string>> = {
@@ -401,6 +410,7 @@ export function PageEditor({
           >
             <EditorActions
               link={publicBookingUrl(page.publicKey)}
+              viewHref={`/b/${page.publicKey}`}
               {...(isLocked
                 ? {}
                 : {
@@ -440,31 +450,14 @@ export function PageEditor({
               selectedKey={shown}
               onSelectionChange={(id) => onTabChange(pageTabOf(id))}
             >
-              {/* One panel, the chosen tab's: the layout and its preview stay mounted as the tab changes. */}
+              {/* One panel, the chosen tab's: the layout stays mounted as the tab changes. No preview (the owner, 22 Oct
+                  2026): the tabs take the page's width and the fields keep a readable column, as Settings' do. */}
               <TabPanel id={shown} variant="fill">
                 <PreviewLayout
                   bodyWidth="form"
-                  previewControls={<PreviewDeviceSwitch value={device} onChange={setDevice} />}
-                  preview={
-                    <PreviewFrame
-                      src={`/b/${page.publicKey}`}
-                      title={page.title}
-                      device={device}
-                      // The page's save, or a save of the schedule it books by, draws the preview again with the new times.
-                      version={`${page.updatedAt}|${hours.version}`}
-                      draft={{
-                        title: draft.title,
-                        description: draft.description,
-                        durations: draft.durations,
-                        location: draft.location,
-                      }}
-                    />
-                  }
-                  {...(page.status === 'paused'
-                    ? { previewNote: <Callout tone="info">{strings.pausedPreview}</Callout> }
-                    : {})}
                   notices={
                     <>
+                      {page.status === 'paused' && <Callout tone="info">{strings.pausedNote}</Callout>}
                       {isLocked && (
                         <Callout tone="info" title={strings.readOnlyTitle}>
                           {strings.readOnlyText}
@@ -486,15 +479,19 @@ export function PageEditor({
                     <SaveBar
                       status={barStatus}
                       {...(barError === undefined ? {} : { error: barError })}
-                      {...(sendable(draft)
+                      {...(sendable(draft) && (!isWeekDirty || week.isValid)
                         ? {}
                         : {
                             blockedReason: tabs.some((id) => hasError[id] && id !== shown)
                               ? strings.fixTabs(tabs.filter((id) => hasError[id]).map((id) => tabLabel[id]))
                               : strings.fixPage,
                           })}
-                      onSave={() => save(dirty)}
+                      onSave={() => {
+                        if (isPageDirty) save(dirty);
+                        if (isWeekDirty) week.save();
+                      }}
                       onDiscard={() => {
+                        week.discard();
                         setDraft(saved);
                         setFailure(undefined);
                         setChipsError(undefined);
@@ -701,46 +698,63 @@ export function PageEditor({
                   )}
                   {shown === 'hours' && (
                     <>
-                      {!isTeam && (
-                        <Select
+                      {isTeam ? (
+                        <FieldGroup label={strings.weeklyHours}>{rotationStrings.hoursMembers}</FieldGroup>
+                      ) : (
+                        <FieldGroup
                           label={scheduleStrings.schedule}
-                          info={tipFor(scheduleStrings.schedule, strings.tips.schedule)}
-                          items={hours.items}
-                          value={draft.scheduleId ?? 'default'}
-                          isReadOnly={isLocked || hours.items.length === 0}
-                          {...(hours.items.length === 0 ? { readOnlyReason: strings.followOwnerHint } : {})}
-                          onChange={(id) => {
-                            if (id !== null) change({ scheduleId: id === 'default' ? null : id });
-                          }}
-                        />
-                      )}
-                      {/* The chosen schedule's week, read only, Calendly style; Edit opens it in Availability. */}
-                      <FieldGroup
-                        label={strings.weeklyHours}
-                        {...(hours.editHref === undefined
-                          ? {}
-                          : {
-                              action: (
-                                <ButtonLink href={hours.editHref} variant="ghost" size="sm" icon="pencil">
-                                  {strings.edit}
-                                </ButtonLink>
-                              ),
-                            })}
-                        {...(isTeam ? {} : { meta: zoneDisplay(hours.availability.timeZone, openedAt) })}
-                      >
-                        {isTeam ? (
-                          rotationStrings.hoursMembers
-                        ) : (
-                          <DescriptionList
-                            layout="compact"
-                            items={weekGroups(hours.availability, locale).map((group) => ({
-                              id: group.days,
-                              term: group.days,
-                              description: group.hours,
-                            }))}
+                          action={
+                            <ButtonLink href={hours.manageHref} variant="ghost" size="sm" icon="settings">
+                              {strings.manageSchedules}
+                            </ButtonLink>
+                          }
+                          {...(hours.schedule !== undefined && hours.schedule.pages.length > 1
+                            ? { hint: strings.sharedSchedule(hours.schedule.name, hours.schedule.pages.length) }
+                            : {})}
+                        >
+                          <Select
+                            label={scheduleStrings.schedule}
+                            isLabelHidden
+                            items={hours.items}
+                            value={draft.scheduleId ?? 'default'}
+                            isReadOnly={isLocked || hours.items.length === 0 || isWeekDirty}
+                            {...(hours.items.length === 0
+                              ? { readOnlyReason: strings.followOwnerHint }
+                              : isWeekDirty
+                                ? { readOnlyReason: strings.saveHoursFirst }
+                                : {})}
+                            onChange={(id) => {
+                              if (id !== null) change({ scheduleId: id === 'default' ? null : id });
+                            }}
                           />
-                        )}
-                      </FieldGroup>
+                        </FieldGroup>
+                      )}
+                      {!isTeam &&
+                        (hours.schedule === undefined ? (
+                          // The owner's schedules can't be read here: the week the page books by, read only.
+                          <FieldGroup
+                            label={strings.weeklyHours}
+                            meta={zoneDisplay(hours.availability.timeZone, openedAt)}
+                          >
+                            <DescriptionList
+                              layout="compact"
+                              items={weekGroups(hours.availability, locale).map((group) => ({
+                                id: group.days,
+                                term: group.days,
+                                description: group.hours,
+                              }))}
+                            />
+                          </FieldGroup>
+                        ) : (
+                          <>
+                            <WeekCard availability={week.shown} onChange={week.change} isReadOnly={isLocked} />
+                            <DaysOff
+                              availability={week.shown}
+                              onChange={(next) => week.change(() => next)}
+                              isReadOnly={isLocked}
+                            />
+                          </>
+                        ))}
                       {draft.isPrivate && (
                         <FieldGroup
                           label={strings.reservedTime}
@@ -833,8 +847,8 @@ export interface PageEditorPendingProps {
 }
 
 /**
- * The editor while its page loads: the tabs where the editor's will stand, the chosen one's fields as skeletons, and
- * the preview's place. Hosts waits for the page, since only a round robin page has it.
+ * The editor while its page loads: the tabs where the editor's will stand, and the chosen one's fields as skeletons.
+ * Hosts waits for the page, since only a round robin page has it.
  */
 export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
   // Hosts only when it is the tab asked for (a round robin page's); the page says whether it has it.
@@ -861,11 +875,7 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
             selectedKey={shown}
           >
             <TabPanel id={shown} variant="fill">
-              <PreviewLayout
-                bodyWidth="form"
-                preview={<Skeleton shape="block" />}
-                {...(notices === undefined ? {} : { notices })}
-              >
+              <PreviewLayout bodyWidth="form" {...(notices === undefined ? {} : { notices })}>
                 <Skeleton lines={6} />
               </PreviewLayout>
             </TabPanel>
@@ -877,10 +887,10 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
 }
 
 /**
- * The Hours card's choices and what the chosen one holds (spec 0035, AC-965): "Default schedule (<name>)" first,
- * then each of the owner's stored schedules by name. A page naming a schedule that is gone books by the default, as
- * the server reads it. Until the owner's schedules load (or when they can't be read), the page's own answer stands
- * in: the hours it books by now. Edit hours opens the chosen schedule's editor.
+ * The Hours tab's choices and the chosen schedule (spec 0035, AC-965): "Default schedule (<name>)" first, then each
+ * of the owner's stored schedules by name. A page naming a schedule that is gone books by the default, as the server
+ * reads it. Until the owner's schedules load (or when they can't be read), there is no schedule to edit and the
+ * page's own answer stands in: the hours it books by now.
  */
 function useHours(
   view: SchedulesView | undefined,
@@ -890,23 +900,32 @@ function useHours(
   ownerMember: string | undefined,
 ) {
   const state = useSchedulesOrNone(view);
+  // Availability, on the owner's schedules (an admin's view of a colleague's page opens theirs, `?member=`).
+  const manageHref = availabilityHref(slug, ownerMember);
   if (state === undefined) {
-    return { items: [], availability: page.availability, editHref: undefined, version: '' } as const;
+    return { items: [], availability: page.availability, schedule: undefined, manageHref } as const;
   }
   const fallback = state.find((each) => each.isDefault);
   const named = scheduleId === null ? undefined : state.find((each) => each.id === scheduleId);
   const chosen = named ?? fallback;
-  // The virtual default books in each page's own zone, which the server read for a page that follows it.
-  const isVirtualSaved = chosen?.id === null && page.scheduleId === null;
   return {
     items: scheduleChoices(state, scheduleId),
-    availability: isVirtualSaved ? page.availability : (chosen?.availability ?? page.availability),
-    // The owner's schedule; an admin's view of a colleague's page opens it as theirs (`?member=`).
-    editHref: chosen === undefined ? undefined : scheduleHref(slug, chosen.id ?? 'default', ownerMember),
-    // When the hours it books by were last saved: the preview reads its times again after a change.
-    version: chosen?.updatedAt ?? '',
+    availability: chosen?.availability ?? page.availability,
+    schedule: chosen,
+    manageHref,
   };
 }
+
+/** What the week's draft holds while there is no schedule to edit: the page's own hours, never saved. */
+const standIn = (page: BookingPageView): ScheduleView => ({
+  id: null,
+  memberId: page.ownerMemberId,
+  name: '',
+  isDefault: true,
+  availability: page.availability,
+  pages: [],
+  updatedAt: null,
+});
 
 /** The owner's schedules once read, or undefined (none read for a reader who can't read them). */
 function useSchedulesOrNone(view: SchedulesView | undefined) {

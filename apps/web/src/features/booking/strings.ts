@@ -61,7 +61,8 @@ export const strings = {
   titlePlaceholder: 'Quick chat',
   titleRequired: 'Give the page a title.',
   whereRequired: 'Say where the meeting happens.',
-  pausedPreview: 'This page is off, so visitors see it closed. Turn it on to preview booking.',
+  /** Above a paused page's editor: what visitors see, and how to turn it back on. */
+  pausedNote: 'This page is off, so visitors see it closed. Resume it from the ⋯ menu to take bookings again.',
   duration: 'Duration',
   durationRequired: 'Pick at least one length.',
   durationCustom: 'Custom',
@@ -91,6 +92,13 @@ export const strings = {
   addressOrRoom: 'Address or room',
   numberToCall: 'Number to call',
   where: 'Where',
+  /** The Hours tab's way to Availability, where every schedule is kept. */
+  manageSchedules: 'Manage schedules',
+  /** Under the Schedule picker when other pages book by the same schedule. */
+  sharedSchedule: (name: string, pages: number) =>
+    `Changes apply to every page that uses ${name}, ${String(pages)} pages.`,
+  /** Why the Schedule picker waits: its hours have changes not saved yet. */
+  saveHoursFirst: 'Save or discard the changes to these hours first.',
   followOwnerHint: 'This page books by its owner’s schedule.',
   readOnlyTitle: 'You can view this page',
   readOnlyText: 'Only its owner or a workspace admin can change it.',
@@ -247,8 +255,9 @@ export const strings = {
   bookings: 'Bookings',
   daysOff: 'Days off',
   daysOffText: 'Days you’re closed, whatever your weekly hours say.',
-  openDay: 'Open this day',
-  openDayOn: (date: string) => `Open ${date}`,
+  /** A day off row's remove button: the day opens again by the weekly hours. */
+  removeDayOff: (date: string) => `Remove the day off on ${date}`,
+  noDaysOff: 'No days off yet',
   pickDate: 'Pick the day to close.',
   pickLaterDate: 'Pick today or a later day.',
   addDayOff: 'Add day off',
