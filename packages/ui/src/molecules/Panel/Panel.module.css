@@ -120,6 +120,13 @@
     background: var(--surface-subtle);
   }
 
+  /* A destructive action at the footer's start, the rest pushed to its end. */
+  .footStart {
+    display: inline-flex;
+    gap: var(--space-8);
+    margin-inline-end: auto;
+  }
+
   .root[data-entering] {
     animation: slide-in var(--duration-modal) var(--ease-drawer);
   }

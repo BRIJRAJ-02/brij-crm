@@ -14,7 +14,7 @@ export interface AnswerFiling {
 
 /**
  * Says filing once: a form that files nothing, or a submission not in the CRM, keeps every answer with it; one in
- * the CRM saves the filed answers on the record and marks whichever group is smaller, so the exceptions stand out.
+ * the CRM saves the filed answers on the record and marks the answers not saved, the same group on every submission.
  */
 export function answerFiling(
   answers: readonly SubmissionAnswer[],
@@ -30,9 +30,10 @@ export function answerFiling(
   const kept = answers.filter((answer) => answer.attributeId === undefined);
   if (kept.length === 0) return { note: strings.answersAllSaved, marked: none, mark: '' };
   if (filed.length === 0) return { note: strings.answersNoneSaved, marked: none, mark: '' };
-  const note = strings.answersSomeSaved(filed.length, answers.length);
-  if (kept.length <= filed.length) {
-    return { note, marked: new Set(kept.map((each) => each.questionId)), mark: strings.notSavedMark };
-  }
-  return { note, marked: new Set(filed.map((each) => each.questionId)), mark: strings.savedMark };
+  // Always the same group, so an unmarked answer means the same on every submission: the ones not saved are marked.
+  return {
+    note: strings.answersSomeSaved(filed.length, answers.length),
+    marked: new Set(kept.map((each) => each.questionId)),
+    mark: strings.notSavedMark,
+  };
 }

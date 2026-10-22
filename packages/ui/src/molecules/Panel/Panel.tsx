@@ -28,6 +28,8 @@ export interface PanelProps {
   readonly actions?: ReactNode;
   /** A footer under the content, for a form's buttons. */
   readonly footer?: ReactNode;
+  /** At the footer's start, away from its other buttons: a destructive action such as Delete. */
+  readonly footerStart?: ReactNode;
   readonly width?: PanelWidth;
   readonly variant?: PanelVariant;
   /** The content runs to the edges and fills the height, for Tabs and lists that scroll themselves. */
@@ -76,6 +78,7 @@ export function Panel({
   onClose,
   actions,
   footer,
+  footerStart,
   width = 'md',
   variant = 'sheet',
   isFlush = false,
@@ -133,7 +136,12 @@ export function Panel({
             {/* Opened from a settings page, its content keeps to the panel, never the page's edges. */}
             <PageEdge value={false}>{children}</PageEdge>
           </div>
-          {footer !== undefined && <footer className={styles.foot}>{footer}</footer>}
+          {(footer !== undefined || footerStart !== undefined) && (
+            <footer className={styles.foot}>
+              {footerStart !== undefined && <span className={styles.footStart}>{footerStart}</span>}
+              {footer}
+            </footer>
+          )}
         </Dialog>
       </section>
     </FocusScope>

@@ -32,26 +32,23 @@ describe('how a submission says which answers went to the CRM', () => {
     expect(filing.marked.size).toBe(0);
   });
 
-  it('marks the few kept answers when most were saved on the record', () => {
-    const filing = answerFiling(
+  it('marks the answers not saved, whichever group is larger', () => {
+    const most = answerFiling(
       [answer('name', true), answer('email', true), answer('budget', false)],
       { state: 'linked', record },
       true,
     );
-    expect(filing.note).toBe('2 of 3 saved on the record');
-    expect([...filing.marked]).toEqual(['budget']);
-    expect(filing.mark).toBe(strings.notSavedMark);
-  });
-
-  it('marks the few saved answers when most stay with the submission', () => {
-    const filing = answerFiling(
+    expect(most.note).toBe('2 of 3 saved on the record');
+    expect([...most.marked]).toEqual(['budget']);
+    expect(most.mark).toBe(strings.notSavedMark);
+    const few = answerFiling(
       [answer('email', true), answer('size', false), answer('budget', false)],
       { state: 'linked', record },
       true,
     );
-    expect(filing.note).toBe('1 of 3 saved on the record');
-    expect([...filing.marked]).toEqual(['email']);
-    expect(filing.mark).toBe(strings.savedMark);
+    expect(few.note).toBe('1 of 3 saved on the record');
+    expect([...few.marked]).toEqual(['size', 'budget']);
+    expect(few.mark).toBe(strings.notSavedMark);
   });
 
   it('marks nothing when every answer was saved', () => {
