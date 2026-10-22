@@ -4,7 +4,7 @@
 // Leaves out: the member's own default (Settings › Calendars), and calendar names for colleagues, who see "Owner’s default" only (spec 0037).
 import type { CalendarListState, CalendarsHeld, PageDestinationState } from '@crm/data';
 import { useCalendarList, usePageDestination } from '@crm/data/react';
-import { DescriptionList, Link, Select } from '@crm/ui';
+import { Badge, ButtonLink, FieldGroup, Select } from '@crm/ui';
 import { calendarOptions } from '../calendars/calendar-options.ts';
 import { strings } from './strings.ts';
 
@@ -102,26 +102,39 @@ export interface PageConflictsProps {
   readonly settingsHref: string;
 }
 
-/** Which of the owner's calendars hold this page's times back: set in Settings, never per page. Owner only. */
+/**
+ * "Checks for conflicts in": the owner's calendars that hold this page's times back, each a Badge in its own colour,
+ * with Manage to Settings › Calendars, where that switch lives (never per page). With none connected, it says so and
+ * offers to connect one. Colleagues see none of the owner's calendars, so it shows to the owner only.
+ */
 export function PageConflicts({ destination, calendars, settingsHref }: PageConflictsProps) {
   const held = usePageDestination(destination);
   const list = useCalendarList(calendars);
   if (held.status !== 'ready' || !held.destination.isOwner || list.status !== 'ready') return null;
-  const all = list.accounts.flatMap((account) => account.calendars);
-  if (all.length === 0) return null;
-  const conflicts = all.filter((calendar) => calendar.checkConflicts).length;
+  if (list.accounts.length === 0) {
+    return (
+      <FieldGroup label={strings.checksConflictsIn} hint={strings.noCalendars} layout="row">
+        <ButtonLink href={settingsHref} size="sm" icon="plus">
+          {strings.connectCalendar}
+        </ButtonLink>
+      </FieldGroup>
+    );
+  }
+  const checked = calendarOptions({ accounts: list.accounts, include: (calendar) => calendar.checkConflicts });
   return (
-    <DescriptionList
-      items={[
-        {
-          term: strings.conflicts,
-          description: (
-            <>
-              {strings.checksCalendars(conflicts)} <Link href={settingsHref}>{strings.calendarSettings}</Link>
-            </>
-          ),
-        },
-      ]}
-    />
+    <FieldGroup
+      label={strings.checksConflictsIn}
+      layout="row"
+      action={
+        <ButtonLink href={settingsHref} variant="ghost" size="sm">
+          {strings.manage}
+        </ButtonLink>
+      }
+      {...(checked.length === 0 ? { hint: strings.noneChecked } : {})}
+    >
+      {checked.map((item) => (
+        <Badge key={item.id} text={item.label} dot={item.hue ?? 'gray'} />
+      ))}
+    </FieldGroup>
   );
 }

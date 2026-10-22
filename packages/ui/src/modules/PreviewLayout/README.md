@@ -15,7 +15,7 @@ It kept this name, not the form's: it is the general one (any editor beside its 
 - **Notices** (`notices`, Callouts), full width inside the gutter.
 - **Body**: the children stacked `space-16` apart (SettingsStack's rhythm), groups of fields as `Card`s with a live summary as each Card's description, as on a settings page. It takes the whole width, with the preview column beside it (owner rule, 20 October 2026: every page is full width).
 - **Preview column**: a header row (a "Preview" heading that names the column, then `previewControls` at its end, level with the body's first header; owner feedback F27), then `previewNote` over the `preview` in one hairline frame with `radius-lg`, the panel's width (`size-panel`), sticky `space-16` from the top, right beside the body.
-- **Footer** (`footer`): a bar pinned to the body's foot while given.
+- **Footer** (`footer`): a bar at the view's foot while given, `space-16` above it and centred on the body's column, whether the body is short or long (the owner, 22 October 2026: on a short tab the SaveBar floated mid page under the last field). The layout fills the view's height so the bar sits at its foot; on a long body it is sticky after the last field, so scrolled to the end it never covers it. The bar's own motion is the FloatingBar's.
 
 Everything under the tabs sits inside the page gutter, `space-16`, PageColumn's, so an editor lines up with the list it opened from.
 

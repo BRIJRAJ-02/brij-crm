@@ -282,11 +282,11 @@ describe('removing closed time', () => {
     shown?.unmount();
 
     await renderWeek([blockOf({ kind: 'hold', label: undefined })]);
-    await openCard(/^Held,/);
+    await openCard(/^Reserved time,/);
     await userEvent.click(page.getByRole('button', { name: 'Release', exact: true }));
-    await expect.poll(() => alert()?.textContent).toContain('Release this hold?');
+    await expect.poll(() => alert()?.textContent).toContain('Release this reserved time?');
     expect(alert()?.textContent).toContain('opens to every booking page again.');
-    expect([...(alert()?.querySelectorAll('button') ?? [])].at(-1)?.textContent).toBe('Release hold');
+    expect([...(alert()?.querySelectorAll('button') ?? [])].at(-1)?.textContent).toBe('Release reserved time');
   });
 });
 

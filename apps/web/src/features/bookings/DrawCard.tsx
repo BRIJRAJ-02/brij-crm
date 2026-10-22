@@ -1,9 +1,9 @@
 // Brief
 // Purpose: the card a span drawn on Bookings › Calendar opens (spec 0027, AC-702 to AC-704): what the time is for.
-// Main task: pick Book someone in, Block this time (once or every week) or Hold it for a private page; saving closes it.
+// Main task: pick Book someone in, Block this time (once or every week) or Reserve it for link only pages; saving closes it.
 // Leaves out: drawing (WeekCalendar), what a block does to slots (the server), and the New meeting dialog's form.
 import { isDataError, type TimeBlockKind, type TimeBlockRepeat } from '@crm/data';
-import { Button, Callout, Field, Radio, RadioGroup, Select, SpanCard, type SpanCardChoice } from '@crm/ui';
+import { Button, ButtonLink, Callout, Field, Radio, RadioGroup, Select, SpanCard, type SpanCardChoice } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './strings.ts';
 import { spanNames, type DrawnSpan } from './span.ts';
@@ -23,8 +23,10 @@ export interface CloseInput {
 export interface DrawCardProps {
   readonly span: DrawnSpan;
   readonly locale: string;
-  /** The member's private pages, for a hold's choice. */
+  /** The member's link only pages, for reserved time's choice. */
   readonly privatePages: readonly { readonly id: string; readonly title: string }[];
+  /** Where a link only page is made (Captures › Links), offered while the member has none. */
+  readonly createLinkOnlyHref?: string;
   /** Confirmed bookings inside the span: they stay booked, and the card says so. */
   readonly overlapping: number;
   /** Moves or resizes the span (From and To, for the keyboard and for fine changes). */
@@ -37,11 +39,20 @@ export interface DrawCardProps {
 
 type Mode = { readonly kind: 'choose' } | { readonly kind: 'block' } | { readonly kind: 'hold' };
 
-/** Any private page: a hold's shared choice. */
+/** Any link only page: reserved time's shared choice. */
 const ANY_PAGE = 'any';
 
 /** The drawn span's card: its choices, then the picked one's form; saving closes it (the screen does). */
-export function DrawCard({ span, locale, privatePages, overlapping, onSpanChange, onClose, onBook }: DrawCardProps) {
+export function DrawCard({
+  span,
+  locale,
+  privatePages,
+  createLinkOnlyHref,
+  overlapping,
+  onSpanChange,
+  onClose,
+  onBook,
+}: DrawCardProps) {
   const [mode, setMode] = useState<Mode>({ kind: 'choose' });
   // Saving: the span, Back and the form wait, so nothing changes under the save.
   const [pending, setPending] = useState(false);
@@ -59,6 +70,7 @@ export function DrawCard({ span, locale, privatePages, overlapping, onSpanChange
           weekday={weekday}
           isHold={isHold}
           privatePages={privatePages}
+          {...(createLinkOnlyHref === undefined ? {} : { createLinkOnlyHref })}
           pending={pending}
           onPending={setPending}
           onClose={onClose}
@@ -77,13 +89,14 @@ export function DrawCard({ span, locale, privatePages, overlapping, onSpanChange
 }
 
 /**
- * Block this time (how often) or Hold it (for which private page), and why,
+ * Block this time (how often) or Reserve it (for which link only page), and why,
  * which only the member sees. A hold is always this one date.
  */
 function CloseForm({
   weekday,
   isHold,
   privatePages,
+  createLinkOnlyHref,
   pending,
   onPending,
   onClose,
@@ -91,6 +104,7 @@ function CloseForm({
   readonly weekday: string;
   readonly isHold: boolean;
   readonly privatePages: readonly { readonly id: string; readonly title: string }[];
+  readonly createLinkOnlyHref?: string;
   readonly pending: boolean;
   readonly onPending: (pending: boolean) => void;
   readonly onClose: (input: CloseInput) => Promise<void>;
@@ -116,12 +130,27 @@ function CloseForm({
       })
       .finally(() => onPending(false));
   };
+  // No link only page yet: nothing could book reserved time, so the card says why and offers to make one.
+  if (isHold && privatePages.length === 0) {
+    return (
+      <>
+        <Callout tone="info" title={strings.reservedTime}>
+          {strings.noPrivatePages}
+        </Callout>
+        {createLinkOnlyHref !== undefined && (
+          <ButtonLink href={createLinkOnlyHref} icon="plus">
+            {strings.createLinkOnly}
+          </ButtonLink>
+        )}
+      </>
+    );
+  }
   return (
     <>
       {isHold ? (
         <Select
           label={strings.holdFor}
-          hint={privatePages.length === 0 ? strings.noPrivatePages : strings.holdHint}
+          hint={strings.holdHint}
           items={[
             { id: ANY_PAGE, label: strings.anyPrivatePage },
             ...privatePages.map((each) => ({ id: each.id, label: each.title })),

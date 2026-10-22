@@ -2,7 +2,7 @@
 // makes, so a window that ends before it starts or overlaps another is said
 // on its row before anything is sent (spec 0025, AC-624, AC-680). Plain
 // functions.
-import type { BookingAvailability, DateOverride, TimeRange, Weekday } from '@crm/data';
+import { clockLabel, type BookingAvailability, type DateOverride, type TimeRange, type Weekday } from '@crm/data';
 import { strings } from './strings.ts';
 
 /** The weekdays, Monday first, as the availability keys them. */
@@ -188,3 +188,42 @@ export function zoneMatches(item: { readonly label: string; readonly description
 
 // A week as words and a clock time as words: the one summary in `@crm/contracts/hours`, through the data layer.
 export { clockLabel, weekSummary } from '@crm/data';
+
+/** One row of a week's read only summary: the days that share it, and their hours (or Unavailable). */
+export interface WeekGroup {
+  readonly days: string;
+  readonly hours: string;
+}
+
+/**
+ * A week as Calendly prints it, Monday first: one row per run of days in a row with the same hours ("Mon to Fri,
+ * 9:00 AM to 5:00 PM"; "Sat, Sun, Unavailable"). Two days read "Sat, Sun"; three or more, "Mon to Fri".
+ */
+export function weekGroups(availability: BookingAvailability, locale: string): readonly WeekGroup[] {
+  const day = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' });
+  // 5 January 2026 is a Monday.
+  const dayName = (index: number) => day.format(new Date(Date.UTC(2026, 0, 5 + index)));
+  const hoursOf = (weekday: Weekday) => {
+    const ranges = availability.weekly[weekday];
+    return ranges.length === 0
+      ? strings.unavailable
+      : ranges
+          .map(([start, end]) => `${clockLabel(start, locale)} ${strings.to} ${clockLabel(end, locale)}`)
+          .join(', ');
+  };
+  const runs: { readonly hours: string; readonly days: number[] }[] = [];
+  WEEKDAYS.forEach((weekday, index) => {
+    const hours = hoursOf(weekday);
+    const last = runs.at(-1);
+    if (last?.hours === hours) last.days.push(index);
+    else runs.push({ hours, days: [index] });
+  });
+  return runs.map(({ hours, days }) => {
+    const first = dayName(days[0] ?? 0);
+    const end = dayName(days.at(-1) ?? 0);
+    return {
+      days: days.length === 1 ? first : days.length === 2 ? `${first}, ${end}` : `${first} ${strings.to} ${end}`,
+      hours,
+    };
+  });
+}

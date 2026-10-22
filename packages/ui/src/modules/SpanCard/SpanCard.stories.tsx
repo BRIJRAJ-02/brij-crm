@@ -25,7 +25,7 @@ export const Choices: Story = {
     choices: [
       { id: 'book', label: 'Book someone in', icon: 'user-plus', onPress: fn() },
       { id: 'block', label: 'Block this time', icon: 'circle-slash', onPress: fn() },
-      { id: 'hold', label: 'Hold for a private page', icon: 'bookmark', onPress: fn() },
+      { id: 'hold', label: 'Reserve for link only pages', icon: 'bookmark', onPress: fn() },
     ],
   },
   render: (args) => (

@@ -993,6 +993,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
                         privatePages={pages
                           .filter((page) => page.isPrivate)
                           .map((page) => ({ id: page.id, title: page.title }))}
+                        createLinkOnlyHref={linksHref(slug)}
                         overlapping={overlapping(bookings, draft)}
                         onSpanChange={setDraft}
                         onClose={({ kind, repeat, label, pageId }) => {

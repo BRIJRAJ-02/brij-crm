@@ -42,12 +42,10 @@ export const strings = {
   acceptingOf: (name: string) => `Accepting submissions on ${name}`,
   formActions: (name: string) => `Actions for ${name}`,
   open: 'Open',
-  copyAddress: 'Copy the address',
-  addressCopied: 'Address copied.',
   duplicate: 'Duplicate',
   duplicated: (name: string) => `Made “${name}”.`,
   delete: 'Delete',
-  deleteForm: 'Delete this form',
+  deleteForm: 'Delete form',
   /** A destructive confirm names the thing in its question (the owner's rule, 21 October 2026). */
   deleteTitle: (name: string) => `Delete the ${name} form?`,
   deleteText: (submissions: number) =>
@@ -70,6 +68,7 @@ export const strings = {
   previewOpen: 'Preview',
   previewNotLive: 'Preview, not live. Answers are checked here, and nothing is sent.',
   publish: 'Publish',
+  publishChanges: 'Publish changes',
   publishing: 'Publishing…',
   moreActions: 'More actions',
   pause: 'Pause',

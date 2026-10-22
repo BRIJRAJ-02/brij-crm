@@ -165,11 +165,12 @@
     outline: none;
   }
 
-  /* A tab of fields with no Card around them: the Form's rhythm. */
+  /* A tab of fields with no Card around them: the Form's rhythm, at most a readable column wide, from the start. */
   .panel[data-variant='fields'] {
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
+    max-inline-size: var(--size-column-max);
     padding-block-start: var(--space-16);
   }
 

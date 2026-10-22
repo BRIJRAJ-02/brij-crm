@@ -10,9 +10,12 @@
    whole width (every page is full width). The preview hangs in one
    hairline frame with lg corners. The footer bar sticks to the body's foot. */
 @layer components {
+  /* The layout fills the view's height (its parent is the view's flex column), so the footer can sit at the view's
+     foot even when the body is short. */
   .root {
     box-sizing: border-box;
     display: flex;
+    flex: 1 0 auto;
     flex-direction: column;
     inline-size: 100%;
     min-inline-size: 0;
@@ -20,6 +23,7 @@
 
   .inner {
     display: flex;
+    flex: 1 0 auto;
     flex-direction: column;
     gap: var(--space-16);
     min-inline-size: 0;
@@ -28,6 +32,7 @@
 
   .measure {
     display: flex;
+    flex: 1 0 auto;
     flex-direction: column;
     gap: var(--space-16);
     min-inline-size: 0;
@@ -43,14 +48,17 @@
 
   .body {
     display: grid;
+    flex: 1 0 auto;
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-16);
     align-items: start;
   }
 
+  /* The body's column runs to the view's foot, so the footer under its content can sit there. */
   .main {
     display: flex;
     flex-direction: column;
+    align-self: stretch;
     gap: var(--space-16);
     min-inline-size: 0;
   }
@@ -60,12 +68,16 @@
   .main[data-layout='grid'] {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--size-panel)), 1fr));
+    align-content: start;
     align-items: start;
   }
 
+  /* At the view's foot, whatever the body's length: pushed down by the column (a short body), held there by sticky
+     (a long one, where it follows the last field, so it never covers it once scrolled to the end). */
   .footer {
     grid-column: 1 / -1;
     position: sticky;
+    margin-block-start: auto;
     z-index: var(--z-sticky);
     inset-block-end: var(--space-16);
     pointer-events: none;
