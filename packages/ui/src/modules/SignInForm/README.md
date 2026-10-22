@@ -20,13 +20,14 @@ New (spec 0005, pulled forward from spec 0003's milestone 4), reordered by spec 
 </AuthLayout>
 ```
 
-- The order is fixed: the notice, "Continue with Google" (Google's own G through `provider="google"`, drawn by ProviderMark; the owner's brand exception to Lucide), "or" between two hairlines, the Email field ("name@company.com" as its placeholder), anything in `afterEmail`, then the submit. Why Google first: one press signs most people in, and the email is the way for everyone else (spec 0036, the coordinator's recommendation after Attio's and Linear's sign in pages).
+- The order is fixed: the notice, "Continue with Google" (Google's own G through `provider="google"`, drawn by ProviderMark; the owner's brand exception to Lucide), anything in `otherWays`, "or" between two hairlines, the Email field ("name@company.com" as its placeholder), anything in `afterEmail`, then the submit. Why Google first: one press signs most people in, and the email is the way for everyone else (spec 0036, the coordinator's recommendation after Attio's and Linear's sign in pages).
 - `onGoogle` shows the Google button and the "or" under it; leave it out when Google isn't set up, and the submit reads "Continue" alone. With Google it reads "Continue with email", so the two ways read as a pair.
 - `onContinue(email)` gets the trimmed address. Before calling it, the form checks only that something like an address was typed ("Enter your email address.", "Enter an email address like name@company.com."); the server decides the rest, including whether this is a sign in or a sign up.
 - `error` is the server's refusal of the address, as a sentence that says what to do. It shows on the email field until the address changes, and comes back with the next answer. It is hidden while `status` is `sending`.
 - `notice` is a refusal about the sign in as a whole, not the address: sign up closed for that email, too many codes, a refused Google sign in, a session that ended under the person. It shows at the top as a danger Callout (announced as an alert) and never marks the email field invalid. Why apart from `error`: a cancelled Google sign in said on the email field read as if the address were wrong. It steps aside once the person submits, even an address that isn't one, so it isn't announced again beside the field's refusal; the screen clears it when the next attempt starts, and a notice cleared and set again shows again.
 - `status`: `sending` spins the email's submit as "Sending code" and turns Google off; `google` spins the Google button as "Opening Google" and turns the email's submit off.
-- `afterEmail` is the room under the email field for another way in that belongs with the email: spec 0033's "Sign in with a passkey" (a ghost Button with the key icon, filled by the sign in screen where the browser has passkeys).
+- `otherWays` holds the ways in that need no address, beside Google above the "or", space-8 under it (the sign in screen's "Sign in with a passkey", a `size="lg"` full width Button with the key icon, where the browser has passkeys). With `otherWays` and no Google the "or" still shows, and the submit still reads "Continue with email". It keeps the email field followed straight by its submit, as Linear and Uxcel do (design sweep, 22 October 2026).
+- `afterEmail` is the room under the email field for another way in that belongs with the email: spec 0033's "Sign in with a passkey" (the sign in screen used it for its passkey until the design sweep moved that to `otherWays`; kept for a way in that does belong with the address).
 - `status="passkey"` turns Continue with Google and the email's submit off while the browser's passkey prompt is open; the screen's own passkey button in `afterEmail` shows the wait.
 - `isPasskeyAutofill` adds `webauthn` to the email field's autocomplete, so the browser offers saved passkeys in the field's suggestions (spec 0033, AC-888). The screen sets it while it waits for one to be picked.
 - `isDisabled` turns the field and both buttons off; `disabledReason` says why, under the field, and describes both buttons (their `aria-describedby`), so a screen reader hears why each is off.
@@ -39,7 +40,7 @@ Idle, sending, refused (the reason on the field), a notice (at the top), checked
 
 ## Keyboard
 
-The screen puts focus in the email field. Tab follows the page: Continue with Google, the email field, anything in `afterEmail`, then the submit. Enter in the field sends the code. A refusal moves focus to the field, or is announced if focus is there already.
+The screen puts focus in the email field. Tab follows the page: Continue with Google, anything in `otherWays`, the email field, anything in `afterEmail`, then the submit. Enter in the field sends the code. A refusal moves focus to the field, or is announced if focus is there already.
 
 ## Differences from the artifact
 

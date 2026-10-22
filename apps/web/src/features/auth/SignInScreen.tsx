@@ -172,9 +172,11 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
         isPasskeyAutofill={passkeys.autofill}
         {...(passkeys.available
           ? {
-              afterEmail: (
+              // Beside Google, above the "or": a way in that needs no address, so the email field and its submit
+              // stay together.
+              otherWays: (
                 <Button
-                  variant="ghost"
+                  size="lg"
                   icon="key"
                   isFullWidth="center"
                   isPending={status === 'passkey'}

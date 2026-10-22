@@ -47,6 +47,14 @@ export interface SignInFormProps {
   /** Sign up is closed: a quiet line under the buttons says so. */
   readonly isSignUpClosed?: boolean;
   /**
+   * Other ways in beside Google, above the "or" (spec 0033's "Sign in with a
+   * passkey"): Buttons with `size="lg"` and `isFullWidth="center"`, under
+   * Continue with Google. The "or" shows when this or Google is there. Prefer
+   * it to `afterEmail` for a way in that doesn't use the typed address, so
+   * the email field and its submit stay together.
+   */
+  readonly otherWays?: ReactNode;
+  /**
    * Under the email field, before its submit: another way in that belongs
    * with the email, such as spec 0033's "Sign in with a passkey". Empty until
    * a screen fills it.
@@ -88,6 +96,7 @@ export function SignInForm({
   disabledReason,
   isSignUpClosed = false,
   afterEmail,
+  otherWays,
   isPasskeyAutofill = false,
 }: SignInFormProps) {
   const [email, setEmail] = useState(defaultEmail);
@@ -114,24 +123,28 @@ export function SignInForm({
     <div className={styles.root}>
       {/* Danger is announced as an alert: about the sign in, not the address, so never on the field. */}
       {shownNotice !== undefined && <Callout tone="danger">{shownNotice}</Callout>}
-      {onGoogle !== undefined && (
-        <>
-          <Button
-            size="lg"
-            isFullWidth="center"
-            provider="google"
-            onPress={onGoogle}
-            isPending={status === 'google'}
-            isDisabled={isDisabled || status === 'sending' || status === 'passkey'}
-            {...(hasReason ? { 'aria-describedby': reasonId } : {})}
-          >
-            {status === 'google' ? strings.googlePending : strings.google}
-          </Button>
-          <Separator label={strings.or} />
-        </>
+      {(onGoogle !== undefined || otherWays !== undefined) && (
+        // The ways in that need no address, together, space-8 apart as a Form's buttons are.
+        <div className={styles.ways}>
+          {onGoogle !== undefined && (
+            <Button
+              size="lg"
+              isFullWidth="center"
+              provider="google"
+              onPress={onGoogle}
+              isPending={status === 'google'}
+              isDisabled={isDisabled || status === 'sending' || status === 'passkey'}
+              {...(hasReason ? { 'aria-describedby': reasonId } : {})}
+            >
+              {status === 'google' ? strings.googlePending : strings.google}
+            </Button>
+          )}
+          {otherWays}
+        </div>
       )}
+      {(onGoogle !== undefined || otherWays !== undefined) && <Separator label={strings.or} />}
       <Form
-        submitLabel={onGoogle === undefined ? strings.continue : strings.continueWithEmail}
+        submitLabel={onGoogle === undefined && otherWays === undefined ? strings.continue : strings.continueWithEmail}
         busyLabel={strings.sending}
         isBusy={status === 'sending'}
         isDisabled={isDisabled || status === 'google' || status === 'passkey'}
