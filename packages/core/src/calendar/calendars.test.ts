@@ -396,16 +396,22 @@ describe('the three switches (AC-993, AC-1002, AC-1003)', () => {
     await w.sync(conn.id);
     const opened = w.fake.watched().find((each) => each.calendarId === 'team@group.calendar');
     expect(opened?.token.startsWith(`${w.workspaceId}.${team.id}.`)).toBe(true);
-    expect(await takeCalendarNotice(db, { channelId: opened?.channel.id, token: opened?.token, state: 'exists' })).toBe(
-      'queued',
-    );
+    expect(
+      await takeCalendarNotice(db, { channelId: opened?.channel.id, token: opened?.token, state: 'exists' }),
+    ).toEqual({
+      outcome: 'queued',
+      reason: 'change',
+      workspaceId: w.workspaceId,
+      calendarId: team.id,
+      connectionId: conn.id,
+    });
     expect(
       await takeCalendarNotice(db, {
         channelId: opened?.channel.id,
         token: `${opened?.token ?? ''}x`,
         state: 'exists',
       }),
-    ).toBe('refused');
+    ).toEqual({ outcome: 'refused', reason: 'mismatch' });
     // A lifecycle notice (Graph) marks the channel for renewal: the next sync opens another.
     expect(
       await takeCalendarNotice(db, {
@@ -413,7 +419,7 @@ describe('the three switches (AC-993, AC-1002, AC-1003)', () => {
         token: opened?.token,
         state: 'reauthorizationRequired',
       }),
-    ).toBe('queued');
+    ).toMatchObject({ outcome: 'queued', reason: 'renew', calendarId: team.id });
     const watches = w.fake.calls('watch');
     await w.sync(conn.id);
     expect(w.fake.calls('watch')).toBe(watches + 1);

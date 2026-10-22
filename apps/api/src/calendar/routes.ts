@@ -26,6 +26,13 @@
 // only key (`takeCalendarNotice`). It answers 200 with no body whatever the
 // notice was, so a caller learns nothing, and a notice that queued a sync
 // pokes the worker. A channel sent more than 120 a minute is told to wait.
+// Each notice leaves one `calendar.notice` line: the calendar, account and
+// workspace it matched (our ids) and what it did, or why it was refused,
+// never its token or channel id.
+//
+// A workspace deleted between the start and the callback is refused there
+// too: the door refuses it at the callback, and `connectCalendar` checks it
+// again inside its own transaction, since the code exchange takes a moment.
 //
 // Outlook (milestone 4, AC-1006, AC-1008) has the same three addresses under
 // `/api/calendar/microsoft/`: the connect leg is the same, through Microsoft's
@@ -36,7 +43,15 @@
 // channel's token), and a lifecycle notice marks the subscription for renewal.
 // It answers 202 whatever the notices were.
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { connectCalendar, isProviderError, isRefusal, signValue, takeCalendarNotice, verifyValue } from '@crm/core';
+import {
+  connectCalendar,
+  isProviderError,
+  isRefusal,
+  signValue,
+  takeCalendarNotice,
+  verifyValue,
+  type NoticeResult,
+} from '@crm/core';
 import type { Database } from '@crm/db';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
@@ -116,6 +131,36 @@ const NOTICES_MAX = 50;
 
 /** The longest validation token echoed back. */
 const VALIDATION_MAX = 1024;
+
+/** Google's resource states and Graph's lifecycle events a log line names; anything else reads `other`. */
+const NOTICE_STATES: ReadonlySet<string> = new Set([
+  'sync',
+  'exists',
+  'not_exists',
+  'reauthorizationRequired',
+  'subscriptionRemoved',
+  'missed',
+]);
+
+/**
+ * One notice's `calendar.notice` line: the calendar, account and workspace it matched (our ids) and what it did, or
+ * why it was refused (at warn). Never its token, its channel id or anything else the caller chose.
+ */
+function logNotice(
+  requestId: string,
+  provider: ConnectProvider,
+  state: string | undefined,
+  result: NoticeResult,
+): void {
+  const fields = {
+    requestId,
+    provider,
+    ...(state === undefined ? {} : { state: NOTICE_STATES.has(state) ? state : 'other' }),
+    ...result,
+  };
+  if (result.outcome === 'refused') log.warn('calendar.notice', fields);
+  else log.info('calendar.notice', fields);
+}
 
 /** The page in the app a connect for `slug` comes back to, before what happened is added. */
 function returnPath(slug: string, then: ConnectReturn): string {
@@ -224,16 +269,29 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
           continue;
         }
         if (!deps.limiter(`calendar-notice:${subscriptionId.slice(0, 64)}`, NOTICE_LIMIT).allowed) continue;
-        const outcome = await takeCalendarNotice(deps.db, {
+        const state = typeof lifecycleEvent === 'string' ? lifecycleEvent : 'exists';
+        const result = await takeCalendarNotice(deps.db, {
           channelId: subscriptionId,
           token: typeof clientState === 'string' ? clientState : undefined,
-          state: typeof lifecycleEvent === 'string' ? lifecycleEvent : 'exists',
+          state,
         });
-        if (outcome === 'queued') queued = true;
-        else if (outcome === 'refused') refused += 1;
+        // Refused ones are counted, so a forged post is one line; a matched notice gets its own.
+        if (result.outcome === 'refused') {
+          refused += 1;
+          continue;
+        }
+        if (result.outcome === 'queued') queued = true;
+        logNotice(c.get('requestId'), 'microsoft', state, result);
       }
       // One line a post, however many of its notices were refused.
-      if (refused > 0) log.warn('calendar.notice.refused', { requestId: c.get('requestId'), count: refused });
+      if (refused > 0) {
+        log.warn('calendar.notice', {
+          requestId: c.get('requestId'),
+          provider: 'microsoft',
+          outcome: 'refused',
+          count: refused,
+        });
+      }
       if (queued) deps.wakeRelay();
       return c.body(null, 202);
     },
@@ -244,13 +302,14 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
       const channel = (c.req.header('x-goog-channel-id') ?? '').slice(0, 64);
       if (!deps.limiter(`calendar-notice:${channel}`, NOTICE_LIMIT).allowed) return c.body(null, 429);
       if (deps.calendar === undefined) return c.body(null, 200);
-      const outcome = await takeCalendarNotice(deps.db, {
+      const state = c.req.header('x-goog-resource-state');
+      const result = await takeCalendarNotice(deps.db, {
         channelId: c.req.header('x-goog-channel-id'),
         token: c.req.header('x-goog-channel-token'),
-        state: c.req.header('x-goog-resource-state'),
+        state,
       });
-      if (outcome === 'queued') deps.wakeRelay();
-      else if (outcome === 'refused') log.warn('calendar.notice.refused', { requestId: c.get('requestId') });
+      logNotice(c.get('requestId'), 'google', state, result);
+      if (result.outcome === 'queued') deps.wakeRelay();
       return c.body(null, 200);
     },
 
@@ -298,17 +357,28 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
       let result: ConnectResult = 'connected';
       try {
         const exchanged = await adapter.exchangeCode(code, calendar.redirectUris[provider]);
-        await commitWrite(
+        const connected = await commitWrite(
           { wakeRelay: deps.wakeRelay, analytics: deps.analytics, user: { id: member.userId } },
           { mutationId: crypto.randomUUID() },
           (hooks) => connectCalendar(member.scope, { provider, exchanged, tokenKey: calendar.tokenKey }, hooks),
         );
+        // Which account this connect made (or reconnected), so its first sync and channels read alongside it.
+        log.info('calendar.connect.connected', {
+          requestId: c.get('requestId'),
+          provider,
+          workspaceId: member.scope.workspaceId,
+          connectionId: connected.id,
+        });
       } catch (error) {
         if (isProviderError(error)) {
           result = error.code === 'CALENDAR_SCOPE_DECLINED' ? 'scope' : 'failed';
           log.warn('calendar.connect.failed', { requestId: c.get('requestId'), code: error.code });
         } else if (isRefusal(error) && error.refusal.code === 'LIMIT_REACHED') {
           result = 'limit';
+        } else if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') {
+          // The workspace was deleted while the member was at the consent screen: nothing was stored.
+          log.warn('calendar.connect.refused', { requestId: c.get('requestId'), reason: 'workspace' });
+          result = 'failed';
         } else {
           log.error('calendar.connect.failed', { requestId: c.get('requestId'), ...errorFields(error) });
           result = 'failed';

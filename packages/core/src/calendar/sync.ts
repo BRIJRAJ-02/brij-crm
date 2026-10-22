@@ -25,6 +25,11 @@
 // another, and stops the channel of any calendar no longer pulled. One
 // calendar failing is recorded on that calendar and never stops the others;
 // a refused grant, or every pulled calendar failing, is the connection's.
+//
+// A run in a deleted workspace (spec 0031, AC-823) syncs nothing: it ends
+// each calendar's push channel at the provider, so the provider stops posting
+// notices for a workspace nobody can open, and stops. What became of every
+// channel it touched is in its outcome (`channels`), for the log.
 import { sql } from 'drizzle-orm';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -34,14 +39,23 @@ import { applyEvents, dropBusyTimes, dropSources } from './apply.ts';
 import { CALENDARS_LIST_EVERY_MS, isPulled, moveDestinationOff, storeCalendars } from './calendars.ts';
 import { isBusyOnly } from './match.ts';
 import {
+  failureOf,
   isProviderError,
   type CalendarErrorCode,
   type CalendarProvider,
   type CalendarTokens,
   type ProviderChanges,
+  type ProviderFailure,
   type SyncWindow,
 } from './provider.ts';
-import { needsChannel, openChannel, stopChannel, storedChannel } from './push.ts';
+import {
+  needsChannel,
+  openChannel,
+  stopChannel,
+  storedChannel,
+  type ChannelReport,
+  type StoredChannel,
+} from './push.ts';
 import { openTokens, sealTokens, type TokenBinding, type TokenKey } from './tokens.ts';
 
 /** How far back and ahead a full sync reads (spec 0024's call). */
@@ -105,14 +119,23 @@ export interface CalendarSyncInput {
   readonly connectionId: string;
 }
 
-/** How a sync ended, and when the next one should run (`nextInMs`), if ever. */
-export type CalendarSyncOutcome =
+/**
+ * How a sync ended, and when the next one should run (`nextInMs`), if ever. `channels`, when the run opened, failed
+ * to open or ended any push channel, says what became of each (the `calendar.channel` log lines).
+ */
+export type CalendarSyncOutcome = (
   | { readonly kind: 'synced'; readonly full: boolean; readonly events: number; readonly nextInMs: number }
   | { readonly kind: 'retry'; readonly code: CalendarErrorCode; readonly nextInMs: number }
   | {
       readonly kind: 'stopped';
       readonly reason: 'gone' | 'not-syncing' | 'expired' | 'no-provider' | 'revoked' | 'workspace-deleted';
-    };
+    }
+) & { readonly channels?: readonly ChannelReport[] };
+
+/** An outcome with the channel reports a run gathered, when it gathered any. */
+function withChannels(outcome: CalendarSyncOutcome, channels: readonly ChannelReport[]): CalendarSyncOutcome {
+  return channels.length === 0 ? outcome : { ...outcome, channels };
+}
 
 /** A connection as the sync reads it. */
 interface ConnectionRow extends Record<string, unknown> {
@@ -318,6 +341,65 @@ async function revokeConnection(
 }
 
 /**
+ * A deleted workspace's account (spec 0031, AC-823): nothing syncs, and each of its calendars' push channels ends at
+ * the provider, so the provider stops posting notices for a workspace nobody can open. A channel the provider
+ * couldn't end for now (it didn't answer) stays stored, so a notice it still sends queues this again; one it
+ * refused for good (the grant is gone) is forgotten, since nothing can end it, and it runs out within days. The
+ * grant itself is kept: the member's other workspaces may hold the same account, and a restore syncs it again.
+ */
+async function endDeletedChannels(
+  deps: Pick<CalendarSyncDeps, 'tokenKey'>,
+  scope: EngineScope,
+  provider: CalendarProvider | undefined,
+  row: Pick<ConnectionRow, 'id' | 'tokens'>,
+  binding: TokenBinding,
+  now: Date,
+): Promise<CalendarSyncOutcome> {
+  const stopped: CalendarSyncOutcome = { kind: 'stopped', reason: 'workspace-deleted' };
+  const held = (
+    await inWorkspace(scope, (tx) =>
+      tx.execute<{ id: string; channel: unknown }>(sql`
+        select id::text as id, channel from calendar_calendars
+        where connection_id = ${row.id}::uuid and channel is not null
+        order by is_primary desc, name, id
+      `),
+    )
+  ).rows.flatMap((each): { readonly id: string; readonly channel: StoredChannel }[] => {
+    const channel = storedChannel(each.channel);
+    return channel === undefined ? [] : [{ id: each.id, channel }];
+  });
+  // A worker without this provider can't reach it: the channels wait for one that can.
+  if (held.length === 0 || provider === undefined) return stopped;
+  let tokens: CalendarTokens | undefined;
+  let refused: ProviderFailure | undefined;
+  try {
+    tokens = await liveTokens(deps, scope, provider, row, binding, now);
+  } catch (error) {
+    if (!isProviderError(error)) throw error;
+    refused = failureOf(error);
+  }
+  const channels: ChannelReport[] = [];
+  for (const each of held) {
+    const failure = tokens === undefined ? refused : await stopChannel(provider, tokens, each.channel);
+    // Ended, or refused for good: forgotten. A provider that didn't answer is asked again by the next notice.
+    if (failure?.code !== 'CALENDAR_UNAVAILABLE') {
+      await inWorkspace(scope, (tx) =>
+        tx.execute(sql`
+          update calendar_calendars set channel = null
+          where id = ${each.id}::uuid and channel ->> 'id' = ${each.channel.id}
+        `),
+      );
+    }
+    channels.push(
+      failure === undefined
+        ? { calendarId: each.id, outcome: 'stopped', why: 'workspace-deleted' }
+        : { calendarId: each.id, outcome: 'unstopped', why: 'workspace-deleted', ...failure },
+    );
+  }
+  return withChannels(stopped, channels);
+}
+
+/**
  * Syncs one pulled calendar: its changes since its token, or its whole window. Every batch is written before its
  * next token is stored. A provider failure is answered, not thrown.
  */
@@ -423,8 +505,9 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   };
   // A removed member's connection (spec 0031, AC-815): its grant ends with the provider, then its stored tokens go.
   if (row.status === 'revoked') return revokeConnection(deps, scope, provider, row, binding);
-  // A deleted workspace (spec 0031, AC-823) syncs nothing in its window; a restore queues each connection again.
-  if (row.workspace_deleted) return { kind: 'stopped', reason: 'workspace-deleted' };
+  // A deleted workspace (spec 0031, AC-823) syncs nothing in its window and ends its push channels; a restore queues
+  // each connection again, which opens new ones.
+  if (row.workspace_deleted) return endDeletedChannels(deps, scope, provider, row, binding, now);
   if (!(SYNCING_STATUSES as readonly string[]).includes(row.status)) return { kind: 'stopped', reason: 'not-syncing' };
   if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
   const window = syncWindow(now);
@@ -493,6 +576,8 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   let failures = 0;
   let relist = false;
   let lastCode: CalendarErrorCode | undefined;
+  // What became of each push channel this run touched, for the log (`calendar.channel`).
+  const channels: ChannelReport[] = [];
   for (const calendar of pulled) {
     const run = await syncCalendar(deps, scope, provider, tokens, connection, calendar, window);
     if (run.kind === 'synced') {
@@ -501,14 +586,16 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
       // Push (AC-602, AC-622, AC-1003): a channel opened once the calendar is current, and renewed before it runs out.
       const channel = storedChannel(calendar.channel);
       if (pushAddress !== undefined && needsChannel(channel, now)) {
-        await openChannel(scope, {
-          provider,
-          tokens,
-          calendarRowId: calendar.id,
-          calendarId: calendar.provider_calendar_id,
-          address: pushAddress,
-          previous: channel,
-        });
+        channels.push(
+          await openChannel(scope, {
+            provider,
+            tokens,
+            calendarRowId: calendar.id,
+            calendarId: calendar.provider_calendar_id,
+            address: pushAddress,
+            previous: channel,
+          }),
+        );
       }
       continue;
     }
@@ -519,7 +606,7 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
       run.code === 'CALENDAR_AUTH' ||
       run.code === 'CALENDAR_SCOPE_DECLINED'
     ) {
-      return failed(run.code);
+      return withChannels(await failed(run.code), channels);
     }
     failures += 1;
     lastCode = run.code;
@@ -530,9 +617,14 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   for (const calendar of calendars.filter((each) => !isPulled(each))) {
     const channel = storedChannel(calendar.channel);
     if (channel === undefined) continue;
-    await stopChannel(provider, tokens, channel);
+    const failure = await stopChannel(provider, tokens, channel);
     await inWorkspace(scope, (tx) =>
       tx.execute(sql`update calendar_calendars set channel = null where id = ${calendar.id}::uuid`),
+    );
+    channels.push(
+      failure === undefined
+        ? { calendarId: calendar.id, outcome: 'stopped', why: 'not-pulled' }
+        : { calendarId: calendar.id, outcome: 'unstopped', why: 'not-pulled', ...failure },
     );
   }
   if (relist) {
@@ -542,7 +634,9 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
     );
   }
   // Every pulled calendar failing is the connection's failure: it backs off, and fails after 6 hours (AC-620).
-  if (pulled.length > 0 && failures === pulled.length && lastCode !== undefined) return failed(lastCode);
+  if (pulled.length > 0 && failures === pulled.length && lastCode !== undefined) {
+    return withChannels(await failed(lastCode), channels);
+  }
   const stored = await inWorkspace(scope, (tx) =>
     tx.execute<{ was: string }>(sql`
       with before as (
@@ -559,13 +653,16 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
     `),
   );
   const [synced] = stored.rows;
-  if (synced === undefined) return { kind: 'stopped', reason: 'gone' };
+  if (synced === undefined) return withChannels({ kind: 'stopped', reason: 'gone' }, channels);
   // Connected again (a first sync, or healed): the member's other tabs show it.
   if (synced.was !== 'connected') await tellCalendars(scope, deps.hooks, row.member_id);
-  return {
-    kind: 'synced',
-    full,
-    events,
-    nextInMs: relist ? RETRY_FIRST_MS : POLL_INTERVAL_MS,
-  };
+  return withChannels(
+    {
+      kind: 'synced',
+      full,
+      events,
+      nextInMs: relist ? RETRY_FIRST_MS : POLL_INTERVAL_MS,
+    },
+    channels,
+  );
 }

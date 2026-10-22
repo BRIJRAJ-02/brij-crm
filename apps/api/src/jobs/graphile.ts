@@ -356,6 +356,13 @@ function calendarTask(options: JobRunnersOptions, sync: NonNullable<JobRunnersOp
       ...(outcome.kind === 'retry' ? { code: outcome.code } : {}),
       ...(outcome.kind === 'stopped' ? { reason: outcome.reason } : {}),
     });
+    // Each push channel the run opened, failed to open or ended (spec 0024, AC-602): our ids, its expiry, and the
+    // provider's code, status and reason when it refused. Never a token or a channel id.
+    for (const channel of outcome.channels ?? []) {
+      const fields = { workspaceId: parsed.data.workspaceId, connectionId: parsed.data.connectionId, ...channel };
+      if (channel.outcome === 'failed' || channel.outcome === 'unstopped') options.log.warn('calendar.channel', fields);
+      else options.log.info('calendar.channel', fields);
+    }
     if (outcome.kind === 'stopped') return;
     await helpers.addJob(CALENDAR_TASK, parsed.data, {
       ...calendarQueue(parsed.data),

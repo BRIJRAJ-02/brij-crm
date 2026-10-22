@@ -1,8 +1,9 @@
 // Spec 0024, milestones 2 and 3, against a real Postgres as the app role and
 // the fake provider: busy times (the owner's call, 20 October 2026), the
-// `failed` rule and its healing, push channels and their notices, Add as
-// person and the workspace setting that makes people by itself, and free and
-// busy with the event writes.
+// `failed` rule and its healing, push channels and their notices (with what
+// each channel and notice did, for the log), a deleted workspace's channels
+// ended at the provider (spec 0031, AC-823), Add as person and the workspace
+// setting that makes people by itself, and free and busy with the event writes.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
@@ -18,15 +19,17 @@ import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
+import { deleteWorkspace, restoreWorkspace } from '../workspace/settings.ts';
+import { updateMemberCalendar } from './calendars.ts';
 import { connectCalendar, listCalendarConnections, syncCalendarNow, updateCalendarConnection } from './connections.ts';
 import { createCalendarEvents } from './events.ts';
 import { createFakeCalendarProvider } from './fake.ts';
 import { listMeetingsForRecord } from './meetings.ts';
 import { addMeetingAttendee, readCalendarSettings, updateCalendarSettings } from './people.ts';
 import type { ProviderAttendee, ProviderEvent } from './provider.ts';
-import { takeCalendarNotice } from './push.ts';
+import { openChannel, takeCalendarNotice } from './push.ts';
 import { syncConnection, type CalendarSyncDeps } from './sync.ts';
-import { decodeTokenKey } from './tokens.ts';
+import { decodeTokenKey, sealTokens } from './tokens.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -339,13 +342,35 @@ describe('push channels (AC-602, AC-622)', () => {
     await testQuery(ownerUrl, `select graphile_worker.remove_job($1)`, [key]);
     const queued = () =>
       testQuery<{ key: string }>(ownerUrl, `select key from graphile_worker.jobs where key = $1`, [key]);
-    expect(await takeCalendarNotice(db, { channelId, token, state: 'sync' })).toBe('ignored');
-    expect(await takeCalendarNotice(db, { channelId: 'other', token, state: 'exists' })).toBe('refused');
-    expect(await takeCalendarNotice(db, { channelId, token: `${token}x`, state: 'exists' })).toBe('refused');
-    expect(await takeCalendarNotice(db, { channelId, token: 'not.a.token', state: 'exists' })).toBe('refused');
-    expect(await takeCalendarNotice(db, { channelId, token: undefined, state: 'exists' })).toBe('refused');
+    const [calendar] = await w.query<{ id: string }>(sql`select id::text as id from calendar_calendars`);
+    const matched = { workspaceId: w.workspaceId, calendarId: calendar?.id, connectionId: conn.id };
+    expect(await takeCalendarNotice(db, { channelId, token, state: 'sync' })).toEqual({
+      ...matched,
+      outcome: 'ignored',
+      reason: 'handshake',
+    });
+    expect(await takeCalendarNotice(db, { channelId: 'other', token, state: 'exists' })).toEqual({
+      outcome: 'refused',
+      reason: 'mismatch',
+    });
+    expect(await takeCalendarNotice(db, { channelId, token: `${token}x`, state: 'exists' })).toEqual({
+      outcome: 'refused',
+      reason: 'mismatch',
+    });
+    expect(await takeCalendarNotice(db, { channelId, token: 'not.a.token', state: 'exists' })).toEqual({
+      outcome: 'refused',
+      reason: 'malformed',
+    });
+    expect(await takeCalendarNotice(db, { channelId, token: undefined, state: 'exists' })).toEqual({
+      outcome: 'refused',
+      reason: 'malformed',
+    });
     expect(await queued()).toEqual([]);
-    expect(await takeCalendarNotice(db, { channelId, token, state: 'exists' })).toBe('queued');
+    expect(await takeCalendarNotice(db, { channelId, token, state: 'exists' })).toEqual({
+      ...matched,
+      outcome: 'queued',
+      reason: 'change',
+    });
     expect(await queued()).toHaveLength(1);
     // Sync now (the member's own connection) moves the same keyed row: still one waiting sync.
     expect(await syncCalendarNow(w.owner, { connectionId: conn.id })).toEqual({ queued: true });
@@ -353,7 +378,215 @@ describe('push channels (AC-602, AC-622)', () => {
     // Another workspace's ids with this secret find nothing.
     const other = await world({ push: true });
     const forged = token.replace(w.workspaceId, other.workspaceId);
-    expect(await takeCalendarNotice(db, { channelId, token: forged, state: 'exists' })).toBe('refused');
+    expect(await takeCalendarNotice(db, { channelId, token: forged, state: 'exists' })).toEqual({
+      outcome: 'refused',
+      reason: 'unknown',
+    });
+    // An account that no longer syncs is matched, and asks for nothing.
+    await testQuery(ownerUrl, `select graphile_worker.remove_job($1)`, [key]);
+    await testQuery(ownerUrl, `update calendar_connections set status = 'expired' where id = $1`, [conn.id]);
+    expect(await takeCalendarNotice(db, { channelId, token, state: 'exists' })).toEqual({
+      ...matched,
+      outcome: 'ignored',
+      reason: 'not-syncing',
+    });
+    expect(await queued()).toEqual([]);
+  });
+
+  it('says what became of each channel: opened, renewed, refused with the provider’s code, dropped and stopped', async () => {
+    const w = await world({ push: true });
+    w.fake.addCalendar('ada@acme.dev', { id: 'team@acme.dev', name: 'Team', accessRole: 'writer' });
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    const first = await w.sync(conn.id);
+    const calendars = await w.query<{ id: string; provider_calendar_id: string }>(
+      sql`select id::text as id, provider_calendar_id from calendar_calendars order by is_primary desc`,
+    );
+    const main = calendars[0]?.id ?? '';
+    const team = calendars.find((each) => each.provider_calendar_id === 'team@acme.dev')?.id ?? '';
+    const [opened] = w.fake.watched();
+    expect(first.channels).toEqual([
+      { calendarId: main, outcome: 'opened', expiresAt: opened?.channel.expiresAt, renewed: false },
+    ]);
+    // Nothing to do while it lasts: no report at all.
+    expect((await w.sync(conn.id)).channels).toBeUndefined();
+    // About to run out: a new one takes over.
+    await w.query(
+      sql`update calendar_calendars set channel = jsonb_set(channel, '{expiresAt}', to_jsonb((now() + interval '1 day')::text)) where id = ${main}::uuid`,
+    );
+    expect((await w.sync(conn.id)).channels).toEqual([
+      { calendarId: main, outcome: 'opened', expiresAt: w.fake.watched()[1]?.channel.expiresAt, renewed: true },
+    ]);
+    // The provider refuses a calendar it can't watch: the code, its status and its reason, never its words.
+    await updateMemberCalendar(w.owner, { calendarId: team, showInWeek: true });
+    w.fake.failNext('watch', 'CALENDAR_UNAVAILABLE', 1, {
+      status: 400,
+      reason: 'pushNotSupportedForRequestedResource',
+    });
+    const refused = await w.sync(conn.id);
+    expect(refused).toMatchObject({ kind: 'synced' });
+    expect(refused.channels).toEqual([
+      {
+        calendarId: team,
+        outcome: 'failed',
+        code: 'CALENDAR_UNAVAILABLE',
+        status: 400,
+        reason: 'pushNotSupportedForRequestedResource',
+      },
+    ]);
+    // The next run tries again, and opens it.
+    expect((await w.sync(conn.id)).channels).toMatchObject([{ calendarId: team, outcome: 'opened' }]);
+    // Switched off: its channel ends at the provider.
+    await updateMemberCalendar(w.owner, { calendarId: team, showInWeek: false });
+    const teamChannel = w.fake.watched().at(-1)?.channel.id;
+    expect((await w.sync(conn.id)).channels).toEqual([{ calendarId: team, outcome: 'stopped', why: 'not-pulled' }]);
+    expect(w.fake.stopped()).toContain(teamChannel);
+    // Opened while the calendar was switched off (or its workspace deleted): stopped at once, never stored.
+    const tokens = w.fake.tokensFor('ada@acme.dev');
+    const dropped = await openChannel(w.system, {
+      provider: w.fake.provider,
+      tokens,
+      calendarRowId: team,
+      calendarId: 'team@acme.dev',
+      address: PUSH,
+      previous: undefined,
+    });
+    expect(dropped).toEqual({ calendarId: team, outcome: 'dropped' });
+    expect(w.fake.stopped()).toContain(w.fake.watched().at(-1)?.channel.id);
+    const [teamRow] = await w.query<{ channel: unknown }>(
+      sql`select channel from calendar_calendars where id = ${team}::uuid`,
+    );
+    expect(teamRow?.channel).toBeNull();
+  });
+});
+
+describe('a deleted workspace’s calendars (spec 0031, AC-823)', () => {
+  const channelOf = async (w: World) =>
+    (
+      await w.query<{ channel: { id?: string } | null }>(sql`select channel from calendar_calendars where is_primary`)
+    )[0]?.channel ?? null;
+  const mainOf = async (w: World) =>
+    (await w.query<{ id: string }>(sql`select id::text as id from calendar_calendars where is_primary`))[0]?.id;
+  const jobsOf = (connectionId: string) =>
+    testQuery<{ run_at: Date }>(
+      ownerUrl,
+      `select run_at from graphile_worker._private_jobs where payload->>'connectionId' = $1`,
+      [connectionId],
+    );
+
+  it('ends its channels at the provider on the deletion’s run, syncs nothing, and opens new ones after a restore', async () => {
+    const w = await world({ push: true });
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    await w.sync(conn.id);
+    const opened = w.fake.watched()[0];
+    expect((await channelOf(w))?.id).toBe(opened?.channel.id);
+    const key = `crm-calendar:${w.workspaceId}:${conn.id}`;
+    // The poll's row waits 15 minutes on: the deletion brings it forward to now, in its own transaction.
+    await testQuery(
+      ownerUrl,
+      `update graphile_worker._private_jobs set run_at = now() + interval '15 minutes' where key = $1`,
+      [key],
+    );
+    await deleteWorkspace(w.owner, { confirmName: 'Calendar two' });
+    const [job] = await jobsOf(conn.id);
+    expect(job?.run_at.getTime()).toBeLessThanOrEqual(Date.now() + 1_000);
+    const listed = w.fake.calls('listChanges');
+    const ended = await w.sync(conn.id);
+    expect(ended).toEqual({
+      kind: 'stopped',
+      reason: 'workspace-deleted',
+      channels: [{ calendarId: await mainOf(w), outcome: 'stopped', why: 'workspace-deleted' }],
+    });
+    expect(w.fake.stopped()).toEqual([opened?.channel.id]);
+    expect(w.fake.calls('listChanges')).toBe(listed);
+    expect(await channelOf(w)).toBeNull();
+    // A run that began before the deletion and opens a channel after it: the channel is stopped at once, never kept.
+    const late = await openChannel(w.system, {
+      provider: w.fake.provider,
+      tokens: w.fake.tokensFor('ada@acme.dev'),
+      calendarRowId: (await mainOf(w)) ?? '',
+      calendarId: 'ada@acme.dev',
+      address: PUSH,
+      previous: undefined,
+    });
+    expect(late).toEqual({ calendarId: await mainOf(w), outcome: 'dropped' });
+    expect(w.fake.stopped()).toEqual([opened?.channel.id, w.fake.watched().at(-1)?.channel.id]);
+    expect(await channelOf(w)).toBeNull();
+    // A notice from that channel now names nothing; a run again has nothing to end.
+    expect(
+      await takeCalendarNotice(db, { channelId: opened?.channel.id, token: opened?.token, state: 'exists' }),
+    ).toEqual({ outcome: 'refused', reason: 'unknown' });
+    expect(await w.sync(conn.id)).toEqual({ kind: 'stopped', reason: 'workspace-deleted' });
+    // Restored: its accounts sync again, and open new channels.
+    await restoreWorkspace(w.owner);
+    expect(await jobsOf(conn.id)).toHaveLength(1);
+    expect((await w.sync(conn.id)).channels).toMatchObject([{ outcome: 'opened', renewed: false }]);
+    expect(await channelOf(w)).not.toBeNull();
+  });
+
+  it('keeps a channel the provider couldn’t end for now, so its next notice queues the stop again', async () => {
+    const w = await world({ push: true });
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    await w.sync(conn.id);
+    const opened = w.fake.watched()[0];
+    await deleteWorkspace(w.owner, { confirmName: 'Calendar two' });
+    w.fake.failNext('stopWatch', 'CALENDAR_UNAVAILABLE');
+    expect((await w.sync(conn.id)).channels).toEqual([
+      {
+        calendarId: await mainOf(w),
+        outcome: 'unstopped',
+        why: 'workspace-deleted',
+        code: 'CALENDAR_UNAVAILABLE',
+      },
+    ]);
+    expect((await channelOf(w))?.id).toBe(opened?.channel.id);
+    // The provider still posts: the notice queues the run that ends it, never a sync.
+    const key = `crm-calendar:${w.workspaceId}:${conn.id}`;
+    await testQuery(ownerUrl, `select graphile_worker.remove_job($1)`, [key]);
+    expect(
+      await takeCalendarNotice(db, { channelId: opened?.channel.id, token: opened?.token, state: 'exists' }),
+    ).toMatchObject({ outcome: 'queued', reason: 'stop', connectionId: conn.id });
+    expect(await jobsOf(conn.id)).toHaveLength(1);
+    expect((await w.sync(conn.id)).channels).toMatchObject([{ outcome: 'stopped', why: 'workspace-deleted' }]);
+    expect(w.fake.stopped()).toEqual([opened?.channel.id]);
+    expect(await channelOf(w)).toBeNull();
+    // A grant the provider refuses can never end one: it is forgotten, and runs out by itself.
+    const other = await world({ push: true });
+    const theirs = await other.connect(other.ownerId, 'bea@acme.dev');
+    await other.sync(theirs.id);
+    await deleteWorkspace(other.owner, { confirmName: 'Calendar two' });
+    // Its access token has run out, and the account took the grant back: the refresh is refused.
+    const binding = {
+      workspaceId: other.workspaceId,
+      memberId: other.ownerId,
+      provider: 'google' as const,
+      accountEmail: 'bea@acme.dev',
+    };
+    const lapsed = other.fake.tokensFor('bea@acme.dev', new Date(Date.now() - 60_000).toISOString());
+    await testQuery(ownerUrl, `update calendar_connections set tokens = $2 where id = $1`, [
+      theirs.id,
+      sealTokens(tokenKey, lapsed, binding),
+    ]);
+    other.fake.revoke('bea@acme.dev');
+    expect((await other.sync(theirs.id)).channels).toMatchObject([
+      { outcome: 'unstopped', why: 'workspace-deleted', code: 'CALENDAR_AUTH_REVOKED' },
+    ]);
+    expect(await channelOf(other)).toBeNull();
+  });
+
+  it('refuses a connect into a workspace deleted while its member was at the consent screen', async () => {
+    const w = await world();
+    // The door let the member in before the deletion: the connect itself finds the workspace gone.
+    await deleteWorkspace(w.owner, { confirmName: 'Calendar two' });
+    const refusal = await refusalOf(w.connect(w.ownerId, 'ada@acme.dev'));
+    expect(refusal).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await w.query(sql`select 1 from calendar_connections`)).toEqual([]);
+    expect(await w.query(sql`select 1 from calendar_calendars`)).toEqual([]);
+    const queued = await testQuery(
+      ownerUrl,
+      `select 1 from graphile_worker._private_jobs where payload->>'workspaceId' = $1`,
+      [w.workspaceId],
+    );
+    expect(queued).toEqual([]);
   });
 });
 

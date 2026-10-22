@@ -347,4 +347,64 @@ describe('calendar sync on the light runner (spec 0024)', () => {
       await runners.stop();
     }
   });
+
+  it('logs each push channel a run opened, with our ids and its expiry, never its token', async () => {
+    const scope = await owner();
+    const fake = createFakeCalendarProvider();
+    const tokenKey = decodeTokenKey(Buffer.alloc(32, 4).toString('base64'));
+    const exchanged = await fake.provider.exchangeCode('code:bo@acme.dev', 'https://app.test/callback');
+    const connection = await connectCalendar(scope, { provider: 'google', exchanged, tokenKey });
+    const lines: { message: string; level: string; fields: Record<string, unknown> }[] = [];
+    const recorded: JobsLog = {
+      info: (message, fields = {}) => void lines.push({ message, level: 'info', fields }),
+      warn: (message, fields = {}) => void lines.push({ message, level: 'warn', fields }),
+      error: (message, fields = {}) => void lines.push({ message, level: 'error', fields }),
+    };
+    const runners = await startJobRunners({
+      queue,
+      runner: coreRunner(20_000),
+      log: recorded,
+      pollInterval: 200,
+      calendar: (input) =>
+        syncConnection(
+          {
+            providers: { google: fake.provider },
+            tokenKey,
+            systemScope: (workspaceId) => systemScope(db, workspaceId),
+            hooks: backgroundHooks(),
+            isFreeDomain: () => false,
+            pushAddress: 'https://hooks.test/api/calendar/google/notify',
+          },
+          input,
+        ),
+    });
+    try {
+      await expect
+        .poll(() => lines.filter((line) => line.message === 'calendar.channel').length, { timeout: 15_000 })
+        .toBe(1);
+    } finally {
+      await runners.stop();
+    }
+    const [opened] = fake.watched();
+    const [main] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select id::text as id from calendar_calendars where connection_id = $1 and is_primary`,
+      [connection.id],
+    );
+    expect(lines.find((line) => line.message === 'calendar.channel')).toEqual({
+      message: 'calendar.channel',
+      level: 'info',
+      fields: {
+        workspaceId: scope.workspaceId,
+        connectionId: connection.id,
+        calendarId: main?.id,
+        outcome: 'opened',
+        expiresAt: opened?.channel.expiresAt,
+        renewed: false,
+      },
+    });
+    const written = JSON.stringify(lines);
+    expect(written).not.toContain(opened?.token.split('.')[2] ?? '-');
+    expect(written).not.toContain(opened?.channel.id ?? '-');
+  });
 });

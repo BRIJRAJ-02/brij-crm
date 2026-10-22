@@ -133,6 +133,7 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'syncConnection',
   'isProviderError',
   'providerError',
+  'failureOf',
   'normaliseEmail',
   'signValue',
   'verifyValue',
