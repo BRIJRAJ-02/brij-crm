@@ -170,6 +170,13 @@ export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } fro
 export { ChoiceChips, type ChoiceChip, type ChoiceChipsProps } from './molecules/ChoiceChips/ChoiceChips.tsx';
 export { ConditionRow, type ConditionRowProps } from './molecules/ConditionRow/ConditionRow.tsx';
 export { Steps, type Step, type StepsProps, type StepsVariant } from './molecules/Steps/Steps.tsx';
+/** The rows to pick from under a field being typed in, focus staying in the field (Field's `combobox` names it). */
+export {
+  SuggestionList,
+  suggestionOptionId,
+  type SuggestionListProps,
+  type SuggestionRow,
+} from './molecules/SuggestionList/SuggestionList.tsx';
 export { Table, type TableColumn, type TableProps } from './molecules/Table/Table.tsx';
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
 export {

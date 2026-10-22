@@ -839,6 +839,13 @@ export interface ReadOptions {
    * their reference cells read empty, with no version and no total.
    */
   readonly trashed?: true;
+  /**
+   * Leave out records on an archived object, from the object rows the read
+   * loads anyway (a booking's hand linked record, polish F2: an archived
+   * object's records are absent until it is restored), so a caller needs no
+   * statement of its own to check.
+   */
+  readonly liveObjectsOnly?: true;
 }
 
 /**
@@ -898,11 +905,15 @@ export async function readRecords(
           access,
           found.map((row) => ({ objectId: row.objectId, recordId: row.id })),
         );
-  const rows = seen === undefined ? found : found.filter((row) => seen.has(row.id));
-  const objectIds = [...new Set(rows.map((row) => row.objectId))];
+  const visible = seen === undefined ? found : found.filter((row) => seen.has(row.id));
+  const visibleObjectIds = [...new Set(visible.map((row) => row.objectId))];
+  const loadedObjects =
+    visibleObjectIds.length === 0 ? [] : await tx.select().from(objects).where(inArray(objects.id, visibleObjectIds));
   const objectRows =
-    objectIds.length === 0 ? [] : await tx.select().from(objects).where(inArray(objects.id, objectIds));
+    options.liveObjectsOnly === true ? loadedObjects.filter((row) => row.archivedAt === null) : loadedObjects;
   const objectById = new Map(objectRows.map((row) => [row.id, row]));
+  const rows = options.liveObjectsOnly === true ? visible.filter((row) => objectById.has(row.objectId)) : visible;
+  const objectIds = [...new Set(rows.map((row) => row.objectId))];
   const attributesByObject = new Map(
     await Promise.all(
       objectIds.map(async (id) => [id, options.attributes?.get(id) ?? (await loadAttributes(tx, id))] as const),

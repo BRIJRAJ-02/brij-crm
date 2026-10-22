@@ -48,6 +48,11 @@ export interface SearchResult {
   readonly linked: boolean;
   /** The record holding it now on the paired side ("At Acme"), or `{ hidden: true }` when the reader can't see it. */
   readonly takenBy?: RecordRefDisplay | { readonly hidden: true };
+  /**
+   * Its first email or domain the reader may see (a person's address, a company's domain), as the command menu's
+   * second line has it: New meeting fills in the guest's email from it.
+   */
+  readonly detail?: string;
 }
 
 /** Which search runs for a query: recent with nothing typed, a prefix range for one or two characters, else contains. */
@@ -141,6 +146,31 @@ async function findIds(
     limit ${limit}
   `);
   return rows.rows.map((row) => row.id);
+}
+
+/**
+ * Each record's first email or domain the reader may see (the searched attributes after the name, in their order),
+ * in one statement over the current values at position 0. A hidden attribute is never read (AC-144).
+ */
+async function detailsOf(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  ids: readonly string[],
+  primary: AttributeDef | undefined,
+  attributes: ReadonlyMap<string, AttributeDef>,
+): Promise<ReadonlyMap<string, string>> {
+  const detailIds = searchedAttributes(scope, primary, attributes)
+    .filter((attribute) => attribute.id !== primary?.id)
+    .map((attribute) => attribute.id);
+  if (ids.length === 0 || detailIds.length === 0) return new Map();
+  const rows = await tx.execute<{ id: string; text: string }>(sql`
+    select distinct on (v.owner_id) v.owner_id::text as id, v.text_value as text
+    from "values" v
+    where v.owner_id = any(${uuidList([...ids])}) and v.attribute_id = any(${uuidList(detailIds)})
+      and v.active_until is null and not v.is_cleared and v.position = 0 and v.text_value is not null
+    order by v.owner_id, array_position(${uuidList(detailIds)}, v.attribute_id)
+  `);
+  return new Map(rows.rows.map((row) => [row.id, row.text]));
 }
 
 /**
@@ -269,6 +299,8 @@ export async function searchRecords(
         visibleAlready: true,
       });
       const display = new Map(views.map((view) => [view.id, view.display]));
+      const named = primary !== undefined && attributeVisible(scope.access, primary) ? primary : undefined;
+      const details = await detailsOf(tx, scope, ids, named, attributes);
       return ids.flatMap((id): SearchResult[] => {
         const ref = display.get(id);
         if (ref === undefined) return [];
@@ -280,7 +312,15 @@ export async function searchRecords(
             : visibleHolders.has(holder.holderId) && holderDisplay !== undefined
               ? holderDisplay
               : ({ hidden: true } as const);
-        return [{ ref, linked: linked.has(id), ...(takenBy === undefined ? {} : { takenBy }) }];
+        const detail = details.get(id);
+        return [
+          {
+            ref,
+            linked: linked.has(id),
+            ...(takenBy === undefined ? {} : { takenBy }),
+            ...(detail === undefined ? {} : { detail }),
+          },
+        ];
       });
     });
   } catch (error) {

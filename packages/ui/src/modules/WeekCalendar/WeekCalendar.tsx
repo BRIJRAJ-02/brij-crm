@@ -58,7 +58,7 @@ export interface WeekCalendarBlock {
   readonly kind: 'booking' | 'event' | 'blocked' | 'held' | 'busy';
   /** A booking's link colour, or an event's calendar colour (each connection keeps one). */
   readonly hue?: Hue;
-  /** Drawn struck through and quieter, and read out as canceled. */
+  /** Drawn struck through and quieter, and read out as cancelled. */
   readonly isCancelled?: boolean;
   /**
    * A short word for a state other than the usual one ("No show", "Needs a host"), shown before the time and read

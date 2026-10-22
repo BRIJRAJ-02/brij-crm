@@ -404,10 +404,12 @@ export {
   type HomeMetricsCache,
   type WorkspaceFigures,
 } from './home/metrics.ts';
-// Changing a booking from Bookings (spec 0025, AC-640): its host moves or cancels it, or copies the guest's link.
+// Changing a booking from Bookings (spec 0025, AC-640): its host moves or cancels it, or copies the guest's link,
+// and links it to a record by hand (polish F2).
 export {
   bookingGuestPath,
   cancelBooking,
+  linkBookingRecord,
   markNoShow,
   hostTarget,
   MAX_GUESTS,

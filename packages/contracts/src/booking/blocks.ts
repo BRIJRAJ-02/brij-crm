@@ -122,6 +122,11 @@ export const BookAsHostInput = WorkspaceScoped.extend({
     .array(z.email({ error: 'Give each guest’s email address.' }).trim().toLowerCase().max(254))
     .max(10, { error: 'Invite at most 10 more people.' }),
   message: z.string().trim().max(1000, { error: 'Keep the message to 1,000 characters.' }).optional(),
+  /**
+   * Which of the caller's own calendars the event goes on (New meeting's Calendar, with two or more to choose from):
+   * one they can add events to, on an account that works. Absent, the page's own "Add events to", else their default.
+   */
+  calendarId: Uuid.optional(),
   mutationId: Uuid,
 });
 /** Book someone in. */

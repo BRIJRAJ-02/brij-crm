@@ -5,7 +5,7 @@
 // page (as the other Bookings reads are); More reads the next page and adds
 // it. A failed first read shows the failure; a failed next page keeps what is
 // shown and says so in `moreFailed`.
-import type { BookingsTab, MeetingListItem, MeetingListPage, MeetingSource } from '@crm/contracts';
+import type { BookingListItem, BookingsTab, MeetingListItem, MeetingListPage, MeetingSource } from '@crm/contracts';
 import { toDataError } from '../errors.ts';
 import { browserReturn } from './store.ts';
 
@@ -76,9 +76,15 @@ const keyOf = (workspace: string, query: MeetingsQuery) =>
 export function createMeetingsStore(deps: MeetingsDeps) {
   const onReturn = deps.onReturn ?? browserReturn;
   const limit = deps.pageSize ?? 50;
-  const lists = new Map<string, MeetingsHeld & { readonly workspace: string }>();
+  const lists = new Map<string, Made>();
 
-  function make(workspace: string, query: MeetingsQuery): MeetingsHeld & { readonly workspace: string } {
+  /** A held list as the store keeps it: its workspace, and a way to show an edit of its items at once. */
+  type Made = MeetingsHeld & {
+    readonly workspace: string;
+    readonly patch: (edit: (item: MeetingListItem) => MeetingListItem) => () => void;
+  };
+
+  function make(workspace: string, query: MeetingsQuery): Made {
     let state: MeetingsState = { status: 'loading' };
     let cursor: string | undefined;
     let held = 0;
@@ -172,6 +178,16 @@ export function createMeetingsStore(deps: MeetingsDeps) {
       reload() {
         void readFirst();
       },
+      patch(edit) {
+        if (state.status !== 'ready') return () => undefined;
+        const before = state;
+        const patched: MeetingsState = { ...before, items: before.items.map(edit) };
+        set(patched);
+        // Only while nothing newer landed: a read or another change since then is left as it is.
+        return () => {
+          if (state === patched) set(before);
+        };
+      },
     };
   }
 
@@ -188,6 +204,26 @@ export function createMeetingsStore(deps: MeetingsDeps) {
     /** Forgets every list (signed out): the next person's lists start from nothing. */
     clear(): void {
       lists.clear();
+    },
+    /**
+     * Shows `edit` of one booking in every list of the workspace at once (a link made by hand, polish F2); answers
+     * how to put them all back on a refusal.
+     */
+    patchBooking(
+      workspace: string,
+      bookingId: string,
+      edit: (booking: BookingListItem) => BookingListItem,
+    ): () => void {
+      const restores = [...lists.values()]
+        .filter((each) => each.workspace === workspace)
+        .map((each) =>
+          each.patch((item) =>
+            item.kind === 'booking' && item.booking.id === bookingId ? { ...item, booking: edit(item.booking) } : item,
+          ),
+        );
+      return () => {
+        for (const restore of restores) restore();
+      };
     },
     /** Reads every held list of a workspace again (a booking made, moved or cancelled; a calendar shown). */
     reloadAll(workspace: string): void {

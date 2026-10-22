@@ -121,7 +121,7 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
         body: (
           <>
             {/* Whose tasks as the page's tabs, the row Bookings' Calendar, List and Availability take, with Open
-                and Completed at the strip's end, as Bookings keeps Upcoming, Past and Canceled (the owner, 21 Oct). */}
+                and Completed at the strip's end, as Bookings keeps Upcoming, Past and Cancelled (the owner, 21 Oct). */}
             <Tabs
               variant="bar"
               label={strings.whoseTasks}
