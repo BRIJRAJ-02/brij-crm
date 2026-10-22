@@ -3,7 +3,18 @@
 // request headers from the response's x-middleware-* headers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sourcePattern } from './csp.ts';
-import middleware, { apiTarget, config, EDGE_HEADER, GEO_HEADERS, ORIGIN_HEADER, TRACE_HEADERS } from './middleware.ts';
+import { readFileSync } from 'node:fs';
+import middleware, {
+  apiTarget,
+  config,
+  EDGE_HEADER,
+  GEO_HEADERS,
+  ORIGIN_HEADER,
+  PUBLIC_HOST_PATH,
+  publicHostRedirect,
+  TRACE_HEADERS,
+} from './middleware.ts';
+import * as paths from './public-paths.ts';
 import { MIDDLEWARE_MATCHER } from './public-paths.ts';
 
 const API = 'https://api-production.up.railway.app';
@@ -317,5 +328,41 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
     vi.stubEnv('APP_URL', 'https://app.timefix.ai');
     vi.stubEnv('BOOKING_PUBLIC_ORIGIN', 'https://app.timefix.ai');
     expect(at('https://app.timefix.ai/').status).not.toBe(308);
+  });
+});
+
+// Vercel compiles middleware.ts on its own: an import of the repo's TypeScript or a workspace package fails the
+// deploy (it did on 22 Oct 2026), so what it needs from public-paths.ts is written out there, and kept equal here.
+describe('the public host check written out in middleware.ts', () => {
+  it('imports nothing but @vercel/functions', () => {
+    const source = readFileSync(new URL('./middleware.ts', import.meta.url), 'utf8');
+    const imports = [...source.matchAll(/^import[^;]*?from '([^']+)';/gms)].map((match) => match[1]);
+    expect(imports).toEqual(['@vercel/functions']);
+  });
+
+  it('serves exactly the paths public-paths.ts serves', () => {
+    expect(PUBLIC_HOST_PATH.source).toBe(paths.PUBLIC_HOST_PATH.source);
+  });
+
+  it('moves exactly what public-paths.ts moves', () => {
+    const env = {
+      PUBLIC_HOST_HOME_URL: 'https://app.timefix.ai',
+      BOOKING_PUBLIC_ORIGIN: 'https://timefix.com',
+      APP_URL: 'https://app.timefix.ai',
+    };
+    const urls = [
+      'https://timefix.com/',
+      'https://timefix.com/settings',
+      'https://timefix.com/ada',
+      'https://timefix.com/ada/30min',
+      'https://timefix.com/b/abcdefghijklmnop',
+      'https://timefix.com/api/public/booking/x/slots',
+      'https://app.timefix.ai/w/ada/home',
+    ];
+    for (const each of urls) {
+      expect(publicHostRedirect(new URL(each), env), each).toBe(paths.publicHostRedirect(new URL(each), env));
+    }
+    expect(publicHostRedirect(new URL('https://timefix.com/settings'), env)).toBe('https://app.timefix.ai/');
+    expect(publicHostRedirect(new URL('https://timefix.com/ada/30min'), env)).toBeUndefined();
   });
 });

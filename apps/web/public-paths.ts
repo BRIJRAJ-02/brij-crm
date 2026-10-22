@@ -45,9 +45,10 @@ const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /**
  * What the public booking origin serves (BOOKING_PUBLIC_ORIGIN, timefix.com; 22 Oct 2026): the handle addresses,
  * `/b/…`, `/f/…`, `/embed/…`, the built files (`/assets/…`, `/brand/…` and `TOP_LEVEL_FILES`, `/layers.css` among them) and the public API,
- * `/api/public/…`. Nothing else belongs on that host.
+ * `/api/public/…`. Nothing else belongs on that host. middleware.ts holds the same pattern written out (it can't
+ * import this file), and middleware.test.ts keeps the two equal.
  */
-const PUBLIC_HOST_PATH = new RegExp(
+export const PUBLIC_HOST_PATH = new RegExp(
   `^(?:/(?:b|f|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:${TOP_LEVEL_FILES.map(literal).join('|')})|/${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?/?)$`,
 );
 
