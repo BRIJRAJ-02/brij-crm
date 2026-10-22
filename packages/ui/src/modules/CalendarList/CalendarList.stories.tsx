@@ -118,3 +118,31 @@ export const Folded: Story = {
     await waitFor(() => expect(canvas.queryByRole('checkbox', { name: 'Team' })).not.toBeInTheDocument());
   },
 };
+
+/** A long address: cut with an ellipsis before the options button's room, never mid letter, hovered or not. */
+export const LongName: Story = {
+  render: (args) => (
+    <Stage width="narrow">
+      <CalendarList
+        {...args}
+        accounts={[
+          {
+            id: 'school',
+            provider: 'google-calendar',
+            email: '1032201225@tcetmumbai.in',
+            calendars: [{ id: 'school', name: '1032201225@tcetmumbai.in.example.edu', hue: 'sky', isShown: true }],
+          },
+          ...accounts(),
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // The visible name (the StatusDot's); the checkbox's own label is for screen readers.
+    const [name] = canvas.getAllByText('1032201225@tcetmumbai.in.example.edu');
+    if (name === undefined) throw new Error('no name');
+    await expect(getComputedStyle(name).textOverflow).toBe('ellipsis');
+    await userEvent.click(name);
+    await expect(canvas.getByRole('checkbox', { name: '1032201225@tcetmumbai.in.example.edu' })).not.toBeChecked();
+  },
+};

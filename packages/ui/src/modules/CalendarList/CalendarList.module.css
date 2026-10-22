@@ -1,5 +1,5 @@
 /* CalendarList: a small quiet label, then the calendars as rows (the
-   checkbox in the calendar's hue taking the room, the options button after
+   plain checkbox with the calendar's colour dot and name taking the room, the options button after
    it), an account with two or more calendars folding under a label
    Disclosure (its mark and address). The options button shows on hover or
    focus with a fine pointer, and always on touch. Show all follows the
@@ -41,11 +41,11 @@
     border-radius: var(--radius-sm);
   }
 
+  /* Takes the room the options leave; the name inside cuts itself with an ellipsis, so nothing clips the focus ring. */
   .check {
     display: flex;
     flex: 1;
     min-inline-size: 0;
-    overflow: hidden;
   }
 
   .options {
@@ -57,7 +57,8 @@
       background: var(--surface-hover);
     }
 
-    /* Out of sight until the row is hovered or something in it has focus; still in the tab order. */
+    /* Out of sight until the row is hovered or something in it has focus; still in the tab order, and still
+       taking its room, so the name never reflows when it shows. */
     .row:not(:hover, :focus-within, :has([aria-expanded='true'])) .options {
       opacity: 0;
     }

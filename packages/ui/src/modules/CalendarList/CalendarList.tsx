@@ -1,6 +1,7 @@
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
+import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { Hue } from '../../hue.ts';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
@@ -54,9 +55,11 @@ function Row({
   return (
     <li className={styles.row}>
       <span className={styles.check}>
+        {/* The plain box, then the calendar's colour as a dot before its name, cut with an ellipsis when long. */}
         <Checkbox
           label={calendar.name}
-          hue={calendar.hue}
+          isLabelHidden
+          leading={<StatusDot hue={calendar.hue}>{calendar.name}</StatusDot>}
           isSelected={calendar.isShown}
           onChange={(isShown) => onShownChange(calendar.id, isShown)}
         />
@@ -84,7 +87,7 @@ function Row({
 
 /**
  * The member's calendars, as Google Calendar lists them beside its grid: a small label, then each calendar a
- * checkbox filled with its own colour and its name. An account with one calendar is that one row; an account with
+ * plain checkbox, its colour as a dot and its name (cut with an ellipsis when long). An account with one calendar is that one row; an account with
  * two or more folds under its provider's mark and address. Each row's options (Show only this) show on hover or
  * focus, and always on touch. Show all follows the list while any calendar is hidden. Which calendar takes new
  * bookings is a setting, so it lives in Settings, not here.

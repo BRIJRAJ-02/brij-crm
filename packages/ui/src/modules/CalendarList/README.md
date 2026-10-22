@@ -4,7 +4,7 @@ The member's calendars, as Google Calendar lists them beside its grid: the Booki
 
 ## Why it exists
 
-New. Nothing in the library lists checkable items under folding headings with a per row menu. It composes Disclosure (an account with two or more calendars, its provider's mark in `leading`), Checkbox (each calendar, in its `hue`) and a MenuTrigger per row, so every part keeps the library's look and keys.
+New. Nothing in the library lists checkable items under folding headings with a per row menu. It composes Disclosure (an account with two or more calendars, its provider's mark in `leading`), Checkbox (each calendar, its colour and name a StatusDot in `leading`) and a MenuTrigger per row, so every part keeps the library's look and keys.
 
 ## Use
 
@@ -19,7 +19,7 @@ New. Nothing in the library lists checkable items under folding headings with a 
 
 - A small label heads the list ("My calendars", or `label`).
 - An account with one calendar is that calendar's row alone, never its address over the same name again; an account with two or more folds under its mark and address.
-- Each box is filled with its calendar's colour when checked (Checkbox `hue`). A box checks or clears a calendar (`onShownChange`); what that changes is the caller's (Bookings: the view only, `cal` in the address).
+- Each row is the plain Checkbox, then the calendar's colour as a dot and its name (a StatusDot in the Checkbox's `leading`, so pressing the name toggles it); a long name is cut with an ellipsis. The options button keeps its room while hidden, so the name never reflows on hover. A box checks or clears a calendar (`onShownChange`); what that changes is the caller's (Bookings: the view only, `cal` in the address).
 - Each row's options button ("<name> options") offers Show only this, and is left out on the only calendar shown. With a fine pointer it shows while its row is hovered or holds focus (it stays in the tab order); on touch it always shows.
 - Show all follows the list while any calendar is hidden, at its end, so rows never move under the pointer.
 - Which calendar takes new bookings is a setting, so it is not here: Settings › Calendars owns it.

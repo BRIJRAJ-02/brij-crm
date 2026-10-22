@@ -20,7 +20,10 @@ Ported from the artifact's Checkbox card (version 8). Forms, settings, table sel
 - `CheckboxMark` is the same look with no control. The checkbox attribute's display and the grid's selection column draw it, where the cell is the control (Space, or a click on the mark), so a scroll past hundreds of rows mounts no checkbox per row. Screen readers hear its label and state ("Is customer, checked"). It stays inside the library: screens draw a checkbox value through `AttributeDisplay`.
 
 - `slot="selection"` puts it in a selectable Table's selection column: the table says whether it is checked, and the header's is indeterminate while some rows are picked.
-- `hue` draws the box in a data hue, as Google Calendar draws its calendars: unchecked, tinted with the hue's tag background (`tag-<hue>-bg`) inside the `control-border` edge; checked, filled with the hue's solid dot colour (`dot-<hue>`) and edged in its tag text (`tag-<hue>-text`, so the box's edge holds contrast on the surface) and ticked dark in both themes (`text` in light, `on-inverse` in dark; gray's deep dark dot takes the light `text`), which holds 3:1 on every dot colour. Why a variant: the calendars list's boxes are both the switch and each calendar's colour key.
+
+### Leading
+
+`leading` puts something after the box, inside the control so pressing it toggles the box too, hidden from screen readers (the label says it). With `isLabelHidden` it is the visible name: the calendars list passes a StatusDot (the calendar's colour dot and name), which shrinks and cuts a long name with an ellipsis. Why: the owner wants the plain box with the calendar's colour as a small dot before its name (22 October 2026); a dot outside the control would not toggle, and the label is a string.
 
 ## States
 
