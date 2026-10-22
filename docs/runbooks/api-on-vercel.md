@@ -10,9 +10,11 @@ Do the steps in order. Never paste a secret into a chat, a commit or an issue.
 - A terminal in the repo root (it is linked to `brij-crm`).
 - In Vercel, Settings, Environment Variables: leave **Sensitive** off for the variables below. A Sensitive variable comes down empty to the deploy, so the deploy can't tell where the api runs and can't check the browser files for it.
 
-## 2. Make the new secrets (Railway held the old ones)
+## 2. Keep the values, or make new ones
 
-Treat every secret Railway held as seen, as in [render-cutover.md](render-cutover.md) step 2:
+The owner's call for now (22 Oct): keep everything the same. With `railway login` done, step 3's script copies every value from Railway's api and worker services, keeps Vercel's own `EDGE_SECRET`, and makes only `JOBS_RUN_SECRET` new, so sessions and guests' booking links keep working. Skip to step 3.
+
+To rotate instead (`--rotate`), treat every secret Railway held as seen, as in [render-cutover.md](render-cutover.md) step 2:
 
 | Make | Where |
 |---|---|
@@ -30,7 +32,7 @@ Run, from the repo root:
 bash /private/tmp/claude-501/-Users-brijraj-Desktop-brijraj-crm/686e1a66-aabc-4dfa-a43f-c1550cbabba8/scratchpad/vercel-api-setup.sh
 ```
 
-It asks for the values from step 2 with hidden typing, makes fresh random ones for the rest, copies the plain settings from Railway if its CLI still works (else it asks), and never prints a value. It does all of the following; to do it by hand instead, use the table.
+With Railway logged in it runs in keep mode by default: it copies every value from Railway (production), asks with hidden typing only for a required value Railway lacks, and otherwise needs no input. If Railway isn't logged in it says "Run `railway login` first" (or pass `--rotate` to type the new values from step 2 and make fresh shared secrets). It never prints a value, keeps Railway's values only in a private temporary folder it removes on exit, and ends with the list of names it set. The table below is what it sets in rotate mode; in keep mode every value is Railway's, `EDGE_SECRET` stays Vercel's, and only `JOBS_RUN_SECRET` is new.
 
 ### Vercel, Production environment
 
@@ -63,7 +65,7 @@ Never give a server variable a `VITE_` name: Vite puts every `VITE_` variable in
 
 | Secret | Value |
 |---|---|
-| `DATABASE_URL_OWNER` | the owner URL, direct host (new password). The deploy applies migrations with it |
+| `DATABASE_URL_OWNER` | the owner URL, direct host (Railway's in keep mode). The deploy applies migrations with it |
 | `JOBS_RUN_SECRET` | the same value as Vercel's `JOBS_RUN_SECRET` |
 
 ## 4. Recommended: protect old deployment addresses
