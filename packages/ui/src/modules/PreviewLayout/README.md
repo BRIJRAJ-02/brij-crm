@@ -39,7 +39,7 @@ Everything under the tabs sits inside the page gutter, `space-16`, PageColumn's,
 - **`preview`** is a `PreviewFrame` or a drawn preview (`HostedFormPreview`). Leave it out on a tab with nothing to preview.
 - **`PreviewFrame`** loads `src` in a frame titled "Preview of {title}", laid out at the device's width (phone 390, tablet 768, desktop 1280) and scaled to fit, so nothing scrolls sideways. It loads again when `version` changes and posts `draft` (`{ type: 'crm:preview', draft }`, same origin only) when it changes and when the frame loads. The frame is `inert` and out of the tab order. What it shows is the public page itself, untouched.
 - **`PreviewDeviceSwitch`** is the Phone, Tablet and Desktop SegmentedControl for `previewControls`; the editor holds the device.
-- **`EditorStatus`** is the TopBar's status: a StatusDot, green when live, orange when changed since publishing, gray when not published or paused, and its words always say it. It is an editor's own state, not an attribute value, so StatusDot draws it here rather than through the field set.
+- **`EditorStatus`** is the TopBar's status: a StatusDot, green when live, orange when changed since publishing, gray when not published or paused, and its words always say it: beside the dot from 480px, and only to screen readers on a phone's bar (StatusDot's `isLabelCollapsible`), so the name keeps its room. It is an editor's own state, not an attribute value, so StatusDot draws it here rather than through the field set.
 
 ## States
 

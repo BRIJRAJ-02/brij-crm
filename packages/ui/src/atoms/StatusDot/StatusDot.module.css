@@ -21,6 +21,13 @@
     text-overflow: ellipsis;
   }
 
+  /* A collapsible label in a narrow container (a phone's bar): the dot alone; its hidden copy still names it. */
+  @container (inline-size < 480px) {
+    .label[data-collapsible] {
+      display: none;
+    }
+  }
+
   .dot {
     flex: none;
     inline-size: var(--space-8);
