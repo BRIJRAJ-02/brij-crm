@@ -5,9 +5,16 @@ import { ProfilePending, ProfileScreen } from '../features/settings/ProfileScree
 import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
 import { strings } from '../features/settings/workspace-strings.ts';
 
-// Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and time zone in this workspace.
+// Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and time zone in this workspace,
+// their public profile, and the order it lists their Public pages in (owner ask A102).
 export const Route = createFileRoute('/w/$slug/settings/account/profile')({
   loader: async ({ context, params }) => {
+    // The booking pages, read beside the profile and never waited for: the order's section shows its own loading
+    // and failure, so a slow or refused list never holds up the page.
+    context.data.bookingPages
+      .view(params.slug)
+      .ready()
+      .catch(() => undefined);
     try {
       return { profile: await context.data.profile.get(params.slug) };
     } catch (error) {

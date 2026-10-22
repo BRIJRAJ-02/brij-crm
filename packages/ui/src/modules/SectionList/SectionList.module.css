@@ -1,0 +1,35 @@
+/* SectionList: an ordered list of Cards, stacked space-16 apart as a settings section stacks its cards, with no
+   markers. The section being moved is lifted (shadow-md around its Card's radius-lg corners) above the others,
+   which slide out of its way. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    border-radius: var(--radius-lg);
+  }
+
+  /* The section being moved (the drag wrapper sets data-dragging). */
+  .item[data-dragging] {
+    position: relative;
+    z-index: var(--z-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Lifted, in forced colours, where the shadow is gone. */
+  @media (forced-colors: active) {
+    .item[data-dragging] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

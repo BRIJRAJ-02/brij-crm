@@ -212,6 +212,8 @@ export {
   type LinkRow,
   type LinkToggle,
 } from './modules/LinkList/LinkList.tsx';
+/** Titled sections, each a Card, that move as wholes: a profile's sections in Settings › Profile (owner ask A102). */
+export { SectionList, type SectionListProps, type SectionListSection } from './modules/SectionList/SectionList.tsx';
 export {
   WeekCalendar,
   type WeekCalendarBlock,

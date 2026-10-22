@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
 import { GridList, GridListItem } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -11,7 +11,12 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './LinkList.module.css';
+import type { RowGrip } from './RowOrder.tsx';
 import { strings } from './strings.ts';
+
+// The drag wrapper loads only for a list whose rows move: a public profile's links never do, so its page never loads
+// dnd-kit. Until it arrives the rows stand as they will, each grip's place held, so nothing shifts when it does.
+const LazyRowOrder = lazy(() => import('./RowOrder.tsx').then((module) => ({ default: module.RowOrder })));
 
 /** A row's on or off switch: a booking page's visibility, a form's Accepting. */
 export interface LinkToggle {
@@ -113,6 +118,13 @@ export interface LinkListProps {
    * rows then take no `onOpen`, `toggle` or `actions`.
    */
   readonly rowsAreLinks?: boolean;
+  /**
+   * The rows move (owner ask A102, Settings › Profile's order): a grip starts each row, dragged, or Space on it,
+   * the arrows and Space again, and a drop calls this with the row's id and its new index among `rows`. Not while
+   * the search narrows the rows, nor with `rowsAreLinks`. A pending row keeps its place and has no grip. Left out,
+   * the rows hold still.
+   */
+  readonly onMove?: (id: string, toIndex: number) => void;
 }
 
 /** Props for LinkListToolbar. */
@@ -178,6 +190,7 @@ function matches(row: LinkRow, query: string): boolean {
  * badge when it is off, its switch, and its quiet icon actions. `compact`
  * draws the records area's one line rows with no frame (Captures). Arrows move
  * between rows, Enter opens one, and left and right reach a row's controls.
+ * With `onMove` the rows move by their grips.
  */
 export function LinkList({
   label,
@@ -195,17 +208,21 @@ export function LinkList({
   density = 'comfortable',
   placement = 'page',
   rowsAreLinks = false,
+  onMove,
 }: LinkListProps) {
   const isCompact = density === 'compact';
   const isCard = isCompact && placement === 'card';
+  const [ownQuery, setOwnQuery] = useState('');
+  const query = heldQuery ?? ownQuery;
+  const setQuery = onQueryChange ?? setOwnQuery;
+  // A narrowed list can't say where a row goes among the ones it hides, so a search puts the grips away.
+  const moves = onMove !== undefined && !rowsAreLinks && query.trim() === '' ? onMove : undefined;
   const frameProps = {
     className: styles.frame,
     'data-density': density,
     'data-placement': isCompact ? placement : undefined,
+    'data-reorderable': moves === undefined ? undefined : '',
   };
-  const [ownQuery, setOwnQuery] = useState('');
-  const query = heldQuery ?? ownQuery;
-  const setQuery = onQueryChange ?? setOwnQuery;
   const showSkeleton = useDelayedLoading(status === 'loading');
   if (status === 'no-access') {
     return (
@@ -252,6 +269,8 @@ export function LinkList({
           {showSkeleton &&
             Array.from({ length: SKELETON_ROWS }, (_, index) => (
               <div key={index} className={styles.row} data-loading="">
+                {/* The grip's place, so the titles that follow land where these lines stood. */}
+                {moves !== undefined && <span className={styles.grip} />}
                 <div className={styles.main}>
                   <span className={styles.skeletonTitle}>
                     <Skeleton width="medium" />
@@ -269,6 +288,37 @@ export function LinkList({
       </div>
     );
   }
+  // The rows as React Aria's grid, each starting with its grip when they move (`grip` absent: its place held).
+  const grid = (grip: RowGrip | undefined) => (
+    <GridList
+      className={styles.root}
+      aria-label={label}
+      items={shown}
+      // A row draws again when its grip arrives, not only when its item changes.
+      dependencies={[grip]}
+      disabledKeys={shown.flatMap((row) => (row.isPending === true ? [row.id] : []))}
+      onAction={(key) => {
+        onOpen(String(key));
+      }}
+    >
+      {(row) => (
+        <GridListItem
+          id={row.id}
+          className={styles.row}
+          textValue={row.title}
+          data-pressable={row.isPending === true ? undefined : ''}
+          data-pending={row.isPending === true || undefined}
+          data-off={row.isOff === true || undefined}
+          data-href={row.isPending === true ? undefined : row.href}
+        >
+          {moves !== undefined && (
+            <span className={styles.grip}>{grip?.(row.id, strings.move(row.title), row.isPending === true)}</span>
+          )}
+          <RowContent row={row} isCompact={isCompact} />
+        </GridListItem>
+      )}
+    </GridList>
+  );
   return (
     <div {...frameProps}>
       {toolbar}
@@ -298,30 +348,18 @@ export function LinkList({
             </li>
           ))}
         </ul>
+      ) : moves === undefined ? (
+        grid(undefined)
       ) : (
-        <GridList
-          className={styles.root}
-          aria-label={label}
-          items={shown}
-          disabledKeys={shown.flatMap((row) => (row.isPending === true ? [row.id] : []))}
-          onAction={(key) => {
-            onOpen(String(key));
-          }}
-        >
-          {(row) => (
-            <GridListItem
-              id={row.id}
-              className={styles.row}
-              textValue={row.title}
-              data-pressable={row.isPending === true ? undefined : ''}
-              data-pending={row.isPending === true || undefined}
-              data-off={row.isOff === true || undefined}
-              data-href={row.isPending === true ? undefined : row.href}
-            >
-              <RowContent row={row} isCompact={isCompact} />
-            </GridListItem>
-          )}
-        </GridList>
+        <Suspense fallback={grid(undefined)}>
+          <LazyRowOrder
+            ids={shown.map((row) => row.id)}
+            nameOf={(id) => shown.find((row) => row.id === id)?.title ?? id}
+            onMove={moves}
+          >
+            {(grip) => grid(grip)}
+          </LazyRowOrder>
+        </Suspense>
       )}
     </div>
   );

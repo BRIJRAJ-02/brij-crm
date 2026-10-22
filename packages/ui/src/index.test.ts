@@ -145,6 +145,7 @@ describe('@crm/ui', () => {
       'RulesEditor',
       'SaveBar',
       'SectionBar',
+      'SectionList',
       'SegmentedControl',
       'Select',
       'Separator',
