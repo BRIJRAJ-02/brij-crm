@@ -16,9 +16,9 @@ import {
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { shownStep, welcomeSearch } from './steps.ts';
-import { WelcomeScreen } from './WelcomeScreen.tsx';
+import { WelcomeScreen, type WelcomeScreenProps } from './WelcomeScreen.tsx';
 
 const USER: SignedInUser = { id: '0199a6f2-0000-7000-8000-000000000001', name: '', email: 'ada.lovelace@acme.com' };
 const WORKSPACE_ID = '0199a6f2-0000-7000-8000-00000000000a';
@@ -30,7 +30,6 @@ function fakeData(taken: readonly string[] = ['taken-one']) {
     readonly name: string;
     readonly slug: string;
     readonly memberName: string;
-    readonly onboarding?: unknown;
   }[] = [];
   const checked: string[] = [];
   const invites: { readonly workspace: string; readonly emails: readonly string[]; readonly role: string }[] = [];
@@ -104,7 +103,12 @@ afterEach(() => {
 });
 
 /** Renders first run at `start` inside a memory router, with sign in and a workspace page to go to. */
-async function renderWelcome(data: DataLayer, start = '/welcome', calendarSync = true): Promise<AnyRouter> {
+async function renderWelcome(
+  data: DataLayer,
+  start = '/welcome',
+  calendarSync = true,
+  inviteRoles?: WelcomeScreenProps['inviteRoles'],
+): Promise<AnyRouter> {
   const toasts = createToasts();
   const rootRoute = createRootRoute();
   const welcome = createRoute({
@@ -123,6 +127,7 @@ async function renderWelcome(data: DataLayer, start = '/welcome', calendarSync =
           calendarSync={calendarSync}
           workspace={workspace}
           calendarResult={search.calendar}
+          inviteRoles={inviteRoles}
         />
       );
     },
@@ -157,11 +162,11 @@ async function renderWelcome(data: DataLayer, start = '/welcome', calendarSync =
 }
 
 describe('first run’s steps', () => {
-  it('goes Your name, About you, then Your workspace, counting them, and Back keeps what was typed', async () => {
+  it('goes Your name, then Your workspace, counting them, and Back keeps what was typed', async () => {
     const fake = fakeData();
     const router = await renderWelcome(fake.data);
     await expect.element(page.getByRole('heading', { level: 1, name: 'Your name' })).toBeVisible();
-    await expect.element(page.getByText('Step 1 of 5')).toBeVisible();
+    await expect.element(page.getByText('Step 1 of 4')).toBeVisible();
     // The first step has nothing to go back to.
     expect(page.getByRole('button', { name: 'Back' }).query()).toBeNull();
     // Continue needs a name.
@@ -172,48 +177,30 @@ describe('first run’s steps', () => {
     await page.getByRole('textbox', { name: 'Your name' }).fill('Ada Lovelace');
     await page.getByRole('button', { name: 'Continue' }).click();
 
-    // About you: a few chips, focus on the first.
-    await expect.element(page.getByRole('heading', { level: 1, name: 'About you' })).toBeVisible();
-    expect(router.state.location.search).toEqual({ step: 'details' });
-    await expect.element(page.getByText('Step 2 of 5')).toBeVisible();
-    await expect.element(page.getByRole('radio', { name: 'Founder' })).toHaveFocus();
-    await page.getByRole('radio', { name: 'Founder' }).click();
-    await page.getByRole('button', { name: 'All of it' }).click();
-    await expect
-      .element(page.getByRole('button', { name: 'Booking meetings' }))
-      .toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: 'Continue' }).click();
-
+    // No questionnaire (taken out 22 October 2026): straight to Your workspace.
     await expect.element(page.getByRole('heading', { level: 1, name: 'Your workspace' })).toBeVisible();
     expect(router.state.location.search).toEqual({ step: 'workspace' });
-    await expect.element(page.getByText('Step 3 of 5')).toBeVisible();
+    await expect.element(page.getByText('Step 2 of 4')).toBeVisible();
     // The workspace follows the name, and the address the workspace; focus is in the step's first field.
     await expect.element(page.getByRole('textbox', { name: 'Workspace name' })).toHaveValue('Ada’s workspace');
     await expect.element(page.getByRole('textbox', { name: 'Web address' })).toHaveValue('ada');
     await expect.element(page.getByRole('textbox', { name: 'Workspace name' })).toHaveFocus();
 
     await page.getByRole('button', { name: 'Back' }).click();
-    await expect.element(page.getByRole('heading', { level: 1, name: 'About you' })).toBeVisible();
-    await expect.element(page.getByRole('radio', { name: 'Founder' })).toBeChecked();
-    await page.getByRole('button', { name: 'Back' }).click();
     await expect.element(page.getByRole('textbox', { name: 'Your name' })).toHaveValue('Ada Lovelace');
   });
 
-  it('skips Your name and About you, naming the workspace from the email, and leaves out the calendar where sync is off', async () => {
+  it('skips Your name, naming the workspace from the email, and leaves out the calendar where sync is off', async () => {
     const fake = fakeData();
     const router = await renderWelcome(fake.data, '/welcome', false);
-    await expect.element(page.getByText('Step 1 of 4')).toBeVisible();
-    await page.getByRole('button', { name: 'Skip' }).click();
-    await expect.element(page.getByRole('heading', { level: 1, name: 'About you' })).toBeVisible();
-    await page.getByRole('radio', { name: 'Sales' }).click();
-    // Skip forgets the answers.
+    await expect.element(page.getByText('Step 1 of 3')).toBeVisible();
     await page.getByRole('button', { name: 'Skip' }).click();
     await expect.element(page.getByRole('textbox', { name: 'Workspace name' })).toHaveValue('Ada’s workspace');
     await expect.element(page.getByText('Available', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Create workspace' }).click();
     // Sync off: Invite your team is the last step, then the workspace, the member named from the email.
     await expect.element(page.getByRole('heading', { level: 1, name: 'Invite your team' })).toBeVisible();
-    await expect.element(page.getByText('Step 4 of 4')).toBeVisible();
+    await expect.element(page.getByText('Step 3 of 3')).toBeVisible();
     await page.getByRole('button', { name: 'Skip for now' }).click();
     await expect.poll(() => router.state.location.pathname).toBe('/w/ada');
     expect(fake.created).toEqual([
@@ -256,7 +243,8 @@ describe('first run’s steps', () => {
     await expect.element(offered.getByRole('button', { name: 'acme' })).toBeVisible();
   });
 
-  it('sends the answers with the workspace, then invites the team and goes on to the calendar step', async () => {
+  it('makes the workspace with no questionnaire answers, then invites a row per person and goes on', async () => {
+    // A draft from before the questionnaire was taken out still opens; its answers are no longer sent.
     sessionStorage.setItem(
       'crm.welcome.draft',
       JSON.stringify({ userId: USER.id, workspaceId: WORKSPACE_ID, answers: { role: 'sales', areas: ['booking'] } }),
@@ -266,16 +254,22 @@ describe('first run’s steps', () => {
     await expect.element(page.getByText('Available', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Create workspace' }).click();
     await expect.element(page.getByRole('heading', { level: 1, name: 'Invite your team' })).toBeVisible();
-    expect(fake.created[0]?.onboarding).toEqual({ role: 'sales', areas: ['booking'] });
+    expect(fake.created[0]).not.toHaveProperty('onboarding');
     expect(router.state.location.search).toEqual({ step: 'invite', workspace: 'ada' });
-    await expect.element(page.getByText('Step 4 of 5')).toBeVisible();
+    await expect.element(page.getByText('Step 3 of 4')).toBeVisible();
     expect(page.getByRole('button', { name: 'Back' }).query()).toBeNull();
-    // Nothing typed: refused on the field.
+    // No roles read: no role column, everyone joins as a member.
+    expect(page.getByRole('button', { name: /^Role for/ }).query()).toBeNull();
+    // Nothing typed: said above the rows, focus on the first.
     await page.getByRole('button', { name: 'Send invites' }).click();
-    await expect
-      .element(page.getByRole('textbox', { name: 'Emails' }))
-      .toHaveAccessibleDescription('Add an email address, or skip this step.');
-    await page.getByRole('textbox', { name: 'Emails' }).fill('Ada <ADA@acme.com>, grace@acme.com bob@acme.com');
+    await expect.element(page.getByText('Add an email address, or skip this step.')).toBeVisible();
+    await expect.element(page.getByRole('textbox', { name: 'Email' })).toHaveFocus();
+    // A pasted list splits into rows; the plus and Enter add more.
+    await page.getByRole('textbox', { name: 'Email' }).fill('ADA@acme.com, grace@acme.com');
+    await expect.element(page.getByRole('textbox', { name: 'Email 2' })).toHaveValue('grace@acme.com');
+    await page.getByRole('button', { name: 'Add another person' }).click();
+    await expect.element(page.getByRole('textbox', { name: 'Email 3' })).toHaveFocus();
+    await page.getByRole('textbox', { name: 'Email 3' }).fill('bob@acme.com');
     await page.getByRole('button', { name: 'Send invites' }).click();
     await expect.element(page.getByText('2 invites sent.')).toBeVisible();
     await expect.element(page.getByText(/Already in the workspace: grace@acme.com/)).toBeVisible();
@@ -287,13 +281,36 @@ describe('first run’s steps', () => {
 
     await expect.element(page.getByRole('heading', { level: 1, name: 'Connect your calendar' })).toBeVisible();
     expect(router.state.location.search).toEqual({ step: 'calendar', workspace: 'ada' });
-    await expect.element(page.getByText('Step 5 of 5')).toBeVisible();
+    await expect.element(page.getByText('Step 4 of 4')).toBeVisible();
     // The workspace exists: no going back to it.
     expect(page.getByRole('button', { name: 'Back' }).query()).toBeNull();
     await expect.element(page.getByRole('button', { name: 'Connect Google Calendar' })).toHaveFocus();
     await expect.element(page.getByRole('button', { name: 'Connect Outlook' })).toBeDisabled();
     await page.getByRole('button', { name: 'Skip for now' }).click();
     await expect.poll(() => router.state.location.pathname).toBe('/w/ada');
+  });
+
+  it('offers the roles the maker may invite as, each row starting as Member, one call per role', async () => {
+    const fake = fakeData();
+    const roles = [
+      { id: 'r-admin', label: 'Admin', description: 'Manages people and settings.', builtIn: 'admin' as const },
+      { id: 'r-member', label: 'Member', description: 'Works with records.', builtIn: 'member' as const },
+    ];
+    await renderWelcome(fake.data, '/welcome?step=invite&workspace=ada', true, { roles, defaultRole: 'r-member' });
+    await page.getByRole('textbox', { name: 'Email' }).fill('ada@acme.com');
+    await expect.element(page.getByRole('button', { name: /Role for ada@acme.com/ })).toHaveTextContent('Member');
+    await page.getByRole('textbox', { name: 'Email' }).click();
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByRole('textbox', { name: 'Email 2' })).toHaveFocus();
+    await page.getByRole('textbox', { name: 'Email 2' }).fill('bob@acme.com');
+    await page.getByRole('button', { name: /Role for bob@acme.com/ }).click();
+    await page.getByRole('option', { name: 'Admin' }).click();
+    await page.getByRole('button', { name: 'Send invites' }).click();
+    await expect.element(page.getByText('2 invites sent.')).toBeVisible();
+    expect(fake.invites).toEqual([
+      { workspace: 'ada', emails: ['bob@acme.com'], role: 'admin' },
+      { workspace: 'ada', emails: ['ada@acme.com'], role: 'member' },
+    ]);
   });
 
   it('says a connected calendar came back, and Continue opens the workspace', async () => {

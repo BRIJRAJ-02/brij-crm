@@ -6,9 +6,6 @@
 // (a private window, blocked site data), so every read and write is guarded;
 // without it, a reload starts the steps again.
 
-import type { OnboardingAnswers } from '@crm/data';
-import { answersFrom } from './details.ts';
-
 const KEY = 'crm.welcome.draft';
 
 /** A workspace id as `data.workspaces.newId()` mints it: a UUID v7. */
@@ -23,8 +20,6 @@ export interface WelcomeDraft {
   readonly memberName?: string;
   readonly workspaceName?: string;
   readonly slug?: string;
-  /** About you's answers so far. */
-  readonly answers?: OnboardingAnswers;
 }
 
 /** The draft kept for `userId`, or undefined when there is none, it is someone else's, or it can't be read. */
@@ -34,18 +29,16 @@ export function readDraft(storage: Storage | undefined, userId: string): Welcome
     if (raw === null || raw === undefined) return undefined;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return undefined;
-    const { userId: owner, workspaceId, memberName, workspaceName, slug, answers } = parsed as Record<string, unknown>;
+    const { userId: owner, workspaceId, memberName, workspaceName, slug } = parsed as Record<string, unknown>;
     if (owner !== userId || typeof workspaceId !== 'string' || !UUID_V7.test(workspaceId)) return undefined;
     const text = (value: unknown) => (typeof value === 'string' ? value.slice(0, 80) : undefined);
     const [name, workspace, address] = [text(memberName), text(workspaceName), text(slug)];
-    const answered = answersFrom(answers);
     return {
       userId,
       workspaceId,
       ...(name === undefined ? {} : { memberName: name }),
       ...(workspace === undefined ? {} : { workspaceName: workspace }),
       ...(address === undefined ? {} : { slug: address }),
-      ...(answered === undefined ? {} : { answers: answered }),
     };
   } catch {
     return undefined;
