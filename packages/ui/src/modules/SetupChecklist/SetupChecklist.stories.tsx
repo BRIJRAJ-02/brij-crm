@@ -88,6 +88,7 @@ export const Loading: Story = {
 export const Error: Story = {
   args: { status: 'error', steps: [] },
   play: async ({ canvas, args }) => {
+    await expect(canvas.getByRole('alert')).toHaveAttribute('data-layout', 'row');
     await userEvent.click(canvas.getByRole('button', { name: /try again/i }));
     await expect(args.onRetry).toHaveBeenCalled();
   },

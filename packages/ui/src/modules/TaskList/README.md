@@ -31,7 +31,7 @@ New. The record page's Tasks tab, Overview's Open tasks block and the My tasks p
 - `hideRecord` drops the record chips.
 - Under 480px of width (a phone, a narrow card) the title comes first: it keeps at least a narrow column, the record chip holds to the smallest column and is cut short, and the checkbox, due day and assignee never shrink.
 - `isReadOnly` makes every checkbox read only (the viewer can't tick tasks). A task with a `readOnlyReason` has a read only checkbox and a `LockReason` saying why.
-- `status`: `loading` (skeleton rows after the loading delay), `error` (with Try again from `onRetry`), or `no-access`.
+- `status`: `loading` (skeleton rows after the loading delay), `error` (with Try again from `onRetry`, and "Check your connection and try again."; an inline or framed list draws it as one row, like its empty state), or `no-access`.
 - Rows are keyed by their task, so when a ticked task leaves the list, focus and state stay with the right rows.
 - Give it a slot with a height (the `list` layout): it scrolls inside it. Rows not loaded yet draw as skeletons, and `onRangeChange` hears which range is on screen.
 
