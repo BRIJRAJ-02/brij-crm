@@ -346,7 +346,8 @@ export function MembersScreen({
           <Select
             label={strings.roleFor(member.name)}
             isLabelHidden
-            size="sm"
+            // The role reads as text with its chevron, like the rows that can't change it, rather than a column of boxes.
+            variant="inline"
             items={options.map((option) => ({ id: option.id, label: option.label }))}
             value={role}
             isDisabled={pendingRoles.has(member.id)}
@@ -523,6 +524,7 @@ export function MembersScreen({
         rows={rows}
         getRowId={(member) => member.id}
         renderCell={memberCell}
+        isScrollable
         emptyState={<EmptyState icon="search" title={strings.noMatches} />}
       />
       {held.cursor !== undefined && (

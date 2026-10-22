@@ -6,7 +6,6 @@ export const strings = {
   name: 'Workspace name',
   timeZone: 'Time zone',
   timeZoneInfo: 'New booking pages and members start in this time zone. Each person can pick their own.',
-  address: 'Address',
   copyAddress: 'Copy address',
   /** The address row: the part after /w/, edited by owners and admins. */
   webAddress: 'Web address',

@@ -4,7 +4,8 @@
 export const strings = {
   /** The page's title, and its entry in the settings navigation. */
   title: 'Security',
-  devices: 'Devices',
+  devices: 'Signed in devices',
+  devicesDescription: 'Each browser and app signed in to your account.',
   /** Recent activity (AC-898): the last 90 days of the account's security events. */
   activity: {
     section: 'Recent activity',

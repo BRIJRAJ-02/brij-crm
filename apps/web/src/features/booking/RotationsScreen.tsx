@@ -236,13 +236,11 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
           <EmptyState
             icon="users-round"
             title={strings.emptyAloneTitle}
+            // The help sits once, beside the page's title.
             actions={
-              <>
-                <ButtonLink variant="primary" icon="user-plus" href={membersSettingsHref(slug)}>
-                  {strings.inviteTeammates}
-                </ButtonLink>
-                <RoundRobinHelp slug={slug} />
-              </>
+              <ButtonLink variant="primary" icon="user-plus" href={membersSettingsHref(slug)}>
+                {strings.inviteTeammates}
+              </ButtonLink>
             }
           >
             {strings.emptyAloneText}
@@ -251,12 +249,17 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
           <EmptyState
             icon="users-round"
             title={strings.emptyTitle}
-            actions={
-              <>
-                {newButton}
-                <RoundRobinHelp slug={slug} />
-              </>
-            }
+            // New group is the bar's one primary; here it is the quiet way in beside the words, and the help sits
+            // once, beside the page's title.
+            {...(canManage
+              ? {
+                  actions: (
+                    <Button icon="plus" onPress={() => open('new')}>
+                      {strings.newRotation}
+                    </Button>
+                  ),
+                }
+              : {})}
           >
             {canManage ? strings.emptyText : strings.emptyMemberText}
           </EmptyState>
