@@ -179,7 +179,7 @@ function columnsFor(
  * only those the field set edits in a form here (no system values, and no
  * references or members yet, #15).
  */
-function createEditors(
+export function createEditors(
   object: ObjectSummary,
   attributes: readonly AttributeDefinition[],
 ): { readonly first: readonly AttributeDefinition[]; readonly more: readonly AttributeDefinition[] } {

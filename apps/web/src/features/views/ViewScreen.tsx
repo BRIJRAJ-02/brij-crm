@@ -481,16 +481,6 @@ export function ViewScreen(props: ViewScreenProps) {
     },
   };
   const storedBoard = view?.config.board;
-  // A board has no new record dialog: the command menu's request is dropped, so the address doesn't keep it.
-  const { isCreateRequested, onCreateRequestTaken } = props;
-  // Read through a ref, so a new callback each render never hands the request back twice.
-  const takeRequest = useRef(onCreateRequestTaken);
-  useEffect(() => {
-    takeRequest.current = onCreateRequestTaken;
-  });
-  useEffect(() => {
-    if (isCreateRequested === true && kind === 'board') takeRequest.current?.();
-  }, [isCreateRequested, kind]);
   const boardOutcome = useMemo(
     () => (kind === 'board' ? planBoard(attributes, storedBoard) : undefined),
     [kind, attributes, storedBoard],
@@ -823,6 +813,8 @@ export function ViewScreen(props: ViewScreenProps) {
     return (
       <>
         <BoardScreen
+          {...(props.isCreateRequested === true ? { isCreateRequested: true } : {})}
+          {...(props.onCreateRequestTaken === undefined ? {} : { onCreateRequestTaken: props.onCreateRequestTaken })}
           slug={slug}
           object={object}
           attributes={attributes}

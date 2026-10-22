@@ -2752,6 +2752,47 @@ describe('moving a card (spec 0021, milestone 2)', () => {
     expect(idsOf(lead)).toEqual([idAt(2)]);
   });
 
+  it('puts a record made here first in the column of its grouping value only', async () => {
+    const { layer, none, lead, won, creates, frame } = await readyBoard();
+    const made = layer.create(WS, PEOPLE, { [NAME]: 'Grace', [STAGE]: WON });
+    await settle();
+    frame();
+    const id = creates[0]?.input.id ?? '';
+    expect(idsOf(won)).toEqual([id]);
+    expect(idsOf(lead)).toEqual([idAt(1), idAt(2)]);
+    expect(idsOf(none)).toEqual([]);
+    creates[0]?.answer(rowOf(id, { [NAME]: 'Grace', [STAGE]: WON }, { [STAGE]: version(1) }, 30));
+    await made;
+    frame();
+    expect(idsOf(won)).toEqual([id]);
+    expect(idsOf(lead)).toEqual([idAt(1), idAt(2)]);
+  });
+
+  it('puts a record made here with no grouping value in the no value column', async () => {
+    const { layer, none, lead, creates, frame } = await readyBoard();
+    void layer.create(WS, PEOPLE, { [NAME]: 'Ada' });
+    await settle();
+    frame();
+    const id = creates[0]?.input.id ?? '';
+    expect(idsOf(none)).toEqual([id]);
+    expect(idsOf(lead)).toEqual([idAt(1), idAt(2)]);
+  });
+
+  it('moves a record made here with no value to the column its server row names (a default stage)', async () => {
+    const { layer, none, lead, creates, frame } = await readyBoard();
+    const made = layer.create(WS, PEOPLE, { [NAME]: 'Lin' });
+    await settle();
+    frame();
+    const id = creates[0]?.input.id ?? '';
+    expect(idsOf(none)).toEqual([id]);
+    creates[0]?.answer(rowOf(id, { [NAME]: 'Lin', [STAGE]: LEAD }, { [STAGE]: version(1) }, 30));
+    await made;
+    await settle();
+    frame();
+    expect(idsOf(none)).toEqual([]);
+    expect(idsOf(lead)[0]).toBe(id);
+  });
+
   it('puts a refused move back in its old place, restores the counts, and says why with Retry', async () => {
     const { board, lead, won, edits, frame, notices } = await readyBoard();
     const moved = board.move(idAt(1), WON);
