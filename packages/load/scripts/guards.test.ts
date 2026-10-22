@@ -1,58 +1,72 @@
 // The load commands' setup refusals (spec 0011, AC-203, AC-209, AC-210): with
-// any address that isn't this machine, `load:run` and `load:reset` exit 3
-// before they read or reach anything, and so does an unknown scenario, or
-// none at all. Run as the real commands, in a child.
+// any address that isn't this machine, `load:run` exits 3 before it reads or
+// reaches anything, and so does an unknown scenario, or none at all. The
+// checks run in process (`preflightRun`, which the command calls before it
+// imports the harness); one smoke test runs the real command in a child to
+// prove the refusal becomes exit 3. `load:reset`'s refusal is tested beside it
+// in @crm/core (`load-reset.test.ts`).
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { isLoadRefusal } from '@crm/core/load-local';
 import { describe, expect, it } from 'vitest';
+import { preflightRun } from '../src/preflight.ts';
 import { assertSessionsApi, objectOf, plannedCreates, scenarioOf } from '../src/run.ts';
 import { threadsFor } from '../src/scenarios.ts';
 
 const RUN = fileURLToPath(new URL('./run.ts', import.meta.url));
-const RESET = fileURLToPath(new URL('../../core/scripts/load-reset.ts', import.meta.url));
 
-/** Runs a load command with only these variables (and PATH), answering its exit code and what it printed. */
-function command(script: string, args: readonly string[], env: Readonly<Record<string, string>>) {
-  const result = spawnSync(process.execPath, [script, ...args], {
-    env: { PATH: process.env.PATH ?? '', ...env },
-    encoding: 'utf8',
-    timeout: 30_000,
-  });
-  return { status: result.status, output: `${result.stdout}${result.stderr}` };
+/** The refusal `work` throws (its message and exit code), or undefined when it passes. */
+function refusalOf(work: () => unknown): { message: string; exitCode: number } | undefined {
+  try {
+    work();
+  } catch (error) {
+    if (isLoadRefusal(error)) return { message: error.message, exitCode: error.exitCode };
+    throw error;
+  }
+  return undefined;
 }
 
-// Each test starts Node children (up to 30 s each), past Vitest's 5 s default on a busy runner.
-const CHILD_TIMEOUT = 70_000;
-
-describe('load:run', { timeout: CHILD_TIMEOUT }, () => {
+describe('load:run', () => {
   it.each([
     ['LOAD_API_URL', 'http://api.example.com:3100'],
     ['LOAD_DATABASE_URL_OWNER', 'postgres://crm_owner:x@db.example.com:5434/crm'],
     ['LOAD_PGBOUNCER_URL', 'postgres://crm_app_user:x@10.0.0.7:6434/crm'],
     ['LOAD_CENTRIFUGO_URL', 'ws://centrifugo.example.com:8100/connection/websocket'],
   ])('refuses a remote %s with exit 3, before anything else', (name, url) => {
-    const { status, output } = command(RUN, ['steady'], { [name]: url });
-    expect(status).toBe(3);
-    expect(output).toContain(`Refusing ${name}`);
+    const refusal = refusalOf(() => preflightRun(['steady'], { [name]: url }));
+    expect(refusal?.exitCode).toBe(3);
+    expect(refusal?.message).toContain(`Refusing ${name}`);
   });
 
   it('refuses an unknown scenario, and a missing one', () => {
-    const unknown = command(RUN, ['soak'], {});
-    expect(unknown.status).toBe(3);
-    expect(unknown.output).toContain('Name a scenario');
-    const none = command(RUN, [], {});
-    expect(none.status).toBe(3);
-    expect(none.output).toContain('Name a scenario');
+    for (const args of [['soak'], []]) {
+      const refusal = refusalOf(() => preflightRun(args, {}));
+      expect(refusal?.exitCode).toBe(3);
+      expect(refusal?.message).toContain('Name a scenario');
+    }
   });
-});
 
-describe('load:reset', { timeout: CHILD_TIMEOUT }, () => {
-  it('refuses a remote owner database with exit 3', () => {
-    const { status, output } = command(RESET, [], {
-      LOAD_DATABASE_URL_OWNER: 'postgres://crm_owner:x@db.example.com:5434/crm',
+  it('refuses a number that is not above 0', () => {
+    expect(refusalOf(() => preflightRun(['steady', '--users', '0'], {}))?.message).toContain('--users');
+    expect(refusalOf(() => preflightRun(['steady'], { LOAD_TEST_BLOCK_LOOP_MS: 'x' }))?.exitCode).toBe(3);
+  });
+
+  it('passes the load stack, answering the scenario, its options and the addresses', () => {
+    const request = preflightRun(['hub', '--users', '20', '--seed', '7.9'], {});
+    expect(request).toMatchObject({ scenario: 'hub', users: 20, seed: 7, minutes: undefined, threads: undefined });
+    expect(request.urls.LOAD_API_URL).toBe('http://localhost:3100');
+  });
+
+  // The one child: the real command, so the refusal is shown to end the process with exit 3. It refuses before the
+  // harness is imported, so it costs one Node start; the timeouts only bound a stuck child on a busy runner.
+  it('ends the real command with exit 3 and the refusal', { timeout: 60_000 }, () => {
+    const result = spawnSync(process.execPath, [RUN, 'steady'], {
+      env: { PATH: process.env.PATH ?? '', LOAD_API_URL: 'http://api.example.com:3100' },
+      encoding: 'utf8',
+      timeout: 50_000,
     });
-    expect(status).toBe(3);
-    expect(output).toContain('Refusing LOAD_DATABASE_URL_OWNER');
+    expect(result.status).toBe(3);
+    expect(`${result.stdout}${result.stderr}`).toContain('Refusing LOAD_API_URL');
   });
 });
 

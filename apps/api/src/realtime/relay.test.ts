@@ -138,6 +138,7 @@ interface RelayOptions extends Partial<
     | 'selfDormant'
     | 'onWork'
     | 'cutOff'
+    | 'now'
   >
 > {
   readonly applicationName?: string;
@@ -198,6 +199,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     ...(options.selfDormant === undefined ? {} : { selfDormant: options.selfDormant }),
     ...(options.onWork === undefined ? {} : { onWork: options.onWork }),
     ...(options.cutOff === undefined ? {} : { cutOff: options.cutOff }),
+    ...(options.now === undefined ? {} : { now: options.now }),
   });
   started.push(relay);
   relay.start();
@@ -642,14 +644,14 @@ describe('the relay', () => {
       /** What a prune answered. */
       pruned?: number;
     }
-    /** Records every database call the relay makes through its reader, in order. */
-    function recorder() {
+    /** Records every database call the relay makes through its reader, in order, timed by `clock`. */
+    function recorder(clock: () => number = () => Date.now()) {
       const calls: Call[] = [];
       const timed = <T>(name: Call['name'], work: () => Promise<T>): Promise<T> => {
-        const call: Call = { name, start: Date.now(), end: Number.NaN };
+        const call: Call = { name, start: clock(), end: Number.NaN };
         calls.push(call);
         return work().finally(() => {
-          call.end = Date.now();
+          call.end = clock();
         });
       };
       const wrap = (reader: OutboxReader): OutboxReader => ({
@@ -667,6 +669,29 @@ describe('the relay', () => {
           }),
       });
       return { calls, wrap, prunes: () => calls.filter((call) => call.name === 'prune') };
+    }
+
+    /**
+     * A clock that moves only when a poll asks for workspaces, `tickMs` a
+     * poll: the relay's rounds and quiet spells then count polls, however
+     * slow the machine, and the next poll is due at once.
+     */
+    function pollClock(tickMs: number) {
+      let at = 1_000_000;
+      const tick =
+        (wrap: (reader: OutboxReader) => OutboxReader, before?: () => Promise<void>) =>
+        (reader: OutboxReader): OutboxReader => {
+          const inner = wrap(reader);
+          return {
+            ...inner,
+            workspaces: async (max, after) => {
+              await before?.();
+              at += tickMs;
+              return inner.workspaces(max, after);
+            },
+          };
+        };
+      return { now: () => at, tick };
     }
 
     it('prunes one batch after each pass while batches come back full, never two without a pass between', async () => {
@@ -707,12 +732,15 @@ describe('the relay', () => {
       servers.push(centrifugo);
       const workspaceId = await workspace();
       await pastRetention(workspaceId, 1, 3);
-      const { wrap, prunes } = recorder();
+      // 100 ms a poll on the relay's clock: a round every 4 polls, dormant after 12 quiet ones.
+      const clock = pollClock(100);
+      const { wrap, prunes } = recorder(clock.now);
       const { relay, infos } = relayTo(centrifugo.url, {
         pollScheduleMs: [50],
         dormantAfterMs: 1_200,
         pruneEveryMs: 400,
-        wrap,
+        wrap: clock.tick(wrap),
+        now: clock.now,
       });
       // The first pass of the awake period starts a round, and the rows past retention go.
       await expect.poll(() => left(workspaceId), WAIT).toEqual([]);
@@ -724,11 +752,15 @@ describe('the relay', () => {
       expect(infos.some((line) => line.message === 'relay.prune' && Number(line.fields.pruned) >= 3)).toBe(true);
       await expect.poll(() => relay.mode(), WAIT).toBe('dormant');
       const whileAwake = prunes().length;
-      await sleep(600);
+      const asleepAt = clock.now();
+      await sleep(300);
+      // Dormant: no poll moved the clock, and nothing was pruned.
+      expect(clock.now()).toBe(asleepAt);
       expect(prunes()).toHaveLength(whileAwake);
-      // A new awake period: its first pass starts a round at once.
+      // A new awake period: its first pass starts a round at once, before a second poll.
       relay.wake();
-      await expect.poll(() => prunes().length, { timeout: 300, interval: 10 }).toBe(whileAwake + 1);
+      await expect.poll(() => prunes().length, WAIT).toBeGreaterThan(whileAwake);
+      expect(prunes()[whileAwake]?.start).toBe(asleepAt + 100);
     });
 
     it('starts a round on a busy pass once it has been due for another pruneEveryMs with no quiet pass', async () => {
@@ -737,29 +769,32 @@ describe('the relay', () => {
       const old = await workspace();
       await pastRetention(old, 1, 2);
       const busy = await workspace();
-      // A row to publish at every poll, stored just before the poll asks, so no pass is quiet however slow the
-      // machine: a writer on a timer of its own fell behind the 50 ms polls on a busy CI runner.
+      // A row to publish at every poll, stored just before the poll asks, so no pass is quiet; and 100 ms a poll on
+      // the relay's clock, so "another pruneEveryMs" is 3 polls however slow the machine (wall time flaked on CI).
       let seq = 0;
-      const { wrap: timed, prunes, calls } = recorder();
-      const wrap = (reader: OutboxReader): OutboxReader => {
-        const inner = timed(reader);
-        return {
-          ...inner,
-          workspaces: async (max, after) => {
-            seq += 1;
-            await events(busy, [seq]);
-            return inner.workspaces(max, after);
-          },
-        };
-      };
-      const startedAt = Date.now();
-      relayTo(centrifugo.url, { pollScheduleMs: [50], pruneEveryMs: 300, wrap });
+      const clock = pollClock(100);
+      const { wrap, prunes, calls } = recorder(clock.now);
+      const startedAt = clock.now();
+      relayTo(centrifugo.url, {
+        pollScheduleMs: [50],
+        pruneEveryMs: 300,
+        now: clock.now,
+        wrap: clock.tick(wrap, async () => {
+          seq += 1;
+          await events(busy, [seq]);
+        }),
+      });
       await expect.poll(() => left(old), WAIT).toEqual([]);
       const [first] = prunes();
       if (first === undefined) throw new Error('A prune was seen.');
-      // Due from the start, then another 300 ms with every pass busy.
-      expect(first.start - startedAt).toBeGreaterThanOrEqual(300);
-      expect(calls.filter((call) => call.name === 'advance' && call.end <= first.start).length).toBeGreaterThan(2);
+      // Due from the start, then another 300 ms (3 polls) with every pass busy: the prune follows the third poll.
+      expect(first.start - startedAt).toBe(300);
+      const polls = calls.filter((call) => call.name === 'workspaces' && call.start <= first.start);
+      expect(polls).toHaveLength(3);
+      // Each of those passes published a row: none was quiet.
+      expect(calls.filter((call) => call.name === 'advance' && call.end <= first.start).length).toBeGreaterThanOrEqual(
+        3,
+      );
     });
 
     it('ends a round at a slow batch, even a full one, so publishing waits behind one slow batch a round', async () => {
