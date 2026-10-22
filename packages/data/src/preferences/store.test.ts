@@ -86,6 +86,15 @@ describe('the preferences store', () => {
     expect(calls).toHaveLength(2);
   });
 
+  it('reads again for a new holder after a failed read', async () => {
+    const { calls, store } = setup();
+    const loaded = store.load('acme');
+    calls[0]?.settle(false);
+    await expect(loaded).rejects.toBeDefined();
+    store.of('acme').retain();
+    expect(calls).toHaveLength(2);
+  });
+
   it('shows a change at once and keeps the answer', async () => {
     const { calls, store } = setup();
     const loading = store.load('acme');
