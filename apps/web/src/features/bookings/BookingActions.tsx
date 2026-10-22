@@ -12,7 +12,7 @@ import {
   type ReassignedBooking,
   type RotationView,
 } from '@crm/data';
-import { Button, ButtonGroup, Callout, DayStrip, Field, focusLater, Modal, SlotList } from '@crm/ui';
+import { Button, ButtonGroup, Callout, DayStrip, Field, focusLater, Modal, SlotList, useFormatSettings } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { zoneDisplay } from '../../public/booking/time.ts';
 import { strings } from './strings.ts';
@@ -235,7 +235,8 @@ function MoveDialog({
   readonly onClose: () => void;
   readonly onDone: () => void;
 }) {
-  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // The member's zone (their Preferences, else the browser's), the one the week is drawn in.
+  const { timeZone: zone } = useFormatSettings();
   const [openedAt] = useState(() => Date.now());
   const [slots, setSlots] = useState<readonly string[] | undefined>(undefined);
   const [day, setDay] = useState<string | undefined>(undefined);
@@ -383,7 +384,12 @@ function MoveDialog({
             layout="grid"
             isLoading={slots === undefined}
           />
-          <p>{strings.timesIn(zoneDisplay(zone, openedAt))}</p>
+          {/* The offset as it is on the day shown, which may be past a daylight saving change. */}
+          <p>
+            {strings.timesIn(
+              zoneDisplay(zone, shown === undefined ? openedAt : Date.parse(byDay.get(shown)?.[0] ?? '') || openedAt),
+            )}
+          </p>
         </>
       )}
       {!failed && error !== '' && (

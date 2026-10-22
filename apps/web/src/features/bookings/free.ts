@@ -1,8 +1,8 @@
 // Where Bookings' New meeting starts: the next free half hour in the week on screen, inside the member's hours,
-// clear of their bookings, calendar events, busy times and closed time. Pure: the clock and the week come in.
+// clear of their bookings, calendar events, busy times and closed time. Pure: the clock, the zone and the week come in.
 import type { BookingAvailability, BookingsCalendarView } from '@crm/data';
 import type { DrawnSpan } from './span.ts';
-import { addDays, dayKeyOf, dayStart, weekDays } from './week.ts';
+import { addDays, dayKeyOf, dayStart, instantAt, minuteOfDay, weekDays } from './week.ts';
 
 /** New meeting starts on the half hour. */
 const STEP_MINUTES = 30;
@@ -53,6 +53,8 @@ export interface FreeSpanInput {
   readonly minutes: number;
   readonly busy: readonly { readonly start: number; readonly end: number }[];
   readonly availability?: BookingAvailability;
+  /** The member's zone, the one the week is drawn in. */
+  readonly zone: string;
 }
 
 /**
@@ -60,11 +62,11 @@ export interface FreeSpanInput {
  * week, from the week's start in a later one. A week already past, or one with no free time left, gives the next
  * half hour from now.
  */
-export function nextFreeSpan({ now, week, minutes, busy, availability }: FreeSpanInput): DrawnSpan {
-  const today = dayKeyOf(now);
-  const nowMinute = now.getHours() * 60 + now.getMinutes();
+export function nextFreeSpan({ now, week, minutes, busy, availability, zone }: FreeSpanInput): DrawnSpan {
+  const today = dayKeyOf(now, zone);
+  const nowMinute = minuteOfDay(now, zone);
   const isFree = (dayKey: string, start: number) => {
-    const from = dayStart(dayKey).getTime() + start * 60_000;
+    const from = instantAt(dayKey, start, zone).getTime();
     const to = from + minutes * 60_000;
     return busy.every((span) => span.end <= from || span.start >= to);
   };

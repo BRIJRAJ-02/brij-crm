@@ -3,7 +3,18 @@
 // Main task: pick Book someone in, Block this time (once or every week) or Reserve it for link only pages; saving closes it.
 // Leaves out: drawing (WeekCalendar), what a block does to slots (the server), and the New meeting dialog's form.
 import { isDataError, type TimeBlockKind, type TimeBlockRepeat } from '@crm/data';
-import { Button, ButtonLink, Callout, Field, Radio, RadioGroup, Select, SpanCard, type SpanCardChoice } from '@crm/ui';
+import {
+  Button,
+  ButtonLink,
+  Callout,
+  Field,
+  Radio,
+  RadioGroup,
+  Select,
+  SpanCard,
+  useFormatSettings,
+  type SpanCardChoice,
+} from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './strings.ts';
 import { spanNames, type DrawnSpan } from './span.ts';
@@ -56,7 +67,9 @@ export function DrawCard({
   const [mode, setMode] = useState<Mode>({ kind: 'choose' });
   // Saving: the span, Back and the form wait, so nothing changes under the save.
   const [pending, setPending] = useState(false);
-  const { title, meta } = spanNames(span, locale);
+  // The member's zone, the one the week is drawn in.
+  const { timeZone } = useFormatSettings();
+  const { title, meta } = spanNames(span, locale, timeZone);
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(dayStart(span.dayKey));
   const back = () => setMode({ kind: 'choose' });
 

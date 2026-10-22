@@ -228,6 +228,31 @@ export const Default: Story = {
   ),
 };
 
+/**
+ * The zone the hours are in, over the hour axis ("GMT+5:30"), read out in full: the member's zone from their
+ * Preferences, which may not be the device's. Out of the screenshots until its baseline is taken in the pinned
+ * image; Default shows the same grid.
+ */
+export const Zone: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { zone: { short: 'GMT+5:30', name: 'Times in Kolkata time (GMT+5:30)' } },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={blocks()} now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const corner = canvasElement.querySelector('[title^="Times in"]');
+    await expect(corner?.textContent).toContain('GMT+5:30');
+    await expect(corner?.getAttribute('title')).toBe('Times in Kolkata time (GMT+5:30)');
+    // Read out as focus enters the week: the section is described by the zone's full name.
+    const described = canvasElement.querySelector('section')?.getAttribute('aria-describedby') ?? '';
+    await expect(canvasElement.ownerDocument.getElementById(described)?.textContent).toBe(
+      'Times in Kolkata time (GMT+5:30)',
+    );
+  },
+};
+
 /** The week while its blocks load: the grid in place, busy, each day saying it is loading. */
 export const Loading: Story = {
   parameters: { crm: { screenshot: false } },

@@ -42,6 +42,7 @@ import {
   Panel,
   SectionBar,
   SegmentedControl,
+  useFormatSettings,
   useKeyboardPlatform,
   focusLater,
   Skeleton,
@@ -52,10 +53,10 @@ import {
   type WeekCalendarBlock,
 } from '@crm/ui';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { offsetLabel, zoneDisplay } from '../../public/booking/time.ts';
 import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { createPortal } from 'react-dom';
-import { browserZone } from '../booking/zone.ts';
 import { newLinkOnlyPageHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
@@ -77,11 +78,13 @@ import {
   allDayKeys,
   bookingPieces,
   dayKeyOf,
+  minuteOfDay,
   eventPieces,
   piecesOf,
   rangeLabel,
   scrollMinute,
   timeRange,
+  weekBounds,
   weekDays,
   weekOf,
 } from './week.ts';
@@ -116,11 +119,14 @@ function personHrefOf(booking: BookingListItem, link: RecordLink, people: Object
 }
 
 /** "Monday, 19 October · 9:00 – 9:30 AM". */
-function whenOf(startsAt: string, endsAt: string, locale: string): string {
-  const day = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(
-    new Date(startsAt),
-  );
-  return `${day} · ${timeRange(startsAt, endsAt, locale)}`;
+function whenOf(startsAt: string, endsAt: string, locale: string, zone: string): string {
+  const day = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: zone,
+  }).format(new Date(startsAt));
+  return `${day} · ${timeRange(startsAt, endsAt, locale, zone)}`;
 }
 
 /**
@@ -234,6 +240,8 @@ function BookingCard({
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk | undefined;
 }) {
+  // The member's zone (their Preferences, else the browser's), as the week is drawn in.
+  const { timeZone } = useFormatSettings();
   // Read again when its host changes (a reassign or a move through the rotation lands).
   // Read again after a reassign here (a second rotation's seat leaves the organiser as it was).
   const [reads, setReads] = useState(0);
@@ -266,7 +274,7 @@ function BookingCard({
             description:
               personHref === undefined ? booking.visitorName : <Link href={personHref}>{booking.visitorName}</Link>,
           },
-          { term: strings.when, description: whenOf(booking.startsAt, booking.endsAt, locale) },
+          { term: strings.when, description: whenOf(booking.startsAt, booking.endsAt, locale, timeZone) },
           {
             term: strings.who,
             description: <Link href={`mailto:${booking.visitorEmail}`}>{booking.visitorEmail}</Link>,
@@ -384,6 +392,8 @@ function EventCard({
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
 }) {
+  // The member's zone (their Preferences, else the browser's), as the week is drawn in.
+  const { timeZone } = useFormatSettings();
   return (
     <>
       <DescriptionList
@@ -393,7 +403,7 @@ function EventCard({
             term: strings.when,
             description: event.allDay
               ? allDayWhenOf(event.startsAt, event.endsAt, locale)
-              : whenOf(event.startsAt, event.endsAt, locale),
+              : whenOf(event.startsAt, event.endsAt, locale, timeZone),
           },
           { term: event.title, description: strings.fromCalendar },
           ...(connection === undefined ? [] : [{ term: strings.calendar, description: connection.accountEmail }]),
@@ -417,11 +427,13 @@ function BusyCard({
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
 }) {
+  // The member's zone (their Preferences, else the browser's), as the week is drawn in.
+  const { timeZone } = useFormatSettings();
   return (
     <DescriptionList
       layout="stacked"
       items={[
-        { term: strings.when, description: whenOf(busy.startsAt, busy.endsAt, locale) },
+        { term: strings.when, description: whenOf(busy.startsAt, busy.endsAt, locale, timeZone) },
         { term: strings.busy, description: strings.busyNote },
         ...(connection === undefined ? [] : [{ term: strings.calendar, description: connection.accountEmail }]),
       ]}
@@ -433,13 +445,19 @@ function BusyCard({
 function removeWords(
   turn: Pick<TimeBlockOccurrence, 'kind' | 'repeat' | 'label' | 'startsAt' | 'endsAt'>,
   locale: string,
+  zone: string,
 ): { readonly title: string; readonly text: string; readonly action: string; readonly busy: string } {
   const start = new Date(turn.startsAt);
-  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: zone });
   const from = clock.format(start);
   const to = clock.format(new Date(turn.endsAt));
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(start);
-  const day = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(start);
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: zone }).format(start);
+  const day = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: zone,
+  }).format(start);
   if (turn.kind === 'hold') {
     return {
       title: strings.releaseHoldTitle(turn.label),
@@ -485,7 +503,9 @@ function BlockCard({
   /** Focus Remove as the card opens: its confirm was just dismissed. */
   readonly isRemoveFocused?: boolean;
 }) {
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(new Date(turn.startsAt));
+  // The member's zone (their Preferences, else the browser's), as the week is drawn in.
+  const { timeZone } = useFormatSettings();
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone }).format(new Date(turn.startsAt));
   const remove = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (isRemoveFocused) focusLater(() => remove.current);
@@ -497,7 +517,7 @@ function BlockCard({
       <DescriptionList
         layout="stacked"
         items={[
-          { term: strings.when, description: whenOf(turn.startsAt, turn.endsAt, locale) },
+          { term: strings.when, description: whenOf(turn.startsAt, turn.endsAt, locale, timeZone) },
           ...(turn.label === undefined ? [] : [{ term: strings.why, description: turn.label }]),
           ...(turn.repeat === 'weekly' ? [{ term: strings.repeats, description: strings.everyWeek(weekday) }] : []),
           { term: strings.bookingPages, description: turn.kind === 'hold' ? strings.heldNote : strings.blockedNote },
@@ -534,9 +554,11 @@ function RemoveBlockDialog({
   /** Dismissed: Cancel or Esc. */
   readonly onClose: () => void;
 }) {
+  // The member's zone (their Preferences, else the browser's), as the week is drawn in.
+  const { timeZone } = useFormatSettings();
   const [isBusy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
-  const words = removeWords(turn, locale);
+  const words = removeWords(turn, locale, timeZone);
   const remove = () => {
     if (isBusy) return;
     setBusy(true);
@@ -686,6 +708,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const state = useBookingsCalendar(week);
   const now = useNow();
   const firstDay = useFirstDay();
+  // The member's zone (their Preferences, else the browser's): the week's days, hours, blocks and now line.
+  const { timeZone } = useFormatSettings();
   const [openId, setOpenId] = useState<string | undefined>(undefined);
   // A dialog a card asked for, drawn here rather than over the card's popover (React Aria draws popovers above every
   // dialog): the card closes while it is open, opens again when it is dismissed, and once its change went through
@@ -738,7 +762,17 @@ function WeekView(props: BookingsCalendarScreenProps) {
     return () => document.removeEventListener('keydown', listener, true);
   }, [platform]);
   const days = weekDays(search.week);
-  const today = dayKeyOf(now);
+  // The week's midnights in the member's zone, worked out once per week and zone rather than per block.
+  const bounds = useMemo(() => weekBounds(weekDays(search.week), timeZone), [search.week, timeZone]);
+  const today = dayKeyOf(now, timeZone);
+  const nowMinute = minuteOfDay(now, timeZone);
+  // The zone the hours are in, over the hour axis: the member's may not be the device's clock. Its offset as it is in
+  // the week on screen (the picked day's noon), so a week past a daylight saving change names the offset it is in.
+  const shownAt = instantOf(days.includes(search.day) ? search.day : search.week, 12 * 60, timeZone).getTime();
+  const zone = {
+    short: offsetLabel(timeZone, shownAt),
+    name: strings.timesIn(zoneDisplay(timeZone, shownAt)),
+  };
   const isThisWeek = weekOf(today, firstDay) === search.week;
   const range = rangeLabel(search.week, locale);
   // Each event in its calendar's colour (the member's pick, else the provider's); before the list reads, its account's.
@@ -794,7 +828,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
           <Button variant="secondary" onPress={() => onSearch({ week: weekOf(today, firstDay), day: today })}>
             {isThisWeek
               ? strings.today
-              : strings.todayOn(new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(now))}
+              : strings.todayOn(
+                  new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone }).format(now),
+                )}
           </Button>
           <Button
             variant="ghost"
@@ -821,11 +857,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
             isFill
             selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
             onSelectDay={(day) => onSearch({ day })}
+            zone={zone}
             hourLabel={(hour) =>
               new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour))
             }
-            now={{ dayKey: today, minute: now.getHours() * 60 + now.getMinutes() }}
-            scrollToMinute={scrollMinute(days, now, [], workingStart(today))}
+            now={{ dayKey: today, minute: nowMinute }}
+            scrollToMinute={scrollMinute(days, now, timeZone, [], workingStart(today))}
             {...(props.openHours === undefined ? {} : { openHours: props.openHours })}
             onOpen={() => undefined}
             onClose={() => undefined}
@@ -868,13 +905,13 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const busyTimes = state.busy.filter(isShownEvent);
   const byBusy = new Map(busyTimes.map((busy) => [`busy:${busy.connectionId}:${busy.startsAt}:${busy.endsAt}`, busy]));
   const pieces = [
-    ...bookingPieces(bookings, days).map((piece) => ({ piece, kind: 'booking' as const })),
-    ...eventPieces(events, days).map((piece) => ({ piece, kind: 'event' as const })),
+    ...bookingPieces(bookings, bounds).map((piece) => ({ piece, kind: 'booking' as const })),
+    ...eventPieces(events, bounds).map((piece) => ({ piece, kind: 'event' as const })),
     ...state.blocks
-      .flatMap((turn) => piecesOf(turn.key, turn.startsAt, turn.endsAt, days))
+      .flatMap((turn) => piecesOf(turn.key, turn.startsAt, turn.endsAt, bounds))
       .map((piece) => ({ piece, kind: 'closed' as const })),
     ...[...byBusy]
-      .flatMap(([key, busy]) => piecesOf(key, busy.startsAt, busy.endsAt, days))
+      .flatMap(([key, busy]) => piecesOf(key, busy.startsAt, busy.endsAt, bounds))
       .map((piece) => ({ piece, kind: 'busy' as const })),
   ];
   const blocks: WeekCalendarBlock[] = pieces.flatMap(({ piece, kind }): WeekCalendarBlock[] => {
@@ -888,7 +925,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           startMinute: piece.startMinute,
           endMinute: piece.endMinute,
           title: booking.pageTitle,
-          time: timeRange(booking.startsAt, booking.endsAt, locale),
+          time: timeRange(booking.startsAt, booking.endsAt, locale, timeZone),
           detail: booking.visitorName,
           kind: 'booking',
           provider: 'timefix',
@@ -907,7 +944,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           startMinute: piece.startMinute,
           endMinute: piece.endMinute,
           title: strings.busy,
-          time: timeRange(busy.startsAt, busy.endsAt, locale),
+          time: timeRange(busy.startsAt, busy.endsAt, locale, timeZone),
           kind: 'busy',
           ...(provider === undefined ? {} : { provider }),
         },
@@ -923,7 +960,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           startMinute: piece.startMinute,
           endMinute: piece.endMinute,
           title: turn.kind === 'hold' ? strings.held : strings.blocked,
-          time: timeRange(turn.startsAt, turn.endsAt, locale),
+          time: timeRange(turn.startsAt, turn.endsAt, locale, timeZone),
           ...(turn.label === undefined ? {} : { detail: turn.label }),
           kind: turn.kind === 'hold' ? 'held' : 'blocked',
         },
@@ -940,7 +977,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
         startMinute: piece.startMinute,
         endMinute: piece.endMinute,
         title: event.title,
-        time: timeRange(event.startsAt, event.endsAt, locale),
+        time: timeRange(event.startsAt, event.endsAt, locale, timeZone),
         kind: 'event',
         ...(hue === undefined ? {} : { hue }),
         ...(provider === undefined ? {} : { provider }),
@@ -1001,11 +1038,13 @@ function WeekView(props: BookingsCalendarScreenProps) {
             isFill
             selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
             onSelectDay={(day) => onSearch({ day })}
+            zone={zone}
             hourLabel={(hour) => hourFormat.format(new Date(2000, 0, 1, hour))}
-            now={{ dayKey: today, minute: now.getHours() * 60 + now.getMinutes() }}
+            now={{ dayKey: today, minute: nowMinute }}
             scrollToMinute={scrollMinute(
               days,
               now,
+              timeZone,
               pieces.map(({ piece }) => piece),
               workingStart(today),
             )}
@@ -1072,12 +1111,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
             }}
             {...(meeting !== undefined
               ? // The span stays drawn behind New meeting, so the week shows where it will go.
-                { draft: meeting, draftLabel: strings.drawCard(spanNames(meeting, locale).title) }
+                { draft: meeting, draftLabel: strings.drawCard(spanNames(meeting, locale, timeZone).title) }
               : draft === undefined
                 ? {}
                 : {
                     draft,
-                    draftLabel: strings.drawCard(spanNames(draft, locale).title),
+                    draftLabel: strings.drawCard(spanNames(draft, locale, timeZone).title),
                     draftCard: (
                       <DrawCard
                         key={drawCount}
@@ -1087,7 +1126,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
                           .filter((page) => page.isPrivate)
                           .map((page) => ({ id: page.id, title: page.title }))}
                         createLinkOnlyHref={newLinkOnlyPageHref(slug)}
-                        overlapping={overlapping(bookings, draft)}
+                        overlapping={overlapping(bookings, draft, timeZone)}
                         onSpanChange={setDraft}
                         onClose={({ kind, repeat, label, pageId }) => {
                           const drawn = draft;
@@ -1095,8 +1134,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
                             kind,
                             repeat,
                             ...(label === undefined ? {} : { label }),
-                            startsAt: instantOf(drawn.dayKey, drawn.startMinute).toISOString(),
-                            endsAt: instantOf(drawn.dayKey, drawn.endMinute).toISOString(),
+                            startsAt: instantOf(drawn.dayKey, drawn.startMinute, timeZone).toISOString(),
+                            endsAt: instantOf(drawn.dayKey, drawn.endMinute, timeZone).toISOString(),
                           };
                           return onBlock(
                             {
@@ -1105,7 +1144,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
                               date: drawn.dayKey,
                               startMinute: drawn.startMinute,
                               endMinute: drawn.endMinute,
-                              timeZone: browserZone(),
+                              timeZone,
                               ...(label === undefined ? {} : { label }),
                               ...(pageId === undefined ? {} : { pageId }),
                             },
@@ -1136,7 +1175,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
                             },
                           );
                         }}
-                        {...(bookable.length === 0 || instantOf(draft.dayKey, draft.startMinute) < now
+                        {...(bookable.length === 0 || instantOf(draft.dayKey, draft.startMinute, timeZone) < now
                           ? {}
                           : {
                               onBook: () => {
@@ -1217,17 +1256,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
 }
 
 /** How many confirmed bookings a drawn span overlaps (they stay booked; the card says so). */
-function overlapping(bookings: readonly BookingListItem[], span: DrawnSpan): number {
-  const start = instantOf(span.dayKey, span.startMinute).getTime();
-  const end = instantOf(span.dayKey, span.endMinute).getTime();
+function overlapping(bookings: readonly BookingListItem[], span: DrawnSpan, zone: string): number {
+  const start = instantOf(span.dayKey, span.startMinute, zone).getTime();
+  const end = instantOf(span.dayKey, span.endMinute, zone).getTime();
   return bookings.filter(
     (booking) =>
       booking.status === 'confirmed' && Date.parse(booking.startsAt) < end && Date.parse(booking.endsAt) > start,
   ).length;
 }
-
-/** The local day a meeting starts on, as a key. */
-const dayKeyOfInstant = (instant: string) => dayKeyOf(new Date(instant));
 
 /** A meeting's start and end, whichever kind it is. */
 const spanOf = (item: MeetingListItem) =>
@@ -1249,24 +1285,27 @@ function groupsOf(
   personHref: (booking: BookingListItem) => string | undefined,
   locale: string,
   me: string | undefined,
+  zone: string,
 ): readonly BookingListGroup[] {
   const now = new Date();
-  const today = dayKeyOf(now);
+  // Days and times in the member's zone, the one the week is drawn in.
+  const today = dayKeyOf(now, zone);
   const tomorrow = addDays(today, 1);
-  const shortDate = (date: Date) =>
+  // A band's date, named from its day key alone (noon UTC read in UTC), so no zone moves it.
+  const shortDate = (key: string) =>
     new Intl.DateTimeFormat(locale, {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
-      ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
-    }).format(date);
+      timeZone: 'UTC',
+      ...(key.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }),
+    }).format(new Date(`${key}T12:00:00Z`));
   const groups: { id: string; label: string; rows: BookingListGroup['rows'][number][] }[] = [];
   for (const item of items) {
     const { startsAt, endsAt } = spanOf(item);
     // An all day event's dates are calendar dates (midnight UTC): read by date, never moved into the local zone.
     const isAllDay = item.kind === 'event' && item.event.allDay;
-    const id = isAllDay ? startsAt.slice(0, 10) : dayKeyOfInstant(startsAt);
-    const start = isAllDay ? new Date(`${id}T12:00:00`) : new Date(startsAt);
+    const id = isAllDay ? startsAt.slice(0, 10) : dayKeyOf(new Date(startsAt), zone);
     const videoUrl = item.kind === 'booking' ? item.booking.videoUrl : item.event.videoUrl;
     const isCancelled =
       item.kind === 'booking' ? item.booking.status === 'cancelled' : item.event.status === 'cancelled';
@@ -1274,7 +1313,7 @@ function groupsOf(
       id: rowIdOf(item),
       // Under its day's band, a row says its time alone (the band says the day): the time on the date's line, bold,
       // and nothing under it; an all day event says All day.
-      date: isAllDay ? strings.allDay : timeRange(startsAt, endsAt, locale),
+      date: isAllDay ? strings.allDay : timeRange(startsAt, endsAt, locale, zone),
       time: '',
       // Join only while it can still be joined: not once cancelled, nor once it has ended.
       ...(videoUrl === undefined || isCancelled || Date.parse(endsAt) <= now.getTime()
@@ -1327,7 +1366,7 @@ function groupsOf(
     else
       groups.push({
         id,
-        label: id === today ? strings.today : id === tomorrow ? strings.tomorrow : shortDate(start),
+        label: id === today ? strings.today : id === tomorrow ? strings.tomorrow : shortDate(id),
         rows: [row],
       });
   }
@@ -1443,6 +1482,9 @@ export function BookingsListScreen({
   actions,
 }: BookingsListScreenProps) {
   const personHref = usePersonHref(slug, objects);
+  // The member's zone (their Preferences, else the browser's): each row's day band and time.
+  const { timeZone } = useFormatSettings();
+  const listNow = useNow();
   const calendarList = useCalendarList(calendars);
   const byCalendar = new Map(
     (calendarList.status === 'ready' ? calendarList.accounts : []).flatMap((account) =>
@@ -1511,8 +1553,9 @@ export function BookingsListScreen({
     ) : (
       <>
         <BookingList
-          label={strings.listLabel[tab]}
-          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), personHref, locale, me)}
+          // Rows' times are on the member's clock: the list's name says so for screen readers.
+          label={`${strings.listLabel[tab]}, ${strings.timesIn(zoneDisplay(timeZone, listNow.getTime()))}`}
+          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), personHref, locale, me, timeZone)}
           onOpen={setOpenId}
           emptyState={
             search.link !== undefined || search.cal !== undefined || source !== 'all' ? (

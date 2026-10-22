@@ -210,6 +210,7 @@ describe('@crm/ui', () => {
       'isRefusal',
       'isSystemOnly',
       'loadPhoneLibrary',
+      'memoIntl',
       'quickPicks',
       'relationshipStep',
       'ruleOf',

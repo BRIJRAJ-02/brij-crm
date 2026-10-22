@@ -1,5 +1,5 @@
 import { isDataError, type BookingPageView, type MeetingsQuery, type ObjectSummary } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
+import { LoadingNow, useFormatSettings } from '@crm/ui';
 import { useMemo } from 'react';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { BookingsFailed, BookingsListScreen } from '../features/bookings/BookingsScreen.tsx';
@@ -7,6 +7,7 @@ import { bookingsSearchOf, parseBookingsSearch, rawOf, type BookingsSearch } fro
 import { strings } from '../features/bookings/strings.ts';
 import { hostActions } from '../features/bookings/hostActions.ts';
 import { useFirstDay } from '../features/workspace/first-day.ts';
+import { memberZone } from '../features/booking/zone.ts';
 
 // Bookings › List (spec 0025, AC-646; every meeting, the owner's ask of 21 October 2026): Upcoming, Past (`tab=past`)
 // or Canceled (`tab=cancelled`), All, Bookings or Calendar (`src`), one booking page (`link`) and the calendars the
@@ -19,7 +20,8 @@ export const Route = createFileRoute('/w/$slug/bookings/list')({
   loaderDeps: () => ({}),
   loader: async ({ context, params, location }) => {
     const { data } = context;
-    const search = bookingsSearchOf(parseBookingsSearch(location.search));
+    // The list reads by tab and link, never by week; the week start and zone only fill the defaults.
+    const search = bookingsSearchOf(parseBookingsSearch(location.search), new Date(), 1, memberZone(data, params.slug));
     const [objects, pages] = await Promise.all([
       data.objects.list(params.slug),
       data.bookingPages.held(params.slug).catch(() => []),
@@ -65,7 +67,8 @@ function ListPending() {
 
 function List({ objects, pages }: ListLoaded) {
   const { slug } = Route.useParams();
-  const search = bookingsSearchOf(Route.useSearch(), new Date(), useFirstDay());
+  const { timeZone } = useFormatSettings();
+  const search = bookingsSearchOf(Route.useSearch(), new Date(), useFirstDay(), timeZone);
   const navigate = useNavigate();
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
