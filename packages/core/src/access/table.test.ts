@@ -170,6 +170,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // cancel is; the report checks its surface (the form's or page's own access) itself; the route and the record
   // facts it reads are pure.
   'markNoShow',
+  // A booking's hand link to a record (polish F2): through the booking's target too, then the record's own access
+  // (visible, and an object the member may change), checked in change.test.ts.
+  'linkBookingRecord',
   'routingReport',
   'decideRoute',
   'recordFactKeys',

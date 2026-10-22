@@ -8,7 +8,10 @@ import type { PublicBookInput } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { enterBookingByToken, enterBookingPage } from '../access/door.ts';
+import type { AccessRules } from '../access/policy.ts';
+import { deleteRecord } from '../engine/deletion.ts';
 import { newId } from '../engine/ids.ts';
+import { createRecord } from '../engine/records.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
@@ -20,10 +23,13 @@ import {
   cancelBooking,
   guestTarget,
   hostTarget,
+  linkBookingRecord,
   MAX_RESCHEDULES,
   moveBooking,
   readMoveSlots,
 } from './change.ts';
+import { bookAsHost } from './host.ts';
+import { listWorkspaceBookings, readBookingsCalendar } from './list.ts';
 import { createBookingPage, updateBookingPage } from './pages.ts';
 import { bookPublicSlot, readManagedBooking } from './public.ts';
 import { manageTokenFor } from './tokens.ts';
@@ -344,3 +350,137 @@ describe('the host moves and cancels (AC-640)', () => {
     });
   });
 });
+
+describe('the host links a booking to a record by hand (polish F2)', () => {
+  /** The workspace's standard objects, and Deals' name attribute. */
+  async function objectsOf(workspaceId: string) {
+    const found = await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute<{ key: string; id: string; name_id: string }>(sql`
+        select o.standard_key as key, o.id::text as id, a.id::text as name_id
+        from objects o join attributes a on a.object_id = o.id and a.id = o.primary_attribute_id
+        where o.standard_key in ('people', 'companies', 'deals')
+      `),
+    );
+    const of = (key: string) => {
+      const object = found.rows.find((each) => each.key === key);
+      if (object === undefined) throw new Error(`No ${key}.`);
+      return object;
+    };
+    return { people: of('people'), companies: of('companies'), deals: of('deals') };
+  }
+
+  /** Rules for the member role: Deals at `level`, every other object as it is. */
+  const dealsAt = (deals: string, level: 'none' | 'read'): AccessRules => ({
+    levels: [{ subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: deals }, level }],
+    records: [],
+  });
+
+  const week = { from: '2026-11-02T00:00:00.000Z', to: '2026-11-03T00:00:00.000Z' };
+
+  it('links a deal at once in every read, audits it, takes it off, and files a past or cancelled one too', async () => {
+    const s = await setup();
+    const booked = await s.book();
+    const { deals } = await objectsOf(s.workspaceId);
+    const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
+    expect(await linkBookingRecord(s.host, { bookingId: booked.bookingId, recordId: navy.recordId })).toMatchObject({
+      linkedRecord: { objectId: deals.id, recordId: navy.recordId, name: 'Navy rollout' },
+    });
+    const [shown] = (await readBookingsCalendar(s.host, week)).bookings;
+    expect(shown?.linkedRecord).toMatchObject({ recordId: navy.recordId, name: 'Navy rollout' });
+    const [listed] = await listWorkspaceBookings(s.host, { when: 'upcoming' }, NOW);
+    expect(listed?.linkedRecord).toMatchObject({ recordId: navy.recordId });
+    // The same link again changes nothing and audits nothing more.
+    await linkBookingRecord(s.host, { bookingId: booked.bookingId, recordId: navy.recordId });
+    expect(await audited(s.workspaceId, booked.bookingId)).toEqual(['booking.record_linked']);
+    // Taken off: gone from every read.
+    expect(await linkBookingRecord(s.host, { bookingId: booked.bookingId, recordId: null })).toEqual({});
+    expect((await readBookingsCalendar(s.host, week)).bookings[0]).not.toHaveProperty('linkedRecord');
+    expect(await audited(s.workspaceId, booked.bookingId)).toEqual([
+      'booking.record_linked',
+      'booking.record_unlinked',
+    ]);
+    // A cancelled booking can still be filed.
+    await cancelBooking(hostTarget(s.host, booked.bookingId), s.deps, {});
+    await expect(
+      linkBookingRecord(s.host, { bookingId: booked.bookingId, recordId: navy.recordId }),
+    ).resolves.toMatchObject({ linkedRecord: { recordId: navy.recordId } });
+  });
+
+  it('refuses a person, a company, a record in the trash, and a booking that isn’t theirs', async () => {
+    const s = await setup();
+    const booked = await s.book();
+    const { people, companies, deals } = await objectsOf(s.workspaceId);
+    const ada = await createRecord(s.host, { objectId: people.id, values: { [people.name_id]: { firstName: 'Ada' } } });
+    const acme = await createRecord(s.host, { objectId: companies.id, values: { [companies.name_id]: 'Acme' } });
+    for (const record of [ada, acme]) {
+      expect(
+        await refusalOf(linkBookingRecord(s.host, { bookingId: booked.bookingId, recordId: record.recordId })),
+      ).toMatchObject({ code: 'CONFIG_INVALID', field: 'recordId' });
+    }
+    const gone = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Gone' } });
+    await deleteRecord(s.host, { recordId: gone.recordId });
+    expect(
+      await refusalOf(linkBookingRecord(s.host, { bookingId: booked.bookingId, recordId: gone.recordId })),
+    ).toMatchObject({ code: 'NOT_FOUND', field: 'recordId' });
+    expect(
+      await refusalOf(linkBookingRecord(s.host, { bookingId: booked.bookingId, recordId: newId() })),
+    ).toMatchObject({ code: 'NOT_FOUND', field: 'recordId' });
+    // Someone who is neither its host, the page's owner nor an admin finds no such booking.
+    const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
+    const stranger = await s.addMember('Bo', 'member');
+    expect(
+      await refusalOf(linkBookingRecord(stranger, { bookingId: booked.bookingId, recordId: navy.recordId })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await row(s.workspaceId, booked.bookingId)).not.toHaveProperty('deal_record_id', navy.recordId);
+  });
+
+  it('refuses a deal the member can’t see as missing, and one they may only read; a reader who can’t see it learns nothing', async () => {
+    const s = await setup();
+    const { deals } = await objectsOf(s.workspaceId);
+    const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
+    // Bea books on her own page, so the booking is hers to change.
+    const bea = await s.addMember('Bea', 'member');
+    const page = await createBookingPage(bea, { id: newId(), title: 'Bea’s call', timeZone: 'UTC' }, NOW);
+    const { bookingId } = await bookAsHost(
+      bea,
+      { calendar: { events: () => Promise.resolve({}) }, linkKey: LINK_KEY, now: () => NOW },
+      {
+        idempotencyKey: newId(),
+        pageId: page.id,
+        start: new Date('2026-11-02T12:00:00.000Z'),
+        minutes: 30,
+        name: 'Grace Hopper',
+        email: 'grace@navy.example',
+        timeZone: 'UTC',
+        guests: [],
+      },
+    );
+    const blind = rescope(bea, { rules: dealsAt(deals.id, 'none') });
+    expect(await refusalOf(linkBookingRecord(blind, { bookingId, recordId: navy.recordId }))).toMatchObject({
+      code: 'NOT_FOUND',
+      field: 'recordId',
+      message: 'That record doesn’t exist, or you can’t see it.',
+    });
+    const reader = rescope(bea, { rules: dealsAt(deals.id, 'read') });
+    expect(await refusalOf(linkBookingRecord(reader, { bookingId, recordId: navy.recordId }))).toMatchObject({
+      code: 'FORBIDDEN',
+      field: 'recordId',
+    });
+    // Linked by Bea while she may: once she may no longer see Deals, her booking shows no link at all.
+    await linkBookingRecord(bea, { bookingId, recordId: navy.recordId });
+    const [mine] = (await readBookingsCalendar(blind, week)).bookings;
+    expect(mine?.id).toBe(bookingId);
+    expect(mine).not.toHaveProperty('linkedRecord');
+    // And a linked deal moved to the trash leaves the booking unlinked in every read until it is restored.
+    await deleteRecord(s.host, { recordId: navy.recordId });
+    expect((await readBookingsCalendar(bea, week)).bookings[0]).not.toHaveProperty('linkedRecord');
+  });
+});
+
+/** A booking's audit rows, oldest first. */
+async function audited(workspaceId: string, bookingId: string): Promise<readonly string[]> {
+  const found = await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute<{ action: string }>(sql`select action from audit_events where target_id = ${bookingId} order by at, id`),
+  );
+  return found.rows.map((each) => each.action);
+}

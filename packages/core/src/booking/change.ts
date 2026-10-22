@@ -19,18 +19,22 @@
 // times. Nothing changes once the meeting has started.
 import { and, eq, sql } from 'drizzle-orm';
 import type { PublicSlots } from '@crm/contracts';
+import type { RecordRefDisplay } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry } from '../access/door.ts';
 import { requirePermission } from '../access/check.ts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
 import { writeAudit } from '../members/audit.ts';
-import { can } from '../access/policy.ts';
+import { can, isOpen, objectLevel } from '../access/policy.ts';
+import { visibleRecords } from '../access/visibility.ts';
+import { checkId } from '../engine/ids.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import type { BookingCalendar, BusyReader, EventRef } from './calendar.ts';
 import { chooseHosts, lockRotations } from '../rotation/assign.ts';
 import { changedSeats, liveSeats, recordSeats, syncHosts } from '../rotation/reseat.ts';
 import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } from '../rotation/team.ts';
+import { handLinkOf, linkedRecords } from './links.ts';
 import { hostLockKey, lockKey } from './locks.ts';
 import { enqueueBookingMail } from './mail-queue.ts';
 import {
@@ -752,4 +756,77 @@ export async function markNoShow(
     });
     return { noShow: input.noShow };
   });
+}
+
+/** What a link to a record nobody may see, or that doesn't exist, answers: the same either way. */
+const NO_SUCH_RECORD = 'That record doesn’t exist, or you can’t see it.';
+
+/**
+ * Links a booking to a record by hand from its card, or takes the link off with `recordId: null` (polish F2): its
+ * host, the page's owner or `booking.admin`, as any change (a booking they can't change answers NOT_FOUND). The
+ * record must be live on a live object the member can see (else NOT_FOUND on `recordId`, the same for one that
+ * doesn't exist) and may change (else FORBIDDEN, as linking a task, AC-447); a person or a company is refused
+ * (CONFIG_INVALID): those are the guest's, filed when it was made. A past or cancelled booking may be filed too.
+ * Kept in `deal_record_id`, audited; the same link again changes nothing. Answers the record as a chip shows it.
+ */
+export async function linkBookingRecord(
+  scope: EngineScope,
+  input: { readonly bookingId: string; readonly recordId: string | null },
+): Promise<{ readonly linkedRecord?: RecordRefDisplay }> {
+  const target = hostTarget(scope, input.bookingId);
+  const { principal } = scope.access;
+  if (principal.kind !== 'member') throw refuse('FORBIDDEN', 'Only a member links a booking from Bookings.');
+  return inWorkspace(scope, async (tx) => {
+    const { row } = await readTarget(tx, target, true);
+    const recordId = input.recordId === null ? null : checkId(input.recordId, NO_SUCH_RECORD);
+    if (recordId !== null) await checkLinkableRecord(tx, scope, recordId);
+    if (row.dealRecordId !== recordId) {
+      await tx
+        .update(bookings)
+        .set({
+          dealRecordId: recordId,
+          updatedAt: sql`now()`,
+          updatedByType: 'member',
+          updatedById: principal.memberId,
+          updatedByMemberId: principal.memberId,
+        })
+        .where(eq(bookings.id, row.id));
+      await writeAudit(tx, scope.workspaceId, scope.actor, {
+        action: recordId === null ? 'booking.record_unlinked' : 'booking.record_linked',
+        targetType: 'booking',
+        targetId: row.id,
+        before: { recordId: row.dealRecordId },
+        after: { recordId },
+      });
+    }
+    return handLinkOf({ dealRecordId: recordId }, await linkedRecords(tx, scope.access, [{ dealRecordId: recordId }]));
+  });
+}
+
+/**
+ * Refuses a record a booking can't be linked to: missing, in the trash, on an archived object or one the member
+ * can't see (NOT_FOUND, alike); a person or a company (CONFIG_INVALID); one on an object they may only read
+ * (FORBIDDEN). Locks it `for key share`, which blocks only its purge, never an edit.
+ */
+async function checkLinkableRecord(tx: WorkspaceTx, scope: EngineScope, recordId: string): Promise<void> {
+  const found = await tx.execute<{ id: string; object_id: string; standard_key: string | null }>(sql`
+    select r.id::text as id, r.object_id::text as object_id, o.standard_key
+    from records r join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
+    where r.id = ${recordId}::uuid and r.deleted_at is null and o.archived_at is null
+    for key share of r
+  `);
+  const [record] = found.rows;
+  if (record === undefined) throw refuseOn('NOT_FOUND', NO_SUCH_RECORD, 'recordId');
+  const seen = await visibleRecords(tx, scope.access, [{ objectId: record.object_id, recordId: record.id }]);
+  if (!seen.has(record.id)) throw refuseOn('NOT_FOUND', NO_SUCH_RECORD, 'recordId');
+  if (record.standard_key === 'people' || record.standard_key === 'companies') {
+    throw refuseOn(
+      'CONFIG_INVALID',
+      'A booking is filed to its guest’s person and company already. Link a deal or another record.',
+      'recordId',
+    );
+  }
+  if (!isOpen(scope.access) && objectLevel(scope.access, record.object_id) !== 'write') {
+    throw refuseOn('FORBIDDEN', 'You can’t link a booking to a record you can’t change.', 'recordId');
+  }
 }

@@ -66,6 +66,9 @@ export const AUDIT_ACTIONS = [
   'routing.changed',
   'booking.no_show',
   'booking.no_show_undone',
+  // A booking linked to a record by hand from its card, and the link taken off (polish F2).
+  'booking.record_linked',
+  'booking.record_unlinked',
   // Spec 0033 (AC-899): an owner changed the workspace's sign in rules, or signed everyone out of it.
   'workspace_security.changed',
   'workspace_security.signed_out_everyone',
