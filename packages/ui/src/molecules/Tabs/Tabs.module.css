@@ -165,6 +165,12 @@
     outline: none;
   }
 
+  /* A page layout inside (PreviewLayout): a flex column, so it can grow to the view's foot and put its footer there. */
+  .panel[data-variant='fill'] {
+    display: flex;
+    flex-direction: column;
+  }
+
   /* A tab of fields with no Card around them: the Form's rhythm, at most a readable column wide, from the start. */
   .panel[data-variant='fields'] {
     display: flex;

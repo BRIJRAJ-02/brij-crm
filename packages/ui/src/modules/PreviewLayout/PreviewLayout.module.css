@@ -62,6 +62,12 @@
     min-inline-size: 0;
   }
 
+  /* A form's fields: a readable column from the start edge; the footer still spans the body's column. */
+  .main[data-width='form'] > :not(.footer) {
+    inline-size: 100%;
+    max-inline-size: var(--size-column-max);
+  }
+
   /* The wrapper lets presses through to the body under it; the bar inside takes its own. */
   /* As many columns of groups as fit, each at least the panel's width: no container query needed. */
   .main[data-layout='grid'] {

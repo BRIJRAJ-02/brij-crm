@@ -39,8 +39,10 @@
     gap: var(--space-6);
   }
 
+  /* A step more room above the hint than between the label and the content, so the hint reads as the group's
+     note, not one more row of the content. */
   .hint {
-    margin: 0;
+    margin: var(--space-4) 0 0;
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);

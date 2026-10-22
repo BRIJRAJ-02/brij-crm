@@ -43,6 +43,11 @@ interface ButtonLook {
    */
   readonly isLabelCollapsible?: boolean;
   readonly isDisabled?: boolean;
+  /**
+   * A second label the button may swap to, whose width it keeps from the start, so the swap never moves what is
+   * beside it (CopyButton's "Copied").
+   */
+  readonly labelReserve?: string;
   /** A slot a parent fills, such as `close` inside a toast or a dialog. */
   readonly slot?: string;
   readonly ref?: Ref<HTMLButtonElement>;
@@ -174,7 +179,17 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
       ) : (
         face.provider !== undefined && <ProviderMark provider={face.provider} size={look.size === 'lg' ? 'md' : 'sm'} />
       )}
-      {face.children !== undefined && <span className={styles.label}>{face.children}</span>}
+      {face.children !== undefined &&
+        (look.labelReserve === undefined ? (
+          <span className={styles.label}>{face.children}</span>
+        ) : (
+          <span className={styles.label} data-reserve>
+            <span>{face.children}</span>
+            <span className={styles.reserve} aria-hidden="true">
+              {look.labelReserve}
+            </span>
+          </span>
+        ))}
       {keycaps(look.kbd, variant)}
       {look.iconRight !== undefined && <Icon name={look.iconRight} size="sm" />}
     </>

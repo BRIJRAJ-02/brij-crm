@@ -47,7 +47,7 @@ export interface EditorActionsProps {
 export function EditorActions({ link, isLinkDisabled = false, preview, publish, menu }: EditorActionsProps) {
   return (
     <>
-      <CopyButton value={link} label={strings.copyLink} isDisabled={isLinkDisabled} />
+      <CopyButton value={link} label={strings.copyLink} announcement={strings.linkCopied} isDisabled={isLinkDisabled} />
       {preview}
       {publish}
       {menu !== undefined && (

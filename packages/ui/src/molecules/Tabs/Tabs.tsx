@@ -179,16 +179,17 @@ export interface TabPanelProps {
   readonly id: string;
   /**
    * `fields` stacks the panel's content `space-16` apart, as a Form stacks its fields, for a tab that holds a
-   * group of fields with no Card around them (the booking page editor's tabs). The default lays out nothing.
+   * group of fields with no Card around them. `fill` makes the panel a flex column, so a page layout inside it
+   * (PreviewLayout, in the Captures editors) can fill the view's height. The default lays out nothing.
    */
-  readonly variant?: 'default' | 'fields';
+  readonly variant?: 'default' | 'fields' | 'fill';
   readonly children: ReactNode;
 }
 
 /** The content of one tab. */
 export function TabPanel({ id, variant = 'default', children }: TabPanelProps) {
   return (
-    <AriaTabPanel id={id} className={styles.panel} data-variant={variant === 'fields' ? 'fields' : undefined}>
+    <AriaTabPanel id={id} className={styles.panel} data-variant={variant === 'default' ? undefined : variant}>
       {children}
     </AriaTabPanel>
   );

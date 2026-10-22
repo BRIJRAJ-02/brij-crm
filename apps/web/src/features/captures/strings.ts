@@ -10,6 +10,7 @@ export const strings = {
   formsCount: 'forms',
   /** The editors' shared header (22 Oct 2026): one set of words for a booking page and a form. */
   copyLink: 'Copy link',
+  linkCopied: 'Link copied',
   moreActions: 'More actions',
   pause: 'Pause',
   resume: 'Resume',

@@ -625,6 +625,7 @@ export function FormEditor(props: FormEditorProps) {
             {isPublished ? (
               // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
               <Tabs
+                variant="bar"
                 end={<div ref={setToolbarSlot} />}
                 label={strings.tabs}
                 selectedKey={current}
@@ -639,7 +640,7 @@ export function FormEditor(props: FormEditorProps) {
                 ]}
               >
                 {FORM_TABS.map((id) => (
-                  <TabPanel key={id} id={id}>
+                  <TabPanel key={id} id={id} variant="fill">
                     {id === current && layout}
                   </TabPanel>
                 ))}
