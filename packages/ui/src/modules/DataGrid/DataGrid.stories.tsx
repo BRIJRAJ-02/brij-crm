@@ -847,6 +847,9 @@ export const RowNotesAndUnreadCells: Story = {
   },
   play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByText('New')).toBeVisible();
+    // "New" never shrinks to "N…": the name beside it gives way instead.
+    const fresh = canvas.getByText('New');
+    await expect(fresh.scrollWidth).toBeLessThanOrEqual(fresh.clientWidth);
     await expect(canvas.getByText('Doesn’t match this view')).toBeVisible();
     // The note is part of the row header, so it is read with the name.
     await expect(cell(canvasElement, 0, 1)).toHaveTextContent('New');
