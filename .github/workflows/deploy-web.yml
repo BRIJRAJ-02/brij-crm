@@ -23,6 +23,11 @@
 # Order (8 October 2026): the web app ships only after CI passes on main, and, behind a proxied API, only once that
 # API runs this commit, when the commit changed the API at all. A new web app calling procedures the old API lacks
 # broke the People page for a deploy's length before. /api/health names the API's commit.
+#
+# Fast path (22 October 2026, the owner's call): a push to main whose commit already passed every required CI job on
+# another branch (a landing branch fast forwarded onto main is the same commit) deploys at once, without waiting for
+# main's own CI run. Otherwise main's CI run triggers the deploy as before, and a commit the fast path deployed isn't
+# deployed twice.
 name: Deploy web
 
 on:
@@ -30,15 +35,72 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  push:
+    branches: [main]
 
 concurrency:
   group: deploy-web
   cancel-in-progress: false
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      checks: read
+    outputs:
+      go: ${{ steps.decide.outputs.go }}
+      sha: ${{ steps.decide.outputs.sha }}
+    steps:
+      - name: Decide whether this commit deploys now
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          REQUIRED=("check" "flows (1/4)" "flows (2/4)" "flows (3/4)" "flows (4/4)" "stories (chromium)" "stories (firefox)" "stories (webkit)" "visual")
+          if [ "$EVENT" = push ]; then
+            sha="$PUSH_SHA"
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+            # Every required job must have passed on this exact commit, on whichever branch ran it.
+            passed=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
+              -q '.check_runs[] | select(.conclusion == "success") | .name' | sort -u)
+            for name in "${REQUIRED[@]}"; do
+              if ! grep -Fxq "$name" <<< "$passed"; then
+                echo "$sha hasn't passed \"$name\" yet, so main's own CI run will trigger the deploy."
+                echo "go=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            done
+            echo "$sha already passed every required job, so it deploys now."
+            echo "go=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sha="$RUN_SHA"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if [ "$RUN_CONCLUSION" != success ] || [ "$RUN_EVENT" != push ]; then
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          done_before=$(gh api "repos/$REPO/actions/workflows/deploy-web.yml/runs?head_sha=$sha&event=push&status=success" -q '.total_count')
+          if [ "${done_before:-0}" -gt 0 ]; then
+            echo "$sha was already deployed by the fast path."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
     name: deploy (${{ matrix.target }})
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    needs: gate
+    if: needs.gate.outputs.go == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -66,7 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ needs.gate.outputs.sha }}
           fetch-depth: 0
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
@@ -98,7 +160,7 @@ jobs:
       - name: Wait for the API to run this commit
         if: steps.mode.outputs.deploy == 'true' && steps.mode.outputs.api == 'proxy'
         env:
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ needs.gate.outputs.sha }}
           HEALTH_URL: ${{ matrix.health }}
         run: |
           set -euo pipefail
@@ -138,7 +200,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT_WEB: ${{ vars.SENTRY_PROJECT_WEB }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_SHA: ${{ needs.gate.outputs.sha }}
         run: |
           set -euo pipefail
           # Under workflow_run, GITHUB_SHA is main's newest commit, not the one CI passed; the release is that one.
