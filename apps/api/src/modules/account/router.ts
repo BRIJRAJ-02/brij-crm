@@ -22,6 +22,7 @@ import {
 import { renderAccountDeleted, renderSignInCode } from '@crm/emails';
 import { backgroundHooks, commitWrite } from '../../hooks.ts';
 import { apiError } from '../../errors.ts';
+import { refusalOf } from '../../mail/mailer.ts';
 import { log } from '../../log.ts';
 import { captureFault } from '../../monitoring/sentry.ts';
 import { authed, memberDoor, type RequestContext, type SessionContext } from '../../orpc.ts';
@@ -58,11 +59,13 @@ function stepUpDeps(context: RequestContext): StepUpDeps {
         const message = await renderSignInCode(code, { appOrigin: new URL(context.appUrl).origin });
         await context.mailer.send({ to: email, ...message });
       } catch (error) {
-        // Our mailers' messages name the service and the status, never the recipient. Reported, since every
-        // step up waits on this mail; the person is told the code didn't go, never "something went wrong".
+        // Only the error's name and the mail service's refusal code: never its message, which could quote the
+        // recipient. Reported, since every step up waits on this mail; the person is told the code didn't go.
+        const refusal = refusalOf(error)?.code;
         log.error('Step up code not sent', {
           mail: context.mailer.transport,
-          error: error instanceof Error ? { name: error.name, message: error.message } : { name: typeof error },
+          error: error instanceof Error ? error.name : typeof error,
+          ...(refusal === undefined ? {} : { refusal }),
         });
         captureFault(error, { requestId: context.requestId, task: 'step up mail' });
         throw apiError('API_UNAVAILABLE', CODE_NOT_SENT_MESSAGE);

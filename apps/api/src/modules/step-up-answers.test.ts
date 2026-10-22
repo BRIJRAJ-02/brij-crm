@@ -31,7 +31,7 @@ beforeAll(() => {
         transport: 'resend',
         send: (message) =>
           failing.has(message.to)
-            ? Promise.reject(new Error('Resend answered 403 (validation_error).'))
+            ? Promise.reject(new Error(`Resend refused ${message.to} (validation_error).`))
             : mailpit.send(message),
       },
     },
