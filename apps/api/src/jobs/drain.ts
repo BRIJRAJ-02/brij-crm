@@ -10,13 +10,14 @@
 // The daily cleanup's cron line rides along: a turn started after 03:00 UTC
 // backfills the day's run (one day of fill). No relay runs here: live updates
 // are off while the api is on Vercel, so a stored change event wakes nothing.
+import type { QueueRows } from '@crm/core';
 import { assertWorkerConnection, openDirectConnection, openQueueConnection, type QueueConnection } from '@crm/db';
 import { errorFields } from '../log.ts';
 import type { JobTasks } from './compose.ts';
 import { startJobRunners, type JobsLog } from './graphile.ts';
 
-/** How many slices each lane runs at once in a turn: three, the size of the function's tenant pool. */
-export const DRAIN_CONCURRENCY = { heavy: 1, light: 2 } as const;
+/** How many slices each lane runs at once in a turn: two, so requests on the same instance keep a tenant connection. */
+export const DRAIN_CONCURRENCY = { heavy: 1, light: 1 } as const;
 
 /** The queue pool's size in a turn: a LISTEN client for each runner, and room for the jobs they fetch. */
 export const DRAIN_QUEUE_CONNECTIONS = 5;
@@ -60,7 +61,11 @@ export interface DrainTurn {
 /** What the drain needs: the worker login's direct address, the runners' work, and the log. */
 export interface JobDrainOptions {
   readonly directUrl: string;
-  readonly tasks: JobTasks;
+  /**
+   * Builds the runners' work (`composeJobTasks`) once, given the queue rows
+   * the daily cleanup's requeue phase reads: the open turn's queue.
+   */
+  readonly compose: (queue: QueueRows) => JobTasks;
   readonly log: JobsLog;
   readonly onFault?: (error: unknown) => void;
   /** Milliseconds between due checks; tests shorten it. */
@@ -81,10 +86,18 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 /** Builds the drain. Nothing connects until the first turn. */
 export function createJobDrain(options: JobDrainOptions): JobDrain {
-  const { log, tasks } = options;
+  const { log } = options;
   const now = options.now ?? (() => performance.now());
   const pollMs = options.pollMs ?? DRAIN_POLL_MS;
   let current: Promise<DrainReport> | undefined;
+  // The queue of the turn in hand, for the daily cleanup's requeue phase; between turns it is closed.
+  let open: QueueConnection | undefined;
+  const tasks = options.compose({
+    rows: (workspaceId, jobIds) =>
+      open === undefined
+        ? Promise.reject(new Error('No job turn runs, so the queue is closed.'))
+        : open.rows(workspaceId, jobIds),
+  });
   // Whether the direct login may run jobs, asked once per instance (until it answers): a role that can bypass row
   // level security is refused outright, and one outside crm_worker leaves the jobs off, as on the worker.
   let login: Promise<boolean> | undefined;
@@ -130,6 +143,7 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
         options.onFault?.(error);
       },
     });
+    open = queue;
     try {
       if (minimumMs === undefined && !(await dueNow(queue))) return report('nothing');
       // Set by a runner that stopped on its own; read between checks.
@@ -153,7 +167,8 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
         // nothing is due for a moment.
         let quiet = 0;
         for (;;) {
-          await sleep(pollMs);
+          // Never sleep past the budget: it is checked as soon as it is spent.
+          await sleep(Math.max(0, Math.min(pollMs, budgetMs - (now() - started))));
           const elapsed = now() - started;
           if (runner.failed) {
             outcome = 'failed';
@@ -176,6 +191,7 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
       }
       return report(outcome);
     } finally {
+      if (open === queue) open = undefined;
       await queue.close();
     }
   }
@@ -193,29 +209,47 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
   };
 }
 
-/** What the after request trigger needs: the drain, how to keep the instance alive, and the turn's budget. */
+/** What the after request trigger needs: the drain, how to keep the instance alive, and the time it may take. */
 export interface DrainWakeOptions {
   readonly drain: JobDrain;
   /** Keeps the instance alive until the promise settles (`waitUntil` on Vercel). */
   readonly keepAlive: (work: Promise<unknown>) => void;
+  /** The whole wake's budget: its turn, and the one more it may run, share it. */
   readonly budgetMs: number;
+  /** The least time between two turns' starts in this instance; a wake sooner waits for it (5 seconds). */
+  readonly cooldownMs?: number;
   readonly log: JobsLog;
   readonly onFault?: (error: unknown) => void;
+  /** The clock, for tests. */
+  readonly now?: () => number;
 }
+
+/** A second turn starts only with at least this much of the wake's budget left. */
+export const AGAIN_MINIMUM_MS = 5_000;
+
+/** The least time between two after request turns in one instance. */
+export const WAKE_COOLDOWN_MS = 5_000;
 
 /**
  * The api's wake call on Vercel: where a write would poke the worker, it
- * starts a turn after the response, kept alive by `waitUntil`. A wake while a
- * turn runs asks for one more quick check once it ends (the running turn's
- * LISTEN already takes most new rows), so a burst of writes is one turn and
- * at most one more.
+ * starts a turn after the response, kept alive by `waitUntil`. Turns start at
+ * most once per cooldown in an instance (a wake sooner waits for it, so
+ * anonymous writes can't open a direct connection each), and a wake while a
+ * turn runs asks for one more once it ends (the running turn's LISTEN already
+ * takes most new rows), within the same budget, so a burst of writes is one
+ * turn and at most one more, and the whole wake stays inside the function's
+ * time limit.
  */
 export function createDrainWake(options: DrainWakeOptions): () => void {
   const { drain, log } = options;
+  const now = options.now ?? (() => performance.now());
+  const cooldownMs = options.cooldownMs ?? WAKE_COOLDOWN_MS;
   let pending: Promise<void> | undefined;
   let again = false;
-  const once = async () => {
-    const report = await drain.run({ budgetMs: options.budgetMs });
+  let lastStart = Number.NEGATIVE_INFINITY;
+  const once = async (budgetMs: number) => {
+    lastStart = now();
+    const report = await drain.run({ budgetMs });
     if (report.outcome !== 'nothing' && report.outcome !== 'busy') log.info('jobs.drain', { ...report, by: 'request' });
   };
   return () => {
@@ -225,10 +259,14 @@ export function createDrainWake(options: DrainWakeOptions): () => void {
     }
     const work = (async () => {
       try {
-        await once();
-        if (again) {
+        const wait = Math.max(0, lastStart + cooldownMs - now());
+        if (wait > 0) await sleep(wait);
+        const deadline = now() + options.budgetMs;
+        await once(options.budgetMs);
+        const left = deadline - now();
+        if (again && left >= AGAIN_MINIMUM_MS) {
           again = false;
-          await once();
+          await once(left);
         }
       } catch (error) {
         log.error('jobs.drain.failed', errorFields(error));

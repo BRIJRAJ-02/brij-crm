@@ -128,5 +128,5 @@ jobs:
           vercel() { npx -y "$VERCEL_CLI" "$@" --token "$VERCEL_TOKEN"; }
           vercel build --prod
           # No server secret may reach a file the browser loads (spec 0045); it names the variable, never the value.
-          node --env-file=.vercel/.env.production.local apps/web/client-secrets.ts .vercel/output/static
+          node apps/web/client-secrets.ts .vercel/.env.production.local .vercel/output/static
           vercel deploy --prebuilt --prod

@@ -14,6 +14,7 @@ import { createEdgeGuard } from '../edge.ts';
 import { ApiEnv, FunctionEnv } from '../env.ts';
 import { composeJobTasks } from '../jobs/compose.ts';
 import { createDrainWake, createJobDrain, type DrainReport, type JobDrain } from '../jobs/drain.ts';
+import { DAILY_CRON_HOUR_UTC } from '../jobs/graphile.ts';
 import { errorFields, log } from '../log.ts';
 import { createMailer } from '../mail/mailer.ts';
 import { createAnalytics, POSTHOG_EU_HOST } from '../monitoring/posthog.ts';
@@ -31,14 +32,28 @@ const LIVENESS_PATH = '/api/health';
 export const JOBS_SECRET_HEADER = 'x-crm-jobs-secret';
 
 /**
- * A turn's time budget: the after request turn's and the scheduled one's.
- * The slices in hand then finish their batch (each returns within 30
- * seconds), which keeps a turn inside the function's 60 second limit.
+ * A turn's time budget: the after request wake's (its turn and the one more
+ * it may run share it) and the scheduled one's. The slices in hand then
+ * finish their batch (each returns within 30 seconds), and an after request
+ * wake may first wait out its 5 second cooldown, which keeps it all inside
+ * the function's 60 second limit.
  */
-export const DRAIN_BUDGET_MS = 20_000;
+export const DRAIN_BUDGET_MS = 15_000;
 
-/** The scheduled turn runs at least this long, so the daily cron line's backfill gets its chance. */
+/**
+ * The scheduled turn in the daily cleanup's hour (03:00 UTC) runs at least
+ * this long, so the cron line's backfill gets its chance. In every other hour
+ * a scheduled turn with nothing due ends after one check, so the database can
+ * go back to sleep.
+ */
 export const SCHEDULED_MINIMUM_MS = 3_000;
+
+/** The scheduled turn's limits at `at`: the minimum only in the daily cleanup's hour. */
+export function scheduledTurn(at: Date): { readonly budgetMs: number; readonly minimumMs?: number } {
+  return at.getUTCHours() === DAILY_CRON_HOUR_UTC
+    ? { budgetMs: DRAIN_BUDGET_MS, minimumMs: SCHEDULED_MINIMUM_MS }
+    : { budgetMs: DRAIN_BUDGET_MS };
+}
 
 /** The tenant pool's size per instance: Neon's pooler multiplexes them, and each instance serves many requests. */
 export const FUNCTION_DB_CONNECTIONS = 3;
@@ -139,7 +154,7 @@ export function createFunctionApi(source: Record<string, string | undefined>, pl
       ? undefined
       : createJobDrain({
           directUrl: own.DATABASE_URL_DIRECT,
-          tasks: composeJobTasks({ env, db, onStored: () => undefined }),
+          compose: (queue) => composeJobTasks({ env, db, onStored: () => undefined, queue }),
           log,
           onFault: (error) => captureFault(error, { task: 'jobs' }),
         });
@@ -185,7 +200,7 @@ export function createFunctionApi(source: Record<string, string | undefined>, pl
     if (refused !== undefined) return refused;
     let report: DrainReport;
     try {
-      report = await drain.run({ budgetMs: DRAIN_BUDGET_MS, minimumMs: SCHEDULED_MINIMUM_MS });
+      report = await drain.run(scheduledTurn(new Date()));
     } catch (error) {
       log.error('jobs.drain.failed', errorFields(error));
       captureFault(error, { task: 'jobs' });

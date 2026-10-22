@@ -7,7 +7,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EDGE_HEADER } from '../edge.ts';
 import { ApiEnv, FunctionEnv } from '../env.ts';
 import { captureLogs, TEST_EDGE_SECRET } from '../testing.ts';
-import { createFunctionApi, JOBS_RUN_PATH, JOBS_SECRET_HEADER, secretMatches, type FunctionApi } from './handler.ts';
+import {
+  createFunctionApi,
+  DRAIN_BUDGET_MS,
+  JOBS_RUN_PATH,
+  JOBS_SECRET_HEADER,
+  scheduledTurn,
+  SCHEDULED_MINIMUM_MS,
+  secretMatches,
+  type FunctionApi,
+} from './handler.ts';
 
 const NOWHERE = 'postgres://nobody:nothing@127.0.0.1:1/none';
 const SHA = '5332cb46565e22105f3ebdc1e249337ba0ab4a7d';
@@ -154,5 +163,15 @@ describe('the jobs endpoint', () => {
     expect(secretMatches(JOBS_SECRET, JOBS_SECRET)).toBe(true);
     expect(secretMatches(JOBS_SECRET, 'short')).toBe(false);
     expect(secretMatches(JOBS_SECRET, null)).toBe(false);
+  });
+});
+
+describe('the scheduled turn', () => {
+  it('runs a minimum only in the daily cleanup hour, so other scheduled runs let the database sleep', () => {
+    expect(scheduledTurn(new Date('2026-10-22T03:10:00Z'))).toEqual({
+      budgetMs: DRAIN_BUDGET_MS,
+      minimumMs: SCHEDULED_MINIMUM_MS,
+    });
+    expect(scheduledTurn(new Date('2026-10-22T04:10:00Z'))).toEqual({ budgetMs: DRAIN_BUDGET_MS });
   });
 });

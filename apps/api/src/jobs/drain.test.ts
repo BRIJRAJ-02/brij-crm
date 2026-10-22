@@ -4,6 +4,7 @@
 // second turn in the same instance answers busy; a slow task outlasting the
 // budget ends the turn on its budget, the task finishing first; and the
 // after request trigger runs one turn for a burst of wakes, plus one more.
+import type { QueueRows } from '@crm/core';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
@@ -27,17 +28,23 @@ beforeEach(async () => {
 });
 
 /** The worker's own tasks, with booking emails sent to `send` instead. */
-function tasksWith(send: (payload: unknown) => Promise<void>): JobTasks {
+function tasksWith(send: (payload: unknown) => Promise<void>, queue: QueueRows): JobTasks {
   const tasks = composeJobTasks({
     env: { APP_ENV: 'local', MAIL_FROM: 'Timefix <sign-in@crm.localhost>', calendar: undefined },
     db,
     onStored: () => undefined,
+    queue,
   });
   return { ...tasks, bookingMail: send };
 }
 
 function drainWith(send: (payload: unknown) => Promise<void>): JobDrain {
-  return createJobDrain({ directUrl: workerUrl, tasks: tasksWith(send), log: quiet, pollMs: 100 });
+  return createJobDrain({
+    directUrl: workerUrl,
+    compose: (queue) => tasksWith(send, queue),
+    log: quiet,
+    pollMs: 100,
+  });
 }
 
 async function queueBookingMail(marker: string): Promise<void> {
@@ -115,6 +122,33 @@ describe('the job drain', () => {
 });
 
 describe('the after request trigger', () => {
+  it('waits out the cooldown before its next turn, and runs no second turn without enough budget left', async () => {
+    let clock = 0;
+    const starts: number[] = [];
+    const drain: JobDrain = {
+      run: () => {
+        starts.push(clock);
+        clock += 18_000;
+        return Promise.resolve({ outcome: 'idle', ms: 18_000 });
+      },
+      running: () => false,
+    };
+    const kept: Promise<unknown>[] = [];
+    const wake = createDrainWake({
+      drain,
+      keepAlive: (work) => kept.push(work),
+      budgetMs: 20_000,
+      cooldownMs: 20,
+      log: quiet,
+      now: () => clock,
+    });
+    wake();
+    wake();
+    await kept[0];
+    // The second wake asked for one more, but only 2 seconds of the 20 were left.
+    expect(starts).toEqual([0]);
+  });
+
   it('runs one turn for a burst of wakes, then one more, kept alive by the platform', async () => {
     const turns: string[] = [];
     let finish: (report: DrainReport) => void = () => undefined;
@@ -130,7 +164,13 @@ describe('the after request trigger', () => {
       running: () => false,
     };
     const kept: Promise<unknown>[] = [];
-    const wake = createDrainWake({ drain, keepAlive: (work) => kept.push(work), budgetMs: 20_000, log: quiet });
+    const wake = createDrainWake({
+      drain,
+      keepAlive: (work) => kept.push(work),
+      budgetMs: 20_000,
+      cooldownMs: 0,
+      log: quiet,
+    });
     wake();
     wake();
     wake();
@@ -152,6 +192,7 @@ describe('the after request trigger', () => {
       drain,
       keepAlive: (work) => kept.push(work),
       budgetMs: 20_000,
+      cooldownMs: 0,
       log: { ...quiet, error: (message) => errors.push(message) },
     });
     wake();
