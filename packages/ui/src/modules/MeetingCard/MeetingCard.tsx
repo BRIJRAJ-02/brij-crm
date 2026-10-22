@@ -45,7 +45,7 @@ export interface MeetingCardProps {
   readonly title: string;
   /** When, under the title ("Friday, October 23 · 9:00 – 9:30 AM"). */
   readonly when: string;
-  /** Where it stands, a quiet dot and word beside the time ("Confirmed", "Canceled"). */
+  /** Where it stands, a quiet dot and word beside the time ("Confirmed", "Cancelled"). */
   readonly status?: { readonly label: string; readonly hue: Hue };
   /** Callouts that need reading first (the calendar event couldn't be made, it needs a host). */
   readonly notices?: ReactNode;

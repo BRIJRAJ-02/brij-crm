@@ -242,6 +242,7 @@ export const strings = {
   unlink: (name: string) => (name === '' ? 'Unlink record' : `Unlink ${name}`),
   unlinkedToast: (name: string) => (name === '' ? 'Unlinked.' : `Unlinked from ${name}.`),
   linkFailed: 'That link didn’t go through. Try again.',
+  unlinkFailed: 'Couldn’t unlink it. Try again.',
   searchFailed: 'The search didn’t answer. Type again to try again.',
   rescheduleTitle: (title: string, name: string) => `Reschedule ${title} with ${name}`,
   tryAgain: 'Try again',

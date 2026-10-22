@@ -212,6 +212,22 @@ describe('New meeting', () => {
     await expect.element(page.getByRole('listbox', { name: 'People' })).not.toBeInTheDocument();
   });
 
+  it('leaves a row under a resting pointer alone on Tab, and Shift+Tab picks nothing', async () => {
+    await open({ people: () => peopleSearch([person('01', 'Grace Hopper', 'grace@navy.example')]) });
+    await userEvent.keyboard('gra');
+    const row = page.getByRole('option', { name: /Grace Hopper/ });
+    await expect.element(row).toBeVisible();
+    await userEvent.hover(row);
+    // The pointer highlights it, as the arrows would.
+    await expect.element(page.getByRole('textbox', { name: 'With' })).toHaveAttribute('aria-activedescendant');
+    await userEvent.keyboard('{Tab}');
+    await expect.element(page.getByRole('textbox', { name: 'With' })).toHaveValue('gra');
+    await expect.element(page.getByRole('textbox', { name: 'Email' })).toHaveValue('');
+    await userEvent.click(page.getByRole('textbox', { name: 'With' }));
+    await userEvent.keyboard('{ArrowDown}{Shift>}{Tab}{/Shift}');
+    await expect.element(page.getByRole('textbox', { name: 'With' })).toHaveValue('gra');
+  });
+
   it('puts the list away on Esc and keeps the dialog', async () => {
     await open({ people: () => peopleSearch([person('01', 'Grace Hopper', 'grace@navy.example')]) });
     await userEvent.keyboard('gr');
@@ -244,6 +260,17 @@ describe('New meeting', () => {
     await userEvent.click(page.getByRole('button', { name: /Book it/ }));
     expect(onBook).toHaveBeenCalledWith(expect.objectContaining({ guests: ['kat@nasa.example'] }));
     expect(onBook.mock.calls[0]?.[0]).not.toHaveProperty('calendarId');
+  });
+
+  it('refuses an 11th guest in the field, keeping what was typed', async () => {
+    await open();
+    await userEvent.click(page.getByRole('textbox', { name: 'Also invite' }));
+    for (let index = 0; index < 10; index += 1) await userEvent.keyboard(`g${String(index)}@navy.example{Enter}`);
+    expect(page.getByRole('list', { name: 'Also invite' }).getByRole('listitem').elements()).toHaveLength(10);
+    await userEvent.keyboard('one.more@navy.example{Enter}');
+    await expect.element(page.getByText('Up to 10 guests.')).toBeVisible();
+    await expect.element(page.getByRole('textbox', { name: 'Also invite' })).toHaveValue('one.more@navy.example');
+    expect(page.getByRole('list', { name: 'Also invite' }).getByRole('listitem').elements()).toHaveLength(10);
   });
 
   it('holds Also invite still while Book it is out, as the other fields are', async () => {

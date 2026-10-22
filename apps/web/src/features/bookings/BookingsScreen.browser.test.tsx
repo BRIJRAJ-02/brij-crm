@@ -759,6 +759,13 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     );
   });
 
+  it('says so when unlinking fails, and keeps the record', async () => {
+    const { notify } = await openWith(navy, new Error('down'));
+    await userEvent.click(page.getByRole('button', { name: 'Unlink Navy rollout' }));
+    await expect.poll(() => notify.mock.calls.at(-1)).toEqual(['danger', 'Couldn’t unlink it. Try again.']);
+    await expect.element(page.getByRole('link', { name: 'Navy rollout' })).toBeVisible();
+  });
+
   it('links one from More: the picker over Deals, then Link', async () => {
     const { link, notify } = await openWith(undefined);
     await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));

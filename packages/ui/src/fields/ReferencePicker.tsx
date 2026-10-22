@@ -295,7 +295,14 @@ export function ReferencePicker<D extends Reference>({
   // The button's name: what pressing it does, since past the first pick it shows only its chevron.
   const triggerLabel = isEmpty ? undefined : allowMultiple ? strings.addAnother : strings.change(name);
   return (
-    <div ref={rootRef} className={styles.root} {...(showLabel ? { role: 'group', 'aria-labelledby': labelId } : {})}>
+    <div
+      ref={rootRef}
+      className={styles.root}
+      // On a form the field is a named group, and while its form sends the whole group is off, chips included.
+      {...(showLabel
+        ? { role: 'group', 'aria-labelledby': labelId, ...(isDisabled ? { 'aria-disabled': true } : {}) }
+        : {})}
+    >
       {showLabel && (
         <span id={labelId} className={styles.label}>
           {name}
@@ -310,9 +317,6 @@ export function ReferencePicker<D extends Reference>({
         data-invalid={error === undefined ? undefined : ''}
         data-open={(isOpen && !isDisabled) || undefined}
         data-disabled={isDisabled || undefined}
-        // The whole field is off while its form sends, chips included (and so out of the contrast rule, as a disabled
-        // Field's text is).
-        aria-disabled={isDisabled || undefined}
         // In a popover (a grid cell's editor) its focus is the accent edge alone, as a Field's there.
         data-in-popover={isInPopover || undefined}
         onClick={(event) => {

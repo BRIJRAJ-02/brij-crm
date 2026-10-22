@@ -93,6 +93,11 @@ export function ListEditor<T extends AttributeType, V>({
   };
   const add = () => {
     if (draft.trim() === '') return;
+    // At the list's limit, one more is refused here, and what was typed stays to move or fix.
+    if (attribute.limit !== undefined && values.length >= attribute.limit.count) {
+      setMessage(attribute.limit.message);
+      return;
+    }
     const one = checkOne(draft);
     if (!one.ok) {
       setMessage(one.message);

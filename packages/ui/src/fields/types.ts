@@ -36,6 +36,11 @@ export interface FieldAttribute {
   readonly defaultCountry?: string;
   /** Record reference: whether it holds one record or several. */
   readonly cardinality?: 'one' | 'many';
+  /**
+   * A list's most values, and what to say when one more is typed (New meeting's "Up to 10 guests."): the list
+   * editors refuse it in the add field and keep what was typed, so nothing typed is lost to a refusal.
+   */
+  readonly limit?: { readonly count: number; readonly message: string };
   readonly isRequired: boolean;
   /**
    * A form checks Required as it submits (a create dialog), so an editor left
@@ -90,12 +95,16 @@ export interface EditorProps<T extends AttributeType> {
   readonly me?: ActorDisplay;
   /** The grid opened the editor by typing this: typed editors start from it, replacing the value, and searches start with it. */
   readonly startText?: string;
-  /** The grid started the edit: a list, menu or search opens at once, so one key reaches the choices. */
+  /**
+   * A list, menu or search opens at once, so one key reaches the choices: the grid starting an edit, or a dialog
+   * whose whole task is the pick (a booking's Link to a record, with nothing picked yet).
+   */
   readonly autoOpen?: boolean;
   /**
-   * The form around it is sending (a dialog's commit in flight): the value shows as it is, in Field's disabled look,
-   * and takes no change until the answer. The list editors (several emails, phones, domains or URLs) and the member
-   * and record pickers honour it, the editors a dialog's form uses today.
+   * The form around it is sending (a dialog's commit in flight): the value shows as it is and takes no change until
+   * the answer. Typed fields and a list's add field take Field's disabled look and a list's Removes are off (its
+   * chips stay as they are); a member or record picker fades its whole box. The typed editors, the list editors and
+   * the member and record pickers honour it; selects, statuses, dates, checkboxes and ratings don't yet.
    */
   readonly isDisabled?: boolean;
   /**

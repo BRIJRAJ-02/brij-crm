@@ -5,6 +5,7 @@ import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
 import { useState } from 'react';
 import { Form } from '../../molecules/Form/Form.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
+import type { FieldAttribute } from '../types.ts';
 import { expect, fn } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.email;
@@ -92,8 +93,16 @@ export const Guidance: Story = {
 const submitted = fn();
 
 /** Several emails in a form, as New meeting's Also invite. */
-function SeveralForm({ onSubmit, isSending = false }: { readonly onSubmit: () => void; readonly isSending?: boolean }) {
-  const several = sample.several?.attribute ?? sample.attribute;
+function SeveralForm({
+  onSubmit,
+  isSending = false,
+  limit,
+}: {
+  readonly onSubmit: () => void;
+  readonly isSending?: boolean;
+  readonly limit?: FieldAttribute['limit'];
+}) {
+  const several = { ...(sample.several?.attribute ?? sample.attribute), ...(limit === undefined ? {} : { limit }) };
   const [value, setValue] = useState<readonly string[]>(['ada@example.com', 'ada@work.example.com']);
   return (
     <Stage width="narrow">
@@ -135,12 +144,26 @@ export const SeveralInAForm: Story = {
   },
 };
 
-/** While the form around it sends: the chips and the add field show faded, and nothing is added or removed. */
+/** While the form around it sends: the add field and each Remove are off (the chips stay as they are), and nothing is added or removed. */
 export const SeveralWhileSending: Story = {
   render: () => <SeveralForm onSubmit={submitted} isSending />,
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('group', { name: 'Emails' })).toBeInTheDocument();
     await expect(canvas.getByRole('textbox', { name: 'Emails' })).toBeDisabled();
     for (const remove of canvas.getAllByRole('button', { name: /^Remove/ })) await expect(remove).toBeDisabled();
+  },
+};
+
+/** At the list's limit: one more typed is refused in the add field with the caller's words, and what was typed stays. */
+export const SeveralAtTheLimit: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <SeveralForm onSubmit={submitted} limit={{ count: 2, message: 'Up to 2 addresses.' }} />,
+  play: async ({ canvas, userEvent }) => {
+    const add = canvas.getByRole('textbox', { name: 'Emails' });
+    await userEvent.click(add);
+    await userEvent.keyboard('lovelace@example.org{Enter}');
+    await expect(canvas.getByText('Up to 2 addresses.')).toBeInTheDocument();
+    await expect(add).toHaveValue('lovelace@example.org');
+    await expect(canvas.getByRole('list', { name: 'Emails' }).querySelectorAll('li')).toHaveLength(2);
   },
 };

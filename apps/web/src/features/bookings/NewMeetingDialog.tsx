@@ -59,7 +59,10 @@ const MAX_GUESTS = 10;
 /** How many people from People show under With at once. */
 const SHOWN_PEOPLE = 6;
 
-/** Also invite, drawn by the field set's Email editor with several values: each address a removable chip. */
+/**
+ * Also invite, drawn by the field set's Email editor with several values: each address a removable chip, and an 11th
+ * refused in the add field with what was typed kept.
+ */
 const GUESTS: FieldAttribute = {
   id: 'guests',
   name: strings.alsoInvite,
@@ -68,6 +71,7 @@ const GUESTS: FieldAttribute = {
   isRequired: false,
   isUnique: false,
   isReadOnly: false,
+  limit: { count: MAX_GUESTS, message: strings.guestsFull(MAX_GUESTS) },
 };
 
 /** What Book it sends. */
@@ -206,6 +210,8 @@ export function NewMeetingDialog({
   const found = usePeople(people, typed);
   const [putAway, setPutAway] = useState<string | undefined>(undefined);
   const [active, setActive] = useState(-1);
+  // Whether the arrows, not a resting pointer, put the highlight where it is: only then does Tab take the row.
+  const [isKeyed, setKeyed] = useState(false);
   const shown = putAway === typed ? [] : found;
   const isListOpen = shown.length > 0 && !busy;
   const activeIndex = active < shown.length ? active : -1;
@@ -219,6 +225,7 @@ export function NewMeetingDialog({
     // The list stays away for the name picked, until the member types on.
     setPutAway(person.name.trim());
     setActive(-1);
+    setKeyed(false);
   };
 
   const keyDown = (event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -226,6 +233,7 @@ export function NewMeetingDialog({
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const step = event.key === 'ArrowDown' ? 1 : -1;
+      setKeyed(true);
       setActive(
         activeIndex === -1 && step === -1 ? shown.length - 1 : (activeIndex + step + shown.length) % shown.length,
       );
@@ -239,9 +247,9 @@ export function NewMeetingDialog({
       pick(person);
       return;
     }
-    // Tab on a highlighted row takes it, as a combobox does, and goes on to Email (filled with theirs); Shift+Tab
-    // goes back with nothing picked.
-    if (event.key === 'Tab' && !event.shiftKey && activeIndex !== -1) {
+    // Tab on a row the arrows highlighted takes it, as a combobox does, and goes on to Email (filled with theirs).
+    // Shift+Tab goes back with nothing picked, and a row under a resting pointer is never taken by Tab.
+    if (event.key === 'Tab' && !event.shiftKey && isKeyed && activeIndex !== -1) {
       const person = shown[activeIndex];
       if (person !== undefined) pick(person);
       return;
@@ -338,6 +346,7 @@ export function NewMeetingDialog({
           onChange={(next) => {
             setName(next);
             setActive(-1);
+            setKeyed(false);
           }}
           onBlur={() => {
             setPutAway(typed);
@@ -379,7 +388,10 @@ export function NewMeetingDialog({
               const person = shown[index];
               if (person !== undefined) pick(person);
             }}
-            onHighlight={setActive}
+            onHighlight={(index) => {
+              setActive(index);
+              setKeyed(false);
+            }}
           />
         )}
         <Field
@@ -465,10 +477,6 @@ export function NewMeetingDialog({
               : typeof value === 'string'
                 ? [value]
                 : [];
-            if (next.length > MAX_GUESTS) {
-              setGuestsError(strings.guestsFull(MAX_GUESTS));
-              return;
-            }
             setGuestsError(undefined);
             setGuests(next);
           }}

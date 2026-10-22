@@ -22,6 +22,7 @@ import {
   DayStrip,
   Field,
   focusLater,
+  Form,
   Menu,
   MenuItem,
   MenuTrigger,
@@ -32,7 +33,7 @@ import {
   type ToastAction,
 } from '@crm/ui';
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { zoneDisplay } from '../../public/booking/time.ts';
 import { editorSearch, useRecordSearch } from '../records/links.ts';
 import { strings } from './strings.ts';
@@ -76,9 +77,9 @@ export interface BookingLinking {
 /** How far ahead Reschedule looks: two weeks, as the timefix booking menu does. */
 const MOVE_DAYS = 14;
 
-/** What a refused link or unlink says: the server's words, else the plain line. */
-function linkMessageOf(error: unknown): string {
-  return isDataError(error) && error.message !== '' ? error.message : strings.linkFailed;
+/** What a refused link or unlink says: the server's words, else the plain line for which it was. */
+function linkMessageOf(error: unknown, fallback: string = strings.linkFailed): string {
+  return isDataError(error) && error.message !== '' ? error.message : fallback;
 }
 
 /** A refusal's sentence for the member. */
@@ -221,7 +222,7 @@ export function useBookingActions({
         });
       },
       (error: unknown) => {
-        actions.notify('danger', linkMessageOf(error));
+        actions.notify('danger', linkMessageOf(error, strings.unlinkFailed));
       },
     );
   };
@@ -652,9 +653,10 @@ function refOf(value: unknown): { readonly objectId: string; readonly recordId: 
 
 /**
  * Link to a record (polish F2): the record picker over the objects a booking may be linked to (Deals first, the
- * switcher in its menu as on a task's Records), then Link. It starts on the record linked now, if any; with none, its
- * search opens at once, since picking one is the dialog's whole task. The picker holds still while Link is out. A
- * refusal stays under the picker; linked, it closes and says so, and the card shows the record.
+ * switcher in its menu as on a task's Records), then Link (⌘↵ from anywhere in it). It starts on the record linked
+ * now, if the member may change it; starting empty, its search opens at once, since picking one is the dialog's whole
+ * task. The picker holds still while Link is out. A refusal stays under the picker; linked, it closes and says so,
+ * and the card shows the record.
  */
 function LinkRecordDialog({
   booking,
@@ -677,6 +679,9 @@ function LinkRecordDialog({
   const [picked, setPicked] = useState<RecordRefDisplay | undefined>(
     linking.objects.some((object) => object.id === now?.objectId) ? now : undefined,
   );
+  // Whether the picker started empty, kept from the first draw: clearing a pick later doesn't open the search again.
+  const [startsEmpty] = useState(picked === undefined);
+  const formId = useId();
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const search = useRecordSearch(linking.slug, objectId);
@@ -714,47 +719,51 @@ function LinkRecordDialog({
           <Button
             variant="primary"
             icon="link"
+            type="submit"
+            form={formId}
+            kbd="⌘↵"
             isPending={busy}
             isDisabled={picked === undefined || isSame}
-            onPress={link}
           >
             {busy ? strings.linking : strings.linkIt}
           </Button>
         </>
       }
     >
-      <AttributeEditor
-        attribute={LINKED_RECORD}
-        value={picked === undefined ? null : { objectId: picked.objectId, recordId: picked.recordId }}
-        {...(picked === undefined ? {} : { display: picked })}
-        surface="form"
-        autoOpen={now === undefined}
-        isDisabled={busy}
-        onSearch={editorSearch(search.onSearch)}
-        objectSwitcher={{
-          objects: linking.objects.map((object) => ({
-            id: object.id,
-            label: object.pluralName,
-            icon: object.icon,
-            hue: object.hue,
-          })),
-          objectId,
-          // Another object: a record picked in the last one goes, so Link never sends one the list no longer shows.
-          onObjectChange: (next) => {
-            setObjectId(next);
+      <Form id={formId} isBusy={busy} onSubmit={link} label={strings.linkTitle(booking.pageTitle, booking.visitorName)}>
+        <AttributeEditor
+          attribute={LINKED_RECORD}
+          value={picked === undefined ? null : { objectId: picked.objectId, recordId: picked.recordId }}
+          {...(picked === undefined ? {} : { display: picked })}
+          surface="form"
+          autoOpen={startsEmpty}
+          isDisabled={busy}
+          onSearch={editorSearch(search.onSearch)}
+          objectSwitcher={{
+            objects: linking.objects.map((object) => ({
+              id: object.id,
+              label: object.pluralName,
+              icon: object.icon,
+              hue: object.hue,
+            })),
+            objectId,
+            // Another object: a record picked in the last one goes, so Link never sends one the list no longer shows.
+            onObjectChange: (next) => {
+              setObjectId(next);
+              setError(undefined);
+              if (picked !== undefined && picked.objectId !== next) setPicked(undefined);
+            },
+          }}
+          onCommit={(value) => {
             setError(undefined);
-            if (picked !== undefined && picked.objectId !== next) setPicked(undefined);
-          },
-        }}
-        onCommit={(value) => {
-          setError(undefined);
-          const ref = refOf(value);
-          setPicked(
-            ref === undefined ? undefined : (search.displayOf(ref.recordId) ?? { ...ref, name: '', kind: 'other' }),
-          );
-        }}
-        {...(shownError === undefined ? {} : { error: shownError })}
-      />
+            const ref = refOf(value);
+            setPicked(
+              ref === undefined ? undefined : (search.displayOf(ref.recordId) ?? { ...ref, name: '', kind: 'other' }),
+            );
+          }}
+          {...(shownError === undefined ? {} : { error: shownError })}
+        />
+      </Form>
     </Modal>
   );
 }
