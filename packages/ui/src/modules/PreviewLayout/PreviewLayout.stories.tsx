@@ -1,6 +1,6 @@
 import type { PublicForm } from '@crm/contracts/forms';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
@@ -282,5 +282,129 @@ export const LongPreview: Story = {
   play: async ({ canvas }) => {
     const screen = await waitFor(() => canvas.getByRole('region', { name: 'Phone preview' }));
     await expect(screen).toHaveAttribute('tabindex', '0');
+  },
+};
+
+/**
+ * A stand in for a booking page in the frame: lines of text down to a "Powered by" foot, taller than the phone,
+ * written into the frame's own empty page (a story has no booking page to serve). As on a booking page, they arrive
+ * a moment after the frame loads (its data), inside a root the window's height (the app's mount point) that they
+ * spill out of, so the document's own size never changes.
+ */
+function writeLongPage(frame: HTMLIFrameElement) {
+  const page = frame.contentDocument;
+  if (page === null || page.getElementById('foot') !== null) return;
+  const root = page.createElement('div');
+  root.style.blockSize = '100dvb';
+  page.body.style.margin = '0';
+  page.body.append(root);
+  setTimeout(() => {
+    const lines = Array.from({ length: 60 }, (_, at) => {
+      const line = page.createElement('p');
+      line.textContent = `Line ${String(at + 1)} of the page`;
+      return line;
+    });
+    const foot = page.createElement('p');
+    foot.id = 'foot';
+    foot.textContent = 'Powered by Timefix';
+    root.append(...lines, foot);
+  }, 100);
+}
+
+/** The booking page editor with a page longer than the phone in its frame, written again whenever it loads. */
+function LongPageExample() {
+  useEffect(() => {
+    const frame = document.querySelector('iframe[title="Preview of Intro call"]');
+    if (!(frame instanceof HTMLIFrameElement)) return;
+    const write = () => {
+      writeLongPage(frame);
+    };
+    write();
+    frame.addEventListener('load', write);
+    return () => {
+      frame.removeEventListener('load', write);
+    };
+  }, []);
+  return <PageEditorExample />;
+}
+
+/** A wheel turned over `target`, in pixels; false when it was taken (its default prevented). */
+function wheel(target: Element, deltaY: number) {
+  return target.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }));
+}
+
+/** A finger dragged over `target`, from `from` to `to` down the screen. */
+function drag(target: Element, from: number, to: number) {
+  const box = target.getBoundingClientRect();
+  const at = (clientY: number) => ({
+    pointerId: 7,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: box.x + 20,
+    clientY,
+    bubbles: true,
+  });
+  target.dispatchEvent(new PointerEvent('pointerdown', at(from)));
+  target.dispatchEvent(new PointerEvent('pointermove', at(to)));
+  target.dispatchEvent(new PointerEvent('pointerup', at(to)));
+}
+
+/** The page in the frame: its window, and how far its foot sits under the phone's screen (none once in view). */
+function pageOf(frame: HTMLIFrameElement) {
+  const view = frame.contentWindow;
+  const foot = frame.contentDocument?.getElementById('foot');
+  if (view === null || foot === null || foot === undefined) throw new Error('the frame has no long page');
+  return { view, footBelow: () => foot.getBoundingClientRect().bottom - view.innerHeight };
+}
+
+/**
+ * A page longer than the phone (a booking page and its "Powered by" foot): the frame is inert, so a wheel over the
+ * phone scrolls the page for it, and the screen becomes a "Phone preview" region whose keys scroll it to its foot.
+ */
+export const LongPage: Story = {
+  render: () => <LongPageExample />,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, step }) => {
+    const region = await waitFor(() => canvas.getByRole('region', { name: 'Phone preview' }));
+    await expect(region).toHaveAttribute('tabindex', '0');
+    const frame = canvas.getByTitle('Preview of Intro call');
+    if (!(frame instanceof HTMLIFrameElement)) throw new Error('no frame');
+    const { view, footBelow } = pageOf(frame);
+    await expect(footBelow()).toBeGreaterThan(0);
+
+    await step('a wheel over the phone scrolls the page, not the editor', async () => {
+      // Taken by the page, so the editor behind stays put.
+      await expect(wheel(region, 200)).toBe(false);
+      await expect(view.scrollY).toBeGreaterThan(0);
+      await expect(wheel(region, -400)).toBe(false);
+      await expect(view.scrollY).toBe(0);
+    });
+
+    await step('a finger dragged up the phone scrolls the page, not the sheet around it', async () => {
+      await expect(getComputedStyle(region).touchAction).toBe('none');
+      const box = region.getBoundingClientRect();
+      drag(region, box.y + 300, box.y + 100);
+      await expect(view.scrollY).toBeGreaterThan(100);
+      drag(region, box.y + 100, box.y + 500);
+      await expect(view.scrollY).toBe(0);
+    });
+
+    await step('the keys scroll it, down to its foot', async () => {
+      region.focus();
+      await userEvent.keyboard('{ArrowDown}');
+      await expect(view.scrollY).toBe(40);
+      await userEvent.keyboard('{PageDown}');
+      await waitFor(() => expect(view.scrollY).toBeGreaterThan(40));
+      await userEvent.keyboard('{End}');
+      await waitFor(() => expect(footBelow()).toBeLessThanOrEqual(0));
+      await userEvent.keyboard('{Home}');
+      await waitFor(() => expect(view.scrollY).toBe(0));
+    });
+
+    await step('at its top, a new wheel upward goes on to the editor', async () => {
+      // A new gesture: past the gap that joins wheel events into one.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await expect(wheel(region, -100)).toBe(true);
+    });
   },
 };

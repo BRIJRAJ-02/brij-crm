@@ -215,6 +215,9 @@ export function createCaptureList<Item extends { readonly id: string }>(deps: Ca
           return read();
         },
         reload() {
+          // A read already on its way may have left before the change that asks for this one (a handle claimed
+          // while Links preloaded): it lands as stale and asks again.
+          epoch += 1;
           read().catch(() => undefined);
         },
       } satisfies CaptureListView<Item>,

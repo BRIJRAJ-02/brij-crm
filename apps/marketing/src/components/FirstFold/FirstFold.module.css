@@ -1,0 +1,93 @@
+/* FirstFold: at least one screen (100svh: the smallest the browser's own bars leave), growing when the showcase's
+   screen needs more (it is shown whole, full width): the bar, then a centred two tone headline, one line of copy and one call to action (claim your booking
+   address, as Cal claims a username), then the product filling the rest of the screen. Display sizes are built
+   from tokens, as the library's base layer builds its overlay scale; the headline is set in the display face
+   (styles/fonts.css). The gutters come from SiteFrame (`--site-inline`). */
+@layer components {
+  .root {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    min-block-size: 100vh;
+    min-block-size: 100svh;
+  }
+
+  .main {
+    display: grid;
+    grid-template-rows: auto auto;
+    align-content: start;
+    gap: clamp(var(--space-32), 7svh, calc(var(--space-32) * 2));
+    min-block-size: 0;
+    padding-block: clamp(var(--space-16), 5svh, calc(var(--space-32) * 2)) clamp(var(--space-12), 3svh, var(--space-24));
+    padding-inline: var(--site-inline);
+  }
+
+  .hero {
+    display: grid;
+    justify-items: center;
+    gap: clamp(var(--space-12), 2.2svh, var(--space-20));
+    text-align: center;
+  }
+
+  .title {
+    font: var(--text-note-title);
+    font-family: var(--site-font-display);
+    font-size: var(--site-text-display);
+    line-height: var(--site-leading-display);
+    letter-spacing: var(--tracking-note-title);
+  }
+
+  .line {
+    display: block;
+  }
+
+  /* Two tones: the setup quiet, the payoff bright. */
+  .line[data-tone='quiet'] {
+    color: var(--text-tertiary);
+  }
+
+  .lead {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    font-size: var(--site-text-lead);
+    line-height: var(--site-leading-lead);
+    text-wrap: balance;
+  }
+
+  /* The call to action, drawn as the booking address it gives you: the address, then the button that claims it. */
+  .claim {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-6);
+    margin-block-start: var(--space-4);
+    padding: var(--space-4);
+    padding-inline-start: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-md);
+  }
+
+  .address {
+    color: var(--text-tertiary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: nowrap;
+  }
+
+  .handle {
+    color: var(--text);
+  }
+
+  .demo {
+    min-inline-size: 0;
+  }
+
+  /* A phone: the fold is as tall as its content, so no dead ink sits under the window before the footer. */
+  @media (width < 1024px) {
+    .root {
+      min-block-size: auto;
+    }
+  }
+}
