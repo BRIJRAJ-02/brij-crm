@@ -8,8 +8,10 @@ import { RoutingRules } from './routing.ts';
 import {
   hiddenFacts,
   isHiddenFact,
+  isRecordFact,
   matchesCondition,
   matchesShowWhen,
+  RECORD_FACT,
   summarizeShowWhen,
   visibleQuestions,
 } from './show-when.ts';
@@ -74,6 +76,49 @@ describe('Show when on questions', () => {
       { budget: 'Small', size: '12' },
     );
     expect(checked).toEqual({ ok: true, answers: { budget: 'Small' } });
+  });
+});
+
+describe('record facts (AC-1603)', () => {
+  const id = '0192f6a0-7c1e-7b3a-9d4e-5f6a7b8c9d0e';
+  /** One team page rule reading `key`. */
+  const rules = (key: string) =>
+    RoutingRules.safeParse({
+      rules: [{ id: 'r1', when: { join: 'all', rules: [{ key, op: 'is', value: 'cto' }] }, then: { kind: 'message' } }],
+    });
+
+  it('names a field by its attribute id in the one spelling the database answers', () => {
+    expect(isRecordFact(`person.${id}`)).toBe(true);
+    expect(isRecordFact(`company.${id}`)).toBe(true);
+    expect(RECORD_FACT.exec(`company.${id}`)?.[2]).toBe(id);
+    expect(rules(`person.${id}`).success).toBe(true);
+  });
+
+  it('refuses a malformed id with the standard refusal, never letting it reach the uuid cast (it answered 500)', () => {
+    const malformed = [
+      `person.${'-'.repeat(36)}`,
+      `person.${'0'.repeat(36)}`,
+      // Hyphens where Postgres would take them, but not the canonical 8-4-4-4-12.
+      'person.0192-f6a07c1e-7b3a-9d4e-5f6a7b8c9d0e',
+      `person.${id.toUpperCase()}`,
+      `person.${id.replaceAll('-', '')}`,
+      `person.{${id}}`,
+      `person.${id} `,
+      `person.${id}0`,
+      `deal.${id}`,
+      `person.${id.replace('0e', 'zz')}`,
+    ];
+    for (const key of malformed) {
+      expect(isRecordFact(key)).toBe(false);
+      const parsed = rules(key);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error?.issues).toEqual([
+        expect.objectContaining({
+          path: ['rules', 0, 'when', 'rules', 0, 'key'],
+          message: 'Pick a question or a field.',
+        }),
+      ]);
+    }
   });
 });
 

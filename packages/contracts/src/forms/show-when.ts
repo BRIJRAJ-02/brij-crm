@@ -49,8 +49,12 @@ export interface ShowWhen {
 /** The facts a condition reads, by key: answers as the answer check made them, record fields as their values. */
 export type Facts = Readonly<Record<string, unknown>>;
 
-/** The record facts' key prefixes (AC-1603). */
-export const RECORD_FACT = /^(person|company)\.([0-9a-f-]{36})$/;
+/**
+ * A record fact's key (AC-1603): `person.` or `company.`, then the field's attribute id as a uuid in its one
+ * canonical spelling (lower case, 8-4-4-4-12 digits), the second group. Anything else is no record fact: it fails
+ * `FactKey` at the boundary, so a malformed id (36 dashes once answered 500) never reaches the database's uuid cast.
+ */
+export const RECORD_FACT = /^(person|company)\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 /** True when a key names a record field, not an answer. */
 export function isRecordFact(key: string): boolean {

@@ -3,16 +3,16 @@
 // access door like After someone sends it, hosts only on a round robin page,
 // and every host named must be in that page's rotations. A team page's rules
 // may read only the record fields their writer can see.
-import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { isHiddenFact, NUMBER_OPS, RECORD_FACT, type RoutingRule } from '@crm/contracts';
+import { and, eq, isNull } from 'drizzle-orm';
+import { isHiddenFact, NUMBER_OPS, type RoutingRule } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import type { Access } from '../access/policy.ts';
-import { attributeVisible } from '../access/visibility.ts';
 import { bookingTargetProblem } from '../booking/pages.ts';
 import { refuseOn } from '../engine/refusals.ts';
+import { fieldsSeen, ruleFields } from './seen.ts';
 
-const { attributes, bookingPageRotations, bookingPages, rotationMembers, rotations } = schema;
+const { bookingPageRotations, bookingPages, rotationMembers, rotations } = schema;
 
 /** A rule's name in a sentence: "Rule 2" or "Rule 2, “Enterprise”,". */
 export function ruleName(rule: RoutingRule, index: number): string {
@@ -128,17 +128,13 @@ async function checkRuleFields(
   const read = new Map<string, number>();
   for (const [index, rule] of rules.entries()) {
     if (kept.has(JSON.stringify(rule))) continue;
-    for (const condition of rule.when.rules) {
-      const attributeId = RECORD_FACT.exec(condition.key)?.[2];
-      if (attributeId !== undefined && !read.has(attributeId)) read.set(attributeId, index);
+    for (const attributeId of ruleFields(rule)) {
+      if (!read.has(attributeId)) read.set(attributeId, index);
     }
   }
   if (read.size === 0) return;
-  const found = await tx
-    .select({ id: attributes.id, objectId: attributes.objectId, listId: attributes.listId })
-    .from(attributes)
-    .where(inArray(attributes.id, [...read.keys()]));
-  const visible = new Set(found.filter((attribute) => attributeVisible(access, attribute)).map((each) => each.id));
+  // Even for a reader nothing restricts: a field this workspace doesn't hold is never one they can use.
+  const visible = await fieldsSeen(tx, access, [...read.keys()]);
   for (const [attributeId, index] of read) {
     const rule = rules[index];
     if (!visible.has(attributeId) && rule !== undefined) {
