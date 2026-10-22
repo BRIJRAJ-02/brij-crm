@@ -12,9 +12,13 @@
 # GITHUB_SHA for the build). Before the deploy, a check refuses a build whose client files hold any server secret's
 # value (apps/web/client-secrets.ts).
 #
-# Repository variables: VERCEL_ORG_ID, VERCEL_PROJECT_ID, SENTRY_ORG, SENTRY_PROJECT_WEB
-# Secrets: VERCEL_TOKEN, DATABASE_URL_OWNER (function mode only), SENTRY_AUTH_TOKEN (optional: an organization
-# token that can only upload releases)
+# Two productions deploy from the same commit, one job each (the matrix below): brij-crm on the personal Vercel,
+# and Timefix (app.timefix.ai, project timefix-app on the Timefix Vercel team, its own Neon database). A target
+# whose token is unset is skipped with a notice.
+# Repository variables: VERCEL_ORG_ID, VERCEL_PROJECT_ID, TIMEFIX_VERCEL_ORG_ID, TIMEFIX_VERCEL_PROJECT_ID,
+# SENTRY_ORG, SENTRY_PROJECT_WEB
+# Secrets: VERCEL_TOKEN and TIMEFIX_VERCEL_TOKEN, DATABASE_URL_OWNER and TIMEFIX_DATABASE_URL_OWNER (function mode
+# only), SENTRY_AUTH_TOKEN (optional: an organization token that can only upload releases)
 #
 # Order (8 October 2026): the web app ships only after CI passes on main, and, behind a proxied API, only once that
 # API runs this commit, when the commit changed the API at all. A new web app calling procedures the old API lacks
@@ -33,15 +37,32 @@ concurrency:
 
 jobs:
   deploy:
+    name: deploy (${{ matrix.target }})
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: brij-crm
+            org: VERCEL_ORG_ID
+            project: VERCEL_PROJECT_ID
+            token: VERCEL_TOKEN
+            owner: DATABASE_URL_OWNER
+            health: https://brij-crm-phi.vercel.app/api/health
+          - target: timefix
+            org: TIMEFIX_VERCEL_ORG_ID
+            project: TIMEFIX_VERCEL_PROJECT_ID
+            token: TIMEFIX_VERCEL_TOKEN
+            owner: TIMEFIX_DATABASE_URL_OWNER
+            health: https://app.timefix.ai/api/health
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
     env:
       VERCEL_CLI: vercel@54.4.1
-      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_ORG_ID: ${{ vars[matrix.org] }}
+      VERCEL_PROJECT_ID: ${{ vars[matrix.project] }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -56,11 +77,11 @@ jobs:
       - name: Read where the api runs
         id: mode
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets[matrix.token] }}
         run: |
           set -euo pipefail
           if [ -z "$VERCEL_TOKEN" ]; then
-            echo "::notice::VERCEL_TOKEN isn't set yet, so there's nothing to deploy to."
+            echo "::notice::${{ matrix.token }} isn't set yet, so there's nothing to deploy to."
             echo "deploy=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -78,7 +99,7 @@ jobs:
         if: steps.mode.outputs.deploy == 'true' && steps.mode.outputs.api == 'proxy'
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
-          HEALTH_URL: https://brij-crm-phi.vercel.app/api/health
+          HEALTH_URL: ${{ matrix.health }}
         run: |
           set -euo pipefail
           # The api's build filter (render.yaml): a commit that changes none of them doesn't redeploy the API.
@@ -101,18 +122,18 @@ jobs:
       - name: Apply migrations (the api runs on Vercel)
         if: steps.mode.outputs.deploy == 'true' && steps.mode.outputs.api == 'function'
         env:
-          DATABASE_URL_OWNER: ${{ secrets.DATABASE_URL_OWNER }}
+          DATABASE_URL_OWNER: ${{ secrets[matrix.owner] }}
         run: |
           set -euo pipefail
           if [ -z "$DATABASE_URL_OWNER" ]; then
-            echo "::error::The api runs on Vercel, so this deploy applies the migrations, but the DATABASE_URL_OWNER secret isn't set. See docs/runbooks/api-on-vercel.md."
+            echo "::error::The api runs on Vercel, so this deploy applies the migrations, but the ${{ matrix.owner }} secret isn't set. See docs/runbooks/api-on-vercel.md."
             exit 1
           fi
           node packages/db/scripts/migrate.ts
       - name: Build and deploy
         if: steps.mode.outputs.deploy == 'true'
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets[matrix.token] }}
           # The source map upload (spec 0010), skipped when the token is absent.
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}

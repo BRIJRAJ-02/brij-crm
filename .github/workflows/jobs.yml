@@ -7,7 +7,8 @@
 # API has no such endpoint (it answers NOT_FOUND, or FORBIDDEN_ORIGIN to a write with no Origin), which this treats
 # as nothing to do.
 #
-# Secret: JOBS_RUN_SECRET, the same value as the Vercel project's Production JOBS_RUN_SECRET. Unset, this does nothing.
+# Each production gets its own run: brij-crm (JOBS_RUN_SECRET) and Timefix at app.timefix.ai (TIMEFIX_JOBS_RUN_SECRET),
+# each the same value as that Vercel project's Production JOBS_RUN_SECRET. A target whose secret is unset does nothing.
 name: Jobs
 
 on:
@@ -23,17 +24,28 @@ permissions: {}
 
 jobs:
   run:
+    name: run (${{ matrix.target }})
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: brij-crm
+            secret: JOBS_RUN_SECRET
+            url: https://brij-crm-phi.vercel.app/api/internal/jobs/run
+          - target: timefix
+            secret: TIMEFIX_JOBS_RUN_SECRET
+            url: https://app.timefix.ai/api/internal/jobs/run
     steps:
       - name: Run the job queue for one turn
         env:
-          JOBS_RUN_SECRET: ${{ secrets.JOBS_RUN_SECRET }}
-          JOBS_URL: https://brij-crm-phi.vercel.app/api/internal/jobs/run
+          JOBS_RUN_SECRET: ${{ secrets[matrix.secret] }}
+          JOBS_URL: ${{ matrix.url }}
         run: |
           set -euo pipefail
           if [ -z "$JOBS_RUN_SECRET" ]; then
-            echo "::notice::JOBS_RUN_SECRET isn't set, so there is no job run to call."
+            echo "::notice::${{ matrix.secret }} isn't set, so there is no job run to call."
             exit 0
           fi
           # The secret goes in a header read from stdin, never on the command line or in the log.
