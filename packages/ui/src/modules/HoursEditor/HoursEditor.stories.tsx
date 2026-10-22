@@ -72,19 +72,25 @@ export const Week: Story = {
 export const Phone: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => (
-    <Stage width="phone">
+    // Stretched across a narrow column (the editor is its own size container, so it needs a width given to it,
+    // as a phone's settings card gives it), under 480px.
+    <Stage width="narrow-fill">
       <HoursEditor {...args} rows={weekRows()} />
     </Stage>
   ),
   play: async ({ canvas }) => {
     const [saturday, sunday] = canvas.getAllByText('Unavailable');
     const day = canvas.getByRole('switch', { name: 'Saturday' }).closest('li');
-    if (saturday === undefined || sunday === undefined || day === null) throw new Error('no day off');
+    const dayCell = day?.firstElementChild;
+    if (saturday === undefined || sunday === undefined || day === null || !(dayCell instanceof HTMLElement))
+      throw new Error('no day off');
     const row = day.getBoundingClientRect();
     const label = saturday.getBoundingClientRect();
-    // On the day's own line, starting in the left half (the times' column), not pushed to the end.
+    // On the day's own line, right after the day's column (where the times start on a wide card), with the
+    // same start on every day off.
     await expect(label.top).toBeLessThan(row.top + row.height / 2);
-    await expect(label.left - row.left).toBeLessThan(row.width / 2);
+    await expect(label.left - dayCell.getBoundingClientRect().right).toBeLessThanOrEqual(16);
+    await expect(label.left).toBeGreaterThanOrEqual(dayCell.getBoundingClientRect().right);
     await expect(Math.round(label.left)).toBe(Math.round(sunday.getBoundingClientRect().left));
   },
 };
