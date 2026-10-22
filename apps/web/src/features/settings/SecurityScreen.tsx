@@ -31,12 +31,12 @@ import { TwoFactorSection } from './TwoFactorSection.tsx';
 const CONFIRM_EXIT_MS = 200;
 
 /** A busy Card of rows: one section's content while its read is out. */
-function BusyRows({ rows }: { readonly rows: number }) {
+function BusyRows({ rows, hasControl = true }: { readonly rows: number; readonly hasControl?: boolean }) {
   return (
     <Card isBusy>
       {Array.from({ length: rows }, (_, index) => (
         <SettingsRow key={index} title="" description={<Skeleton width="medium" />}>
-          <Skeleton width="short" />
+          {hasControl && <Skeleton width="short" />}
         </SettingsRow>
       ))}
     </Card>
@@ -58,7 +58,8 @@ export function SecurityLoading() {
       </SettingsSection>
       <DevicesLoading />
       <SettingsSection title={strings.activity.section} description={strings.activity.description}>
-        <BusyRows rows={3} />
+        {/* Activity rows have no control, as its own loading rows don't. */}
+        <BusyRows rows={3} hasControl={false} />
       </SettingsSection>
     </>
   );
