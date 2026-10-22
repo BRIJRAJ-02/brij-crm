@@ -230,7 +230,7 @@ export const strings = {
   destinationUnusableColleague: 'The owner’s pick can’t take bookings now, so they go on the owner’s default.',
   destinationFailed: 'Couldn’t load calendars. Reload the page to try again.',
   destinationOwnerOnly: 'Only the page’s owner sees their calendars.',
-  destinationLoading: 'Loading calendars…',
+  destinationLoading: 'Loading calendars',
   noCalendarTitle: 'No calendar connected',
   connectCalendar: 'Connect calendar',
   notNow: 'Not now',

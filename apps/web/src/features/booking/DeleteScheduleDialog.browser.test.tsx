@@ -80,9 +80,7 @@ describe('the delete schedule confirm', () => {
   it('asks by name, says where its pages go and that it can’t be undone, Cancel first and the verb last', async () => {
     const { dialog } = await open(() => Promise.resolve());
     expect(dialog.textContent).toContain('Delete the Evenings schedule?');
-    expect(dialog.textContent).toContain(
-      'Intro call and Demo will use Working hours, your default. This can’t be undone.',
-    );
+    expect(dialog.textContent).toContain('Intro call and Demo will use Working hours, your default.');
     const buttons = [...dialog.querySelectorAll('button')].map((each) => each.textContent.trim());
     expect(buttons.findIndex((text) => text.startsWith('Cancel'))).toBeLessThan(
       buttons.findIndex((text) => text.startsWith('Delete schedule')),
