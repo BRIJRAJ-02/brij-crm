@@ -88,11 +88,13 @@ describe('a url contains with an @ handle', () => {
     expect(evaluate(evaluateContext, rows, contains('@ada', 'does_not_contain'), [])).toEqual(['grace', 'none']);
   });
 
-  it('compiles to a LIKE on each needle, and is not handed to the one text search', () => {
+  it('compiles to a LIKE on each needle, and searches for the handle alone (a superset each hit is checked on)', () => {
     const { sql, params } = compiled(contains('@Ada'));
     expect(params).toEqual(expect.arrayContaining(['%@ada%', '%/ada%']));
     expect(sql).toMatch(/like \$\d+ or lower\(left\(v\.text_value, 2048\)\) like \$\d+/);
-    expect(searchTermsOf(compileContext, contains('@ada'))).toEqual([]);
+    expect(searchTermsOf(compileContext, contains('@ada'))).toEqual([
+      expect.objectContaining({ attributeId: twitter.id, text: 'ada' }),
+    ]);
   });
 
   it('leaves a plain contains as one LIKE the search can answer', () => {
