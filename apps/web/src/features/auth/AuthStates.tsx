@@ -12,7 +12,8 @@ import { PRODUCT_LOGO } from '../../brand.ts';
 /**
  * Sign in's split screen, the frame first run continues in (spec 0036): a
  * sample workspace in the sketch beside the task (as Attio and Linear show
- * the product on sign in); first run then draws its own, live. No step count here; the count starts at first run's Step 1 of 4.
+ * the product on sign in); first run then draws its own, live. No step
+ * count here; the count starts at first run's Step 1 of 4.
  */
 export function signInFrame() {
   return { preview: <WorkspacePreview workspaceName="" personName="" sample /> } as const;

@@ -6,8 +6,9 @@
    (size-sidebar) on surface-sidebar, the page beside it on surface, with the
    app's head height (size-bar) and row heights (size-nav-item, size-row).
    Rows carry the app's labels; names are what the person typed, or the
-   sample workspace; the table is still Skeleton bars until there is a sample. The part a step is about takes the focus ring
-   (accent-line and the faint halo), easing to it as the step changes. */
+   sample workspace; the table is still Skeleton bars until there is a
+   sample. The part a step is about takes the focus ring (accent-line and
+   the faint halo), easing to it as the step changes. */
 @layer components {
   .root {
     position: relative;

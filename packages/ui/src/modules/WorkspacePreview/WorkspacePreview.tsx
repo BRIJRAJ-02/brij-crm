@@ -29,7 +29,8 @@ export interface WorkspacePreviewProps {
   /**
    * A believable sample workspace in place of the bars: a named workspace
    * and person, and a People table with names (sign in, verify, join, before
-   * anyone has typed). First run leaves it off, so what is typed shows.
+   * anyone has typed). The sample person shows only with the sample
+   * workspace. First run leaves it off, so what is typed shows.
    */
   readonly sample?: boolean;
 }
@@ -39,27 +40,26 @@ interface SketchRow {
   readonly icon: IconName;
   readonly label: string;
   readonly tile?: Hue;
-  readonly width: 'long' | 'medium' | 'short';
   readonly isCalendar?: boolean;
   readonly area?: WorkspacePreviewArea;
 }
 
 const NAV: readonly SketchRow[] = [
-  { icon: 'house', label: strings.nav.home, width: 'medium' },
-  { icon: 'inbox', label: strings.nav.inbox, width: 'short' },
-  { icon: 'square-check', label: strings.nav.tasks, width: 'medium' },
-  { icon: 'calendar', label: strings.nav.calendar, width: 'long', isCalendar: true },
+  { icon: 'house', label: strings.nav.home },
+  { icon: 'inbox', label: strings.nav.inbox },
+  { icon: 'square-check', label: strings.nav.tasks },
+  { icon: 'calendar', label: strings.nav.calendar, isCalendar: true },
 ];
 
 const AREA_ROWS: readonly SketchRow[] = [
-  { icon: 'calendar-clock', label: strings.nav.booking, width: 'medium', area: 'booking' },
-  { icon: 'clipboard-list', label: strings.nav.forms, width: 'short', area: 'forms' },
+  { icon: 'calendar-clock', label: strings.nav.booking, area: 'booking' },
+  { icon: 'clipboard-list', label: strings.nav.forms, area: 'forms' },
 ];
 
 const RECORDS: readonly SketchRow[] = [
-  { icon: 'user', label: strings.objects.people, tile: 'green', width: 'medium' },
-  { icon: 'building', label: strings.objects.companies, tile: 'blue', width: 'long' },
-  { icon: 'circle-dollar-sign', label: strings.objects.deals, tile: 'orange', width: 'short' },
+  { icon: 'user', label: strings.objects.people, tile: 'green' },
+  { icon: 'building', label: strings.objects.companies, tile: 'blue' },
+  { icon: 'circle-dollar-sign', label: strings.objects.deals, tile: 'orange' },
 ];
 
 /** Enough rows to run off the foot of the tallest window; the frame cuts the rest. */
@@ -84,7 +84,9 @@ export function WorkspacePreview({
   sample = false,
 }: WorkspacePreviewProps) {
   const workspace = workspaceName.trim() === '' && sample ? strings.sampleWorkspace : workspaceName.trim();
-  const person = personName.trim() === '' && sample ? strings.samplePerson : personName.trim();
+  // The sample person only beside the sample workspace: next to a real one (an invitation) the foot stays a bar.
+  const person =
+    personName.trim() === '' && sample && workspaceName.trim() === '' ? strings.samplePerson : personName.trim();
   const row = (each: SketchRow) => (
     <li
       key={each.icon}

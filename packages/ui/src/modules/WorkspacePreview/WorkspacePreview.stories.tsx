@@ -35,18 +35,25 @@ export const Default: Story = {
   },
 };
 
-/** Nothing typed yet: bars stand in for both names and their avatars. */
 /** Sign in's sketch: a sample workspace with a People table, before anyone has typed. */
 export const Sample: Story = {
   args: { workspaceName: '', personName: '', sample: true },
   // New on 22 October 2026: its baseline comes with the next `pnpm test:visual --update`.
   parameters: { crm: { screenshot: false } },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    await expect(canvasElement.textContent).toContain('Halcyon Labs');
+    await expect(canvasElement.textContent).toContain('Ada Lovelace');
+  },
 };
 
+/** Nothing typed yet: bars stand in for both names and their avatars; the rows keep the app's labels. */
 export const Empty: Story = {
   args: { workspaceName: '', personName: '', focus: 'person' },
   play: async ({ canvasElement }) => {
-    await expect(canvasElement.textContent).toBe('');
+    await expect(canvasElement.textContent).not.toContain('Halcyon Labs');
+    await expect(canvasElement.textContent).not.toContain('Maya Chen');
+    await expect(canvasElement.textContent).toContain('Home');
   },
 };
 
