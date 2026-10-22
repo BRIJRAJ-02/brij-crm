@@ -2,7 +2,7 @@
 // Purpose: Settings › Account › Sign in and devices (spec 0033): how this account signs in, the devices signed in to it, and what happened lately.
 // Main task: see each device (browser and system, rough place, last use) and sign one out, or every other one, after a confirm.
 // Leaves out: signing this device out (the account menu does).
-import { STEP_UP_MINUTES, type AccountSession, type ActivityPage, type DataLayer } from '@crm/data';
+import { type AccountSession, type ActivityPage, type DataLayer } from '@crm/data';
 import { useAccountSecurity, useAccountSessions } from '@crm/data/react';
 import {
   Badge,
@@ -10,7 +10,6 @@ import {
   Card,
   EmptyState,
   Icon,
-  InfoTip,
   Modal,
   RelativeTime,
   SettingsRow,
@@ -31,11 +30,25 @@ import { TwoFactorSection } from './TwoFactorSection.tsx';
 const CONFIRM_EXIT_MS = 200;
 
 /** A busy Card of rows: one section's content while its read is out. */
-function BusyRows({ rows, hasControl = true }: { readonly rows: number; readonly hasControl?: boolean }) {
+function BusyRows({
+  rows,
+  hasControl = true,
+  hasLeading = false,
+}: {
+  readonly rows: number;
+  readonly hasControl?: boolean;
+  /** A device row's icon place, so the text doesn't move right as the list arrives. */
+  readonly hasLeading?: boolean;
+}) {
   return (
     <Card isBusy>
       {Array.from({ length: rows }, (_, index) => (
-        <SettingsRow key={index} title="" description={<Skeleton width="medium" />}>
+        <SettingsRow
+          key={index}
+          title=""
+          description={<Skeleton width="medium" />}
+          {...(hasLeading ? { leading: <Skeleton shape="tile" />, leadingAlign: 'center' as const } : {})}
+        >
           {hasControl && <Skeleton width="short" />}
         </SettingsRow>
       ))}
@@ -69,7 +82,7 @@ export function SecurityLoading() {
 function DevicesLoading() {
   return (
     <SettingsSection title={strings.devices} description={strings.devicesDescription}>
-      <BusyRows rows={3} />
+      <BusyRows rows={3} hasLeading />
     </SettingsSection>
   );
 }
@@ -105,7 +118,7 @@ export interface SecurityScreenProps {
 /** Which confirm is showing: one device's sign out, or every other device's. */
 type Confirm = { readonly kind: 'one'; readonly session: AccountSession } | { readonly kind: 'others' };
 
-/** Settings › Account › Sign in and devices: the Devices table, each ending asked first in a danger Modal. */
+/** Settings › Account › Sign in and devices: each section a Card of rows, each ending asked first in a danger Modal. */
 export function SecurityScreen({ data, toasts, activity, onActivityRetry = () => undefined }: SecurityScreenProps) {
   const view = data.account.sessions();
   const state = useAccountSessions(view);
@@ -235,7 +248,6 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
                   <Button ref={othersRef} variant="danger" onPress={() => ask({ kind: 'others' })}>
                     {strings.signOutOthers}
                   </Button>
-                  <InfoTip label={strings.signOutOthers}>{strings.signOutOthersInfo(STEP_UP_MINUTES)}</InfoTip>
                 </>
               ),
             }

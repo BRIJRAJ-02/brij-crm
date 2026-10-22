@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Settings › Account › Profile (spec 0031, AC-821): how this member appears in this workspace.
-// Main task: change their name (the SaveBar at the view's foot shows once it changed).
-// Leaves out: the picture upload (#32: Google's picture or initials until then, so no button), editing the email (the account's), the time zone (Preferences, right above in the nav), and account deletion (the account lane).
+// Main task: change their name (the SaveBar at the view’s foot shows once it changed), or delete the account.
+// Leaves out: the picture upload (#32: Google's picture or initials until then, so no button), editing the email (the account's), the time zone (Preferences, right above in the nav). Deleting the account sits last, in its Danger zone (moved here from Account › Security, 22 October 2026).
 import { isDataError, type DataLayer, type MyProfile } from '@crm/data';
 import { useAccountSecurity } from '@crm/data/react';
 import {
