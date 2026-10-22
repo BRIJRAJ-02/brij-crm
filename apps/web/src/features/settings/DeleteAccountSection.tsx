@@ -4,11 +4,12 @@
 // Main task: see what stands in the way (workspaces you are the last owner of), then confirm with your email and a step up.
 // Leaves out: deleting a workspace or handing ownership on (each workspace's Members settings), and any grace window.
 import { isDataError, type AccountSecurityState, type DataLayer, type DeletionBlocker } from '@crm/data';
+import { useAccountSecurity } from '@crm/data/react';
 import { Button, Callout, Card, Field, Link, Modal, SettingsRow, SettingsSection } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { signInHref } from '../auth/redirect.ts';
-import { membersSettingsHref } from './nav.ts';
+import { generalSettingsHref, membersSettingsHref } from './nav.ts';
 import { strings } from './security-strings.ts';
 import { useStepUp } from './StepUp.tsx';
 
@@ -23,8 +24,57 @@ export interface DeleteAccountSectionProps {
 /** What the confirm learned when it opened: who is signed in, and the workspaces in the way. */
 type Ready = { readonly email: string; readonly blockers: readonly DeletionBlocker[] };
 
-/** The danger zone: one row, and the danger Modal that checks, asks for the email and a step up, then deletes. */
+/** The delete account confirm: `open` it, and render its `dialog`. */
+export interface DeleteAccount {
+  readonly open: () => void;
+  readonly dialog: ReactNode;
+}
+
+/** The danger zone: one row, and the confirm. */
 export function DeleteAccountSection({ data, security }: DeleteAccountSectionProps) {
+  const deletion = useDeleteAccount(data, security);
+  return (
+    <SettingsSection title={copy.section}>
+      <Card>
+        <SettingsRow title={copy.row} description={copy.rowText}>
+          <Button variant="danger" onPress={deletion.open}>
+            {copy.action}
+          </Button>
+        </SettingsRow>
+      </Card>
+      {deletion.dialog}
+    </SettingsSection>
+  );
+}
+
+/**
+ * Delete your account as a quiet action outside Settings, with the same confirm: the page of a deleted workspace
+ * that was the person's last, where Settings can't open (the confirm told them to delete it first).
+ */
+export function DeleteAccountAction({
+  data,
+  workspaceName,
+}: {
+  readonly data: DataLayer;
+  readonly workspaceName: string;
+}) {
+  const security = useAccountSecurity(data.account.security());
+  const deletion = useDeleteAccount(data, security, workspaceName);
+  return (
+    <>
+      <Button variant="link" onPress={deletion.open}>
+        {copy.pageAction}
+      </Button>
+      {deletion.dialog}
+    </>
+  );
+}
+
+/**
+ * The danger Modal that checks what stands in the way, asks for the email and a step up, then deletes. Opened from a
+ * deleted workspace's page (`lostWorkspace`), it first says that workspace can't be restored by them afterwards.
+ */
+function useDeleteAccount(data: DataLayer, security: AccountSecurityState, lostWorkspace?: string): DeleteAccount {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [ready, setReady] = useState<Ready | undefined>(undefined);
@@ -112,11 +162,15 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
         tone="warning"
         title={copy.blockedTitleOne}
         isAnnounced
-        actions={ready.blockers.map((each) => (
-          <Link key={each.slug} href={membersSettingsHref(each.slug)}>
+        actions={ready.blockers.flatMap((each) => [
+          <Link key={`${each.slug}:members`} href={membersSettingsHref(each.slug)}>
             {copy.openMembers(each.name)}
-          </Link>
-        ))}
+          </Link>,
+          // Deleting it is the other way out, in its General settings' Danger zone.
+          <Link key={`${each.slug}:general`} href={generalSettingsHref(each.slug)}>
+            {copy.openGeneral(each.name)}
+          </Link>,
+        ])}
       >
         {copy.blockedText(ready.blockers.map((each) => each.name))}
       </Callout>
@@ -125,6 +179,7 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
     body = (
       <>
         {error !== undefined && <Callout tone="danger">{error}</Callout>}
+        {lostWorkspace !== undefined && <Callout tone="warning">{copy.lostWorkspace(lostWorkspace)}</Callout>}
         {copy.text}
         <Field
           label={copy.emailLabel(ready.email)}
@@ -143,15 +198,9 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
   let label: string = copy.action;
   if (isDeleting) label = copy.deleting;
   else if (stepUp.willSend) label = strings.stepUp.send;
-  return (
-    <SettingsSection title={copy.section}>
-      <Card>
-        <SettingsRow title={copy.row} description={copy.rowText}>
-          <Button variant="danger" onPress={open}>
-            {copy.action}
-          </Button>
-        </SettingsRow>
-      </Card>
+  return {
+    open,
+    dialog: (
       <Modal
         title={blocked ? copy.blockedTitleOne : copy.title}
         tone="danger"
@@ -175,6 +224,6 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
       >
         {body}
       </Modal>
-    </SettingsSection>
-  );
+    ),
+  };
 }

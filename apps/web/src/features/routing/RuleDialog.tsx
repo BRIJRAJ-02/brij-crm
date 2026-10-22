@@ -24,7 +24,12 @@ export type RuleSurface =
       /** A team page's people (its rotations' members); empty for a personal page. */
       readonly poolOf: (pageId: string) => readonly PoolMember[];
     }
-  | { readonly kind: 'page'; readonly pool: readonly PoolMember[] };
+  | {
+      readonly kind: 'page';
+      /** The team page itself: its Routing card reads the page's rules from the data layer by it. */
+      readonly pageId: string;
+      readonly pool: readonly PoolMember[];
+    };
 
 /** Props for RuleDialog. */
 export interface RuleDialogProps {

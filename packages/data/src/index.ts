@@ -121,6 +121,7 @@ import {
   type RoutingReportHeld,
   type RoutingReportSurface,
 } from './routing/reports.ts';
+import { createPageRules, type PageRulesHeld } from './routing/page-rules.ts';
 import {
   createAccountSecurityStore,
   isFresh as isSessionFresh,
@@ -395,6 +396,7 @@ export type {
   RoutingReportState,
   RoutingReportSurface,
 } from './routing/reports.ts';
+export type { PageRulesHeld } from './routing/page-rules.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -973,6 +975,11 @@ export function createDataLayer({
   let ended = false;
   // Whether `me.get` has answered a person since the last sign in or out: a 401 then always ends their session.
   let seenPerson = false;
+  // While this tab deletes its own account (spec 0033): the server ends the session before it answers, so another
+  // call's 401 meanwhile (the live connection asking again) is that ending, which the deletion's own page explains.
+  // Such a 401 is held back, not forgotten: if the deletion itself answers 401 or fails, the session ends as usual.
+  let deletingAccount = false;
+  let heldEnding = false;
   // Live updates: loaded with the first watched workspace, and this tab's writes waiting for their echo.
   let live: Promise<Live> | undefined;
   const mutations = createMutationLog();
@@ -1042,6 +1049,7 @@ export function createDataLayer({
     });
     pendingOptions.clear();
     bookingPageLists.clear();
+    pageRules.clear();
     formLists.clear();
     schedules.clear();
     preferences.clear();
@@ -1108,17 +1116,30 @@ export function createDataLayer({
         throw failure;
       }
       if (failure.code === 'UNAUTHENTICATED' && !ended) {
-        ended = true;
-        // A write still waiting for its answer is lost with the session (its layer leaves with the records), so
-        // sign in says so; read before forget() clears the log.
-        const unsaved = mutations.unanswered();
-        forget();
-        // Off to sign in first, then the app drops the last person's pages.
-        onSignedOut(currentPath(), { unsaved });
-        onSessionChange();
+        if (deletingAccount) heldEnding = true;
+        else endSession();
       }
       throw failure;
     }
+  }
+
+  /** Whether a 401 was held back while the account was being deleted, clearing it for the next deletion. */
+  function takeHeldEnding(): boolean {
+    const held = heldEnding;
+    heldEnding = false;
+    return held;
+  }
+
+  /** The session ended under the person (a 401): off to sign in once, saying whether a change was lost. */
+  function endSession() {
+    ended = true;
+    // A write still waiting for its answer is lost with the session (its layer leaves with the records), so
+    // sign in says so; read before forget() clears the log.
+    const unsaved = mutations.unanswered();
+    forget();
+    // Off to sign in first, then the app drops the last person's pages.
+    onSignedOut(currentPath(), { unsaved });
+    onSessionChange();
   }
 
   const auth = createAuth({ origin, fetch, reset, report: reportSafely });
@@ -1742,6 +1763,8 @@ export function createDataLayer({
     report: (workspace, surface, days) =>
       beforeRead(workspace).then(() => call((options) => api.routing.report({ workspace, surface, days }, options))),
   });
+  // A team page's rules as its Routing card reads them: filled by the page's answers, patched by its updates.
+  const pageRules = createPageRules();
 
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
   // a `schedules` event.
@@ -2841,7 +2864,10 @@ export function createDataLayer({
       },
       /** One page. `NOT_FOUND` for one the reader may not change. */
       get: (workspace: string, pageId: string): Promise<BookingPageView> =>
-        call((options) => api.bookingPages.get({ workspace, pageId }, options)),
+        call((options) => api.bookingPages.get({ workspace, pageId }, options)).then((page) => {
+          pageRules.receive(workspace, page);
+          return page;
+        }),
       /** A new page with defaults. Refusals: `ID_TAKEN`, `SLUG_TAKEN` (field `slug`). */
       create: (
         workspace: string,
@@ -2871,30 +2897,45 @@ export function createDataLayer({
         pageId: string,
         settings: Partial<BookingPageSettings>,
         extra: { hosts?: TeamHosts; routing?: RoutingRules } = {},
-      ): Promise<BookingPageView> =>
-        bookingPageLists.write(workspace, {
-          send: () =>
-            call((options) =>
-              api.bookingPages.update(
-                {
-                  workspace,
-                  pageId,
-                  settings,
-                  ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
-                  ...(extra.routing === undefined ? {} : { routing: extra.routing }),
-                  mutationId: mintId(),
-                },
-                options,
-              ),
-            ).then(settings.scheduleId === undefined ? (page: BookingPageView) => page : usedBy(workspace)),
-          ...shownPatch(bookingPageLists.items(workspace), pageId, (page) => ({
-            ...page,
-            ...settings,
-            ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
-            ...(extra.routing === undefined ? {} : { routing: extra.routing }),
-          })),
-          land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
-        }),
+      ): Promise<BookingPageView> => {
+        // A team page's rules show at once on its Routing card too, and go back there on a refusal.
+        const putBack =
+          extra.routing === undefined ? undefined : pageRules.show(workspace, pageId, extra.routing.rules);
+        return bookingPageLists
+          .write(workspace, {
+            send: () =>
+              call((options) =>
+                api.bookingPages.update(
+                  {
+                    workspace,
+                    pageId,
+                    settings,
+                    ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
+                    ...(extra.routing === undefined ? {} : { routing: extra.routing }),
+                    mutationId: mintId(),
+                  },
+                  options,
+                ),
+              ).then(settings.scheduleId === undefined ? (page: BookingPageView) => page : usedBy(workspace)),
+            ...shownPatch(bookingPageLists.items(workspace), pageId, (page) => ({
+              ...page,
+              ...settings,
+              ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
+              ...(extra.routing === undefined ? {} : { routing: extra.routing }),
+            })),
+            land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
+          })
+          .then(
+            (page) => {
+              pageRules.receive(workspace, page);
+              return page;
+            },
+            (error: unknown) => {
+              putBack?.();
+              throw error;
+            },
+          );
+      },
       /**
        * A copy of a page the list holds, titled `title`: first in the list at
        * once (pending until the server made it), gone again on a refusal. The
@@ -3100,6 +3141,13 @@ export function createDataLayer({
        */
       report: (workspace: string, surface: RoutingReportSurface, days: RoutingReportDays): RoutingReportHeld =>
         routingReports.view(workspace, surface, days),
+      /**
+       * A team page's routing rules as the layer holds them (spec 0043, AC-1608), for its Routing card: filled by
+       * the page's answers (the editor's `bookingPages.get`, an update's), and patched by `bookingPages.update` at
+       * once and put back on a refusal, so a rule added, moved or removed shows before the server answers. Read with
+       * `usePageRules`; undefined until an answer carrying the page arrives.
+       */
+      pageRules: (workspace: string, pageId: string): PageRulesHeld => pageRules.view(workspace, pageId),
     },
     home: {
       /**
@@ -4513,13 +4561,30 @@ export function createDataLayer({
        * Deleting the account (AC-902 to AC-907): `check` names the workspaces
        * it is the last owner of; `confirm` deletes it (after a step up and the
        * email typed in full), then forgets everything cached for the person.
+       * A 401 from another call while it runs, or after, signs nobody out: the
+       * deleting screen goes to sign in itself and says why. Its own 401, or a
+       * failure after one was held back, ends the session as any 401 does.
        * Refusals throw a DataError.
        */
       deletion: {
         check: () => call((options) => api.account.deletion.check(undefined, options)),
         confirm: async (email: string): Promise<void> => {
-          await call((options) => api.account.deletion.confirm({ email }, options));
+          deletingAccount = true;
+          try {
+            await call((options) => api.account.deletion.confirm({ email }, options));
+          } catch (error) {
+            deletingAccount = false;
+            // Its own 401 (the session had already ended elsewhere), or a failure after another call's 401 was held
+            // back: the session ended under the person, and sign in says so as for any 401.
+            if (takeHeldEnding() && !ended) endSession();
+            throw error;
+          }
+          deletingAccount = false;
+          takeHeldEnding();
           reset();
+          // The session is gone and sign in says the account was deleted: a call still out that answers 401 now
+          // ends nothing more (sign in again starts afresh).
+          ended = true;
         },
       },
       twoFactor: {

@@ -4,13 +4,16 @@
 // shape every failure takes, and that a 401 signs out once.
 import {
   contract,
+  defaultAvailability,
   type AttributeDefinition,
+  type BookingPageView,
   type AttributeOption,
   type ChangeEvent,
   type DeleteManyResults,
   type GlobalSearchResults,
   type RecentItem,
   type RestoreResults,
+  type RoutingRule,
   type UpdateManyResults,
   type TrashPage,
   type JobView,
@@ -166,6 +169,14 @@ interface Behaviour {
   /** The command menu (spec 0039): a search's answer, the recent items, and each visit as sent. */
   globalSearch: (query: string) => GlobalSearchResults;
   recents: () => RecentItem[];
+  /** Booking pages (spec 0025): one page's read, and an update's answer, which a team page's rules ride (spec 0043). */
+  bookingPagesGet: (pageId: string) => BookingPageView;
+  bookingPagesUpdate: (input: {
+    readonly pageId: string;
+    readonly routing?: { readonly rules: readonly RoutingRule[] } | undefined;
+  }) => BookingPageView | Promise<BookingPageView>;
+  /** What `account.deletion.confirm` answers (spec 0033). */
+  deleteAccount: () => Promise<{ deleted: true }>;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -199,6 +210,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     jobGet: notServed,
     jobCancel: notServed,
     jobStartTest: notServed,
+    deleteAccount: notServed,
     objectWrite: notServed,
     usage: () => ({ attributes: { [PEOPLE.id]: { used: 20, limit: 250 } }, optionsPerAttribute: 500 }),
     activity: notServed,
@@ -217,6 +229,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     trashRestore: notServed,
     globalSearch: () => ({ records: [], views: [] }),
     recents: () => [],
+    bookingPagesGet: notServed,
+    bookingPagesUpdate: notServed,
     ...overrides,
   };
   const calls: string[] = [];
@@ -544,7 +558,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       },
       deletion: {
         check: os.account.deletion.check.handler(notServed),
-        confirm: os.account.deletion.confirm.handler(notServed),
+        confirm: os.account.deletion.confirm.handler(() => behaviour.deleteAccount()),
       },
     },
     calendar: {
@@ -627,9 +641,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     },
     bookingPages: {
       list: os.bookingPages.list.handler(notServed),
-      get: os.bookingPages.get.handler(notServed),
+      get: os.bookingPages.get.handler(({ input }) => behaviour.bookingPagesGet(input.pageId)),
       create: os.bookingPages.create.handler(notServed),
-      update: os.bookingPages.update.handler(notServed),
+      update: os.bookingPages.update.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.bookingPagesUpdate(input);
+      }),
       delete: os.bookingPages.delete.handler(notServed),
     },
     home: {
@@ -925,6 +942,92 @@ describe('objects.list', () => {
     expect(await data.me.get()).toEqual(ME);
     await failure(data.objects.list('acme'));
     expect(signedOut).toHaveLength(2);
+  });
+
+  it('signs nobody out on a 401 while the account is being deleted, or after it', async () => {
+    let session = true;
+    let answer: (deleted: { deleted: true }) => void = () => undefined;
+    let asked: () => void = () => undefined;
+    const confirmAsked = new Promise<void>((resolve) => {
+      asked = resolve;
+    });
+    const api = fakeApi({
+      me: () => {
+        if (!session) throw unauthenticated();
+        return ME;
+      },
+      objects: () => {
+        if (!session) throw unauthenticated();
+        return [PEOPLE];
+      },
+      deleteAccount: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+          asked();
+        }),
+    });
+    const { data, signedOut, events } = layer(api);
+    await data.me.get();
+    const deleting = data.account.deletion.confirm(ME.user.email);
+    await confirmAsked;
+    // The server ends the session before it answers: the live connection asking again hears 401 meanwhile.
+    session = false;
+    expect((await failure(data.objects.list('acme'))).code).toBe('UNAUTHENTICATED');
+    expect(signedOut).toEqual([]);
+    answer({ deleted: true });
+    await deleting;
+    // A call still out answers 401 afterwards: sign in already says the account was deleted.
+    expect((await failure(data.objects.list('beta'))).code).toBe('UNAUTHENTICATED');
+    expect(signedOut).toEqual([]);
+    expect(events).toEqual(['session changed']);
+    expect(await data.me.get()).toBeUndefined();
+  });
+
+  it('ends the session as usual when the deletion itself answers 401, or fails after a 401 was held back', async () => {
+    const api = fakeApi({
+      deleteAccount: () => {
+        throw unauthenticated();
+      },
+    });
+    const { data, signedOut, events } = layer(api);
+    await data.me.get();
+    // Another tab signed out first: the deletion is the call that finds the session gone.
+    expect((await failure(data.account.deletion.confirm(ME.user.email))).code).toBe('UNAUTHENTICATED');
+    expect(signedOut).toEqual(['/w/acme/objects/people?view=all']);
+    expect(events).toEqual(['signed out', 'session changed']);
+
+    let session = true;
+    let fail: (error: unknown) => void = () => undefined;
+    let asked: () => void = () => undefined;
+    const confirmAsked = new Promise<void>((resolve) => {
+      asked = resolve;
+    });
+    const second = fakeApi({
+      me: () => {
+        if (!session) throw unauthenticated();
+        return ME;
+      },
+      objects: () => {
+        if (!session) throw unauthenticated();
+        return [PEOPLE];
+      },
+      deleteAccount: () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+          asked();
+        }),
+    });
+    const after = layer(second);
+    await after.data.me.get();
+    const deleting = after.data.account.deletion.confirm(ME.user.email);
+    await confirmAsked;
+    session = false;
+    await failure(after.data.objects.list('acme'));
+    expect(after.signedOut).toEqual([]);
+    // The deletion then fails (the server timed out after ending the session): the held 401 ends it after all.
+    fail(new ORPCError('INTERNAL', { status: 500, message: 'Timed out.' }));
+    expect((await failure(deleting)).code).toBe('INTERNAL');
+    expect(after.signedOut).toEqual(['/w/acme/objects/people?view=all']);
   });
 
   it('asks who is signed in again after a NOT_FOUND, since the person may have left the workspace', async () => {
@@ -2695,5 +2798,112 @@ describe('search (spec 0039)', () => {
       expect(count(api.calls, '/api/rpc/recents/visit')).toBe(3);
     });
     expect(notices).toEqual([]);
+  });
+});
+
+describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
+  const rule = (id: string): RoutingRule => ({
+    id,
+    when: { join: 'all', rules: [{ key: 'budget', op: 'is_any_of', value: ['Large', 'Huge'] }] },
+    then: { kind: 'hosts', hosts: [ADA_MEMBER.id] },
+  });
+  const teamPage = (rules: readonly RoutingRule[]): BookingPageView => ({
+    id: '0199a6f2-0000-7000-8000-0000000000b1',
+    title: 'Demo',
+    description: '',
+    slug: 'demo',
+    durations: [30],
+    location: { type: 'video' },
+    bufferBefore: 0,
+    bufferAfter: 0,
+    minNoticeMinutes: 0,
+    windowDays: 30,
+    dailyLimit: null,
+    slotStep: null,
+    status: 'live',
+    scheduleId: null,
+    rescheduleHost: 'same',
+    isPrivate: false,
+    profileSection: null,
+    profilePosition: 0,
+    publicKey: 'demo-key',
+    kind: 'round_robin',
+    ownerMemberId: ADA_MEMBER.id,
+    availability: defaultAvailability('UTC'),
+    scheduleName: 'Working hours',
+    routing: { rules: [...rules] },
+    bookingsThisMonth: 0,
+    canChange: true,
+    createdAt: '2026-10-22T09:00:00.000Z',
+    updatedAt: '2026-10-22T09:00:00.000Z',
+  });
+
+  it('holds the rules the page’s read brought: a change shows at once, the answer lands, a refusal puts them back', async () => {
+    const page = teamPage([rule('large')]);
+    const answers: { settle: (outcome: 'ok' | 'refuse') => void }[] = [];
+    const api = fakeApi({
+      bookingPagesGet: () => page,
+      bookingPagesUpdate: (input) =>
+        new Promise((resolve, reject) => {
+          answers.push({
+            settle: (outcome) => {
+              if (outcome === 'ok') resolve({ ...page, routing: { rules: [...(input.routing?.rules ?? [])] } });
+              else
+                reject(new ORPCError('CONFIG_INVALID', { status: 400, message: 'Rule 2 needs people to pick from.' }));
+            },
+          });
+        }),
+    });
+    const { data } = layer(api);
+    const held = data.routing.pageRules('acme', page.id);
+    // One read per page, so a card's subscription holds across renders.
+    expect(data.routing.pageRules('acme', page.id)).toBe(held);
+    expect(held.getSnapshot()).toBeUndefined();
+    const release = held.retain();
+    // The editor's loader reads the page; its rules are held from that answer, with no page list read.
+    await data.bookingPages.get('acme', page.id);
+    expect(held.getSnapshot()?.map((each) => each.id)).toEqual(['large']);
+    expect(count(api.calls, '/api/rpc/bookingPages/list')).toBe(0);
+
+    const added = data.bookingPages.update('acme', page.id, {}, { routing: { rules: [rule('large'), rule('huge')] } });
+    expect(held.getSnapshot()?.map((each) => each.id)).toEqual(['large', 'huge']);
+    await vi.waitFor(() => {
+      expect(answers).toHaveLength(1);
+    });
+    answers[0]?.settle('ok');
+    await added;
+    expect(held.getSnapshot()?.map((each) => each.id)).toEqual(['large', 'huge']);
+
+    const cleared = data.bookingPages.update('acme', page.id, {}, { routing: { rules: [] } });
+    expect(held.getSnapshot()).toEqual([]);
+    await vi.waitFor(() => {
+      expect(answers).toHaveLength(2);
+    });
+    answers[1]?.settle('refuse');
+    expect((await failure(cleared)).code).toBe('CONFIG_INVALID');
+    expect(held.getSnapshot()?.map((each) => each.id)).toEqual(['large', 'huge']);
+    release();
+  });
+
+  it('forgets the rules when the session ends, so the next one reads its own', async () => {
+    const page = teamPage([rule('large')]);
+    let signedIn = true;
+    const api = fakeApi({
+      bookingPagesGet: () => {
+        if (!signedIn) throw unauthenticated();
+        return page;
+      },
+    });
+    const { data, signedOut } = layer(api);
+    await data.me.get();
+    await data.bookingPages.get('acme', page.id);
+    const held = data.routing.pageRules('acme', page.id);
+    expect(held.getSnapshot()?.map((each) => each.id)).toEqual(['large']);
+    signedIn = false;
+    await failure(data.bookingPages.get('acme', page.id));
+    expect(signedOut).toHaveLength(1);
+    const after = data.routing.pageRules('acme', page.id);
+    expect(after).not.toBe(held);
+    expect(after.getSnapshot()).toBeUndefined();
   });
 });

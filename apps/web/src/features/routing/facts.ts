@@ -1,9 +1,19 @@
 // What a condition can read, as the rule editor shows it (spec 0043): a
-// form's questions (for Show when only the ones before it), and on a team
-// page the person's and their company's fields. Each fact has a kind, which
-// decides its comparisons and its value control. Plain functions, no React.
+// form's questions (for Show when only the ones before it), on a team page
+// the person's and their company's fields, and in any routing rule the
+// visit's hidden fields (UTM tags, page, referrer). Each fact has a kind,
+// which decides its comparisons and its value control. Plain functions, no
+// React.
 import type { AttributeDefinition, FormQuestion } from '@crm/data';
-import { summarizeShowWhen, VALUELESS_OPS, type ConditionOp, type ShowWhen } from '@crm/data/forms';
+import {
+  HIDDEN_FIELDS,
+  hiddenFactKey,
+  summarizeShowWhen,
+  VALUELESS_OPS,
+  type Condition,
+  type ConditionOp,
+  type ShowWhen,
+} from '@crm/data/forms';
 import { strings } from './strings.ts';
 
 /** How a fact's value is compared and picked. */
@@ -17,11 +27,13 @@ export interface Fact {
   readonly kind: FactKind;
   /** A choice fact's options: the stored value (a choice's words, or an option's id) and its name. */
   readonly options?: readonly { readonly id: string; readonly label: string }[];
+  /** The heading it sits under in the picker, after the facts with none: the visit's hidden fields. */
+  readonly group?: string;
 }
 
 /** The comparisons each kind offers, in the order the Select lists them. */
 const OPS: Readonly<Record<FactKind, readonly ConditionOp[]>> = {
-  choice: ['is', 'is_not', 'is_answered', 'is_empty'],
+  choice: ['is', 'is_any_of', 'is_not', 'is_answered', 'is_empty'],
   yes_no: ['is'],
   number: ['is', 'more_than', 'less_than', 'is_answered', 'is_empty'],
   text: ['is', 'is_not', 'contains', 'is_answered', 'is_empty'],
@@ -35,6 +47,25 @@ export function opsFor(fact: Fact | undefined): readonly ConditionOp[] {
 /** True when a comparison takes no value ("is answered"). */
 export function isValueless(op: ConditionOp): boolean {
   return VALUELESS_OPS.includes(op);
+}
+
+/** A condition's values as a list: none, one, or the several "is any of" holds. */
+export function valuesOf(value: Condition['value']): readonly string[] {
+  if (value === undefined) return [];
+  return typeof value === 'string' ? (value.trim() === '' ? [] : [value]) : value;
+}
+
+/**
+ * The value a condition keeps when its comparison changes to `op`: none for a comparison that takes none, the
+ * values as a list for "is any of", else one value (the first of a list), so switching back and forth keeps it.
+ */
+export function valueFor(op: ConditionOp, value: Condition['value']): Condition['value'] {
+  if (isValueless(op)) return undefined;
+  if (op === 'is_any_of') {
+    const values = valuesOf(value);
+    return values.length === 0 ? undefined : values;
+  }
+  return typeof value === 'string' || value === undefined ? value : value[0];
 }
 
 /** The facts a form's questions give: every question but a file one, in order. */
@@ -111,6 +142,19 @@ export function recordFacts(
       }
     });
   return [...of('person', person), ...of('company', company)];
+}
+
+/**
+ * The facts the visit's hidden fields give a routing rule: its UTM tags, the page it was on and the referrer, read
+ * as text. A team page reads them from the form that sent the visitor there, so there each name says so.
+ */
+export function hiddenFieldFacts(surface: 'form' | 'page'): readonly Fact[] {
+  return HIDDEN_FIELDS.map((field) => ({
+    key: hiddenFactKey(field),
+    label: surface === 'page' ? strings.fromForm(strings.hiddenField(field)) : strings.hiddenField(field),
+    kind: 'text' as const,
+    group: surface === 'page' ? strings.hiddenFieldsFromForm : strings.hiddenFields,
+  }));
 }
 
 /** One line for a set of conditions, naming each fact and a choice's option by name. */

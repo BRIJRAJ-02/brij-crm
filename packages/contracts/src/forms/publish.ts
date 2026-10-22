@@ -5,7 +5,7 @@
 import { CHOICE_TYPES, fitsAttribute, FORM_SLUG } from './answer-types.ts';
 import type { AttributeType } from '../values/attribute-values.ts';
 import type { FormDocument } from './document.ts';
-import { isRecordFact, NUMBER_OPS, type Condition, type ShowWhen } from './show-when.ts';
+import { isHiddenFact, isRecordFact, NUMBER_OPS, type Condition, type ShowWhen } from './show-when.ts';
 
 /** An attribute as the check needs it: its name, type, and whether the publisher may write it. */
 export interface PublishAttribute {
@@ -57,12 +57,24 @@ type Readable = ReadonlyMap<string, FormDocument['questions'][number]>;
  * Why one condition can't stand (spec 0043, AC-1605; spec 0023, AC-1038), as
  * the end of a sentence, or undefined: a question that isn't before it (or a
  * record field, which a form's rules don't read), a choice that no longer
- * exists, a number comparison on a question that isn't a number.
+ * exists, a number comparison on a question that isn't a number. A routing
+ * rule (`isRule`) may also read the visit's hidden fields (its UTM tags, page
+ * and referrer) as text; a question's Show when may not, since the hosted
+ * page decides what shows from answers alone.
  */
-function conditionProblem(condition: Condition, readable: Readable, all: Readable): string | undefined {
+function conditionProblem(
+  condition: Condition,
+  readable: Readable,
+  all: Readable,
+  isRule: boolean,
+): string | undefined {
   const question = readable.get(condition.key);
   if (question === undefined) {
     if (isRecordFact(condition.key)) return 'reads a record field, which only a team page’s rules can read';
+    if (isHiddenFact(condition.key)) {
+      if (!isRule) return 'reads a hidden field such as a UTM tag, which only routing rules can read';
+      return NUMBER_OPS.includes(condition.op) ? 'compares a hidden field as a number, but it holds text' : undefined;
+    }
     const later = all.get(condition.key);
     return later === undefined
       ? 'reads a question that is no longer on the form'
@@ -85,10 +97,15 @@ function conditionProblem(condition: Condition, readable: Readable, all: Readabl
   return undefined;
 }
 
-/** The first problem among a Show when's conditions. */
-function showWhenProblem(showWhen: ShowWhen | undefined, readable: Readable, all: Readable): string | undefined {
+/** The first problem among a Show when's conditions, or a routing rule's (`isRule`). */
+function showWhenProblem(
+  showWhen: ShowWhen | undefined,
+  readable: Readable,
+  all: Readable,
+  isRule = false,
+): string | undefined {
   for (const condition of showWhen?.rules ?? []) {
-    const problem = conditionProblem(condition, readable, all);
+    const problem = conditionProblem(condition, readable, all, isRule);
     if (problem !== undefined) return problem;
   }
   return undefined;
@@ -198,7 +215,7 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
     }
   }
   for (const [index, rule] of (input.document.routing?.rules ?? []).entries()) {
-    const problem = showWhenProblem(rule.when, all, all);
+    const problem = showWhenProblem(rule.when, all, all, true);
     if (problem !== undefined) {
       const name =
         rule.name === undefined || rule.name === ''
