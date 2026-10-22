@@ -2,6 +2,8 @@ import type { AttributeDefinition, View } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import {
   createView,
+  defaultSorts,
+  isDefaultSort,
   landingView,
   relationTarget,
   runningQuery,
@@ -99,5 +101,32 @@ describe('createView (spec 0039, AC-1086)', () => {
     expect(createView({ views, lastOpenedViewId: 'board', defaultViewId: 'b' })).toBe('b');
     expect(createView({ views, lastOpenedViewId: 'board', defaultViewId: 'board' })).toBe('a');
     expect(createView({ views: [{ id: 'board', kind: 'board' }] })).toBeUndefined();
+  });
+});
+
+describe('isDefaultSort', () => {
+  const NAME = attribute('name');
+  it('is the default with no sorts, or with exactly Created at newest first', () => {
+    expect(isDefaultSort([], [CREATED, NAME])).toBe(true);
+    expect(isDefaultSort([{ attributeId: 'created', direction: 'descending' }], [CREATED, NAME])).toBe(true);
+  });
+
+  it('is not the default for another order, another attribute, or more than one sort', () => {
+    expect(isDefaultSort([{ attributeId: 'created', direction: 'ascending' }], [CREATED, NAME])).toBe(false);
+    expect(isDefaultSort([{ attributeId: 'name', direction: 'descending' }], [CREATED, NAME])).toBe(false);
+    expect(
+      isDefaultSort(
+        [
+          { attributeId: 'created', direction: 'descending' },
+          { attributeId: 'name', direction: 'ascending' },
+        ],
+        [CREATED, NAME],
+      ),
+    ).toBe(false);
+  });
+
+  it('names the default sort, or none for an object with no Created at', () => {
+    expect(defaultSorts([CREATED, NAME])).toEqual([{ attributeId: 'created', direction: 'descending' }]);
+    expect(defaultSorts([NAME])).toEqual([]);
   });
 });
