@@ -23,7 +23,7 @@ function PreviewRoute() {
   if (form === undefined) return <EmptyState title={strings.missingTitle}>{strings.missingText}</EmptyState>;
   return (
     <main>
-      <Callout placement="bar" tone="info">
+      <Callout placement="banner" tone="info">
         {strings.previewNotLive}
       </Callout>
       <HostedFormPreview form={previewOf(form.draft, { key: form.publicKey })} mode="page" />
