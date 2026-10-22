@@ -289,12 +289,6 @@
     border-end-end-radius: var(--radius-sm);
   }
 
-  @media (hover: hover) and (pointer: fine) {
-    .calendar[data-inline] .day[data-shown][data-hovered]:not([data-selected]) {
-      background: var(--surface-hover);
-    }
-  }
-
   .quick {
     display: flex;
     flex-wrap: wrap;
