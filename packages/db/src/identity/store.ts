@@ -293,7 +293,8 @@ export interface IdentityStore {
   putStepUpCode(sessionId: string, codeHash: string, expiresAt: Date): Promise<void>;
   /**
    * Checks a step up email code: `ok` once (the code is used up), `wrong`
-   * (a try is counted; the fifth wrong try ends the code), or `missing`.
+   * (a try is counted), or `missing` (none, expired, or the fifth wrong try,
+   * which ends the code).
    */
   checkStepUpCode(sessionId: string, codeHash: string): Promise<'ok' | 'wrong' | 'missing'>;
   /** Keeps one security event (AC-898). */
@@ -759,12 +760,15 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
           return 'ok' as const;
         }
         const tries = Number(triesText) + 1;
-        if (tries >= STEP_UP_CODE_TRIES) await tx.delete(verification).where(eq(verification.id, row.id));
-        else
-          await tx
-            .update(verification)
-            .set({ value: `${hash}:${String(tries)}` })
-            .where(eq(verification.id, row.id));
+        if (tries >= STEP_UP_CODE_TRIES) {
+          // The last wrong try uses the code up: it answers as a code that's gone, so the person sends a new one.
+          await tx.delete(verification).where(eq(verification.id, row.id));
+          return 'missing' as const;
+        }
+        await tx
+          .update(verification)
+          .set({ value: `${hash}:${String(tries)}` })
+          .where(eq(verification.id, row.id));
         return 'wrong' as const;
       });
     },

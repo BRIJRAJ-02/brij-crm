@@ -140,12 +140,14 @@ export async function startStepUp(
   if (await hasSecondFactor(deps.identity, caller.userId)) throw inputInvalid('method', USE_SECOND_FACTOR);
   const code = deps.mintCode();
   const now = (deps.now ?? Date.now)();
+  // Sent first: a send that fails leaves the code already in the person's inbox working. A code checks out only
+  // once stored, so the mail arriving a moment earlier opens nothing.
+  await deps.sendCode(caller.email, code);
   await deps.identity.putStepUpCode(
     caller.sessionId,
     deps.hashCode(code),
     new Date(now + STEP_UP_CODE_MINUTES * MINUTE),
   );
-  await deps.sendCode(caller.email, code);
   return { sent: true };
 }
 

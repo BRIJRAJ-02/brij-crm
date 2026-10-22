@@ -41,7 +41,7 @@ function setup(state: { enabled: boolean; verification?: SessionVerification }) 
     requiredBy: () => Promise.resolve([]),
     now: () => NOW,
   };
-  return { deps, sent };
+  return { deps, sent, codes };
 }
 
 const minutesAgo = (minutes: number, by: VerifiedWith = 'email'): SessionVerification => ({
@@ -50,6 +50,19 @@ const minutesAgo = (minutes: number, by: VerifiedWith = 'email'): SessionVerific
 });
 
 describe('the step up', () => {
+  it('keeps the code already sent when a new one fails to send', async () => {
+    const { deps, codes } = setup({ enabled: false });
+    await startStepUp(deps, { ...caller, email: 'ada@example.com' });
+    expect(codes.get(SESSION)).toBe('hash:654321');
+    const failing: StepUpDeps = {
+      ...deps,
+      mintCode: () => '111111',
+      sendCode: () => Promise.reject(new Error('mail down')),
+    };
+    await expect(startStepUp(failing, { ...caller, email: 'ada@example.com' })).rejects.toThrow('mail down');
+    expect(codes.get(SESSION)).toBe('hash:654321');
+  });
+
   it('is fresh for 10 minutes after a check, and not after', async () => {
     expect(
       (await sessionFreshness(setup({ enabled: false, verification: minutesAgo(9) }).deps, caller)).freshUntil,

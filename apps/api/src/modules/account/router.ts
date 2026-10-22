@@ -127,9 +127,13 @@ function deletionDeps(context: RequestContext): AccountDeletionDeps {
 /** What a step up answers when its code email couldn't be sent: plain, and what to do next. */
 export const CODE_NOT_SENT_MESSAGE = 'We couldn’t send the code just now. Try again in a few minutes.';
 
-/** How long to wait, in whole minutes (at least one), as a refusal says it. */
+/** How long to wait, in whole minutes (at least one), or hours from an hour up, as a refusal says it. */
 export function waitFor(seconds: number | undefined): string {
   const minutes = Math.max(1, Math.ceil((seconds ?? 60) / 60));
+  if (minutes >= 60) {
+    const hours = Math.round(minutes / 60);
+    return hours === 1 ? '1 hour' : `${String(hours)} hours`;
+  }
   return minutes === 1 ? '1 minute' : `${String(minutes)} minutes`;
 }
 

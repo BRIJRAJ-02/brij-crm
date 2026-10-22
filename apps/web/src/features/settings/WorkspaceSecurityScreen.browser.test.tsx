@@ -14,7 +14,7 @@ import {
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { WorkspaceSecurityScreen } from './WorkspaceSecurityScreen.tsx';
 
 /** The api's words for a code email that didn't send (CODE_NOT_SENT_MESSAGE in apps/api's account router). */
@@ -56,8 +56,8 @@ afterEach(() => {
   mounted = undefined;
 });
 
-/** A data layer whose step up sends answer `answers` in turn, counting each send. */
-function layerWith(answers: readonly StepUpResult[]) {
+/** A data layer whose step up sends answer `answers` in turn, counting each send; `checked` answers each code. */
+function layerWith(answers: readonly StepUpResult[], checked: StepUpResult = { ok: true }) {
   const sends: number[] = [];
   const view: AccountSecurityView = {
     subscribe: () => () => undefined,
@@ -77,7 +77,7 @@ function layerWith(answers: readonly StepUpResult[]) {
           sends.push(sends.length);
           return Promise.resolve(answers[Math.min(sends.length - 1, answers.length - 1)] ?? { ok: true });
         },
-        verify: () => Promise.resolve({ ok: true }),
+        verify: () => Promise.resolve(checked),
         passkey: () => Promise.resolve({ ok: false, code: 'CANCELLED' }),
       },
     },
@@ -164,5 +164,30 @@ describe('sign out everyone’s step up, when the code can’t be sent', () => {
     await dialog.getByRole('button', { name: 'Email me a code' }).click();
     await expect.element(dialog.getByText(limited)).toBeVisible();
     expect(dialog.element().textContent).not.toContain(GENERIC);
+  });
+
+  it('says a new code that didn’t go in an alert, leaving the code field as it was', async () => {
+    const { layer } = layerWith([{ ok: true }, { ok: false, code: 'API_UNAVAILABLE', message: NOT_SENT }]);
+    await renderScreen(layer);
+    const dialog = await openConfirm();
+    await dialog.getByRole('button', { name: 'Email me a code' }).click();
+    await dialog.getByRole('button', { name: 'Send a new code' }).click();
+    await expect.element(dialog.getByRole('alert')).toHaveTextContent(NOT_SENT);
+    expect(dialog.element().querySelector('[aria-invalid="true"]')).toBeNull();
+    await expect.element(dialog.getByRole('button', { name: 'Send a new code' })).toBeEnabled();
+  });
+
+  it('says a code that ran out on the code field, beside Send a new code', async () => {
+    const expired = 'That code has expired. Send a new code.';
+    const { layer } = layerWith([{ ok: true }], { ok: false, code: 'CODE_INVALID', message: expired });
+    await renderScreen(layer);
+    const dialog = await openConfirm();
+    await dialog.getByRole('button', { name: 'Email me a code' }).click();
+    // A code just sent puts focus in the code's boxes; six digits commit it.
+    await expect.element(dialog.getByText('Code sent. Check your email.')).toBeVisible();
+    await userEvent.keyboard('123456');
+    await expect.element(dialog.getByText(expired)).toBeVisible();
+    expect(dialog.element().querySelector('[aria-invalid="true"]')).not.toBeNull();
+    await expect.element(dialog.getByRole('button', { name: 'Send a new code' })).toBeVisible();
   });
 });

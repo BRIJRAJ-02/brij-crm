@@ -120,5 +120,7 @@ describe('a step up that can’t go ahead', () => {
     expect(waitFor(60)).toBe('1 minute');
     expect(waitFor(61)).toBe('2 minutes');
     expect(waitFor(undefined)).toBe('1 minute');
+    expect(waitFor(3600)).toBe('1 hour');
+    expect(waitFor(3540)).toBe('59 minutes');
   });
 });
