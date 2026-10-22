@@ -26,6 +26,7 @@ export const strings = {
   todayOn: (day: string) => `Today · ${day}`,
   tomorrow: 'Tomorrow',
   allDay: 'All day',
+  dayToDay: (first: string, last: string) => `${first} to ${last}`,
   previousWeek: 'Previous week',
   nextWeek: 'Next week',
   weekLabel: (range: string) => `Bookings, ${range}`,

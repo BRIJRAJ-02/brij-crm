@@ -58,7 +58,7 @@
     }
 
     /* Out of sight until the row is hovered or something in it has focus; still in the tab order. */
-    .row:not(:hover, :focus-within) .options {
+    .row:not(:hover, :focus-within, :has([aria-expanded='true'])) .options {
       opacity: 0;
     }
   }

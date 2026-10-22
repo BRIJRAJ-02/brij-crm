@@ -449,12 +449,23 @@ export interface MenuSectionProps {
    * switch to), so they read as menu items, never as choices.
    */
   readonly selectionMode?: 'none' | 'single' | 'multiple';
+  /**
+   * The section's own chosen items, with `selectionMode`: a menu of two groups that each take one choice (Bookings'
+   * Filter: which meetings show, and which link), so each reads and behaves as its own single choice.
+   */
+  readonly selectedKeys?: Iterable<MenuKey>;
+  readonly onSelectionChange?: (keys: ReadonlySet<MenuKey>) => void;
 }
 
 /** A labelled group of items in a Menu. */
-export function MenuSection({ label, children, selectionMode }: MenuSectionProps) {
+export function MenuSection({ label, children, selectionMode, selectedKeys, onSelectionChange }: MenuSectionProps) {
   return (
-    <AriaMenuSection className={styles.section} {...(selectionMode === undefined ? {} : { selectionMode })}>
+    <AriaMenuSection
+      className={styles.section}
+      {...(selectionMode === undefined ? {} : { selectionMode })}
+      {...(selectedKeys === undefined ? {} : { selectedKeys })}
+      {...selectionHandler(onSelectionChange)}
+    >
       <Header className={styles.heading}>{label}</Header>
       {children}
     </AriaMenuSection>

@@ -112,3 +112,22 @@ export const Fill: Story = {
     await expect(canvas.getByRole('button', { name: 'Main' })).toBeInTheDocument();
   },
 };
+
+/** `isFlush` on a flush page (PageColumn `align="flush"`): no gap and no gutter, the aside padded and parted by a hairline. */
+export const Flush: Story = {
+  render: () => (
+    <Stage width="fill" height="page">
+      <PageColumn align="flush">
+        <AsideLayout aside={<Aside />} asideLabel="Calendars" isAsideOpen onAsideClose={noop} isFill isFlush>
+          <Button>Main</Button>
+        </AsideLayout>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const aside = canvas.getByRole('complementary', { name: 'Calendars' });
+    const main = canvas.getByRole('button', { name: 'Main' });
+    // Flush: the main column starts where the aside ends, with no gap between them.
+    await expect(Math.round(main.getBoundingClientRect().left)).toBe(Math.round(aside.getBoundingClientRect().right));
+  },
+};

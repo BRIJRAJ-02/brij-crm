@@ -124,14 +124,16 @@ function whenOf(startsAt: string, endsAt: string, locale: string): string {
 
 /**
  * An all day event's days: its dates, read as calendar dates (kept as midnight UTC, the end day left out), never
- * moved into the local zone. "Friday, October 23 · All day", or "Friday, October 23 – Saturday, October 24".
+ * moved into the local zone. "Friday, October 23 · All day", or "Friday, October 23 to Saturday, October 24".
  */
 function allDayWhenOf(startsAt: string, endsAt: string, locale: string): string {
   const format = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' });
   const first = new Date(`${startsAt.slice(0, 10)}T12:00:00`);
   const last = new Date(`${endsAt.slice(0, 10)}T12:00:00`);
   last.setDate(last.getDate() - 1);
-  return last <= first ? `${format.format(first)} · ${strings.allDay}` : format.formatRange(first, last);
+  return last <= first
+    ? `${format.format(first)} · ${strings.allDay}`
+    : strings.dayToDay(format.format(first), format.format(last));
 }
 
 /**
@@ -155,45 +157,45 @@ function FilterMenu({
   if (!hasLinks && !hasSources) return null;
   const count =
     (search.link === undefined ? 0 : 1) + (hasSources && search.source !== 'all' && search.link === undefined ? 1 : 0);
-  const selected = [
-    ...(hasSources ? [`source:${search.link === undefined ? search.source : 'bookings'}`] : []),
-    ...(hasLinks ? [`link:${search.link ?? 'all'}`] : []),
-  ];
+  // A link's bookings are bookings only (calendar events have no page), so Show says so while one is picked.
+  const shownSource = search.link === undefined ? search.source : 'bookings';
+  const first = (keys: ReadonlySet<string | number>) => [...keys].map(String)[0];
   return (
     <>
       <MenuTrigger>
         <Button icon="list-filter">{count === 0 ? strings.filter : strings.filterCount(count)}</Button>
-        <Menu
-          label={strings.filterMenu}
-          selectionMode="multiple"
-          selectedKeys={selected}
-          onSelectionChange={(keys) => {
-            // One choice a group: the key just chosen wins its group; choosing the one in effect changes nothing.
-            const chosen = [...keys].map(String).find((key) => !selected.includes(key));
-            if (chosen === undefined) return;
-            if (chosen.startsWith('source:')) {
-              const source = SOURCES.find((each) => `source:${each}` === chosen);
-              if (source !== undefined) onSearch({ source, link: undefined });
-              return;
-            }
-            const link = chosen.slice('link:'.length);
-            onSearch({ link: link === 'all' ? undefined : link });
-          }}
-        >
+        <Menu label={strings.filterMenu}>
           {hasSources && (
-            <MenuSection label={strings.sourceLabel}>
+            <MenuSection
+              label={strings.sourceLabel}
+              selectionMode="single"
+              selectedKeys={[shownSource]}
+              onSelectionChange={(keys) => {
+                const source = SOURCES.find((each) => each === first(keys));
+                if (source !== undefined) onSearch({ source, ...(source === 'bookings' ? {} : { link: undefined }) });
+              }}
+            >
               {SOURCES.map((id) => (
-                <MenuItem key={id} id={`source:${id}`}>
+                <MenuItem key={id} id={id}>
                   {strings.sources[id]}
                 </MenuItem>
               ))}
             </MenuSection>
           )}
           {hasLinks && (
-            <MenuSection label={strings.links}>
-              <MenuItem id="link:all">{strings.allLinks}</MenuItem>
+            <MenuSection
+              label={strings.links}
+              selectionMode="single"
+              // Its own key, apart from Show's "all": one menu holds both groups.
+              selectedKeys={[search.link ?? 'all-links']}
+              onSelectionChange={(keys) => {
+                const link = first(keys);
+                if (link !== undefined) onSearch({ link: link === 'all-links' ? undefined : link });
+              }}
+            >
+              <MenuItem id="all-links">{strings.allLinks}</MenuItem>
               {pages.map((page) => (
-                <MenuItem key={page.id} id={`link:${page.id}`}>
+                <MenuItem key={page.id} id={page.id}>
                   {page.title}
                 </MenuItem>
               ))}
@@ -1293,15 +1295,17 @@ function groupsOf(
                 ? {}
                 : { hostName: item.booking.hostName }),
               // Every booking says where it stands (the owner, 22 October 2026): Canceled (above), Needs a host
-              // (round robin, spec 0029, AC-749), No show (spec 0043), else Confirmed. Calendar events have their
-              // calendar's dot instead.
+              // (round robin, spec 0029, AC-749), No show (spec 0043), else Confirmed while it is ahead (a past one
+              // needs no tag). Calendar events have their calendar's dot instead.
               ...(item.booking.status === 'cancelled'
                 ? {}
                 : item.booking.needsHost
                   ? { badge: strings.needsHost, badgeTone: 'accent' as const }
                   : item.booking.noShow === true
                     ? { badge: strings.noShow }
-                    : { badge: strings.status.confirmed }),
+                    : Date.parse(item.booking.endsAt) > now.getTime()
+                      ? { badge: strings.status.confirmed }
+                      : {}),
               ...(item.booking.note === undefined ? {} : { note: item.booking.note }),
               ...(item.booking.guests.length === 0 ? {} : { attendees: item.booking.guests }),
             };
