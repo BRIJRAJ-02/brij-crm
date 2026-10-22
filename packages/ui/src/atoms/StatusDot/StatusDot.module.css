@@ -16,6 +16,13 @@
     color: var(--text-secondary);
   }
 
+  /* Inside a control that sets the words' colour and type (a segment, a menu item): the dot reads like them. */
+  .root[data-inherit] {
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
   .label {
     overflow: hidden;
     text-overflow: ellipsis;

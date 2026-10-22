@@ -15,6 +15,17 @@ export function stableHue(id: string, among: readonly Hue[] = HUES): Hue {
   return among[(hash >>> 0) % among.length] ?? 'gray';
 }
 
+/** The hues a link may take from its id: every data hue but grey (neutral) and red (an error). */
+const LINK_HUES = HUES.filter((hue) => hue !== 'gray' && hue !== 'red');
+
+/**
+ * A link's colour when it has none of its own (a booking page today): the same hue its LinkCard's edge takes and
+ * its bookings take on the Bookings week, so one link keeps one colour everywhere.
+ */
+export function linkHue(id: string): Hue {
+  return stableHue(id, LINK_HUES);
+}
+
 /** Up to two initials from a name: the first letters of its first and last words ("Ada Lovelace" gives "AL"). */
 export function initialsOf(name: string): string {
   const words = name

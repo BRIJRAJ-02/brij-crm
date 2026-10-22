@@ -227,24 +227,9 @@ export function bookingPieces(bookings: readonly BookingListItem[], week: WeekBo
   return bookings.flatMap((booking) => piecesOf(booking.id, booking.startsAt, booking.endsAt, week));
 }
 
-/** The member's calendar events of the week, by day piece (all day events are left to the list). */
+/** The member's calendar events of the week, by day piece (all day events are left to the list; the week does not show them). */
 export function eventPieces(events: readonly CalendarEventItem[], week: WeekBounds): readonly DayPiece[] {
   return events
     .filter((event) => !event.allDay)
     .flatMap((event) => piecesOf(event.id, event.startsAt, event.endsAt, week));
-}
-
-/**
- * The week's days an all day event covers. Its dates are calendar dates, kept as midnight UTC with the end day
- * excluded (as the calendars give them), so they are read by date, never moved into the member's zone, where a
- * zone west of UTC would put them on the day before.
- */
-export function allDayKeys(
-  event: Pick<CalendarEventItem, 'startsAt' | 'endsAt'>,
-  days: readonly string[],
-): readonly string[] {
-  const first = event.startsAt.slice(0, 10);
-  const end = event.endsAt.slice(0, 10);
-  // A one day event whose end was stored on its own date still covers that day.
-  return days.filter((key) => key >= first && (key < end || key === first));
 }

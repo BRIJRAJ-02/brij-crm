@@ -77,6 +77,49 @@ export const Bar: Story = {
   },
 };
 
+/** The Bookings week's bar: Today and the arrows, the dates quiet, the calendars `after` them, Filter at the end. */
+export const WeekControls: Story = {
+  render: () => (
+    <Stage width="fill">
+      <SectionBar
+        variant="bar"
+        isTitleQuiet
+        start={
+          <>
+            <Button variant="secondary">Today</Button>
+            <Button variant="ghost" icon="chevron-left" label="Previous week" />
+            <Button variant="ghost" icon="chevron-right" label="Next week" />
+          </>
+        }
+        title="19 – 25 October 2026"
+        after={
+          <SegmentedControl
+            label="Calendars"
+            size="compact"
+            defaultValue="all"
+            segments={[
+              { value: 'all', label: 'All calendars' },
+              { value: 'bookings', label: 'Bookings' },
+              { value: 'work', label: 'Work', hue: 'green' },
+            ]}
+          />
+        }
+        end={
+          <Button variant="ghost" icon="list-filter">
+            Filter
+          </Button>
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const heading = canvas.getByRole('heading', { name: '19 – 25 October 2026' });
+    const calendars = canvas.getByRole('radiogroup', { name: 'Calendars' });
+    // The calendars come right after the dates, in reading order.
+    await expect(heading.compareDocumentPosition(calendars) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  },
+};
+
 /** A heading with its quiet line (Home's greeting and today's date). */
 export const WithDescription: Story = {
   render: () => (

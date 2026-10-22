@@ -2,6 +2,8 @@ import { useId, useRef, useState, useSyncExternalStore } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { RadioButton, RadioField, RadioGroup, SelectionIndicator } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
+import type { Hue } from '../../hue.ts';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -16,6 +18,8 @@ export interface Segment {
   readonly icon?: IconName;
   /** Shows the icon alone; the label stays its name. */
   readonly isIconOnly?: boolean;
+  /** A colour dot before the label (a calendar's colour on Bookings' week), drawn as the StatusDot atom. */
+  readonly hue?: Hue;
 }
 
 /** Props for SegmentedControl. */
@@ -124,8 +128,14 @@ export function SegmentedControl({
                 </span>
                 <VisuallyHidden>{segment.label}</VisuallyHidden>
               </>
-            ) : (
+            ) : segment.hue === undefined ? (
               <span className={styles.label}>{segment.label}</span>
+            ) : (
+              <span className={styles.label} data-hue="">
+                <StatusDot hue={segment.hue} isInherited>
+                  {segment.label}
+                </StatusDot>
+              </span>
             )}
           </RadioButton>
         </RadioField>

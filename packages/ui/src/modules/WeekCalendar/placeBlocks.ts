@@ -35,8 +35,12 @@ export interface DayLayout<B extends Timed> {
   readonly more: readonly More<B>[];
 }
 
-/** A block starting this many minutes after everything it overlaps sits over them, indented, instead of beside them. */
-export const NEST_AFTER = 45;
+/**
+ * A block starting this many minutes after everything it overlaps sits over them, indented, instead of beside them.
+ * A quarter hour (the owner, 22 October 2026): a 9:45 booking over a 9:30 one cascades, as Google Calendar draws
+ * it, so both titles stay readable; only blocks that start nearly together share the width.
+ */
+export const NEST_AFTER = 15;
 
 /** The narrowest lane drawn, as a fraction of the column (a week's day holds three); past it the rest go into "+N". */
 export const MIN_LANE = 1 / 3;

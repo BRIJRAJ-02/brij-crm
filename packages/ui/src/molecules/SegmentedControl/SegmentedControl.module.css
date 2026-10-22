@@ -75,6 +75,14 @@
     padding-inline: var(--space-8);
   }
 
+  /* A coloured segment names a calendar, often an email address: capped, and cut with an ellipsis (its name
+     stays whole for screen readers). */
+  .label[data-hue] {
+    display: flex;
+    min-inline-size: 0;
+    max-inline-size: var(--size-column-narrow);
+  }
+
   /* A collapsible label in a narrow bar: the icon alone, its name kept by a
      hidden copy. */
   @container (inline-size < 480px) {

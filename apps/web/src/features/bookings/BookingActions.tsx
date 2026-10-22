@@ -70,8 +70,8 @@ function dayOf(instant: string, zone: string): string {
   return parts;
 }
 
-/** A dialog the card's buttons open: Reschedule, or Cancel booking (a confirm). */
-export type BookingAsk = 'move' | 'cancel';
+/** A dialog the card's buttons open: Reschedule, Cancel booking (a confirm), or Reassign (drawn by its screen). */
+export type BookingAsk = 'move' | 'cancel' | 'reassign';
 
 /**
  * The card's changes in its footer, one row as Google Calendar's and Cal.com's event cards hold them (Join, before
@@ -79,8 +79,8 @@ export type BookingAsk = 'move' | 'cancel';
  * Cancel booking in the danger tone, which still asks first); once it has started, Mark no show.
  * Reschedule and Cancel each open a dialog. The buttons are for a confirmed booking only. In a panel the dialogs open here, and stay while the booking shows
  * cancelled at once (the layer's optimistic cancel), so Cancel's confirm stays busy until the server answers. In a
- * popover (the week's card) they can't: React Aria draws popovers above every dialog, so `onAsk` hands them to the
- * screen, which closes the card and draws `BookingDialog` itself.
+ * popover (the week's card) they can't: a dialog must never open under the card it came from, so `onAsk` hands
+ * them, Reassign too, to the screen, which closes the card first and draws the dialog itself.
  */
 export function useBookingActions({
   booking,
@@ -93,7 +93,7 @@ export function useBookingActions({
   readonly booking: BookingListItem;
   readonly actions: HostBookingActions;
   readonly locale: string;
-  /** Hands Reschedule and Cancel booking to the screen; left out, they open here. */
+  /** Hands Reschedule, Cancel booking and Reassign to the screen; left out, they open here. */
   readonly onAsk?: (ask: BookingAsk) => void;
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk;
@@ -184,8 +184,11 @@ export function useBookingActions({
           label={strings.moreForBooking}
           onAction={(key) => {
             if (key === 'copy') void copy();
-            else if (key === 'reassign') onReassign?.();
-            else if (key === 'cancel') ask('cancel');
+            else if (key === 'reassign') {
+              // In the week's popover the screen closes the card first, so Reassign never opens under it.
+              if (onAsk === undefined) onReassign?.();
+              else onAsk('reassign');
+            } else if (key === 'cancel') ask('cancel');
           }}
         >
           <MenuItem id="copy" icon="link">

@@ -152,6 +152,41 @@ export const CompactAndCollapsible: Story = {
   },
 };
 
+/** Colour dots (`hue`): Bookings' week picks one calendar, each in its colour; the arrow keys still choose. */
+export const ColourDots: Story = {
+  args: {
+    label: 'Calendars',
+    size: 'compact',
+    defaultValue: 'all',
+    segments: [
+      { value: 'all', label: 'All calendars' },
+      { value: 'bookings', label: 'Bookings' },
+      { value: 'work', label: 'Work', hue: 'green' },
+      { value: 'home', label: 'Home', hue: 'purple' },
+      { value: 'long', label: 'grace.hopper@example.com', hue: 'orange' },
+    ],
+  },
+  play: async ({ canvas, userEvent, args }) => {
+    const all = canvas.getByRole('radio', { name: 'All calendars' });
+    await expect(all).toBeChecked();
+    await userEvent.click(all);
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(canvas.getByRole('radio', { name: 'Bookings' })).toBeChecked();
+    await expect(args.onChange).toHaveBeenLastCalledWith('bookings');
+  },
+};
+
+/** Colour dots, disabled and read only: the dotted segments dim and hold like the plain ones. */
+export const ColourDotsStates: Story = {
+  args: { ...ColourDots.args },
+  render: (args) => (
+    <Stage direction="column">
+      <SegmentedControl {...args} label="Disabled" isDisabled />
+      <SegmentedControl {...args} label="Read only" isReadOnly />
+    </Stage>
+  ),
+};
+
 /**
  * `isLabelVisible` with `size="compact"`: a short value picked inside a form, its label shown above the track as a
  * Field's, and the group named by it.

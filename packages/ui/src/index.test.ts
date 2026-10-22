@@ -214,6 +214,7 @@ describe('@crm/ui', () => {
       'iconOf',
       'isRefusal',
       'isSystemOnly',
+      'linkHue',
       'loadPhoneLibrary',
       'memoIntl',
       'quickPicks',

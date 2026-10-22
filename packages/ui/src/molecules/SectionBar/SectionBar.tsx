@@ -12,6 +12,13 @@ export interface SectionBarProps {
   readonly description?: string;
   /** Controls before the heading (a view switch). */
   readonly start?: ReactNode;
+  /** Controls right after the heading, before the end ones (Bookings' week: its calendar switch after the dates). */
+  readonly after?: ReactNode;
+  /**
+   * The heading in body strong rather than title type: a bar whose heading is a place in time (the week's dates)
+   * rather than the section's name, so the controls lead.
+   */
+  readonly isTitleQuiet?: boolean;
   /** Controls at the end (previous, Today, next, Filter). */
   readonly end?: ReactNode;
   /**
@@ -31,9 +38,21 @@ export type SectionBarVariant = 'inline' | 'bar';
  * list, spec 0025): what comes first, the heading, then what sits at the end;
  * it wraps on a narrow container, the end controls under the rest.
  */
-export function SectionBar({ title, description, start, end, variant = 'inline' }: SectionBarProps) {
+export function SectionBar({
+  title,
+  description,
+  start,
+  after,
+  isTitleQuiet = false,
+  end,
+  variant = 'inline',
+}: SectionBarProps) {
   return (
-    <div className={styles.root} data-variant={variant === 'bar' ? 'bar' : undefined}>
+    <div
+      className={styles.root}
+      data-variant={variant === 'bar' ? 'bar' : undefined}
+      data-quiet-title={isTitleQuiet || undefined}
+    >
       {start !== undefined && <div className={styles.group}>{start}</div>}
       {title !== undefined &&
         (description === undefined ? (
@@ -44,6 +63,7 @@ export function SectionBar({ title, description, start, end, variant = 'inline' 
             <p className={styles.description}>{description}</p>
           </div>
         ))}
+      {after !== undefined && <div className={styles.group}>{after}</div>}
       {end !== undefined && <div className={styles.end}>{end}</div>}
     </div>
   );

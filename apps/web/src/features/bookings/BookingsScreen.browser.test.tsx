@@ -9,6 +9,7 @@
 // gives it, or a FormatScope's), never the browser's.
 import {
   dataError,
+  type BookingAssignment,
   type BookingListItem,
   type BookingsCalendarHeld,
   type BookingsCalendarState,
@@ -116,6 +117,8 @@ async function renderWeek(
   blocks: readonly TimeBlockOccurrence[],
   bookings: readonly BookingListItem[] = [],
   zone?: string,
+  /** What the member may do; `booking.admin` offers Reassign on a round robin booking, which then has one seat. */
+  permissions?: readonly string[],
 ) {
   const { held, patch } = weekOfItems(blocks, bookings);
   const removals: ReturnType<typeof deferred<undefined>>[] = [];
@@ -149,7 +152,7 @@ async function renderWeek(
     moveSlots: vi.fn(),
     guestLink: vi.fn(() => Promise.resolve({ path: '/b/key/manage' })),
     notify,
-    assignments: vi.fn(() => Promise.resolve([])),
+    assignments: vi.fn(() => Promise.resolve(permissions === undefined ? [] : [SEAT])),
     reassign: vi.fn(),
     rotations: vi.fn(() => Promise.resolve([])),
     markNoShow: vi.fn(() => Promise.resolve()),
@@ -180,10 +183,27 @@ async function renderWeek(
         />
       </FormatScope>
     ),
-    { data, toasts, pattern: '/w/$slug/bookings/calendar', at: '/w/acme/bookings/calendar' },
+    {
+      data,
+      toasts,
+      pattern: '/w/$slug/bookings/calendar',
+      at: '/w/acme/bookings/calendar',
+      ...(permissions === undefined ? {} : { permissions }),
+    },
   );
   return { onRemoveBlock, removals, actions, cancels, notify };
 }
+
+/** A round robin booking's one live seat, which Reassign hands to someone else. */
+const SEAT: BookingAssignment = {
+  id: '0199f0a0-0000-7000-8000-0000000000f1',
+  rotationId: '0199f0a0-0000-7000-8000-0000000000f2',
+  rotationName: 'Support',
+  memberId: '0199f0a0-0000-7000-8000-0000000000e1',
+  memberName: 'Ada Lovelace',
+  reason: 'manual',
+  assignedAt: at(9),
+} as unknown as BookingAssignment;
 
 /** The calendars list, still loading: the panel waits, and the screens draw without it. One snapshot, the same each
  * read, as a store's must be (a new one each read loops React). */
@@ -339,6 +359,37 @@ describe('cancelling a booking', () => {
     expect(week.notify).toHaveBeenCalledWith('success', 'Cancelled. Ada Lovelace is emailed.');
     // Its Cancel booking went with the cancel: focus goes to the booking, still on the week, drawn cancelled.
     await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toMatch(/^Quick chat,/);
+  });
+});
+
+const REASSIGN = 'Reassign Quick chat with Ada Lovelace';
+/** A dialog's title, or its name when it has no heading (the week's card). */
+const heading = (dialog: Element) =>
+  dialog.querySelector('h1, h2, h3')?.textContent ?? dialog.getAttribute('aria-label') ?? '';
+
+describe('reassigning a booking', () => {
+  it('closes the card first, so the dialog is on top and alone; Esc opens the card again, focus on More', async () => {
+    await renderWeek([], [bookingOf()], undefined, ['booking.admin']);
+    await openCard(/^Quick chat,/);
+    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Reassign' }));
+    // One dialog open, the Reassign one: the card's popover is gone, not drawn over it.
+    await expect.poll(() => [...document.querySelectorAll('[role="dialog"]')].map(heading)).toEqual([REASSIGN]);
+    // And on top: the point at its title is the dialog's own.
+    const dialog = card();
+    const title = dialog?.querySelector('h1, h2, h3');
+    const box = title?.getBoundingClientRect();
+    expect(box).toBeDefined();
+    if (box !== undefined) {
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      expect(dialog?.contains(hit ?? null)).toBe(true);
+    }
+    // Focus went into it.
+    await expect.poll(() => dialog?.contains(document.activeElement)).toBe(true);
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(() => [...document.querySelectorAll('[role="dialog"]')].map(heading)).not.toContain(REASSIGN);
+    await expect.poll(card).not.toBeNull();
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for this booking');
   });
 });
 

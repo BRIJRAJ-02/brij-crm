@@ -20,6 +20,7 @@ New. The artifact draws each menu's surface itself and animates it in only. One 
 - `placement` follows React Aria (`bottom start` by default) and flips when there is no room.
 - `triggerRef` anchors it to an element that isn't a React Aria trigger (a context menu's row).
 - What it holds knows it is in a popover (`InPopover`, a context): a Field or a Select there draws its focus with its accent border alone, no halo, since the popover's edge already frames it (the owner, 21 October 2026: a halo inside a grid cell's editor read as a second ring). Modal sets it back to false for what it holds.
+- Layer: popovers and dialogs share one layer (`z-modal`), so whichever opened last is on top: a Select's list over the Modal it sits in, a Modal over the popover it came from. React Aria's own inline z-index (100000) drew every popover over every dialog. Still, an action in a popover that opens a dialog closes the popover first (the Bookings week card's Reschedule, Cancel booking and Reassign), so focus moves into the dialog and nothing is left open behind it.
 
 ## States
 

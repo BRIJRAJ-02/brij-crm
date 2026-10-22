@@ -31,6 +31,9 @@ export interface InAppOptions {
   readonly at: string;
   /** The app's toast queue, when the screen takes it as a prop too; else one of its own. */
   readonly toasts?: Toasts;
+  /** What the person may do, read by `useCan`: the screen then sits under a `/w/$slug` route whose loader holds
+   * them, as the workspace frame's does. `pattern` must start with `/w/$slug/`. Left out, `useCan` is false. */
+  readonly permissions?: readonly string[];
 }
 
 /** The calendar banner every workspace page draws: no calendars, still loading, so nothing shows. One snapshot,
@@ -55,7 +58,7 @@ const stillLoading = {
 /** Renders `screen` at `at` inside the app's providers, and waits for the router to settle. */
 export async function renderInApp(
   screen: () => ReactNode,
-  { data, pattern, at, toasts = createToasts() }: InAppOptions,
+  { data, pattern, at, toasts = createToasts(), permissions }: InAppOptions,
 ): Promise<InApp> {
   const layer = {
     calendar: { view: () => calendarView },
@@ -64,9 +67,29 @@ export async function renderInApp(
     tasks: { due: () => stillLoading, ...data.tasks },
   } as unknown as DataLayer;
   const rootRoute = createRootRouteWithContext<{ data: DataLayer; toasts: Toasts }>()({ component: Outlet });
-  const page = createRoute({ getParentRoute: () => rootRoute, path: pattern, component: screen });
+  const workspace =
+    permissions === undefined
+      ? undefined
+      : createRoute({
+          getParentRoute: () => rootRoute,
+          path: '/w/$slug',
+          component: Outlet,
+          loader: () => ({ access: { permissions } }),
+        });
+  const routeTree =
+    workspace === undefined
+      ? rootRoute.addChildren([createRoute({ getParentRoute: () => rootRoute, path: pattern, component: screen })])
+      : rootRoute.addChildren([
+          workspace.addChildren([
+            createRoute({
+              getParentRoute: () => workspace,
+              path: pattern.replace(/^\/w\/\$slug\//, ''),
+              component: screen,
+            }),
+          ]),
+        ]);
   const router = createRouter({
-    routeTree: rootRoute.addChildren([page]),
+    routeTree,
     history: createMemoryHistory({ initialEntries: [at] }),
     context: { data: layer, toasts },
   });
