@@ -178,7 +178,8 @@ export function createFunctionApi(source: Record<string, string | undefined>, pl
         });
   log.info('API on Vercel', { environment: env.APP_ENV, jobs: drain === undefined ? 'off' : 'drain' });
 
-  const app = createApp({ services: { db, identity, auth, wakeRelay, analytics, rules: APP_RULES }, env });
+  // The same mailer as sign in's: step up codes and invitations send through it, as on `server.ts`.
+  const app = createApp({ services: { db, identity, auth, wakeRelay, analytics, mailer, rules: APP_RULES }, env });
   // The jobs endpoint answers only through the app's edge, like every other route.
   const edge = createEdgeGuard({ secret: env.EDGE_SECRET, environment: env.APP_ENV });
 
