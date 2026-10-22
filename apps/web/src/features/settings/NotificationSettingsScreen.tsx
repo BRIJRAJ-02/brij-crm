@@ -50,9 +50,11 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
   let email;
   if (state.status === 'error') {
     email = (
-      <EmptyState tone="error" title={strings.loadFailed} onRetry={settings.retry}>
-        {state.error?.message}
-      </EmptyState>
+      <SettingsSection title={strings.email}>
+        <EmptyState tone="error" title={strings.loadFailed} onRetry={settings.retry}>
+          {state.error?.message}
+        </EmptyState>
+      </SettingsSection>
     );
   } else if (state.settings === undefined) {
     email = <NotificationSettingsLoading />;

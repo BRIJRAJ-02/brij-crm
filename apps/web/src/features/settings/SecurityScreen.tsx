@@ -31,7 +31,6 @@ const CONFIRM_EXIT_MS = 200;
 
 const COLUMNS: readonly TableColumn[] = [
   { id: 'device', label: strings.columns.device, isRowHeader: true, isInline: true },
-  { id: 'place', label: strings.columns.place },
   { id: 'lastActive', label: strings.columns.lastActive },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
 ];
@@ -50,6 +49,12 @@ export function SecurityLoading() {
       />
     </SettingsSection>
   );
+}
+
+/** A device's row header: its name, and its rough place when the edge knew it ("Chrome on macOS, Berlin"). */
+function deviceLine(session: AccountSession): string {
+  const place = devicePlace(session);
+  return place === undefined ? deviceName(session) : `${deviceName(session)}, ${place}`;
 }
 
 /** Props for the Security screen. */
@@ -95,13 +100,26 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     }, CONFIRM_EXIT_MS);
   };
 
+  /**
+   * After one device's sign out: Sign out of all other devices, beside the rows, while it is still there, so the
+   * next sign out is a Tab away; the page's title once it went too.
+   */
+  const othersRef = useRef<HTMLButtonElement>(null);
+  const focusDevices = () => {
+    const target = () => (othersRef.current?.isConnected === true ? othersRef.current : titleRef.current);
+    requestAnimationFrame(() => target()?.focus());
+    setTimeout(() => {
+      if (document.activeElement === document.body) target()?.focus();
+    }, CONFIRM_EXIT_MS);
+  };
+
   const signOutOne = async (session: AccountSession) => {
     setIsBusy(true);
     const proven = await stepUp.prove();
     setIsBusy(false);
     if (!proven) return;
     setIsOpen(false);
-    focusTitle();
+    focusDevices();
     // Gone from the table at once; a refusal puts it back with a toast from the data layer.
     void data.account.signOut(session.id).then((landed) => {
       if (landed) toasts.toast({ tone: 'success', message: strings.signedOut(deviceName(session)) });
@@ -135,12 +153,12 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     if (column === 'device') {
       return (
         <>
-          {deviceName(session)}
+          {/* The place rides with the name, so a phone sees each row's Sign out without scrolling sideways. */}
+          {deviceLine(session)}
           {session.current && <Badge text={strings.thisDevice} />}
         </>
       );
     }
-    if (column === 'place') return devicePlace(session) ?? strings.unknownPlace;
     if (column === 'lastActive') return session.current ? strings.now : <RelativeTime value={session.lastActiveAt} />;
     if (session.current) return null;
     const place = devicePlace(session);
@@ -179,10 +197,10 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
           ? {
               actions: (
                 <>
-                  <InfoTip label={strings.signOutOthers}>{strings.signOutOthersInfo(STEP_UP_MINUTES)}</InfoTip>
-                  <Button variant="danger" onPress={() => ask({ kind: 'others' })}>
+                  <Button ref={othersRef} variant="danger" onPress={() => ask({ kind: 'others' })}>
                     {strings.signOutOthers}
                   </Button>
+                  <InfoTip label={strings.signOutOthers}>{strings.signOutOthersInfo(STEP_UP_MINUTES)}</InfoTip>
                 </>
               ),
             }

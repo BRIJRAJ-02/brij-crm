@@ -89,7 +89,7 @@ function StatusBadge({ status }: { readonly status: JobView['status'] }) {
 function Progress({ job }: { readonly job: JobView }) {
   const handled = job.done + job.refused + job.skipped;
   if (job.total === undefined || job.total === 0) {
-    // A finished job that handled nothing has no progress to tell: an empty cell, not "0 so far".
+    // A job not running that handled nothing has no progress to tell: an empty cell, not "0 so far".
     if (job.status !== 'running' && handled === 0) return null;
     const label = strings.progressUnknown(format(handled));
     return job.status === 'running' ? <ProgressBar label={label} /> : <>{label}</>;
