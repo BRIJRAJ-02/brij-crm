@@ -28,6 +28,17 @@ export function isDefaultSort(
   return createdAt !== undefined && only.attributeId === createdAt.id;
 }
 
+/**
+ * A query in its one form for comparing: the default order written as no sorts, so a view that stores Created at
+ * newest first and a draft that asks none (or the other way round) are the same question, never a draft.
+ */
+export function withDefaultOrderAsNone(
+  query: DraftQuery,
+  attributes: readonly Pick<AttributeDefinition, 'id' | 'isSystem' | 'apiSlug'>[],
+): DraftQuery {
+  return query.sorts.length > 0 && isDefaultSort(query.sorts, attributes) ? { ...query, sorts: [] } : query;
+}
+
 /** A view's saved filter and sorts. */
 export function savedQuery(view: View): DraftQuery {
   return { ...(view.config.filter === undefined ? {} : { filter: view.config.filter }), sorts: view.config.sorts };

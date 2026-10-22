@@ -112,6 +112,9 @@ export function ViewToolbar({
   // The sort chip, or the dashed Sort button when the view has no sorts: the sort builder opens from either.
   const sortAnchor = useRef<HTMLElement>(null);
   const [isSortOpen, setSortOpen] = useState(false);
+  // The builder opened on the default order shows it empty; once someone edits there, it shows their rows as they
+  // are, so a row turned into Created at newest first stays put rather than vanishing under the pointer.
+  const [isSortEdited, setSortEdited] = useState(false);
   const [isFilterOpen, setFilterOpen] = useState(false);
   // What the builder holds while it is open: incomplete rows included, which filter nothing until complete.
   const [building, setBuilding] = useState<FilterGroup>(NO_FILTER);
@@ -291,7 +294,10 @@ export function ViewToolbar({
       <Popover
         triggerRef={sortAnchor}
         isOpen={isSortOpen}
-        onOpenChange={setSortOpen}
+        onOpenChange={(isOpen) => {
+          setSortOpen(isOpen);
+          if (!isOpen) setSortEdited(false);
+        }}
         label={strings.sorts}
         width="builder"
       >
@@ -299,8 +305,9 @@ export function ViewToolbar({
           attributes={sortFields}
           // The default order opens the builder empty, where it says "Newest records show first." (the order that
           // runs), so Add sort starts a sort of its own rather than adding after a Created at nobody chose.
-          value={isDefaultOrder ? [] : query.sorts}
+          value={isDefaultOrder && !isSortEdited ? [] : query.sorts}
           onChange={(sorts) => {
+            setSortEdited(true);
             commit({ ...(query.filter === undefined ? {} : { filter: query.filter }), sorts });
           }}
         />

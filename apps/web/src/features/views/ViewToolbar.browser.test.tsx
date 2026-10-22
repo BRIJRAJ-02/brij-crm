@@ -95,6 +95,17 @@ describe('the view bar sort chip', () => {
     expect(page.getByText('+1').elements()).toHaveLength(0);
   });
 
+  it('keeps a row edited into the default order in the open builder, rather than dropping it', async () => {
+    await render(DEFAULT);
+    await userEvent.click(page.getByRole('button', { name: 'Sort', exact: true }));
+    await userEvent.click(page.getByRole('button', { name: 'Add sort' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Created at' }));
+    // Created at starts ascending; turned descending it asks the default order, and its row stays in the builder.
+    await userEvent.click(page.getByRole('button', { name: /Ascending/ }));
+    await userEvent.click(page.getByText('Descending', { exact: true }));
+    await expect.element(page.getByRole('button', { name: 'Remove the sort by Created at' })).toBeVisible();
+  });
+
   it('shows a chip for another order, and removing it goes back to the default with no chip', async () => {
     await render({ sorts: [{ attributeId: NAME.id, direction: 'ascending' }] });
     await expect.element(page.getByRole('button', { name: 'Remove sort' })).toBeVisible();

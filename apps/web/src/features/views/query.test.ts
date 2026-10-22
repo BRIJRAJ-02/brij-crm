@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createView,
   isDefaultSort,
+  withDefaultOrderAsNone,
   landingView,
   relationTarget,
   runningQuery,
@@ -122,5 +123,21 @@ describe('isDefaultSort', () => {
         [CREATED, NAME],
       ),
     ).toBe(false);
+  });
+});
+
+describe('withDefaultOrderAsNone', () => {
+  it('writes the default order as no sorts, so the two forms compare the same', () => {
+    expect(withDefaultOrderAsNone({ sorts: [{ attributeId: 'created', direction: 'descending' }] }, [CREATED])).toEqual(
+      {
+        sorts: [],
+      },
+    );
+    expect(withDefaultOrderAsNone({ sorts: [] }, [CREATED])).toEqual({ sorts: [] });
+  });
+
+  it('leaves any other order as it is', () => {
+    const query = { sorts: [{ attributeId: 'created', direction: 'ascending' as const }] };
+    expect(withDefaultOrderAsNone(query, [CREATED])).toBe(query);
   });
 });
