@@ -108,7 +108,7 @@ export async function requireFresh(
   }
 }
 
-/** Account › Sign in and devices's state: two factor, backup codes left, passkeys, and this session's freshness (AC-881, AC-887). */
+/** Account › Sign in and devices' state: two factor, backup codes left, passkeys, and this session's freshness (AC-881, AC-887). */
 export async function accountSecurity(deps: StepUpDeps, caller: SessionCaller): Promise<AccountSecurity> {
   const [state, session, passkeys, requiredBy] = await Promise.all([
     deps.identity.twoFactorState(caller.userId),

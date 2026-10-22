@@ -1,4 +1,4 @@
-// Settings › Workspace › Security: the page's copy (spec 0033, milestone 4), apart from Account › Sign in and devices's own.
+// Settings › Workspace › Security: the page's copy (spec 0033, milestone 4), apart from Account › Sign in and devices' own.
 
 /** Days as the session length Select says them. */
 const days = (count: number) => (count === 1 ? '1 day' : `${String(count)} days`);

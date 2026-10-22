@@ -212,7 +212,7 @@ export const SessionFreshness = z.object({
 export type SessionFreshness = z.infer<typeof SessionFreshness>;
 
 /**
- * Account › Sign in and devices's state (AC-881, AC-883): two factor on or off, how many
+ * Account › Sign in and devices' state (AC-881, AC-883): two factor on or off, how many
  * backup codes are left, and this session's freshness. Never a secret or a code.
  */
 export const AccountSecurity = z.object({
@@ -230,7 +230,7 @@ export const AccountSecurity = z.object({
    */
   requiredBy: z.array(z.string()),
 });
-/** Account › Sign in and devices's state. */
+/** Account › Sign in and devices' state. */
 export type AccountSecurity = z.infer<typeof AccountSecurity>;
 
 /** A workspace where the person is the last active owner: deleting the account waits until it has another (AC-902). */

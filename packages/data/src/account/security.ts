@@ -1,4 +1,4 @@
-// Account › Security's state (spec 0033, milestone 2): two factor on or off,
+// Account › Sign in and devices' state (spec 0033, milestone 2): two factor on or off,
 // backup codes left, and whether this session is fresh for a sensitive
 // change. One held value, read when a screen first holds it and again after
 // each change. A step up (AC-896) proves who the person is again and makes
@@ -28,7 +28,7 @@ export interface AccountSecurityApi {
   readonly removePasskey: (input: { readonly id: string }) => Promise<unknown>;
 }
 
-/** Account › Security's state: loading, failed, or as the server last said. */
+/** Account › Sign in and devices' state: loading, failed, or as the server last said. */
 export type AccountSecurityState =
   | { readonly status: 'loading' }
   | { readonly status: 'error'; readonly message: string }
@@ -41,7 +41,7 @@ export type StepUpResult =
 /** How a passkey step up went: as a code's, or the person closed the browser's prompt (nothing to show). */
 export type PasskeyStepUpResult = StepUpResult | { readonly ok: false; readonly code: 'CANCELLED' };
 
-/** Account › Security's state, as screens hold it. */
+/** Account › Sign in and devices' state, as screens hold it. */
 export interface AccountSecurityView {
   readonly subscribe: (listener: () => void) => () => void;
   readonly getSnapshot: () => AccountSecurityState;
