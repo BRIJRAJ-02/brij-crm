@@ -159,6 +159,7 @@
     gap: var(--space-6);
     align-items: center;
     min-inline-size: 0;
+    max-inline-size: 100%;
   }
 
   /* A fitted column takes its widest content and no more, so control columns line up from table to table; a

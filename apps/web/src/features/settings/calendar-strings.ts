@@ -34,6 +34,27 @@ export const strings = {
   defaultHelpExample:
     'With Google and Outlook connected, bookings go on the one default. Every calendar with Check for conflicts on, in either account, keeps its busy times from being booked.',
   calendarsGroup: 'Calendars',
+  /** Where new bookings go (the member's destination), one Select across every account. */
+  addBookingsTo: 'Add bookings to',
+  addBookingsHelp: 'New bookings from your booking pages go on this calendar.',
+  chooseCalendar: 'Choose a calendar',
+  noWritable: 'None of your calendars can take bookings',
+  /** Each account's calendars, a compact table: the column headers once, above the rows. */
+  calendarsIn: (account: string) => `Calendars in ${account}`,
+  otherCalendarsIn: (account: string) => `Other calendars in ${account}`,
+  calendarColumn: 'Calendar',
+  conflictsColumn: 'Conflicts',
+  weekColumn: 'Show on my week',
+  optionsColumn: 'Options',
+  checkFor: (name: string) => `Check ${name} for conflicts`,
+  showOn: (name: string) => `Show ${name} on my week`,
+  calendarOptions: (name: string) => `${name} options`,
+  logMeetings: 'Log meetings to CRM',
+  otherCalendars: 'Other calendars in this account',
+  searchCalendars: 'Search calendars',
+  noCalendarMatches: 'No calendars match',
+  /** A calendar that couldn't be read, said once under the account's list. */
+  warningLine: (name: string, message: string) => `${name}: ${message}`,
   calendarsLoading: 'Loading this account’s calendars',
   calendarsFailed: 'Couldn’t load this account’s calendars.',
   tryAgain: 'Try again',
@@ -51,7 +72,8 @@ export const strings = {
     checkConflicts: (name: string, on: boolean) =>
       on ? `${name} is checked for conflicts` : `${name} is no longer checked for conflicts`,
     showInWeek: (name: string, on: boolean) => (on ? `${name} shows on your week` : `${name} is hidden from your week`),
-    sync: (name: string, on: boolean) => (on ? `${name}’s meetings sync` : `${name}’s meetings stop syncing`),
+    sync: (name: string, on: boolean) =>
+      on ? `${name}’s meetings are logged to the CRM` : `${name}’s meetings are no longer logged to the CRM`,
   },
   colourSaved: (name: string) => `${name}’s colour changed`,
   defaultSaved: (name: string) => `New bookings now go to ${name}`,
