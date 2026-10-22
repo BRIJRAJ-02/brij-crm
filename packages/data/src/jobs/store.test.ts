@@ -161,6 +161,19 @@ describe('the jobs store', () => {
     expect(watches.open).toBe(0);
   });
 
+  it('hears a job end that comes while its read is out, reading it again once that read lands', async () => {
+    const server = new Map<string, JobView>();
+    const { store, finished } = setup(server, []);
+    const started = await store.startTest('acme', store.newId(), { items: 10 });
+    // A read leaves while the job still runs; the job ends, and its event comes, before that read lands.
+    store.changed('acme', event([started.id]));
+    server.set(started.id, { ...started, status: 'succeeded', done: 10 });
+    store.changed('acme', event([started.id]));
+    await flush();
+    await flush();
+    expect(finished.map((each) => each.status)).toEqual(['succeeded']);
+  });
+
   it('drops a job the server no longer shows (NOT_FOUND)', async () => {
     const one = job(6, 'queued');
     const server = new Map([[one.id, one]]);

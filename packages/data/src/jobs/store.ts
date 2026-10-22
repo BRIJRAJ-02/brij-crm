@@ -151,6 +151,8 @@ export function createJobsStore(deps: JobsDeps) {
   const startedHere = new Map<string, Set<string>>();
   const watching = new Map<string, () => void>();
   const fetching = new Set<string>();
+  // Reads asked for while one was out, run once it lands.
+  const fetchAgain = new Set<string>();
   // Screens following one job (a bulk bar's progress, spec 0022): told whenever a held job changes or goes.
   const followers = new Set<() => void>();
   const tellFollowers = () => {
@@ -287,10 +289,17 @@ export function createJobsStore(deps: JobsDeps) {
     }
   };
 
-  /** Reads one job again; NOT_FOUND drops it (gone, or no longer visible). One read per job at a time. */
+  /**
+   * Reads one job again; NOT_FOUND drops it (gone, or no longer visible). One read per job at a time; one asked
+   * for meanwhile runs once the first lands, since that read may have left before the change it was asked for (a
+   * job ending while its read is out would otherwise never be heard).
+   */
   const refetch = (workspace: string, jobId: string) => {
     const key = `${workspace}\u0000${jobId}`;
-    if (fetching.has(key)) return;
+    if (fetching.has(key)) {
+      fetchAgain.add(key);
+      return;
+    }
     fetching.add(key);
     deps.api
       .get({ workspace, jobId })
@@ -302,7 +311,10 @@ export function createJobsStore(deps: JobsDeps) {
           if (toDataError(error).code === 'NOT_FOUND') drop(workspace, jobId);
         },
       )
-      .finally(() => fetching.delete(key));
+      .finally(() => {
+        fetching.delete(key);
+        if (fetchAgain.delete(key)) refetch(workspace, jobId);
+      });
   };
 
   function makeView(workspace: string, scope: JobsScope) {
