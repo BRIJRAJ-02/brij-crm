@@ -4,6 +4,7 @@ import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import type { Hue } from '../../hue.ts';
 import styles from './WorkspacePreview.module.css';
+import { strings } from './strings.ts';
 
 /** The part of the sketch a first run step is about, ringed: the person, the workspace, or the calendar. */
 export type WorkspacePreviewFocus = 'person' | 'workspace' | 'calendar' | 'areas';
@@ -25,11 +26,18 @@ export interface WorkspacePreviewProps {
   readonly focus?: WorkspacePreviewFocus;
   /** The areas picked on About you: each adds its row (Bookings, Forms) under the calendar, ringed with `focus="areas"`. */
   readonly areas?: readonly WorkspacePreviewArea[];
+  /**
+   * A believable sample workspace in place of the bars: a named workspace
+   * and person, and a People table with names (sign in, verify, join, before
+   * anyone has typed). First run leaves it off, so what is typed shows.
+   */
+  readonly sample?: boolean;
 }
 
 /** A row of the sketched navigation: its icon (or an object's tile) and a bar for its name. */
 interface SketchRow {
   readonly icon: IconName;
+  readonly label: string;
   readonly tile?: Hue;
   readonly width: 'long' | 'medium' | 'short';
   readonly isCalendar?: boolean;
@@ -37,33 +45,34 @@ interface SketchRow {
 }
 
 const NAV: readonly SketchRow[] = [
-  { icon: 'house', width: 'medium' },
-  { icon: 'inbox', width: 'short' },
-  { icon: 'square-check', width: 'medium' },
-  { icon: 'calendar', width: 'long', isCalendar: true },
+  { icon: 'house', label: strings.nav.home, width: 'medium' },
+  { icon: 'inbox', label: strings.nav.inbox, width: 'short' },
+  { icon: 'square-check', label: strings.nav.tasks, width: 'medium' },
+  { icon: 'calendar', label: strings.nav.calendar, width: 'long', isCalendar: true },
 ];
 
 const AREA_ROWS: readonly SketchRow[] = [
-  { icon: 'calendar-clock', width: 'medium', area: 'booking' },
-  { icon: 'clipboard-list', width: 'short', area: 'forms' },
+  { icon: 'calendar-clock', label: strings.nav.booking, width: 'medium', area: 'booking' },
+  { icon: 'clipboard-list', label: strings.nav.forms, width: 'short', area: 'forms' },
 ];
 
 const RECORDS: readonly SketchRow[] = [
-  { icon: 'user', tile: 'green', width: 'medium' },
-  { icon: 'building', tile: 'blue', width: 'long' },
-  { icon: 'circle-dollar-sign', tile: 'orange', width: 'short' },
+  { icon: 'user', label: strings.objects.people, tile: 'green', width: 'medium' },
+  { icon: 'building', label: strings.objects.companies, tile: 'blue', width: 'long' },
+  { icon: 'circle-dollar-sign', label: strings.objects.deals, tile: 'orange', width: 'short' },
 ];
 
-const TABLE_ROWS = 9;
+/** Enough rows to run off the foot of the tallest window; the frame cuts the rest. */
+const TABLE_ROWS = 18;
 
 /**
  * A sketch of the app as it will look, drawn live from what a first run step
  * has typed (spec 0036): the sidebar with the workspace's initials tile and
- * name at its head, a few quiet rows, the person's avatar and name at its
+ * name at its head, the app's own rows by name, the person's avatar and name at its
  * foot, and a table beside it, cut off by its frame. The part the step is
- * about is ringed. It is decoration, hidden from assistive technology: every
- * word in it is something the person just typed, which the form already
- * holds.
+ * about is ringed. With `sample`, a sample workspace fills it (sign in). It
+ * is decoration, hidden from assistive technology: its words are the app's
+ * labels, a sample, or what the person just typed, which the form holds.
  */
 export function WorkspacePreview({
   workspaceName,
@@ -72,9 +81,10 @@ export function WorkspacePreview({
   personId,
   focus,
   areas = [],
+  sample = false,
 }: WorkspacePreviewProps) {
-  const workspace = workspaceName.trim();
-  const person = personName.trim();
+  const workspace = workspaceName.trim() === '' && sample ? strings.sampleWorkspace : workspaceName.trim();
+  const person = personName.trim() === '' && sample ? strings.samplePerson : personName.trim();
   const row = (each: SketchRow) => (
     <li
       key={each.icon}
@@ -90,7 +100,7 @@ export function WorkspacePreview({
       ) : (
         <Icon name={each.icon} tile={each.tile} />
       )}
-      <Skeleton width={each.width} isStill />
+      <span className={styles.label}>{each.label}</span>
     </li>
   );
   return (
@@ -124,9 +134,7 @@ export function WorkspacePreview({
           <ul className={styles.list}>
             {[...NAV, ...AREA_ROWS.filter((each) => each.area !== undefined && areas.includes(each.area))].map(row)}
           </ul>
-          <span className={styles.label}>
-            <Skeleton width="short" isStill />
-          </span>
+          <span className={styles.section}>{strings.records}</span>
           <ul className={styles.list}>{RECORDS.map(row)}</ul>
           <div className={styles.foot}>
             <span className={styles.part} data-focused={focus === 'person' ? '' : undefined}>
@@ -141,15 +149,24 @@ export function WorkspacePreview({
         </div>
         <div className={styles.main}>
           <div className={styles.bar}>
-            <Skeleton width="short" isStill />
+            <Icon name="user" tile="green" />
+            <span className={styles.title}>{strings.objects.people}</span>
           </div>
           <ul className={styles.table}>
-            {Array.from({ length: TABLE_ROWS }, (_, index) => (
-              <li key={index} className={styles.line}>
-                <Skeleton shape="circle" isStill />
-                <Skeleton width={index % 3 === 0 ? 'long' : index % 3 === 1 ? 'medium' : 'short'} isStill />
-              </li>
-            ))}
+            {sample
+              ? strings.samplePeople.map(([name, company]) => (
+                  <li key={name} className={styles.line}>
+                    <Avatar name={name} size="sm" isDecorative />
+                    <span className={styles.cell}>{name}</span>
+                    <span className={styles.muted}>{company}</span>
+                  </li>
+                ))
+              : Array.from({ length: TABLE_ROWS }, (_, index) => (
+                  <li key={index} className={styles.line}>
+                    <Skeleton shape="circle" isStill />
+                    <Skeleton width={index % 3 === 0 ? 'long' : index % 3 === 1 ? 'medium' : 'short'} isStill />
+                  </li>
+                ))}
           </ul>
         </div>
       </div>

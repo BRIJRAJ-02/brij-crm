@@ -36,6 +36,13 @@ export const Default: Story = {
 };
 
 /** Nothing typed yet: bars stand in for both names and their avatars. */
+/** Sign in's sketch: a sample workspace with a People table, before anyone has typed. */
+export const Sample: Story = {
+  args: { workspaceName: '', personName: '', sample: true },
+  // New on 22 October 2026: its baseline comes with the next `pnpm test:visual --update`.
+  parameters: { crm: { screenshot: false } },
+};
+
 export const Empty: Story = {
   args: { workspaceName: '', personName: '', focus: 'person' },
   play: async ({ canvasElement }) => {
