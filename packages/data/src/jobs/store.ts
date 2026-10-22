@@ -150,6 +150,8 @@ export function createJobsStore(deps: JobsDeps) {
   // The jobs this browser started and hasn't heard the end of, per workspace, and the watch that hears it.
   const startedHere = new Map<string, Set<string>>();
   const watching = new Map<string, () => void>();
+  // The jobs whose end the app was told of, so a later follow of one tells it no second time.
+  const told = new Set<string>();
   const fetching = new Set<string>();
   // Reads asked for while one was out, run once it lands.
   const fetchAgain = new Set<string>();
@@ -241,6 +243,7 @@ export function createJobsStore(deps: JobsDeps) {
     const mine = startedHere.get(workspace);
     if (mine === undefined || !mine.has(job.id) || !isFinished(job)) return;
     mine.delete(job.id);
+    told.add(job.id);
     stopPolling(workspace, job.id);
     deps.onFinished(workspace, job);
     if (mine.size === 0) {
@@ -463,9 +466,7 @@ export function createJobsStore(deps: JobsDeps) {
   const track = (workspace: string, job: JobView, tellEnded = false) => {
     const mine = startedHere.get(workspace) ?? new Set<string>();
     startedHere.set(workspace, mine);
-    const before = jobsOf(workspace).get(job.id);
-    const heardEnd = before !== undefined && isFinished(before);
-    if (!isFinished(job) || (tellEnded && !heardEnd)) mine.add(job.id);
+    if (!isFinished(job) || (tellEnded && !told.has(job.id))) mine.add(job.id);
     if (!watching.has(workspace) && !isFinished(job)) watching.set(workspace, deps.watch(workspace));
     put(workspace, job, true);
     // Finished already (a count of zero): nobody waits on it.
@@ -603,6 +604,7 @@ export function createJobsStore(deps: JobsDeps) {
       tellFollowers();
       views.clear();
       startedHere.clear();
+      told.clear();
       for (const stop of polling.values()) stop();
       polling.clear();
       for (const stop of watching.values()) stop();

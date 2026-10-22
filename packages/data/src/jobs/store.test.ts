@@ -170,9 +170,14 @@ describe('the jobs store', () => {
     await flush();
     expect(finished.map((each) => each.id)).toEqual([ended.id]);
     expect(watches.open).toBe(0);
+    // Held already from a list, before this tab followed it: the follow still tells the app, once.
+    const listed: JobView = { ...job(32, 'succeeded', 10), kind: 'records.export' };
+    store.track('acme', listed);
+    store.track('acme', listed, true);
+    expect(finished.map((each) => each.id)).toEqual([ended.id, listed.id]);
     // Without `tellEnded` (a bulk change of nothing), nobody waits on it.
     store.track('acme', { ...job(31, 'succeeded', 0), kind: 'records.bulk' });
-    expect(finished).toHaveLength(1);
+    expect(finished).toHaveLength(2);
   });
 
   it('hears a job end that comes while its read is out, reading it again once that read lands', async () => {
