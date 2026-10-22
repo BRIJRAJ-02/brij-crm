@@ -1,5 +1,6 @@
 // The only links an email may carry: the app's own origin, and Powered by
 // Timefix tagged with fixed words.
+import { timefixUrl } from '@crm/contracts/brand';
 import { describe, expect, it } from 'vitest';
 import {
   appOrigin,
@@ -8,6 +9,7 @@ import {
   EMAIL_MEDIUMS,
   onAppOrigin,
   poweredByUrl,
+  TIMEFIX_SITE,
   wordmarkUrls,
   type EmailMedium,
 } from './links.ts';
@@ -29,6 +31,20 @@ describe('Powered by Timefix', () => {
       expect(new URL(poweredByUrl(medium)).searchParams.get('utm_medium')).toBe(medium);
     for (const medium of ['sign_in', 'email_', 'email_acme_corp', 'email_a@b.example', 'email_ref=acme']) {
       expect(() => poweredByUrl(medium as EmailMedium), medium).toThrow('That isn’t an email medium.');
+    }
+  });
+
+  it('refuses a public page’s medium: an email names its own family', () => {
+    for (const medium of ['booking_page', 'booking_manage', 'form']) {
+      expect(() => poweredByUrl(medium as EmailMedium), medium).toThrow('That isn’t an email medium.');
+    }
+  });
+
+  it('is built by the one builder the public pages use, with no referrer', () => {
+    expect(TIMEFIX_SITE).toBe('https://timefix.ai');
+    for (const medium of EMAIL_MEDIUMS) {
+      expect(poweredByUrl(medium)).toBe(timefixUrl({ surface: medium }));
+      expect(new URL(poweredByUrl(medium)).searchParams.has('ref')).toBe(false);
     }
   });
 });
