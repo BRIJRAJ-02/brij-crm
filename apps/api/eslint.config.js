@@ -18,11 +18,8 @@ export default server({
         'better-auth/crypto',
         'better-auth/plugins/email-otp',
         'better-auth/plugins/two-factor',
-        '@better-auth/passkey',
       ],
     },
-    // A step up by passkey (spec 0033, milestone 3): WebAuthn's checks, only here.
-    { files: ['src/auth/passkey.ts'], allow: ['@simplewebauthn/server'] },
     { files: ['src/mail/resend.ts'], allow: ['resend'] },
     // The job runners (spec 0008): Graphile Worker only here.
     { files: ['src/jobs/graphile.ts'], allow: ['graphile-worker'] },

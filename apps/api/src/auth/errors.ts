@@ -20,9 +20,9 @@ const MESSAGES: Readonly<Record<string, string>> = {
 };
 
 /**
- * The two factor and passkey plugins' codes, as ours (spec 0033, AC-882): a
- * wrong app or backup code, a second step that ran out or had too many wrong
- * codes, the account locked for a while, and a passkey that didn't check out.
+ * The two factor plugin's codes, as ours (spec 0033, AC-882): a wrong app or
+ * backup code, a second step that ran out or had too many wrong codes, and
+ * the account locked for a while.
  */
 const TWO_FACTOR_CODES: Readonly<Record<string, { readonly code: ErrorCode; readonly message: string }>> = {
   INVALID_CODE: { code: 'CODE_INVALID', message: 'That code didn’t work. Try the newest code in your app.' },
@@ -34,15 +34,6 @@ const TWO_FACTOR_CODES: Readonly<Record<string, { readonly code: ErrorCode; read
   INVALID_TWO_FACTOR_COOKIE: { code: 'SIGN_IN_EXPIRED', message: 'This sign in has expired. Sign in again.' },
   TOTP_ALREADY_ENABLED: { code: 'INPUT_INVALID', message: 'Two factor sign in is already on.' },
   TWO_FACTOR_NOT_ENABLED: { code: 'INPUT_INVALID', message: 'Two factor sign in is off.' },
-  // The passkey plugin's (spec 0033, milestone 3).
-  CHALLENGE_NOT_FOUND: { code: 'SIGN_IN_EXPIRED', message: 'That took too long. Try your passkey again.' },
-  PASSKEY_NOT_FOUND: {
-    code: 'CODE_INVALID',
-    message: 'That passkey isn’t on any account here. Sign in with your email instead.',
-  },
-  AUTHENTICATION_FAILED: { code: 'CODE_INVALID', message: 'That passkey didn’t work. Try again.' },
-  FAILED_TO_VERIFY_REGISTRATION: { code: 'CODE_INVALID', message: 'Your passkey wasn’t added. Try again.' },
-  YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY: { code: 'FORBIDDEN', message: 'That passkey can’t be added here.' },
 };
 
 /** What a locked second step says (AC-882). */
@@ -86,13 +77,7 @@ export async function authErrorResponse(response: Response, route = ''): Promise
       headers,
     );
   }
-  // The passkey plugin answers 500 for a passkey that didn't check out (a wrong site, a bad signature): a refusal.
   const ours = code === undefined ? undefined : TWO_FACTOR_CODES[code];
-  if (response.status >= 500 && code === 'FAILED_TO_VERIFY_REGISTRATION' && ours !== undefined) {
-    // Logged all the same: the plugin answers this for a database fault too, which must not pass as a failed try.
-    log.warn('Passkey not added', { status: response.status, code });
-    return json(ours, errorStatus(ours.code), response.headers);
-  }
   if (response.status >= 500) {
     log.error('Sign in route failed', { status: response.status, code });
     // Better Auth caught the error itself (its logger has the detail); the report names the route and status.

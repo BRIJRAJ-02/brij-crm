@@ -131,7 +131,7 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * and "Sign out everyone" keeps its caller's own session. Kept for member
    * handlers, unlike `identity`.
    */
-  factors: Pick<IdentityStore, 'secondFactorUsers' | 'hasPasskey' | 'sessionVerification' | 'markSessionVerified'>;
+  factors: Pick<IdentityStore, 'secondFactorUsers' | 'sessionVerification' | 'markSessionVerified'>;
   /**
    * The names of the workspaces a person is in that require two factor (spec
    * 0033, AC-885): Account › Sign in and devices says so, and keeps their last second
@@ -173,7 +173,7 @@ export const requireSession = os.$context<RequestContext>().middleware(async ({ 
     context: {
       user: session.user,
       sessionId: session.sessionId,
-      doorSession: doorSession(session, context.identity),
+      doorSession: doorSession(session),
     },
   });
 });

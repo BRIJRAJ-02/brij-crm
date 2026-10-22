@@ -17,7 +17,7 @@ export const strings = {
     invitedBy: 'Invited by',
     expires: 'Expires',
   },
-  /** The Two factor column (spec 0033, AC-895): an authenticator app or a passkey counts. */
+  /** The Two factor column (spec 0033, AC-895): an authenticator app. */
   twoFactorOn: 'On',
   twoFactorOff: 'Off',
   you: 'You',

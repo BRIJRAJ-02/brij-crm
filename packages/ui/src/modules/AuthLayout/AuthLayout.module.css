@@ -106,17 +106,16 @@
       padding-block-start: max(calc(2 * var(--space-32)), calc((100dvh - var(--size-page-card)) / 2 - var(--size-bar)));
     }
 
-    /* The preview's panel: the sketch a step in from its top and start, running off its end and foot, large
-       enough to read as the app. */
+    /* The preview's panel, on its own surface (surface-sunken: a tint in light, a step down in dark, so the
+       sketch on surface reads as lifted): the sketch anchors at a fixed offset from its top and start and runs
+       off its end and foot, cut by both on purpose, at every width. */
     .side {
       display: block;
       position: relative;
       min-inline-size: 0;
       overflow: hidden;
-      padding-block-start: var(--space-32);
-      padding-inline-start: var(--space-32);
       border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
-      background: var(--surface-subtle);
+      background: var(--surface-sunken);
     }
   }
 

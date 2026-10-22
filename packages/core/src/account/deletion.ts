@@ -60,7 +60,7 @@ export interface AccountDeletionDeps {
   readonly db: Database;
   readonly identity: Pick<
     IdentityStore,
-    'findWorkspace' | 'workspacesOf' | 'sessionVerification' | 'twoFactorState' | 'hasPasskey' | 'deleteUser'
+    'findWorkspace' | 'workspacesOf' | 'sessionVerification' | 'twoFactorState' | 'deleteUser'
   >;
   readonly rules: DoorDeps['rules'];
   /** The hooks each workspace's removal runs in its transaction (the outbox), as a background write's. */

@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Account › Sign in and devices' two factor sign in (spec 0033, AC-881, AC-883, AC-885): on or off, and backup codes.
 // Main task: set the authenticator app up (QR code, first code, backup codes saved), turn it off, or make new codes.
-// Leaves out: passkeys (their own section) and the workspace's requirement (milestone 4).
+// Leaves out: the workspace's requirement (milestone 4).
 import type { AccountSecurityState, DataLayer } from '@crm/data';
 import {
   Button,
@@ -164,10 +164,9 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
     }
   };
 
-  const plain = useStepUp(data, security, { onComplete: () => void startSetup(), isBusy });
+  const plain = useStepUp(data, security, { onComplete: () => void startSetup() });
   const strict = useStepUp(data, security, {
     secondFactor: true,
-    isBusy,
     onComplete: () => void (dialog.kind === 'off' ? turnOff() : makeCodes()),
   });
   // The handlers above run after render, so they read the latest checks.
@@ -209,8 +208,8 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
     );
   } else {
     const on = security.twoFactor.on;
-    // A workspace that requires two factor keeps the app on unless a passkey stands in (AC-885); the server says so too.
-    const kept = on && security.passkeys.length === 0 && security.requiredBy.length > 0;
+    // A workspace that requires two factor keeps the app on (AC-885); the server says so too.
+    const kept = on && security.requiredBy.length > 0;
     card = (
       <Card>
         <SettingsRow
@@ -254,7 +253,7 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
       <Modal
         title={step === 'codes' ? copy.codesTitle : copy.setupTitle}
         isOpen={isOpen}
-        isBusy={isBusy || plain.isAsking || strict.isAsking}
+        isBusy={isBusy}
         // The codes won't be shown again: a click outside never closes them; the close button and Esc still do.
         isDismissable={step !== 'codes'}
         onOpenChange={(next) => {
@@ -313,7 +312,7 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
         title={copy.turnOffTitle}
         tone="danger"
         isOpen={isOpen}
-        isBusy={isBusy || plain.isAsking || strict.isAsking}
+        isBusy={isBusy}
         onOpenChange={(next) => {
           if (!next) close();
         }}
@@ -339,7 +338,7 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
       <Modal
         title={step === 'codes' ? copy.codesTitle : copy.newCodesTitle}
         isOpen={isOpen}
-        isBusy={isBusy || plain.isAsking || strict.isAsking}
+        isBusy={isBusy}
         isDismissable={step !== 'codes'}
         onOpenChange={(next) => {
           if (!next) close();

@@ -92,7 +92,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
-import { createAuth, type PasskeyOutcome, type PasskeySupport } from './auth/auth.ts';
+import { createAuth } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
 import { createRecordFactsStore, type RecordFacts } from './records/facts.ts';
 import {
@@ -125,7 +125,6 @@ import {
   createAccountSecurityStore,
   isFresh as isSessionFresh,
   type AccountSecurityView,
-  type PasskeyStepUpResult,
   type StepUpResult,
 } from './account/security.ts';
 import { createAccountSessionsStore, type AccountSessionsView, type SignOutOthersResult } from './account/sessions.ts';
@@ -414,14 +413,12 @@ export {
   isFresh as isSessionFresh,
   type AccountSecurityState,
   type AccountSecurityView,
-  type PasskeyStepUpResult,
   type StepUpResult,
 } from './account/security.ts';
-export type { PasskeyOutcome, PasskeySupport, SecondFactorKind, SignInOutcome, TwoFactorSetup } from './auth/auth.ts';
+export type { SecondFactorKind, SignInOutcome, TwoFactorSetup } from './auth/auth.ts';
 export type { StepUpMethod } from '@crm/contracts';
 export type { AccountSession, DeletionBlocker } from '@crm/contracts';
-export { PASSKEY_NAME_MAX, SESSION_LENGTH_DAYS, STEP_UP_MINUTES } from '@crm/contracts/account-limits';
-export type { AccountPasskey } from '@crm/contracts';
+export { SESSION_LENGTH_DAYS, STEP_UP_MINUTES } from '@crm/contracts/account-limits';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type {
   CalendarChange,
@@ -1813,11 +1810,6 @@ export function createDataLayer({
     get: () => call((options) => api.account.security.get(undefined, options)),
     startStepUp: () => call((options) => api.account.stepUp.start({ method: 'email' }, options)),
     verifyStepUp: (input) => call((options) => api.account.stepUp.verify(input, options)),
-    passkeyOptions: () => call((options) => api.account.stepUp.passkeyOptions(undefined, options)),
-    passkeyAssertion: (options) => auth.passkeys.assertion(options),
-    verifyPasskey: (input) => call((options) => api.account.stepUp.verifyPasskey(input, options)),
-    renamePasskey: (input) => call((options) => api.account.passkeys.rename(input, options)),
-    removePasskey: (input) => call((options) => api.account.passkeys.remove(input, options)),
   });
 
   // Account security (spec 0033): the person's own sessions, one list for the app load.
@@ -4494,24 +4486,6 @@ export function createDataLayer({
         sendCode: (): Promise<StepUpResult> => accountSecurity.sendCode(),
         verify: (method: 'email' | 'totp' | 'backup', code: string): Promise<StepUpResult> =>
           accountSecurity.verify(method, code),
-        /** A step up by passkey (milestone 3): `CANCELLED` when the person closed the browser's prompt. */
-        passkey: (): Promise<PasskeyStepUpResult> => accountSecurity.verifyPasskey(),
-      },
-      /**
-       * The person's passkeys (spec 0033, milestone 3, AC-887). `add` runs
-       * the browser's prompt (after a step up; refusals throw a DataError) and
-       * reads the list again; `rename` and `remove` show at once and are put
-       * back if refused, answering how it went.
-       */
-      passkeys: {
-        support: (): Promise<PasskeySupport> => auth.passkeys.support(),
-        add: async (name: string | undefined): Promise<PasskeyOutcome> => {
-          const outcome = await auth.passkeys.add(name);
-          if (outcome === 'done') await accountSecurity.view().reload();
-          return outcome;
-        },
-        rename: (id: string, name: string): Promise<StepUpResult> => accountSecurity.renamePasskey(id, name),
-        remove: (id: string): Promise<StepUpResult> => accountSecurity.removePasskey(id),
       },
       /**
        * Two factor's setup and changes, each after a step up: start (the

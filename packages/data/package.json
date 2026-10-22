@@ -22,7 +22,6 @@
     "@crm/contracts": "workspace:*",
     "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",
-    "@simplewebauthn/browser": "catalog:",
     "better-auth": "catalog:",
     "centrifuge": "catalog:",
     "re2js": "catalog:",

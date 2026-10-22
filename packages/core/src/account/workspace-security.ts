@@ -21,7 +21,7 @@ const { members, workspaces, workspaceSecurity } = schema;
 /** What an owner without a second factor answers when they try to require one (AC-893). */
 export const OWNER_NEEDS_TWO_FACTOR_MESSAGE = 'Set up two factor sign in for yourself first, then require it here.';
 
-/** Who has a second factor (an authenticator app or a passkey), among these users: the identity store's answer. */
+/** Who has a second factor (an authenticator app), among these users: the identity store's answer. */
 export type SecondFactorUsers = (userIds: readonly string[]) => Promise<ReadonlySet<string>>;
 
 /** What reading or changing the rules needs beside the scope: who has a second factor, and whether the caller does. */

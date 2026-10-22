@@ -25,7 +25,6 @@ const GENERIC = 'Something went wrong';
 const STALE: AccountSecurityState = {
   status: 'ready',
   twoFactor: { on: false },
-  passkeys: [],
   session: { withSecondFactor: false },
   requiredBy: [],
 };
@@ -78,7 +77,6 @@ function layerWith(answers: readonly StepUpResult[], checked: StepUpResult = { o
           return Promise.resolve(answers[Math.min(sends.length - 1, answers.length - 1)] ?? { ok: true });
         },
         verify: () => Promise.resolve(checked),
-        passkey: () => Promise.resolve({ ok: false, code: 'CANCELLED' }),
       },
     },
     workspaceSecurity: { signOutEveryone: () => Promise.reject(new Error('not reached')) },

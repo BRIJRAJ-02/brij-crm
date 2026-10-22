@@ -98,8 +98,7 @@ const vendorSdks = {
         'better-auth',
         'better-auth/*',
         '@better-auth/*',
-        // WebAuthn (spec 0033, passkeys): the server checks only in apps/api/src/auth/passkey.ts; the browser
-        // ceremony only in packages/data/src/auth/.
+        // WebAuthn: passkeys were taken out on 22 October 2026, so nothing may import it until a spec brings it back.
         '@simplewebauthn/*',
         // The job queue (spec 0008): only apps/api/src/jobs/graphile.ts (the runners) and
         // packages/db/src/migrations.ts (its schema migrations).

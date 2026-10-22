@@ -132,6 +132,8 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
             personName={user?.name ?? ''}
             {...(user === undefined ? {} : { personId: user.id })}
             focus="workspace"
+            // Sample rows around the real workspace name, so the sketch reads as a workspace in use.
+            sample
           />
         }
         {...(user === undefined || isMismatch
