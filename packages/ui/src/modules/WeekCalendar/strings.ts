@@ -4,7 +4,9 @@ export const strings = {
   dayBlocks: (day: string, count: number) =>
     count === 0 ? `${day}, nothing on` : count === 1 ? `${day}, 1 item` : `${day}, ${String(count)} items`,
   dayLoading: (day: string) => `${day}, loading`,
-  blockName: (title: string, time: string) => `${title}, ${time}`,
+  /** A block's name: its title and time, then who it is with and whether it was called off, when the screen says. */
+  blockName: (title: string, time: string, detail?: string, isCancelled?: boolean) =>
+    [title, time, ...(detail === undefined ? [] : [detail]), ...(isCancelled === true ? ['canceled'] : [])].join(', '),
   details: 'Details',
   more: (count: number) => `+${String(count)}`,
   moreName: (count: number, at: string) =>

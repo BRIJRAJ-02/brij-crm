@@ -42,9 +42,9 @@ export interface WeekCalendarBlock {
   readonly startMinute: number;
   readonly endMinute: number;
   readonly title: string;
-  /** "9:00 – 9:30 AM". */
+  /** "9:00 – 9:30 AM". A block of half an hour or less shows its start alone (`minuteLabel`), but reads this. */
   readonly time: string;
-  /** A third line when the block is tall enough (the page's title). */
+  /** A third line when the block is tall enough (who it is with); read out in the block's name at any size. */
   readonly detail?: string;
   /**
    * `booking` is accent; `event` quieter, in its calendar's hue; `blocked` and
@@ -56,6 +56,7 @@ export interface WeekCalendarBlock {
   readonly kind: 'booking' | 'event' | 'blocked' | 'held' | 'busy';
   /** An event's calendar hue (each connection keeps one). */
   readonly hue?: Hue;
+  /** Drawn struck through and quieter, and read out as canceled. */
   readonly isCancelled?: boolean;
   /** Where the block came from, as a small mark before its title: Timefix for a booking, the calendar's brand for an event. */
   readonly provider?: ProviderName;
@@ -145,7 +146,7 @@ export interface WeekCalendarProps {
   readonly drawMinutes?: number;
   /** Where Enter on a day starts its span (the member's working start). Default 9:00. */
   readonly drawStartMinute?: (dayKey: string) => number;
-  /** A minute of the day as a time ("10:15 AM"), for the drawn span's corners. */
+  /** A minute of the day as a time ("10:15 AM"), for the drawn span's corners, a "+N" chip, and the start a block of half an hour or less shows. */
   readonly minuteLabel?: (minute: number) => string;
   /**
    * The week's blocks are still loading: the grid itself shows (the days, the hours, today), busy, so the week
@@ -691,6 +692,13 @@ export function WeekCalendar({
                 )}
                 {dayBlocks.map((block) => {
                   const length = block.endMinute - block.startMinute;
+                  const size = sizeOf(length);
+                  // On one line (half an hour or less) the start alone, as Google Calendar and Klaviyo write it, so
+                  // the title keeps its room; "10:00 AM – 10:30 AM" was cut to "10:00 A…".
+                  const shownTime =
+                    (size === 'tiny' || size === 'compact') && minuteLabel !== undefined
+                      ? minuteLabel(block.startMinute)
+                      : block.time;
                   return (
                     <button
                       key={block.id}
@@ -707,10 +715,10 @@ export function WeekCalendar({
                       data-nested={block.indent > 0 || undefined}
                       data-narrow={(block.span / block.lanes) * block.width < 0.5 || undefined}
                       data-open={block.id === openId || undefined}
-                      data-size={sizeOf(length)}
+                      data-size={size}
                       aria-haspopup="dialog"
                       aria-expanded={block.id === openId}
-                      aria-label={strings.blockName(block.title, block.time)}
+                      aria-label={strings.blockName(block.title, block.time, block.detail, block.isCancelled)}
                       style={{
                         '--start': String(block.startMinute),
                         '--length': String(Math.max(block.endMinute - block.startMinute, 15)),
@@ -740,7 +748,7 @@ export function WeekCalendar({
                         )}
                         <span className={styles.blockTitle}>{block.title}</span>
                       </span>
-                      <span className={styles.blockTime}>{block.time}</span>
+                      <span className={styles.blockTime}>{shownTime}</span>
                       {block.detail !== undefined && <span className={styles.blockDetail}>{block.detail}</span>}
                     </button>
                   );
@@ -849,7 +857,7 @@ export function WeekCalendar({
           placement={cardPlacement}
           label={strings.details}
         >
-          {detail}
+          <div className={styles.detail}>{detail}</div>
         </Popover>
       )}
     </section>

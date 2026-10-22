@@ -215,6 +215,12 @@ export const ShortBlocks: Story = {
     if (start === null) throw new Error('a drawn span without its start');
     await expect(start).toHaveTextContent('4:00 PM');
     await expect(wordsInside(ghost, start).centred).toBe(true);
+    // Half an hour shows its start alone, so the title keeps its room, but still reads the whole time.
+    const half = within(canvasElement).getByRole('button', { name: 'Ada Lovelace, 10:00 – 10:30 AM' });
+    await expect(half.querySelector('[class*="block-time"]')).toHaveTextContent(/^10:00 AM$/);
+    // A longer block shows the whole time, and says who it is with in its name.
+    const long = within(canvasElement).getByRole('button', { name: 'Alan Turing, 11:00 – 11:45 AM, Intro' });
+    await expect(long.querySelector('[class*="block-time"]')).toHaveTextContent('11:00 – 11:45 AM');
   },
 };
 
@@ -290,7 +296,12 @@ export const OpenCard: Story = {
           onSelectDay={setDay}
           now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
           {...(open === undefined ? {} : { openId: open })}
-          detail={<p>Grace Hopper, 3:30 – 4:00 PM</p>}
+          detail={
+            <>
+              <p>Grace Hopper, 3:30 – 4:00 PM</p>
+              <p>Quick chat</p>
+            </>
+          }
           onOpen={setOpen}
           onClose={() => setOpen(undefined)}
         />
@@ -298,9 +309,19 @@ export const OpenCard: Story = {
     );
   },
   play: async ({ canvas, canvasElement }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Grace Hopper, 3:30 – 4:00 PM' }));
+    // A cancelled block says so in its name, not by its strike alone.
+    await expect(
+      canvas.getByRole('button', { name: 'Alan Turing, 10:00 – 11:00 AM, Site visit, canceled' }),
+    ).toBeInTheDocument();
+    // Its name says who and when, and what it is about (the block's detail).
+    await userEvent.click(canvas.getByRole('button', { name: 'Grace Hopper, 3:30 – 4:00 PM, Quick chat' }));
     const body = within(canvasElement.ownerDocument.body);
     await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toBeInTheDocument());
+    // The card's pieces sit apart, not flush (measured while the card may still be growing in, so not exact).
+    const card = within(body.getByRole('dialog', { name: 'Details' }));
+    const first = card.getByText('Grace Hopper, 3:30 – 4:00 PM').getBoundingClientRect();
+    const second = card.getByText('Quick chat').getBoundingClientRect();
+    await expect(second.top - first.bottom).toBeGreaterThan(8);
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(body.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument());
   },

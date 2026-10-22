@@ -30,6 +30,11 @@ export interface PanelProps {
   readonly variant?: PanelVariant;
   /** The content runs to the edges and fills the height, for Tabs and lists that scroll themselves. */
   readonly isFlush?: boolean;
+  /**
+   * The content's pieces sit `space-12` apart (a badge, a description list, a callout, a row of buttons), for
+   * details made of library parts with no layout of their own: a booking's card on Bookings › List.
+   */
+  readonly isStacked?: boolean;
 }
 
 type Phase = 'open' | 'exiting' | 'closed';
@@ -74,6 +79,7 @@ export function Panel({
   width = 'md',
   variant = 'sheet',
   isFlush = false,
+  isStacked = false,
 }: PanelProps) {
   const ref = useRef<HTMLElement>(null);
   const phase = usePresence(isOpen, ref);
@@ -111,7 +117,7 @@ export function Panel({
               <Button variant="ghost" icon="x" label={strings.close} onPress={onClose} />
             </span>
           </header>
-          <div className={styles.body} data-flush={isFlush || undefined}>
+          <div className={styles.body} data-flush={isFlush || undefined} data-stacked={isStacked || undefined}>
             {/* Opened from a settings page, its content keeps to the panel, never the page's edges. */}
             <PageEdge value={false}>{children}</PageEdge>
           </div>
