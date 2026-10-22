@@ -39,6 +39,12 @@ const withEvent: BookingCalendar = {
   existing: { move: () => Promise.resolve(), cancel: () => Promise.resolve() },
 };
 
+/**
+ * A calendar file's text with its folded lines joined again (RFC 5545 folds a content line at 75 octets), so an
+ * attendee whose line folds inside its address still reads whole.
+ */
+const unfolded = (content: string | undefined) => content?.replace(/\r\n /g, '');
+
 let count = 0;
 async function booked(calendar: BookingCalendar = NO_CALENDAR, guests: string[] = []) {
   count += 1;
@@ -89,11 +95,11 @@ describe('the confirmation (AC-636)', () => {
     expect(visitor?.ics?.content).toContain(`UID:${b.bookingId}@app.example`);
     expect(host).toMatchObject({ subject: 'New booking: Intro call with Grace Hopper' });
     // The host is in the meeting by default (owner, 22 Oct 2026): both files list them, and the host gets one too.
-    expect(visitor?.ics?.content).toContain('MAILTO:ada@example.com');
+    expect(unfolded(visitor?.ics?.content)).toContain('MAILTO:ada@example.com');
     expect(host?.ics?.method).toBe('REQUEST');
     expect(host?.ics?.content).toContain(`UID:${b.bookingId}@app.example`);
-    expect(host?.ics?.content).toContain('MAILTO:grace@navy.example');
-    expect(host?.ics?.content).toContain('MAILTO:ada@example.com');
+    expect(unfolded(host?.ics?.content)).toContain('MAILTO:grace@navy.example');
+    expect(unfolded(host?.ics?.content)).toContain('MAILTO:ada@example.com');
     expect(host?.rows).toContainEqual({ label: 'Note', value: 'About the compiler.' });
     // Each reader's footer says why they got it.
     expect(visitor?.why).toBe('You got this email because this address was used to book Intro call with Ada Host.');
