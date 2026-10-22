@@ -31,6 +31,26 @@
     min-inline-size: 100%;
   }
 
+  /* Where a scrollable table hides columns past an end, that end fades over space-24, so the frame shows it
+     scrolls (only the mask's alpha counts, so the surface token stands in for opaque). */
+  .frame[data-fade='end'] {
+    mask-image: linear-gradient(to right, var(--surface) calc(100% - var(--space-24)), transparent);
+  }
+
+  .frame[data-fade='start'] {
+    mask-image: linear-gradient(to left, var(--surface) calc(100% - var(--space-24)), transparent);
+  }
+
+  .frame[data-fade='both'] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      var(--surface) var(--space-24),
+      var(--surface) calc(100% - var(--space-24)),
+      transparent
+    );
+  }
+
   .column {
     block-size: var(--size-table-header);
     padding-inline: var(--space-8);

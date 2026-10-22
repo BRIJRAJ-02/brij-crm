@@ -5,6 +5,7 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 import { PageEdge } from '../../lib/page-edge.ts';
+import { useScrollEdges } from '../../lib/scroll-edges.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { strings } from './strings.ts';
 import styles from './Table.module.css';
@@ -110,6 +111,10 @@ export function Table<T>({
   isScrollable = false,
 }: TableProps<T>) {
   const isSelectable = selected !== undefined && onSelectedChange !== undefined;
+  // A scrollable frame fades the end that hides columns, so it shows there is more to scroll to.
+  const scrolls = isScrollable && !isHeaderSticky;
+  const { edges, ref: frameRef } = useScrollEdges(scrolls);
+  const fade = edges.start ? (edges.end ? 'both' : 'start') : edges.end ? 'end' : undefined;
   const ids = rows.map(getRowId);
   const showSkeleton = useDelayedLoading(isLoading);
   // Directly in a settings page's body the rows run out into the page's gutter, the first column's text on the
@@ -231,9 +236,11 @@ export function Table<T>({
   );
   return (
     <div
+      ref={frameRef}
       className={styles.frame}
       data-sticky={isHeaderSticky || undefined}
-      data-scrollable={(isScrollable && !isHeaderSticky) || undefined}
+      data-scrollable={scrolls || undefined}
+      data-fade={fade}
       data-edge={atPageEdge ? 'page' : undefined}
     >
       {onReorder === undefined ? (
