@@ -15,7 +15,9 @@ Ported from the artifact's Avatar card. Record chips, the record header, presenc
 ```
 
 - People are circles, companies and other records squares (`shape`).
-- `size`: `xs` 16px, `sm` 20px (the default), `md` 24px, `lg` 32px, `title` 48px (a record heading its page or panel, beside its name), `xl` 72px (a booking page's host).
+- `size`: `xs` 16px, `sm` 20px (the default), `md` 24px, `lg` 32px, `title` 48px (a record heading its page or panel, beside its name), `xl` 72px (a booking page's host). Each diameter and its initials come from the avatar scale in `styles/base.css` (`--avatar-<size>`, `--avatar-initials-<size>`).
+- Initials sit at about 40% of the diameter in medium weight: `xs` and `sm` show one initial (8px and 9px), `md` 9.6px, `lg` 12.8px, `title` 19.2px and `xl` 28.8px show two. The line box is one em tall, which puts Inter's capitals on the optical centre. These sizes are worked out from the diameter on purpose, so the avatar is the one place exempt from the type scale; other text keeps to the `text-*` tokens.
+- The tile is a soft tint of its hue (`tag-<hue>-bg`) with the initials in that hue's darker text shade, and no ring (owner, 22 October 2026). Forced colours draw a hairline, since the fill is gone there.
 - `hue` comes from the display shape when it names one; otherwise a stable hash of `id` picks one of the nine, so a person keeps their colour.
 - `src` loads only from our origin, `data:image` or `blob:` (`safeImageSrc`, AC-14); anything else, or a broken picture, shows the initials.
 - `isDecorative` hides it from screen readers when the name is written beside it (chips do this). Otherwise it reads as an image named after the person.

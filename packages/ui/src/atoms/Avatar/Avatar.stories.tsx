@@ -20,14 +20,14 @@ const PEOPLE = [
   { id: 'p5', name: 'Ines Duarte', hue: 'green' },
 ] as const;
 
-/** Initials on a hue picked from the person's id. It reads as their name. */
+/** Initials on a hue picked from the person's id. It reads as their name. At the default 20px it shows one initial. */
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('img', { name: 'Ada Lovelace' })).toHaveTextContent('AL');
+    await expect(canvas.getByRole('img', { name: 'Ada Lovelace' })).toHaveTextContent(/^A$/u);
   },
 };
 
-/** The four sizes, people as circles and companies as squares. */
+/** The six sizes, people as circles and companies as squares: 16px and 20px show one initial, 24px and up two. */
 export const Sizes: Story = {
   parameters: { crm: { preview: true } },
   render: () => (
@@ -37,12 +37,17 @@ export const Sizes: Story = {
       <Avatar name="Priya Rao" hue="orange" size="md" />
       <Avatar name="Leo Martins" hue="blue" size="lg" />
       <Avatar name="Ada Lovelace" hue="lime" size="title" />
+      <Avatar name="Alex Turner" hue="blue" size="xl" />
       <Avatar name="Northwind" hue="ink" shape="square" size="xs" />
       <Avatar name="Acme Logistics" hue="green" shape="square" size="md" />
       <Avatar name="Globex" hue="red" shape="square" size="lg" />
       <Avatar name="Initech" hue="yellow" shape="square" size="title" />
     </Stage>
   ),
+  play: async ({ canvasElement }) => {
+    const shown = [...canvasElement.querySelectorAll('[role="img"]')].map((avatar) => avatar.textContent);
+    await expect(shown).toEqual(['M', 'J', 'PR', 'LM', 'AL', 'AT', 'N', 'AL', 'G', 'I']);
+  },
 };
 
 /** A picture from an outside origin is refused and the initials show (AC-14). */
@@ -51,7 +56,7 @@ export const RefusedPicture: Story = {
   play: async ({ canvas }) => {
     const avatar = canvas.getByRole('img', { name: 'Ada Lovelace' });
     await expect(avatar.querySelector('img')).toBeNull();
-    await expect(avatar).toHaveTextContent('AL');
+    await expect(avatar).toHaveTextContent(/^A$/u);
   },
 };
 
