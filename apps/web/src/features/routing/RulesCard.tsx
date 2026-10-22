@@ -139,7 +139,8 @@ export function RulesCard({
         </InfoTip>
       }
     >
-      <SettingsStack>
+      {/* No lines between the rules: space alone sets them apart, as across the Captures editors. */}
+      <SettingsStack variant="plain">
         {failure !== undefined && editing === undefined && removing === undefined && (
           <Callout tone="danger">{failure}</Callout>
         )}

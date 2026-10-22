@@ -13,6 +13,8 @@ interface BadgeBase {
   readonly tone?: BadgeTone;
   /** What it counts, read after the number by screen readers ("unread"). */
   readonly label?: string;
+  /** `chip` is a Tag's height (`size-chip`), for a Badge in a row of chips (the calendars a page checks); `sm` by default. */
+  readonly size?: 'sm' | 'chip';
 }
 
 /** Props for Badge: a count, or a short label (a row's note, "New"). */
@@ -48,7 +50,7 @@ export type BadgeProps = BadgeBase &
 
 /** A small count beside a tab, a nav item or a list (3, 99+, or 10,000+ at least), or a short label. */
 export function Badge(props: BadgeProps) {
-  const { tone = 'neutral', label } = props;
+  const { tone = 'neutral', label, size = 'sm' } = props;
   const { locale } = useFormatSettings();
   const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale));
   let shown: string;
@@ -64,6 +66,7 @@ export function Badge(props: BadgeProps) {
       data-tone={tone}
       data-text={props.text === undefined ? undefined : ''}
       data-whole={props.isWhole === true || undefined}
+      data-size={size === 'chip' ? 'chip' : undefined}
     >
       {props.dot !== undefined && <span className={styles.dot} data-hue={props.dot} aria-hidden="true" />}
       {props.text === undefined ? shown : <span className={styles.text}>{shown}</span>}

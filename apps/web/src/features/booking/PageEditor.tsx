@@ -369,8 +369,8 @@ export function PageEditor({
   ) => (
     <SettingsRow
       title={title}
-      // Every select one column wide, as on Settings › Preferences, so their edges line up.
-      control="field"
+      // Every select one short column wide, so their edges line up at the end of the form's column.
+      control="compact"
       {...(description === undefined ? {} : { description })}
       meta={
         <InfoTip label={title} example={help.example}>
@@ -726,12 +726,13 @@ export function PageEditor({
                                 </ButtonLink>
                               ),
                             })}
-                        {...(isTeam ? {} : { hint: zoneDisplay(hours.availability.timeZone, openedAt) })}
+                        {...(isTeam ? {} : { meta: zoneDisplay(hours.availability.timeZone, openedAt) })}
                       >
                         {isTeam ? (
                           rotationStrings.hoursMembers
                         ) : (
                           <DescriptionList
+                            layout="compact"
                             items={weekGroups(hours.availability, locale).map((group) => ({
                               id: group.days,
                               term: group.days,
@@ -744,7 +745,12 @@ export function PageEditor({
                         <FieldGroup
                           label={strings.reservedTime}
                           action={
-                            <ButtonLink href={bookingsTabHref(slug, 'calendar')} variant="ghost" size="sm">
+                            <ButtonLink
+                              href={bookingsTabHref(slug, 'calendar')}
+                              variant="ghost"
+                              size="sm"
+                              icon="settings"
+                            >
                               {strings.manage}
                             </ButtonLink>
                           }
@@ -761,7 +767,7 @@ export function PageEditor({
                   )}
                   {shown === 'limits' && (
                     <>
-                      <SettingsRowGroup title={strings.limitGroups.buffers}>
+                      <SettingsRowGroup variant="plain" title={strings.limitGroups.buffers}>
                         {limitRow(
                           strings.bufferBefore,
                           strings.limitHelp.before,
@@ -777,7 +783,7 @@ export function PageEditor({
                           (id) => change({ bufferAfter: Number(id ?? 0) }),
                         )}
                       </SettingsRowGroup>
-                      <SettingsRowGroup title={strings.limitGroups.window}>
+                      <SettingsRowGroup variant="plain" title={strings.limitGroups.window}>
                         {limitRow(
                           strings.notice,
                           strings.limitHelp.notice,
@@ -790,7 +796,7 @@ export function PageEditor({
                           change({ windowDays: Number(id ?? 60) }),
                         )}
                       </SettingsRowGroup>
-                      <SettingsRowGroup title={strings.limitGroups.pace}>
+                      <SettingsRowGroup variant="plain" title={strings.limitGroups.pace}>
                         {limitRow(
                           strings.dailyLimit,
                           strings.limitHelp.daily,

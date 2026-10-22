@@ -43,3 +43,24 @@ export const Stacked: Story = {
     </Stage>
   ),
 };
+
+/** Compact: a week's hours, the days in one narrow column so the times line up, rows close together. */
+export const Compact: Story = {
+  args: {
+    layout: 'compact',
+    items: [
+      { term: 'Mon to Wed', description: '9:00 AM to 5:00 PM' },
+      { term: 'Thu', description: '9:00 AM to 1:00 PM' },
+      { term: 'Fri', description: '9:00 AM to 5:00 PM' },
+      { term: 'Sat, Sun', description: 'Unavailable' },
+    ],
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <DescriptionList {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Thu')).toBeInTheDocument();
+  },
+};

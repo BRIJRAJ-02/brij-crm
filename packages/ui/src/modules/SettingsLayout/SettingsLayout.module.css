@@ -212,6 +212,28 @@
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* Plain (a booking page's Limits): no hairlines at all; rows on a compact rhythm, a wider space before the next
+     group's label than under it. */
+  .rowGroup[data-variant='plain'] {
+    gap: var(--space-8);
+  }
+
+  .rowGroup[data-variant='plain'] + .rowGroup[data-variant='plain'] {
+    padding-block-start: var(--space-16);
+    border-block-start: none;
+  }
+
+  .rowGroup[data-variant='plain'] > .row {
+    padding-block-start: 0;
+    border-block-start: none;
+  }
+
+  /* A plain stack (the Captures editors): its rows without hairlines between them. */
+  .stack[data-variant='plain'] > .row {
+    padding-block-start: 0;
+    border-block-start: none;
+  }
+
   .rowGroupTitle {
     color: var(--text-secondary);
     font: var(--text-label-strong);
@@ -236,6 +258,17 @@
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+  }
+
+  /* A compact input row: a short column, as wide as a short Select's longest option ("Meeting length"), so a
+     list of them lines up at the end of a narrow column without each taking half of it. */
+  .rowControl[data-control='compact'] {
+    flex: 0 0 var(--size-column);
+  }
+
+  .rowControl[data-control='compact'] > * {
+    flex: 1 1 auto;
+    min-inline-size: 0;
   }
 
   .rowControl[data-control='field'] > * {
