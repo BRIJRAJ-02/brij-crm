@@ -354,7 +354,8 @@ export function OptionsEditor({
                       <Field
                         label={newName}
                         isLabelHidden
-                        {...(isChoice ? { placeholder: strings.typeChoice } : {})}
+                        // A blank row says what to type, so it never reads as an empty box beside a disabled Add option.
+                        placeholder={isStatus ? strings.typeStage : isChoice ? strings.typeChoice : strings.typeOption}
                         size="sm"
                         maxLength={labelMaxLength}
                         autoComplete="off"

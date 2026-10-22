@@ -121,6 +121,8 @@ export interface AttributeSettingsProps {
   readonly attribute?: AttributeSettingsAttribute;
   /** The picker's entries offered on create, by key (`PICKER_TYPES`), in the picker's order; all fifteen when absent. */
   readonly typeKeys?: readonly string[];
+  /** On create, the picker's entry chosen at the start (`select` where a board needs one); the first offered when absent. */
+  readonly initialTypeKey?: string;
   /**
    * Adds "Relationship" last to the picker (#15): choosing it calls
    * `onChoose` with the name typed so far, so the screen swaps in its own
@@ -231,6 +233,7 @@ export function AttributeSettings({
   onOpenChange,
   attribute,
   typeKeys,
+  initialTypeKey,
   relationshipEntry,
   members = [],
   isBusy = false,
@@ -290,6 +293,7 @@ export function AttributeSettings({
           label={title}
           attribute={attribute}
           typeKeys={typeKeys}
+          initialTypeKey={initialTypeKey}
           relationshipEntry={relationshipEntry}
           members={members}
           isBusy={isBusy}
@@ -314,6 +318,7 @@ interface AttributeFormProps {
   readonly label: string;
   readonly attribute: AttributeSettingsAttribute | undefined;
   readonly typeKeys: readonly string[] | undefined;
+  readonly initialTypeKey: string | undefined;
   readonly relationshipEntry: AttributeSettingsProps['relationshipEntry'];
   readonly members: readonly ActorDisplay[];
   readonly isBusy: boolean;
@@ -333,6 +338,7 @@ function AttributeForm({
   label,
   attribute,
   typeKeys,
+  initialTypeKey,
   relationshipEntry,
   members,
   isBusy,
@@ -351,7 +357,7 @@ function AttributeForm({
   const offered = PICKER_TYPES.filter((entry) => typeKeys === undefined || typeKeys.includes(entry.key));
   const [typeKey, setTypeKey] = useState(() =>
     attribute === undefined
-      ? (offered[0]?.key ?? 'text')
+      ? ((offered.find((each) => each.key === initialTypeKey) ?? offered[0])?.key ?? 'text')
       : (pickerTypeOf(attribute.type, attribute.isMulti)?.key ?? attribute.type),
   );
   const entry = PICKER_TYPES.find((each) => each.key === typeKey);
@@ -676,7 +682,8 @@ function AttributeForm({
             attribute={{ title: name, type }}
             newId={ruleId}
             isReadOnly={isReadOnly}
-            hint={strings.rulesSaveOnSave}
+            // Creating, the rules go with Create attribute: the hint names Save, which only editing shows.
+            {...(isCreating ? {} : { hint: strings.rulesSaveOnSave })}
             errors={ruleErrors}
             onChange={(next) => {
               setRules(next);
