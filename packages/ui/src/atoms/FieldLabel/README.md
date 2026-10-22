@@ -1,6 +1,6 @@
 # FieldLabel
 
-The one label row of every form control: Field, Select and RadioGroup.
+The one label row of every form control: Field, Select and RadioGroup, and FieldGroup's label over read only content.
 
 ## Why it exists
 
@@ -12,6 +12,7 @@ New, by extraction. Field, Select and RadioGroup each drew the same row (the lab
 <FieldLabel label="Domain" aside="(optional)" info={<InfoTip label="Domain">…</InfoTip>} />
 ```
 
+- `id` names the label, so a group can point `aria-labelledby` at it (FieldGroup, 22 October 2026, which had its own copy of this style).
 - `tone="strong"` for a group's question (RadioGroup); `label` otherwise.
 - `as="text"` for a read only control with nothing to label (a read only Select names its group with `aria-label`).
 - `isDisabled` fades it with the control.

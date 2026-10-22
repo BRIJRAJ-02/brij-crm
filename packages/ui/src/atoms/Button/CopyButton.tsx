@@ -88,7 +88,7 @@ export function CopyButton({
           onPress={onPress}
           isDisabled={isDisabled}
           labelReserve={isCopied ? label : strings.copiedLabel}
-          {...(isLabelCollapsible ? { isLabelCollapsible: true, label } : {})}
+          {...(isLabelCollapsible ? { isLabelCollapsible: true, label: isCopied ? strings.copiedLabel : label } : {})}
         >
           {isCopied ? strings.copiedLabel : label}
         </Button>

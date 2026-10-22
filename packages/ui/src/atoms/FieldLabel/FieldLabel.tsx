@@ -19,6 +19,8 @@ export interface FieldLabelProps {
   readonly as?: 'label' | 'text';
   /** Drawn faded with the not allowed cursor, as the disabled control under it. */
   readonly isDisabled?: boolean;
+  /** An id for the name, so a group can be labelled by it (`aria-labelledby`), as FieldGroup does. */
+  readonly id?: string;
   /** Keys pressed inside the help (a radio group keeps its arrows from moving the choice from there). */
   readonly onInfoKeyDown?: (event: KeyboardEvent<HTMLSpanElement>) => void;
 }
@@ -34,6 +36,7 @@ export function FieldLabel({
   tone = 'label',
   as = 'label',
   isDisabled = false,
+  id,
   onInfoKeyDown,
 }: FieldLabelProps) {
   const text = (
@@ -49,11 +52,21 @@ export function FieldLabel({
   );
   const name =
     as === 'label' ? (
-      <Label className={styles.label} data-tone={tone} data-disabled={isDisabled || undefined}>
+      <Label
+        className={styles.label}
+        data-tone={tone}
+        data-disabled={isDisabled || undefined}
+        {...(id === undefined ? {} : { id })}
+      >
         {text}
       </Label>
     ) : (
-      <span className={styles.label} data-tone={tone} data-disabled={isDisabled || undefined}>
+      <span
+        className={styles.label}
+        data-tone={tone}
+        data-disabled={isDisabled || undefined}
+        {...(id === undefined ? {} : { id })}
+      >
         {text}
       </span>
     );

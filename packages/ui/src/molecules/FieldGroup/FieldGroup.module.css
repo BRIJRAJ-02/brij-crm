@@ -17,21 +17,11 @@
     min-inline-size: 0;
   }
 
-  .label {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-  }
-
-  /* A section's heading over labelled values: the same size, medium, so it stands apart from the terms under it. */
-  .label[data-tone='strong'] {
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
-  }
-
-  /* The label's fact: the label's own style, a step quieter. */
+  /* The label's fact: the label's size, a step quieter. */
   .meta {
     color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .action {

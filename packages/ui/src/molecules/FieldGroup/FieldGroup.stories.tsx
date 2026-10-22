@@ -119,9 +119,9 @@ export const LongRow: Story = {
   },
 };
 
-/** `tone="strong"`: a section's heading over labelled values, medium beside the terms under it. */
+/** `tone="strong"` with `headingLevel`: a section's heading over labelled values, medium beside the terms under it. */
 export const Strong: Story = {
-  args: { label: 'Answers', tone: 'strong' },
+  args: { label: 'Answers', tone: 'strong', headingLevel: 3 },
   render: (args) => (
     <Stage>
       <FieldGroup {...args}>
@@ -137,5 +137,6 @@ export const Strong: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('group', { name: 'Answers' })).toHaveTextContent('Grace Hopper');
+    await expect(canvas.getByRole('heading', { level: 3, name: 'Answers' })).toBeInTheDocument();
   },
 };

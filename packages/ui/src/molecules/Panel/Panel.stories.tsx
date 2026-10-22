@@ -93,7 +93,7 @@ export const Stacked: Story = {
             { term: 'When', description: '5 minutes ago' },
           ]}
         />
-        <FieldGroup label="Answers" tone="strong">
+        <FieldGroup label="Answers" tone="strong" headingLevel={3}>
           <DescriptionList
             layout="stacked"
             items={[
@@ -102,7 +102,7 @@ export const Stacked: Story = {
             ]}
           />
         </FieldGroup>
-        <FieldGroup label="Where it came from" tone="strong">
+        <FieldGroup label="Where it came from" tone="strong" headingLevel={3}>
           <DescriptionList items={[{ term: 'Sent from', description: 'The form’s own page' }]} />
         </FieldGroup>
       </Panel>
