@@ -9,8 +9,10 @@
 // connections are cut, and a last email goes to the old address. Before the
 // `auth` rows go, the person's open join requests in workspaces they never
 // joined are closed (`closeJoinRequests`), so no admin is left deciding on
-// someone who no longer exists. Every step
-// can run again: a workspace already left is skipped.
+// someone who no longer exists. A deleted workspace still inside its window
+// is left the same way (`enterDeletedWorkspaceToLeave`), so a restore never
+// brings them back: it never blocks, since a deleted workspace needs no
+// owner. Every step can run again: a workspace already left is skipped.
 import {
   MEMBERS_PAGE_MAX,
   type AccountDeletionCheck,
@@ -19,7 +21,7 @@ import {
 } from '@crm/contracts';
 import { schema, type Database, type IdentityStore } from '@crm/db';
 import { and, eq, sql } from 'drizzle-orm';
-import { enterWorkspace, LEAVING, type DoorDeps } from '../access/door.ts';
+import { enterDeletedWorkspaceToLeave, enterWorkspace, LEAVING, type DoorDeps } from '../access/door.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { CalendarTokens } from '../calendar/provider.ts';
@@ -60,7 +62,7 @@ export interface AccountDeletionDeps {
   readonly db: Database;
   readonly identity: Pick<
     IdentityStore,
-    'findWorkspace' | 'workspacesOf' | 'sessionVerification' | 'twoFactorState' | 'deleteUser'
+    'findWorkspace' | 'workspacesOf' | 'deletedWorkspacesOf' | 'sessionVerification' | 'twoFactorState' | 'deleteUser'
   >;
   readonly rules: DoorDeps['rules'];
   /** The hooks each workspace's removal runs in its transaction (the outbox), as a background write's. */
@@ -105,6 +107,28 @@ async function myWorkspaces(
       } catch (error) {
         // Already left (a run that stopped part way), or the workspace is gone: nothing to do there. Anything else
         // (a database that didn't answer) fails the request, so a workspace is never skipped unseen.
+        if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') return undefined;
+        throw error;
+      }
+    }),
+  );
+  return entered.filter((each) => each !== undefined);
+}
+
+/**
+ * The person's member scope in each deleted workspace, still inside its window, that they are still in: left too,
+ * never a blocker. One past its window, or already left, is skipped; anything else fails the request.
+ */
+async function myDeletedWorkspaces(
+  deps: AccountDeletionDeps,
+  userId: string,
+): Promise<readonly { readonly scope: EngineScope }[]> {
+  const listed = await deps.identity.deletedWorkspacesOf(userId);
+  const entered = await Promise.all(
+    listed.map(async (workspace) => {
+      try {
+        return { scope: await enterDeletedWorkspaceToLeave({ db: deps.db }, { userId, workspaceId: workspace.id }) };
+      } catch (error) {
         if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') return undefined;
         throw error;
       }
@@ -195,13 +219,17 @@ export async function deleteMyAccount(
   const standing = await standingIn(await myWorkspaces(deps, caller.userId));
   const blockers = standing.filter((each) => each.last).map(({ entry }) => entry.name);
   if (blockers.length > 0) throw refuse('LAST_OWNER', lastOwnerMessage(blockers));
+  const deleted = await myDeletedWorkspaces(deps, caller.userId);
   // Owned workspaces first: should an owner be demoted meanwhile, `removeMember`'s own last owner guard refuses
-  // before any other workspace is left.
-  const ordered = [...standing.filter((each) => each.owner), ...standing.filter((each) => !each.owner)];
+  // before any other workspace is left. Deleted ones next: the guard passes them, unless one is restored meanwhile.
+  const ordered = [
+    ...standing.filter((each) => each.owner).map(({ entry }) => entry.scope),
+    ...deleted.map((each) => each.scope),
+    ...standing.filter((each) => !each.owner).map(({ entry }) => entry.scope),
+  ];
 
   const grants: CalendarGrant[] = [];
-  for (const { entry } of ordered) {
-    const scope = entry.scope;
+  for (const scope of ordered) {
     if (scope.actor.type !== 'member' || scope.actor.id === null) continue;
     const memberId = scope.actor.id;
     grants.push(...(await grantsOf(deps, scope)));

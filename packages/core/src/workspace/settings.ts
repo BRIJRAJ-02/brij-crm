@@ -304,6 +304,24 @@ export async function restoreWorkspace(
         )
         .returning(SETTINGS);
       if (row === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
+      // The restorer is still an active owner now, read after the update took the workspace's row lock: one who
+      // left meanwhile (deleting their account leaves a deleted workspace, spec 0033) can't bring it back with nobody
+      // to own it. A removal takes that row `for share` before it commits, so the two take turns; no member row is
+      // locked here, since a removal locks those before the workspace's.
+      if (scope.actor.type === 'member' && scope.actor.id !== null) {
+        const [owner] = await tx
+          .select({ id: members.id })
+          .from(members)
+          .where(
+            and(
+              eq(members.workspaceId, scope.workspaceId),
+              eq(members.id, scope.actor.id),
+              eq(members.status, 'active'),
+              eq(members.role, 'owner'),
+            ),
+          );
+        if (owner === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
+      }
       // Calendar sync stopped while it was deleted: each connection that syncs starts again.
       await tx.execute(sql`
         select crm_enqueue_calendar_sync(c.id) from calendar_connections c

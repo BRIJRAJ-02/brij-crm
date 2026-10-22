@@ -14,6 +14,7 @@ import { createUserWorkspace } from '../engine/workspaces.ts';
 import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import {
   enterAsActor,
+  enterDeletedWorkspaceToLeave,
   enterWithKey,
   enterWorkspace,
   NO_RULE_SOURCE,
@@ -279,6 +280,58 @@ describe('rules at the door (spec 0009, milestone 2)', () => {
       enterWorkspace({ db, identity, rules }, { userId: randomUUID(), slug: a.workspace.slug, session: signedInNow() }),
     );
     expect(asked).toBe(0);
+  });
+});
+
+describe('enterDeletedWorkspaceToLeave (spec 0033, AC-903)', () => {
+  /** A's workspace with B as a plain member, deleted now with its window `purgeIn` from now. */
+  async function deleted(purgeIn: string) {
+    const a = await userWithWorkspace();
+    const bUser = await createTestUser(identityUrl, { email: `${tag()}@example.com` });
+    const bMember = newId();
+    await testQuery(
+      ownerUrl,
+      `insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type)
+       values ($1, $2, $3, 'Bo', $4, 'member', 'system', 'system')`,
+      [a.workspace.id, bMember, bUser, `${tag()}@example.com`],
+    );
+    await testQuery(
+      ownerUrl,
+      `update workspaces set deleted_at = now(), purge_after = now() + $2::interval where id = $1`,
+      [a.workspace.id, purgeIn],
+    );
+    return { ...a, bUser, bMember };
+  }
+
+  it('gives any active member their own scope in a deleted workspace inside its window', async () => {
+    const w = await deleted('30 days');
+    const scope = await enterDeletedWorkspaceToLeave({ db }, { userId: w.bUser, workspaceId: w.workspace.id });
+    expect(scope).toMatchObject({ workspaceId: w.workspace.id, actor: { type: 'member', id: w.bMember } });
+    expect(scope.access.principal).toMatchObject({ kind: 'member', memberId: w.bMember, role: 'member' });
+    // The owner too: leaving needs no role.
+    const owner = await enterDeletedWorkspaceToLeave({ db }, { userId: w.userId, workspaceId: w.workspace.id });
+    expect(owner.actor).toEqual({ type: 'member', id: w.memberId });
+  });
+
+  it('refuses a non member, a removed member, a live workspace and one past its window, all NOT_FOUND', async () => {
+    const w = await deleted('30 days');
+    const stranger = await createTestUser(identityUrl, { email: `${tag()}@example.com` });
+    const live = await userWithWorkspace();
+    const past = await deleted('-1 hour');
+    await testQuery(ownerUrl, `update members set status = 'removed', left_at = now() where id = $1`, [w.bMember]);
+    for (const input of [
+      { userId: stranger, workspaceId: w.workspace.id },
+      { userId: w.bUser, workspaceId: w.workspace.id },
+      { userId: live.userId, workspaceId: live.workspace.id },
+      { userId: past.userId, workspaceId: past.workspace.id },
+      { userId: past.bUser, workspaceId: past.workspace.id },
+      { userId: 'not-a-uuid', workspaceId: w.workspace.id },
+      { userId: w.userId, workspaceId: 'not-a-uuid' },
+    ]) {
+      expect(await refusalOf(enterDeletedWorkspaceToLeave({ db }, input))).toEqual([
+        expect.objectContaining({ code: 'NOT_FOUND' }),
+      ]);
+    }
   });
 });
 

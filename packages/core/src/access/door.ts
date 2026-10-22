@@ -288,6 +288,40 @@ export async function enterDeletedWorkspace(
 }
 
 /**
+ * Account deletion's way into a deleted workspace (spec 0033, AC-903): the
+ * person's own active member row, in a workspace deleted but still inside its
+ * window, so they can leave it and be forgotten there too. Any role, since
+ * leaving needs none; their role's access, with no rules, as
+ * `enterDeletedWorkspace` mints. A live workspace, one past its window, a
+ * removed member, someone who isn't a member and a role the code doesn't
+ * know are all NOT_FOUND. Only `deleteMyAccount` calls it: it is not
+ * exported from `@crm/core`.
+ */
+export async function enterDeletedWorkspaceToLeave(
+  deps: Pick<DoorDeps, 'db' | 'log'>,
+  input: { readonly userId: string; readonly workspaceId: string },
+): Promise<EngineScope> {
+  if (!isUuid(input.userId) || !isUuid(input.workspaceId)) throw notFound();
+  const found = await deps.db.withWorkspace(input.workspaceId, async (tx) => {
+    const [row] = await tx
+      .select({ id: members.id, userId: members.userId, role: members.role })
+      .from(members)
+      .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
+      .where(
+        and(
+          eq(members.userId, input.userId),
+          eq(members.status, 'active'),
+          sql`${workspaces.deletedAt} is not null and ${workspaces.purgeAfter} > now()`,
+        ),
+      )
+      .limit(1);
+    return row;
+  });
+  if (found === undefined) throw notFound();
+  return memberScope(deps, input.workspaceId, found, NO_RULES);
+}
+
+/**
  * What `enterAsActor` needs: the tenant database, where to report an unknown
  * role, and where rules come from, always named and the same source the
  * member's requests use, so a job never runs with less than its member's
