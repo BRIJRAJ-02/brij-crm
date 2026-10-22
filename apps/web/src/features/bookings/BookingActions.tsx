@@ -635,17 +635,16 @@ function LinkRecordDialog({
   const [objectId, setObjectId] = useState(
     linking.objects.find((object) => object.id === now?.objectId)?.id ?? linking.objects[0]?.id ?? '',
   );
-  const [picked, setPicked] = useState<RecordRefDisplay | undefined>(now);
+  // The record linked now, when it is on an object the member may link from (else the picker starts empty).
+  const [picked, setPicked] = useState<RecordRefDisplay | undefined>(
+    linking.objects.some((object) => object.id === now?.objectId) ? now : undefined,
+  );
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const search = useRecordSearch(linking.slug, objectId);
   const isSame = picked !== undefined && picked.recordId === now?.recordId;
   const link = () => {
-    if (busy || picked === undefined) return;
-    if (isSame) {
-      onClose();
-      return;
-    }
+    if (busy || picked === undefined || isSame) return;
     setBusy(true);
     setError(undefined);
     linking.link(booking.id, picked).then(
@@ -674,7 +673,13 @@ function LinkRecordDialog({
           <Button slot="close" isDisabled={busy} kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button variant="primary" icon="link" isPending={busy} isDisabled={picked === undefined} onPress={link}>
+          <Button
+            variant="primary"
+            icon="link"
+            isPending={busy}
+            isDisabled={picked === undefined || isSame}
+            onPress={link}
+          >
             {busy ? strings.linking : strings.linkIt}
           </Button>
         </>
@@ -694,7 +699,12 @@ function LinkRecordDialog({
             hue: object.hue,
           })),
           objectId,
-          onObjectChange: setObjectId,
+          // Another object: a record picked in the last one goes, so Link never sends one the list no longer shows.
+          onObjectChange: (next) => {
+            setObjectId(next);
+            setError(undefined);
+            if (picked !== undefined && picked.objectId !== next) setPicked(undefined);
+          },
         }}
         onCommit={(value) => {
           setError(undefined);

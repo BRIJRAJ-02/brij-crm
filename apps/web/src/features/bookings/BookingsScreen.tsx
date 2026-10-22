@@ -366,7 +366,10 @@ function BookingCard({
           icon: 'briefcase',
           label: strings.linkedTo,
           value: <RecordChip display={record} {...hrefProps(linking?.hrefOf(record))} />,
-          ...(linking === undefined || focusMore === undefined
+          // Remove only on a record the member may change the link of: its object is one they may link from.
+          ...(linking === undefined ||
+          focusMore === undefined ||
+          !linking.objects.some((object) => object.id === record.objectId)
             ? {}
             : {
                 action: (

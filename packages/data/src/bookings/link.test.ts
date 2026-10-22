@@ -62,14 +62,15 @@ async function held(linked?: RecordRefDisplay) {
   page.retain();
   await settle();
   const sent: (string | null)[] = [];
-  let answer: { resolve: () => void; reject: (error: Error) => void } | undefined;
+  type Answer = { readonly linkedRecord?: RecordRefDisplay };
+  const answers: { resolve: (answer: Answer) => void; reject: (error: Error) => void }[] = [];
   const link = createBookingLink({
     lists,
     meetings,
     send: (_workspace, _bookingId, recordId) => {
       sent.push(recordId);
-      return new Promise<void>((resolve, reject) => {
-        answer = { resolve, reject };
+      return new Promise<Answer>((resolve, reject) => {
+        answers.push({ resolve, reject });
       });
     },
   });
@@ -84,12 +85,19 @@ async function held(linked?: RecordRefDisplay) {
         : 'unread',
     ];
   };
-  const answerWith = (outcome: 'ok' | Error) => {
+  /** Answers the `index`th call (the last by default): what the server links now, or a refusal. */
+  const answerWith = (outcome: Answer | Error, index = answers.length - 1) => {
+    const answer = answers[index];
     if (answer === undefined) throw new Error('Nothing was sent.');
-    if (outcome === 'ok') answer.resolve();
-    else answer.reject(outcome);
+    if (outcome instanceof Error) answer.reject(outcome);
+    else answer.resolve(outcome);
   };
-  return { link, sent, shown, answerWith };
+  /** Booking `b`'s linked record in the list. */
+  const shownB = () => {
+    const listed = list.getSnapshot();
+    return listed.status === 'ready' ? listed.bookings.find((each) => each.id === 'b')?.linkedRecord?.name : 'unread';
+  };
+  return { link, sent, shown, shownB, answerWith };
 }
 
 describe('linking a booking to a record by hand (polish F2)', () => {
@@ -98,7 +106,7 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     const linking = h.link('acme', 'a', deal);
     expect(h.shown()).toEqual(['Navy rollout', 'Navy rollout', 'Navy rollout']);
     expect(h.sent).toEqual([deal.recordId]);
-    h.answerWith('ok');
+    h.answerWith({ linkedRecord: deal });
     await linking;
     expect(h.shown()).toEqual(['Navy rollout', 'Navy rollout', 'Navy rollout']);
   });
@@ -121,6 +129,28 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     expect(h.sent).toEqual([null]);
     h.answerWith(new Error('down'));
     await expect(unlinking).rejects.toThrow('down');
+    expect(h.shown()).toEqual(['Navy rollout', 'Navy rollout', 'Navy rollout']);
+  });
+
+  it('puts back only the refused booking when another link went out meanwhile', async () => {
+    const h = await held();
+    const linkingA = h.link('acme', 'a', deal);
+    const linkingB = h.link('acme', 'b', deal);
+    h.answerWith(new Error('down'), 0);
+    await expect(linkingA).rejects.toThrow('down');
+    expect(h.shown()).toEqual([undefined, undefined, undefined]);
+    expect(h.shownB()).toBe('Navy rollout');
+    h.answerWith({ linkedRecord: deal }, 1);
+    await linkingB;
+    expect(h.shownB()).toBe('Navy rollout');
+  });
+
+  it('shows the server’s answer once it lands, over what was shown', async () => {
+    const h = await held();
+    const linking = h.link('acme', 'a', { ...deal, name: '' });
+    expect(h.shown()).toEqual(['', '', '']);
+    h.answerWith({ linkedRecord: deal });
+    await linking;
     expect(h.shown()).toEqual(['Navy rollout', 'Navy rollout', 'Navy rollout']);
   });
 });
