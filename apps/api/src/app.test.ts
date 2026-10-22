@@ -234,16 +234,12 @@ describe('the body limit on /api/auth', () => {
 describe('the Better Auth routes the API serves', () => {
   const app = createTestApp();
 
-  it('serves exactly the reviewed list (spec 0033, AC-900, and milestone 3 passkeys)', () => {
+  it('serves exactly the reviewed list (spec 0033, AC-900; passkeys taken out 22 October 2026)', () => {
     expect([...AUTH_ROUTES].sort()).toEqual(
       [
         '/callback/google',
         '/email-otp/send-verification-otp',
         '/get-session',
-        '/passkey/generate-authenticate-options',
-        '/passkey/generate-register-options',
-        '/passkey/verify-authentication',
-        '/passkey/verify-registration',
         '/sign-in/email-otp',
         '/sign-in/social',
         '/sign-out',

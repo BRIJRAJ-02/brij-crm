@@ -152,7 +152,9 @@ export const twoFactor = auth.table(
 );
 
 /**
- * A person's passkeys (spec 0033, milestone 3, Better Auth's passkey plugin):
+ * A person's passkeys (spec 0033, milestone 3, Better Auth's passkey plugin).
+ * Unused since 22 October 2026 (the owner took passkeys out); the table stays
+ * until a later migration drops it, and rows go with their user (cascade):
  * the public key only, never a secret. `credential_id` is unique across every
  * account, so one credential can't sign in two people. `name` is the person's
  * label (60 characters at most); `last_used_at` is ours, set on each passkey

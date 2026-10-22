@@ -83,8 +83,7 @@ export const strings = {
   // A workspace's sign in rules holding this session back (spec 0033, AC-894).
   twoFactorRequiredTitle: (workspace: string) => `${workspace} requires two factor sign in`,
   twoFactorRequiredText:
-    'Set up an authenticator app or a passkey to open it. Your other workspaces open as usual from the workspace menu.',
-  twoFactorChoose: 'Either one is enough: an authenticator app, or a passkey on this device.',
+    'Set up an authenticator app to open it. Your other workspaces open as usual from the workspace menu.',
   twoFactorDone: 'You’re set up. Two factor sign in now protects your account in every workspace.',
   setUpNow: 'Set up now',
   continueToWorkspace: 'Continue',

@@ -70,7 +70,7 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
   // Signing everyone out needs a recent check (AC-896): asked inline in its confirm when this session isn't fresh.
   const security = useAccountSecurity(data.account.security());
   const commit = useRef<() => void>(() => undefined);
-  const stepUp = useStepUp(data, security, { onComplete: () => commit.current(), isBusy });
+  const stepUp = useStepUp(data, security, { onComplete: () => commit.current() });
 
   const refusal = (failure: unknown) =>
     isDataError(failure) && failure.code !== 'INTERNAL' ? failure.message : strings.saveFailed;
@@ -242,9 +242,9 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
         }
         {...(confirm === 'require' ? {} : { tone: 'danger' as const })}
         isOpen={isOpen}
-        isBusy={isBusy || stepUp.isAsking}
+        isBusy={isBusy}
         onOpenChange={(open) => {
-          if (!open && !isBusy && !stepUp.isAsking) setIsOpen(false);
+          if (!open && !isBusy) setIsOpen(false);
         }}
         actions={
           <>

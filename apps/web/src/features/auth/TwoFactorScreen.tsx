@@ -1,9 +1,8 @@
 // Brief
 // Purpose: the second step of a sign in with two factor on (spec 0033): prove it's you with the app or a backup code.
-// Main task: type the app's 6 digit code (checked when complete), or a backup code, or use a passkey (which signs
-// in on its own, AC-888), then go on into the app.
-// Leaves out: any way round the second factor (no email recovery, owner decision). An account whose only second
-// factor is a passkey (`passkeyOnly`) gets the passkey alone.
+// Main task: type the app's 6 digit code (checked when complete), or a backup code, then go on into the app.
+// Leaves out: any way round the second factor (no email recovery, owner decision), and passkeys (taken out
+// 22 October 2026).
 import { isDataError, type DataLayer } from '@crm/data';
 import { AuthLayout, Button, ButtonLink, Callout, Checkbox, CodeInput, Field, Form } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
@@ -19,12 +18,10 @@ export interface TwoFactorScreenProps {
   readonly data: DataLayer;
   /** The `?redirect=` the sign in started with. */
   readonly redirect: string | undefined;
-  /** The account's only second factor is a passkey (AC-888): no code field, the passkey alone. */
-  readonly passkeyOnly?: boolean;
 }
 
 /** The second step page: the app's code, or a backup code, and "Remember this device". */
-export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFactorScreenProps) {
+export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
   const navigate = useNavigate();
   const [kind, setKind] = useState<'totp' | 'backup'>('totp');
   const [code, setCode] = useState('');
@@ -62,42 +59,6 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
     );
   };
 
-  // A passkey signs in on its own (AC-888): offered here too, where the browser has passkeys.
-  const [hasPasskeys, setHasPasskeys] = useState(false);
-  const [supportKnown, setSupportKnown] = useState(false);
-  const [isAsking, setAsking] = useState(false);
-  // A passkey's own failure: above the form, never on the code's field.
-  const [passkeyError, setPasskeyError] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    let live = true;
-    void data.auth.passkeys
-      .support()
-      .then((support) => {
-        if (live) setHasPasskeys(support.available);
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (live) setSupportKnown(true);
-      });
-    return () => {
-      live = false;
-    };
-  }, [data]);
-  const usePasskeyInstead = () => {
-    setAsking(true);
-    setPasskeyError(undefined);
-    data.auth.passkeys.signIn(false).then(
-      (outcome) => {
-        setAsking(false);
-        if (outcome === 'done') void navigate({ href: safeRedirect(redirect), replace: true });
-      },
-      (failure: unknown) => {
-        setAsking(false);
-        setPasskeyError(isDataError(failure) && failure.code !== 'INTERNAL' ? failure.message : strings.passkeyFailed);
-      },
-    );
-  };
-
   const switchTo = (next: 'totp' | 'backup') => {
     setKind(next);
     setError(undefined);
@@ -119,44 +80,6 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
     );
   }
 
-  if (passkeyOnly) {
-    return (
-      <AuthLayout
-        productName={signIn.product}
-        logo={PRODUCT_LOGO}
-        title={strings.title}
-        description={strings.passkeyHint}
-        isBusy={isAsking}
-        {...signInFrame()}
-      >
-        {passkeyError !== undefined && (
-          <Callout tone="danger" isAnnounced>
-            {passkeyError}
-          </Callout>
-        )}
-        {supportKnown && !hasPasskeys ? (
-          <>
-            <Callout tone="warning">{strings.passkeyUnavailable}</Callout>
-            <ButtonLink variant="primary" size="lg" isFullWidth="center" href={signInAgainHref}>
-              {strings.signInAgain}
-            </ButtonLink>
-          </>
-        ) : (
-          <Button
-            variant="primary"
-            size="lg"
-            isFullWidth="center"
-            icon="key"
-            isPending={isAsking || !supportKnown}
-            onPress={usePasskeyInstead}
-          >
-            {strings.passkeyContinue}
-          </Button>
-        )}
-      </AuthLayout>
-    );
-  }
-
   return (
     <AuthLayout
       productName={signIn.product}
@@ -166,41 +89,19 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
       isBusy={isChecking}
       {...signInFrame()}
     >
-      {passkeyError !== undefined && (
-        <Callout tone="danger" isAnnounced>
-          {passkeyError}
-        </Callout>
-      )}
       <Form
         submitLabel={strings.continue}
-        isDisabled={isAsking}
         busyLabel={strings.checking}
         isBusy={isChecking}
         actions={
-          <>
-            <Button
-              variant="ghost"
-              size="lg"
-              isFullWidth="center"
-              isDisabled={isAsking}
-              onPress={() => switchTo(kind === 'totp' ? 'backup' : 'totp')}
-            >
-              {kind === 'totp' ? strings.useBackup : strings.useApp}
-            </Button>
-            {hasPasskeys && (
-              <Button
-                variant="ghost"
-                size="lg"
-                isFullWidth="center"
-                icon="key"
-                isPending={isAsking}
-                isDisabled={isChecking}
-                onPress={usePasskeyInstead}
-              >
-                {strings.usePasskey}
-              </Button>
-            )}
-          </>
+          <Button
+            variant="ghost"
+            size="lg"
+            isFullWidth="center"
+            onPress={() => switchTo(kind === 'totp' ? 'backup' : 'totp')}
+          >
+            {kind === 'totp' ? strings.useBackup : strings.useApp}
+          </Button>
         }
         onSubmit={() => {
           if (kind === 'backup') {
@@ -219,7 +120,7 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
           label={strings.remember}
           isSelected={remember}
           onChange={setRemember}
-          isDisabled={isChecking || isAsking}
+          isDisabled={isChecking}
         />
         {kind === 'totp' ? (
           <CodeInput

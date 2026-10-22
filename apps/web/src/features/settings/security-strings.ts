@@ -20,6 +20,7 @@ export const strings = {
       two_factor_off: 'Turned off two factor sign in',
       backup_codes_made: 'Made new backup codes',
       backup_code_used: 'Used a backup code',
+      // From before passkeys were taken out (22 October 2026): kept so older history still reads.
       passkey_added: 'Added a passkey',
       passkey_removed: 'Removed a passkey',
       alert_sent: 'Emailed you about a new device',
@@ -68,8 +69,6 @@ export const strings = {
     emailLabel: 'Code from the email',
     useBackup: 'Use a backup code',
     useApp: 'Use your authenticator app',
-    usePasskey: 'Use a passkey',
-    withPasskey: 'Use one of your passkeys.',
     send: 'Email me a code',
     sendAgain: 'Send a new code',
     sent: 'Code sent. Check your email.',
@@ -83,9 +82,9 @@ export const strings = {
     app: 'Authenticator app',
     appOff: 'Off',
     appOn: 'On',
-    /** On, and a workspace requires it with no passkey to stand in (AC-885). */
+    /** On, and a workspace requires it (AC-885). */
     appRequired: (names: readonly string[]) =>
-      `On. ${names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`} ${names.length === 1 ? 'requires' : 'require'} two factor sign in, so it stays on. Add a passkey to turn the app off.`,
+      `On. ${names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`} ${names.length === 1 ? 'requires' : 'require'} two factor sign in, so it stays on.`,
     setUp: 'Set up',
     turnOff: 'Turn off',
     backupCodes: 'Backup codes',
@@ -118,47 +117,6 @@ export const strings = {
     newCodesText: 'Your old codes stop working.',
     making: 'Making codes',
     fileName: 'timefix-backup-codes.txt',
-  },
-  /** Passkeys (milestone 3, AC-887). */
-  passkeys: {
-    section: 'Passkeys',
-    /** Says what the tip used to, so the page has no tips (the owner, 22 October 2026). */
-    description:
-      'Sign in with your fingerprint, face or device PIN, with no email code. A passkey counts as two factor sign in.',
-    unnamed: 'Passkey',
-    added: (date: string) => `Added ${date}.`,
-    lastUsed: (date: string) => `Last used ${date}.`,
-    neverUsed: 'Not used yet.',
-    /** With none yet, the row reads as two factor's does: the method, its state, the way to add one. */
-    none: 'Passkeys',
-    noneText: 'None yet',
-    another: 'Add one for another device',
-    addText: 'Add one for each device or password manager you use.',
-    unsupported: 'This browser can’t make passkeys.',
-    add: 'Add passkey',
-    addTitle: 'Add a passkey',
-    addDialogText: 'Your browser asks you to confirm with your fingerprint, face or device PIN.',
-    addDialogTwice:
-      'Your browser may ask twice: once to check it’s you, then to make the new passkey with your fingerprint, face or device PIN.',
-    nameLabel: 'Name',
-    nameHint: 'So you can tell your passkeys apart. Left empty, it takes this device’s name.',
-    namePlaceholder: 'Work laptop',
-    nameMissing: 'Enter a name.',
-    adding: 'Adding',
-    added_: 'Passkey added.',
-    addFailed: 'Couldn’t add the passkey. Try again.',
-    failedTitle: 'Couldn’t load your passkeys',
-    rename: 'Rename',
-    renameLabel: (name: string) => `Rename ${name}`,
-    renameTitle: 'Rename passkey',
-    save: 'Save',
-    remove: 'Remove',
-    removeLabel: (name: string) => `Remove ${name}`,
-    removeTitle: (name: string) => `Remove ${name}?`,
-    removeText: 'You won’t be able to sign in with it any more. Delete it from your device or password manager too.',
-    removing: 'Removing',
-    removed: (name: string) => `Removed ${name}.`,
-    cancel: 'Cancel',
   },
   /** Deleting the account (AC-902 to AC-907). */
   deletion: {

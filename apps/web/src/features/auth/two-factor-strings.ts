@@ -9,7 +9,6 @@ export const strings = {
   backupHint: 'Each backup code works once.',
   useBackup: 'Use a backup code',
   useApp: 'Use your authenticator app',
-  usePasskey: 'Use a passkey',
   remember: 'Remember this device for 30 days',
   continue: 'Continue',
   checking: 'Checking',
@@ -18,8 +17,4 @@ export const strings = {
   expired: 'This sign in has expired. Sign in again.',
   signInAgain: 'Sign in again',
   failed: 'Couldn’t check that code. Check your connection, then try again.',
-  passkeyHint: 'Your account uses a passkey as its second step. Confirm with your fingerprint, face or device PIN.',
-  passkeyContinue: 'Continue with your passkey',
-  passkeyFailed: 'Couldn’t use your passkey. Check your connection, then try again.',
-  passkeyUnavailable: 'This browser can’t use passkeys. Sign in on a device that has your passkey.',
 } as const;

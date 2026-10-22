@@ -1,12 +1,12 @@
 // A workspace's sign in rules (spec 0033, milestone 4: AC-885, AC-888,
 // AC-893 to AC-895, AC-899): only owners read or change them; requiring two
 // factor waits for the owner's own; a member without a second factor is
-// refused TWO_FACTOR_REQUIRED in that workspace alone, and a passkey counts;
-// a session older than the workspace allows, or from before "Sign out
-// everyone", signs in again there while the owner who did it stays in; the
-// last second factor stays on while a workspace requires it; a passkey only
-// account's email code sign in waits for the passkey; owners and admins see
-// the Members column.
+// refused TWO_FACTOR_REQUIRED in that workspace alone; a session older than
+// the workspace allows, or from before "Sign out everyone", signs in again
+// there while the owner who did it stays in; the last second factor stays on
+// while a workspace requires it; owners and admins see the Members column.
+// Passkeys were taken out on 22 October 2026: a passkey row left from before
+// counts for nothing (no second factor, no held back sign in).
 import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
@@ -75,7 +75,7 @@ async function teammate(owner: Owner, role: 'admin' | 'member') {
   return { ...person, client };
 }
 
-/** Gives the person signed in by `email` a passkey row, as the plugin would store one (the ceremony has its own tests). */
+/** Gives the person signed in by `email` a passkey row as the removed plugin stored one: rows from before 22 October 2026. */
 async function givePasskey(email: string): Promise<void> {
   await testQuery(
     identityUrl,
@@ -120,7 +120,7 @@ describe('workspace security settings (spec 0033, milestone 4)', () => {
     expect(await auditActions(owner.workspace.id)).not.toContain('workspace_security.changed');
   });
 
-  it('refuses a member without a second factor in the requiring workspace alone, and lets a passkey count', async () => {
+  it('refuses a member without a second factor in the requiring workspace alone, a leftover passkey counting for nothing', async () => {
     const owner = await memberWithWorkspace(app);
     const member = await teammate(owner, 'member');
     const withPasskey = await teammate(owner, 'member');
@@ -135,7 +135,7 @@ describe('workspace security settings (spec 0033, milestone 4)', () => {
     const on = await turnOnTwoFactor(app, owner.cookie);
     const ownerClient = rpcClient(app, on.cookie);
     const rules = await ownerClient.workspaceSecurity.set({ workspace: owner.slug, requireTwoFactor: true });
-    expect(rules).toMatchObject({ requireTwoFactor: true, membersWithout: 1, youHaveTwoFactor: true });
+    expect(rules).toMatchObject({ requireTwoFactor: true, membersWithout: 2, youHaveTwoFactor: true });
     expect(await auditActions(owner.workspace.id)).toContain('workspace_security.changed');
 
     expect(await failure(() => member.client.objects.list({ workspace: owner.slug }))).toMatchObject({
@@ -143,7 +143,9 @@ describe('workspace security settings (spec 0033, milestone 4)', () => {
       status: 403,
     });
     expect(await member.client.objects.list({ workspace: theirs.slug })).not.toHaveLength(0);
-    expect(await withPasskey.client.objects.list({ workspace: owner.slug })).not.toHaveLength(0);
+    expect(await failure(() => withPasskey.client.objects.list({ workspace: owner.slug }))).toMatchObject({
+      code: 'TWO_FACTOR_REQUIRED',
+    });
     expect(await ownerClient.objects.list({ workspace: owner.slug })).not.toHaveLength(0);
     // A stranger still learns nothing: the same NOT_FOUND as any workspace they aren't in.
     const stranger = rpcClient(app, (await signIn(app)).cookie);
@@ -151,11 +153,11 @@ describe('workspace security settings (spec 0033, milestone 4)', () => {
 
     // The Members column: owners and admins only (AC-895).
     const listed = (await ownerClient.members.list({ workspace: owner.slug })).members;
-    expect(listed.map((each) => each.twoFactor).sort()).toEqual([false, true, true]);
+    expect(listed.map((each) => each.twoFactor).sort()).toEqual([false, false, true]);
+    // A member who sets up the app gets in, and is never told who else has one.
+    const memberOn = rpcClient(app, (await turnOnTwoFactor(app, member.cookie)).cookie);
     expect(
-      (await withPasskey.client.members.list({ workspace: owner.slug })).members.every(
-        (each) => each.twoFactor === undefined,
-      ),
+      (await memberOn.members.list({ workspace: owner.slug })).members.every((each) => each.twoFactor === undefined),
     ).toBe(true);
   });
 
@@ -178,27 +180,9 @@ describe('workspace security settings (spec 0033, milestone 4)', () => {
       code: 'WORKSPACE_REQUIRES_TWO_FACTOR',
       message: 'Acme requires two factor sign in.',
     });
-    // With a passkey to stand in, the app may go.
+    // A leftover passkey row no longer stands in: the app stays.
     await givePasskey(owner.email);
-    expect((await authPost(app, '/two-factor/disable', {}, { cookie: on.cookie })).status).toBe(200);
-  });
-
-  it('refuses to remove the last passkey while a workspace requires two factor', async () => {
-    const owner = await memberWithWorkspace(app);
-    await givePasskey(owner.email);
-    await owner.client.workspaceSecurity.set({ workspace: owner.slug, requireTwoFactor: true });
-    const [passkey] = (await owner.client.account.security.get()).passkeys;
-    // Proven by the passkey itself, as removing one needs.
-    await testQuery(
-      identityUrl,
-      `update auth.session set verified_with = 'second_factor', verified_at = now()
-        where user_id = (select id from auth."user" where email = $1)`,
-      [owner.email],
-    );
-    expect(await failure(() => owner.client.account.passkeys.remove({ id: passkey?.id ?? '' }))).toMatchObject({
-      code: 'WORKSPACE_REQUIRES_TWO_FACTOR',
-      message: 'Acme requires two factor sign in.',
-    });
+    expect((await authPost(app, '/two-factor/disable', {}, { cookie: on.cookie })).status).toBe(409);
   });
 
   it('signs everyone out of the workspace, keeping the owner in, and holds sessions to its length', async () => {
@@ -229,29 +213,19 @@ describe('workspace security settings (spec 0033, milestone 4)', () => {
     expect(await owner.client.objects.list({ workspace: owner.slug })).not.toHaveLength(0);
   });
 
-  it('asks a passkey only account for its passkey after an email code (AC-888)', async () => {
+  it('signs a leftover passkey account in by its email code alone, and steps it up by email', async () => {
     const owner = await memberWithWorkspace(app);
     await givePasskey(owner.email);
     const ip = newIp();
     expect((await sendCode(app, owner.email, ip)).status).toBe(200);
     const answer = await verifyCode(app, owner.email, await codeFor(owner.email), ip);
     expect(answer.status).toBe(200);
-    expect(await answer.json()).toEqual({ twoFactorRedirect: true, twoFactorMethods: ['passkey'] });
+    expect(await answer.json()).not.toHaveProperty('twoFactorRedirect');
     expect(
       answer.headers
         .getSetCookie()
         .some((cookie) => cookie.includes('session_token=') && !cookie.includes('Max-Age=0')),
-    ).toBe(false);
-  });
-
-  it('never lets an email code stand in for a passkey only account’s second factor (AC-888)', async () => {
-    const owner = await memberWithWorkspace(app);
-    await givePasskey(owner.email);
-    expect(await failure(() => owner.client.account.stepUp.start({ method: 'email' }))).toMatchObject({
-      code: 'INPUT_INVALID',
-    });
-    expect(await failure(() => owner.client.account.stepUp.verify({ method: 'email', code: '123456' }))).toMatchObject({
-      code: 'INPUT_INVALID',
-    });
+    ).toBe(true);
+    expect(await owner.client.account.stepUp.start({ method: 'email' })).toEqual({ sent: true });
   });
 });

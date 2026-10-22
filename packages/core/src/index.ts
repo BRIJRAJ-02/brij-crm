@@ -87,17 +87,6 @@ export {
   type FreshnessDeps,
   type StepUpDeps,
 } from './account/step-up.ts';
-// Passkeys (spec 0033, milestone 3, AC-887 to AC-889).
-export {
-  NO_PASSKEY,
-  PASSKEY_INVALID_MESSAGE,
-  passkeyStepUpOptions,
-  removeMyPasskey,
-  renameMyPasskey,
-  UNKNOWN_PASSKEY,
-  verifyPasskeyStepUp,
-  type PasskeyDeps,
-} from './account/passkeys.ts';
 // Deleting your own account (spec 0033, AC-902 to AC-907).
 export {
   accountDeletionCheck,

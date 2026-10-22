@@ -1,7 +1,7 @@
 // Brief
 // Purpose: what a workspace shows someone its sign in rules hold back (spec 0033, AC-894): two factor required and
 // not set up, or a sign in older than the workspace allows.
-// Main task: set up two factor right here (an authenticator app or a passkey) and continue, or confirm it's you.
+// Main task: set up two factor right here (an authenticator app) and continue, or confirm it's you.
 // Leaves out: any way past the rule, and the person's other workspaces, which open as usual from the workspace menu.
 import { type DataLayer } from '@crm/data';
 import { useAccountSecurity } from '@crm/data/react';
@@ -9,7 +9,6 @@ import { Button, Callout, EmptyState, Modal, TopBar, type Toasts } from '@crm/ui
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { signInHref } from '../auth/redirect.ts';
-import { PasskeysSection } from '../settings/PasskeysSection.tsx';
 import { useStepUp } from '../settings/StepUp.tsx';
 import { TwoFactorSection } from '../settings/TwoFactorSection.tsx';
 import { strings } from './strings.ts';
@@ -68,7 +67,7 @@ function TwoFactorRequired({ data, toasts, workspaceName }: SignInRulesProps) {
   const setupRef = useRef<HTMLDivElement>(null);
   const next = useContinue();
   const ready = security.status === 'ready';
-  const isSetUp = ready && (security.passkeys.length > 0 || (security.twoFactor.on && (appDone || !isSettingUp)));
+  const isSetUp = ready && security.twoFactor.on && (appDone || !isSettingUp);
   // Focus follows the step: into the setup when it opens, onto Continue once it is done.
   useEffect(() => {
     if (isSetUp) continueRef.current?.focus();
@@ -115,7 +114,6 @@ function TwoFactorRequired({ data, toasts, workspaceName }: SignInRulesProps) {
       </EmptyState>
       {isSettingUp && (
         <div ref={setupRef}>
-          {!isSetUp && <Callout>{strings.twoFactorChoose}</Callout>}
           <TwoFactorSection
             data={data}
             security={security}
@@ -124,12 +122,6 @@ function TwoFactorRequired({ data, toasts, workspaceName }: SignInRulesProps) {
               setAppDone(true);
               requestAnimationFrame(() => continueRef.current?.focus());
             }}
-          />
-          <PasskeysSection
-            data={data}
-            security={security}
-            toasts={toasts}
-            onFocusLost={() => requestAnimationFrame(() => continueRef.current?.focus())}
           />
         </div>
       )}
@@ -149,7 +141,7 @@ function SignInAgain({ data, workspaceName }: SignInRulesProps) {
   const next = useContinue();
   const [isChecking, setChecking] = useState(false);
   const commit = useRef<() => void>(() => undefined);
-  const stepUp = useStepUp(data, security, { onComplete: () => commit.current(), isBusy: isChecking });
+  const stepUp = useStepUp(data, security, { onComplete: () => commit.current() });
   const [isConfirmingSignOut, setConfirmingSignOut] = useState(false);
   const [isSigningOut, setSigningOut] = useState(false);
   const [signOutFailed, setSignOutFailed] = useState(false);
@@ -188,11 +180,7 @@ function SignInAgain({ data, workspaceName }: SignInRulesProps) {
       isLoading={security.status === 'loading'}
       actions={
         <>
-          <Button
-            variant="primary"
-            isPending={isChecking || next.isBusy || stepUp.isAsking}
-            onPress={() => commit.current()}
-          >
+          <Button variant="primary" isPending={isChecking || next.isBusy} onPress={() => commit.current()}>
             {stepUp.willSend ? strings.sendCode : strings.confirmItsYou}
           </Button>
           <Button onPress={() => setConfirmingSignOut(true)}>{strings.signOutInstead}</Button>

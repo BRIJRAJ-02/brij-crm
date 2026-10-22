@@ -11,7 +11,7 @@ export const strings = {
   twoFactor: 'Two factor sign in',
   twoFactorDescription: 'A second step at sign in, so access to someone’s email alone doesn’t open the workspace.',
   require: 'Require two factor sign in',
-  requireOff: 'When on, everyone signs in with an authenticator app or a passkey as well as their email.',
+  requireOff: 'When on, everyone signs in with an authenticator app as well as their email.',
   requireOn: (without: number) =>
     without === 0
       ? 'Everyone here has two factor sign in set up.'

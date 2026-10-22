@@ -5,16 +5,11 @@ import {
   deleteMyAccount,
   type AccountDeletionDeps,
   listMySessions,
-  type PasskeyDeps,
-  passkeyStepUpOptions,
   closeJoinRequestsOf,
   listMyActivity,
-  removeMyPasskey,
-  renameMyPasskey,
   revokeMyOtherSessions,
   revokeMySession,
   startStepUp,
-  verifyPasskeyStepUp,
   verifyStepUp,
   type SessionCaller,
   type StepUpDeps,
@@ -31,8 +26,6 @@ export const STEP_UP_CHECKS = { window: 5 * 60, max: 5 } as const;
 export const STEP_UP_CHECKS_HOUR = { window: 60 * 60, max: 15 } as const;
 /** Step up emails per person: 3 in 10 minutes. */
 export const STEP_UP_SENDS = { window: 10 * 60, max: 3 } as const;
-/** Passkey step up challenges per person: 20 in 10 minutes (each replaces the last, so this only stops a flood). */
-export const STEP_UP_PASSKEY_CHALLENGES = { window: 10 * 60, max: 20 } as const;
 
 // Bootstrap: a session, no workspace (spec 0033). Each procedure reaches only the caller's own sessions, by id.
 
@@ -59,16 +52,6 @@ function stepUpDeps(context: RequestContext): StepUpDeps {
     },
     mintCode: () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
     hashCode: (code) => context.auth.hashStepUpCode(code),
-    requiredBy: (userId) => context.requiredBy(userId),
-  };
-}
-
-/** What the passkey procedures need: the identity store, and sign in's passkey step up. */
-function passkeyDeps(context: RequestContext): PasskeyDeps {
-  return {
-    identity: context.identity,
-    passkeyOptions: (caller) => context.auth.passkeyStepUp.options(caller.userId, caller.sessionId),
-    checkPasskey: (caller, response) => context.auth.passkeyStepUp.check(caller.userId, caller.sessionId, response),
     requiredBy: (userId) => context.requiredBy(userId),
   };
 }
@@ -163,33 +146,6 @@ export const accountRouter = authed.account.router({
       );
       return verifyStepUp(stepUpDeps(context), callerOf(context), input);
     }),
-    passkeyOptions: authed.account.stepUp.passkeyOptions.handler(async ({ context }) => {
-      await limit(
-        context,
-        `step-up-passkey:${context.user.id}`,
-        [STEP_UP_PASSKEY_CHALLENGES],
-        'Too many tries. Wait a few minutes.',
-      );
-      return passkeyStepUpOptions(passkeyDeps(context), callerOf(context));
-    }),
-    verifyPasskey: authed.account.stepUp.verifyPasskey.handler(async ({ context, input }) => {
-      // The same per person count as a code: a step up is never guessed at by switching method.
-      await limit(
-        context,
-        `step-up:${context.user.id}`,
-        [STEP_UP_CHECKS, STEP_UP_CHECKS_HOUR],
-        'Too many tries. Wait 15 minutes, then try again.',
-      );
-      return verifyPasskeyStepUp(passkeyDeps(context), callerOf(context), input);
-    }),
-  },
-  passkeys: {
-    rename: authed.account.passkeys.rename.handler(({ context, input }) =>
-      renameMyPasskey(passkeyDeps(context), callerOf(context), input),
-    ),
-    remove: authed.account.passkeys.remove.handler(({ context, input }) =>
-      removeMyPasskey(passkeyDeps(context), callerOf(context), input),
-    ),
   },
   deletion: {
     check: authed.account.deletion.check.handler(({ context }) =>

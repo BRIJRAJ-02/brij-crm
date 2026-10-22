@@ -56,7 +56,7 @@ export const rotationsSettingsHref = (slug: string) => `/w/${slug}/settings/sche
 /** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
 export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
 
-/** Settings › Account › Sign in and devices (spec 0033): two factor, passkeys, the devices signed in and recent activity. */
+/** Settings › Account › Sign in and devices (spec 0033): two factor, the devices signed in and recent activity. */
 export const securitySettingsHref = (slug: string) => `/w/${slug}/settings/account/sign-in`;
 
 /** The settings navigation's pages: Account's, then Scheduling's and Workspace's. */

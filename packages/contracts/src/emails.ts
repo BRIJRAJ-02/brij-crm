@@ -218,6 +218,7 @@ export const SignInAlertEmail = z.strictObject({
   device: Line,
   /** An approximate place, such as "London, United Kingdom", when known. */
   place: Line.optional(),
+  /** `passkey` only for an email queued before passkeys were taken out (22 October 2026). */
   method: z.enum(['code', 'google', 'passkey']),
   securityPath: AppPath,
 });

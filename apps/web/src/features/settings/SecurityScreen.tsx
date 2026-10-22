@@ -22,7 +22,6 @@ import { currentFirst, deviceIcon, deviceName, devicePlace } from './security-li
 import { strings } from './security-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { useStepUp } from './StepUp.tsx';
-import { PasskeysSection } from './PasskeysSection.tsx';
 import { RecentActivitySection } from './RecentActivitySection.tsx';
 import { TwoFactorSection } from './TwoFactorSection.tsx';
 
@@ -57,16 +56,13 @@ function BusyRows({
 }
 
 /**
- * The page while it loads: every section in its place (two factor, passkeys,
+ * The page while it loads: every section in its place (two factor,
  * devices, recent activity), each a busy card, so nothing moves as it arrives.
  */
 export function SecurityLoading() {
   return (
     <>
       <SettingsSection title={strings.twoFactor.section} description={strings.twoFactor.description}>
-        <BusyRows rows={1} />
-      </SettingsSection>
-      <SettingsSection title={strings.passkeys.section} description={strings.passkeys.description}>
         <BusyRows rows={1} />
       </SettingsSection>
       <DevicesLoading />
@@ -131,7 +127,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   const security = useAccountSecurity(data.account.security());
   // A complete code in the confirm runs it, as its button would.
   const commit = useRef<() => void>(() => undefined);
-  const stepUp = useStepUp(data, security, { onComplete: () => commit.current(), isBusy });
+  const stepUp = useStepUp(data, security, { onComplete: () => commit.current() });
 
   const ask = (next: Confirm) => {
     setConfirm(next);
@@ -282,16 +278,15 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   return (
     <SettingsPage title={strings.title} titleRef={titleRef}>
       <TwoFactorSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
-      <PasskeysSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       {body}
       {activity !== undefined && <RecentActivitySection data={data} first={activity} onRetry={onActivityRetry} />}
       <Modal
         title={one === undefined ? strings.signOutOthersTitle : strings.signOutTitle(deviceName(one))}
         tone="danger"
         isOpen={isOpen}
-        isBusy={isBusy || stepUp.isAsking}
+        isBusy={isBusy}
         onOpenChange={(open) => {
-          if (!open && !isBusy && !stepUp.isAsking) setIsOpen(false);
+          if (!open && !isBusy) setIsOpen(false);
         }}
         actions={
           <>

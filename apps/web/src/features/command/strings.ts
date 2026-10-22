@@ -41,7 +41,7 @@ export const strings = {
   objectsTerms: ['attributes', 'fields', 'columns', 'schema'],
   jobsTerms: ['background', 'imports', 'exports', 'progress'],
   /** Account › Sign in and devices answers to what people call it elsewhere (it was Security). */
-  signInTerms: ['security', 'password', 'two factor', 'passkeys', 'sessions', 'devices', 'sign out'],
+  signInTerms: ['security', 'password', 'two factor', 'sessions', 'devices', 'sign out'],
   /** Actions (AC-1086, AC-1087). */
   create: (singular: string) => `Create a ${singular.toLocaleLowerCase()}`,
   newWord: 'new',

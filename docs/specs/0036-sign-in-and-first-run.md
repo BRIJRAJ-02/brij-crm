@@ -1,5 +1,7 @@
 # 0036 · Sign in and first run
 
+> Amended 22 October 2026: passkeys were taken out (spec 0033's amendment), so sign in is Google, then "or", then the email; the passkey room under the email field (`afterEmail`) and its mentions below no longer apply.
+
 **Status**: Proposed
 **Date**: 2026-10-21
 **Feature**: Sign in (spec 0005) and the first run, owner request of 21 October 2026 ("I saw a better signup/signin flow. Can we create a better new one")

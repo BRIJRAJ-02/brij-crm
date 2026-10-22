@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Separator } from '../../atoms/Separator/Separator.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
@@ -7,12 +7,8 @@ import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import styles from './SignInForm.module.css';
 import { strings } from './strings.ts';
 
-/**
- * What is under way: `idle`, `sending` while the code goes out, `google`
- * while the browser heads to Google, `passkey` while the browser's passkey
- * prompt is open.
- */
-export type SignInStatus = 'idle' | 'sending' | 'google' | 'passkey';
+/** What is under way: `idle`, `sending` while the code goes out, `google` while the browser heads to Google. */
+export type SignInStatus = 'idle' | 'sending' | 'google';
 
 /** Props for SignInForm. */
 export interface SignInFormProps {
@@ -24,8 +20,7 @@ export interface SignInFormProps {
    * What is under way, `idle` by default. `sending` spins the email's submit
    * as "Sending code" (Enter does nothing more) and turns Google off;
    * `google` spins the Google button as "Opening Google" and turns the
-   * email's submit off; `passkey` turns both off (the screen's own passkey
-   * button shows the wait).
+   * email's submit off.
    */
   readonly status?: SignInStatus;
   /** Why the address was refused, as a sentence that says what to do. Shown on the email field until it changes. */
@@ -46,27 +41,6 @@ export interface SignInFormProps {
   readonly disabledReason?: string;
   /** Sign up is closed: a quiet line under the buttons says so. */
   readonly isSignUpClosed?: boolean;
-  /**
-   * Other ways in beside Google, above the "or" (spec 0033's "Sign in with a
-   * passkey"): Buttons with `size="lg"` and `isFullWidth="center"`, under
-   * Continue with Google. The "or" shows when this or Google is there. Prefer
-   * it to `afterEmail` for a way in that doesn't use the typed address, so
-   * the email field and its submit stay together. The form doesn't turn these
-   * off for `isDisabled` or `status`: the screen does, as it renders them.
-   */
-  readonly otherWays?: ReactNode;
-  /**
-   * Under the email field, before its submit: another way in that belongs
-   * with the address it was given (a passkey goes in `otherWays`). Empty until
-   * a screen fills it.
-   */
-  readonly afterEmail?: ReactNode;
-  /**
-   * The browser may offer passkeys in the email field's suggestions (spec
-   * 0033, AC-888): its autocomplete gains `webauthn`. Set it only while the
-   * screen is waiting for one to be picked.
-   */
-  readonly isPasskeyAutofill?: boolean;
 }
 
 /** Every refusal the form shows is about the one field; the notice shows above everything, apart from the form. */
@@ -96,9 +70,6 @@ export function SignInForm({
   isDisabled = false,
   disabledReason,
   isSignUpClosed = false,
-  afterEmail,
-  otherWays,
-  isPasskeyAutofill = false,
 }: SignInFormProps) {
   const [email, setEmail] = useState(defaultEmail);
   const [problem, setProblem] = useState<FormRefusal | undefined>(undefined);
@@ -124,31 +95,27 @@ export function SignInForm({
     <div className={styles.root}>
       {/* Danger is announced as an alert: about the sign in, not the address, so never on the field. */}
       {shownNotice !== undefined && <Callout tone="danger">{shownNotice}</Callout>}
-      {(onGoogle !== undefined || otherWays !== undefined) && (
-        // The ways in that need no address, together, space-8 apart as a Form's buttons are.
-        <div className={styles.ways}>
-          {onGoogle !== undefined && (
-            <Button
-              size="lg"
-              isFullWidth="center"
-              provider="google"
-              onPress={onGoogle}
-              isPending={status === 'google'}
-              isDisabled={isDisabled || status === 'sending' || status === 'passkey'}
-              {...(hasReason ? { 'aria-describedby': reasonId } : {})}
-            >
-              {status === 'google' ? strings.googlePending : strings.google}
-            </Button>
-          )}
-          {otherWays}
-        </div>
+      {onGoogle !== undefined && (
+        <>
+          <Button
+            size="lg"
+            isFullWidth="center"
+            provider="google"
+            onPress={onGoogle}
+            isPending={status === 'google'}
+            isDisabled={isDisabled || status === 'sending'}
+            {...(hasReason ? { 'aria-describedby': reasonId } : {})}
+          >
+            {status === 'google' ? strings.googlePending : strings.google}
+          </Button>
+          <Separator label={strings.or} />
+        </>
       )}
-      {(onGoogle !== undefined || otherWays !== undefined) && <Separator label={strings.or} />}
       <Form
-        submitLabel={onGoogle === undefined && otherWays === undefined ? strings.continue : strings.continueWithEmail}
+        submitLabel={onGoogle === undefined ? strings.continue : strings.continueWithEmail}
         busyLabel={strings.sending}
         isBusy={status === 'sending'}
-        isDisabled={isDisabled || status === 'google' || status === 'passkey'}
+        isDisabled={isDisabled || status === 'google'}
         refusals={shown === undefined ? [] : [shown]}
         fieldFor={toEmailField}
         {...(hasReason ? { submitDescribedBy: reasonId } : {})}
@@ -167,7 +134,7 @@ export function SignInForm({
           name={EMAIL_FIELD}
           type="email"
           inputMode="email"
-          autoComplete={isPasskeyAutofill ? 'email webauthn' : 'email'}
+          autoComplete="email"
           placeholder={strings.emailPlaceholder}
           isRequired
           value={email}
@@ -180,7 +147,6 @@ export function SignInForm({
           {...(disabledReason === undefined ? {} : { disabledReason })}
           {...(hasReason ? { descriptionId: reasonId } : {})}
         />
-        {afterEmail}
       </Form>
       {isSignUpClosed && <p className={styles.note}>{strings.signUpClosed}</p>}
     </div>

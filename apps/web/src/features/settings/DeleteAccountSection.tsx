@@ -41,7 +41,6 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
   const stepUp = useStepUp(data, security, {
     secondFactor: twoFactorOn,
     onComplete: () => commit.current(),
-    isBusy,
   });
 
   const check = () => {
@@ -157,7 +156,7 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
         title={blocked ? copy.blockedTitleOne : copy.title}
         tone="danger"
         isOpen={isOpen}
-        isBusy={isBusy || stepUp.isAsking}
+        isBusy={isBusy}
         onOpenChange={(next) => {
           if (!next && !isBusy) setIsOpen(false);
         }}

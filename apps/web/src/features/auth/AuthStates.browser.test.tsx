@@ -44,16 +44,15 @@ describe('AuthError', () => {
 });
 
 describe('TwoFactorScreen', () => {
-  it('sits in the split card, its other ways full width under Continue', async () => {
-    const data = {
-      auth: { passkeys: { support: () => Promise.resolve({ available: true, autofill: false }) } },
-    } as unknown as Partial<DataLayer>;
+  it('sits in the split screen, its backup code way full width under Continue, and offers no passkey', async () => {
+    const data = {} as Partial<DataLayer>;
     shown = await renderInApp(() => <TwoFactorScreen data={data as DataLayer} redirect={undefined} />, {
       data,
       pattern: '/two-factor',
       at: '/two-factor',
     });
-    await expect.element(page.getByRole('button', { name: 'Use a passkey' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Use a backup code' })).toBeVisible();
+    expect(page.getByRole('button', { name: /passkey/i }).query()).toBeNull();
     expect(isSplit()).toBe(true);
     const submit = page.getByRole('button', { name: 'Continue' }).element();
     const backup = page.getByRole('button', { name: 'Use a backup code' }).element();

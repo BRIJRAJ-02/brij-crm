@@ -27,7 +27,7 @@ const READS: ReadonlySet<string> = new Set([
   'me.get',
   // The caller's own preference in schema auth (spec 0031, AC-802): no tenant change, no outbox row.
   'me.setLastWorkspace',
-  // Your own account (spec 0033): sessions, step up and passkeys live in schema auth only, so no tenant change
+  // Your own account (spec 0033): sessions and step up live in schema auth only, so no tenant change
   // and no outbox row. Deleting the account is the one account write (below): it leaves each workspace.
   'account.sessions.list',
   'account.sessions.revoke',
@@ -36,10 +36,6 @@ const READS: ReadonlySet<string> = new Set([
   'account.activity.list',
   'account.stepUp.start',
   'account.stepUp.verify',
-  'account.stepUp.passkeyOptions',
-  'account.stepUp.verifyPasskey',
-  'account.passkeys.rename',
-  'account.passkeys.remove',
   'account.deletion.check',
   // A workspace's sign in rules (spec 0033, milestone 4): reading them.
   'workspaceSecurity.get',
