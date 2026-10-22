@@ -102,6 +102,7 @@ const SETTINGS_TERMS: Readonly<Record<string, readonly string[]>> = {
   calendars: strings.calendarsTerms,
   objects: strings.objectsTerms,
   jobs: strings.jobsTerms,
+  security: strings.signInTerms,
 };
 
 /** The Settings pages this member may open (`visibleSettingsNav`), named "Settings › <page>" (AC-1082). */

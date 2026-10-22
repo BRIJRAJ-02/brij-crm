@@ -26,7 +26,7 @@ export const signInAlert: Template<SignInAlertParams> = ({ when, device, place }
     },
     {
       type: 'note',
-      text: 'If this wasn’t you, open Settings › Account › Security in Timefix and sign that device out. Then check that your email account is secure, and turn on two factor sign in if it’s off.',
+      text: 'If this wasn’t you, open Settings › Account › Sign in and devices in Timefix and sign that device out. Then check that your email account is secure, and turn on two factor sign in if it’s off.',
     },
   ],
   why: 'You got this email because a device your account hasn’t used lately signed in.',

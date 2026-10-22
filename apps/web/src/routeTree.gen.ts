@@ -54,6 +54,7 @@ import { Route as WSlugSettingsAccountNotificationsRouteImport } from './routes/
 import { Route as WSlugSettingsAccountPreferencesRouteImport } from './routes/w.$slug.settings.account.preferences.tsx'
 import { Route as WSlugSettingsAccountProfileRouteImport } from './routes/w.$slug.settings.account.profile.tsx'
 import { Route as WSlugSettingsAccountSecurityRouteImport } from './routes/w.$slug.settings.account.security.tsx'
+import { Route as WSlugSettingsAccountSignInRouteImport } from './routes/w.$slug.settings.account.sign-in.tsx'
 import { Route as WSlugSettingsBookingPagesIndexRouteImport } from './routes/w.$slug.settings.booking-pages.index.tsx'
 import { Route as WSlugSettingsBookingPagesPageIdRouteImport } from './routes/w.$slug.settings.booking-pages.$pageId.tsx'
 import { Route as WSlugSettingsFormsIndexRouteImport } from './routes/w.$slug.settings.forms.index.tsx'
@@ -306,6 +307,12 @@ const WSlugSettingsAccountSecurityRoute =
     path: '/account/security',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsAccountSignInRoute =
+  WSlugSettingsAccountSignInRouteImport.update({
+    id: '/account/sign-in',
+    path: '/account/sign-in',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsBookingPagesIndexRoute =
   WSlugSettingsBookingPagesIndexRouteImport.update({
     id: '/booking-pages/',
@@ -439,6 +446,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
   '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
+  '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
@@ -497,6 +505,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
   '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
+  '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
@@ -560,6 +569,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
   '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
+  '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
@@ -624,6 +634,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
     | '/w/$slug/settings/account/security'
+    | '/w/$slug/settings/account/sign-in'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/scheduling/calendars'
@@ -682,6 +693,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
     | '/w/$slug/settings/account/security'
+    | '/w/$slug/settings/account/sign-in'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/scheduling/calendars'
@@ -744,6 +756,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
     | '/w/$slug/settings/account/security'
+    | '/w/$slug/settings/account/sign-in'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/scheduling/calendars'
@@ -1094,6 +1107,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsAccountSecurityRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/account/sign-in': {
+      id: '/w/$slug/settings/account/sign-in'
+      path: '/account/sign-in'
+      fullPath: '/w/$slug/settings/account/sign-in'
+      preLoaderRoute: typeof WSlugSettingsAccountSignInRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/booking-pages/': {
       id: '/w/$slug/settings/booking-pages/'
       path: '/booking-pages'
@@ -1248,6 +1268,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsAccountPreferencesRoute: typeof WSlugSettingsAccountPreferencesRoute
   WSlugSettingsAccountProfileRoute: typeof WSlugSettingsAccountProfileRoute
   WSlugSettingsAccountSecurityRoute: typeof WSlugSettingsAccountSecurityRoute
+  WSlugSettingsAccountSignInRoute: typeof WSlugSettingsAccountSignInRoute
   WSlugSettingsBookingPagesPageIdRoute: typeof WSlugSettingsBookingPagesPageIdRoute
   WSlugSettingsFormsFormIdRoute: typeof WSlugSettingsFormsFormIdRoute
   WSlugSettingsSchedulingCalendarsRoute: typeof WSlugSettingsSchedulingCalendarsRoute
@@ -1274,6 +1295,7 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsAccountPreferencesRoute: WSlugSettingsAccountPreferencesRoute,
   WSlugSettingsAccountProfileRoute: WSlugSettingsAccountProfileRoute,
   WSlugSettingsAccountSecurityRoute: WSlugSettingsAccountSecurityRoute,
+  WSlugSettingsAccountSignInRoute: WSlugSettingsAccountSignInRoute,
   WSlugSettingsBookingPagesPageIdRoute: WSlugSettingsBookingPagesPageIdRoute,
   WSlugSettingsFormsFormIdRoute: WSlugSettingsFormsFormIdRoute,
   WSlugSettingsSchedulingCalendarsRoute: WSlugSettingsSchedulingCalendarsRoute,

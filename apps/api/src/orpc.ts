@@ -134,7 +134,7 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   factors: Pick<IdentityStore, 'secondFactorUsers' | 'hasPasskey' | 'sessionVerification' | 'markSessionVerified'>;
   /**
    * The names of the workspaces a person is in that require two factor (spec
-   * 0033, AC-885): Account › Security says so, and keeps their last second
+   * 0033, AC-885): Account › Sign in and devices says so, and keeps their last second
    * factor on. A system read per workspace, in packages/core.
    */
   requiredBy: (userId: string) => Promise<readonly string[]>;
