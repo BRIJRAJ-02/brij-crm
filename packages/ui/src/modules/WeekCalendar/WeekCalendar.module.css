@@ -229,6 +229,7 @@
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+    /* Over the now line and the shading (both raised), so the note is never crossed out. */
     z-index: var(--z-sticky);
     pointer-events: none;
     translate: -50% -50%;
