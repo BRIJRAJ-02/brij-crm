@@ -45,6 +45,22 @@ const PROBE = () => {
       // Each source by its element and, when it moved, from where to where (y and height), to find what pushed it.
       const at = (rect: DOMRectReadOnly | undefined) =>
         rect === undefined ? '' : `${String(Math.round(rect.y))}+${String(Math.round(rect.height))}`;
+      // The shell's content box taking the new page's bars (People's ViewBar and its sort row above the content,
+      // Captures' tabs inside it): its top moves and its bottom stays, the bars themselves are held by the chrome
+      // checks, and nothing inside it moved with it. Not a shift of the page.
+      const frameOnly = (entry.sources ?? []).every((source) => {
+        const node = source.node;
+        const before = source.previousRect;
+        const after = source.currentRect;
+        return (
+          node instanceof Element &&
+          node.classList.contains('ws-app-shell-content') &&
+          before !== undefined &&
+          after !== undefined &&
+          Math.round(before.y + before.height) === Math.round(after.y + after.height)
+        );
+      });
+      if (frameOnly && (entry.sources ?? []).length > 0) continue;
       probe.shifts.push({
         t: entry.startTime - probe.start,
         value: entry.value,
