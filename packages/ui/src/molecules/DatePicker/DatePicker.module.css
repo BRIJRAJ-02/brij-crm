@@ -312,6 +312,11 @@
       border-color: CanvasText;
     }
 
+    .calendar[data-inline] .day[data-shown]:not([data-selected]) {
+      outline: var(--border-width-hairline) solid CanvasText;
+      outline-offset: calc(-1 * var(--border-width-hairline));
+    }
+
     .day[data-selected] {
       background: Highlight;
       color: HighlightText;

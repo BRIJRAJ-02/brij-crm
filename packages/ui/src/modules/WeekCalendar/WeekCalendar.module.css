@@ -189,13 +189,6 @@
     color: var(--tag-lime-text);
   }
 
-  /* "+N more": the items past the row's cap, a quiet chip like the grid's own "+N", opening their list. */
-  .allDayItem[data-kind='more'] {
-    background: var(--surface-subtle);
-    color: var(--text-secondary);
-    border: var(--border-width-hairline) solid var(--control-border);
-  }
-
   .allDayItem[data-open],
   .allDayItem:focus-visible {
     outline: var(--border-width-hairline) solid var(--accent-line);
@@ -460,14 +453,18 @@
     box-shadow: 0 0 0 var(--border-width-hairline) var(--column-surface);
   }
 
-  /* "+N": blocks folded where a lane would be too narrow. */
+  /* "+N": blocks folded where a lane would be too narrow, and the all day row's "+N more" past its cap: one quiet look. */
+  .block[data-kind='more'],
+  .allDayItem[data-kind='more'] {
+    border: var(--border-width-hairline) solid var(--control-border);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
   .block[data-kind='more'] {
     align-items: center;
     justify-content: center;
     padding-inline: var(--space-2);
-    border: var(--border-width-hairline) solid var(--control-border);
-    background: var(--surface-subtle);
-    color: var(--text-secondary);
   }
 
   .block[data-cancelled] {

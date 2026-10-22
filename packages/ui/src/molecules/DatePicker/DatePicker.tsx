@@ -112,24 +112,28 @@ function Grid({
         {(day) => <CalendarHeaderCell className={styles.weekday}>{day}</CalendarHeaderCell>}
       </CalendarGridHeader>
       <CalendarGridBody>
-        {(date) => (
-          <CalendarCell
-            date={date}
-            className={styles.day}
-            data-shown={
-              shown !== undefined && date.compare(shown.start) >= 0 && date.compare(shown.end) <= 0 ? '' : undefined
-            }
-            data-shown-start={shown !== undefined && isSameDay(date, shown.start) ? '' : undefined}
-            data-shown-end={shown !== undefined && isSameDay(date, shown.end) ? '' : undefined}
-          >
-            {({ formattedDate }) => (
-              <>
-                {formattedDate}
-                {isSameDay(date, today) && <span className={styles.today} data-today-mark="" />}
-              </>
-            )}
-          </CalendarCell>
-        )}
+        {(date) => {
+          const isShown = shown !== undefined && date.compare(shown.start) >= 0 && date.compare(shown.end) <= 0;
+          return (
+            <CalendarCell
+              date={date}
+              className={styles.day}
+              data-shown={isShown ? '' : undefined}
+              // A week running over the month's edge ends its band at the month's first or last day, the rest hidden.
+              data-shown-start={isShown && (isSameDay(date, shown.start) || date.day === 1) ? '' : undefined}
+              data-shown-end={
+                isShown && (isSameDay(date, shown.end) || date.add({ days: 1 }).day === 1) ? '' : undefined
+              }
+            >
+              {({ formattedDate }) => (
+                <>
+                  {formattedDate}
+                  {isSameDay(date, today) && <span className={styles.today} data-today-mark="" />}
+                </>
+              )}
+            </CalendarCell>
+          );
+        }}
       </CalendarGridBody>
     </CalendarGrid>
   );

@@ -54,7 +54,7 @@ Blocks (bookings, events, closed and busy time) of every length, a quarter hour 
 - Left and Right move to the previous or next day (and select it).
 - Up and Down move between that day's all day chips (top to bottom, "+N more" last), then its blocks and "+N" chips by start: the order they read down the screen. The chips are not tab stops; Left and Right on a chip move to the day before or after it, as on its column.
 - Enter or Space on a day (not on a block) draws a span there, when drawing is on.
-- Enter or Space opens the focused block.
+- Enter or Space opens the focused block, or the list of a focused "+N" or "+N more" chip (the arrows stay the week's, so Down never opens a list).
 - Escape closes its card.
 - The day header buttons select a day.
 
