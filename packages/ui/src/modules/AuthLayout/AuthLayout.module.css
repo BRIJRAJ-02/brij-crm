@@ -78,7 +78,7 @@
 
   /* The readable column the task and the footer share, so they start on one line. */
   .column {
-    inline-size: min(var(--size-panel-wide), 100%);
+    inline-size: min(var(--size-panel), 100%);
   }
 
   .panelFoot {
