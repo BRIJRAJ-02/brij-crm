@@ -168,7 +168,7 @@ export const EmailHint: Story = {
   },
 };
 
-/** While sending: the button keeps its width, shows the spinner and reads "Sending…". */
+/** While sending: the button keeps its width, shows the spinner and reads "Sending". */
 export const Sending: Story = {
   args: { onSubmit: never },
   play: async ({ canvas }) => {

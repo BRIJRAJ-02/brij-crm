@@ -130,7 +130,7 @@ describe('Review on a counted change', () => {
     const commit = page.getByRole('button', { name: 'Delete 12,345 records' });
     await userEvent.click(commit);
     // Busy: its label says so and a second press sends nothing.
-    await expect.poll(() => alert()?.textContent).toContain('Starting…');
+    await expect.poll(() => alert()?.textContent).toContain('Starting');
     await userEvent.click(page.getByRole('button', { name: /Starting/ }), { force: true });
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(confirm).toHaveBeenCalledWith('acme', job.id);
@@ -154,7 +154,7 @@ describe('Review on a counted change', () => {
     await userEvent.click(page.getByRole('button', { name: 'Delete 12,345 records' }));
     // As the store does: queued at once, then put back when the server refuses.
     change([{ ...job, status: 'queued' }]);
-    await expect.poll(() => alert()?.textContent).toContain('Starting…');
+    await expect.poll(() => alert()?.textContent).toContain('Starting');
     change([job]);
     answer.resolve(false);
     await expect.poll(dialog).toBeNull();
@@ -212,7 +212,7 @@ describe('Cancel on a job', () => {
     const { change } = await renderJobs([job], { confirm: vi.fn(), cancel });
     await userEvent.click(page.getByRole('button', { name: 'Cancel', exact: true }));
     await userEvent.click(page.getByRole('button', { name: 'Cancel job' }));
-    await expect.poll(() => alert()?.textContent).toContain('Cancelling…');
+    await expect.poll(() => alert()?.textContent).toContain('Cancelling');
     change([{ ...job, status: 'cancelled', cancellable: false }]);
     answer.resolve(true);
     await expect.poll(dialog).toBeNull();

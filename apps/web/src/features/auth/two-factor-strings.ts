@@ -12,7 +12,7 @@ export const strings = {
   usePasskey: 'Use a passkey',
   remember: 'Remember this device for 30 days',
   continue: 'Continue',
-  checking: 'Checking…',
+  checking: 'Checking',
   backupMissing: 'Enter one of your backup codes.',
   appMissing: 'Enter the 6 digit code from your app.',
   expired: 'This sign in has expired. Sign in again.',

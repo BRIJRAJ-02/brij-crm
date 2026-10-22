@@ -70,7 +70,7 @@ export const strings = {
   previewOpen: 'Preview',
   previewNotLive: 'Preview, not live. Answers are checked here, and nothing is sent.',
   publish: 'Publish',
-  publishing: 'Publishing…',
+  publishing: 'Publishing',
   moreActions: 'More actions',
   pause: 'Pause',
   resume: 'Resume',
@@ -423,7 +423,7 @@ export const strings = {
   syncCapped: (checked: number) =>
     `These counts cover the newest ${new Intl.NumberFormat().format(checked)} submissions.`,
   syncStart: 'Sync',
-  syncStarting: 'Starting…',
+  syncStarting: 'Starting',
   notNow: 'Not now',
   tryAgain: 'Try again',
   settledSome: (done: number, of: number) => `Changed ${String(done)} of ${String(of)}; the rest are still picked.`,

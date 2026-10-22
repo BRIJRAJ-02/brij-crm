@@ -72,7 +72,7 @@ export const strings = {
   removeText: 'Leads it would have matched go to the next rule, or the fallback.',
   removeAction: 'Remove rule',
   cancel: 'Cancel',
-  saving: 'Saving…',
+  saving: 'Saving',
   saved: 'Routing saved',
   waitsForPublish: 'Changes here go live when you publish.',
   noPages: 'Make a booking page first, then send people to it.',

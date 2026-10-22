@@ -58,7 +58,7 @@ export const strings = {
   /** Before the address in its field. */
   addressPrefix: '/w/',
   addressRule: 'Lowercase letters, digits and dashes.',
-  addressChecking: 'Checking…',
+  addressChecking: 'Checking',
   addressFree: 'Available',
   addressTaken: 'Taken',
   /** The free addresses offered under the field. */

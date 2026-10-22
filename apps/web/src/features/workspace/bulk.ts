@@ -83,7 +83,7 @@ export const bulkStrings = {
   close: 'Close',
   /** The title already names the records ("Edit 48 people"), so the footer has room for its keycaps on a phone. */
   apply: 'Apply',
-  applying: 'Applying…',
+  applying: 'Applying',
   updated: (records: string) => `Updated ${records}.`,
   /** Some refused: their cells say why, as a delete's rows do (AC-530). */
   updatedSome: (records: string, refused: number) =>
@@ -108,7 +108,7 @@ export const bulkStrings = {
     restore: (done: string, total: string) => `Restoring ${done} of ${total}`,
     purge: (done: string, total: string) => `Deleting ${done} of ${total} forever`,
   },
-  starting: 'Starting…',
+  starting: 'Starting',
   confirmEditTitle: (records: string) => `Update ${records}?`,
   confirmEditText: 'This can’t be undone.',
   /**

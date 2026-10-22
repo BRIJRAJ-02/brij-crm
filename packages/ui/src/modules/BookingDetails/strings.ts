@@ -17,7 +17,7 @@ export const strings = {
   trap: 'Leave this empty',
   back: 'Back',
   confirm: 'Confirm booking',
-  confirming: 'Booking…',
+  confirming: 'Booking',
   nameRequired: 'Give your name.',
   emailRequired: 'Give an email address such as name@example.com.',
   guestInvalid: 'Give each guest’s email address.',

@@ -242,7 +242,7 @@ describe('removing closed time', () => {
     await userEvent.click(page.getByRole('button', { name: 'Remove', exact: true }));
     await confirmAlone();
     await userEvent.click(page.getByRole('button', { name: 'Remove block' }));
-    await expect.poll(() => alert()?.textContent).toContain('Removing…');
+    await expect.poll(() => alert()?.textContent).toContain('Removing');
     await userEvent.click(page.getByRole('button', { name: /Removing/ }), { force: true });
     expect(week.onRemoveBlock).toHaveBeenCalledTimes(1);
     expect(week.onRemoveBlock).toHaveBeenCalledWith(blockOf({}).blockId);
@@ -319,7 +319,7 @@ describe('cancelling a booking', () => {
     await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
     await userEvent.fill(page.getByRole('textbox', { name: 'Reason' }), 'Ill today');
     await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel booking' }));
-    await expect.poll(() => alert()?.textContent).toContain('Cancelling…');
+    await expect.poll(() => alert()?.textContent).toContain('Cancelling');
     expect(week.actions.cancel).toHaveBeenCalledTimes(1);
     expect(week.actions.cancel).toHaveBeenCalledWith(bookingOf().id, 'Ill today');
     week.cancels[0]?.reject(dataError('INTERNAL', 'Can’t reach Timefix. Check your connection, then try again.'));
@@ -403,7 +403,7 @@ describe('cancelling from the list', () => {
     await expect.poll(alert).not.toBeNull();
     await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel booking' }));
     // The booking already shows cancelled in the panel; the confirm stays, busy, until the server answers.
-    await expect.poll(() => alert()?.textContent).toContain('Cancelling…');
+    await expect.poll(() => alert()?.textContent).toContain('Cancelling');
     expect(cancel).toHaveBeenCalledTimes(1);
     answer.resolve(undefined);
     await expect.poll(alert).toBeNull();

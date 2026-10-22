@@ -58,7 +58,7 @@ export const strings = {
   /** Cancel's confirm keeps the job: its dismiss can't be called Cancel too. */
   keepJob: 'Keep job',
   cancelling: 'Cancelling',
-  cancellingNow: 'Cancelling…',
+  cancellingNow: 'Cancelling',
   cancelJob: 'Cancel job',
   /**
    * Confirm asks first, in the words of the change it runs (spec 0022's counted changes, as the table's Review
@@ -98,7 +98,7 @@ export const strings = {
   review: 'Review',
   /** Confirm's dismiss: the job keeps waiting for its confirm. */
   notNow: 'Not now',
-  starting: 'Starting…',
+  starting: 'Starting',
   oneRecord: '1 record',
   records: (count: string) => `${count} records`,
   showMore: 'Show more',

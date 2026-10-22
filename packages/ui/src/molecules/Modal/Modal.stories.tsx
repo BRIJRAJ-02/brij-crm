@@ -224,7 +224,7 @@ export const Busy: Story = {
               Cancel
             </Button>
             <Button variant="primary" isPending>
-              Creating…
+              Creating
             </Button>
           </>
         }

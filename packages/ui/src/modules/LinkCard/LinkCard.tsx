@@ -50,7 +50,7 @@ export interface LinkCardProps {
    * clipboard refuses. Left out when there is no link yet (a form never published).
    */
   readonly address?: string;
-  /** A state the switch can't say, beside the title ("Not published", "Private", "Copying…"). Never "Off". */
+  /** A state the switch can't say, beside the title ("Not published", "Private", "Copying"). Never "Off". */
   readonly badge?: string;
   /** Off (not taking people): the card reads quieter, its title muted. Its edge keeps its colour: the edge never says a state. */
   readonly isOff?: boolean;
