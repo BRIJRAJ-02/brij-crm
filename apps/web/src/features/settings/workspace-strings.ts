@@ -57,7 +57,7 @@ export const strings = {
   publicProfileSection: 'Public profile',
   publicProfileText: 'Your booking pages live at your handle, and so does a page listing your public ones.',
   handle: 'Handle',
-  handleNew: 'Suggested from your name. Claim it or change it, then save. Your pages keep their /b/ links until then.',
+  handleNew: 'Suggested from your name. Claim it, or change it and save. Your pages keep their /b/ links until then.',
   handleKept: 'The same in every workspace. If you change it, your old address keeps working.',
   handleFix: 'Fix your handle first.',
   claimHandle: 'Claim',

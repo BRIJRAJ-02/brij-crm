@@ -45,7 +45,7 @@ Without `person` the card draws as a skeleton.
 
 ## States
 
-Three panes, two panes, a team page, loading; BookingMessage's loading, message and Try again; BookingProfile's loaded, with sections, and loading.
+Three panes, two panes, a team page, loading; BookingMessage's loading, message and Try again; BookingProfile's loaded, with sections (a row with no address shows none), empty, and loading.
 
 ## Keyboard
 

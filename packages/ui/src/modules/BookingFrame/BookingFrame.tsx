@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Avatar, AvatarStack, type AvatarStackPerson } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -262,9 +262,14 @@ export interface BookingProfileSectionProps {
 
 /** One group of a profile's links, under its small heading when it has one. */
 export function BookingProfileSection({ title, children }: BookingProfileSectionProps) {
+  const headingId = useId();
   return (
-    <section className={styles.section} {...(title === undefined ? {} : { 'aria-label': title })}>
-      {title !== undefined && <h2 className={styles.sectionTitle}>{title}</h2>}
+    <section className={styles.section} {...(title === undefined ? {} : { 'aria-labelledby': headingId })}>
+      {title !== undefined && (
+        <h2 id={headingId} className={styles.sectionTitle}>
+          {title}
+        </h2>
+      )}
       {children}
     </section>
   );

@@ -19,7 +19,7 @@
 //    failed stays confirmed and is marked for the host.
 import { handoffSubmission, handoffVisitor } from '../forms/public.ts';
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { PROFILE_PAGE_SIZE, type PublicAddress, type PublicProfile, type PublicProfileLink } from '@crm/contracts';
 import type {
   PublicBookInput,
@@ -218,21 +218,11 @@ function profileInitials(name: string, handle: string): string {
   return initialsOf(name) || handle.slice(0, 1).toUpperCase();
 }
 
-/** A picture a public page may show: an https address, or none. */
-function httpsImage(image: string | undefined): string | undefined {
-  if (image === undefined) return undefined;
-  try {
-    return new URL(image).protocol === 'https:' ? image : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * A profile (22 Oct 2026): the person, and one page of their Public links as the door listed them, in its order
  * (read `PROFILE_PAGE_SIZE + 1` to know there is more). Each workspace's pages are read in one transaction under
- * the first of its entries, every entry checked first. The name is the account's, else the owner member's on the
- * first link, else the handle; never an email.
+ * the first of its entries, every entry checked first, and each page checked again there. The name is the
+ * account's, else the handle; never an email.
  */
 export async function readBookingProfile(found: {
   readonly owner: HandleOwner;
@@ -247,7 +237,6 @@ export async function readBookingProfile(found: {
     byWorkspace.set(entry.scope.workspaceId, group);
   }
   const links = new Map<string, PublicProfileLink>();
-  const ownerNames = new Map<string, string>();
   for (const group of byWorkspace.values()) {
     const [first] = group;
     if (first === undefined) continue;
@@ -261,21 +250,22 @@ export async function readBookingProfile(found: {
           durations: bookingPages.durations,
           kind: bookingPages.kind,
           section: bookingPages.profileSection,
-          ownerName: members.name,
         })
         .from(bookingPages)
-        .innerJoin(
-          members,
-          and(eq(members.workspaceId, bookingPages.workspaceId), eq(members.id, bookingPages.ownerMemberId)),
-        )
+        // Listed again under row level security, as the door's definer chose them: a page made Link only, paused or
+        // deleted since is left out.
         .where(
-          inArray(
-            bookingPages.id,
-            group.map((entry) => entry.pageId),
+          and(
+            inArray(
+              bookingPages.id,
+              group.map((entry) => entry.pageId),
+            ),
+            isNull(bookingPages.deletedAt),
+            eq(bookingPages.isPrivate, false),
+            eq(bookingPages.status, 'live'),
           ),
         );
       for (const row of rows) {
-        ownerNames.set(row.id, row.ownerName);
         links.set(row.id, {
           slug: row.slug,
           title: row.title,
@@ -292,16 +282,13 @@ export async function readBookingProfile(found: {
     return link === undefined ? [] : [link];
   });
   const last = listed.at(-1);
-  const name =
-    found.owner.name.trim() ||
-    (listed[0] === undefined ? '' : (ownerNames.get(listed[0].pageId) ?? '')).trim() ||
-    found.owner.handle;
-  const image = httpsImage(found.owner.image);
+  // The account's name, else the handle: never a member name, which may be an email's first part.
+  const name = found.owner.name.trim() || found.owner.handle;
   return {
     handle: found.owner.handle,
     name,
     initials: profileInitials(name, found.owner.handle),
-    ...(image === undefined ? {} : { image }),
+    // No picture: the account's is Google's, which the public pages' policy (img-src 'self') never loads.
     bio: found.owner.bio,
     links: ordered,
     ...(found.pages.length > PROFILE_PAGE_SIZE && last !== undefined

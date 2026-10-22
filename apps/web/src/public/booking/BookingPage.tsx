@@ -76,10 +76,10 @@ export interface BookingPageProps {
   /** Opens the guest page once booked. */
   readonly onBooked: (manageToken: string) => void;
   /**
-   * The page has a handle address (`/<handle>/<slug>`, 22 Oct 2026): a plain `/b/<key>` visit moves there.
-   * Answers true when it is moving, so the page stays loading rather than drawing first.
+   * The page has a handle address (`/<handle>/<slug>`, 22 Oct 2026): a plain `/b/<key>` visit shows it in the
+   * address bar.
    */
-  readonly onAddress?: (path: string) => boolean;
+  readonly onAddress?: (path: string) => void;
 }
 
 type Client = ReturnType<typeof createBookingClient>;
@@ -145,7 +145,7 @@ export function BookingPage({
   const load = useCallback(() => {
     client.page(publicKey).then(
       (page) => {
-        if (page.path !== undefined && onAddress?.(page.path) === true) return;
+        if (page.path !== undefined) onAddress?.(page.path);
         setLoaded({ state: 'ready', page });
       },
       (error: unknown) => {

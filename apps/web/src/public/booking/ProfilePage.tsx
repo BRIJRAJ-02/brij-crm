@@ -10,6 +10,7 @@ import {
   BookingProfileSection,
   Button,
   Callout,
+  EmptyState,
   LinkList,
   LinkListToolbar,
   type LinkRow,
@@ -75,6 +76,8 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   const [searched, setSearched] = useState('');
   const [isMoreLoading, setMoreLoading] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
+  // A search that failed: said under the search, the profile stays.
+  const [searchFailed, setSearchFailed] = useState(false);
   // Whether the unsearched list is long enough for a search: once true, it stays while the person searches.
   const [isLong, setLong] = useState(false);
   // Only the newest read lands: a slow answer to an older search never replaces a newer one.
@@ -89,6 +92,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
           if (profile.handle !== handle) onMoved(profile.handle);
           if (search === '' && (profile.links.length > SEARCH_FROM || profile.next !== undefined)) setLong(true);
           setMoreFailed(false);
+          setSearchFailed(false);
           setLoaded({
             state: 'ready',
             profile,
@@ -98,7 +102,14 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         },
         (error: unknown) => {
           if (ticket !== latest.current) return;
-          setLoaded({ state: isDataError(error) && error.code === 'NOT_FOUND' ? 'gone' : 'failed' });
+          // Only the first read takes the page: a search that fails says so under the search.
+          setLoaded((was) => {
+            if (was.state === 'ready') {
+              setSearchFailed(true);
+              return was;
+            }
+            return { state: isDataError(error) && error.code === 'NOT_FOUND' ? 'gone' : 'failed' };
+          });
         },
       );
     },
@@ -152,7 +163,21 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
       </BookingMessage>
     );
   }
-  if (loaded.state === 'loading') return <BookingProfile />;
+  if (loaded.state === 'loading') {
+    // The card and the rows as skeletons, so nothing moves when they arrive.
+    return (
+      <BookingProfile>
+        <LinkList
+          label={strings.profileLinks}
+          searchLabel={strings.searchLinks}
+          isToolbarHidden
+          status="loading"
+          rows={[]}
+          onOpen={() => undefined}
+        />
+      </BookingProfile>
+    );
+  }
 
   const { profile, links } = loaded;
   const current = profile.handle;
@@ -165,16 +190,19 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
       person={{
         name: profile.name,
         id: current,
-        ...(profile.image === undefined ? {} : { image: profile.image }),
         bio: profile.bio,
       }}
       claimHref="https://timefix.ai"
     >
       {isLong && <LinkListToolbar searchLabel={strings.searchLinks} query={query} onQueryChange={setQuery} />}
+      {searchFailed && <Callout tone="danger">{strings.searchFailed}</Callout>}
       {links.length === 0 ? (
-        <Callout title={searched === '' ? strings.noLinksTitle : strings.noMatchesTitle(searched)}>
+        <EmptyState
+          title={searched === '' ? strings.noLinksTitle : strings.noMatchesTitle(searched)}
+          icon={searched === '' ? 'calendar-clock' : 'search'}
+        >
           {searched === '' ? strings.noLinksText : strings.noMatchesText}
-        </Callout>
+        </EmptyState>
       ) : (
         sections.map((section) => (
           <BookingProfileSection
@@ -182,7 +210,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
             {...(section.title === undefined ? {} : { title: section.title })}
           >
             <LinkList
-              label={section.title ?? strings.profileLinks}
+              label={section.title === undefined ? strings.profileLinks : strings.sectionLinks(section.title)}
               searchLabel={strings.searchLinks}
               isToolbarHidden
               rows={section.links.map((link) => rowOf(current, link))}

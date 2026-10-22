@@ -170,6 +170,66 @@ describe('a handle address', () => {
   });
 });
 
+describe('what a workspace may publish under a person', () => {
+  it('lets only the owner change a page’s address and place on their profile', async () => {
+    const ada = await person('Ada');
+    const bobId = randomUUID();
+    await testQuery(ownerUrl, `insert into auth."user" (id, name, email) values ($1, 'Bob', $2)`, [
+      bobId,
+      `${bobId}@example.com`,
+    ]);
+    const bobMember = newId();
+    await db.withWorkspace(ada.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type) values (${ada.workspaceId}, ${bobMember}, ${bobId}, 'Bob', ${`${bobId}@example.com`}, 'member', 'system', 'system')`,
+      ),
+    );
+    const bobsPage = await page(
+      testScope({ db, workspaceId: ada.workspaceId, actor: { type: 'member', id: bobMember }, role: 'member' }),
+      'Bob call',
+    );
+    // Ada owns the workspace and may change Bob's page, but not what is published under Bob's name.
+    expect(
+      await refusalOf(updateBookingPage(ada.scope, { pageId: bobsPage.id, settings: { slug: 'taken-over' } })),
+    ).toBe('FORBIDDEN');
+    expect(
+      await refusalOf(updateBookingPage(ada.scope, { pageId: bobsPage.id, settings: { profilePosition: 1 } })),
+    ).toBe('FORBIDDEN');
+    expect((await updateBookingPage(ada.scope, { pageId: bobsPage.id, settings: { title: 'Renamed' } })).title).toBe(
+      'Renamed',
+    );
+  });
+
+  it('stops addressing and listing a page once its owner has left that workspace', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('gone');
+    await updateMyMemberProfile(ada.scope, { handle });
+    // Ada joins Bob's workspace as a member, and makes a page there.
+    const bob = await person('Bob');
+    const adaThere = newId();
+    await db.withWorkspace(bob.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type) values (${bob.workspaceId}, ${adaThere}, ${ada.userId}, 'Ada', ${`${ada.userId}@example.com`}, 'member', 'system', 'system')`,
+      ),
+    );
+    const made = await page(
+      testScope({ db, workspaceId: bob.workspaceId, actor: { type: 'member', id: adaThere }, role: 'member' }),
+      'Elsewhere',
+    );
+    expect((await readAddressedPage(await enterBookingAddress({ db }, handle, made.slug))).publicKey).toBe(
+      made.publicKey,
+    );
+    await db.withWorkspace(bob.workspaceId, (tx) =>
+      tx.execute(
+        sql`update members set status = 'removed', left_at = now(), removed_by_type = 'system' where id = ${adaThere}`,
+      ),
+    );
+    expect(await refusalOf(enterBookingAddress({ db }, handle, made.slug))).toBe('NOT_FOUND');
+    const profile = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
+    expect(profile.links.map((link) => link.slug)).not.toContain(made.slug);
+  });
+});
+
 describe('a profile', () => {
   it('lists the person’s Public, live pages in their order, a page at a time, and finds them by title', async () => {
     const ada = await person('Ada Lovelace');

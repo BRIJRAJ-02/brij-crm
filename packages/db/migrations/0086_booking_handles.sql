@@ -94,8 +94,9 @@ $function$;
 --> statement-breakpoint
 revoke all on function crm_booking_pages_owner_user() from public;
 --> statement-breakpoint
+-- On every insert and update, so the column is always the owner member's identity, whatever a write sets.
 create trigger booking_pages_owner_user
-  before insert or update of owner_member_id on booking_pages
+  before insert or update on booking_pages
   for each row execute function crm_booking_pages_owner_user();
 --> statement-breakpoint
 do $$
@@ -203,11 +204,16 @@ revoke create on schema public from crm_handle;
 --> statement-breakpoint
 revoke crm_handle from current_user;
 --> statement-breakpoint
-grant select (owner_user_id, slug, deleted_at, is_private, status, title, profile_position) on booking_pages to crm_booking_lookup;
+grant select (owner_member_id, owner_user_id, slug, deleted_at, is_private, status, title, profile_position) on booking_pages to crm_booking_lookup;
 --> statement-breakpoint
 grant select (id, deleted_at) on workspaces to crm_booking_lookup;
 --> statement-breakpoint
--- The workspace and page `/<handle>/<slug>` names (by the handle's person), or no row. Ids only.
+grant select (workspace_id, id, user_id, status) on members to crm_booking_lookup;
+--> statement-breakpoint
+-- The workspace and page `/<handle>/<slug>` names (by the handle's person), or no row. Ids only. Only a page whose
+-- owner is still an active member there, with this very identity, in a workspace that exists: a workspace the
+-- person left can't publish under their handle. A Link only page answers too (the owner's call: it works by its
+-- address, it is never listed).
 create function crm_booking_page_by_address(owner uuid, wanted text)
   returns table (workspace_id uuid, page_id uuid)
   language sql
@@ -219,14 +225,18 @@ begin atomic
   select p.workspace_id, p.id
   from public.booking_pages p
   join public.workspaces w on w.id = p.workspace_id
+  join public.members m on m.workspace_id = p.workspace_id and m.id = p.owner_member_id
   where p.owner_user_id = crm_booking_page_by_address.owner
+    and m.user_id = crm_booking_page_by_address.owner
+    and m.status = 'active'
     and p.slug = crm_booking_page_by_address.wanted
     and p.deleted_at is null
     and w.deleted_at is null
   limit 1;
 end;
 --> statement-breakpoint
--- A profile's listed pages: the person's Public, live pages in workspaces that exist, in their order (position, then
+-- A profile's listed pages: the person's Public, live pages in workspaces that exist where they are still an active
+-- member, in their order (position, then
 -- oldest first), after the cursor given, optionally only those whose title holds `search`; at most 50. Ids and the
 -- position (the next cursor) only.
 create function crm_booking_profile_pages(owner uuid, after_position smallint, after_id uuid, search text, max integer)
@@ -239,7 +249,10 @@ begin atomic
   select p.workspace_id, p.id, p.profile_position
   from public.booking_pages p
   join public.workspaces w on w.id = p.workspace_id
+  join public.members m on m.workspace_id = p.workspace_id and m.id = p.owner_member_id
   where p.owner_user_id = crm_booking_profile_pages.owner
+    and m.user_id = crm_booking_profile_pages.owner
+    and m.status = 'active'
     and p.deleted_at is null
     and p.is_private = false
     and p.status = 'live'
@@ -252,7 +265,7 @@ begin atomic
   limit least(greatest(crm_booking_profile_pages.max, 1), 50);
 end;
 --> statement-breakpoint
--- The slugs a person's live pages hold, in any workspace, that start with `prefix`: at most 1,000.
+-- The slugs a person's live pages hold, in any workspace that exists, that start with `prefix`: at most 1,000.
 create function crm_booking_owner_slugs(owner uuid, prefix text)
   returns table (slug text)
   language sql
@@ -262,7 +275,9 @@ create function crm_booking_owner_slugs(owner uuid, prefix text)
 begin atomic
   select p.slug
   from public.booking_pages p
+  join public.workspaces w on w.id = p.workspace_id
   where p.owner_user_id = crm_booking_owner_slugs.owner
+    and w.deleted_at is null
     and p.deleted_at is null
     and pg_catalog.left(p.slug, pg_catalog.length(crm_booking_owner_slugs.prefix)) = crm_booking_owner_slugs.prefix
   limit 1000;

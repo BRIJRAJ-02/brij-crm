@@ -498,6 +498,18 @@ export async function updateBookingPage(
   return inWorkspace(scope, async (tx) => {
     const page = await pageToChange(tx, scope, input.pageId, true);
     const { settings } = input;
+    // The address after the owner's handle, and where the page sits on their profile, are the owner's alone: an
+    // admin of a workspace may change the page, never what is published under the person's name.
+    const placement = (['slug', 'profileSection', 'profilePosition'] as const).find(
+      (key) => settings[key] !== undefined,
+    );
+    if (placement !== undefined && memberOf(scope) !== page.ownerMemberId) {
+      throw refuseOn(
+        'FORBIDDEN',
+        'Only the page’s owner changes its address and its place on their profile.',
+        placement,
+      );
+    }
     checkTeamSchedule(page.kind, settings.scheduleId);
     checkDurations(settings.durations);
     if (settings.scheduleId !== undefined && settings.scheduleId !== null) {

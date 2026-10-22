@@ -9,9 +9,9 @@
 // Handle addresses (22 Oct 2026) load it too: `/<handle>` is the person's
 // profile, and `/<handle>/<slug>` one of their pages, found by its public key
 // and then drawn exactly as `/b/<key>` is. An old handle's address moves to
-// the current one in place; a plain `/b/<key>` visit moves to the page's
-// handle address once it has one (never inside an embed, never on a return
-// from Google, whose guest cookie lives on this origin's `/b/` path).
+// the current one in place; a plain `/b/<key>` visit shows the page's handle
+// address in place once it has one (never inside an embed, never on a return
+// from Google, which comes back to `/b/`).
 import '@crm/ui/styles.css';
 import { handleAddressOf } from '@crm/contracts/handles';
 import { createHandleClient, isDataError } from '@crm/data/booking';
@@ -109,9 +109,9 @@ function renderBooking(publicKey: string) {
             {...(handoff === undefined ? {} : { handoff })}
             {...(mayMove
               ? {
+                  // The address bar shows the handle address in place: the page already loaded carries on.
                   onAddress: (moved: string) => {
-                    globalThis.location.replace(`${moved}${globalThis.location.search}${globalThis.location.hash}`);
-                    return true;
+                    showAddress(moved);
                   },
                 }
               : {})}

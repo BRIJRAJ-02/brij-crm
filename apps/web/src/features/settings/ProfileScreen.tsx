@@ -201,7 +201,8 @@ export function ProfileScreen({ data, slug, profile, onChanged }: ProfileScreenP
                 setFailure(undefined);
                 setJustSaved(false);
               }}
-              onSubmit={save}
+              // Enter claims the suggestion while Claim shows, else saves.
+              onSubmit={profile.handle === undefined && !isHandleDirty ? claim : save}
               {...(profile.handle === undefined && !isHandleDirty && wantedHandle !== ''
                 ? {
                     after: (

@@ -187,9 +187,6 @@ function sendable(draft: BookingPageSettings): boolean {
   return (
     draft.title.trim() !== '' &&
     slugProblem(draft.slug) === undefined &&
-    Number.isInteger(draft.profilePosition) &&
-    draft.profilePosition >= 0 &&
-    draft.profilePosition <= 999 &&
     draft.durations.length > 0 &&
     (draft.location.type === 'video' || draft.location.type === 'phone' || draft.location.value.trim() !== '')
   );
@@ -216,6 +213,10 @@ export function PageEditor({
   const isLocked = !page.canChange;
   const saved = settingsOf(page);
   const [draft, setDraft] = useState(saved);
+  // The Order field's text as typed (digits only), so it can be empty while editing; the draft holds its number.
+  const [positionText, setPositionText] = useState(String(saved.profilePosition));
+  // The address's shape is said once the person leaves the field, not at every key.
+  const [isSlugLeft, setSlugLeft] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
   const dirty = changed(saved, draft);
@@ -369,10 +370,7 @@ export function PageEditor({
   const refusedTab = failure?.field === undefined ? undefined : FIELD_TABS[failure.field];
   const isWhereMissing = (location.type === 'address' || location.type === 'custom') && location.value.trim() === '';
   const hasError: Readonly<Record<PageTab, boolean>> = {
-    page:
-      refusedTab === 'page' ||
-      slugProblem(draft.slug) !== undefined ||
-      !(Number.isInteger(draft.profilePosition) && draft.profilePosition >= 0 && draft.profilePosition <= 999),
+    page: refusedTab === 'page' || slugProblem(draft.slug) !== undefined,
     meeting:
       refusedTab === 'meeting' ||
       draft.title.trim() === '' ||
@@ -515,6 +513,8 @@ export function PageEditor({
                       onDiscard={() => {
                         week.discard();
                         setDraft(saved);
+                        setPositionText(String(saved.profilePosition));
+                        setSlugLeft(false);
                         setFailure(undefined);
                         setChipsError(undefined);
                         setJustSaved(false);
@@ -537,16 +537,23 @@ export function PageEditor({
                         // The address after the owner's handle (22 Oct 2026); with no handle yet, the page keeps its
                         // /b/ link and the description says where to pick one.
                         {...(page.handle === undefined ? {} : { prefix: `/${page.handle}/` })}
-                        hint={page.handle === undefined ? strings.slugNoHandle : strings.slugHint}
+                        hint={
+                          page.handle === undefined
+                            ? strings.slugNoHandle
+                            : draft.slug !== page.slug && page.status === 'live'
+                              ? strings.slugChanging
+                              : strings.slugHint
+                        }
                         maxLength={60}
                         isRequired
                         isReadOnly={isLocked}
-                        onChange={(value) => change({ slug: value.toLowerCase() })}
-                        {...(slugProblem(draft.slug) === undefined
-                          ? failure?.field === 'slug'
+                        onChange={(value) => change({ slug: value.toLowerCase().replace(/\s+/g, '-') })}
+                        onBlur={() => setSlugLeft(true)}
+                        {...(isSlugLeft && slugProblem(draft.slug) !== undefined
+                          ? { error: slugProblem(draft.slug) }
+                          : failure?.field === 'slug'
                             ? { error: failure.message }
-                            : {}
-                          : { error: slugProblem(draft.slug) })}
+                            : {})}
                       />
                       <Field
                         label={strings.description}
@@ -585,17 +592,17 @@ export function PageEditor({
                           />
                           <Field
                             label={strings.profilePosition}
-                            value={String(draft.profilePosition)}
+                            value={positionText}
                             hint={strings.profilePositionHint}
                             inputMode="numeric"
                             maxLength={3}
                             isReadOnly={isLocked}
-                            onChange={(value) => change({ profilePosition: value === '' ? 0 : Number(value) })}
-                            {...(Number.isInteger(draft.profilePosition) &&
-                            draft.profilePosition >= 0 &&
-                            draft.profilePosition <= 999
-                              ? {}
-                              : { error: strings.profilePositionInvalid })}
+                            onChange={(value) => {
+                              // Digits only: anything else never reaches the field, and empty counts as 0.
+                              const digits = value.replace(/\D/g, '').slice(0, 3);
+                              setPositionText(digits);
+                              change({ profilePosition: digits === '' ? 0 : Number(digits) });
+                            }}
                           />
                         </FieldGroup>
                       )}

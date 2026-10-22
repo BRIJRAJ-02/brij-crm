@@ -103,6 +103,8 @@ export const strings = {
   noMatchesText: 'Try fewer or other words.',
   showMore: 'Show more',
   moreFailed: 'More links didn’t load. Try again.',
+  searchFailed: 'That search didn’t go through. Try again in a moment.',
+  sectionLinks: (section: string) => `${section} links`,
   profileNotFound: 'No one has this address.',
   // The guest page.
   titles: {

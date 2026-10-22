@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ComponentProps } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
@@ -155,11 +156,33 @@ export const Profile: Story = {
   },
 };
 
-/** A profile while it loads: the card as a skeleton. */
+/** A profile while it loads: the card and the rows as skeletons. */
 export const ProfileLoading: Story = {
   render: () => (
     <Stage width="fill" height="page">
-      <BookingProfile />
+      <BookingProfile>
+        <LinkList
+          label="Booking links"
+          searchLabel="Search links"
+          isToolbarHidden
+          status="loading"
+          rows={[]}
+          onOpen={fn()}
+        />
+      </BookingProfile>
+    </Stage>
+  ),
+};
+
+/** A profile with nothing public to book yet. */
+export const ProfileEmpty: Story = {
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingProfile person={{ name: 'Ada Lovelace', id: 'ada' }} claimHref="https://timefix.ai">
+        <EmptyState title="Nothing to book here yet" icon="calendar-clock">
+          This person has no public booking links right now.
+        </EmptyState>
+      </BookingProfile>
     </Stage>
   ),
 };
