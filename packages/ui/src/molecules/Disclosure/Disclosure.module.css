@@ -208,6 +208,13 @@
     padding: 0;
   }
 
+  /* Under rows inset by space-8 with a 16px control first (RowInset: a TaskList's footer): the chevron sits on
+     the rows' checkboxes and the words on their titles, and the pill stays inside the part, which may clip. */
+  .root[data-variant='quiet'][data-inset='row'] .trigger {
+    gap: var(--space-8);
+    margin-inline-start: calc(var(--space-8) - var(--space-6));
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .chevron,
     .panel {
