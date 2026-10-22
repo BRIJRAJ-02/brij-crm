@@ -34,6 +34,7 @@ export function AllFeatures({ groups }: AllFeaturesProps) {
       </Button>
       <Modal
         variant="window"
+        isWide
         title="Everything in Timefix"
         icon="layout-grid"
         context={`${total} features, all live today`}

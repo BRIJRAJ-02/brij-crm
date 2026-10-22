@@ -41,6 +41,11 @@
     inline-size: min(100%, var(--size-dialog-wide));
   }
 
+  /* A wide window: a reference laid out as a settings page, a rail beside its sections. */
+  .root[data-variant='window'][data-wide] {
+    inline-size: min(100%, calc(var(--size-dialog-wide) + var(--size-column)));
+  }
+
   .dialog {
     display: flex;
     flex-direction: column;

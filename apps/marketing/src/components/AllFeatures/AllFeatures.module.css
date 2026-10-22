@@ -1,7 +1,7 @@
-/* AllFeatures: the sheet inside the library's Modal, laid out as the app's settings page: the areas as a column of
-   quiet rows on the left, the sections on the right (the Modal's body is the scroll box, and nothing in the sheet is
-   sticky, so nothing overlaps as it scrolls); one column under the compact width. Each section is a hairline apart,
-   its features two to a row with a check. */
+/* AllFeatures: the sheet inside the library's wide Modal, laid out as the app's settings page: the areas as a
+   column of quiet rows on the left, held in view at the body's inset while the sections scroll on the right (the
+   Modal's body is the scroll box); one column under the compact width. Each section is a hairline apart, its
+   features two to a row with a check. */
 @layer components {
   /* The sheet is the size container; the layout inside it answers to its width (a query never styles its own container). */
   .sheet {
@@ -88,6 +88,14 @@
     .layout {
       grid-template-columns: calc(var(--size-column) + var(--space-16)) minmax(0, 1fr);
       gap: var(--space-32);
+    }
+
+    /* The rail stays in view while the sections scroll (the Modal's body is the scroll box), held the body's own
+       inset under the title bar, where it started, so it never jumps or overlaps. */
+    .nav {
+      position: sticky;
+      inset-block-start: var(--overlay-inset);
+      align-self: start;
     }
   }
 }
