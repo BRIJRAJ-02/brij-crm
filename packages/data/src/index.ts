@@ -2273,10 +2273,15 @@ export function createDataLayer({
 
   /** Follows a job like any this tab started: live until it ends, then `onJobFinished`. */
   async function followJob(workspace: string, jobId: string): Promise<void> {
-    // One held already is live: following it again would only read it twice.
-    if (jobs.get(workspace, jobId) !== undefined) return;
+    // One held already (a jobs list or a live event read it first) is followed from that copy, with no second read.
+    const held = jobs.get(workspace, jobId);
+    if (held !== undefined) {
+      jobs.track(workspace, held, true);
+      return;
+    }
     const job = await call((options) => api.jobs.get({ workspace, jobId }, options)).catch(() => undefined);
-    if (job !== undefined) jobs.track(workspace, job);
+    // It may have ended before this read (a small export): the app still hears the end, once.
+    if (job !== undefined) jobs.track(workspace, job, true);
   }
 
   /**
