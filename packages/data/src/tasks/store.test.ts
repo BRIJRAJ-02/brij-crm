@@ -657,6 +657,26 @@ describe('the tasks store (spec 0019)', () => {
       expect(titles(assigned.getSnapshot())).toEqual(['Task 2']);
       expect(calls.filter((call) => call === 'list assigned open')).toHaveLength(2);
     });
+
+    it('reads a list nobody shows again when a screen shows it after a tasks event, and not before', async () => {
+      const server = new Map<string, TaskView>();
+      const { store, calls } = setup(server);
+      const assigned = store.mine(WS, 'assigned', 'open');
+      // Home read it, then let go of it before any task was made.
+      const release = assigned.retain();
+      await assigned.ready();
+      release();
+      const made = task(1, { assigneeMemberId: ME, records: [] });
+      server.set(made.id, made);
+      store.changed(WS, { seq: 9, at: '2026-10-12T10:00:00.000Z', kind: 'tasks', recordIds: [], taskIds: [made.id] });
+      await flush();
+      expect(calls.filter((call) => call === 'list assigned open')).toHaveLength(1);
+      // Tasks shows it: it reads again rather than show the empty list it held.
+      assigned.retain();
+      await flush();
+      expect(titles(assigned.getSnapshot())).toEqual(['Task 1']);
+      expect(calls.filter((call) => call === 'list assigned open')).toHaveLength(2);
+    });
   });
 
   it('deletes a task out of every list at once, and Undo brings it back (AC-445)', async () => {

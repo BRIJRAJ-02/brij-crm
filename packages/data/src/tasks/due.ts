@@ -115,8 +115,9 @@ export function createDueTasks(deps: DueTasksDeps) {
       source: {
         retain: () => {
           made.holders += 1;
-          // Each new holder reads: the count may have moved while nobody showed it.
-          read(made);
+          // Each new holder reads: the count may have moved while nobody showed it. A read already out is that
+          // read (two badges taking a new day at once ask once).
+          if (!made.isReading) read(made);
           return () => {
             made.holders -= 1;
             if (made.holders === 0 && made.listeners.size === 0) entries.delete(key);

@@ -699,6 +699,13 @@ export function createTasksStore(deps: TasksDeps) {
       /** Settles now (a resync). */
       settleNow: settle,
       /**
+       * A change it may hold while no screen shows it: no read now, but the
+       * next screen to show it reads it again rather than its old rows.
+       */
+      staleUnlessShown() {
+        if (first !== undefined && retained === 0) stale = true;
+      },
+      /**
        * A task someone else made or linked here, read at once on its event
        * (AC-432): it takes its place in the list's order when it falls inside
        * the loaded rows, or the end when every row is loaded; the settle that
@@ -1175,6 +1182,9 @@ export function createTasksStore(deps: TasksDeps) {
         workspace,
         event.taskIds.filter((id) => shows || held.has(id)),
       );
+      // A My tasks list nobody shows reads nothing now, but reads afresh when a screen shows it again (one Home read
+      // before tasks were made otherwise showed Tasks empty).
+      for (const list of listsOf(workspace)) if (list.mine !== undefined) list.staleUnlessShown();
       dirtyRecords(workspace, event.recordIds, true);
       deps.timelines(workspace, event.recordIds);
     },

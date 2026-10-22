@@ -88,7 +88,8 @@ test('My tasks: the four groups, the switches in the address, a tick, and midnig
   const upcomingAt = rows.findIndex((row) => row.includes('Upcoming'));
   expect(overdueAt).toBeLessThan(graceAt);
   expect(graceAt).toBeLessThan(upcomingAt);
-  expect(calls).toEqual([]);
+  // The list asks nothing; only the sidebar's Tasks badge, a count by date (spec 0034, AC-924), reads the new day's.
+  expect(calls.filter((url) => !url.endsWith('/api/rpc/tasks/due'))).toEqual([]);
 
   // The tabs work by keyboard: arrows move the filter, and the address follows.
   await page.getByRole('tab', { name: 'Assigned to me' }).focus();
