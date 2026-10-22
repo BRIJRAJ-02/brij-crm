@@ -115,7 +115,7 @@ export async function routeBooking(
 /**
  * Records what routing did for a booking (AC-1607, AC-1611): the form's
  * decision gets its booking; the page's own decision is stored with it, one
- * per booking (migration 0087), `hosts` null when the routed hosts weren't
+ * per booking (migration 0089), `hosts` null when the routed hosts weren't
  * free and the rotation picked.
  */
 export async function recordBookingRouting(

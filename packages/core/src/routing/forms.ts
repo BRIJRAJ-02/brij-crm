@@ -30,7 +30,7 @@ export interface SubmissionRouting {
  * Decides a stored submission's route and records the decision (AC-1607).
  * Answers the matching rule's route, or undefined for the fallback (the
  * form's After someone sends it). A form with no rules records nothing. One
- * decision per submission (migration 0087): when one is stored already, it
+ * decision per submission (migration 0089): when one is stored already, it
  * stands and its route is answered, so a submission never decides twice.
  */
 export async function routeSubmission(tx: WorkspaceTx, input: SubmissionRouting): Promise<Route | undefined> {

@@ -40,13 +40,12 @@ export interface RulesCardProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly surface: RuleSurface;
-  /**
-   * The surface the report is read for; absent before the surface exists (no report yet). On a team page it also
-   * names the page whose rules the data layer holds: the card shows those, so a change shows at once and a refusal
-   * puts it back.
-   */
+  /** The surface the report is read for; absent before the surface exists, or for a reader who can't change it. */
   readonly report?: ReportSurface;
-  /** The rules as the caller has them: a form's draft; on a team page, the first paint until the data layer holds the page. */
+  /**
+   * The rules as the caller has them: a form's draft. On a team page only until the data layer holds the page: the
+   * card shows the layer's copy (`data.routing.pageRules`), so a change shows at once and a refusal puts it back.
+   */
   readonly rules: readonly RoutingRule[];
   /** What a condition may read; the visit's hidden fields (UTM tags, page, referrer) come after them on every surface. */
   readonly facts: readonly Fact[];
@@ -65,7 +64,8 @@ export interface RulesCardProps {
   readonly onRulesChange: (rules: readonly RoutingRule[]) => Promise<void>;
 }
 
-// The rule being edited or removed goes by its id, so a list read landing meanwhile never moves the change to another.
+// The rule being edited (and the one being removed) is found again by its id when saved, so an answer landing
+// meanwhile that moves the rules never puts the change on another rule.
 type Editing = { readonly index: number; readonly rule?: RoutingRule } | undefined;
 
 const REPORT_COLUMNS: readonly TableColumn[] = [
@@ -81,12 +81,8 @@ const REPORT_COLUMNS: readonly TableColumn[] = [
  * rules come from the data layer's copy of the page (`data.routing.pageRules`), never a copy of the card's own.
  */
 export function RulesCard(props: RulesCardProps) {
-  const { report } = props;
-  return report?.kind === 'booking_page' ? (
-    <PageRulesCard {...props} pageId={report.pageId} />
-  ) : (
-    <RulesCardBody {...props} />
-  );
+  const { surface } = props;
+  return surface.kind === 'page' ? <PageRulesCard {...props} pageId={surface.pageId} /> : <RulesCardBody {...props} />;
 }
 
 /**
