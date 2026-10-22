@@ -104,10 +104,13 @@ function useGroupStore(
   return key === undefined ? undefined : held?.store;
 }
 
+/** The empty board's one snapshot: the same object every read, as useSyncExternalStore needs. */
+const NO_BOARD_SNAPSHOT: ReturnType<BoardStore<RecordsView>['getSnapshot']> = { status: 'loading', columns: [] };
+
 /** An empty board while none is held: nothing to read. */
 const NO_BOARD: BoardStore<RecordsView> = {
   subscribe: () => () => undefined,
-  getSnapshot: () => ({ status: 'loading', columns: [] }),
+  getSnapshot: () => NO_BOARD_SNAPSHOT,
   retry: () => undefined,
   retain: () => () => undefined,
   isRetained: () => false,
