@@ -28,11 +28,16 @@ export interface AvatarProps {
   readonly isDecorative?: boolean;
 }
 
+/** The two small sizes, 16px and 20px, show one initial: a pair doesn't fit at a readable size. */
+const ONE_INITIAL: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['xs', 'sm']);
+
 /** A person's or company's picture, or their initials on a hue tile: people are circles, companies squares. */
 export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDecorative = false }: AvatarProps) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const image = safeImageSrc(src);
   const showImage = image !== undefined && failed !== image;
+  // One initial is the first word's: initialsOf on that word alone, so a letter built of several code points stays whole.
+  const initials = initialsOf(ONE_INITIAL.has(size) ? (name.trim().split(/\s+/u)[0] ?? '') : name);
   return (
     <span
       className={styles.root}
@@ -51,7 +56,7 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
           }}
         />
       ) : (
-        initialsOf(name)
+        initials
       )}
     </span>
   );

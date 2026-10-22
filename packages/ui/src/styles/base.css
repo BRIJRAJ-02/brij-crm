@@ -50,6 +50,21 @@
     --popover-item-inline: var(--space-8);
     --popover-text-inset: calc(var(--popover-inset) + var(--popover-item-inline));
     --popover-panel-inset: var(--space-8);
+    /* The avatar scale (the owner, 22 October 2026: "make the text smaller"): each size's diameter, and its
+       initials at about 40% of it, so the letters keep a clear margin inside the tile at every size. The two
+       small sizes show one initial, a touch larger, since a lone letter has room a pair doesn't. */
+    --avatar-xs: var(--size-icon);
+    --avatar-sm: var(--size-chip);
+    --avatar-md: var(--space-24);
+    --avatar-lg: var(--space-32);
+    --avatar-title: var(--size-toolbar);
+    --avatar-xl: calc(var(--size-toolbar) + var(--space-24));
+    --avatar-initials-xs: calc(var(--avatar-xs) * 0.5);
+    --avatar-initials-sm: calc(var(--avatar-sm) * 0.45);
+    --avatar-initials-md: calc(var(--avatar-md) * 0.4);
+    --avatar-initials-lg: calc(var(--avatar-lg) * 0.4);
+    --avatar-initials-title: calc(var(--avatar-title) * 0.4);
+    --avatar-initials-xl: calc(var(--avatar-xl) * 0.4);
   }
 
   /* Toasts are view transitions (see provider/toasts.tsx): a new one rises

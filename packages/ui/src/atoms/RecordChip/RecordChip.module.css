@@ -1,6 +1,8 @@
 /* RecordChip: a 20px chip with a 16px avatar (or an actor's icon) and the
-   name. Flat chips drop the edge for dense places; plain ones drop the fill
-   too, the avatar and name sitting in a line of text. */
+   name. The avatar sits the same 2px in from the chip's top, bottom and start
+   edges (the start padding gives back the hairline border's width). Flat chips
+   drop the edge for dense places; plain ones drop the fill too, the avatar and
+   name sitting in a line of text. */
 @layer components {
   .root {
     display: inline-flex;
@@ -8,7 +10,7 @@
     gap: var(--space-4);
     max-inline-size: 100%;
     block-size: var(--size-chip);
-    padding-inline: var(--space-2) var(--space-6);
+    padding-inline: calc(var(--space-2) - var(--border-width-hairline)) var(--space-6);
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface-raised);
