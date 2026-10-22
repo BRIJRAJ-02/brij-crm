@@ -1817,9 +1817,18 @@ export function createRecordsLayer({
       },
       hidesMoved: (id) => movedOut.has(id),
       withdrawn: (id) => {
-        if (!created.delete(id)) return;
-        const rest = inner.pins().filter((pin) => pin.id !== id);
-        inner.setPins(rest.map((pin) => ({ ...pin, index: pin.index - 1 })));
+        // Made here, or (on a board) moved here before the create answered: either pin goes.
+        const wasMade = created.delete(id);
+        const wasMovedIn = movedIn.delete(id);
+        if (!wasMade && !wasMovedIn) return;
+        // Only the pins below it move up one; one above (a newer draft) keeps its place.
+        const at = inner.pins().find((pin) => pin.id === id)?.index ?? 0;
+        inner.setPins(
+          inner
+            .pins()
+            .filter((pin) => pin.id !== id)
+            .map((pin) => (pin.index > at ? { ...pin, index: pin.index - 1 } : pin)),
+        );
       },
       letGo: (ids) => {
         const leaving = inner.pins().filter((pin) => ids.has(pin.id));
