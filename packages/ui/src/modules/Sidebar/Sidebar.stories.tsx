@@ -348,6 +348,9 @@ export const CollapsedWorkspaceBusy: Story = {
     await expect(button.getBoundingClientRect().right).toBeLessThanOrEqual(nav.getBoundingClientRect().right);
     await userEvent.click(button);
     await expect(document.querySelector('[role="menu"]')).toBeNull();
+    // The rail's name tooltip gone before the screenshot, so the shot is the same every run.
+    await userEvent.unhover(button);
+    await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull(), { timeout: 4000 });
   },
 };
 

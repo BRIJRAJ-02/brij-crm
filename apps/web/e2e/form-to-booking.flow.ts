@@ -9,19 +9,19 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { codeFor } from './mailpit.ts';
+import { firstRun } from './people.ts';
 
 /** Signs a new person in through Mailpit and names their workspace, patient with a busy machine. */
 async function newWorkspace(page: Page, email: string, slug: string): Promise<void> {
   const patient = { timeout: 120_000 };
   await page.goto('/sign-in');
   await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: /^Continue( with email)?$/ }).click();
   await expect(page).toHaveURL(/\/verify/, patient);
   await page.getByLabel('Code').fill(await codeFor(page.request, email));
   await expect(page).toHaveURL(/\/welcome$/, patient);
-  await page.getByLabel('Your name').fill('Ada Lovelace');
-  await page.getByLabel('Web address').fill(slug);
-  await page.getByRole('button', { name: 'Create workspace' }).click();
+  // The stepped first run (name, details, address, calendar), as every flow walks it.
+  await firstRun(page, slug);
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/`), patient);
 }
 

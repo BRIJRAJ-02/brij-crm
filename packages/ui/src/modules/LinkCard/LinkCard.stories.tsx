@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -123,6 +123,8 @@ export const Form: Story = {
       'Accepting submissions',
     );
     await userEvent.unhover(canvas.getByRole('switch', { name: 'Accepting submissions on Contact us' }));
+    // Gone before the screenshot, so the shot never catches it closing.
+    await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull(), { timeout: 4000 });
   },
 };
 
