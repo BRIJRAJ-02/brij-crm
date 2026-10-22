@@ -4,7 +4,7 @@
 // Main task: read who may be invited as what once the dialog opens, then hand over to InviteDialog.
 // Leaves out: the invitations list and the invite link (Settings › Members holds those).
 import type { DataLayer, RoleOption } from '@crm/data';
-import { Button, Modal, Skeleton } from '@crm/ui';
+import { Button, Callout, Modal, Skeleton, useDelayedLoading } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { InviteDialog } from './InviteDialog.tsx';
 import { invitableRoles } from './members.ts';
@@ -39,6 +39,8 @@ export function InviteTeamDialog({ data, slug, isOpen, onClose, onInvited }: Inv
   const [ready, setReady] = useState<Ready | undefined>(undefined);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // The reads are usually held already, so the skeleton shows only for a slow one.
+  const isSlow = useDelayedLoading(isOpen && ready === undefined && !failed);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -103,7 +105,7 @@ export function InviteTeamDialog({ data, slug, isOpen, onClose, onInvited }: Inv
           )
         }
       >
-        {failed ? strings.inviteLoadFailed : <Skeleton lines={2} />}
+        {failed ? <Callout tone="danger">{strings.inviteLoadFailed}</Callout> : isSlow && <Skeleton lines={2} />}
       </Modal>
     );
   }

@@ -151,7 +151,11 @@ export function InviteRows({
                   type(row, value);
                 }}
                 onBlur={() => onBlurRow?.(row.id)}
-                onSubmit={() => {
+                // Enter is the rows' own (the next row, a new row, or send), never the browser's submit of a
+                // form around them, which would send while a row is being added.
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+                  event.preventDefault();
                   const next = rows[index + 1];
                   if (next !== undefined) fields.current.get(next.id)?.focus();
                   // Enter on an empty last row sends, rather than adding empty rows.

@@ -32,12 +32,14 @@ const [rows, setRows] = useState(() => [createInviteRow('member')]);
 
 ## Keyboard
 
+Enter is the rows' own, so InviteRows works inside a library `Form` (first run) as well as a Modal: it never also submits the form around it.
+
 - Enter in a row goes to the next row; in the last row it adds one; in an empty last row it calls `onSubmit` (the screen sends).
 - Tab moves email, role and remove along each row, then to "+ Add another". Adding focuses the new row, removing the row before, a paste the last row filled.
 
 ## States
 
-One empty row, several rows, with errors, without roles, full (`max`), disabled, and a phone's width.
+One empty row, several rows, with errors, without roles, full (`max`), disabled, and a phone's width. No loading or read only state: a screen shows its own loading before it has the roles, and someone who can't invite never sees the form.
 
 ## Differences from the artifact
 

@@ -36,7 +36,7 @@ export interface InviteDialogProps {
 /**
  * The Invite dialog: the one invite form (`useInvite` with the library's
  * InviteRows), a row per person with that row's role, what each role can do
- * in the tip by the Role column, the plus at the last row's end. An address
+ * in the tip by the Role column, "+ Add another" under the rows. An address
  * that already belongs or is already invited is refused in its row before
  * anything is sent. Invite sends every valid row, one call per role; the
  * dialog then says who was invited, who already belongs, and whose email

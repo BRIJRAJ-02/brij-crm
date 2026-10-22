@@ -51,7 +51,6 @@ export type CardProps = CardBase &
         /** Its heading. */
         readonly title?: string;
         readonly size?: never;
-        readonly preview?: never;
       }
     | {
         readonly placement: 'page';
@@ -59,14 +58,6 @@ export type CardProps = CardBase &
         readonly title: string;
         /** How wide the page card is: `md` (the default) or `sm`. */
         readonly size?: CardPageSize;
-        /**
-         * A live preview beside the card's content, from `bp-page-compact` up
-         * (first run's workspace sketch): the card widens to hold both, the
-         * content keeps `size-panel`, and the preview fills the rest on
-         * `surface-subtle`. Narrower, the preview is left out. It is
-         * decoration: hidden from assistive technology, and inert.
-         */
-        readonly preview?: ReactNode;
       }
   );
 
@@ -81,7 +72,6 @@ export function Card({
   tone = 'default',
   placement = 'inline',
   size,
-  preview,
   isBusy = false,
 }: CardProps) {
   const level = useContext(CardTitleLevel);
@@ -128,19 +118,9 @@ export function Card({
       data-tone={tone}
       data-placement={placement}
       data-size={placement === 'page' ? (size ?? 'md') : undefined}
-      data-preview={preview === undefined ? undefined : ''}
       aria-busy={isBusy || undefined}
     >
-      {preview === undefined ? (
-        content
-      ) : (
-        <>
-          <div className={styles.column}>{content}</div>
-          <div className={styles.preview} aria-hidden="true" inert>
-            {preview}
-          </div>
-        </>
-      )}
+      {content}
     </Root>
   );
 }

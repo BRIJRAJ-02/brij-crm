@@ -96,19 +96,17 @@ export const PageSmall: Story = {
   },
 };
 
-/**
- * A page card with a preview beside it (first run's split card): the content keeps its narrow column, and the preview,
- * decoration, sits beside it out of the accessibility tree from 1024px up. An eyebrow leads the title.
- */
-export const PageWithPreview: Story = {
+/** A small page card with an eyebrow leading its title (first run's Back and step count). */
+export const PageWithEyebrow: Story = {
   args: {
     placement: 'page',
     size: 'sm',
     title: 'Your workspace',
     description: 'Name it for your team or company.',
     eyebrow: <Button variant="ghost" icon="arrow-left" label="Back" />,
-    preview: <DescriptionList items={[{ term: 'Workspace', description: 'Halcyon Labs' }]} />,
   },
+  // New on 22 October 2026 (it replaced the preview story): its baseline comes with the next `pnpm test:visual --update`.
+  parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Card {...args}>
       <Button variant="primary" size="lg" isFullWidth="center">
@@ -116,13 +114,9 @@ export const PageWithPreview: Story = {
       </Button>
     </Card>
   ),
-  play: async ({ canvas, canvasElement }) => {
+  play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Your workspace' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Back' })).toBeInTheDocument();
-    const preview = canvasElement.querySelector('[inert]');
-    await expect(preview).toHaveAttribute('aria-hidden', 'true');
-    // Out of the accessibility tree: its words aren't found by role or text queries that respect aria-hidden.
-    await expect(canvas.queryByRole('term')).toBeNull();
   },
 };
 

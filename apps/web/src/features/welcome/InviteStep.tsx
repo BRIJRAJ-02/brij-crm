@@ -4,7 +4,7 @@
 // where roles were read, then Send invites, or Skip for now; then on to the calendar step or the workspace.
 // Leaves out: the list of open invitations and the invite link (Settings › Members holds those).
 import type { DataLayer, RoleOption } from '@crm/data';
-import { Button, Callout, InviteRows } from '@crm/ui';
+import { Button, Callout, Form, InviteRows } from '@crm/ui';
 import { useEffect, useRef } from 'react';
 import { useInvite } from '../settings/useInvite.tsx';
 import { strings } from './strings.ts';
@@ -63,19 +63,19 @@ export function InviteStep({ data, slug, roles, onDone }: InviteStepProps) {
   }
 
   return (
-    <>
-      {failure !== undefined && (
-        <Callout tone="danger" isAnnounced>
-          {failure}
-        </Callout>
-      )}
+    <Form
+      submitLabel={strings.sendInvites}
+      busyLabel={strings.sendingInvites}
+      isBusy={isBusy}
+      refusals={failure === undefined ? [] : [{ code: 'INVITE', message: failure }]}
+      onSubmit={invite.send}
+      actions={
+        <Button variant="ghost" size="lg" isFullWidth="center" isDisabled={isBusy} onPress={onDone}>
+          {strings.skipCalendar}
+        </Button>
+      }
+    >
       <InviteRows {...invite.rowsProps} />
-      <Button variant="primary" size="lg" isFullWidth="center" isPending={isBusy} onPress={invite.send}>
-        {isBusy ? strings.sendingInvites : strings.sendInvites}
-      </Button>
-      <Button variant="ghost" size="lg" isFullWidth="center" isDisabled={isBusy} onPress={onDone}>
-        {strings.skipCalendar}
-      </Button>
-    </>
+    </Form>
   );
 }
