@@ -31,8 +31,6 @@ import type {
   RotationMemberInput,
   RotationSettings,
   RotationView,
-  RoutingReport,
-  RoutingReportInput,
   RoutingRules,
   TeamHosts,
   TaskMine,
@@ -111,6 +109,12 @@ import { stageChunks } from './imports/stage.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
 import { createHomeStore, type HomeHeld, type HomeMetricsState, type TeamTodayState } from './home/store.ts';
+import {
+  createRoutingReports,
+  type RoutingReportDays,
+  type RoutingReportHeld,
+  type RoutingReportSurface,
+} from './routing/reports.ts';
 import {
   createAccountSecurityStore,
   isFresh as isSessionFresh,
@@ -378,6 +382,12 @@ export type {
 } from './activity/feed.ts';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 export type { HomeHeld, HomeMetricsState, TeamTodayState } from './home/store.ts';
+export type {
+  RoutingReportDays,
+  RoutingReportHeld,
+  RoutingReportState,
+  RoutingReportSurface,
+} from './routing/reports.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -1718,6 +1728,13 @@ export function createDataLayer({
         beforeRead(input.workspace).then(() => call((options) => api.home.teamToday(input, options))),
       metrics: (input) => beforeRead(input.workspace).then(() => call((options) => api.home.metrics(input, options))),
     },
+  });
+
+  // Routing reports (spec 0043, AC-1612): held per workspace, surface and window, read again on return and after a
+  // no show mark lands.
+  const routingReports = createRoutingReports({
+    report: (workspace, surface, days) =>
+      beforeRead(workspace).then(() => call((options) => api.routing.report({ workspace, surface, days }, options))),
   });
 
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
@@ -3070,11 +3087,12 @@ export function createDataLayer({
     },
     routing: {
       /**
-       * A form's or a team page's per rule report (spec 0043, AC-1612): read when its card opens and when the window
-       * changes. Counts, not records, so nothing here is held between reads.
+       * A form's or a team page's per rule report (spec 0043, AC-1612), held while its card shows it
+       * (`useRoutingReport`): read when first held, again when the person comes back to the page, and again after
+       * this tab marks a booking no show.
        */
-      report: (workspace: string, surface: RoutingReportInput['surface'], days: 30 | 90): Promise<RoutingReport> =>
-        call((options) => api.routing.report({ workspace, surface, days }, options)),
+      report: (workspace: string, surface: RoutingReportSurface, days: RoutingReportDays): RoutingReportHeld =>
+        routingReports.view(workspace, surface, days),
     },
     home: {
       /**
@@ -3150,6 +3168,8 @@ export function createDataLayer({
           await call((options) =>
             api.bookings.markNoShow({ workspace, bookingId, noShow, mutationId: mintId() }, options),
           );
+          // The routing report counts no shows per rule, and no change event names a booking yet.
+          routingReports.reloadWorkspace(workspace);
         } catch (error) {
           restore();
           throw error;
