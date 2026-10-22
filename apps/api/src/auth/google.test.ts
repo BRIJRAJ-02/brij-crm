@@ -6,6 +6,7 @@
 // claims (email, email_verified) are what Google would say.
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
+import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { APP_URL, TEST_EDGE_SECRET } from '../testing.ts';
@@ -25,6 +26,8 @@ import {
 const { identityUrl } = inject('testDatabase');
 const GOOGLE = { GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com', GOOGLE_CLIENT_SECRET: 'test-secret' };
 const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+/** A PNG's first bytes: what the fake Google's picture hosts answer. */
+const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 let db: Database;
 let identity: IdentityStore;
 
@@ -82,6 +85,10 @@ function fakeGoogle(person: GooglePerson): {
   const requests: TokenRequest[] = [];
   vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
+    // Google's picture hosts answer every picture as a small PNG.
+    if (url.startsWith('https://lh3.googleusercontent.com/')) {
+      return new Response(PNG, { headers: { 'content-type': 'image/png' } });
+    }
     if (!url.startsWith(TOKEN_ENDPOINT)) return real(input, init);
     const body = input instanceof Request ? await input.clone().text() : bodyText(init?.body);
     requests.push(new URLSearchParams(body));
@@ -309,7 +316,7 @@ describe('Google sign in, against a fake Google (AC-28)', () => {
     expect(await identity.userImage(user.id)).toBe(picture);
   });
 
-  it('fills a picture an account lacks from Google (an email code account linked later), and never replaces one', async () => {
+  it('fills a picture an account lacks from Google (an email code account linked later), and keeps it Google’s current one', async () => {
     const { app } = signInApp({ db, identity }, GOOGLE);
     const email = newEmail();
     const userId = randomUUID();
@@ -324,11 +331,72 @@ describe('Google sign in, against a fake Google (AC-28)', () => {
     fakeGoogle({ sub, email, emailVerified: true, picture });
     await googleRoundTrip(app, newIp());
     expect(await identity.userImage(userId)).toBe(picture);
-    // Signed in again with a new picture at Google: the account keeps the one it has.
+    // Signed in again with a new picture at Google: the account takes it.
     vi.unstubAllGlobals();
-    fakeGoogle({ sub, email, emailVerified: true, picture: 'https://lh3.googleusercontent.com/a/newer=s96-c' });
+    const newer = 'https://lh3.googleusercontent.com/a/newer=s96-c';
+    fakeGoogle({ sub, email, emailVerified: true, picture: newer });
     await googleRoundTrip(app, newIp());
-    expect(await identity.userImage(userId)).toBe(picture);
+    expect(await identity.userImage(userId)).toBe(newer);
+    // A picture from anywhere else (one day, an upload) is never replaced by Google's.
+    const own = 'https://pictures.example/own.png';
+    await testQuery(identityUrl, `update auth."user" set image = $2 where id = $1`, [userId, own]);
+    await googleRoundTrip(app, newIp());
+    expect(await identity.userImage(userId)).toBe(own);
+  });
+
+  it('saves no picture for a sign in held back for its second step: only one that stands does', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const email = newEmail();
+    const userId = randomUUID();
+    await testQuery(
+      identityUrl,
+      `insert into auth."user" (id, name, email, email_verified, two_factor_enabled) values ($1, '', $2, true, true)`,
+      [userId, email],
+    );
+    fakeGoogle({
+      sub: randomUUID(),
+      email,
+      emailVerified: true,
+      picture: 'https://lh3.googleusercontent.com/a/held=s96-c',
+    });
+    const held = await googleRoundTrip(app, newIp());
+    expect(held.location).toBe(`${APP_URL}/two-factor`);
+    expect(await identity.userImage(userId)).toBeUndefined();
+  });
+
+  it('serves the person’s own Google picture to Settings › Profile from our origin, to them alone', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const email = newEmail();
+    fakeGoogle({
+      sub: randomUUID(),
+      email,
+      emailVerified: true,
+      picture: 'https://lh3.googleusercontent.com/a/own=s96-c',
+    });
+    const { cookie } = await googleRoundTrip(app, newIp());
+    const client = rpcClient(app, cookie);
+    const { workspace } = await client.workspaces.create({
+      id: newId(),
+      name: 'Acme',
+      slug: `picture-${randomUUID().slice(0, 8)}`,
+      memberName: 'Grace',
+    });
+    const { image } = await client.profile.get({ workspace: workspace.slug });
+    expect(image).toMatch(/^\/api\/me\/picture\?v=[0-9a-f]{12}$/);
+    const get = (path: string, withCookie: boolean) =>
+      app.fetch(
+        new Request(`${APP_URL}${path}`, {
+          headers: { ...(withCookie ? { cookie } : {}), 'x-forwarded-for': newIp(), [EDGE_HEADER]: TEST_EDGE_SECRET },
+        }),
+      );
+    const own = await get(image ?? '', true);
+    expect(own.status).toBe(200);
+    expect(own.headers.get('content-type')).toBe('image/png');
+    expect(own.headers.get('cache-control')).toBe('private, max-age=3600');
+    expect(new Uint8Array(await own.arrayBuffer())).toEqual(PNG);
+    // Signed out, or a version that isn't the current picture's: nothing.
+    expect((await get(image ?? '', false)).status).toBe(401);
+    expect((await get('/api/me/picture?v=000000000000', true)).status).toBe(404);
   });
 
   it('never fills a picture that isn’t https', async () => {

@@ -14,8 +14,13 @@ export const PICTURE_TIMEOUT_MS = 3000;
 export const PICTURE_MAX_BYTES = 1024 * 1024;
 /** The most redirects followed, each to Google's picture hosts only. */
 const PICTURE_REDIRECTS = 2;
-/** How long a picture is kept: an hour in the browser, a day at the edge. */
-export const PICTURE_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400';
+/**
+ * How long a public picture is kept: an hour, in the browser and at the edge. Its path is versioned (a new picture is a
+ * new path), so the hour only bounds how long a picture outlives its page, its handle or its account.
+ */
+export const PICTURE_CACHE_CONTROL = 'public, max-age=3600, s-maxage=3600';
+/** The signed in person's own picture: their browser only, never the edge. */
+export const PRIVATE_PICTURE_CACHE_CONTROL = 'private, max-age=3600';
 
 /** The image types answered. */
 export type PictureType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
@@ -128,15 +133,18 @@ export function createPictureFetch(
 }
 
 /**
- * A fetched picture as our answer: its own type and length, cacheable (an hour in the browser, a day at the edge),
- * never sniffed as anything else, for our own pages only, and inert if opened on its own.
+ * A fetched picture as our answer: its own type and length, cacheable (`PICTURE_CACHE_CONTROL` unless said), never
+ * sniffed as anything else, for our own pages only, and inert if opened on its own.
  */
-export function pictureResponse(picture: { readonly type: PictureType; readonly bytes: Uint8Array }): Response {
+export function pictureResponse(
+  picture: { readonly type: PictureType; readonly bytes: Uint8Array },
+  cacheControl: string = PICTURE_CACHE_CONTROL,
+): Response {
   return new Response(picture.bytes, {
     headers: {
       'content-type': picture.type,
       'content-length': String(picture.bytes.byteLength),
-      'cache-control': PICTURE_CACHE_CONTROL,
+      'cache-control': cacheControl,
       'x-content-type-options': 'nosniff',
       'cross-origin-resource-policy': 'same-origin',
       'content-security-policy': "default-src 'none'; sandbox",

@@ -33,6 +33,8 @@ import {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** The longest account picture URL kept (the same bound as `members.avatar_url`). */
 const USER_IMAGE_MAX = 2048;
+/** A picture on Google's picture hosts, which a newer one from Google may replace (a POSIX pattern for Postgres). */
+const GOOGLE_PICTURE = '^https://lh[3-6]\\.googleusercontent\\.com/';
 
 /** How a session last proved who it is: a second factor, or an email code or Google alone. */
 export type VerifiedWith = 'email' | 'second_factor';
@@ -295,11 +297,12 @@ export interface IdentityStore {
    */
   userImage(id: string): Promise<string | undefined>;
   /**
-   * Saves the picture only when the user has none yet, and only an https URL of at most 2048 characters: an account
-   * made with an email code and later linked to Google starts with none, and Better Auth fills it only at sign up.
-   * True when it saved.
+   * Saves Google's picture from a sign in that stands, only an https URL of at most 2048 characters, when the user
+   * has none or an older one of Google's picture hosts (`lh3` to `lh6.googleusercontent.com`): an account made with
+   * an email code and linked to Google later starts with none, and Better Auth fills it only at sign up. A picture
+   * from anywhere else is never replaced. True when it saved.
    */
-  setUserImageIfEmpty(id: string, image: string): Promise<boolean>;
+  setUserImageFromGoogle(id: string, image: string): Promise<boolean>;
   /**
    * Counts one use of `key` against `rule` in Better Auth's `auth.rate_limit`
    * table, in one atomic statement, so the limit holds across instances. For
@@ -752,14 +755,19 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
       return row?.image ?? undefined;
     },
 
-    async setUserImageIfEmpty(id, image) {
+    async setUserImageFromGoogle(id, image) {
       const trimmed = image.trim();
       if (!UUID.test(id) || trimmed.length > USER_IMAGE_MAX || !URL.canParse(trimmed)) return false;
       if (new URL(trimmed).protocol !== 'https:') return false;
       const saved = await db
         .update(user)
         .set({ image: trimmed, updatedAt: sql`now()` })
-        .where(and(eq(user.id, id), sql`coalesce(btrim(${user.image}), '') = ''`))
+        .where(
+          and(
+            eq(user.id, id),
+            sql`(coalesce(btrim(${user.image}), '') = '' or (${user.image} ~ ${GOOGLE_PICTURE} and ${user.image} is distinct from ${trimmed}))`,
+          ),
+        )
         .returning({ id: user.id });
       return saved.length > 0;
     },

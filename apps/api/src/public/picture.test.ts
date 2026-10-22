@@ -3,6 +3,7 @@
 // cacheable and nosniff for a personal page and a profile, and 404 for a team page, a picture elsewhere, or none.
 import { randomUUID } from 'node:crypto';
 import { createBookingPage, createWorkspace, newId, updateMyMemberProfile } from '@crm/core';
+import { pictureVersion } from '@crm/core/public';
 import { testScope } from '@crm/core/testing';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
@@ -151,9 +152,11 @@ afterAll(async () => {
   await db.close();
 });
 
-/** A GET as the public page sends it through the edge. */
+/** A GET as the public page sends it through the edge: `path` under `/api/public/`, or a whole `/api/public/` path. */
 const visit = (path: string) =>
-  app.request(`/api/public/${path}`, { headers: { [EDGE_HEADER]: TEST_EDGE_SECRET, 'x-forwarded-for': newIp() } });
+  app.request(path.startsWith('/api/') ? path : `/api/public/${path}`, {
+    headers: { [EDGE_HEADER]: TEST_EDGE_SECRET, 'x-forwarded-for': newIp() },
+  });
 
 /** A person with this account picture (or none), their workspace, and a personal page of theirs. */
 async function host(image: string | null) {
@@ -176,18 +179,27 @@ async function host(image: string | null) {
     userId,
   });
   const page = await createBookingPage(scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
-  return { ...created, scope, page };
+  return { ...created, userId, scope, page };
 }
 
 describe('GET /api/public/booking/:publicKey/picture', () => {
   it('answers the owner’s Google picture from our origin, cacheable and nosniff, and the facts point at it', async () => {
-    const { page } = await host(GOOGLE);
+    const { page, userId } = await host(GOOGLE);
     const facts = await visit(`booking/${page.publicKey}`);
     const body = await facts.text();
-    expect(JSON.parse(body)).toMatchObject({ hostImage: `/api/public/booking/${page.publicKey}/picture` });
+    const path = `/api/public/booking/${page.publicKey}/picture?v=${pictureVersion(userId, GOOGLE)}`;
+    expect(JSON.parse(body)).toMatchObject({ hostImage: path });
     expect(body).not.toContain('googleusercontent');
+    // Only the current version: a stale or made up one is never fetched (nor cached under it).
+    const before = fetched.length;
+    for (const stale of ['', '?v=000000000000', `?v=${pictureVersion(randomUUID(), GOOGLE)}`]) {
+      const refused = await visit(`booking/${page.publicKey}/picture${stale}`);
+      expect(refused.status, stale).toBe(404);
+      expect(refused.headers.get('cache-control')).toBe('no-store');
+    }
+    expect(fetched.length).toBe(before);
 
-    const picture = await visit(`booking/${page.publicKey}/picture`);
+    const picture = await visit(path);
     expect(picture.status).toBe(200);
     expect(picture.headers.get('content-type')).toBe('image/png');
     expect(picture.headers.get('cache-control')).toBe(PICTURE_CACHE_CONTROL);
@@ -203,7 +215,7 @@ describe('GET /api/public/booking/:publicKey/picture', () => {
       const before = fetched.length;
       const facts = (await (await visit(`booking/${page.publicKey}`)).json()) as Record<string, unknown>;
       expect(facts.hostImage, String(image)).toBeUndefined();
-      const picture = await visit(`booking/${page.publicKey}/picture`);
+      const picture = await visit(`booking/${page.publicKey}/picture?v=${pictureVersion(randomUUID(), String(image))}`);
       expect(picture.status, String(image)).toBe(404);
       expect(picture.headers.get('cache-control')).toBe('no-store');
       expect(fetched.length).toBe(before);
@@ -211,7 +223,7 @@ describe('GET /api/public/booking/:publicKey/picture', () => {
   });
 
   it('answers 404 for a team page, which names no member (AC-754), and for an unknown key', async () => {
-    const { page, workspaceId, memberId } = await host(GOOGLE);
+    const { page, workspaceId, memberId, userId } = await host(GOOGLE);
     await db.withWorkspace(workspaceId, async (tx) => {
       await tx.execute(sql`update booking_pages set kind = 'collective' where id = ${page.id}::uuid`);
       await tx.execute(sql`delete from booking_page_members where page_id = ${page.id}::uuid`);
@@ -223,25 +235,30 @@ describe('GET /api/public/booking/:publicKey/picture', () => {
     const facts = (await (await visit(`booking/${page.publicKey}`)).json()) as Record<string, unknown>;
     expect(facts.team).toBeDefined();
     expect(facts.hostImage).toBeUndefined();
-    expect((await visit(`booking/${page.publicKey}/picture`)).status).toBe(404);
-    expect((await visit('booking/AAAAAAAAAAAAAAAA/picture')).status).toBe(404);
+    const version = pictureVersion(userId, GOOGLE);
+    expect((await visit(`booking/${page.publicKey}/picture?v=${version}`)).status).toBe(404);
+    expect((await visit(`booking/AAAAAAAAAAAAAAAA/picture?v=${version}`)).status).toBe(404);
+    expect((await visit(`booking/not-a-key/picture?v=${version}`)).status).toBe(404);
     expect(fetched.length).toBe(before);
   });
 });
 
 describe('GET /api/public/profiles/:handle/picture', () => {
   it('answers the profile’s picture, and the profile points at it; an unknown handle is 404', async () => {
-    const { scope } = await host(GOOGLE);
+    const { scope, userId } = await host(GOOGLE);
     const handle = `ada-${randomUUID().slice(0, 8)}`;
     await updateMyMemberProfile(scope, { handle });
     const profile = await visit(`handles/${handle}`);
     const body = await profile.text();
-    expect(JSON.parse(body)).toMatchObject({ image: `/api/public/profiles/${handle}/picture` });
+    const path = `/api/public/profiles/${handle}/picture?v=${pictureVersion(userId, GOOGLE)}`;
+    expect(JSON.parse(body)).toMatchObject({ image: path });
     expect(body).not.toContain('googleusercontent');
-    const picture = await visit(`profiles/${handle}/picture`);
+    // A handle freed and claimed by someone else is another version: the old path never shows the new owner.
+    expect((await visit(`profiles/${handle}/picture?v=${pictureVersion(randomUUID(), GOOGLE)}`)).status).toBe(404);
+    const picture = await visit(path);
     expect(picture.status).toBe(200);
     expect(picture.headers.get('cache-control')).toBe(PICTURE_CACHE_CONTROL);
     expect(fetched.at(-1)).toBe(SIZED);
-    expect((await visit(`profiles/nobody-${randomUUID().slice(0, 8)}/picture`)).status).toBe(404);
+    expect((await visit(`profiles/nobody-${randomUUID().slice(0, 8)}/picture?v=000000000000`)).status).toBe(404);
   });
 });

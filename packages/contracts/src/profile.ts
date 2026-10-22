@@ -48,7 +48,8 @@ export const MyProfile = z.object({
   email: z.string(),
   timeZone: z.string().optional(),
   workspaceTimeZone: z.string(),
-  image: z.url().optional(),
+  /** Their account's Google picture as our own origin serves it (`/api/me/picture?v=`, 23 Oct 2026), never Google's URL. */
+  image: z.string().optional(),
   /** Their handle, the same in every workspace; absent until they pick one. */
   handle: z.string().optional(),
   /** A free handle from their name, for the field's first value while they have none. */

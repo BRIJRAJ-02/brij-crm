@@ -30,6 +30,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   errorStatus,
+  HANDLE_PATTERN,
   PublicBookInput,
   PublicCancelInput,
   PublicChatInput,
@@ -78,6 +79,7 @@ import {
   readPagePicture,
   readProfilePicture,
   isPageHost,
+  type AccountPicture,
   type AccountPictureReader,
   type BookingEntry,
   managedBookingIcs,
@@ -218,6 +220,9 @@ function refusalAnswer(error: unknown): Response {
   return answer(code, message, data === undefined ? {} : { data });
 }
 
+/** No picture here: 404, never cached. */
+const noPicture = (): Response => answer('NOT_FOUND', 'There’s no picture here.');
+
 /** A JSON answer, never cached (slots change by the minute; a page can be paused; a visitor's overlay is theirs). */
 function ok(body: unknown, setCookies: readonly string[] = []): Response {
   const headers = new Headers({ 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' });
@@ -277,23 +282,30 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     });
   };
 
-  /** Answers the picture at `url` (one core's `accountPicture` gave), or 404 when there is none or it can't be had. */
-  const servePicture = async (c: Context<{ Variables: Variables }>, url: URL | undefined): Promise<Response> => {
-    const none = () => answer('NOT_FOUND', 'There’s no picture here.');
-    if (url === undefined) return none();
-    const fetched = await services.pictures.fetch(url);
+  /**
+   * Answers a person's picture: only its current version (`?v=`, so a stale or made up one is never fetched and
+   * never cached under a new owner), else 404 when there is none or it can't be had.
+   */
+  const servePicture = async (
+    c: Context<{ Variables: Variables }>,
+    picture: AccountPicture | undefined,
+  ): Promise<Response> => {
+    if (picture === undefined || c.req.query('v') !== picture.version) return noPicture();
+    const fetched = await services.pictures.fetch(picture.url);
     if (fetched.ok) return pictureResponse(fetched);
     // Why, never the URL: it names the account.
     log.warn('booking.picture.missed', { requestId: c.get('requestId'), reason: fetched.reason });
-    return none();
+    return noPicture();
   };
 
   // A personal page's host picture (23 Oct 2026): through the same door and liveness as its facts; a team page has none.
   app.get('/public/booking/:publicKey/picture', async (c) => {
     const key = c.req.param('publicKey');
+    // A key that can't be one never reaches the limiter's keys.
+    if (!PUBLIC_KEY.test(key)) return noPicture();
     const refused = limited([
       [`booking:picture:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.picturesPerAddress],
-      [`booking:picture-of:${key}`, BOOKING_LIMITS.picturesPerTarget],
+      [`booking:picture-page:${key}`, BOOKING_LIMITS.picturesPerTarget],
     ]);
     if (refused !== undefined) return refused;
     try {
@@ -307,9 +319,10 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   // A profile's picture, by a current or old handle. Under `profiles`: `/handles/:handle/:slug` is a page's address.
   app.get('/public/profiles/:handle/picture', async (c) => {
     const handle = c.req.param('handle');
+    if (!HANDLE_PATTERN.test(handle)) return noPicture();
     const refused = limited([
       [`booking:picture:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.picturesPerAddress],
-      [`booking:picture-of:${handle}`, BOOKING_LIMITS.picturesPerTarget],
+      [`booking:picture-handle:${handle}`, BOOKING_LIMITS.picturesPerTarget],
     ]);
     if (refused !== undefined) return refused;
     try {

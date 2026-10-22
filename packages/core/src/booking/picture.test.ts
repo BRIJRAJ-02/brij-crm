@@ -13,7 +13,7 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
 import { createBookingPage } from './pages.ts';
-import { accountPicture, isPictureHost } from './picture.ts';
+import { accountPicture, isPictureHost, pictureVersion } from './picture.ts';
 import { getPublicBookingPage, readBookingProfile, readPagePicture, readProfilePicture } from './public.ts';
 
 const GOOGLE = 'https://lh3.googleusercontent.com/a/ACg8ocK_abc-123=s96-c';
@@ -28,10 +28,17 @@ describe('accountPicture', () => {
     expect(accountPicture('https://lh5.googleusercontent.com/a-/AOh14Gh=s96-c')?.href).toBe(
       'https://lh5.googleusercontent.com/a-/AOh14Gh=s256-c',
     );
-    // Another path on those hosts is kept as it is.
-    expect(accountPicture('https://lh3.googleusercontent.com/-x/AAAA/s96-c/photo.jpg')?.href).toBe(
-      'https://lh3.googleusercontent.com/-x/AAAA/s96-c/photo.jpg',
-    );
+    // An older account picture's path is kept as it is.
+    const legacy = 'https://lh3.googleusercontent.com/-XdUIqdMkCWA/AAAAAAAAAAI/AAAAAAAAAAA/4252rscbv5M/s96-c/photo.jpg';
+    expect(accountPicture(legacy)?.href).toBe(legacy);
+  });
+
+  it('versions a picture by its person and address, so a new picture or a new owner is a new path', () => {
+    const ada = randomUUID();
+    expect(pictureVersion(ada, GOOGLE)).toMatch(/^[0-9a-f]{12}$/);
+    expect(pictureVersion(ada, GOOGLE)).toBe(pictureVersion(ada, GOOGLE));
+    expect(pictureVersion(ada, `${GOOGLE}x`)).not.toBe(pictureVersion(ada, GOOGLE));
+    expect(pictureVersion(randomUUID(), GOOGLE)).not.toBe(pictureVersion(ada, GOOGLE));
   });
 
   it('refuses every other place: no picture, plain http, other hosts, ports, credentials, look alikes', () => {
@@ -48,6 +55,10 @@ describe('accountPicture', () => {
       'https://user:pass@lh3.googleusercontent.com/a/x',
       'https://169.254.169.254/latest/meta-data',
       'https://localhost/a/x',
+      // Other content those hosts serve is no account picture.
+      'https://lh3.googleusercontent.com/d/some-drive-file',
+      'https://lh3.googleusercontent.com/proxy/abc',
+      'https://lh3.googleusercontent.com/a/x/y',
       `https://lh3.googleusercontent.com/a/${'x'.repeat(2100)}`,
     ]) {
       expect(accountPicture(refused), String(refused)).toBeUndefined();
@@ -58,6 +69,7 @@ describe('accountPicture', () => {
     expect(isPictureHost(new URL(SIZED))).toBe(true);
     expect(isPictureHost(new URL('https://lh6.googleusercontent.com/x'))).toBe(true);
     expect(isPictureHost(new URL('http://lh3.googleusercontent.com/x'))).toBe(false);
+    expect(isPictureHost(new URL('https://:secret@lh3.googleusercontent.com/x'))).toBe(false);
     expect(isPictureHost(new URL('https://www.google.com/x'))).toBe(false);
   });
 });
@@ -114,9 +126,10 @@ describe('a personal page’s host picture', () => {
     const page = await createBookingPage(ada.scope, { id: newId(), title: 'Intro call', timeZone: 'Europe/London' });
     const entry = await enterBookingPage({ db }, page.publicKey);
     const facts = await getPublicBookingPage(entry, pictures);
-    expect(facts.hostImage).toBe(`/api/public/booking/${page.publicKey}/picture`);
+    const version = pictureVersion(ada.userId, GOOGLE);
+    expect(facts.hostImage).toBe(`/api/public/booking/${page.publicKey}/picture?v=${version}`);
     expect(JSON.stringify(facts)).not.toContain('googleusercontent');
-    expect((await readPagePicture(entry, pictures))?.href).toBe(SIZED);
+    expect(await readPagePicture(entry, pictures)).toEqual({ url: new URL(SIZED), version });
     // Without the reader (the chat's own read), no picture is named.
     expect((await getPublicBookingPage(entry)).hostImage).toBeUndefined();
   });
@@ -129,6 +142,25 @@ describe('a personal page’s host picture', () => {
       expect((await getPublicBookingPage(entry, pictures)).hostImage, String(image)).toBeUndefined();
       expect(await readPagePicture(entry, pictures), String(image)).toBeUndefined();
     }
+  });
+
+  it('shows only where the page does: a paused or deleted page refuses its picture as it refuses its facts', async () => {
+    const ada = await person('Ada Lovelace', GOOGLE);
+    const paused = await createBookingPage(ada.scope, { id: newId(), title: 'Paused', timeZone: 'UTC' });
+    const deleted = await createBookingPage(ada.scope, { id: newId(), title: 'Deleted', timeZone: 'UTC' });
+    const pausedEntry = await enterBookingPage({ db }, paused.publicKey);
+    const deletedEntry = await enterBookingPage({ db }, deleted.publicKey);
+    await db.withWorkspace(ada.workspaceId, async (tx) => {
+      await tx.execute(sql`update booking_pages set status = 'paused' where id = ${paused.id}::uuid`);
+      await tx.execute(sql`update booking_pages set deleted_at = now() where id = ${deleted.id}::uuid`);
+    });
+    const codeOf = (promise: Promise<unknown>) =>
+      promise.then(
+        () => 'answered',
+        (error: unknown) => (isRefusal(error) ? error.refusal.code : 'thrown'),
+      );
+    expect(await codeOf(readPagePicture(pausedEntry, pictures))).toBe('BOOKING_CLOSED');
+    expect(await codeOf(readPagePicture(deletedEntry, pictures))).toBe('NOT_FOUND');
   });
 
   it('names none on a team page, which names no member (AC-754)', async () => {
@@ -156,9 +188,10 @@ describe('a profile’s picture', () => {
     const handle = `ada-${randomUUID().slice(0, 8)}`;
     await updateMyMemberProfile(ada.scope, { handle });
     const profile = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
-    expect(profile.image).toBe(`/api/public/profiles/${handle}/picture`);
+    const version = pictureVersion(ada.userId, GOOGLE);
+    expect(profile.image).toBe(`/api/public/profiles/${handle}/picture?v=${version}`);
     expect(JSON.stringify(profile)).not.toContain('googleusercontent');
-    expect(readProfilePicture(await findHandleOwner({ db }, handle))?.href).toBe(SIZED);
+    expect(readProfilePicture(await findHandleOwner({ db }, handle))).toEqual({ url: new URL(SIZED), version });
   });
 
   it('names none without a Google picture, and a handle no one holds is NOT_FOUND', async () => {

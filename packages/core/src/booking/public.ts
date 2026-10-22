@@ -41,7 +41,7 @@ import type {
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry, HandleOwner, ProfilePageEntry } from '../access/door.ts';
 import { pagePath } from './handles.ts';
-import { accountPicture, type AccountPictureReader } from './picture.ts';
+import { servedPicture, type AccountPicture, type AccountPictureReader } from './picture.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -217,30 +217,35 @@ export async function getPublicBookingPage(
       // Once the owner has a handle, a plain `/b/<key>` visit moves to `/<handle>/<slug>`.
       ...(path.startsWith('/b/') ? {} : { path }),
     };
-    return { facts, pictureUser: team === undefined ? (page.ownerUserId ?? undefined) : undefined };
+    return { facts, pictureUser: pictureOwner(page) };
   });
   if (pictures === undefined || pictureUser === undefined) return facts;
-  const picture = accountPicture(await pictures.pictureOf(pictureUser));
-  return picture === undefined ? facts : { ...facts, hostImage: bookingPicturePath(facts.publicKey) };
+  const picture = servedPicture(pictureUser, await pictures.pictureOf(pictureUser));
+  return picture === undefined ? facts : { ...facts, hostImage: bookingPicturePath(facts.publicKey, picture.version) };
+}
+
+/** Whose picture a page shows: a personal page's owner; a team page, or a kind yet to come, names no member (AC-754). */
+function pictureOwner(page: PageRecord): string | undefined {
+  return page.kind === 'personal' ? (page.ownerUserId ?? undefined) : undefined;
 }
 
 /**
- * Where a personal page's host picture is fetched from (23 Oct 2026): the owner's account picture, when it is an
- * https one on Google's picture hosts (`accountPicture`), else undefined; a team page has none (AC-754). The same
- * door and liveness as the page's facts, so a picture shows only where the page does.
+ * A personal page's host picture to serve (23 Oct 2026): the owner's account picture, when it is one of Google's
+ * (`servedPicture`), else undefined; a team page has none (AC-754). The same door and liveness as the page's facts,
+ * so a picture shows only where the page does.
  */
-export async function readPagePicture(entry: BookingEntry, pictures: PublicPictureDeps): Promise<URL | undefined> {
+export async function readPagePicture(
+  entry: BookingEntry,
+  pictures: PublicPictureDeps,
+): Promise<AccountPicture | undefined> {
   checkEntry(entry);
-  const owner = await inWorkspace(entry.scope, async (tx) => {
-    const page = await livePage(tx, entry);
-    return page.kind === 'personal' ? (page.ownerUserId ?? undefined) : undefined;
-  });
-  return owner === undefined ? undefined : accountPicture(await pictures.pictureOf(owner));
+  const owner = await inWorkspace(entry.scope, async (tx) => pictureOwner(await livePage(tx, entry)));
+  return owner === undefined ? undefined : servedPicture(owner, await pictures.pictureOf(owner));
 }
 
-/** Where a handle's profile picture is fetched from: their account's, when Google's (`accountPicture`), else undefined. */
-export function readProfilePicture(owner: HandleOwner): URL | undefined {
-  return accountPicture(owner.image);
+/** A handle's profile picture to serve: their account's, when one of Google's (`servedPicture`), else undefined. */
+export function readProfilePicture(owner: HandleOwner): AccountPicture | undefined {
+  return servedPicture(owner.userId, owner.image);
 }
 
 /**
@@ -254,6 +259,12 @@ export async function readAddressedPage(entry: BookingEntry & { readonly handle:
     if (page === undefined || page.isDeleted) throw refuse('NOT_FOUND', 'This page is no longer available.');
     return { publicKey: page.publicKey, handle: entry.handle, slug: page.slug };
   });
+}
+
+/** A profile's `image`: our own path to the owner's picture, under their current handle, when they have one. */
+function withPicture(owner: HandleOwner): { readonly image?: string } {
+  const picture = readProfilePicture(owner);
+  return picture === undefined ? {} : { image: profilePicturePath(owner.handle, picture.version) };
 }
 
 /** Up to two initials of a name, for an avatar without a picture. */
@@ -333,7 +344,7 @@ export async function readBookingProfile(found: {
     initials: profileInitials(name, found.owner.handle),
     // The account's picture is Google's, which the public pages' policy (img-src 'self') never loads: our own
     // origin serves it, under the current handle.
-    ...(readProfilePicture(found.owner) === undefined ? {} : { image: profilePicturePath(found.owner.handle) }),
+    ...withPicture(found.owner),
     bio: found.owner.bio,
     links: ordered,
     ...(found.pages.length > PROFILE_PAGE_SIZE && last !== undefined
