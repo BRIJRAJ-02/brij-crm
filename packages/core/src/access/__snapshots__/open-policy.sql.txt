@@ -12,7 +12,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -156,7 +159,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -300,7 +306,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -349,7 +358,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -419,7 +431,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -431,7 +446,10 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
 ) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -575,7 +593,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -785,7 +806,10 @@ set local statement_timeout = '10s'
 select "object_id" from "lists" where "lists"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -797,7 +821,10 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
 ) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 3>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -927,7 +954,10 @@ select "position", "text_value", "number_value"::text, "date_value"::text, to_ch
 select "list_entries"."id", "list_entries"."list_id", "list_entries"."record_id", "list_entries"."created_at", "list_entries"."created_by_type", "list_entries"."created_by_id", "list_entries"."updated_at", "list_entries"."updated_by_type", "list_entries"."updated_by_id" from "list_entries" inner join "records" on ("records"."workspace_id" = "list_entries"."workspace_id" and "records"."id" = "list_entries"."record_id" and "records"."deleted_at" is null) where ("list_entries"."deleted_at" is null and "list_entries"."id" in ($1)) order by "list_entries"."id" asc
   ["<id 10>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -959,7 +989,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1086,7 +1119,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1215,7 +1251,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1387,7 +1426,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1525,7 +1567,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1642,7 +1687,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1685,7 +1733,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1749,7 +1800,10 @@ set local statement_timeout = '10s'
 select "object_id" from "lists" where "lists"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1761,7 +1815,10 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
 ) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 3>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1807,7 +1864,10 @@ select set_config('app.workspace_id', $1, true)
 select "object_id", "created_at", "deleted_at" from "records" where "records"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1834,7 +1894,10 @@ select set_config('app.workspace_id', $1, true)
 select "object_id", "created_at", "deleted_at" from "records" where "records"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -1880,7 +1943,10 @@ select set_config('app.workspace_id', $1, true)
   
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -2074,7 +2140,10 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id
@@ -2189,7 +2258,10 @@ select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "dele
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+select "id", "object_id", "list_id", "api_slug", (case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
   (select far_object.id::text from relationships rel
     join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
     join objects far_object on far_object.id = far.object_id

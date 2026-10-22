@@ -117,7 +117,7 @@ describe('deleting a booking page', () => {
     );
     const labels = [...(alert()?.querySelectorAll('button') ?? [])].map((button) => button.textContent);
     expect(labels[0]).toMatch(/^Cancel/);
-    expect(labels.at(-1)).toBe('Delete page');
+    expect(labels.at(-1)).toBe('Delete booking page');
 
     await userEvent.keyboard('{Escape}');
     await expect.poll(alert).toBeNull();
@@ -132,7 +132,7 @@ describe('deleting a booking page', () => {
   it('deletes once, busy until the server answers, then gives focus to the title', async () => {
     const held = await renderLinks([pageOf('p1', 'Quick chat'), pageOf('p2', 'Demo')]);
     await chooseDelete('Quick chat');
-    await userEvent.click(page.getByRole('button', { name: 'Delete page' }));
+    await userEvent.click(page.getByRole('button', { name: 'Delete booking page' }));
     // The card left at once; the confirm waits, busy, and a second press sends nothing.
     await expect.poll(() => alert()?.textContent).toContain('Deleting');
     await userEvent.click(page.getByRole('button', { name: /Deleting/ }), { force: true });
@@ -147,13 +147,13 @@ describe('deleting a booking page', () => {
   it('keeps a refusal inside the confirm, with the card back, and tries again from there', async () => {
     const held = await renderLinks([pageOf('p1', 'Quick chat')]);
     await chooseDelete('Quick chat');
-    await userEvent.click(page.getByRole('button', { name: 'Delete page' }));
+    await userEvent.click(page.getByRole('button', { name: 'Delete booking page' }));
     held.answers[0]?.reject(dataError('FORBIDDEN', 'Only its owner can delete it.'));
     await expect.poll(() => alert()?.textContent).toContain('Only its owner can delete it.');
     expect(alert()).not.toBeNull();
     // The last card left and came back while the confirm stayed open over it.
     expect(document.querySelector('[aria-label="More for Quick chat"]')).not.toBeNull();
-    await userEvent.click(page.getByRole('button', { name: 'Delete page' }));
+    await userEvent.click(page.getByRole('button', { name: 'Delete booking page' }));
     expect(held.remove).toHaveBeenCalledTimes(2);
     held.answers[1]?.resolve({ pageId: 'p1' });
     await expect.poll(alert).toBeNull();

@@ -1149,6 +1149,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     return [
       { kind: 'records', record_ids: [recordId] },
       { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
+      // The member's calendars changed too, so their other tabs read them again (polish item 6).
+      { kind: 'calendars', mutation_id: mutationId },
     ];
   },
   'calendar.connections.remove': async (m, mutationId) => {
@@ -1157,6 +1159,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     return [
       { kind: 'records', record_ids: [recordId] },
       { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
+      // The member's calendars changed too, so their other tabs read them again (polish item 6).
+      { kind: 'calendars', mutation_id: mutationId },
     ];
   },
   // Sync now queues the connection's sync: a job row, no outbox row, and one poke so the worker wakes for it.
@@ -1188,6 +1192,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     return [
       { kind: 'records', record_ids: [recordId] },
       { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
+      // The member's calendars changed too, so their other tabs read them again (polish item 6).
+      { kind: 'calendars', mutation_id: mutationId },
     ];
   },
   // Where bookings go: the member's own setting, no outbox row.

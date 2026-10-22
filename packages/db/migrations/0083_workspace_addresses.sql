@@ -97,11 +97,21 @@ grant create on schema public to crm_address;
 --> statement-breakpoint
 alter function crm_claim_workspace_address(text) owner to crm_address;
 --> statement-breakpoint
+-- And the database's owner, which already owns every table it touches: the seed and load scripts make workspaces
+-- as the owner login, through the same directory write. Granted by crm_address, once it owns the function (a grant
+-- made before the change of owner would become crm_address's own).
+set role crm_address;
+--> statement-breakpoint
+grant execute on function crm_claim_workspace_address(text) to session_user;
+--> statement-breakpoint
+reset role;
+--> statement-breakpoint
 revoke create on schema public from crm_address;
 --> statement-breakpoint
 revoke crm_address from current_user;
 --> statement-breakpoint
--- Refuse to finish unless the claim is as narrow as it reads: owned by crm_address and executable by crm_app alone,
+-- Refuse to finish unless the claim is as narrow as it reads: owned by crm_address and executable by crm_app (and the
+-- database's owner) alone,
 -- out of the identity login's reach; crm_address a plain role in no role that nothing but the owner can become,
 -- holding exactly the privileges granted above.
 do $$
@@ -112,7 +122,8 @@ begin
     or exists (
       select 1 from pg_proc p cross join lateral aclexplode(p.proacl) a
       where p.oid = fn and a.privilege_type = 'EXECUTE'
-        and a.grantee not in ('crm_address'::regrole, 'crm_app'::regrole)
+        and a.grantee not in ('crm_address'::regrole, 'crm_app'::regrole,
+          (select d.datdba from pg_database d where d.datname = current_database()))
     )
     or has_function_privilege('crm_identity', fn, 'EXECUTE') then
     raise exception 'crm_claim_workspace_address must be owned by crm_address and executable by crm_app alone';
