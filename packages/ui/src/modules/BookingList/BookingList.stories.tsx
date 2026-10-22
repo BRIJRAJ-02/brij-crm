@@ -59,12 +59,14 @@ export const Default: Story = {
       <BookingList {...args} groups={groups()} />
     </Stage>
   ),
-  play: async ({ canvas, args }) => {
+  play: async ({ canvas, canvasElement, args }) => {
     await expect(canvas.getByRole('link', { name: 'Join Google Meet' })).toBeInTheDocument();
     await expect(canvas.getByRole('link', { name: 'Grace Hopper' })).toBeInTheDocument();
     await expect(canvas.getByText('Cancelled')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Site visit' }));
     await expect(args.onOpen).toHaveBeenCalledWith('alan');
+    // The pointer leaves the title for the empty page, so the shot never catches its hover.
+    await userEvent.hover(canvasElement);
   },
 };
 
