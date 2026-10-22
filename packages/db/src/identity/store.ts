@@ -113,6 +113,8 @@ export interface RateLimitDecision {
 export interface SessionListing {
   readonly id: string;
   readonly deviceLabel: string | null;
+  /** The browser's user agent as sign in kept it, so a session with no label yet is named from it. Never sent on. */
+  readonly userAgent: string | null;
   readonly country: string | null;
   readonly city: string | null;
   /** Last used, ISO 8601 UTC with microseconds (the keyset cursor's moment). */
@@ -471,6 +473,7 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .select({
           id: session.id,
           deviceLabel: session.deviceLabel,
+          userAgent: session.userAgent,
           country: session.country,
           city: session.city,
           updatedAt: moment,
