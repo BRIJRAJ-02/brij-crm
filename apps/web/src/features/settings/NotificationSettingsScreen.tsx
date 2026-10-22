@@ -4,7 +4,7 @@
 // Leaves out: the in app inbox (always on, said in the Email InfoTip), other workspaces' settings, push notifications.
 import type { InboxSettings, NotificationSettingsChange } from '@crm/data';
 import { useNotificationSettings } from '@crm/data/react';
-import { Card, EmptyState, InfoTip, Skeleton, SettingsRow, Switch } from '@crm/ui';
+import { Card, EmptyState, InfoTip, Skeleton, SettingsRow, SettingsSection, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { strings } from './notifications-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -19,10 +19,12 @@ const KINDS = [
 /** The page while the settings load: the Email card, busy. */
 export function NotificationSettingsLoading() {
   return (
-    <Card title={strings.email} isBusy>
-      <Skeleton width="long" />
-      <Skeleton width="medium" />
-    </Card>
+    <SettingsSection title={strings.email} description={strings.emailDescription}>
+      <Card isBusy>
+        <Skeleton width="long" />
+        <Skeleton width="medium" />
+      </Card>
+    </SettingsSection>
   );
 }
 
@@ -57,35 +59,46 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
   } else {
     const shown = state.settings;
     email = (
-      <Card title={strings.email} actions={<InfoTip label={strings.email}>{strings.emailInfo}</InfoTip>}>
-        {KINDS.map((kind) => (
-          <SettingsRow key={kind.key} title={kind.title}>
+      // A section like every other settings page's: the heading above the card, and the inbox's promise said
+      // in a line rather than hidden in a tip.
+      <SettingsSection
+        title={strings.email}
+        description={
+          <>
+            {strings.emailDescription} <InfoTip label={strings.email}>{strings.emailInfo}</InfoTip>
+          </>
+        }
+      >
+        <Card>
+          {KINDS.map((kind) => (
+            <SettingsRow key={kind.key} title={kind.title}>
+              <Switch
+                label={kind.title}
+                isLabelHidden
+                isSelected={shown[kind.key]}
+                onChange={(isSelected) => {
+                  save({ [kind.key]: isSelected });
+                }}
+              />
+            </SettingsRow>
+          ))}
+          <SettingsRow title={strings.digest} meta={<InfoTip label={strings.digest}>{strings.digestInfo}</InfoTip>}>
             <Switch
-              label={kind.title}
+              label={strings.digest}
               isLabelHidden
-              isSelected={shown[kind.key]}
+              isSelected={shown.digest}
               onChange={(isSelected) => {
-                save({ [kind.key]: isSelected });
+                // The digest comes at 8 in the morning in the time zone this browser has now.
+                save(
+                  isSelected
+                    ? { digest: true, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
+                    : { digest: false },
+                );
               }}
             />
           </SettingsRow>
-        ))}
-        <SettingsRow title={strings.digest} meta={<InfoTip label={strings.digest}>{strings.digestInfo}</InfoTip>}>
-          <Switch
-            label={strings.digest}
-            isLabelHidden
-            isSelected={shown.digest}
-            onChange={(isSelected) => {
-              // The digest comes at 8 in the morning in the time zone this browser has now.
-              save(
-                isSelected
-                  ? { digest: true, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
-                  : { digest: false },
-              );
-            }}
-          />
-        </SettingsRow>
-      </Card>
+        </Card>
+      </SettingsSection>
     );
   }
 
