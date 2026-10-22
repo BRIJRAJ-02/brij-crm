@@ -25,7 +25,7 @@ export const strings = {
   /** The stat strip under the header (the tabs keep the counts): when it last changed, its next meeting, its stage. */
   lastActivity: 'Last activity',
   nextMeeting: 'Next meeting',
-  enteredStage: (stage: string) => `Entered ${stage}`,
+  enteredStage: (stage: string) => `Entered “${stage}”`,
   viewAll: 'View all',
   /** Recent activity's "View all" by its full name, apart from Open tasks' beside it. */
   viewAllActivity: 'View all activity',
