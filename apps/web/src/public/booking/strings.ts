@@ -58,7 +58,7 @@ export const strings = {
   trap: 'Leave this empty',
   // Book by chat (spec 0042).
   chatGreeting: (host: string, title: string, minutes: number) =>
-    `I book ${host}’s ${title} (${String(minutes)} minutes). When suits you? Type something like “tomorrow afternoon”, or pick a time below.`,
+    `I can book your ${String(minutes)} minute ${title} with ${host}. When works for you? Type something like “tomorrow afternoon”, or pick a time below.`,
   chatNoTimes: (host: string) => `${host} has nothing open right now. Check back soon.`,
   chatSuggestions: ['Something later', 'Next week'] as readonly string[],
   chatTooMany: 'That was a lot at once. Give it a few seconds and try again.',

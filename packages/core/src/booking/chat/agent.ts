@@ -432,7 +432,7 @@ export function answer(
     case 'select-ambiguous':
       return say(`Which one? Tap a time, or say “the first one”.`, offers);
     case 'confirm-nothing':
-      return say(`Happy to. When suits you? Type something like “tomorrow afternoon”.`, soonest(offers));
+      return say(`Happy to. When works for you? Type something like “tomorrow afternoon”.`, soonest(offers));
     case 'exhausted':
       return say(`${page.hostName} has nothing open for now. Check back soon.`, [], []);
     case 'duration':
@@ -451,10 +451,7 @@ export function answer(
     case 'thanks':
       return say(`You’re welcome.`, [], []);
     case 'details':
-      return say(
-        `Thanks${state.name === undefined ? '' : `, ${state.name}`}. When suits? Here’s what’s open next.`,
-        offers,
-      );
+      return say(`Thanks${state.name === undefined ? '' : `, ${state.name}`}. Here’s what’s open next.`, offers);
     case 'not-understood':
       return say(
         `Sorry, I didn’t catch a time in that. Try something like “Thursday morning”, or tap one of these.`,
@@ -470,5 +467,5 @@ export function answer(
 
 /** The chat's opening line (AC-1502). */
 export function greeting(page: ChatPage, duration: number): string {
-  return `I book ${page.hostName}’s ${page.title} (${String(duration)} minutes). When suits you? Type something like “tomorrow afternoon”, or pick a time below.`;
+  return `I can book your ${String(duration)} minute ${page.title} with ${page.hostName}. When works for you? Type something like “tomorrow afternoon”, or pick a time below.`;
 }

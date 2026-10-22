@@ -5,7 +5,7 @@ export const strings = {
   assistant: 'Assistant',
   said: (who: string) => `${who}: `,
   message: 'Message',
-  placeholder: 'When suits you?',
+  placeholder: 'When works for you?',
   send: 'Send',
   loading: 'Loading times',
   waiting: 'One moment',
