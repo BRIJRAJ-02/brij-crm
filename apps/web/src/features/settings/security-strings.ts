@@ -11,7 +11,6 @@ export const strings = {
   activity: {
     section: 'Recent activity',
     description: 'Sign ins and changes to how you sign in, from the last 90 days.',
-    columns: { what: 'Activity', device: 'Device', place: 'Location', when: 'When' },
     kinds: {
       sign_in: 'Signed in',
       sign_out: 'Signed out',
@@ -31,15 +30,11 @@ export const strings = {
     failedMore: 'Couldn’t load older activity',
     showMore: 'Show more',
   },
-  columns: { device: 'Device', place: 'Location', lastActive: 'Last active', actions: 'Actions' },
   unknownDevice: 'Unknown device',
-  unknownPlace: 'Unknown',
   thisDevice: 'This device',
   /** A device's line under its name: where, then when it was last used. */
   activeNow: 'Active now',
   active: 'Active',
-  /** This device's last use, in RelativeTime's own word for the moment. */
-  now: 'now',
   signOut: 'Sign out',
   signOutLabel: (device: string) => `Sign out ${device}`,
   signOutOthers: 'Sign out of all other devices',
