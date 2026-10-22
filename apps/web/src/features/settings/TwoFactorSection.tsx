@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Account › Security's two factor sign in (spec 0033, AC-881, AC-883, AC-885): on or off, and backup codes.
+// Purpose: Account › Sign in and devices' two factor sign in (spec 0033, AC-881, AC-883, AC-885): on or off, and backup codes.
 // Main task: set the authenticator app up (QR code, first code, backup codes saved), turn it off, or make new codes.
 // Leaves out: passkeys (their own section) and the workspace's requirement (milestone 4).
 import type { AccountSecurityState, DataLayer } from '@crm/data';
@@ -11,7 +11,6 @@ import {
   Code,
   CodeInput,
   EmptyState,
-  InfoTip,
   Modal,
   QrCode,
   SettingsRow,
@@ -378,14 +377,7 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
   }
 
   return (
-    <SettingsSection
-      title={copy.section}
-      description={
-        <>
-          {copy.description} <InfoTip label={copy.section}>{copy.info}</InfoTip>
-        </>
-      }
-    >
+    <SettingsSection title={copy.section} description={copy.description}>
       {card}
       {modal}
     </SettingsSection>

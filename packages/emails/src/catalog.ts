@@ -103,7 +103,7 @@ export const CATALOG: Catalog = {
       device: 'Chrome on macOS',
       place: 'London, United Kingdom',
       method: 'code',
-      securityPath: '/settings/account/security',
+      securityPath: '/settings/account/sign-in',
     },
   },
   import_finished: {

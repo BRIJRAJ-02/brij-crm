@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Account › Security's passkeys (spec 0033, milestone 3, AC-887): sign in with a fingerprint, face or PIN.
+// Purpose: Account › Sign in and devices' passkeys (spec 0033, milestone 3, AC-887): sign in with a fingerprint, face or PIN.
 // Main task: add a passkey (after a check, with an optional name), rename one, or remove one after a confirm.
 // Leaves out: signing in with one (the sign in page), and the workspace's two factor requirement (milestone 4).
 import { PASSKEY_NAME_MAX, type AccountPasskey, type AccountSecurityState, type DataLayer } from '@crm/data';
@@ -9,7 +9,6 @@ import {
   Card,
   EmptyState,
   Field,
-  InfoTip,
   Modal,
   SettingsRow,
   SettingsSection,
@@ -170,8 +169,11 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
   let card;
   if (security.status === 'loading') {
     card = (
+      // The row as it will stand, so the card keeps its shape from the page's pending state to its own load.
       <Card isBusy>
-        <Skeleton width="long" />
+        <SettingsRow title="" description={<Skeleton width="medium" />}>
+          <Skeleton width="short" />
+        </SettingsRow>
       </Card>
     );
   } else if (security.status === 'error') {
@@ -204,7 +206,9 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
         ))}
         <SettingsRow
           title={security.passkeys.length === 0 ? copy.none : copy.another}
-          description={supported === false ? copy.unsupported : copy.addText}
+          description={
+            supported === false ? copy.unsupported : security.passkeys.length === 0 ? copy.noneText : copy.addText
+          }
         >
           {addButton}
         </SettingsRow>
@@ -315,14 +319,7 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
   }
 
   return (
-    <SettingsSection
-      title={copy.section}
-      description={
-        <>
-          {copy.description} <InfoTip label={copy.section}>{copy.info}</InfoTip>
-        </>
-      }
-    >
+    <SettingsSection title={copy.section} description={copy.description}>
       {card}
       {modal}
     </SettingsSection>

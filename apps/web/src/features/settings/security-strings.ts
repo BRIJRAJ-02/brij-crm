@@ -1,16 +1,16 @@
-// Settings › Account › Security: the page's copy (spec 0033), apart from the other settings pages' own.
+// Settings › Account › Sign in and devices: the page's copy (spec 0033), apart from the other settings pages' own.
 
-/** Settings › Account › Security: the page's copy (spec 0033, AC-890, AC-891, AC-896). */
+/** Settings › Account › Sign in and devices: the page's copy (spec 0033, AC-890, AC-891, AC-896). */
 export const strings = {
   /** The page's title, and its entry in the settings navigation. */
-  title: 'Security',
+  /** Not "Security": that is the workspace's page, and the sidebar showed it twice (the owner, 22 October 2026). */
+  title: 'Sign in and devices',
   devices: 'Signed in devices',
   devicesDescription: 'Each browser and app signed in to your account.',
   /** Recent activity (AC-898): the last 90 days of the account's security events. */
   activity: {
     section: 'Recent activity',
     description: 'Sign ins and changes to how you sign in, from the last 90 days.',
-    columns: { what: 'Activity', device: 'Device', place: 'Location', when: 'When' },
     kinds: {
       sign_in: 'Signed in',
       sign_out: 'Signed out',
@@ -30,17 +30,14 @@ export const strings = {
     failedMore: 'Couldn’t load older activity',
     showMore: 'Show more',
   },
-  columns: { device: 'Device', place: 'Location', lastActive: 'Last active', actions: 'Actions' },
   unknownDevice: 'Unknown device',
-  unknownPlace: 'Unknown',
   thisDevice: 'This device',
-  /** This device's last use, in RelativeTime's own word for the moment. */
-  now: 'now',
+  /** A device's line under its name: where, then when it was last used. */
+  activeNow: 'Active now',
+  active: 'Active',
   signOut: 'Sign out',
   signOutLabel: (device: string) => `Sign out ${device}`,
   signOutOthers: 'Sign out of all other devices',
-  signOutOthersInfo: (minutes: number) =>
-    `Every other device has to sign in again. If you haven't confirmed it's you in the last ${String(minutes)} minutes, you'll be asked first. Locations are approximate.`,
   showMore: 'Show more',
   failedTitle: 'Couldn’t load your devices',
   noDevices: 'No devices signed in',
@@ -81,8 +78,8 @@ export const strings = {
   /** Two factor sign in (AC-881, AC-883, AC-885). */
   twoFactor: {
     section: 'Two factor sign in',
-    description: 'A code from an app after your email code.',
-    info: 'After your email code or Google, you also enter a code from an authenticator app. Someone with your email alone can’t sign in.',
+    /** Says what the tip used to, so the section needs none. */
+    description: 'A code from an app after your email code or Google, so your email alone can’t sign you in.',
     app: 'Authenticator app',
     appOff: 'Off',
     appOn: 'On',
@@ -125,13 +122,16 @@ export const strings = {
   /** Passkeys (milestone 3, AC-887). */
   passkeys: {
     section: 'Passkeys',
-    description: 'Sign in with your fingerprint, face or device PIN.',
-    info: 'A passkey lives on your device or in your password manager. It signs you in on its own, with no email code, and counts as two factor sign in. It only works on Timefix, so it can’t be phished.',
+    /** Says what the tip used to, so the page has no tips (the owner, 22 October 2026). */
+    description:
+      'Sign in with your fingerprint, face or device PIN, with no email code. A passkey counts as two factor sign in.',
     unnamed: 'Passkey',
     added: (date: string) => `Added ${date}.`,
     lastUsed: (date: string) => `Last used ${date}.`,
     neverUsed: 'Not used yet.',
-    none: 'No passkeys yet',
+    /** With none yet, the row reads as two factor's does: the method, its state, the way to add one. */
+    none: 'Passkeys',
+    noneText: 'None yet',
     another: 'Add one for another device',
     addText: 'Add one for each device or password manager you use.',
     unsupported: 'This browser can’t make passkeys.',
@@ -162,10 +162,10 @@ export const strings = {
   },
   /** Deleting the account (AC-902 to AC-907). */
   deletion: {
-    section: 'Delete account',
-    description: 'Leave every workspace and close your account.',
-    row: 'Records you made stay',
-    rowText: 'They’re credited to Deleted user.',
+    /** On Profile, the page's last section, as General's Delete workspace sits (the owner, 22 October 2026). */
+    section: 'Danger zone',
+    row: 'Delete account',
+    rowText: 'You leave every workspace. Records you made stay, credited to Deleted user.',
     action: 'Delete account',
     title: 'Delete your account?',
     blockedTitleOne: 'Can’t delete your account yet',

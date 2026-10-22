@@ -294,7 +294,7 @@ export interface SettingsSectionProps {
  * one column, no label column beside them), and a hairline before the next
  * section. A page's main list (a Table) needs no section: it runs the full
  * width; a list that is one of several sections (a person's devices) sits in
- * one. With
+ * one, as a Card of rows. With
  * `actions`, the section's one action sits at the heading's end.
  */
 export function SettingsSection({ title, description, actions, children }: SettingsSectionProps) {

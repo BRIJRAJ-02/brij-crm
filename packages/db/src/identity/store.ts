@@ -59,7 +59,7 @@ export interface DirectoryWorkspace {
   readonly name: string;
 }
 
-/** One passkey as Account › Security lists it (spec 0033, AC-887): never its key or credential id. */
+/** One passkey as Account › Sign in and devices lists it (spec 0033, AC-887): never its key or credential id. */
 export interface IdentityPasskey {
   readonly id: string;
   /** The person's label; undefined until they name it. */
@@ -109,7 +109,7 @@ export interface RateLimitDecision {
   readonly retryAfterSeconds: number | undefined;
 }
 
-/** One live session as Account › Security lists it (spec 0033): never its token. */
+/** One live session as Account › Sign in and devices lists it (spec 0033): never its token. */
 export interface SessionListing {
   readonly id: string;
   readonly deviceLabel: string | null;

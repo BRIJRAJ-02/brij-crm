@@ -45,7 +45,7 @@ export interface Auth {
   verify(email: string, code: string): Promise<SignInOutcome>;
   /** The second step: an app code or a backup code; `remember` skips it on this browser for 30 days. */
   secondStep(kind: SecondFactorKind, code: string, remember: boolean): Promise<void>;
-  /** Two factor setup and change (Account › Security, after a step up). */
+  /** Two factor setup and change (Account › Sign in and devices, after a step up). */
   readonly twoFactor: {
     start(): Promise<TwoFactorSetup>;
     confirm(code: string): Promise<void>;
