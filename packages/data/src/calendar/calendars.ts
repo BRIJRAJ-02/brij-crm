@@ -283,12 +283,10 @@ export function createCalendarsStore(deps: CalendarsDeps) {
         };
       });
       try {
-        const landed = await deps.api.setPageDestination({
-          workspace,
-          pageId,
-          calendarId,
-          mutationId: deps.mintId(),
-        });
+        // Through `writing`, so a read started while it is in flight can't bring the old view (a gone pick's note) back.
+        const landed = await writing(workspace, () =>
+          deps.api.setPageDestination({ workspace, pageId, calendarId, mutationId: deps.mintId() }),
+        );
         held.patch(() => ({ destination: landed }));
         return true;
       } catch (error) {

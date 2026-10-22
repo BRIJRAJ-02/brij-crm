@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CalendarItem } from '@crm/data';
-import { destinationHint } from './destination.ts';
+import { destinationChoice, destinationHint } from './destination.ts';
 
 const calendar = (id: string, name: string, changes: Partial<CalendarItem> = {}): CalendarItem => ({
   id,
@@ -53,5 +53,32 @@ describe('destinationHint', () => {
     expect(destinationHint({ status: 'unusable', isOwner: true }, [])).toBe(
       'Your calendar stopped taking bookings, so new bookings on this page go on no calendar until you pick one.',
     );
+  });
+});
+
+describe('destinationChoice', () => {
+  it('shows the page’s own calendar, and saves only a change', () => {
+    const choice = destinationChoice({ status: 'page', calendarId: WORK, isOwner: true });
+    expect(choice.value).toBe(WORK);
+    expect(choice.send(WORK)).toBeUndefined();
+    expect(choice.send('default')).toBeNull();
+    expect(choice.send(MAIN)).toBe(MAIN);
+  });
+
+  it('shows a stopped pick as the default, and choosing Default clears it', () => {
+    const choice = destinationChoice({ status: 'unusable', calendarId: WORK, isOwner: true });
+    expect(choice.value).toBe('default');
+    expect(choice.send('default')).toBeNull();
+  });
+
+  it('shows no value for a pick that went, so choosing Default fires and clears the note', () => {
+    const choice = destinationChoice({ status: 'unusable', removedName: 'Team', isOwner: true });
+    expect(choice.value).toBeNull();
+    expect(choice.send('default')).toBeNull();
+    expect(choice.send(null)).toBeUndefined();
+  });
+
+  it('changes nothing when the default is chosen again', () => {
+    expect(destinationChoice({ status: 'default', isOwner: true }).send('default')).toBeUndefined();
   });
 });

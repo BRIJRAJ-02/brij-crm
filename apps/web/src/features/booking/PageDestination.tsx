@@ -6,7 +6,7 @@ import type { CalendarListState, CalendarsHeld, PageDestinationState } from '@cr
 import { useCalendarList, usePageDestination } from '@crm/data/react';
 import { Badge, ButtonLink, FieldGroup, Select } from '@crm/ui';
 import { calendarOptions } from '../calendars/calendar-options.ts';
-import { destinationHint } from './destination.ts';
+import { DEFAULT_DESTINATION, destinationChoice, destinationHint } from './destination.ts';
 import { strings } from './strings.ts';
 
 /** Props for PageDestination. */
@@ -21,8 +21,7 @@ export interface PageDestinationProps {
   readonly onChange: (calendarId: string | null) => void;
 }
 
-/** The value meaning "the owner's own destination". */
-const DEFAULT = 'default';
+const DEFAULT = DEFAULT_DESTINATION;
 
 /** "Add bookings to": a Select of the owner's writable calendars after their default; colleagues read it only. */
 export function PageDestination({ destination, calendars, isReadOnly, onChange }: PageDestinationProps) {
@@ -37,9 +36,8 @@ export function PageDestination({ destination, calendars, isReadOnly, onChange }
     return <Select label={strings.addBookingsTo} items={[]} placeholder={strings.destinationLoading} isDisabled />;
   }
   const { calendarId, status, isOwner } = held.destination;
-  // A pick that can't take bookings now shows as the default, which is where bookings go (AC-997): the page falls
-  // back rather than staying pinned, and goes back to its pick once that calendar can take bookings again.
-  const value = status === 'page' && calendarId !== undefined ? calendarId : DEFAULT;
+  const choice = destinationChoice(held.destination);
+  const value = choice.value ?? DEFAULT;
   if (!isOwner) {
     return (
       <Select
@@ -78,14 +76,14 @@ export function PageDestination({ destination, calendars, isReadOnly, onChange }
       items={items}
       optionStyle="dot"
       optionDescription="below"
-      value={value}
+      value={choice.value}
+      // A pick that went shows the default as a placeholder, so choosing Default clears the note.
+      placeholder={items[0]?.label}
       hint={destinationHint(held.destination, all)}
       isReadOnly={isReadOnly}
       onChange={(id) => {
-        // Against the stored pick: choosing the default while it only stands in for a stopped pick clears it.
-        const stored = status === 'default' || calendarId === undefined ? DEFAULT : calendarId;
-        if (id === null || id === stored) return;
-        onChange(id === DEFAULT ? null : id);
+        const sent = choice.send(id);
+        if (sent !== undefined) onChange(sent);
       }}
     />
   );
