@@ -22,6 +22,8 @@ export const strings = {
   customObjects: 'Custom objects',
   /** The objects table. */
   objectColumn: 'Object',
+  /** The Object header's InfoTip, for those who may drag the rows (SW15). */
+  objectOrderInfo: 'Drag, or use Move up and Move down, to change the order objects show in the sidebar.',
   kindColumn: 'Type',
   attributesColumn: 'Attributes',
   actionsColumn: 'Actions',
@@ -41,14 +43,12 @@ export const strings = {
   archivedObjects: 'Archived objects',
   noLiveObjects: 'No live objects',
   noLiveObjectsText: 'Restore one below or create a new one.',
-  noArchived: 'Nothing is archived',
-  noArchivedText: 'Archived objects show here, with their records kept.',
   noLiveObjectsMemberText: 'A workspace owner or admin can restore one or create a new one.',
   moving: 'Moving',
   /** A failed move, archive or restore: what failed, then why in the server's words. */
   moveFailed: (plural: string, why: string) => `Couldn’t move ${plural}. ${why}`,
   restoreFailed: (plural: string, why: string) => `Couldn’t restore ${plural}. ${why}`,
-  readOnlyNote: 'Only workspace owners and admins can change objects and attributes.',
+  readOnlyNote: 'Only owners and admins can change this.',
   loadFailed: 'Couldn’t load the objects',
   loadFailedObject: 'Couldn’t load this object',
   somethingWrong: 'Something went wrong. Try again in a moment.',

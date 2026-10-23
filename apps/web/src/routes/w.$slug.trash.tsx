@@ -1,81 +1,11 @@
-import { isDataError } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
-import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { strings } from '../features/trash/strings.ts';
-import { TrashScreen } from '../features/trash/TrashScreen.tsx';
-import { failedPage, missingPage, trashPendingPage } from '../features/workspace/ObjectScreen.tsx';
-import { strings as workspace } from '../features/workspace/strings.ts';
-import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
-// The workspace's trash (spec 0022, AC-533): every trashed record the person
-// may see, newest first, narrowed to one object by `?object=<id>`. The loader
-// warms the trash's view (its count and first block, waiting at most
-// OPEN_GRACE_MS for its rows, so a slow load draws the grid loading in place)
-// beside every object (archived ones too, for the filter and the Object
-// column) and the members (Deleted by), all through the data layer; the
-// screen holds the view, so it settles live as records are deleted, restored
-// or purged anywhere.
-/** How long the route waits for the first rows before showing the grid loading in place. */
-const OPEN_GRACE_MS = 300;
-
-/** The trash's address: an object to narrow it to, by id. */
-interface TrashSearch {
-  readonly object?: string;
-}
-
+// The trash's old address: Settings › Workspace › Trash now (A120, 23 October 2026: the settings sidebar stays
+// beside it), kept for links and bookmarks, with its object filter.
 export const Route = createFileRoute('/w/$slug/trash')({
-  validateSearch: (search: Record<string, unknown>): TrashSearch =>
+  validateSearch: (search: Record<string, unknown>): { readonly object?: string } =>
     typeof search.object === 'string' && search.object !== '' ? { object: search.object } : {},
-  loaderDeps: ({ search }) => ({ object: search.object }),
-  loader: async ({ context, params, deps }) => {
-    try {
-      const [objects, members, view] = await Promise.all([
-        context.data.objects.all(params.slug),
-        context.data.members.list(params.slug),
-        context.data.trash.view(params.slug, deps.object),
-      ]);
-      // An object filter naming nothing the person may see shows every object instead.
-      const objectId = objects.some((object) => object.id === deps.object) ? deps.object : undefined;
-      const shown = objectId === deps.object ? view : await context.data.trash.view(params.slug);
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      await Promise.race([
-        shown.ready(),
-        new Promise<void>((resolve) => {
-          timer = setTimeout(resolve, OPEN_GRACE_MS);
-        }),
-      ]);
-      clearTimeout(timer);
-      return { page: { objects, members, view: shown, objectId } };
-    } catch (error) {
-      // The frame above shows "workspace not found" for this one.
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined };
-      throw error;
-    }
+  beforeLoad: ({ params, search }) => {
+    throw redirect({ to: '/w/$slug/settings/trash', params, search, replace: true });
   },
-  pendingComponent: () => (
-    <LoadingNow>
-      <WorkspacePage currentPage="trash" page={trashPendingPage()} />
-    </LoadingNow>
-  ),
-  errorComponent: TrashError,
-  component: TrashRoute,
 });
-
-function TrashRoute() {
-  const { page } = Route.useLoaderData();
-  const { slug } = Route.useParams();
-  if (page === undefined) {
-    return <WorkspacePage page={missingPage(workspace.pageMissingTitle, workspace.pageMissingText)} />;
-  }
-  return <TrashScreen slug={slug} {...page} />;
-}
-
-function TrashError({ error }: ErrorComponentProps) {
-  const router = useRouter();
-  return (
-    <WorkspacePage
-      currentPage="trash"
-      page={failedPage(strings.title, () => void router.invalidate(), error, strings.failedTitle)}
-    />
-  );
-}

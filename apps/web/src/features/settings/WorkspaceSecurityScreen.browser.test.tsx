@@ -15,6 +15,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
+import { SettingsTopBarSlot } from './topBarSlot.ts';
 import { WorkspaceSecurityScreen } from './WorkspaceSecurityScreen.tsx';
 
 /** The api's words for a code email that didn't send (CODE_NOT_SENT_MESSAGE in apps/api's account router). */
@@ -86,18 +87,22 @@ function layerWith(answers: readonly StepUpResult[], checked: StepUpResult = { o
 
 async function renderScreen(layer: DataLayer): Promise<Toasts> {
   const toasts = createToasts();
+  const bar = document.createElement('div');
   const rootRoute = createRootRouteWithContext<{ data: DataLayer; toasts: Toasts }>()();
   const security = createRoute({
     getParentRoute: () => rootRoute,
     path: '/w/$slug/settings/workspace/security',
+    // The settings frame's bar slot, so the page's TopBar (its h1) draws as it does in the app.
     component: () => (
-      <WorkspaceSecurityScreen
-        data={layer}
-        toasts={toasts}
-        slug="acme"
-        workspaceName="Acme"
-        initial={{ requireTwoFactor: false, membersWithout: 0, youHaveTwoFactor: false }}
-      />
+      <SettingsTopBarSlot value={bar}>
+        <WorkspaceSecurityScreen
+          data={layer}
+          toasts={toasts}
+          slug="acme"
+          workspaceName="Acme"
+          initial={{ requireTwoFactor: false, membersWithout: 0, youHaveTwoFactor: false }}
+        />
+      </SettingsTopBarSlot>
     ),
   });
   const router = createRouter({
@@ -105,10 +110,13 @@ async function renderScreen(layer: DataLayer): Promise<Toasts> {
     history: createMemoryHistory({ initialEntries: ['/w/acme/settings/workspace/security'] }),
     context: { data: layer, toasts },
   });
+  // The bar sits beside the root's container, as the frame's slot does, never inside it (a root clears its own).
+  const frame = document.createElement('div');
   const host = document.createElement('div');
-  document.body.append(host);
+  frame.append(bar, host);
+  document.body.append(frame);
   const root = createRoot(host);
-  mounted = { root, host };
+  mounted = { root, host: frame };
   await act(async () => {
     root.render(
       <UiProvider
@@ -127,6 +135,28 @@ async function renderScreen(layer: DataLayer): Promise<Toasts> {
   });
   return toasts;
 }
+
+describe('the page’s words (SW10, SW11, SW13)', () => {
+  it('is titled Security, with headings only, and no box above the switch while it is off limits', async () => {
+    const { layer } = layerWith([]);
+    await renderScreen(layer);
+    // The trail already says Workspace, so the title is the nav's own word.
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Security' })).toBeInTheDocument();
+    // Headings only: no line under Two factor sign in or Sessions.
+    const text = document.body.textContent;
+    expect(text).not.toContain('A second step at sign in');
+    expect(text).not.toContain('How long a sign in lasts here');
+    // Off limits until the owner has two factor: the row says why, its link inline, and no Callout above the card.
+    expect(page.getByRole('note').elements()).toHaveLength(0);
+    expect(text).toContain('You need two factor sign in yourself first. Set up yours');
+    await expect
+      .element(page.getByRole('link', { name: 'Set up yours' }))
+      .toHaveAttribute('href', '/w/acme/settings/account/sign-in');
+    await expect.element(page.getByRole('switch', { name: 'Require two factor sign in' })).toBeDisabled();
+    expect(text).toContain('How long people stay signed in before they sign in again.');
+    expect(text).toContain('Everyone signs in again. You stay signed in here.');
+  });
+});
 
 /** Opens Sign out everyone's confirm. */
 async function openConfirm() {

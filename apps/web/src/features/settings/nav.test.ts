@@ -37,12 +37,10 @@ describe('settingsNav', () => {
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
       rotations: '/w/acme/settings/scheduling/round-robin',
-      // The trash keeps its own address (the owner, 22 October 2026): the one entry outside Settings.
-      trash: '/w/acme/trash',
+      // The trash opens inside Settings, its sidebar and trail kept (A120, 23 October 2026).
+      trash: '/w/acme/settings/trash',
     });
-    expect(
-      entries.filter((entry) => entry.id !== 'trash').every((entry) => entry.href.startsWith('/w/acme/settings/')),
-    ).toBe(true);
+    expect(entries.every((entry) => entry.href.startsWith('/w/acme/settings/'))).toBe(true);
     expect(entries.filter((entry) => entry.meta !== undefined)).toEqual([]);
     expect(preferencesHref('acme')).toBe('/w/acme/settings/account/preferences');
     expect(calendarSettingsHref('acme')).toBe('/w/acme/settings/scheduling/calendars');
@@ -113,6 +111,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/members')).toBe('members');
     expect(settingsPageOf('/w/acme/settings/scheduling/round-robin')).toBe('rotations');
     expect(settingsPageOf('/w/acme/settings/scheduling/rotations')).toBe('rotations');
+    expect(settingsPageOf('/w/acme/settings/trash')).toBe('trash');
   });
 
   it('keeps the old Calendar address current on Calendars while it redirects', () => {
@@ -124,6 +123,8 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings')).toBeUndefined();
     expect(settingsPageOf('/w/acme/captures/links')).toBeUndefined();
     expect(settingsPageOf('/w/acme/objects/settings/jobs')).toBeUndefined();
+    // The trash's old address redirects into Settings; it marks nothing itself.
+    expect(settingsPageOf('/w/acme/trash')).toBeUndefined();
   });
 
   it('finds the group a page sits in, for its trail', () => {
@@ -132,6 +133,8 @@ describe('settingsPageOf', () => {
     expect(settingsGroupOf(groups, 'calendars')?.label).toBe('Scheduling');
     expect(settingsGroupOf(groups, 'jobs')?.label).toBe('Workspace');
     expect(settingsGroupOf(groups, 'rotations')?.label).toBe('Scheduling');
+    // Settings › Workspace › Trash.
+    expect(settingsGroupOf(groups, 'trash')?.label).toBe('Workspace');
     expect(settingsGroupOf(groups, undefined)).toBeUndefined();
   });
 });

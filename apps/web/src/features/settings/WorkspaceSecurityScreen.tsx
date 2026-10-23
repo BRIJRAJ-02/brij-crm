@@ -14,6 +14,7 @@ import {
   Button,
   Callout,
   Card,
+  InfoTip,
   Link,
   Modal,
   Select,
@@ -181,16 +182,23 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
           {error}
         </Callout>
       )}
-      <SettingsSection title={strings.twoFactor} description={strings.twoFactorDescription}>
-        {!mayRequire && (
-          <Callout actions={<Link href={securitySettingsHref(slug)}>{strings.setUpYours}</Link>}>
-            {strings.youFirst}
-          </Callout>
-        )}
+      <SettingsSection title={strings.twoFactor}>
         <Card isBusy={saving === 'require'}>
           <SettingsRow
             title={strings.require}
-            description={rules.requireTwoFactor ? strings.requireOn(rules.membersWithout) : strings.requireOff}
+            meta={<InfoTip label={strings.require}>{strings.requireInfo}</InfoTip>}
+            description={
+              rules.requireTwoFactor ? (
+                strings.requireOn(rules.membersWithout)
+              ) : mayRequire ? (
+                strings.requireOff
+              ) : (
+                // Off limits until the owner has it: the row says why, with the way to set it up, and no box above.
+                <>
+                  {strings.youFirst} <Link href={securitySettingsHref(slug)}>{strings.setUpYours}</Link>
+                </>
+              )
+            }
           >
             <Switch
               label={strings.require}
@@ -202,9 +210,13 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
           </SettingsRow>
         </Card>
       </SettingsSection>
-      <SettingsSection title={strings.sessions} description={strings.sessionsDescription}>
+      <SettingsSection title={strings.sessions}>
         <Card isBusy={saving === 'length'}>
-          <SettingsRow title={strings.sessionLength} description={strings.sessionLengthDescription}>
+          <SettingsRow
+            title={strings.sessionLength}
+            meta={<InfoTip label={strings.sessionLength}>{strings.sessionLengthInfo}</InfoTip>}
+            description={strings.sessionLengthDescription}
+          >
             <Select
               label={strings.sessionLength}
               isLabelHidden
@@ -284,16 +296,19 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
 export function WorkspaceSecurityPending() {
   return (
     <SettingsPage title={strings.title} isLoading>
-      <SettingsSection title={strings.twoFactor} description={strings.twoFactorDescription}>
+      <SettingsSection title={strings.twoFactor}>
         <Card isBusy>
-          <SettingsRow title={strings.require}>
+          <SettingsRow title={strings.require} meta={<InfoTip label={strings.require}>{strings.requireInfo}</InfoTip>}>
             <Skeleton shape="field" />
           </SettingsRow>
         </Card>
       </SettingsSection>
-      <SettingsSection title={strings.sessions} description={strings.sessionsDescription}>
+      <SettingsSection title={strings.sessions}>
         <Card isBusy>
-          <SettingsRow title={strings.sessionLength}>
+          <SettingsRow
+            title={strings.sessionLength}
+            meta={<InfoTip label={strings.sessionLength}>{strings.sessionLengthInfo}</InfoTip>}
+          >
             <Skeleton shape="field" />
           </SettingsRow>
           <SettingsRow title={strings.signOutEveryone}>
