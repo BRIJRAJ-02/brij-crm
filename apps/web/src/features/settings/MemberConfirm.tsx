@@ -1,7 +1,7 @@
 // Brief
-// Purpose: ask before a change on the Members page that ends something (the owner, 21 October 2026): revoking an
-// invitation now, and removing, leaving and handing over in later slices.
-// Main task: read what will happen, then the verb (or Cancel); it closes once the server agrees.
+// Purpose: ask before a change on the Members page that ends something (the owner, 21 October 2026): cancelling an
+// invitation, declining a request, handing the workspace over, and turning off the invite link or company email.
+// Main task: read what will happen, then the verb (or the way out); it closes once the server agrees.
 // Leaves out: the change's own rules (the server's) and what the page says afterwards (the caller's toast).
 import { isDataError } from '@crm/data';
 import { Button, Callout, Modal } from '@crm/ui';
@@ -12,8 +12,10 @@ import { strings } from './members-strings.ts';
 export interface MemberQuestion {
   readonly title: string;
   readonly text: string;
-  /** The commit's verb ("Revoke invitation"), never OK or Yes. */
+  /** The commit's verb ("Cancel invitation"), never OK or Yes. */
   readonly action: string;
+  /** The way out's words, when Cancel would clash with the verb ("Keep it" beside "Cancel invitation"). */
+  readonly dismiss?: string;
   /** The change: resolves once the server agrees, throws its refusal otherwise. */
   readonly run: () => Promise<void>;
 }
@@ -28,8 +30,8 @@ export interface MemberConfirmProps {
 }
 
 /**
- * A danger Modal (an alert dialog a click outside won't close): Cancel (ESC)
- * first, the danger solid verb last, busy while the server works, and its
+ * A danger Modal (an alert dialog a click outside won't close): Cancel, or
+ * the question's own way out (ESC), first, the danger solid verb last, busy while the server works, and its
  * refusal inside the dialog, which stays open.
  */
 export function MemberConfirm({ question, onClose, onDone }: MemberConfirmProps) {
@@ -86,7 +88,7 @@ function Asked({
       actions={
         <>
           <Button slot="close" kbd="ESC" isDisabled={isBusy}>
-            {strings.cancel}
+            {question.dismiss ?? strings.cancel}
           </Button>
           <Button variant="danger-solid" isPending={isBusy} onPress={commit}>
             {question.action}

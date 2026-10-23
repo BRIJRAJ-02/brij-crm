@@ -1,10 +1,10 @@
 // Brief
 // Purpose: Settings › Workspace › Members (spec 0031, AC-803, AC-810, AC-811): who is in the workspace, what each can
 // do, and who is invited.
-// Main task: find someone by name or email; owners and admins change roles, remove people and invite, resend or
-// revoke invitations; an owner hands the workspace on; everyone reads who is in.
-// Leaves out: leaving (the workspace menu's), the removal's effects and reassignment (slice 5),
-// teams, guests, the invite link and email domains (later slices).
+// Main task: find someone by name or email; owners and admins change roles, remove people and invite, answer
+// requests to join, resend or cancel invitations, and set the invite link and company email (the Joining tab); an
+// owner hands the workspace on; everyone reads who is in.
+// Leaves out: leaving (the workspace menu's), teams and guests (later slices of spec 0031).
 import {
   isDataError,
   ROLE_DESCRIPTIONS,
@@ -27,6 +27,7 @@ import {
   Button,
   ButtonGroup,
   Callout,
+  Card,
   EmptyState,
   Field,
   InfoTip,
@@ -36,6 +37,7 @@ import {
   MenuTrigger,
   RelativeTime,
   Select,
+  SettingsSection,
   SettingsStack,
   Table,
   TabPanel,
@@ -48,8 +50,8 @@ import { useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { InviteDialog } from './InviteDialog.tsx';
-import { EmailDomainCard } from './EmailDomainCard.tsx';
-import { InviteLinkCard } from './InviteLinkCard.tsx';
+import { EmailDomainRow } from './EmailDomainRow.tsx';
+import { InviteLinkRows } from './InviteLinkRows.tsx';
 import { MemberConfirm, type MemberQuestion } from './MemberConfirm.tsx';
 import { RemoveMemberDialog } from './RemoveMemberDialog.tsx';
 import { canRemove, grantableRoles, invitableRoles } from './members.ts';
@@ -73,7 +75,7 @@ export interface MembersScreenProps {
   readonly invitations: readonly InvitationView[] | undefined;
   /** The invite link, for holders of `members.invite` (with the invitations). */
   readonly link?: InviteLinkView | undefined;
-  /** Open requests to join, for holders of `members.invite`; the tab shows only while any wait. */
+  /** Open requests to join, for holders of `members.invite`; Asking to join shows only while any wait. */
   readonly requests?: readonly JoinRequestView[] | undefined;
   /** The email domains, for holders of `workspace.manage`. */
   readonly domains?: WorkspaceDomainsView | undefined;
@@ -126,7 +128,7 @@ const SEARCH_WAIT_MS = 250;
 /** The message a refusal shows, in the server's words when it gave any. */
 const messageOf = (error: unknown) => (isDataError(error) ? error.message : strings.somethingWrong);
 
-/** The Members page: Members and Invitations tabs, the Invite dialog and the confirms. */
+/** The Members page: Members and Joining tabs, the Invite dialog and the confirms. */
 export function MembersScreen({
   data,
   toasts,
@@ -232,22 +234,10 @@ export function MembersScreen({
     );
   };
 
+  // Only someone else's role has a picker (your own reads as text), so a pick changes it at once.
   const askRole = (member: MemberView, role: Role) => {
     if (role === member.role) return;
-    if (member.id !== access.memberId) {
-      changeRole(member, role);
-      return;
-    }
-    // Lowering one's own role asks first: it may take away what lets them change it back (AC-811).
-    setQuestion({
-      title: strings.selfRoleTitle(labelOf(role)),
-      text: strings.selfRoleText,
-      action: strings.selfRoleAction,
-      run: async () => {
-        await data.members.setRole(slug, member.id, role);
-      },
-      done: strings.roleChanged(member.name, labelOf(role)),
-    });
+    changeRole(member, role);
   };
 
   // Handing the workspace on can't be taken back in one click, so it asks first (AC-813).
@@ -265,7 +255,7 @@ export function MembersScreen({
     setRemoving(member);
   };
 
-  // The dialog says who was invited; the Invitations tab reads them in behind it.
+  // The dialog says who was invited; the Joining tab reads them in behind it.
   const invited = () => {
     void reload();
   };
@@ -307,12 +297,13 @@ export function MembersScreen({
     });
   };
 
-  // Revoking ends the link, so it asks first.
+  // Cancelling ends the link, so it asks first; its way out is Keep it, never a second Cancel.
   const revoke = (invitation: InvitationView) => {
     setQuestion({
       title: strings.revokeTitle(invitation.email),
       text: strings.revokeText,
       action: strings.revokeAction,
+      dismiss: strings.keepIt,
       run: () => data.invitations.revoke(slug, invitation.id),
       done: strings.revoked(invitation.email),
     });
@@ -572,66 +563,78 @@ export function MembersScreen({
           inset="none"
           tabs={[
             { id: 'members', label: strings.membersTab, count: page.total },
-            { id: 'invitations', label: strings.invitationsTab, count: invitations.length },
-            // Only while any wait (AC-810), so a workspace with none never shows an empty tab.
-            ...(requests.length > 0 ? [{ id: 'requests', label: strings.requestsTab, count: requests.length }] : []),
+            // Everyone on their way in: pending invitations and waiting requests (SW1, SW2).
+            { id: 'joining', label: strings.joiningTab, count: invitations.length + requests.length },
           ]}
-          selectedKey={tab === 'requests' && requests.length === 0 ? 'members' : tab}
+          selectedKey={tab}
           onSelectionChange={setTab}
           {...(tab === 'members' ? { end: searchField } : {})}
         >
           <TabPanel id="members">{membersList}</TabPanel>
-          <TabPanel id="invitations">
+          <TabPanel id="joining">
             <SettingsStack>
-              {domains !== undefined && (
-                <EmailDomainCard
-                  data={data}
-                  slug={slug}
-                  domains={domains}
-                  ask={setQuestion}
-                  onChanged={reload}
-                  onTurnedOn={(message) => {
-                    toasts.toast({ tone: 'success', message });
-                  }}
-                  onFailed={(message) => {
-                    toasts.toast({ tone: 'danger', message });
-                  }}
-                />
+              {/* Only while some wait (AC-810), so a workspace with none never shows an empty list. */}
+              {requests.length > 0 && (
+                <SettingsSection title={strings.askingSection}>
+                  <Table
+                    label={strings.askingSection}
+                    columns={REQUEST_COLUMNS}
+                    rows={requests}
+                    getRowId={(request) => request.id}
+                    renderCell={requestCell}
+                    emptyState={<EmptyState icon="user-plus" title={strings.noRequests} />}
+                  />
+                </SettingsSection>
               )}
-              {link !== undefined && (
-                <InviteLinkCard
-                  data={data}
-                  slug={slug}
-                  link={link}
-                  ask={setQuestion}
-                  onChanged={reload}
-                  onFailed={(message) => {
-                    toasts.toast({ tone: 'danger', message });
-                  }}
+              <SettingsSection title={strings.pendingSection}>
+                <Table
+                  label={strings.pendingSection}
+                  columns={INVITATION_COLUMNS}
+                  rows={invitations}
+                  getRowId={(invitation) => invitation.id}
+                  renderCell={invitationCell}
+                  emptyState={<EmptyState icon="mail" title={strings.noInvitations} />}
                 />
+              </SettingsSection>
+              {/* Set once, so last: the invite link, then the company email, one Card of rows. */}
+              {(link !== undefined || domains !== undefined) && (
+                <SettingsSection title={strings.otherWaysSection}>
+                  <Card>
+                    {link !== undefined && (
+                      <InviteLinkRows
+                        data={data}
+                        slug={slug}
+                        link={link}
+                        ask={setQuestion}
+                        onChanged={reload}
+                        onSaved={(notice) => {
+                          toasts.toast(notice);
+                        }}
+                        onFailed={(message) => {
+                          toasts.toast({ tone: 'danger', message });
+                        }}
+                      />
+                    )}
+                    {domains !== undefined && (
+                      <EmailDomainRow
+                        data={data}
+                        slug={slug}
+                        domains={domains}
+                        ask={setQuestion}
+                        onChanged={reload}
+                        onTurnedOn={(message) => {
+                          toasts.toast({ tone: 'success', message });
+                        }}
+                        onFailed={(message) => {
+                          toasts.toast({ tone: 'danger', message });
+                        }}
+                      />
+                    )}
+                  </Card>
+                </SettingsSection>
               )}
-              <Table
-                label={strings.invitationsTab}
-                columns={INVITATION_COLUMNS}
-                rows={invitations}
-                getRowId={(invitation) => invitation.id}
-                renderCell={invitationCell}
-                emptyState={<EmptyState icon="mail" title={strings.noInvitations} />}
-              />
             </SettingsStack>
           </TabPanel>
-          {requests.length > 0 && (
-            <TabPanel id="requests">
-              <Table
-                label={strings.requestsTab}
-                columns={REQUEST_COLUMNS}
-                rows={requests}
-                getRowId={(request) => request.id}
-                renderCell={requestCell}
-                emptyState={<EmptyState icon="user-plus" title={strings.noRequests} />}
-              />
-            </TabPanel>
-          )}
         </Tabs>
       ) : (
         <>
@@ -734,12 +737,12 @@ export function MembersPending() {
           inset="none"
           tabs={[
             { id: 'members', label: strings.membersTab },
-            { id: 'invitations', label: strings.invitationsTab },
+            { id: 'joining', label: strings.joiningTab },
           ]}
           end={searchField}
         >
           <TabPanel id="members">{table}</TabPanel>
-          <TabPanel id="invitations">{null}</TabPanel>
+          <TabPanel id="joining">{null}</TabPanel>
         </Tabs>
       ) : (
         <>
