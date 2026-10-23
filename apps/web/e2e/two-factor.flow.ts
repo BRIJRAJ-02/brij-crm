@@ -4,8 +4,7 @@
 // would (RFC 6238, 30 second steps, 6 digits). Then they sign out, sign in by
 // email code and the app's code, sign out again, and sign in by email code
 // and one of the backup codes the setup showed, which then counts one fewer.
-import { createHmac } from 'node:crypto';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { codeFor } from './mailpit.ts';
 import { homeUrl, newWorkspace } from './people.ts';
@@ -114,13 +113,16 @@ test('turns on two factor, then signs in with an app code and with a backup code
   await signOut(page, slug);
   seen.push(await emailStep(page, email, seen));
   await expect(page.getByLabel('Code from your authenticator app')).toBeVisible();
-  // A wrong code is refused on the page, and the boxes are cleared for another go.
-  const right = await freshCode(page, secret, used);
-  await page.getByLabel('Code from your authenticator app').fill(right === '000000' ? '111111' : '000000');
+  // A wrong code is refused on the page, and the boxes are cleared for another go. Wrong for any step the server may
+  // still take (the one before, now and the next two), so it can't match by chance.
+  const near = new Set([-1, 0, 1, 2].map((offset) => totp(secret, stepNow() + offset)));
+  const wrong = ['000000', '111111', '222222', '333333', '444444'].find((code) => !near.has(code)) ?? '555555';
+  await page.getByLabel('Code from your authenticator app').fill(wrong);
   await expect(page.getByText('That code didn’t work. Try the newest code in your app.')).toBeVisible();
   await expect(page).toHaveURL(/\/two-factor/);
   await expect(page.getByLabel('Code from your authenticator app')).toHaveValue('');
-  await page.getByLabel('Code from your authenticator app').fill(right);
+  // The right code is made just before it is typed, so the wrong attempt's wait can't run its step out.
+  await page.getByLabel('Code from your authenticator app').fill(await freshCode(page, secret, used));
   await expect(page).toHaveURL(homeUrl(slug), { timeout: 30_000 });
 
   // Signed out again, a backup code stands in for the app, once.
