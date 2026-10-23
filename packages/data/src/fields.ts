@@ -116,17 +116,19 @@ export function toActorDisplays(members: readonly MemberSummary[]): readonly Act
 /**
  * The members a member picker offers for what was typed (spec 0003, Actor
  * reference: a Menu of members, "Me" first): those whose name or email holds
- * it, ignoring case and the spaces around it, in the workspace's order. `meId`
- * is left out, since the picker pins Me above the results already and one
- * member twice in one menu would share a key.
+ * it, ignoring case and the spaces around it, in the workspace's order. While
+ * nothing is typed `meId` is left out, since the picker pins Me above the
+ * results then (one member twice in one menu would share a key); once a
+ * search is typed the picker pins nothing, so Me comes first among the
+ * matches when it matches, and otherwise not at all.
  */
 export function searchMembers(members: readonly ActorDisplay[], query: string, meId?: string): readonly ActorDisplay[] {
   const wanted = query.trim().toLocaleLowerCase();
-  return members.filter(
+  if (wanted === '') return members.filter((member) => member.id !== meId);
+  const found = members.filter(
     (member) =>
-      member.id !== meId &&
-      (wanted === '' ||
-        member.name.toLocaleLowerCase().includes(wanted) ||
-        (member.email?.toLocaleLowerCase().includes(wanted) ?? false)),
+      member.name.toLocaleLowerCase().includes(wanted) || (member.email?.toLocaleLowerCase().includes(wanted) ?? false),
   );
+  const me = found.filter((member) => member.id === meId);
+  return me.length === 0 ? found : [...me, ...found.filter((member) => member.id !== meId)];
 }

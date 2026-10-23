@@ -1271,7 +1271,7 @@ describe('members and attributes', () => {
     expect(toFieldAttribute(createdAt, 'unused').readOnlyReason).toBeUndefined();
   });
 
-  it('offers members by name or email, ignoring case, with Me left out for the picker to pin first', () => {
+  it('offers members by name or email, ignoring case, Me pinned by the picker while empty and first once matched', () => {
     const members = toActorDisplays([
       { id: '0192a000-0000-7000-8000-000000000001', name: 'Ada Lovelace', email: 'ada@acme.test' },
       { id: '0192a000-0000-7000-8000-000000000002', name: 'Grace Hopper', email: 'grace@navy.test' },
@@ -1281,7 +1281,12 @@ describe('members and attributes', () => {
     expect(names('')).toEqual(['Ada Lovelace', 'Grace Hopper', 'Alan Turing']);
     expect(names('  HOPPER ')).toEqual(['Grace Hopper']);
     expect(names('acme.test')).toEqual(['Ada Lovelace', 'Alan Turing']);
-    expect(names('a', '0192a000-0000-7000-8000-000000000001')).toEqual(['Grace Hopper', 'Alan Turing']);
+    const me = '0192a000-0000-7000-8000-000000000003';
+    // Nothing typed: Me is left out, since the picker pins Me first.
+    expect(names('', me)).toEqual(['Ada Lovelace', 'Grace Hopper']);
+    // Typed: the picker pins nothing, so Me leads the matches when it matches, and is absent when it doesn't.
+    expect(names('a', me)).toEqual(['Alan Turing', 'Ada Lovelace', 'Grace Hopper']);
+    expect(names('grace', me)).toEqual(['Grace Hopper']);
     expect(names('zzz')).toEqual([]);
   });
 

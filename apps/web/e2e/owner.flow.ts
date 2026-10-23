@@ -31,9 +31,13 @@ test('Owner is set from a cell, the record page, bulk Edit and New deal', async 
   await expect(memberItem(page, 'Ada Lovelace')).toContainText('Me');
   await expect(memberItem(page, 'Ada Lovelace')).toContainText(`owner-${tag}@example.com`);
   await checkScreen(page, 'owner-cell-picker');
-  // A search that matches nobody else still keeps Me first; the pick saves and closes the popover.
-  await page.keyboard.type('owner-');
-  await memberItem(page, 'Ada Lovelace').click();
+  // A search drops the pinned Me: one that matches nobody lists nobody, so Enter can't pick Me by accident.
+  await page.keyboard.type('zzz');
+  await expect(memberItem(page, 'Ada Lovelace')).toHaveCount(0);
+  // Searching by email finds the member (still marked Me); Enter picks the first match, saves and closes.
+  await picker.getByRole('searchbox', { name: 'Search Owner' }).fill('owner-');
+  await expect(memberItem(page, 'Ada Lovelace')).toContainText('Me');
+  await page.keyboard.press('Enter');
   await expect(picker).toBeHidden();
   await expect(owner).toContainText('Ada Lovelace');
 
@@ -56,11 +60,13 @@ test('Owner is set from a cell, the record page, bulk Edit and New deal', async 
   await page.keyboard.press('Escape');
   await details.getByRole('button', { name: 'Remove Ada Lovelace' }).click();
   await expect(details).not.toContainText('Ada Lovelace');
+  // The timeline's newest entry names each change.
+  const newest = page.getByRole('feed', { name: 'Recent activity' }).getByRole('article').first();
+  await expect(newest).toHaveAccessibleName(/cleared Owner/);
   await details.getByRole('button', { name: 'Edit Owner' }).click();
   await memberItem(page, 'Ada Lovelace').click();
   await expect(details).toContainText('Ada Lovelace');
-  // The timeline names the change.
-  await expect(page.getByRole('feed', { name: 'Recent activity' })).toContainText('Owner');
+  await expect(newest).toHaveAccessibleName(/set Owner/);
 
   // Back on People for the bulk Edit.
   await page

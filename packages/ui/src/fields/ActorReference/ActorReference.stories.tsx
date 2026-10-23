@@ -79,6 +79,38 @@ export const Editor: Story = {
 };
 
 /**
+ * Typing a search drops the pinned Me from the top, so Enter picks the
+ * member searched for, never Me (QA, 23 October 2026).
+ */
+export const SearchThenEnter: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: Editor.args,
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    const other = SAMPLE_MEMBERS[1];
+    if (other?.id === undefined || other.id === null) throw new Error('the samples need a second member');
+    await userEvent.click(canvas.getByRole('button', { name: /Choose Owner/ }));
+    const search = await waitFor(() => {
+      const found = document.querySelector<HTMLInputElement>('[role="searchbox"]');
+      if (found === null) throw new Error('the search did not open');
+      return found;
+    });
+    await userEvent.type(search, other.name.slice(0, 4));
+    await waitFor(() => {
+      const [first] = [...document.querySelectorAll('[role="menuitem"]')];
+      if (first?.textContent.includes(other.name) !== true) throw new Error(`${other.name} is not first`);
+    });
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onCommit).toHaveBeenCalledWith({ type: 'member', id: other.id });
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};
+
+/**
  * The value changes from outside (a refusal putting it back): the chips
  * follow it. Removing a chip keeps focus among the chips, then the button.
  */

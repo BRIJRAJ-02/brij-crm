@@ -77,7 +77,12 @@ function dayFromToday(days: number): string {
 function prefillOf(definition: AttributeDefinition, meId: string | undefined): unknown {
   const fallback = definition.defaultValue;
   if (fallback === undefined) return null;
-  if (fallback.kind === 'current_user') return meId === undefined ? null : { type: 'member', id: meId };
+  if (fallback.kind === 'current_user') {
+    // Only a member attribute takes this default (the engine gives no other type one).
+    if (definition.type !== 'actor_reference' || meId === undefined) return null;
+    const me = { type: 'member', id: meId };
+    return definition.isMulti ? [me] : me;
+  }
   if (fallback.kind === 'offset') {
     const days = /^P(\d+)D$/.exec(fallback.duration);
     return definition.type === 'date' && days?.[1] !== undefined ? dayFromToday(Number(days[1])) : null;

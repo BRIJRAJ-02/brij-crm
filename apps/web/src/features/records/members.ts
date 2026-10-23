@@ -4,7 +4,7 @@
 // search filters them in the browser and never asks the server; the server
 // checks every pick is an active member of this workspace on its own.
 import { searchMembers, toActorDisplays, type ActorDisplay, type MemberSummary } from '@crm/data';
-import { arraySource } from '@crm/ui';
+import { arraySource, type ListSource } from '@crm/ui';
 import { useMemo } from 'react';
 import { useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { editorSearch } from './links.ts';
@@ -30,13 +30,21 @@ export function useMemberPicker(members: readonly MemberSummary[]): MemberPicker
   return useMemo(() => {
     const displays = toActorDisplays(members);
     const me = meId === undefined ? undefined : displays.find((member) => member.id === meId);
+    // The picker asks on every render it draws, so the last answer is kept until the query changes.
+    const answered = new Map<string, ListSource<ActorDisplay>>();
+    const search = (query: string) => {
+      const held = answered.get(query);
+      if (held !== undefined) return held;
+      const source = arraySource(searchMembers(displays, query, me?.id ?? undefined), keyOf);
+      answered.clear();
+      answered.set(query, source);
+      return source;
+    };
     return {
       displays,
       extras: {
         ...(me === undefined ? {} : { me }),
-        onSearch: editorSearch((query: string) =>
-          arraySource(searchMembers(displays, query, me?.id ?? undefined), keyOf),
-        ),
+        onSearch: editorSearch(search),
       },
     };
   }, [members, meId]);

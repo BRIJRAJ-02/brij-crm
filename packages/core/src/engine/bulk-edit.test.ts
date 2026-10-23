@@ -313,8 +313,16 @@ describe('updateMany', () => {
     // The version names who set it, as every value write does (value history).
     const history = await getHistory(w.scope, { recordId: acme, attributeId: owner });
     expect(history.at(-1)).toMatchObject({ value: me, setBy: { type: 'member', id: w.memberId } });
-    // Another workspace's member, an unknown id and a non member are each refused per record, and nothing changes.
+    // A member removed from this workspace (the picker's list may predate it), another workspace's member, an
+    // unknown id and a non member are each refused per record, and nothing changes.
+    const removed = newId();
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into members (workspace_id, id, name, email, role, status, created_by_type, updated_by_type) values (${w.workspaceId}, ${removed}, 'Gone', 'gone@example.com', 'member', 'removed', 'system', 'system')`,
+      ),
+    );
     for (const stranger of [
+      { type: 'member', id: removed },
       { type: 'member', id: elsewhere.memberId },
       { type: 'member', id: newId() },
       { type: 'system', id: null },

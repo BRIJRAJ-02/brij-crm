@@ -112,6 +112,10 @@ const NO_TASKS = { count: 0, getItem: () => undefined, getKey: (task: { readonly
 /** A feed with nothing in it yet, for the loading page before the record's timeline exists. */
 const NO_ENTRIES = { count: 0, getItem: () => undefined, getKey: () => '' };
 
+/** No attributes or members yet, while the route loads: one array each, so Details' memos hold across renders. */
+const NO_ATTRIBUTES: readonly AttributeDefinition[] = [];
+const NO_MEMBERS: readonly MemberSummary[] = [];
+
 /** No notes yet, while the route loads. */
 const NO_NOTES = { count: 0, getItem: () => undefined, getKey: (note: { readonly id: string }) => note.id };
 
@@ -244,7 +248,7 @@ function LoadingLayout({
       selectedTab={tab}
       onTabChange={onTabChange ?? (() => undefined)}
       sidebarLabel={strings.details}
-      sidebar={<RecordDetails attributes={[]} members={[]} record={undefined} />}
+      sidebar={<RecordDetails attributes={NO_ATTRIBUTES} members={NO_MEMBERS} record={undefined} />}
       isLoading
     >
       {children}
