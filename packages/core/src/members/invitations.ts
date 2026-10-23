@@ -14,6 +14,7 @@ import {
   INVITE_LINK_USES_MAX,
   INVITES_LIMIT,
   maskEmail,
+  memberNameFor,
   OWNER_RULES_MESSAGE,
   PERMISSIONS,
   ROLE_PERMISSIONS,
@@ -751,7 +752,8 @@ export async function acceptInvite(
         throw refuse('SEAT_LIMIT', SEAT_LIMIT_MESSAGE);
       }
       const memberId = newId();
-      const name = user.name.trim() === '' ? (email.split('@')[0] ?? email) : user.name.trim();
+      // Their account's name, else one made from the address as first run makes it ("Jo Smith", QA Q83).
+      const name = memberNameFor('', user.name, email);
       await tx.insert(members).values({
         workspaceId: scope.workspaceId,
         id: memberId,
@@ -1034,8 +1036,8 @@ export async function setInviteLink(
 
 /**
  * Adds a signed in person as an active member with `role` (a link join, an
- * approved request): their name in the workspace (their account's, else the
- * address's local part), and their directory row, in the caller's
+ * approved request): their name in the workspace (their account's, else one
+ * made from the address, as first run makes it), and their directory row, in the caller's
  * transaction. Answers the new member's id. The caller has checked the seat.
  */
 export async function addJoiner(
@@ -1045,7 +1047,7 @@ export async function addJoiner(
   role: Role,
 ): Promise<string> {
   const memberId = newId();
-  const name = user.name.trim() === '' ? (user.email.split('@')[0] ?? user.email) : user.name.trim();
+  const name = memberNameFor('', user.name, user.email);
   await tx.insert(members).values({
     workspaceId,
     id: memberId,

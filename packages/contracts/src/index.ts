@@ -60,6 +60,7 @@ export * from './jobs.ts';
 export * from './csv.ts';
 export * from './me.ts';
 export * from './members.ts';
+export * from './member-names.ts';
 export * from './nav-model.ts';
 export * from './navigation.ts';
 export * from './notifications.ts';

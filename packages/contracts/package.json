@@ -14,6 +14,7 @@
     "./jump": "./src/values/jump.ts",
     "./validation": "./src/validation/index.ts",
     "./slugs": "./src/values/slugs.ts",
+    "./member-names": "./src/member-names.ts",
     "./safe-link": "./src/values/safe-link.ts",
     "./picker": "./src/values/picker.ts",
     "./activity-keys": "./src/activity-keys.ts",

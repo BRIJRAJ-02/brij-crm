@@ -11,6 +11,7 @@ import {
   domainOf,
   PERMISSIONS,
   isPublicEmailDomain,
+  memberNameFor,
   ROLE_PERMISSIONS,
   type Joinable,
   type JoinRequestView,
@@ -51,7 +52,8 @@ export interface SessionPerson {
 /**
  * The asker's name as admins read it in the tab and the email: control
  * characters and line breaks become spaces, runs of space one, at most 80
- * characters; the address's local part when nothing is left.
+ * characters; a name made from the address when nothing is left, as first run
+ * makes it (QA Q83).
  */
 export function plainName(raw: string, email: string): string {
   const clean = raw
@@ -59,7 +61,7 @@ export function plainName(raw: string, email: string): string {
     .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return (clean === '' ? (email.split('@')[0] ?? email) : clean).slice(0, 80);
+  return memberNameFor(clean, '', email);
 }
 
 /** Whether a domain is a public mail domain (gmail.com and the like). */
