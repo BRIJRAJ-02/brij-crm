@@ -50,6 +50,11 @@ export const MyProfile = z.object({
   workspaceTimeZone: z.string(),
   /** Their account's Google picture as our own origin serves it (`/api/me/picture?v=`, 23 Oct 2026), never Google's URL. */
   image: z.string().optional(),
+  /**
+   * Whether their account has Google linked (23 Oct 2026): Sync Google photo refreshes it when linked, and links it
+   * first when not. Absent where Google sign in is off.
+   */
+  google: z.enum(['linked', 'unlinked']).optional(),
   /** Their handle, the same in every workspace; absent until they pick one. */
   handle: z.string().optional(),
   /** A free handle from their name, for the field's first value while they have none. */

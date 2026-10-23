@@ -234,12 +234,13 @@ describe('the body limit on /api/auth', () => {
 describe('the Better Auth routes the API serves', () => {
   const app = createTestApp();
 
-  it('serves exactly the reviewed list (spec 0033, AC-900; passkeys taken out 22 October 2026)', () => {
+  it('serves exactly the reviewed list (spec 0033, AC-900; passkeys taken out 22 October 2026; linking for Sync Google photo 23 October)', () => {
     expect([...AUTH_ROUTES].sort()).toEqual(
       [
         '/callback/google',
         '/email-otp/send-verification-otp',
         '/get-session',
+        '/link-social',
         '/sign-in/email-otp',
         '/sign-in/social',
         '/sign-out',
@@ -259,7 +260,9 @@ describe('the Better Auth routes the API serves', () => {
     ['GET', '/passkey/list-user-passkeys'],
     ['POST', '/update-user'],
     ['GET', '/list-sessions'],
-    ['POST', '/link-social'],
+    // Linking serves Profile's Sync Google photo only (23 October 2026): listing and unlinking stay shut.
+    ['GET', '/list-accounts'],
+    ['POST', '/unlink-account'],
     ['POST', '/revoke-sessions'],
     ['POST', '/revoke-other-sessions'],
     ['POST', '/change-email'],

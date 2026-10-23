@@ -2,13 +2,15 @@
 // Purpose: Settings › Account › Profile (spec 0031, AC-821): how this member appears in this workspace.
 // Main task: change their name (the SaveBar at the view’s foot shows once it changed), or delete the account.
 // Also their public profile (22 Oct 2026): the handle their booking addresses start with (/<handle>/<slug>) and a one
-// line bio, the person's own in every workspace; a new handle keeps the old one working.
-// Leaves out: the picture upload (#32: Google's picture or initials until then, so no button), editing the email (the account's), the time zone (Preferences, right above in the nav). Deleting the account sits last, in its Danger zone (moved here from Account › Security, 22 October 2026).
+// line bio, the person's own in every workspace; a new handle keeps the old one working. And Sync Google photo beside
+// the picture where Google sign in is on (23 Oct 2026): their Google account's current photo, linking Google first.
+// Leaves out: the picture upload (#32: Google's picture or initials until then), editing the email (the account's), the time zone (Preferences, right above in the nav). Deleting the account sits last, in its Danger zone (moved here from Account › Security, 22 October 2026).
 import { isDataError, type DataLayer, type MyProfile } from '@crm/data';
 import { useAccountSecurity } from '@crm/data/react';
 import {
   Avatar,
   Button,
+  Callout,
   Card,
   Field,
   SaveBar,
@@ -17,15 +19,15 @@ import {
   Skeleton,
   type SaveBarStatus,
 } from '@crm/ui';
-import { useBlocker } from '@tanstack/react-router';
+import { useBlocker, useRouteContext } from '@tanstack/react-router';
 import { handleProblem } from '@crm/contracts/handles';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
 import { DeleteAccountSection } from './DeleteAccountSection.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings as securityCopy } from './security-strings.ts';
-import { strings } from './workspace-strings.ts';
+import { strings, type GooglePhotoResult } from './workspace-strings.ts';
 
 /** Props for the Profile page. */
 export interface ProfileScreenProps {
@@ -34,15 +36,53 @@ export interface ProfileScreenProps {
   readonly profile: MyProfile;
   /** A change landed: the route reads the profile again. */
   readonly onChanged: () => Promise<void>;
+  /** How a Google photo sync went, once, on the way back from Google (`?google-photo=`). */
+  readonly photoResult?: GooglePhotoResult;
+  /** Clears `?google-photo=`: once the success toast is up, or when its note is dismissed. */
+  readonly onPhotoResultSeen: () => void;
 }
 
 /**
- * One Card: their picture with their name beside it, the name to change, and the sign in email as plain text.
- * The SaveBar at the view's foot only while the name differs: Discard puts the saved name back.
+ * Your details: their picture with their name beside it (and Sync Google photo where Google sign in is on), the name
+ * to change, and the sign in email as plain text. Then the public profile (handle, bio, the page's link) and the
+ * Danger zone. The SaveBar at the view's foot only while something changed: Discard puts the saved values back.
  */
-export function ProfileScreen({ data, slug, profile, onChanged }: ProfileScreenProps) {
+export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onPhotoResultSeen }: ProfileScreenProps) {
   // Deleting the account asks for a step up, which reads how this account signs in.
   const security = useAccountSecurity(data.account.security());
+  const { toasts } = useRouteContext({ from: '__root__' });
+  const [isOpeningGoogle, setOpeningGoogle] = useState(false);
+  // Back from Google synced: the toast once, then the result leaves the address so a reload doesn't say it again.
+  // Any other result is the page's note (below) until dismissed: it says why, and what to do.
+  const saidSynced = useRef(false);
+  useEffect(() => {
+    if (photoResult !== 'synced' || saidSynced.current) return;
+    saidSynced.current = true;
+    toasts.toast({ tone: 'success', message: strings.googlePhoto.synced.text() });
+    onPhotoResultSeen();
+  }, [photoResult, toasts, onPhotoResultSeen]);
+  const photoNote: (typeof strings.googlePhoto)[Exclude<GooglePhotoResult, 'synced'>] | undefined =
+    photoResult === undefined || photoResult === 'synced' ? undefined : strings.googlePhoto[photoResult];
+  // Back from Google with the browser's back button, the page comes out of the back/forward cache as it was left:
+  // "Opening Google". Start over.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setOpeningGoogle(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, []);
+  // On success the browser leaves for Google and comes back to this page; only a failure to start comes back here.
+  const syncGooglePhoto = () => {
+    if (isOpeningGoogle || isDirty) return;
+    setOpeningGoogle(true);
+    data.auth.syncGooglePhoto(`/w/${encodeURIComponent(slug)}/settings/account/profile`).catch((error: unknown) => {
+      setOpeningGoogle(false);
+      toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+    });
+  };
   const [name, setName] = useState(profile.name);
   // The handle starts from the saved one, else a free one made from their name, which they claim by saving.
   const [handle, setHandle] = useState(profile.handle ?? profile.suggestedHandle ?? '');
@@ -59,6 +99,17 @@ export function ProfileScreen({ data, slug, profile, onChanged }: ProfileScreenP
   const isBioDirty = bio.trim() !== profile.bio;
   const isNameDirty = name.trim() !== profile.name;
   const isDirty = isNameDirty || isHandleDirty || isBioDirty;
+  // Leaving for Google would lose unsaved changes, so the button waits for them, and says so in the row.
+  const pictureNote =
+    profile.google !== undefined && isDirty
+      ? strings.saveBeforeSync
+      : profile.google === 'unlinked'
+        ? strings.googleUnlinked(profile.email)
+        : profile.image !== undefined
+          ? strings.fromGoogle
+          : profile.google === 'linked'
+            ? strings.googleNoPhoto
+            : undefined;
   const isNameMissing = name.trim() === '';
   const handleError = isHandleDirty ? handleProblem(wantedHandle) : undefined;
   const isBioWithoutHandle = isBioDirty && profile.handle === undefined && !isHandleDirty;
@@ -141,9 +192,24 @@ export function ProfileScreen({ data, slug, profile, onChanged }: ProfileScreenP
         />
       }
     >
+      {photoNote !== undefined && (
+        <Callout
+          tone={photoNote.tone}
+          title={photoNote.title}
+          isAnnounced
+          actions={
+            <Button variant="ghost" onPress={onPhotoResultSeen}>
+              {strings.dismiss}
+            </Button>
+          }
+        >
+          {photoNote.text(profile.email)}
+        </Callout>
+      )}
       {/* A section like the danger zone under it, so the two read as parts of one page with a line between. */}
       <SettingsSection title={strings.detailsSection}>
         <Card>
+          {/* Sync Google photo shows where Google sign in is on; without it the row only shows. */}
           <SettingsRow
             title={profile.name}
             leadingAlign="center"
@@ -156,8 +222,23 @@ export function ProfileScreen({ data, slug, profile, onChanged }: ProfileScreenP
                 {...(profile.image === undefined ? {} : { src: profile.image })}
               />
             }
-            {...(profile.image === undefined ? {} : { description: strings.fromGoogle })}
-          />
+            {...(pictureNote === undefined ? {} : { description: pictureNote })}
+          >
+            {profile.google === undefined ? undefined : (
+              <Button
+                variant="secondary"
+                provider="google"
+                isPending={isOpeningGoogle}
+                isDisabled={isDirty}
+                onPress={syncGooglePhoto}
+                {...(profile.google === 'unlinked' && !isOpeningGoogle
+                  ? { label: strings.syncGooglePhotoAndSignIn }
+                  : {})}
+              >
+                {isOpeningGoogle ? strings.openingGoogle : strings.syncGooglePhoto}
+              </Button>
+            )}
+          </SettingsRow>
           <SettingsRow title={strings.yourName} control="field">
             <Field
               label={strings.yourName}
