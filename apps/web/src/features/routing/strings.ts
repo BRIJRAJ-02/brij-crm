@@ -88,8 +88,11 @@ export const strings = {
   moveUp: 'Move up',
   moveDown: 'Move down',
   remove: 'Remove',
-  removeTitle: (title: string) => `Remove ${title}?`,
-  removeText: 'Leads it would have matched go to the next rule, or the fallback.',
+  /** The remove confirm's question: the rule by its name, or its place when it has none ("Remove rule 2?"). */
+  removeTitle: (index: number, name: string | undefined) =>
+    name === undefined || name === '' ? `Remove rule ${String(index + 1)}?` : `Remove “${name}”?`,
+  removeText: 'Leads it would have matched go to the next rule, or where they go with no rule.',
+  typeValue: 'Type a value',
   removeAction: 'Remove rule',
   cancel: 'Cancel',
   saving: 'Saving',

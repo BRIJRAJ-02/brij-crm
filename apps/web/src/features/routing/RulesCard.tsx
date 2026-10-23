@@ -197,7 +197,7 @@ function RulesCardBody({
                     if (key === 'edit') setEditing({ index, rule });
                     if (key === 'up') move(index, -1);
                     if (key === 'down') move(index, 1);
-                    if (key === 'remove') setRemoving({ id: rule.id, title: strings.ruleTitle(index, rule.name) });
+                    if (key === 'remove') setRemoving({ id: rule.id, title: strings.removeTitle(index, rule.name) });
                   }}
                 >
                   <MenuItem id="edit" icon="pencil">
@@ -272,7 +272,7 @@ function RulesCardBody({
         }}
       />
       <Modal
-        title={strings.removeTitle(removing?.title ?? '')}
+        title={removing?.title ?? ''}
         tone="danger"
         isOpen={removing !== undefined}
         isBusy={busy}

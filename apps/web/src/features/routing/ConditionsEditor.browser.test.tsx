@@ -10,6 +10,8 @@ import { page, userEvent } from 'vitest/browser';
 import { ConditionsEditor } from './ConditionsEditor.tsx';
 import type { Fact } from './facts.ts';
 
+const company: Fact = { key: 'company', label: 'Company', kind: 'text' };
+
 const budget: Fact = {
   key: 'budget',
   label: 'Budget',
@@ -35,7 +37,7 @@ function Editor({ start, onChange }: { readonly start: ShowWhen; readonly onChan
   return (
     <ConditionsEditor
       value={value}
-      facts={[budget]}
+      facts={[budget, company]}
       onChange={(next) => {
         setValue(next);
         onChange(next);
@@ -102,5 +104,11 @@ describe('ConditionsEditor', () => {
     await userEvent.click(trigger('Comparison'));
     await pick('is');
     expect(onChange).toHaveBeenLastCalledWith({ join: 'all', rules: [{ key: 'budget', op: 'is', value: 'Large' }] });
+  });
+
+  it('says what a typed value wants, since its box has no label over it (Q65)', async () => {
+    await draw({ join: 'all', rules: [{ key: 'company', op: 'is', value: '' }] });
+    const box = page.getByRole('textbox', { name: 'Value' }).element();
+    expect(box.getAttribute('placeholder')).toBe('Type a value');
   });
 });

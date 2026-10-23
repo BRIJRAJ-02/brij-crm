@@ -141,6 +141,8 @@ export function ConditionsEditor({
               <Field
                 label={strings.value}
                 isLabelHidden
+                // The box sits in a row with no label over it, so it says what it wants (Q65).
+                placeholder={strings.typeValue}
                 value={text}
                 isReadOnly={isReadOnly}
                 {...(fact?.kind === 'number' ? { inputMode: 'decimal' as const } : {})}
