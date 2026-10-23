@@ -13,6 +13,8 @@ import {
   Button,
   Callout,
   Field,
+  InfoTip,
+  Link,
   Modal,
   Radio,
   RadioGroup,
@@ -25,6 +27,7 @@ import {
   RecordChip,
 } from '@crm/ui';
 import { useState } from 'react';
+import { availabilityHref } from './links.ts';
 import { strings } from './rotation-strings.ts';
 
 /** Props for the dialog. */
@@ -110,6 +113,8 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     .filter((person) => !members.some((member) => member.memberId === person.id))
     .map((person) => ({ id: person.id, label: person.name, description: person.email }));
   const countError = members.length < 2 ? strings.needTwo : members.length > 20 ? strings.tooMany : undefined;
+  // The server refused a member (no hours and no calendar yet): its Callout says who, with Set hours.
+  const isMemberRefused = failure?.field?.startsWith('members.') === true;
 
   const submit = () => {
     if (isBusy) return;
@@ -262,12 +267,20 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
       >
         <SettingsStack>
           {failure !== undefined && failure.field === undefined && <Callout tone="danger">{failure.message}</Callout>}
-          {failure?.field?.startsWith('members.') === true && <Callout tone="danger">{failure.message}</Callout>}
+          {/* A member the server refused (no hours and no calendar yet): its words, and the way to fix it. */}
+          {isMemberRefused && (
+            <Callout tone="danger" actions={<Link href={availabilityHref(slug)}>{strings.setHours}</Link>}>
+              {failure.message}
+            </Callout>
+          )}
           <Field
             label={strings.name}
             placeholder={strings.namePlaceholder}
             value={name}
-            onChange={setName}
+            onChange={(next) => {
+              setName(next);
+              setNameError(undefined);
+            }}
             maxLength={80}
             isRequired
             {...(nameError === undefined ? {} : { error: nameError })}
@@ -293,6 +306,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           )}
           <Select
             label={strings.window}
+            info={<InfoTip label={strings.window}>{strings.windowInfo}</InfoTip>}
             items={WINDOWS}
             value={String(windowDays)}
             onChange={(value) => setWindowDays(value === '7' ? 7 : value === '90' ? 90 : 30)}
@@ -323,6 +337,11 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
               ]);
             }}
           />
+          {/* Who can join, before Create rather than after it (SS-R1); once the server refused someone, its Callout
+              above says it with the same link. Marking each person needs the server's word (canHost, later). */}
+          {!isMemberRefused && (
+            <Callout actions={<Link href={availabilityHref(slug)}>{strings.setHours}</Link>}>{strings.canJoin}</Callout>
+          )}
           {members.length > 0 && (
             <Table
               label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}

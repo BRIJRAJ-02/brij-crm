@@ -7,7 +7,8 @@ import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPa
 
 // Settings › Scheduling › Round robin (spec 0029; the old /rotations address redirects here; spec 0037 AC-1433 gives it its own Settings entry): the rotations
 // the reader may see, from the data layer's held list (`rotations.view`), which every rotation write patches. Owners
-// and admins (`booking.admin`) make and change them; anyone else sees the ones they're in.
+// and admins (`booking.admin`) make and change them; anyone else with `booking.manage` sees the ones they're in. A
+// role without `booking.manage` finds no such page (hidden means absent, SS-R10), as the navigation never offers it.
 export const Route = createFileRoute('/w/$slug/settings/scheduling/round-robin')({
   loader: async ({ context, params }) => {
     try {
@@ -16,10 +17,11 @@ export const Route = createFileRoute('/w/$slug/settings/scheduling/round-robin')
         context.data.members.list(params.slug),
         context.data.rotations.view(params.slug).ready(),
       ]);
+      if (!access.permissions.includes('booking.manage')) return { page: undefined };
       return { page: { canManage: access.permissions.includes('booking.admin'), people } };
     } catch (error) {
-      // The frame above shows "workspace not found" for this one.
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined };
+      // The frame above shows "workspace not found" for NOT_FOUND; the rotations' FORBIDDEN is the missing permission.
+      if (isDataError(error) && (error.code === 'NOT_FOUND' || error.code === 'FORBIDDEN')) return { page: undefined };
       throw error;
     }
   },
