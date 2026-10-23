@@ -65,7 +65,7 @@ describe('the operator store', () => {
     expect(api.calls).toEqual(['overview:30d', 'overview:30d']);
   });
 
-  it('holds a refusal, and reads again when asked after it', async () => {
+  it('holds a refusal, and reads again on Retry', async () => {
     let fail = true;
     const api = fakeApi({
       overview: () =>
@@ -78,10 +78,12 @@ describe('the operator store', () => {
     await held.ready();
     expect(held.getSnapshot()).toMatchObject({ status: 'error', error: { code: 'TWO_FACTOR_REQUIRED' } });
     fail = false;
-    const again = store.overview('7d');
-    expect(again.getSnapshot()).toEqual({ status: 'loading' });
+    // Asked again, the refusal stays until Retry.
+    expect(store.overview('7d').getSnapshot().status).toBe('error');
+    held.retry();
+    expect(held.getSnapshot()).toEqual({ status: 'loading' });
     await flush();
-    expect(again.getSnapshot().status).toBe('ready');
+    expect(held.getSnapshot().status).toBe('ready');
   });
 
   it('grows the users list a page at a time, one page in flight', async () => {

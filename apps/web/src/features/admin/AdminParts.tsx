@@ -3,19 +3,9 @@
 // states a refused or failed read shows.
 // Main task: keep the four pages one product, so a period, a chart or a refusal reads the same on each.
 // Leaves out: loading anything (the data layer holds each read; the screens show its state) and any page's layout.
-import { isDataError, type DataError, type DataLayer, type Me, type OperatorPeriod } from '@crm/data';
+import { isDataError, type DataLayer, type Me, type OperatorPeriod } from '@crm/data';
 import { useAccountSecurity } from '@crm/data/react';
-import {
-  BarStrip,
-  Button,
-  Callout,
-  Card,
-  EmptyState,
-  Link,
-  Modal,
-  SegmentedControl,
-  useFormatSettings,
-} from '@crm/ui';
+import { BarStrip, Button, Callout, Card, EmptyState, Link, Modal, SegmentedControl, useFormatSettings } from '@crm/ui';
 import { useMatch, useNavigate, useParams, useRouter } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { useStepUp } from '../settings/StepUp.tsx';
@@ -91,8 +81,7 @@ export function DayChart({
 }) {
   const { locale } = useFormatSettings();
   const format = formatters(locale);
-  const shown =
-    days ?? Array.from({ length: PERIOD_LENGTH[period] }, (_, index) => ({ day: String(index), value: 0 }));
+  const shown = days ?? Array.from({ length: PERIOD_LENGTH[period] }, (_, index) => ({ day: String(index), value: 0 }));
   const first = days?.[0];
   const busiest = days?.reduce<ChartDay | undefined>(
     (best, each) => (best === undefined || each.value > best.value ? each : best),
@@ -140,7 +129,7 @@ export function AdminFailed({
   onRetry,
 }: {
   readonly title: string;
-  readonly error: DataError | unknown;
+  readonly error: unknown;
   readonly data: DataLayer;
   readonly onRetry: () => void;
 }) {
@@ -192,18 +181,19 @@ function ConfirmItsYou({ data, onConfirmed }: { readonly data: DataLayer; readon
     },
     [],
   );
+  const isMounted = () => live.current;
   const confirm = async () => {
     setChecking(true);
     setStillHeld(false);
     const proven = await stepUp.prove();
-    if (!live.current) return;
+    if (!isMounted()) return;
     setChecking(false);
     if (!proven) return;
     setOpen(false);
     onConfirmed();
     await router.invalidate();
     // Still here once the page read again: the code didn't count for these pages.
-    if (live.current) setStillHeld(true);
+    if (isMounted()) setStillHeld(true);
   };
   useEffect(() => {
     commit.current = () => {

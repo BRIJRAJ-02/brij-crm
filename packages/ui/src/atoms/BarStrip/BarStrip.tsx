@@ -33,9 +33,10 @@ export interface BarStripProps {
 }
 
 /**
- * A small bar chart in a row's height: one thin bar per period on one shared scale, in one data hue, each
- * naming its period and count in a tooltip on hover. Screen readers hear the same lines as a list. For a
- * trend beside a name (a rotation's last 12 weeks per member), not for a chart with axes.
+ * A small bar chart: one thin bar per period on one shared scale, in one data hue, each naming its period and
+ * count in a tooltip on hover. Screen readers hear the same lines as a list. `row` fits a trend beside a name (a
+ * rotation's last 12 weeks per member); `chart` a page's daily figures, its two ends named under it. It draws no
+ * value axis: say the figures that matter in words beside it.
  */
 export function BarStrip({ label, bars, max, size = 'row', axis }: BarStripProps) {
   const top = Math.max(max ?? 0, ...bars.map((bar) => bar.value), 0);

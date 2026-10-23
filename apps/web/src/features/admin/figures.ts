@@ -49,7 +49,8 @@ export function formatters(locale: string) {
     share: (part: number, whole: number) => (whole === 0 ? strings.none : share.format(part / whole)),
     ratio: (part: number, whole: number) => (whole === 0 ? strings.none : ratio.format(part / whole)),
     /** A count, or "100,000+" past a cap it was counted to. */
-    capped: (value: number, cap: number) => (value > cap ? strings.recordsCapped(count.format(cap)) : count.format(value)),
+    capped: (value: number, cap: number) =>
+      value > cap ? strings.recordsCapped(count.format(cap)) : count.format(value),
     /** A UTC day, `YYYY-MM-DD`, as "23 Oct". */
     day: (value: string) => day.format(new Date(`${value}T00:00:00Z`)),
     /** An instant's UTC date, as "23 Oct 2026". */

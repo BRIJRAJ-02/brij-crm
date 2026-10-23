@@ -1,45 +1,49 @@
-import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
-import { createFileRoute, type ErrorComponentProps } from '@tanstack/react-router';
-import { AdminFailed } from '../features/admin/AdminParts.tsx';
-import { DEFAULT_PERIOD, periodSearch } from '../features/admin/figures.ts';
+import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { strings } from '../features/admin/strings.ts';
-import { UserMissing, UserPending, UserScreen } from '../features/admin/UserScreen.tsx';
+import { SettingsFailed } from '../features/settings/SettingsPage.tsx';
+import { DEFAULT_PERIOD, periodSearch } from '../features/admin/figures.ts';
+import { UserBody, UserScreen } from '../features/admin/UserScreen.tsx';
 
-// Settings › Super admin › Users › one person (spec 0047, AC-1630): their account, active days and each workspace's
-// counts for a period, read through the data layer. An unknown id (or someone who isn't a super admin) is NOT_FOUND.
+// Settings › Super admin › Users › one user (spec 0047, AC-1630): their account, active days and each workspace's
+// counts for a period. The loader warms the read on the way in; the screen holds it and loads a new period in place.
 export const Route = createFileRoute('/w/$slug/settings/admin/users/$userId')({
   validateSearch: periodSearch,
-  loaderDeps: ({ search }) => ({ period: search.period ?? DEFAULT_PERIOD }),
-  loader: async ({ context, params, deps }) => {
-    try {
-      return { detail: await context.data.operator.user(params.userId, deps.period) };
-    } catch (error) {
-      if (isDataError(error) && (error.code === 'NOT_FOUND' || error.code === 'INPUT_INVALID')) {
-        return { detail: undefined };
-      }
-      throw error;
-    }
+  loader: async ({ context, params, location }) => {
+    const search = periodSearch(location.search);
+    // Warmed only: a refusal shows in the screen, which holds the same read.
+    await context.data.operator.user(params.userId, search.period ?? DEFAULT_PERIOD).ready();
   },
   pendingComponent: UserLoading,
-  errorComponent: UserError,
+  errorComponent: ConsoleError,
   component: UserRoute,
 });
-
-function UserRoute() {
-  const { detail } = Route.useLoaderData();
-  return detail === undefined ? <UserMissing /> : <UserScreen detail={detail} />;
-}
-
-function UserError({ error }: ErrorComponentProps) {
-  return <AdminFailed title={strings.users} error={error} data={Route.useRouteContext().data} />;
-}
 
 function UserLoading() {
   const { period } = Route.useSearch();
   return (
     <LoadingNow>
-      <UserPending period={period ?? DEFAULT_PERIOD} />
+      <UserBody period={period ?? DEFAULT_PERIOD} detail={undefined} />
     </LoadingNow>
+  );
+}
+
+function UserRoute() {
+  const { data } = Route.useRouteContext();
+  const params = Route.useParams();
+  const { period } = Route.useSearch();
+  return <UserScreen data={data} userId={params.userId} period={period ?? DEFAULT_PERIOD} />;
+}
+
+/** Anything unexpected while drawing the page: the frame stays, with Retry. */
+function ConsoleError() {
+  const router = useRouter();
+  return (
+    <SettingsFailed
+      title={strings.users}
+      heading={strings.failedTitle}
+      text={strings.failedTitle}
+      onRetry={() => void router.invalidate()}
+    />
   );
 }

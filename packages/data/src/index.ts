@@ -62,7 +62,6 @@ import type {
   JoinRequestView,
   JobView,
   Me,
-  OperatorPeriod,
   MemberView,
   MyAccess,
   ObjectSummary,

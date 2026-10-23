@@ -81,3 +81,25 @@ export const Chart: Story = {
     await expect(canvas.getByText('Today')).toBeInTheDocument();
   },
 };
+
+/** A chart with nothing in its period: every day a stub on the baseline, the axis still naming both ends. */
+export const ChartEmpty: Story = {
+  args: {
+    size: 'chart',
+    label: 'Visitors per day',
+    bars: Array.from({ length: 30 }, (_, index) => ({
+      id: `d${String(index)}`,
+      label: `Day ${String(index + 1)}: 0`,
+      value: 0,
+    })),
+    axis: { start: '24 Sep', end: 'Today' },
+  },
+  render: (args) => (
+    <Stage>
+      <BarStrip {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Day 30: 0')).toBeInTheDocument();
+  },
+};

@@ -1,14 +1,10 @@
 // Settings › Super admin (spec 0047): the operator console's copy.
 import type { OperatorPeriod } from '@crm/data';
+import { navStrings } from './nav-strings.ts';
 
 /** Settings › Super admin: every word its pages show. */
 export const strings = {
-  /** The settings navigation's group. */
-  group: 'Super admin',
-  overview: 'Overview',
-  users: 'Users',
-  pages: 'Booking pages',
-  website: 'Website',
+  ...navStrings,
 
   period: {
     label: 'Period',

@@ -1,50 +1,50 @@
-import type { OperatorUserPage } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
-import { createFileRoute, type ErrorComponentProps } from '@tanstack/react-router';
-import { AdminFailed } from '../features/admin/AdminParts.tsx';
-import { DEFAULT_PERIOD, USERS_STEP, usersSearch } from '../features/admin/figures.ts';
+import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { strings } from '../features/admin/strings.ts';
-import { UsersPending, UsersScreen } from '../features/admin/UsersScreen.tsx';
+import { SettingsFailed } from '../features/settings/SettingsPage.tsx';
+import { DEFAULT_PERIOD, usersSearch } from '../features/admin/figures.ts';
+import { UsersScreen } from '../features/admin/UsersScreen.tsx';
 
-// Settings › Super admin › Users (spec 0047, AC-1630): every account, newest first, 50 at a time. The address keeps
-// the period, the search (`?q=`) and how many rows show (`?shown=`, after Show more), so a reload or Back shows the
-// same list; the loader reads the pages up to it through the data layer.
+// Settings › Super admin › Users (spec 0047, AC-1630): every user, newest first, 50 at a time. The address keeps the
+// period and the search (`?q=`); the loader warms that list in the data layer on the way in, and the screen holds it,
+// so a new search, a new period or Show more loads in place with the field keeping its focus.
 export const Route = createFileRoute('/w/$slug/settings/admin/users/')({
   validateSearch: usersSearch,
-  loaderDeps: ({ search }) => ({
-    period: search.period ?? DEFAULT_PERIOD,
-    q: search.q ?? '',
-    shown: search.shown ?? USERS_STEP,
-  }),
-  loader: async ({ context, deps }) => {
-    const first = await context.data.operator.users({ period: deps.period, q: deps.q });
-    let page: OperatorUserPage = first;
-    let users = first.users;
-    while (users.length < deps.shown && page.next !== undefined) {
-      page = await context.data.operator.users({ period: deps.period, q: deps.q, after: page.next });
-      users = [...users, ...page.users];
-    }
-    return { page: { ...page, total: first.total, users }, q: deps.q, shown: deps.shown };
+  loader: async ({ context, location }) => {
+    const search = usersSearch(location.search);
+    // Warmed only: a refusal shows in the screen, which holds the same read.
+    await context.data.operator.users(search.period ?? DEFAULT_PERIOD, search.q ?? '').ready();
   },
   pendingComponent: UsersLoading,
-  errorComponent: UsersError,
+  errorComponent: ConsoleError,
   component: UsersRoute,
 });
 
-function UsersRoute() {
-  const { page, q, shown } = Route.useLoaderData();
-  return <UsersScreen page={page} q={q} shown={shown} />;
-}
-
-function UsersError({ error }: ErrorComponentProps) {
-  return <AdminFailed title={strings.users} error={error} data={Route.useRouteContext().data} />;
-}
-
 function UsersLoading() {
-  const { period } = Route.useSearch();
+  const { data } = Route.useRouteContext();
+  const search = Route.useSearch();
   return (
     <LoadingNow>
-      <UsersPending period={period ?? DEFAULT_PERIOD} />
+      <UsersScreen data={data} period={search.period ?? DEFAULT_PERIOD} q={search.q ?? ''} />
     </LoadingNow>
+  );
+}
+
+function UsersRoute() {
+  const { data } = Route.useRouteContext();
+  const search = Route.useSearch();
+  return <UsersScreen data={data} period={search.period ?? DEFAULT_PERIOD} q={search.q ?? ''} />;
+}
+
+/** Anything unexpected while drawing the page: the frame stays, with Retry. */
+function ConsoleError() {
+  const router = useRouter();
+  return (
+    <SettingsFailed
+      title={strings.users}
+      heading={strings.failedTitle}
+      text={strings.failedTitle}
+      onRetry={() => void router.invalidate()}
+    />
   );
 }

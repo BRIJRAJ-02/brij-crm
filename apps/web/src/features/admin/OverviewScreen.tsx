@@ -5,7 +5,7 @@
 import type { DataLayer, OperatorOverview, OperatorPeriod } from '@crm/data';
 import { useOperator } from '@crm/data/react';
 import { SettingsGrid, SettingsSection, Stats, useFormatSettings } from '@crm/ui';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { AdminFailed, DayChart, PeriodSwitch } from './AdminParts.tsx';
 import { figureStat, formatters, plainStat } from './figures.ts';
@@ -13,19 +13,11 @@ import { strings } from './strings.ts';
 
 /** Overview for `period`: its read held in the data layer, loading in place when the period changes. */
 export function OverviewScreen({ data, period }: { readonly data: DataLayer; readonly period: OperatorPeriod }) {
-  const [attempt, setAttempt] = useState(0);
   // A new period (or Retry) asks again; the data layer keeps each answer for the app load.
-  const held = useMemo(() => data.operator.overview(period), [data, period, attempt]);
+  const held = useMemo(() => data.operator.overview(period), [data, period]);
   const state = useOperator(held);
   if (state.status === 'error') {
-    return (
-      <AdminFailed
-        title={strings.overview}
-        error={state.error}
-        data={data}
-        onRetry={() => setAttempt((count) => count + 1)}
-      />
-    );
+    return <AdminFailed title={strings.overview} error={state.error} data={data} onRetry={held.retry} />;
   }
   return <OverviewBody period={period} overview={state.status === 'ready' ? state.value : undefined} />;
 }

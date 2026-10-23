@@ -40,6 +40,7 @@
 
   /* chart: the container's whole width at four rows' height, the bars sharing it; the axis names both ends. */
   .root[data-size='chart'] {
+    container-type: inline-size;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -56,6 +57,13 @@
     flex: 1 1 0;
     min-inline-size: 0;
     inline-size: auto;
+  }
+
+  /* A narrow chart (a phone's card) with many bars drops the gaps, so 90 days keep bars wider than a hairline. */
+  @container (inline-size < 480px) {
+    .root[data-size='chart'] .plot {
+      gap: 0;
+    }
   }
 
   .axis {

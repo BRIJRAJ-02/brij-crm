@@ -3,7 +3,13 @@
 // and what they made in each workspace in the period.
 // Main task: understand one customer's usage before writing to them.
 // Leaves out: what they wrote (records and bookings show only as counts), and changing the account.
-import { isDataError, type DataLayer, type OperatorPeriod, type OperatorUserDetail, type OperatorUserWorkspace } from '@crm/data';
+import {
+  isDataError,
+  type DataLayer,
+  type OperatorPeriod,
+  type OperatorUserDetail,
+  type OperatorUserWorkspace,
+} from '@crm/data';
 import { useOperator } from '@crm/data/react';
 import {
   Badge,
@@ -19,7 +25,7 @@ import {
   type TableColumn,
 } from '@crm/ui';
 import { useParams } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { AdminFailed, DayChart, PeriodSwitch, useIsOperator } from './AdminParts.tsx';
 import { formatters, plainStat, roleLabel } from './figures.ts';
@@ -51,8 +57,7 @@ export function UserScreen({
   readonly userId: string;
   readonly period: OperatorPeriod;
 }) {
-  const [attempt, setAttempt] = useState(0);
-  const held = useMemo(() => data.operator.user(userId, period), [data, userId, period, attempt]);
+  const held = useMemo(() => data.operator.user(userId, period), [data, userId, period]);
   const state = useOperator(held);
   const isOperator = useIsOperator();
   if (state.status === 'error') {
@@ -60,9 +65,7 @@ export function UserScreen({
     if (isDataError(state.error) && (state.error.code === 'NOT_FOUND' || state.error.code === 'INPUT_INVALID')) {
       return isOperator ? <UserMissing /> : <SettingsMissing backTo="home" />;
     }
-    return (
-      <AdminFailed title={strings.users} error={state.error} data={data} onRetry={() => setAttempt((n) => n + 1)} />
-    );
+    return <AdminFailed title={strings.users} error={state.error} data={data} onRetry={held.retry} />;
   }
   return <UserBody period={period} detail={state.status === 'ready' ? state.value : undefined} />;
 }

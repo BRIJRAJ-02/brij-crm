@@ -15,7 +15,7 @@ import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
-import { strings as admin } from '../admin/strings.ts';
+import { navStrings as admin } from '../admin/nav-strings.ts';
 import type { ObjectTab } from './object-tabs.ts';
 
 export { OBJECT_TABS, isObjectTab, type ObjectTab } from './object-tabs.ts';

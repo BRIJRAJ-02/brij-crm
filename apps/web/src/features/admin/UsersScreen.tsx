@@ -55,8 +55,7 @@ export function UsersScreen({
   const format = formatters(locale);
   const navigate = useNavigate();
   const { slug = '' } = useParams({ strict: false });
-  const [attempt, setAttempt] = useState(0);
-  const list = useMemo(() => data.operator.users(period, q), [data, period, q, attempt]);
+  const list = useMemo(() => data.operator.users(period, q), [data, period, q]);
   const state = useOperator(list);
   const [typed, setTyped] = useState(q);
   // The search this field last sent, and the address's last one: when the address changes to something the field
@@ -96,9 +95,7 @@ export function UsersScreen({
     }, SEARCH_REST_MS);
   };
   if (state.status === 'error') {
-    return (
-      <AdminFailed title={strings.users} error={state.error} data={data} onRetry={() => setAttempt((n) => n + 1)} />
-    );
+    return <AdminFailed title={strings.users} error={state.error} data={data} onRetry={list.retry} />;
   }
   const cell = (user: OperatorUserRow, column: string) => {
     switch (column) {

@@ -1,34 +1,48 @@
 import { LoadingNow } from '@crm/ui';
-import { createFileRoute, type ErrorComponentProps } from '@tanstack/react-router';
-import { AdminFailed } from '../features/admin/AdminParts.tsx';
-import { DEFAULT_PERIOD, periodSearch } from '../features/admin/figures.ts';
-import { SitePending, SiteScreen } from '../features/admin/SiteScreen.tsx';
+import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { strings } from '../features/admin/strings.ts';
+import { SettingsFailed } from '../features/settings/SettingsPage.tsx';
+import { DEFAULT_PERIOD, periodSearch } from '../features/admin/figures.ts';
+import { SiteBody, SiteScreen } from '../features/admin/SiteScreen.tsx';
 
-// Settings › Super admin › Website (spec 0047, AC-1632): the marketing site's visits for a period, from its own
-// beacon, read fresh through the data layer.
+// Settings › Super admin › Website (spec 0047, AC-1632): the marketing site's visits for a period. The loader warms
+// the read on the way in; the screen holds it and loads a new period in place.
 export const Route = createFileRoute('/w/$slug/settings/admin/website')({
   validateSearch: periodSearch,
-  loaderDeps: ({ search }) => ({ period: search.period ?? DEFAULT_PERIOD }),
-  loader: async ({ context, deps }) => ({ site: await context.data.operator.site(deps.period) }),
+  loader: async ({ context, location }) => {
+    const search = periodSearch(location.search);
+    // Warmed only: a refusal shows in the screen, which holds the same read.
+    await context.data.operator.site(search.period ?? DEFAULT_PERIOD).ready();
+  },
   pendingComponent: SiteLoading,
-  errorComponent: SiteError,
+  errorComponent: ConsoleError,
   component: SiteRoute,
 });
-
-function SiteError({ error }: ErrorComponentProps) {
-  return <AdminFailed title={strings.website} error={error} data={Route.useRouteContext().data} />;
-}
 
 function SiteLoading() {
   const { period } = Route.useSearch();
   return (
     <LoadingNow>
-      <SitePending period={period ?? DEFAULT_PERIOD} />
+      <SiteBody period={period ?? DEFAULT_PERIOD} site={undefined} />
     </LoadingNow>
   );
 }
 
 function SiteRoute() {
-  return <SiteScreen site={Route.useLoaderData().site} />;
+  const { data } = Route.useRouteContext();
+  const { period } = Route.useSearch();
+  return <SiteScreen data={data} period={period ?? DEFAULT_PERIOD} />;
+}
+
+/** Anything unexpected while drawing the page: the frame stays, with Retry. */
+function ConsoleError() {
+  const router = useRouter();
+  return (
+    <SettingsFailed
+      title={strings.website}
+      heading={strings.failedTitle}
+      text={strings.failedTitle}
+      onRetry={() => void router.invalidate()}
+    />
+  );
 }

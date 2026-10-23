@@ -30,6 +30,8 @@ export interface OperatorHeld<T> {
   readonly subscribe: (listener: () => void) => () => void;
   /** Settles once the read has answered (or refused); never rejects. */
   readonly ready: () => Promise<void>;
+  /** Reads it again after a refusal (Retry); nothing while an answer is shown or on its way. */
+  readonly retry: () => void;
 }
 
 /** The users list for one period and search: the rows so far, and whether more are coming or failed. */
@@ -74,48 +76,69 @@ const KEPT = 40;
 interface Entry<T> {
   state: T;
   at: number;
+  /** A read is on its way. */
+  busy: boolean;
   readonly listeners: Set<() => void>;
   readonly settled: Promise<void>;
   readonly held: OperatorHeld<T>;
+  /** Reads again: `keepShown` keeps a shown answer while it reads and if the read fails. */
+  readonly refresh: (keepShown: boolean) => void;
 }
 
 /** The store, one per data layer. `now` is passed in for tests. */
 export function createOperatorStore(api: OperatorApi, now: () => number = Date.now) {
   const entries = new Map<string, Entry<unknown>>();
 
-  const keep = (key: string, entry: Entry<unknown>) => {
-    entries.delete(key);
-    entries.set(key, entry);
-    while (entries.size > KEPT) {
-      const oldest = entries.keys().next();
-      if (oldest.done === true) break;
-      const gone = entries.get(oldest.value);
-      // Never drop one a screen still holds.
-      if (gone !== undefined && gone.listeners.size > 0) {
-        entries.delete(oldest.value);
-        entries.set(oldest.value, gone);
-        break;
-      }
-      entries.delete(oldest.value);
-    }
-  };
-
-  const entryOf = <T>(key: string, start: T, run: (entry: Entry<T>, set: (next: T) => void) => Promise<void>) => {
-    const held = entries.get(key) as Entry<T> | undefined;
-    if (held !== undefined) {
-      keep(key, held as Entry<unknown>);
-      return held;
+  /** The entry for `key`, made and read the first time: kept for the app load, the newest `KEPT` of them. */
+  const entryOf = <T>(
+    key: string,
+    start: T,
+    load: (entry: Entry<T>, keepShown: boolean) => Promise<T>,
+    isShown: (state: T) => boolean,
+    failed: (state: T, error: DataError) => T,
+  ): Entry<T> => {
+    const known = entries.get(key) as Entry<T> | undefined;
+    if (known !== undefined) {
+      entries.delete(key);
+      entries.set(key, known);
+      return known;
     }
     let settle: () => void = () => undefined;
     const settled = new Promise<void>((resolve) => {
       settle = resolve;
     });
     const listeners = new Set<() => void>();
+    const set = (next: T) => {
+      entry.state = next;
+      for (const listener of [...listeners]) listener();
+    };
+    const refresh = (keepShown: boolean) => {
+      if (entry.busy) return;
+      entry.busy = true;
+      entry.at = now();
+      if (!keepShown || !isShown(entry.state)) set(start);
+      load(entry, keepShown)
+        .then(
+          (next) => {
+            entry.busy = false;
+            entry.at = now();
+            set(next);
+          },
+          (error: unknown) => {
+            entry.busy = false;
+            // A read behind shown numbers that fails keeps them; any other read shows why.
+            if (!(keepShown && isShown(entry.state))) set(failed(entry.state, toDataError(error)));
+          },
+        )
+        .finally(settle);
+    };
     const entry: Entry<T> = {
       state: start,
       at: now(),
+      busy: false,
       listeners,
       settled,
+      refresh,
       held: {
         getSnapshot: () => entry.state,
         subscribe: (listener) => {
@@ -123,95 +146,90 @@ export function createOperatorStore(api: OperatorApi, now: () => number = Date.n
           return () => listeners.delete(listener);
         },
         ready: () => settled,
+        retry: () => {
+          if (!isShown(entry.state)) refresh(false);
+        },
       },
     };
-    const set = (next: T) => {
-      entry.state = next;
-      entry.at = now();
-      for (const listener of [...listeners]) listener();
-    };
-    keep(key, entry as Entry<unknown>);
-    void run(entry, set).finally(settle);
+    entries.set(key, entry);
+    // Never past `KEPT`: the least recently asked go first, unless a screen still holds them.
+    for (const [old, kept] of entries) {
+      if (entries.size <= KEPT) break;
+      if (kept.listeners.size === 0) entries.delete(old);
+    }
+    refresh(false);
     return entry;
   };
 
-  /** A plain read, held by `key`: read now, read again when asked after a minute or after a refusal. */
+  /** A minute old answer, asked for again, is read again behind itself. */
+  const freshen = <T>(entry: Entry<T>, isShown: (state: T) => boolean) => {
+    if (isShown(entry.state) && now() - entry.at > OPERATOR_FRESH_MS) entry.refresh(true);
+  };
+
+  /** A plain read, held by `key`. */
   function read<T>(key: string, load: () => Promise<T>): OperatorHeld<OperatorState<T>> {
-    const fetchInto = (set: (next: OperatorState<T>) => void, keepShown: boolean, current: () => OperatorState<T>) =>
-      load().then(
-        (value) => set({ status: 'ready', value }),
-        (error: unknown) => {
-          // A read behind shown numbers that fails keeps them; a first read shows why.
-          if (!keepShown || current().status !== 'ready') set({ status: 'error', error: toDataError(error) });
-        },
-      );
-    const entry = entryOf<OperatorState<T>>(key, { status: 'loading' }, (made, set) =>
-      fetchInto(set, false, () => made.state),
+    const isShown = (state: OperatorState<T>) => state.status === 'ready';
+    const entry = entryOf<OperatorState<T>>(
+      key,
+      { status: 'loading' },
+      () => load().then((value) => ({ status: 'ready', value }) as const),
+      isShown,
+      (_state, error) => ({ status: 'error', error }),
     );
-    const state = entry.state;
-    const stale = now() - entry.at > OPERATOR_FRESH_MS;
-    if (state.status === 'error' || (state.status === 'ready' && stale)) {
-      entry.at = now();
-      const set = (next: OperatorState<T>) => {
-        entry.state = next;
-        entry.at = now();
-        for (const listener of [...entry.listeners]) listener();
-      };
-      if (state.status === 'error') set({ status: 'loading' });
-      void fetchInto(set, state.status === 'ready', () => entry.state);
-    }
+    freshen(entry, isShown);
     return entry.held;
   }
 
+  /** Each users list's cursor to its next page, by key. */
+  const cursors = new Map<string, string | undefined>();
+
   /** The users list for a period and search, its pages kept together. */
   function usersList(period: OperatorPeriod, q: string): OperatorUsersHeld {
-    let next: string | undefined;
-    const start: OperatorUsersState = {
-      status: 'loading',
-      users: [],
-      total: 0,
-      hasMore: false,
-      isLoadingMore: false,
-      period,
-    };
     const key = `users:${period}:${q}`;
-    const known = entries.get(key) as (Entry<OperatorUsersState> & { more?: () => void }) | undefined;
-    if (known?.more !== undefined) {
-      keep(key, known as Entry<unknown>);
-      const more = known.more;
-      return { ...known.held, more };
-    }
-    let setState: (state: OperatorUsersState) => void = () => undefined;
-    const entry = entryOf<OperatorUsersState>(key, start, async (made, set) => {
-      setState = set;
-      try {
-        const page = await api.users({ period, ...(q === '' ? {} : { q }) });
-        next = page.next;
-        set({ ...made.state, status: 'ready', users: page.users, total: page.total, hasMore: next !== undefined });
-      } catch (error) {
-        set({ ...made.state, status: 'error', error: toDataError(error) });
-      }
-    }) as Entry<OperatorUsersState> & { more?: () => void };
+    const search = q === '' ? {} : { q };
+    const isShown = (state: OperatorUsersState) => state.status === 'ready';
+    const entry = entryOf<OperatorUsersState>(
+      key,
+      { status: 'loading', users: [], total: 0, hasMore: false, isLoadingMore: false, period },
+      async () => {
+        const page = await api.users({ period, ...search });
+        cursors.set(key, page.next);
+        return {
+          status: 'ready',
+          users: page.users,
+          total: page.total,
+          hasMore: page.next !== undefined,
+          isLoadingMore: false,
+          period,
+        };
+      },
+      isShown,
+      (state, error) => ({ ...state, status: 'error', error }),
+    );
+    freshen(entry, isShown);
+    const set = (next: OperatorUsersState) => {
+      entry.state = next;
+      for (const listener of [...entry.listeners]) listener();
+    };
     const more = () => {
+      const after = cursors.get(key);
       const state = entry.state;
-      if (state.status !== 'ready' || state.isLoadingMore || next === undefined) return;
-      const after = next;
+      if (state.status !== 'ready' || state.isLoadingMore || entry.busy || after === undefined) return;
       const { error: _dropped, ...shown } = state;
-      setState({ ...shown, isLoadingMore: true });
-      api.users({ period, after, ...(q === '' ? {} : { q }) }).then(
+      set({ ...shown, isLoadingMore: true });
+      api.users({ period, after, ...search }).then(
         (page) => {
-          next = page.next;
-          setState({
+          cursors.set(key, page.next);
+          set({
             ...entry.state,
             users: [...entry.state.users, ...page.users],
-            hasMore: next !== undefined,
+            hasMore: page.next !== undefined,
             isLoadingMore: false,
           });
         },
-        (error: unknown) => setState({ ...entry.state, isLoadingMore: false, error: toDataError(error) }),
+        (error: unknown) => set({ ...entry.state, isLoadingMore: false, error: toDataError(error) }),
       );
     };
-    entry.more = more;
     return { ...entry.held, more };
   }
 

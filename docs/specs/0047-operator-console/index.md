@@ -25,12 +25,12 @@ Reasoning and options: see [rationale.md](rationale.md).
 
 *Who is a super admin*
 - **AC-1617**: `OPERATOR_EMAILS` (the api's environment, a comma separated list of emails, optional) names the super admins. Unset or empty, nobody is one. Only a signed in session whose user's email is on the list and verified counts; workspace roles never do.
-- **AC-1618**: Every `operator.*` procedure answers `NOT_FOUND` to anyone else, signed in or not (signed out answers `UNAUTHENTICATED` first, like every session procedure). A listed person without two factor on is refused `TWO_FACTOR_REQUIRED`; a listed person whose session last proved itself more than 12 hours ago is refused `SIGN_IN_AGAIN`.
+- **AC-1618**: Every `operator.*` procedure answers `NOT_FOUND` to anyone else, signed in or not (signed out answers `UNAUTHENTICATED` first, like every session procedure). A listed person without two factor on is refused `TWO_FACTOR_REQUIRED`; a listed person whose session wasn't proven with the authenticator app (at sign in, or by a step up) in the last 12 hours is refused `SIGN_IN_AGAIN`: a remembered device or an email code alone is not enough.
 - **AC-1619**: `me.get` answers `isOperator: true` for a listed, verified person (false otherwise). It decides only whether Settings shows the Super admin group; access is decided again by every `operator.*` call.
 - **AC-1620**: Every `operator.*` call writes one row to `auth.operator_event` (the operator's user id, the procedure, its target id when it has one, the period, the request id, the time) before it reads anything. If the row can't be written, the call fails and reads nothing.
 
 *What leaves the database*
-- **AC-1621**: Tenant data reaches the console only through six security definer functions owned by `crm_operator`, a role that can't log in, holds column grants on the few columns it counts, and bypasses row level security only inside them. They answer counts, ids, workspace names and slugs, member roles and booking page titles, kinds and states. They never read a value, note body, task text, form answer, booking visitor, email or any other content column (the grants make it impossible, and a test proves it).
+- **AC-1621**: Tenant data reaches the console only through six security definer functions owned by `crm_operator`, a role that can't log in, holds column grants on the few columns it counts (never a note or a task), and bypasses row level security only inside them. They answer counts, ids, workspace names and slugs, member roles and booking page titles, kinds and states. They never read a value, note body, task text, form answer, booking visitor, email or any other content column (the grants make it impossible, and a test proves it).
 - **AC-1622**: The guard tests list the six new definers with their owner and hardening (fixed `search_path`, standard SQL bodies), and prove `crm_operator` can't read a column it wasn't granted.
 - **AC-1623**: The users list and a person's page show the account's name, email, sign in methods, two factor, sign up time, last active time and active days. They never show addresses, user agents, session tokens or security event details.
 
@@ -39,11 +39,11 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-1625**: A booking page view is counted when its page loads for someone who isn't one of its hosts (the `viewer` read, which the page makes once per load). It is kept in `booking_page_views` (tenant, forced row level security, the standard policy), one row per page, UTC day and visitor, with a view count. The editor's preview never counts.
 - **AC-1626**: A visitor is an HMAC of the day, the address and the user agent under a key derived from the server's secret, cut to 32 hex characters. The address and the user agent themselves are never stored. The same browser on the next day is a new visitor, on purpose.
 - **AC-1627**: The marketing site sends one beacon per page shown (first load and each in site navigation) to `POST /api/public/site/hit`: the path (no query), the referrer's host when it is another site, and `utm_source` when present. The api keeps it in `auth.site_visit` with the site's host, the country from the edge, the device class (mobile, tablet or desktop from the user agent) and the visitor (AC-1626). Known bots and automation are dropped, 60 hits a minute per address are kept, and a hit from an origin not on `SITE_ORIGINS` is refused `FORBIDDEN_ORIGIN`. The built site posts to the app's own api (`VITE_SITE_HIT_URL` overrides the address; the dev server and a browser under automation send nothing), allowed by its CSP's `connect-src`. No cookie, no local storage and no third party.
-- **AC-1628**: Visits, activity days and operator events older than a year go with the identity sweep; booking page views older than a year go with the daily cleanup.
+- **AC-1628**: Visits and activity days older than a year go with the identity sweep, and the console's own log after two years; booking page views older than a year go with the daily cleanup.
 
 *The screens*
 - **AC-1629**: **Overview**: people (total, new in the period), active people (today, 7 days, 30 days), workspaces (total, new), records, bookings and form submissions made in the period, each with the period before it as its comparison; and the daily bars of sign ups, active people, records and bookings.
-- **AC-1630**: **Users**: one row per account, newest first, 50 a page with "Show more", searchable by name or email: the person, sign up date, last active, active days in the period, workspaces, records made, bookings hosted and booking pages. A row opens the person's page: their facts, daily active bars, and each workspace they're in with their role and what they made there in the period.
+- **AC-1630**: **Users**: one row per account, newest first, 50 at a time with "Show more", searchable by name or email (the search is in the log too): the person, sign up date, last active, active days in the period, workspaces, records made, bookings hosted and booking pages. A row opens the person's page: their facts, daily active bars, and each workspace they're in with their role and what they made there in the period.
 - **AC-1631**: **Booking pages**: the period's views, visitors, bookings and conversion (bookings per visitor) for all pages together, their daily bars, and a table of every page (title, workspace, owner, kind, state, views, visitors, bookings, cancelled, conversion), most viewed first. A row opens the page's own daily bars and figures.
 - **AC-1632**: **Website**: visitors, page views and views per visitor, with daily bars, and the top pages, referrers, sources, countries and devices.
 - **AC-1633**: Each page has loading, empty and failed states, a period switch kept in the address (`?period=30d`), full width, keyboard reachable, and reads in light and dark at 1280 and 390 wide. A refusal of two factor or of an old sign in says what to do, in plain words, with a link to Account › Sign in and devices.
@@ -66,20 +66,21 @@ Reasoning and options: see [rationale.md](rationale.md).
 |---|---|---|---|
 | `activity_day` | `auth` | (`user_id`, `day`) | `first_at`, `last_at`; on delete of the user, cascade. Index (`day`). |
 | `site_visit` | `auth` | `id` (uuidv7) | `at`, `site`, `path` (1 to 200), `referrer` (host, ≤ 120), `source` (≤ 60), `country` (2 letters), `device` (`mobile`, `tablet`, `desktop`), `visitor` (32 hex). Index (`at`). |
-| `operator_event` | `auth` | `id` (uuidv7) | `at`, `user_id` (no foreign key: the log outlives the account), `action`, `target`, `period`, `request_id`. Index (`at`). |
+| `operator_event` | `auth` | `id` (uuidv7) | `at`, `user_id` (no foreign key: the log outlives the account), `action`, `target`, `period`, `q` (the users search), `request_id`. Index (`at`). Kept two years. |
+| index `user_created` | `auth` | (`created_at`, `id`) on `auth.user` | The users list newest first, and sign ups a day. |
 | `booking_page_views` | `public` | (`workspace_id`, `page_id`, `day`, `visitor`) | `views`, `first_at`, `last_at`; foreign key to the page, on delete cascade. Forced row level security, the standard policy. |
-| role `crm_operator` | | | `nologin bypassrls noinherit`; select on listed columns of `workspaces`, `members`, `records`, `notes`, `tasks`, `booking_pages`, `bookings`, `booking_page_views`, `forms`, `form_submissions`. |
+| role `crm_operator` | | | `nologin bypassrls noinherit`; select on listed columns of `workspaces`, `members`, `records`, `booking_pages`, `bookings`, `booking_page_views`, `forms`, `form_submissions`. |
 
 **Definers** (all `stable`, `security definer`, `search_path = pg_catalog, pg_temp`, standard SQL bodies, owned by `crm_operator`, execute granted to `crm_app` only):
 
 | Function | Answers |
 |---|---|
-| `crm_operator_workspaces(ids uuid[], since timestamptz)` | Per workspace: name, slug, created and deleted times, active members, live records, and records, bookings and submissions made since `since`. |
-| `crm_operator_members(users uuid[], since timestamptz)` | Per member row of those users: workspace, role, state, and records, notes and tasks made, bookings hosted since `since`, live booking pages owned. |
-| `crm_operator_totals(since timestamptz, until timestamptz)` | Workspaces made, records, bookings and submissions made in the range, and live workspaces. |
-| `crm_operator_daily(since timestamptz, until timestamptz)` | Per UTC day: workspaces, records, bookings and submissions made. |
-| `crm_operator_pages(since timestamptz, until timestamptz, page uuid)` | Per booking page not deleted (one page when `page` is set): workspace, title, kind, state, owner's user id, views, visitors, bookings, cancelled. |
-| `crm_operator_page_days(since timestamptz, until timestamptz, page uuid)` | Per UTC day, for one page or (null) all: views, visitors, bookings, cancelled. |
+| `crm_operator_workspaces(ids uuid[])` | Per workspace (at most 200): name, slug, created and deleted times, active members, and live records counted to 100,001 at most. |
+| `crm_operator_members(workspaces uuid[], users uuid[], from date, to date)` | Per member row of the (workspace, user) pairs the directory names (at most 400): role, state, live records made and bookings hosted in the range, live booking pages owned. Each workspace is read once, grouped by member. |
+| `crm_operator_totals(from date, to date)` | Workspaces live now, and those made in the range. |
+| `crm_operator_daily(from date, to date)` | Per UTC day: workspaces made, live records made (an index only count), bookings made and submissions received. Overview reads it once over the period and the one before. |
+| `crm_operator_pages(from date, to date, page uuid)` | Per booking page not deleted (one page when `page` is set; the 500 most viewed): workspace and its name, title, kind, state, owner's user id, views, visitors, bookings, cancelled. |
+| `crm_operator_page_days(from date, to date, workspace uuid, page uuid)` | Per UTC day, for one page or (both null) all: views, visitors, bookings, cancelled. |
 
 **API surface**:
 
