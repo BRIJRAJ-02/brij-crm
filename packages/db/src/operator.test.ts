@@ -37,8 +37,8 @@ const unique = () => randomUUID().slice(0, 8);
 
 /** A definer's rows, called as the console calls them: the app login, outside every workspace. */
 async function call<Row extends Record<string, unknown>>(query: ReturnType<typeof sql>): Promise<Row[]> {
-  const result = await db.withWorkspace(NO_WORKSPACE, (tx) => tx.execute<Row>(query));
-  return result.rows;
+  const result = await db.withWorkspace(NO_WORKSPACE, (tx) => tx.execute(query));
+  return result.rows as Row[];
 }
 
 /** A workspace in 2003 with its owner, an object and a booking page, listed in the directory. */
