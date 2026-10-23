@@ -110,8 +110,7 @@ function answer(answers: unknown, key: string): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined;
 }
 
-/** The guests already sent an invitation. */
-/** The guests already told they were taken off (`markUninvited`). */
+/** The guests already told they were taken off (`markGuestsTold`). */
 function toldOffOf(answers: unknown): readonly string[] {
   if (typeof answers !== 'object' || answers === null || !('toldOff' in answers) || !Array.isArray(answers.toldOff)) {
     return [];
@@ -119,6 +118,7 @@ function toldOffOf(answers: unknown): readonly string[] {
   return answers.toldOff.filter((each): each is string => typeof each === 'string');
 }
 
+/** The guests already sent an invitation. */
 function invitedOf(answers: unknown): readonly string[] {
   if (typeof answers !== 'object' || answers === null || !('invited' in answers) || !Array.isArray(answers.invited)) {
     return [];
@@ -227,10 +227,13 @@ export async function prepareBookingMail(
         start: row.startsAt,
         end: row.endsAt,
         summary: name,
-        description: note ?? '',
+        // A cancelled file only takes the meeting off a calendar: it never carries the call's link or the visitor's note.
+        description: method === 'CANCEL' ? '' : (note ?? ''),
         location:
-          row.videoUrl ??
-          (page.location.type === 'address' || page.location.type === 'custom' ? page.location.value : null),
+          method === 'CANCEL'
+            ? null
+            : (row.videoUrl ??
+              (page.location.type === 'address' || page.location.type === 'custom' ? page.location.value : null)),
         url: bookAgainUrl,
         organizerEmail: deps.organizerEmail,
         organizerName: hostName,
@@ -342,12 +345,16 @@ export async function prepareBookingMail(
         // at most once per booking, so taking someone off and adding them back can't be used to mail them over and over.
         const toldOff = toldOffOf(row.answers);
         const removed = invited.filter((guest) => !guests.includes(guest) && !toldOff.includes(guest));
+        // Whoever took them off: the visitor on the guest page, or a host from Bookings.
+        const remover = byGuest ? row.visitorName : hostName;
         const removals: BookingMail[] = removed.map((guest) => ({
           to: guest,
           subject: `No longer invited: ${name}`,
-          preview: `${row.visitorName} took you off ${page.title}.`,
+          preview: `${remover} took you off ${page.title}.`,
           heading: 'You’re no longer invited',
-          intro: `${row.visitorName} took you off ${page.title}, hosted by ${hostName}. Nothing else to do.`,
+          intro: byGuest
+            ? `${remover} took you off ${page.title}, hosted by ${hostName}. Nothing else to do.`
+            : `${remover} took you off ${page.title}. Nothing else to do.`,
           rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone)],
           why: `You got this email because ${row.visitorName} had added this address to ${page.title}.`,
           ...guestFile('CANCEL', guest),
@@ -576,32 +583,35 @@ export async function prepareBookingMail(
 }
 
 /**
- * Takes guests off the invited list once they were told they are off it, so adding them back invites them again, and
- * notes them as told, so a second removal says nothing more (at most an invitation, a removal and one more invitation).
+ * Notes what a run of the booking mail told its guests, in one write, so a retry can't send a removal twice: guests
+ * invited go on the invited list, so a later change never invites them twice; guests told they were taken off leave
+ * it (adding them back invites them again) and go on the told list, so a second removal says nothing more (at most
+ * an invitation, a removal and one more invitation).
  */
-export async function markUninvited(scope: EngineScope, bookingId: string, emails: readonly string[]): Promise<void> {
-  if (emails.length === 0) return;
-  const told = JSON.stringify(emails);
-  await inWorkspace(scope, (tx) =>
-    tx
-      .update(bookings)
-      .set({
-        // Off the invited list (adding them back invites them again), and on the told list (told only once).
-        answers: sql`jsonb_set(jsonb_set(${bookings.answers}, '{invited}', (select coalesce(jsonb_agg(each), '[]'::jsonb) from jsonb_array_elements(coalesce(${bookings.answers}->'invited', '[]'::jsonb)) as each where not (${told}::jsonb @> jsonb_build_array(each)))), '{toldOff}', coalesce(${bookings.answers}->'toldOff', '[]'::jsonb) || ${told}::jsonb)`,
-      })
-      .where(eq(bookings.id, bookingId)),
-  );
-}
-
-/** Marks guests invited once their invitation went, so a later change never invites them twice. */
-export async function markInvited(scope: EngineScope, bookingId: string, emails: readonly string[]): Promise<void> {
-  if (emails.length === 0) return;
-  await inWorkspace(scope, (tx) =>
-    tx
-      .update(bookings)
-      .set({
-        answers: sql`jsonb_set(${bookings.answers}, '{invited}', coalesce(${bookings.answers}->'invited', '[]'::jsonb) || ${JSON.stringify(emails)}::jsonb)`,
-      })
-      .where(eq(bookings.id, bookingId)),
-  );
+export async function markGuestsTold(
+  scope: EngineScope,
+  bookingId: string,
+  told: { readonly invited: readonly string[]; readonly uninvited?: readonly string[] },
+): Promise<void> {
+  const uninvited = told.uninvited ?? [];
+  if (told.invited.length === 0 && uninvited.length === 0) return;
+  await inWorkspace(scope, async (tx) => {
+    if (told.invited.length > 0) {
+      await tx
+        .update(bookings)
+        .set({
+          answers: sql`jsonb_set(${bookings.answers}, '{invited}', coalesce(${bookings.answers}->'invited', '[]'::jsonb) || ${JSON.stringify(told.invited)}::jsonb)`,
+        })
+        .where(eq(bookings.id, bookingId));
+    }
+    if (uninvited.length > 0) {
+      const off = JSON.stringify(uninvited);
+      await tx
+        .update(bookings)
+        .set({
+          answers: sql`jsonb_set(jsonb_set(${bookings.answers}, '{invited}', (select coalesce(jsonb_agg(each), '[]'::jsonb) from jsonb_array_elements(coalesce(${bookings.answers}->'invited', '[]'::jsonb)) as each where not (${off}::jsonb @> jsonb_build_array(each)))), '{toldOff}', coalesce(${bookings.answers}->'toldOff', '[]'::jsonb) || ${off}::jsonb)`,
+        })
+        .where(eq(bookings.id, bookingId));
+    }
+  });
 }

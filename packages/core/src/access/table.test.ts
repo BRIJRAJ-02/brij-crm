@@ -163,7 +163,7 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'moveBooking',
   'readMoveSlots',
   'prepareBookingMail',
-  'markInvited',
+  'markGuestsTold',
   'whenLine',
   // Round robin (spec 0029, AC-749): the booking mail job's needs_host step hands a leaving member's booking on, as
   // the system in its workspace.

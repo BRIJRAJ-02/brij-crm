@@ -13,8 +13,7 @@ import {
   BOOKING_MAIL_KINDS,
   handOnBooking,
   remakeEvent,
-  markInvited,
-  markUninvited,
+  markGuestsTold,
   prepareBookingMail,
   type BookingMailDeps,
   type ReseatDeps,
@@ -104,7 +103,7 @@ export async function runBookingMail(deps: BookingMailTaskDeps, payload: unknown
   if (failed > 0 && failed === prepared.messages.length) {
     throw new Error('A booking email failed to send; the worker log has its booking id.');
   }
-  await markInvited(scope, bookingId, prepared.invited);
-  await markUninvited(scope, bookingId, prepared.uninvited ?? []);
+  // One write for both lists: a retry after it can't send a removal again.
+  await markGuestsTold(scope, bookingId, prepared);
   deps.log.info('booking.mail.sent', { bookingId, kind, messages: prepared.messages.length });
 }

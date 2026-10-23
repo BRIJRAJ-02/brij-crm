@@ -33,8 +33,7 @@ export {
 } from './calendar/sync.ts';
 // Booking emails (spec 0025, milestone 2): what each queued kind sends, read as the system by the worker's task.
 export {
-  markInvited,
-  markUninvited,
+  markGuestsTold,
   prepareBookingMail,
   whenLine,
   type BookingMail,
