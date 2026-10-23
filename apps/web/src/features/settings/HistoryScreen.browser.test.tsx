@@ -2,7 +2,9 @@
 // to AC-4619): an owner gets two tabs, a member none; Workspace changes as a
 // member sends them on to Your sign ins; each state of the log says its words;
 // a row is read as its whole sentence; and axe passes in light and dark at
-// 1280 and 375 wide.
+// 1280 and 375 wide. Your sign ins sits a breath under the tabs, loading and
+// loaded alike (Q96).
+import '@crm/ui/styles.css';
 import type { ActivityPage, AuditEntryView, AuditLog, AuditLogState, DataLayer } from '@crm/data';
 import { isRedirect } from '@tanstack/react-router';
 import axe from 'axe-core';
@@ -147,6 +149,25 @@ describe('the tabs (AC-4600, AC-4601)', () => {
       .poll(() => tabs.elements().map((tab) => tab.textContent))
       .toEqual(['Workspace changes', 'Your sign ins']);
     expect(page.getByRole('tab', { name: 'Workspace changes' }).element().getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('puts Your sign ins a breath under the tab bar, loading and loaded alike (Q96)', async () => {
+    const gap = () => {
+      const heading = page.getByRole('heading', { name: 'Your sign ins' }).element().getBoundingClientRect();
+      return heading.top - page.getByRole('tablist').element().getBoundingClientRect().bottom;
+    };
+    await renderHistory('sign-ins', true, signIns());
+    await expect.poll(() => document.body.textContent).toContain('Signed in');
+    const loaded = gap();
+    expect(loaded).toBeGreaterThanOrEqual(16);
+    shown?.unmount();
+    shown = await renderInApp(() => <HistoryPending tab="sign-ins" canReadChanges body={<SignInsPending />} />, {
+      data,
+      pattern: '/w/$slug/settings/history/sign-ins',
+      at: '/w/acme/settings/history/sign-ins',
+    });
+    await expect.element(page.getByRole('heading', { name: 'Your sign ins' })).toBeVisible();
+    expect(Math.round(gap())).toBe(Math.round(loaded));
   });
 
   it('gives a member their sign ins with no tab bar', async () => {
