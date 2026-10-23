@@ -44,7 +44,7 @@ export interface UnreadCounts {
   readonly refresh: (workspace: string) => void;
   /** Moves the shown count at once (an optimistic mark); the read that follows settles it. */
   readonly adjust: (workspace: string, delta: number) => void;
-  /** Forgets every count (signed out). */
+  /** Forgets every count (signed out); one a screen still holds stays, ended, until that screen lets go. */
   readonly clear: () => void;
 }
 
@@ -54,6 +54,8 @@ interface Entry {
   holders: number;
   reading: boolean;
   again: boolean;
+  /** Its session ended (signed out) while a screen held it: it never reads or listens again. */
+  ended: boolean;
   stopWatch?: () => void;
   cancelRead?: () => void;
   cancelDrop?: () => void;
@@ -76,6 +78,9 @@ export function createUnreadCounts(deps: UnreadDeps): UnreadCounts {
     for (const listener of entry.listeners) listener();
   };
 
+  /** Whether the entry is this session's count of the workspace, so its reads and events still count. */
+  const isLive = (workspace: string, entry: Entry) => !entry.ended && entries.get(workspace) === entry;
+
   const read = (workspace: string, entry: Entry) => {
     if (entry.reading) {
       entry.again = true;
@@ -86,7 +91,7 @@ export function createUnreadCounts(deps: UnreadDeps): UnreadCounts {
     deps.read(workspace).then(
       (answer) => {
         entry.reading = false;
-        if (entries.get(workspace) !== entry) return;
+        if (!isLive(workspace, entry)) return;
         const next = answer.atLeast ? UNREAD_PAST_CAP : Math.min(answer.count, UNREAD_PAST_CAP);
         if (next !== entry.value) {
           entry.value = next;
@@ -96,7 +101,7 @@ export function createUnreadCounts(deps: UnreadDeps): UnreadCounts {
       },
       () => {
         entry.reading = false;
-        if (entry.again && entries.get(workspace) === entry) read(workspace, entry);
+        if (entry.again && isLive(workspace, entry)) read(workspace, entry);
       },
     );
   };
@@ -118,6 +123,7 @@ export function createUnreadCounts(deps: UnreadDeps): UnreadCounts {
       holders: 0,
       reading: false,
       again: false,
+      ended: false,
       listeners,
       source: {
         subscribe(listener) {
@@ -132,7 +138,7 @@ export function createUnreadCounts(deps: UnreadDeps): UnreadCounts {
           entry.cancelDrop?.();
           entry.cancelDrop = undefined;
           // One left over from a session that ended (cleared) never reads or listens again.
-          if (entry.holders === 1 && entries.get(workspace) === entry) {
+          if (entry.holders === 1 && isLive(workspace, entry)) {
             entry.stopWatch = deps.watch(workspace);
             read(workspace, entry);
           }
@@ -144,6 +150,11 @@ export function createUnreadCounts(deps: UnreadDeps): UnreadCounts {
             if (entry.holders > 0) return;
             entry.stopWatch?.();
             entry.stopWatch = undefined;
+            // An ended one goes with its last holder, so the next session's screens get a count of their own.
+            if (entry.ended) {
+              if (entries.get(workspace) === entry) entries.delete(workspace);
+              return;
+            }
             entry.cancelDrop = later(() => {
               if (entry.holders === 0 && entries.get(workspace) === entry) {
                 entry.cancelRead?.();
@@ -162,27 +173,34 @@ export function createUnreadCounts(deps: UnreadDeps): UnreadCounts {
     unread: (workspace) => entryOf(workspace).source,
     refresh(workspace) {
       const entry = entries.get(workspace);
-      if (entry === undefined || entry.holders === 0) return;
+      if (entry === undefined || entry.holders === 0 || entry.ended) return;
       soon(workspace, entry);
     },
     adjust(workspace, delta) {
       const entry = entries.get(workspace);
-      if (entry?.value === undefined || entry.value >= UNREAD_PAST_CAP) return;
+      if (entry?.value === undefined || entry.ended || entry.value >= UNREAD_PAST_CAP) return;
       const next = Math.max(0, entry.value + delta);
       if (next === entry.value) return;
       entry.value = next;
       announce(entry);
     },
     clear() {
-      // Quietly: a screen still holding a count as the session ends (the title, on its way to sign in) must not
-      // draw again and ask for a new one, which would be refused for nobody signed in.
-      for (const entry of entries.values()) {
+      // Quietly: a screen still holding a count as the session ends (the sidebar's badge, the title, on their way to
+      // sign in) must not ask for a new one, which would be refused for nobody signed in. So a held count stays,
+      // ended: a screen that draws again on its way out (the sidebar does, as the Tasks badge empties) gets the same
+      // one back, which never reads or listens again, and it goes with its last holder.
+      const held = new Map<string, Entry>();
+      for (const [workspace, entry] of entries) {
         entry.cancelRead?.();
+        entry.cancelRead = undefined;
         entry.cancelDrop?.();
+        entry.cancelDrop = undefined;
         entry.stopWatch?.();
         entry.stopWatch = undefined;
+        entry.ended = true;
+        if (entry.holders > 0) held.set(workspace, entry);
       }
-      entries = new Map();
+      entries = held;
     },
   };
 }

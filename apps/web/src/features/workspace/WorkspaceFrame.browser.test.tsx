@@ -4,8 +4,8 @@
 // their order and folds (Bookings and Captures with no label, as round 6 had them), then Tasks, and Settings and Help
 // at the foot (AC-921, AC-928, AC-930; owner, 21 and 22 October 2026); a fold or the rail goes
 // through the data layer (AC-931, AC-935), and [ toggles the rail outside a text field; while the member's sidebar
-// loads nothing guesses at their order, and one that couldn't be read draws the defaults. Sign out asks first (the
-// owner, 21 October 2026).
+// loads nothing guesses at their order, and one that couldn't be read draws the defaults. Tasks and the Inbox carry
+// their counts as badges. Sign out asks first (the owner, 21 October 2026).
 import type { DataLayer, DueTasksSnapshot, NavOperation, NavSnapshot, NavState } from '@crm/data';
 import { createToasts, UiProvider } from '@crm/ui';
 import {
@@ -78,9 +78,17 @@ const dueSource = {
   subscribe: () => () => undefined,
   getSnapshot: () => dueSnapshot,
 };
+/** The Inbox badge's count (spec 0038, AC-1174): nothing unread unless a test says otherwise. */
+let unreadSnapshot: number | undefined = 0;
+const unreadSource = {
+  retain: () => () => undefined,
+  subscribe: () => () => undefined,
+  getSnapshot: () => unreadSnapshot,
+};
 const data = {
   calendar: { view: () => calendarView },
   tasks: { due: () => dueSource },
+  inbox: { unread: () => unreadSource },
   nav: {
     source: () => navSource,
     change: (_workspace: string, op: NavOperation) => {
@@ -114,6 +122,7 @@ const OBJECTS = [
 beforeEach(() => {
   snapshot = { status: 'ready', nav: STORED };
   dueSnapshot = { status: 'ready', count: 0, atLeast: false };
+  unreadSnapshot = 0;
   sent = [];
   held = 0;
   try {
@@ -571,6 +580,16 @@ describe('the app’s sidebar (spec 0034)', () => {
       (each) => each.getAttribute('href') === '/w/acme/tasks',
     );
     expect(tasks?.textContent).toContain('4');
+  });
+
+  it('badges Inbox with my unread notifications once the server offers it (spec 0038, AC-1174)', async () => {
+    snapshot = { status: 'ready', nav: { ...STORED, top: ['inbox', 'tasks'] } };
+    unreadSnapshot = 3;
+    await renderFrame(undefined, { objects: OBJECTS });
+    const inbox = [...document.querySelectorAll<HTMLAnchorElement>('nav a')].find(
+      (each) => each.getAttribute('href') === '/w/acme/inbox',
+    );
+    expect(inbox?.textContent).toContain('3');
   });
 });
 
