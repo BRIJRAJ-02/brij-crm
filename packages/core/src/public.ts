@@ -15,6 +15,7 @@ export {
 } from './access/door.ts';
 export {
   bookPublicSlot,
+  countPageView,
   readAddressedPage,
   readBookingProfile,
   readHandoffPrefill,

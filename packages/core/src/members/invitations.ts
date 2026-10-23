@@ -14,6 +14,7 @@ import {
   INVITE_LINK_USES_MAX,
   INVITES_LIMIT,
   maskEmail,
+  memberNameFor,
   OWNER_RULES_MESSAGE,
   PERMISSIONS,
   ROLE_PERMISSIONS,
@@ -751,7 +752,8 @@ export async function acceptInvite(
         throw refuse('SEAT_LIMIT', SEAT_LIMIT_MESSAGE);
       }
       const memberId = newId();
-      const name = user.name.trim() === '' ? (email.split('@')[0] ?? email) : user.name.trim();
+      // Their account's name made plain, else one made from the address as first run makes it ("Jo Smith", QA Q83).
+      const name = plainName(user.name, email);
       await tx.insert(members).values({
         workspaceId: scope.workspaceId,
         id: memberId,
@@ -1033,9 +1035,23 @@ export async function setInviteLink(
 }
 
 /**
+ * A person's name as a member is made with it, and as admins read it in the tab and the email (an accepted invite, a
+ * link join, a request): control characters and line breaks become spaces, runs of space one, at most 80 characters;
+ * a name made from the address when nothing is left, as first run makes it (QA Q83).
+ */
+export function plainName(raw: string, email: string): string {
+  const clean = raw
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return memberNameFor(clean, '', email);
+}
+
+/**
  * Adds a signed in person as an active member with `role` (a link join, an
- * approved request): their name in the workspace (their account's, else the
- * address's local part), and their directory row, in the caller's
+ * approved request): their name in the workspace (their account's, else one
+ * made from the address, as first run makes it), and their directory row, in the caller's
  * transaction. Answers the new member's id. The caller has checked the seat.
  */
 export async function addJoiner(
@@ -1045,7 +1061,7 @@ export async function addJoiner(
   role: Role,
 ): Promise<string> {
   const memberId = newId();
-  const name = user.name.trim() === '' ? (user.email.split('@')[0] ?? user.email) : user.name.trim();
+  const name = plainName(user.name, user.email);
   await tx.insert(members).values({
     workspaceId,
     id: memberId,

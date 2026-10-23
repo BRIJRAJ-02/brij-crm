@@ -15,13 +15,14 @@ import {
 } from './nav.ts';
 
 describe('settingsNav', () => {
-  it('lists Account, Scheduling and Workspace, in order, with their pages', () => {
+  it('lists Account, Scheduling, Workspace and Super admin, in order, with their pages', () => {
     const groups = settingsNav('acme');
-    expect(groups.map((group) => group.label)).toEqual(['Account', 'Scheduling', 'Workspace']);
+    expect(groups.map((group) => group.label)).toEqual(['Account', 'Scheduling', 'Workspace', 'Super admin']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Sign in and devices', 'Notifications'],
       ['Calendars', 'Round robin'],
       ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'History', 'Trash'],
+      ['Overview', 'Users', 'Booking pages', 'Website'],
     ]);
   });
 
@@ -42,6 +43,11 @@ describe('settingsNav', () => {
       rotations: '/w/acme/settings/scheduling/round-robin',
       // The trash opens inside Settings, its sidebar and trail kept (A120, 23 October 2026).
       trash: '/w/acme/settings/trash',
+      // The operator console (spec 0047).
+      'admin-overview': '/w/acme/settings/admin',
+      'admin-users': '/w/acme/settings/admin/users',
+      'admin-pages': '/w/acme/settings/admin/booking-pages',
+      'admin-website': '/w/acme/settings/admin/website',
     });
     expect(entries.every((entry) => entry.href.startsWith('/w/acme/settings/'))).toBe(true);
     expect(entries.filter((entry) => entry.meta !== undefined)).toEqual([]);
@@ -68,20 +74,30 @@ describe('visibleSettingsNav', () => {
   ];
 
   it('shows Round robin only to someone who makes booking pages, and Workspace › Security only to owners', () => {
+    const workspaceGroups = settingsNav('acme').filter((group) => group.id !== 'admin');
     expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage'])).toEqual(
-      settingsNav('acme').map((group) => ({
+      workspaceGroups.map((group) => ({
         ...group,
         entries: group.entries.filter((entry) => entry.id !== 'workspace-security'),
       })),
     );
     // Workspace › Security only for those who change sign in rules (spec 0033).
-    expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'])).toEqual(settingsNav('acme'));
+    expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'])).toEqual(workspaceGroups);
     // Without it, Scheduling keeps Calendars and loses only Round robin.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications'],
       ['calendars'],
       ['general', 'members', 'objects', 'jobs', 'history', 'trash'],
     ]);
+  });
+
+  it('shows Super admin only to a super admin, whatever their workspace role (spec 0047)', () => {
+    const ids = (isOperator: boolean) =>
+      visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'], isOperator).map(
+        (group) => group.id,
+      );
+    expect(ids(false)).toEqual(['account', 'scheduling', 'workspace']);
+    expect(ids(true)).toEqual(['account', 'scheduling', 'workspace', 'admin']);
   });
 
   // History (spec 0046, AC-4600): one entry for every member, its Workspace changes tab checked on the page itself.
@@ -132,6 +148,10 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/history/sign-ins')).toBe('history');
     expect(settingsPageOf('/w/acme/settings/members')).toBe('members');
     expect(settingsPageOf('/w/acme/settings/scheduling/round-robin')).toBe('rotations');
+    expect(settingsPageOf('/w/acme/settings/admin')).toBe('admin-overview');
+    expect(settingsPageOf('/w/acme/settings/admin/users/0199a6f2-0000-7000-8000-000000000001')).toBe('admin-users');
+    expect(settingsPageOf('/w/acme/settings/admin/booking-pages')).toBe('admin-pages');
+    expect(settingsPageOf('/w/acme/settings/admin/website')).toBe('admin-website');
     expect(settingsPageOf('/w/acme/settings/scheduling/rotations')).toBe('rotations');
     expect(settingsPageOf('/w/acme/settings/trash')).toBe('trash');
   });

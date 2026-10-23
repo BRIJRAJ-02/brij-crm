@@ -19,11 +19,12 @@ import {
   Skeleton,
   type SaveBarStatus,
 } from '@crm/ui';
-import { useBlocker, useRouteContext } from '@tanstack/react-router';
+import { useRouteContext } from '@tanstack/react-router';
 import { handleProblem } from '@crm/contracts/handles';
 import { useEffect, useRef, useState } from 'react';
 import { publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
+import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { DeleteAccountSection } from './DeleteAccountSection.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings as securityCopy } from './security-strings.ts';
@@ -120,11 +121,6 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
       : isBioWithoutHandle
         ? strings.bioNeedsHandle
         : undefined;
-  // An unsaved name isn't lost by leaving the page without a word.
-  useBlocker({
-    shouldBlockFn: () => isDirty && !globalThis.confirm(strings.leaveConfirm),
-    enableBeforeUnload: () => isDirty,
-  });
 
   const send = (change: { readonly name?: string; readonly handle?: string; readonly bio?: string }) => {
     setSaving(true);
@@ -331,6 +327,8 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
       </SettingsSection>
       {/* Last on the person's own page, set apart under its own heading (the owner, 22 October 2026). */}
       <DeleteAccountSection data={data} security={security} />
+      {/* An unsaved name isn't lost by leaving the page without a word. */}
+      <LeaveGuard isDirty={isDirty} />
     </SettingsPage>
   );
 }

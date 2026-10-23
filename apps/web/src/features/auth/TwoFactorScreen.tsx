@@ -87,6 +87,13 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
       title={strings.title}
       description={kind === 'totp' ? strings.appHint : strings.backupHint}
       isBusy={isChecking}
+      // The way back /verify has too: the wrong address, or neither the app nor a code to hand.
+      footer={
+        // Off while a code is being checked, as the rest of the card is: the check may still sign them in.
+        <ButtonLink variant="link" icon="arrow-left" href={signInAgainHref} isDisabled={isChecking}>
+          {strings.useAnotherEmail}
+        </ButtonLink>
+      }
       {...signInFrame()}
     >
       <Form
@@ -143,6 +150,8 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
             name="backupCode"
             isDisabled={isChecking}
             autoComplete="off"
+            // Codes check their case: a phone's keyboard must not capitalise the first letter.
+            isVerbatim
             {...(error === undefined ? {} : { error })}
           />
         )}

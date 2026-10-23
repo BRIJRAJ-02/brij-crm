@@ -14,6 +14,7 @@
     "./jump": "./src/values/jump.ts",
     "./validation": "./src/validation/index.ts",
     "./slugs": "./src/values/slugs.ts",
+    "./member-names": "./src/member-names.ts",
     "./safe-link": "./src/values/safe-link.ts",
     "./picker": "./src/values/picker.ts",
     "./activity-keys": "./src/activity-keys.ts",
@@ -34,6 +35,7 @@
     "./booking": "./src/booking/index.ts",
     "./handles": "./src/booking/handles.ts",
     "./hours": "./src/booking/summary.ts",
+    "./zones": "./src/booking/zones.ts",
     "./emails": "./src/emails.ts",
     "./brand": "./src/brand.ts"
   },

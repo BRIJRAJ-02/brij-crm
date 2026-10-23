@@ -272,7 +272,9 @@ export function statusOf(
 ): { readonly tone: 'live' | 'changed' | 'draft' | 'paused'; readonly text: string } {
   if (form.liveVersionNumber === undefined) return { tone: 'draft', text: strings.statusDraft };
   if (form.status === 'paused') return { tone: 'paused', text: strings.statusPaused };
-  if (isChanged) return { tone: 'changed', text: strings.statusChanged };
+  // A draft saved since the last publish (a routing rule added and taken away, say) still has Publish changes beside
+  // it, so the status says edited too rather than the live version alone (Q67).
+  if (isChanged || form.hasUnpublished) return { tone: 'changed', text: strings.statusChanged };
   return { tone: 'live', text: strings.statusLive(form.liveVersionNumber) };
 }
 

@@ -103,6 +103,11 @@ export interface FieldProps {
   readonly type?: 'text' | 'email' | 'url' | 'tel' | 'search' | 'password';
   readonly inputMode?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel' | 'url' | 'search';
   readonly autoComplete?: string;
+  /**
+   * Typed exactly as shown, as a backup code or a key is: no automatic capitals, corrections or spell check, which a
+   * phone's keyboard otherwise applies to the first letter and so spoils a code that checks its case.
+   */
+  readonly isVerbatim?: boolean;
   readonly name?: string;
   readonly size?: FieldSize;
   /**
@@ -192,6 +197,7 @@ export function Field({
   type = 'text',
   inputMode,
   autoComplete,
+  isVerbatim = false,
   name,
   size = 'md',
   variant = 'default',
@@ -245,6 +251,7 @@ export function Field({
     ...(autoComplete === 'off'
       ? { 'data-1p-ignore': true, 'data-lpignore': 'true', 'data-bwignore': true, 'data-form-type': 'other' }
       : {}),
+    ...(isVerbatim ? { autoCapitalize: 'off', autoCorrect: 'off', spellCheck: false } : {}),
     ...(variant === 'composer' && isMultiline ? { 'data-composer': true } : {}),
     ...(placeholder === undefined ? {} : { placeholder }),
     ...(ref === undefined ? {} : { ref }),

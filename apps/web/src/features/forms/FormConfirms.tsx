@@ -65,7 +65,7 @@ function useCommit<Done>(
   return { shown: form ?? last, isBusy, failure, commit };
 }
 
-/** "Delete the Demo request form?": a danger confirm, Cancel (ESC) then Delete form. */
+/** "Delete “Demo request”?": a danger confirm, Cancel (ESC) then Delete form. */
 export function DeleteFormDialog({ data, slug, form, onClose, onDone }: FormConfirmProps<Deleted>) {
   const { shown, isBusy, failure, commit } = useCommit(form, (each) => data.forms.delete(slug, each.id), onDone);
   if (shown === undefined) return null;

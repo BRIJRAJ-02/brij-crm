@@ -57,6 +57,7 @@ const ORIGIN = 'https://crm.test';
 const ME: Me = {
   user: { id: '0199a6f2-0000-7000-8000-000000000001', name: 'Ada Lovelace', email: 'ada@example.com' },
   workspaces: [{ id: '0199a6f2-0000-7000-8000-000000000002', slug: 'acme', name: 'Acme' }],
+  isOperator: false,
 };
 
 const PEOPLE: ObjectSummary = {
@@ -548,6 +549,15 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       markAllRead: os.notifications.markAllRead.handler(notServed),
       settings: os.notifications.settings.handler(notServed),
       setSettings: os.notifications.setSettings.handler(notServed),
+    },
+    // The operator console (spec 0047) is read through to the api as is; its gate and reads are the api's tests.
+    operator: {
+      overview: os.operator.overview.handler(notServed),
+      users: os.operator.users.handler(notServed),
+      user: os.operator.user.handler(notServed),
+      pages: os.operator.pages.handler(notServed),
+      page: os.operator.page.handler(notServed),
+      site: os.operator.site.handler(notServed),
     },
     // Account sessions (spec 0033) are driven against their own fake in `account/sessions.test.ts`.
     account: {

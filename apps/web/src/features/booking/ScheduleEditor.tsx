@@ -15,9 +15,10 @@ import {
   useFormatSettings,
   type SaveBarStatus,
 } from '@crm/ui';
-import { useBlocker, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { useMemo, type ReactNode } from 'react';
 import { DaysOff } from './DaysOff.tsx';
+import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
 import { pageEditorHref } from './links.ts';
 import { useScheduleDraft, type ScheduleSaveNotice } from './scheduleDraft.ts';
@@ -56,11 +57,6 @@ export function ScheduleEditor({ data, slug, member, schedule, onReload, onAdopt
   });
   const shown = draft.shown;
   const change = (next: BookingAvailability) => draft.change(() => next);
-  // Leaving with unsaved changes asks first, in the app and when the tab closes, as the booking page editor does.
-  useBlocker({
-    shouldBlockFn: () => draft.isDirty && !globalThis.confirm(strings.leaveConfirm),
-    enableBeforeUnload: () => draft.isDirty,
-  });
   const status: SaveBarStatus = !draft.isDirty
     ? 'hidden'
     : draft.isSaving
@@ -71,13 +67,18 @@ export function ScheduleEditor({ data, slug, member, schedule, onReload, onAdopt
   return (
     <Layout
       footer={
-        <SaveBar
-          status={status}
-          {...(draft.error === undefined ? {} : { error: draft.error })}
-          {...(draft.isValid ? {} : { blockedReason: scheduleStrings.invalidLeft })}
-          onSave={draft.save}
-          onDiscard={draft.discard}
-        />
+        <>
+          <SaveBar
+            status={status}
+            {...(draft.error === undefined ? {} : { error: draft.error })}
+            {...(draft.isValid ? {} : { blockedReason: scheduleStrings.invalidLeft })}
+            onSave={draft.save}
+            onDiscard={draft.discard}
+          />
+          {/* Leaving with unsaved changes asks first in a Modal, as the booking page editor does; another schedule
+              (`?schedule=`) leaves this one, so it asks too. Closing the tab asks the browser's way. */}
+          <LeaveGuard isDirty={draft.isDirty} />
+        </>
       }
       week={<WeekCard availability={shown} onChange={draft.change} />}
       aside={

@@ -151,8 +151,28 @@ async function renderWeek(
         throw error;
       });
     }),
-    move: vi.fn(() => Promise.resolve()),
-    moveSlots: vi.fn(),
+    // A move shows at once, as the data layer's does: the booking at its new start, its length kept.
+    move: vi.fn((bookingId: string, start: string) => {
+      patch((ready) => ({
+        ...ready,
+        bookings: ready.bookings.map((booking) =>
+          booking.id === bookingId
+            ? {
+                ...booking,
+                startsAt: start,
+                endsAt: new Date(
+                  Date.parse(start) + Date.parse(booking.endsAt) - Date.parse(booking.startsAt),
+                ).toISOString(),
+              }
+            : booking,
+        ),
+      }));
+      return Promise.resolve();
+    }),
+    // One free time: Thursday of the same week at 14:00.
+    moveSlots: vi.fn(() =>
+      Promise.resolve({ slots: [{ start: instantAt(addDays(wednesday, 1), 14 * 60, 'UTC').toISOString() }] } as never),
+    ),
     guestLink: vi.fn(() => Promise.resolve({ path: '/b/key/manage' })),
     notify,
     assignments: vi.fn(() => Promise.resolve(permissions === undefined ? [] : [SEAT])),
@@ -365,6 +385,36 @@ describe('cancelling a booking', () => {
   });
 });
 
+describe('rescheduling a booking', () => {
+  it('moves it to another day, and focus follows the booking to its new day (Q56)', async () => {
+    const week = await renderWeek([], [bookingOf()]);
+    await openCard(/^Quick chat,/);
+    await userEvent.click(page.getByRole('button', { name: /^Reschedule/ }));
+    await expect.poll(() => openDialog('dialog')?.textContent ?? '').toContain('Reschedule Quick chat');
+    await userEvent.click(page.getByRole('dialog').getByText('14:00', { exact: true }));
+    await userEvent.click(page.getByRole('button', { name: /^Move to/ }));
+    expect(week.actions.move).toHaveBeenCalledTimes(1);
+    await expect.poll(() => openDialog('dialog')).toBeNull();
+    // The booking is Thursday's now: focus is on its block there, not on Wednesday, the day it left.
+    await expect
+      .poll(() => document.activeElement?.closest('[role="group"]')?.getAttribute('aria-label') ?? '')
+      .toMatch(/^Thursday/);
+    expect(document.activeElement?.getAttribute('aria-label')).toMatch(/^Quick chat,/);
+  });
+});
+
+describe('going to a date', () => {
+  it('opens the month with focus on the chosen day, so the arrows move at once (Q70)', async () => {
+    await renderWeek([], [bookingOf()]);
+    await userEvent.click(page.getByRole('button', { name: 'Go to date' }));
+    await expect.poll(() => document.activeElement?.closest('[role="grid"]')).not.toBeNull();
+    const before = document.activeElement?.getAttribute('aria-label') ?? '';
+    await userEvent.keyboard('{ArrowRight}');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label') ?? '').not.toBe(before);
+    expect(document.activeElement?.closest('[role="grid"]')).not.toBeNull();
+  });
+});
+
 const REASSIGN = 'Reassign Quick chat with Ada Lovelace';
 /** A dialog's title, or its name when it has no heading (the week's card). */
 const heading = (dialog: Element) =>
@@ -572,6 +622,54 @@ describe('the list rows', () => {
     );
     await expect.element(page.getByRole('link', { name: 'Connect a calendar' }).first()).toBeVisible();
     expect(document.querySelector('aside[aria-label="Calendars"]')).toBeNull();
+    // Without a calendar there are only bookings, so there is no Show to pick (Q71), and with one link no Filter.
+    expect([...document.querySelectorAll('button')].some((button) => button.textContent.startsWith('Filter'))).toBe(
+      false,
+    );
+  });
+
+  it('with no calendar connected, reads a source left in the address as All, so the list can’t empty unseen', async () => {
+    const none = { status: 'ready', accounts: [] } as unknown as CalendarListState;
+    const noneConnected: CalendarsHeld<CalendarListState> = {
+      subscribe: () => () => undefined,
+      getSnapshot: () => none,
+      retain: () => () => undefined,
+      reload: () => undefined,
+    };
+    const state: MeetingsState = { ...ready, items: [] };
+    const held: MeetingsHeld = {
+      subscribe: () => () => undefined,
+      getSnapshot: () => state,
+      retain: () => () => undefined,
+      ready: () => Promise.resolve(),
+      loadMore: () => undefined,
+      reload: () => undefined,
+    };
+    const asked: string[] = [];
+    shown = await renderInApp(
+      () => (
+        <BookingsListScreen
+          slug="acme"
+          // An old link, or one from before the calendar was disconnected.
+          search={{ week, day: wednesday, tab: 'upcoming', source: 'calendar' }}
+          meetings={(query) => {
+            asked.push(query.source);
+            return held;
+          }}
+          calendars={noneConnected}
+          onDismissNotice={() => undefined}
+          objects={[]}
+          pages={[]}
+          locale="en-GB"
+          onSearch={() => undefined}
+        />
+      ),
+      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list?src=calendar' },
+    );
+    // The list's own empty state, not "Nothing matches these filters" with no filter on screen to clear.
+    await expect.element(page.getByText('Nothing coming up')).toBeVisible();
+    expect(page.getByText('Nothing matches these filters').elements()).toHaveLength(0);
+    expect(asked.at(-1)).toBe('all');
   });
 });
 

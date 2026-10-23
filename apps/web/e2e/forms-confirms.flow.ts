@@ -215,7 +215,7 @@ test.describe('confirms on forms', () => {
     await expect(card).toBeVisible();
     await page.getByRole('button', { name: `More for ${live.name}` }).click();
     await page.getByRole('menuitem', { name: 'Delete' }).click();
-    const remove = page.getByRole('alertdialog', { name: `Delete the ${live.name} form?` });
+    const remove = page.getByRole('alertdialog', { name: `Delete “${live.name}”?` });
     await expect(remove).toBeVisible();
     await expect(remove).toContainText('gone for good');
     await remove.getByRole('button', { name: /^Cancel/ }).click();

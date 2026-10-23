@@ -58,6 +58,50 @@ describe('TwoFactorScreen', () => {
     const backup = page.getByRole('button', { name: 'Use a backup code' }).element();
     expect(backup.getBoundingClientRect().width).toBe(submit.getBoundingClientRect().width);
   });
+
+  it('takes a backup code as typed, with no automatic capitals, corrections or spell check (QA Q84)', async () => {
+    const data = {} as Partial<DataLayer>;
+    shown = await renderInApp(() => <TwoFactorScreen data={data as DataLayer} redirect={undefined} />, {
+      data,
+      pattern: '/two-factor',
+      at: '/two-factor',
+    });
+    await page.getByRole('button', { name: 'Use a backup code' }).click();
+    const field = page.getByLabelText('Backup code').element();
+    expect(field.getAttribute('autocapitalize')).toBe('off');
+    expect(field.getAttribute('autocorrect')).toBe('off');
+    expect(field.getAttribute('spellcheck')).toBe('false');
+  });
+
+  it('offers the way back to sign in with another address, keeping where it was going (QA Q85)', async () => {
+    const data = {} as Partial<DataLayer>;
+    shown = await renderInApp(() => <TwoFactorScreen data={data as DataLayer} redirect="/w/acme/tasks" />, {
+      data,
+      pattern: '/two-factor',
+      at: '/two-factor',
+    });
+    const back = page.getByRole('link', { name: 'Use a different email' });
+    await expect.element(back).toBeVisible();
+    expect(back.element().getAttribute('href')).toBe('/sign-in?redirect=%2Fw%2Facme%2Ftasks');
+  });
+
+  it('turns the way back off while a code is being checked, as the rest of the card is', async () => {
+    // A check that never answers holds the card in its checking state.
+    const secondStep = vi.fn(() => new Promise<never>(() => undefined));
+    const data = { auth: { secondStep } } as unknown as Partial<DataLayer>;
+    shown = await renderInApp(() => <TwoFactorScreen data={data as DataLayer} redirect={undefined} />, {
+      data,
+      pattern: '/two-factor',
+      at: '/two-factor',
+    });
+    const back = page.getByRole('link', { name: 'Use a different email' });
+    expect(back.element().getAttribute('aria-disabled')).toBeNull();
+    await page.getByRole('button', { name: 'Use a backup code' }).click();
+    await page.getByLabelText('Backup code').fill('abcd-efgh');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect.poll(() => secondStep.mock.calls.length).toBe(1);
+    await expect.element(back).toHaveAttribute('aria-disabled', 'true');
+  });
 });
 
 describe('JoinScreen', () => {
