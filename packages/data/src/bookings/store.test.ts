@@ -1,6 +1,8 @@
 // The bookings store (spec 0025, AC-646): one list per workspace and tab, read
 // when held and again when the person comes back to the page; a failed read
-// after the first keeps the list; letting go stops listening.
+// after the first keeps the list; letting go stops listening. Kept current
+// (owner ask A115): every minute while live updates are off, and at once when
+// Sync now ran (`refreshHeld`), only while a screen holds it.
 import { describe, expect, it, vi } from 'vitest';
 import type { BookingListItem } from '@crm/contracts';
 import { createBookingsStore } from './store.ts';
@@ -161,5 +163,56 @@ describe('the bookings store', () => {
     restore();
     expect(list.getSnapshot()).toMatchObject({ bookings: [{ id: 'a', status: 'confirmed' }, { id: 'b' }] });
     expect(range.getSnapshot()).toMatchObject({ bookings: [{ id: 'a', status: 'confirmed' }] });
+  });
+
+  it('reads a held week every minute while live updates are off, and at once when Sync now ran, only while held', async () => {
+    const calendar = vi.fn(noCalendar);
+    const listAll = vi.fn(noList);
+    const timers: (() => void)[] = [];
+    let status: 'live' | 'off' = 'off';
+    const store = createBookingsStore({
+      api: { listAll, calendar },
+      onReturn: () => () => undefined,
+      isVisible: () => true,
+      live: { status: () => status, subscribe: () => () => undefined },
+      later: (run) => {
+        timers.push(run);
+        return () => {
+          const at = timers.indexOf(run);
+          if (at >= 0) timers.splice(at, 1);
+        };
+      },
+      random: () => 0.5,
+    });
+    const week = store.calendar('acme', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z');
+    // A week paged past is kept, but nobody holds it: it reads nothing until held again.
+    store.calendar('acme', '2026-10-26T00:00:00.000Z', '2026-11-02T00:00:00.000Z');
+    const release = week.retain();
+    await settle();
+    expect(calendar).toHaveBeenCalledTimes(1);
+    expect(timers).toHaveLength(1);
+    timers.shift()?.();
+    await settle();
+    expect(calendar).toHaveBeenCalledTimes(2);
+    expect(timers).toHaveLength(1);
+
+    store.refreshHeld('acme');
+    store.refreshHeld('other');
+    await settle();
+    expect(calendar).toHaveBeenCalledTimes(3);
+    expect(listAll).not.toHaveBeenCalled();
+    expect(timers).toHaveLength(1);
+
+    // Live again meanwhile: the minute passes and nothing is read.
+    status = 'live';
+    timers.shift()?.();
+    await settle();
+    expect(calendar).toHaveBeenCalledTimes(3);
+
+    release();
+    expect(timers).toHaveLength(0);
+    store.refreshHeld('acme');
+    await settle();
+    expect(calendar).toHaveBeenCalledTimes(3);
   });
 });

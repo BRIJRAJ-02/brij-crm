@@ -32,8 +32,9 @@ const connection = (id: string, changes: Partial<CalendarConnectionView> = {}): 
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-function setup(lists: CalendarConnections[]) {
+function setup(lists: CalendarConnections[], options: { readonly onSynced?: (workspace: string) => void } = {}) {
   const notices: Notice[] = [];
+  let queued = true;
   const timers: { run: () => void; ms: number }[] = [];
   let reads = 0;
   let clock = 0;
@@ -62,7 +63,7 @@ function setup(lists: CalendarConnections[]) {
         ? Promise.reject(new Error('Refused.'))
         : Promise.resolve({ connectionId: input.connectionId, meetingsRemoved: 2 });
     },
-    syncNow: () => Promise.resolve({ queued: true }),
+    syncNow: () => Promise.resolve({ queued }),
     settings: () => Promise.resolve({ createUnknownPeople: false, canManage: true }),
     updateSettings: (input) => {
       sent.push(input);
@@ -89,6 +90,7 @@ function setup(lists: CalendarConnections[]) {
     },
     clearTimeout: () => undefined,
     now: () => clock,
+    ...(options.onSynced === undefined ? {} : { onSynced: options.onSynced }),
   });
   return {
     store,
@@ -98,6 +100,9 @@ function setup(lists: CalendarConnections[]) {
     reads: () => reads,
     refuse: (value: boolean) => {
       refuse = value;
+    },
+    queues: (value: boolean) => {
+      queued = value;
     },
     tick: (ms: number) => {
       clock += ms;
@@ -260,6 +265,28 @@ describe('the calendars live kind', () => {
     expect(reads()).toBe(2);
     const state = store.view(WS).getSnapshot();
     expect(state.status === 'ready' ? state.connections.map((each) => each.id) : []).toEqual([A, B]);
+    release();
+  });
+
+  it('after Sync now, reads the list and what Bookings shows once the sync had time to run, and not when none queued', async () => {
+    const synced: string[] = [];
+    const t = setup([listed([connection('c1')])], { onSynced: (workspace) => synced.push(workspace) });
+    const release = t.store.view('acme').retain();
+    await flush();
+    expect(await t.store.syncNow('acme', 'c1')).toBe(true);
+    expect(synced).toEqual([]);
+    expect(t.timers.map((timer) => timer.ms)).toEqual([SYNC_POLL_MS]);
+    t.timers.shift()?.run();
+    await flush();
+    expect(synced).toEqual(['acme']);
+    expect(t.reads()).toBe(2);
+
+    t.queues(false);
+    expect(await t.store.syncNow('acme', 'c1')).toBe(false);
+    t.timers.shift()?.run();
+    await flush();
+    expect(synced).toEqual(['acme']);
+    expect(t.reads()).toBe(3);
     release();
   });
 

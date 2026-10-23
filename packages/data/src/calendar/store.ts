@@ -65,6 +65,11 @@ export interface CalendarDeps {
   readonly api: CalendarApi;
   readonly mintId: () => string;
   readonly notify: (notice: Notice) => void;
+  /**
+   * A Sync now that queued a sync has had time to run (`SYNC_POLL_MS` after its answer, as the list is read again):
+   * what Bookings shows of the workspace is read again (owner ask A115).
+   */
+  readonly onSynced?: (workspace: string) => void;
   /** Timers, for tests. */
   readonly setTimeout?: (run: () => void, ms: number) => unknown;
   readonly clearTimeout?: (handle: unknown) => void;
@@ -367,11 +372,17 @@ export function createCalendarStore(deps: CalendarDeps) {
     changed(workspace: string): void {
       views.get(workspace)?.changed();
     },
-    /** Brings a connection's next sync forward (Sync now); the list reads again shortly after. Answers whether it queued. */
+    /**
+     * Brings a connection's next sync forward (Sync now); the list reads again shortly after, and so (`onSynced`) does
+     * what Bookings shows. Answers whether it queued.
+     */
     async syncNow(workspace: string, connectionId: string): Promise<boolean> {
       try {
         const answer = await deps.api.syncNow({ workspace, connectionId, mutationId: deps.mintId() });
-        later(() => viewOf(workspace).reload(), SYNC_POLL_MS);
+        later(() => {
+          viewOf(workspace).reload();
+          if (answer.queued) deps.onSynced?.(workspace);
+        }, SYNC_POLL_MS);
         return answer.queued;
       } catch (error) {
         refused(error);

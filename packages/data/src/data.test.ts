@@ -7,6 +7,7 @@ import {
   defaultAvailability,
   type AttributeDefinition,
   type BookingPageView,
+  type BookingsCalendarView,
   type AttributeOption,
   type ChangeEvent,
   type DeleteManyResults,
@@ -177,6 +178,8 @@ interface Behaviour {
   }) => BookingPageView | Promise<BookingPageView>;
   /** What `account.deletion.confirm` answers (spec 0033). */
   deleteAccount: () => Promise<{ deleted: true }>;
+  /** What `bookings.calendar` answers: Bookings' week (spec 0025). */
+  bookingsCalendar: () => BookingsCalendarView;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -231,6 +234,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     recents: () => [],
     bookingPagesGet: notServed,
     bookingPagesUpdate: notServed,
+    bookingsCalendar: notServed,
     ...overrides,
   };
   const calls: string[] = [];
@@ -657,7 +661,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.bookings.list.handler(notServed),
       listAll: os.bookings.listAll.handler(notServed),
       meetings: os.bookings.meetings.handler(notServed),
-      calendar: os.bookings.calendar.handler(notServed),
+      calendar: os.bookings.calendar.handler(() => behaviour.bookingsCalendar()),
       hours: os.bookings.hours.handler(notServed),
       setHours: os.bookings.setHours.handler(notServed),
       bookAsHost: os.bookings.bookAsHost.handler(notServed),
@@ -2906,5 +2910,38 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     const after = data.routing.pageRules('acme', page.id);
     expect(after).not.toBe(held);
     expect(after.getSnapshot()).toBeUndefined();
+  });
+});
+
+describe('Bookings kept current (owner ask A115)', () => {
+  it('reads a held week again every minute while live updates are off, and stops once no screen holds it', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let reads = 0;
+      const api = fakeApi({
+        bookingsCalendar: () => {
+          reads += 1;
+          return { bookings: [], events: [], busy: [], blocks: [] };
+        },
+      });
+      const { data } = layer(api, '/w/acme/bookings/calendar', { random: () => 0.5 });
+      expect(data.live.status()).toBe('off');
+      const week = data.bookings.calendar('acme', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z');
+      const release = week.retain();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(reads).toBe(1);
+      expect(week.getSnapshot()).toMatchObject({ status: 'ready' });
+      await vi.advanceTimersByTimeAsync(59_000);
+      expect(reads).toBe(1);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(reads).toBe(2);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(reads).toBe(3);
+      release();
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(reads).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

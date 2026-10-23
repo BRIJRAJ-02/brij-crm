@@ -306,7 +306,8 @@ export function useSavedView(source: SavedViewSource): SavedViewSnapshot {
 /**
  * Bookings, the workspace's upcoming or past list (spec 0025), re-rendering
  * when it changes. Held while the screen is mounted, so it is read again when
- * the person comes back to the page.
+ * the person comes back to the page, and every minute while the page shows
+ * and live updates are paused or off.
  */
 export function useBookings(view: BookingsView): BookingsState {
   return useRetained(view);
@@ -315,13 +316,18 @@ export function useBookings(view: BookingsView): BookingsState {
 /**
  * Bookings' week (spec 0025): a range's bookings and the reader's calendar
  * events, re-rendering when they change. Held while the screen is mounted,
- * so it is read again when the person comes back to the page.
+ * so it is read again when the person comes back to the page, and every
+ * minute while the page shows and live updates are paused or off.
  */
 export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalendarState {
   return useRetained(view);
 }
 
-/** Bookings' list of every meeting, a page at a time, re-rendering as pages land. Held while the screen is mounted. */
+/**
+ * Bookings' list of every meeting, a page at a time, re-rendering as pages land. Held while the screen is mounted, so
+ * what it shows is read again when the person comes back to the page, and every minute while the page shows and live
+ * updates are paused or off.
+ */
 export function useMeetings(list: MeetingsHeld): MeetingsState {
   return useRetained(list);
 }
