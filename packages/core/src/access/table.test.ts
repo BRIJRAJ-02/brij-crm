@@ -207,6 +207,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'scheduleFor',
   // Home's metrics cache (spec 0041): a factory the api makes once, no scope.
   'createHomeMetricsCache',
+  // A person's own account picture from our origin (23 Oct 2026): which of Google's pictures to serve, and its
+  // version, from the session's user; pure, no scope.
+  'servedPicture',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;

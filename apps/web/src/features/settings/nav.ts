@@ -1,7 +1,9 @@
 // Where settings pages are, which ones exist and how the settings navigation
 // groups them (specs 0012 and 0026). Plain functions with no React or library
-// imports, so the routes' loaders (in the first load) can use them without
-// pulling a screen in.
+// imports, so any screen can use them without pulling another screen in. It
+// carries every settings page's title, and so their words: a route's loader
+// (in the first load) imports a small module of its own instead, as the object
+// settings route does with object-tabs.ts.
 import type { ObjectSummary, Permission } from '@crm/data';
 import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
 import { strings as calendar } from './calendar-strings.ts';
@@ -13,14 +15,9 @@ import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
+import type { ObjectTab } from './object-tabs.ts';
 
-/** An object's settings tabs, in order. */
-export const OBJECT_TABS = ['attributes', 'configuration'] as const;
-/** One of an object's settings tabs. */
-export type ObjectTab = (typeof OBJECT_TABS)[number];
-
-/** True when `tab` names one of an object's settings tabs. */
-export const isObjectTab = (tab: string): tab is ObjectTab => (OBJECT_TABS as readonly string[]).includes(tab);
+export { OBJECT_TABS, isObjectTab, type ObjectTab } from './object-tabs.ts';
 
 /** Settings, Objects. */
 export const objectsSettingsHref = (slug: string) => `/w/${slug}/settings/objects`;
