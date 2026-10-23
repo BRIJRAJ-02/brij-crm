@@ -267,4 +267,16 @@ describe('two factor, on', () => {
     await expect.element(page.getByRole('dialog', { name: 'Save your backup codes' })).toBeVisible();
     expect(changed).toBe(1);
   });
+
+  it('takes a backup code as typed: no capitals, corrections or spell check on a phone (Q84)', async () => {
+    const { data } = layer();
+    await render(ON, data, () => undefined);
+    await page.getByRole('button', { name: 'Turn off' }).click();
+    const off = page.getByRole('alertdialog', { name: 'Turn off two factor sign in?' });
+    await off.getByRole('button', { name: 'Use a backup code' }).click();
+    const field = off.getByRole('textbox', { name: 'Backup code' });
+    await expect.element(field).toHaveAttribute('autocapitalize', 'off');
+    await expect.element(field).toHaveAttribute('autocorrect', 'off');
+    await expect.element(field).toHaveAttribute('spellcheck', 'false');
+  });
 });
