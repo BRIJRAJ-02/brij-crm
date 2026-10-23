@@ -142,7 +142,7 @@ describe('the order of the sections (AC-1075, AC-1079, decision 6)', () => {
   it('puts an action named by the text before a Settings page found by another word: "dark" runs Use dark theme', () => {
     expect(order('dark')).toEqual(['actions', 'settings', 'records', 'views', 'pages']);
     expect(order('dark', 'out')).toEqual(['records', 'views', 'actions', 'settings', 'pages']);
-    expect(order('dark', ['similar'])).toEqual(['actions', 'records', 'settings', 'views', 'pages']);
+    expect(order('dark', ['contains'])).toEqual(['actions', 'records', 'settings', 'views', 'pages']);
   });
 
   it('puts the page the text names before a record holding it mid-word: "deal" opens Deals, not Ideal Standard', () => {
@@ -163,6 +163,10 @@ describe('the order of the sections (AC-1075, AC-1079, decision 6)', () => {
     expect(order('acme', 'out')[0]).toBe('records');
   });
 
+  it('puts a failed search (no records, only its Try again row) after the commands that match', () => {
+    expect(order('deal', [])).toEqual(['pages', 'records', 'views', 'settings', 'actions']);
+  });
+
   it('weighs a view by its name the same way', () => {
     expect(order('deal', ['contains'], ['Deal pipeline'])).toEqual([
       'views',
@@ -174,9 +178,12 @@ describe('the order of the sections (AC-1075, AC-1079, decision 6)', () => {
     expect(order('deal', ['contains'], ['Big deals'])[0]).toBe('pages');
   });
 
-  it('keeps kind order when nothing names a command: a loose match never outranks a record', () => {
-    expect(order('deleted', ['similar'])).toEqual(['records', 'pages', 'views', 'settings', 'actions']);
-    expect(order('ash', ['similar'])[0]).toBe('records');
+  it('ranks a close guess below any other match, and a mid-word record level with another word for a page', () => {
+    expect(order('deleted', ['similar'])).toEqual(['pages', 'records', 'views', 'settings', 'actions']);
+    expect(order('person', ['similar'])).toEqual(['actions', 'pages', 'records', 'views', 'settings']);
+    expect(order('ash', ['similar'])[0]).toBe('pages');
+    // Level: kind order puts the record first.
+    expect(order('deleted', ['contains'])[0]).toBe('records');
     expect(order('northwind', ['prefix'])[0]).toBe('records');
   });
 });

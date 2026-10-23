@@ -98,8 +98,12 @@ export const Open: Story = {
     const menu = await openMenu();
     await expect(menu).toHaveAccessibleName('Column options');
     await expect(menu.querySelector('[data-danger]')).toHaveTextContent('Delete attribute');
-    // The sort in effect carries a check, named for screen readers.
-    await expect(menu.querySelector('[aria-label="Current"]')).not.toBeNull();
+    // The sort in effect carries a check, which screen readers hear after its label.
+    const sorted = [...menu.querySelectorAll('[role="menuitem"]')].find((item) =>
+      item.textContent.includes('ascending'),
+    );
+    await expect(sorted).toHaveAccessibleName('Sort ascending');
+    await expect(sorted).toHaveAccessibleDescription('Current');
   },
 };
 
@@ -149,7 +153,7 @@ export const ChoiceAmongActions: Story = {
               Create a company
             </MenuItem>
           </MenuSection>
-          <MenuSection label="Theme" isLabelHidden isJoined selectionMode="single" selectedKeys={['dark']}>
+          <MenuSection label="Theme" isJoined selectionMode="single" selectedKeys={['dark']}>
             <MenuItem id="light" icon="sun" isCheckAtEnd>
               Use light theme
             </MenuItem>

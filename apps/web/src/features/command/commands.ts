@@ -184,7 +184,7 @@ const BLANK_ORDER: readonly SectionId[] = ['recent', 'actions', 'pages'];
 
 /**
  * What the menu found for the text, before it is drawn: the server's records
- * and views (undefined until its answer for this text is in, or when it
+ * and views (undefined while its search for this text is out, none when it
  * failed), and the pages, Settings pages and actions that match.
  */
 export interface Found {
@@ -198,15 +198,16 @@ export interface Found {
 /**
  * The order the sections show in. With nothing typed: Recent, Actions, Go to.
  * Otherwise each section by its best row, on one scale for every kind: a name
- * starting with the text, then a word of a name starting with it, then any
- * looser match (held mid-word, another word for it, or a close guess). Kind
- * order breaks a tie, so a record whose name starts with the text stays first,
- * while one found only mid-word ("deal" in Ideal Standard) or as a close guess
- * (Northwind Traders for "trash") waits behind the page, Settings page or
- * action the text names, and a command named by the text ("dark" in Use dark
- * theme) beats one found by another word for it (Settings › Preferences).
- * Records still being searched keep their kind's place, with only their
- * "Searching…" row.
+ * starting with the text, then a word of a name starting with it, then a
+ * looser match (held mid-word, or another word for it), then a close guess.
+ * Kind order breaks a tie, so a record whose name starts with the text stays
+ * first, while one found only mid-word ("deal" in Ideal Standard) waits behind
+ * the page, Settings page or action the text names, a close guess (Northwind
+ * Traders for "trash") waits behind any command that matches, and a command
+ * named by the text ("dark" in Use dark theme) beats one found by another word
+ * for it (Settings › Preferences). Records still being searched keep their
+ * kind's place, with only their "Searching…" row; a failed search, with only
+ * its Try again row, goes last.
  */
 export function orderSections(found: Found, query: string): readonly SectionId[] {
   const text = query.trim().toLocaleLowerCase();
@@ -227,12 +228,12 @@ export function orderSections(found: Found, query: string): readonly SectionId[]
 /** Where looser matches sit on the sections' one scale: below a name, or a word of one, starting with the text. */
 const LOOSE = 2;
 
-/** How the server's match kinds (AC-1079) sit on that scale. */
+/** How the server's match kinds (AC-1079) sit on that scale: a close guess (typo tolerance) below every other match. */
 const RECORD_RANK: Readonly<Record<RecordHit['match'], number>> = {
   prefix: 0,
   word: 1,
   contains: LOOSE,
-  similar: LOOSE,
+  similar: LOOSE + 1,
 };
 
 /** A name's or a command's rank on that scale: 0 and 1 kept, anything looser (or unmatched) as one. */

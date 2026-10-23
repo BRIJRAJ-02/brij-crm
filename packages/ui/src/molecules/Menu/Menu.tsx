@@ -370,14 +370,15 @@ export interface MenuItemProps {
   readonly isPending?: boolean;
   /**
    * What is in effect now, in a menu of actions (a column's current sort): a
-   * check at the end, named for screen readers. A menu of choices uses
-   * `selectionMode` instead.
+   * check at the end, which screen readers hear after the label ("Current").
+   * A menu of choices uses `selectionMode` instead.
    */
   readonly isChecked?: boolean;
   /**
    * In a section that chooses (`selectionMode`), draws the check at the end when chosen, as `isChecked` does,
    * instead of in a check column before the items: a choice among plain actions (the command palette's themes under
    * Actions), whose icons stay in line with the actions' icons. Screen readers hear it as checked or not (aria-checked).
+   * It takes the place of `isChecked`.
    */
   readonly isCheckAtEnd?: boolean;
 }
@@ -411,6 +412,8 @@ const HasChecks = createContext(false);
 function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; readonly state: ItemState }) {
   const { children, icon, leading, isLabelInLeading = false, description, meta, kbd, isChecked = false } = look;
   const { isCheckAtEnd = false } = look;
+  // In a choice, the item's own checked state (aria-checked) says it instead.
+  const isCurrent = isChecked && !isCheckAtEnd;
   const hasChecks = useContext(HasChecks);
   return (
     <>
@@ -422,9 +425,13 @@ function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; r
         <Text slot="label" className={styles.label}>
           {isLabelInLeading && leading !== undefined ? <VisuallyHidden>{children}</VisuallyHidden> : children}
         </Text>
-        {description !== undefined && (
-          <Text slot="description" className={styles.description}>
+        {/* The check of what is in effect is said after the label, as the item's description ("Current"). */}
+        {(description !== undefined || isCurrent) && (
+          <Text slot="description" className={description === undefined ? undefined : styles.description}>
             {description}
+            {isCurrent && (
+              <VisuallyHidden>{description === undefined ? strings.current : ` ${strings.current}`}</VisuallyHidden>
+            )}
           </Text>
         )}
       </span>
@@ -434,7 +441,7 @@ function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; r
           <Kbd tone="soft">{kbd}</Kbd>
         </span>
       )}
-      {isChecked && <Icon name="check" size="sm" label={strings.current} />}
+      {isCurrent && <Icon name="check" size="sm" />}
       {/* Screen readers hear the choice from the item itself (aria-checked), so this check is only drawn. */}
       {isCheckAtEnd && state.selectionMode !== 'none' && state.isSelected && <Icon name="check" size="sm" />}
       {state.hasSubmenu && <Icon name="chevron-right" size="sm" tone="muted" />}
@@ -470,8 +477,8 @@ export interface MenuSectionProps {
   readonly selectedKeys?: Iterable<MenuKey>;
   readonly onSelectionChange?: (keys: ReadonlySet<MenuKey>) => void;
   /**
-   * Follows the section above with no gap, as more of its group: a choice inside it (the command palette's themes
-   * under Actions), named for screen readers only, so it goes with `isLabelHidden`.
+   * Follows the section above with no gap and no heading, as more of its group: a choice beside its actions (the
+   * command palette's themes under Actions). `label` names it for screen readers only.
    */
   readonly isJoined?: boolean;
 }
@@ -490,12 +497,12 @@ export function MenuSection({
     <AriaMenuSection
       className={styles.section}
       {...(isJoined ? { 'data-joined': '' } : {})}
-      {...(isLabelHidden ? { 'aria-label': label } : {})}
+      {...(isLabelHidden || isJoined ? { 'aria-label': label } : {})}
       {...(selectionMode === undefined ? {} : { selectionMode })}
       {...(selectedKeys === undefined ? {} : { selectedKeys })}
       {...selectionHandler(onSelectionChange)}
     >
-      {!isLabelHidden && <Header className={styles.heading}>{label}</Header>}
+      {!isLabelHidden && !isJoined && <Header className={styles.heading}>{label}</Header>}
       {children}
     </AriaMenuSection>
   );

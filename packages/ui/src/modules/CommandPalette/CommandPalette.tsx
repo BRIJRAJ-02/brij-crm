@@ -4,7 +4,7 @@
 // answers named at the foot. Rows come as one flat list (`items`, long and
 // async, virtualised) or in sections under headings (`sections`, the command
 // menu's Recent, Records, Views, Pages, Settings and Actions).
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -28,9 +28,10 @@ export interface PaletteItem {
   /** An action's shortcut, written with Mac symbols. */
   readonly kbd?: string;
   /**
-   * The choice this row is one option of ("Theme"): neighbouring rows of one
-   * choice are a group of their own inside their section, named so for screen
-   * readers, and each reads as a radio item, checked or not (`isChecked`).
+   * The choice this row is one option of ("Theme"): a choice's rows are drawn
+   * together, as a group of their own joined to their section's rows (named
+   * after the choice, or after the section when they come first in it), and
+   * each reads as a radio item, checked or not (`isChecked`).
    */
   readonly choice?: string;
   /** The option in effect now (the theme in use): a check at the end. With `choice`, screen readers hear it checked. */
@@ -109,10 +110,28 @@ export function CommandPalette(props: CommandPaletteProps) {
     onSearch(next);
   };
   const searchProps = { label: searchLabel, onSearch: search, ...(placeholder === undefined ? {} : { placeholder }) };
+  // Enter pressed before any row came in, while a section's search was still out: it chooses the first row once
+  // that search is in, for the same text (AC-1097, the top row when none is highlighted). New text, or any other
+  // key, drops it, and so does an answer with no rows.
+  const heldEnter = useRef<string | undefined>(undefined);
   const close = (item: PaletteItem) => {
+    heldEnter.current = undefined;
     onAction(item);
     onOpenChange(false);
   };
+  const { sections: given } = props;
+  useEffect(() => {
+    const held = heldEnter.current;
+    if (held === undefined || given === undefined) return;
+    if (held !== query) {
+      heldEnter.current = undefined;
+      return;
+    }
+    if (given.some((section) => section.status === 'searching')) return;
+    heldEnter.current = undefined;
+    const first = given.flatMap((section) => section.items)[0];
+    if (first !== undefined) close(first);
+  });
 
   let list: ReactNode;
   let announcer: ReactNode = null;
@@ -136,16 +155,20 @@ export function CommandPalette(props: CommandPaletteProps) {
     // Enter in the field chooses the highlighted row, read from the rows themselves: React Aria names it to the
     // field (aria-activedescendant) only half a second after a key, so the field can still name no row, or one
     // from the text before. With no row highlighted (the rows came in after the typing, past a "Searching…"
-    // row), Enter chooses the first row; with no rows yet, it does nothing.
+    // row), Enter chooses the first row; with none yet, it waits for the search still out (`heldEnter`).
     const first = shown.flatMap((section) => section.items)[0];
     chooseOnEnter = (event) => {
-      const target = event.target;
-      if (event.key !== 'Enter' || event.nativeEvent.isComposing || !(target instanceof HTMLInputElement)) return;
+      if (event.key !== 'Enter') {
+        heldEnter.current = undefined;
+        return;
+      }
+      if (event.nativeEvent.isComposing || !(event.target instanceof HTMLInputElement)) return;
       event.preventDefault();
       event.stopPropagation();
       const highlighted = event.currentTarget.querySelector('[data-focused][data-key]')?.getAttribute('data-key');
       if (highlighted !== undefined && highlighted !== null) choose(highlighted);
       else if (first !== undefined) close(first);
+      else if (shown.some((section) => section.status === 'searching')) heldEnter.current = query;
     };
     list = (
       <Menu
@@ -156,12 +179,12 @@ export function CommandPalette(props: CommandPaletteProps) {
         onAction={choose}
       >
         {shown.flatMap((section) =>
-          groupsOf(section.items).map((group, index, groups) => (
-            // The section's first group carries its heading; a choice after it is a group of its own, joined to it.
+          groupsOf(section.items, section.status !== undefined).map((group, index, groups) => (
+            // The section's first group carries its heading; each group after it is joined to it, named for screen readers.
             <MenuSection
-              key={index === 0 ? section.id : `${section.id}:${group.choice ?? String(index)}`}
+              key={`${section.id}:${String(index)}`}
               label={index === 0 ? section.label : (group.choice ?? section.label)}
-              {...(index === 0 ? {} : { isLabelHidden: true, isJoined: true })}
+              {...(index === 0 ? {} : { isJoined: true })}
               {...(group.choice === undefined
                 ? {}
                 : {
@@ -242,7 +265,7 @@ export function CommandPalette(props: CommandPaletteProps) {
       }
     >
       {/* Only the field's own Enter reaches here; the rows' keys stay with the menu. */}
-      <div className={styles.list} {...(chooseOnEnter === undefined ? {} : { onKeyDownCapture: chooseOnEnter })}>
+      <div className={styles.list} onKeyDownCapture={chooseOnEnter}>
         {list}
         {announcer}
       </div>
@@ -272,17 +295,22 @@ interface RowGroup {
 }
 
 /**
- * A section's rows in runs, each choice's neighbouring options together (Create rows, then the themes). A section
- * with no rows is one empty run, which holds its status row.
+ * A section's rows in groups, in the order each group first shows: its plain rows together, and each choice's
+ * options together wherever the matching sorted them (Create rows, then the themes), so one choice is always one
+ * group. The status row ("Searching…", Try again) ends the section and is never an option, so a section with no
+ * rows, or whose rows end in a choice, gets an empty plain group to hold it.
  */
-function groupsOf(items: readonly PaletteItem[]): readonly RowGroup[] {
-  const groups = items.reduce<readonly RowGroup[]>((runs, item) => {
-    const last = runs.at(-1);
-    return last !== undefined && last.choice === item.choice
-      ? [...runs.slice(0, -1), { choice: last.choice, items: [...last.items, item] }]
-      : [...runs, { choice: item.choice, items: [item] }];
+function groupsOf(items: readonly PaletteItem[], hasStatus: boolean): readonly RowGroup[] {
+  const groups = items.reduce<readonly RowGroup[]>((found, item) => {
+    const at = found.findIndex((group) => group.choice === item.choice);
+    return at === -1
+      ? [...found, { choice: item.choice, items: [item] }]
+      : found.map((group, index) => (index === at ? { choice: group.choice, items: [...group.items, item] } : group));
   }, []);
-  return groups.length === 0 ? [{ choice: undefined, items: [] }] : groups;
+  const last = groups.at(-1);
+  return last === undefined || (hasStatus && last.choice !== undefined)
+    ? [...groups, { choice: undefined, items: [] }]
+    : groups;
 }
 
 /**

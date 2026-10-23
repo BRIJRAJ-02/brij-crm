@@ -295,6 +295,59 @@ export const SectionsNothingMatches: Story = {
   },
 };
 
+/** A palette over fixed sections, as given. */
+function FixedPalette({ sections }: { readonly sections: readonly PaletteSection[] }) {
+  const [isOpen, setOpen] = useState(true);
+  return (
+    <CommandPalette
+      isOpen={isOpen}
+      onOpenChange={setOpen}
+      title="Command menu"
+      searchLabel="Search"
+      sections={sections}
+      onSearch={() => undefined}
+      onAction={() => undefined}
+    />
+  );
+}
+
+/**
+ * A choice's options stay one group wherever the matching sorted them: here a
+ * Create row ranked between two themes. A status row after a choice is a plain
+ * row of its own, never an option.
+ */
+export const ChoiceKeptTogether: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <FixedPalette
+      sections={[
+        {
+          id: 'actions',
+          label: 'Actions',
+          status: 'searching',
+          items: [
+            { id: 'theme:system', name: 'Use system theme', icon: 'monitor', choice: 'Theme', isChecked: false },
+            { id: 'create:people', name: 'Create a person', icon: 'plus' },
+            { id: 'theme:light', name: 'Use light theme', icon: 'sun', choice: 'Theme', isChecked: true },
+          ],
+        },
+      ]}
+    />
+  ),
+  play: async () => {
+    const found = await dialog();
+    await waitFor(() => expect(found.querySelectorAll('[role="menuitemradio"]')).toHaveLength(2));
+    const groups = [...found.querySelectorAll('[role="group"]')];
+    const themes = groups.find((group) => group.querySelectorAll('[role="menuitemradio"]').length > 0);
+    await expect(themes?.querySelectorAll('[role="menuitemradio"]')).toHaveLength(2);
+    await expect(groups.filter((group) => group.querySelector('[role="menuitemradio"]') !== null)).toHaveLength(1);
+    await expect(found.querySelector('[aria-checked="true"]')).toHaveAccessibleName('Use light theme');
+    const searching = found.querySelector('[data-pending]');
+    await expect(searching).toHaveAttribute('role', 'menuitem');
+    await expect(searching?.closest('[role="group"]')?.querySelector('[role="menuitemradio"]')).toBeNull();
+  },
+};
+
 /** How long the sample's records search takes, as the app's (a pause, then the server). */
 const RECORDS_AFTER_MS = 150;
 
@@ -303,18 +356,25 @@ const RECORDS_AFTER_MS = 150;
  * after each key, above the pages, and until they do Records holds only its
  * "Searching…" row, never the rows found for the text before.
  */
-function SearchingPalette({ onAction }: { readonly onAction?: (item: PaletteItem) => void }) {
+function SearchingPalette({
+  onAction,
+  answerAfterMs = RECORDS_AFTER_MS,
+}: {
+  readonly onAction?: (item: PaletteItem) => void;
+  /** How long each records search takes here. */
+  readonly answerAfterMs?: number;
+}) {
   const [isOpen, setOpen] = useState(true);
   const [query, setQuery] = useState('');
   const [answered, setAnswered] = useState('');
   useEffect(() => {
     const timer = setTimeout(() => {
       setAnswered(query);
-    }, RECORDS_AFTER_MS);
+    }, answerAfterMs);
     return () => {
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, answerAfterMs]);
   const all = sectionsOf('', 'ready');
   const matches = (item: PaletteItem) => item.name.toLowerCase().includes(query.toLowerCase());
   const records = [...(all[0]?.items ?? []), { id: 'record:contoso', name: 'Contoso', kind: 'Company' }];
@@ -365,12 +425,14 @@ export const HighlightFollowsTheText: Story = {
     await userEvent.keyboard('{ArrowDown}');
     await waitFor(() => expect(highlighted()).toHaveTextContent('Northwind Traders'));
 
-    // New text: while its records are searched, the row found for "north" is gone, and Enter runs nothing.
+    // New text: while its records are searched, the row found for "north" is gone, and Enter runs no row from
+    // before. It waits for this text's answer, which has no rows, so nothing runs.
     await userEvent.keyboard('x');
     await expect(found).not.toHaveTextContent('Northwind Traders');
     await userEvent.keyboard('{Enter}');
     await expect(args.onAction).not.toHaveBeenCalled();
     await waitFor(() => expect(found).toHaveTextContent('Nothing matches “northx”'));
+    await expect(args.onAction).not.toHaveBeenCalled();
 
     // Other text: the first row that matches it now takes the highlight while the records are searched.
     await userEvent.keyboard('{Backspace}{Backspace}{Backspace}{Backspace}{Backspace}{Backspace}th');
@@ -382,5 +444,20 @@ export const HighlightFollowsTheText: Story = {
     await expect(args.onAction).toHaveBeenCalledTimes(1);
     await expect(args.onAction).toHaveBeenCalledWith(expect.objectContaining({ id: 'theme:light' }));
     await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  },
+};
+
+/** Enter pressed before the records come in chooses the first row once they do, for the same text (AC-1097). */
+export const EnterBeforeTheRecords: Story = {
+  args: { onAction: fn() },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <SearchingPalette onAction={args.onAction} answerAfterMs={600} />,
+  play: async ({ args, userEvent }) => {
+    const found = await dialog();
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', 'Search'));
+    await userEvent.keyboard('ada{Enter}');
+    await expect(found).toHaveTextContent('Searching…');
+    await waitFor(() => expect(args.onAction).toHaveBeenCalledWith(expect.objectContaining({ id: 'record:ada' })));
+    await expect(args.onAction).toHaveBeenCalledTimes(1);
   },
 };

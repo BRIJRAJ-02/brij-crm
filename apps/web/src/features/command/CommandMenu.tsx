@@ -85,9 +85,10 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
           : isIn
             ? undefined
             : 'searching';
+    // A failed search has none, so its Try again row waits behind every command that matches.
     const matched = {
-      records: isIn ? found.records : undefined,
-      views: isIn ? found.views : undefined,
+      records: isIn ? found.records : status === 'failed' ? [] : undefined,
+      views: isIn ? found.views : status === 'failed' ? [] : undefined,
       pages: matchCommands(pages, text),
       settings: matchCommands(settings, text),
       actions: matchCommands(actions, text),
