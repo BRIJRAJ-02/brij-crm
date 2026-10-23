@@ -23,6 +23,7 @@ import {
   turnOnTwoFactor,
   withCookies,
 } from '../../test/sign-in.ts';
+import { GOOGLE_USERINFO, idTokenPicture } from './google-photo.ts';
 import { pendingPicture, pendingPictureValue, totpCode } from './two-factor.ts';
 
 const { identityUrl } = inject('testDatabase');
@@ -50,8 +51,10 @@ interface GooglePerson {
   readonly email: string;
   readonly emailVerified: boolean;
   readonly name?: string;
-  /** Their profile picture, as Google's id token names it. */
+  /** Their profile picture, as Google's id token and userinfo name it. */
   readonly picture?: string;
+  /** False when the id token leaves the picture out, as Google may; userinfo still names it. */
+  readonly pictureInIdToken?: boolean;
 }
 
 /** A JWT shaped like Google's id token; unsigned, as Better Auth only decodes one from the token endpoint. */
@@ -67,7 +70,7 @@ function idToken(person: GooglePerson): string {
       email: person.email,
       email_verified: person.emailVerified,
       name: person.name ?? 'Grace Hopper',
-      ...(person.picture === undefined ? {} : { picture: person.picture }),
+      ...(person.picture === undefined || person.pictureInIdToken === false ? {} : { picture: person.picture }),
       iat: now,
       exp: now + 3600,
     }),
@@ -82,27 +85,43 @@ type TokenRequest = URLSearchParams;
 function fakeGoogle(person: GooglePerson): {
   readonly tokenCalls: () => number;
   readonly lastTokenRequest: () => TokenRequest | undefined;
+  readonly userinfoCalls: () => number;
 } {
   const real = globalThis.fetch;
   const requests: TokenRequest[] = [];
+  const tokens = new Set<string>();
+  let userinfo = 0;
   vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     // Google's picture hosts answer every picture as a small PNG.
     if (url.startsWith('https://lh3.googleusercontent.com/')) {
       return new Response(PNG, { headers: { 'content-type': 'image/png' } });
     }
+    // Userinfo answers only an access token this fake handed out, as Google answers only its own.
+    if (url === GOOGLE_USERINFO) {
+      userinfo += 1;
+      const bearer = new Headers(init?.headers).get('authorization')?.replace(/^Bearer /, '') ?? '';
+      if (!tokens.has(bearer)) return Response.json({ error: 'invalid_token' }, { status: 401 });
+      return Response.json({
+        sub: person.sub,
+        email: person.email,
+        ...(person.picture === undefined ? {} : { picture: person.picture }),
+      });
+    }
     if (!url.startsWith(TOKEN_ENDPOINT)) return real(input, init);
     const body = input instanceof Request ? await input.clone().text() : bodyText(init?.body);
     requests.push(new URLSearchParams(body));
+    const accessToken = `access-${randomUUID()}`;
+    tokens.add(accessToken);
     return Response.json({
-      access_token: `access-${randomUUID()}`,
+      access_token: accessToken,
       id_token: idToken(person),
       expires_in: 3599,
       token_type: 'Bearer',
       scope: 'openid email profile',
     });
   });
-  return { tokenCalls: () => requests.length, lastTokenRequest: () => requests.at(-1) };
+  return { tokenCalls: () => requests.length, lastTokenRequest: () => requests.at(-1), userinfoCalls: () => userinfo };
 }
 
 /** A request body as text: the form Better Auth sends, as a string or as URLSearchParams. */
@@ -608,6 +627,39 @@ describe('Sync Google photo, Settings › Profile (23 Oct 2026)', () => {
     fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture: 'https://pictures.example/me.png' });
     expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=none`);
     expect(await identity.userImage(userId)).toBeUndefined();
+  });
+
+  it('finds the photo when the id token leaves it out: Google’s userinfo for the link’s own token', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, cookie, userId, profile } = await profilePerson(app);
+    const picture = 'https://lh3.googleusercontent.com/a/userinfo-only=s96-c';
+    const google = fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture, pictureInIdToken: false });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=synced`);
+    expect(await identity.userImage(userId)).toBe(picture);
+    // The token Better Auth stored (encrypted) was read back and sent as Google handed it out.
+    expect(google.userinfoCalls()).toBe(1);
+  });
+
+  it('asks userinfo nothing when the request already names the photo', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, cookie, profile } = await profilePerson(app);
+    const google = fakeGoogle({
+      sub: randomUUID(),
+      email,
+      emailVerified: true,
+      picture: 'https://lh3.googleusercontent.com/a/in-token=s96-c',
+    });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=synced`);
+    expect(google.userinfoCalls()).toBe(0);
+  });
+
+  it('reads a stored id token’s picture claim, and nothing from a token that isn’t one', () => {
+    const picture = 'https://lh3.googleusercontent.com/a/claim=s96-c';
+    expect(idTokenPicture(idToken({ sub: 's', email: 'a@b.test', emailVerified: true, picture }))).toBe(picture);
+    expect(idTokenPicture(idToken({ sub: 's', email: 'a@b.test', emailVerified: true }))).toBeUndefined();
+    expect(idTokenPicture(undefined)).toBeUndefined();
+    expect(idTokenPicture('not-a-token')).toBeUndefined();
+    expect(idTokenPicture('a.%%%.c')).toBeUndefined();
   });
 
   it('refuses a Google account another person signs in with, changing neither picture', async () => {

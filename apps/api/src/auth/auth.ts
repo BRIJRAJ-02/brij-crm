@@ -17,7 +17,7 @@ import {
 import { renderSignInAlert, renderSignInCode, SIGN_IN_CODE_MINUTES } from '@crm/emails';
 import type { SignUpMethod } from '@crm/contracts/events';
 import type { IdentityStore, SecurityEventInput } from '@crm/db';
-import { betterAuth, type DBAdapter } from 'better-auth';
+import { type AuthContext, betterAuth, type DBAdapter } from 'better-auth';
 import {
   addOAuthServerContext,
   APIError,
@@ -27,6 +27,7 @@ import {
 } from 'better-auth/api';
 import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
 import { generateRandomString, symmetricDecrypt, symmetricEncrypt } from 'better-auth/crypto';
+import { decryptOAuthToken } from 'better-auth/oauth2';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 import * as z from 'zod';
@@ -50,12 +51,14 @@ import { createAllowlist } from './allowlist.ts';
 import { authErrorResponse } from './errors.ts';
 import {
   type GooglePhotoResult,
+  idTokenPicture,
   isProfileReturn,
   LINK_SOCIAL_PATH,
   LinkGoogleBody,
   linkFailure,
   PHOTO_PURPOSE,
   profileWithResult,
+  userinfoPicture,
 } from './google-photo.ts';
 import {
   BACKUP_CODE_COUNT,
@@ -109,6 +112,12 @@ export const CODE_CHECKS_PER_EMAIL_DAY = { window: 24 * 60 * 60, max: 40 } as co
 export const OTHER_AUTH_ROUTES_PER_IP = { window: 600, max: 600 } as const;
 
 /** A fixed window limit, as Better Auth's limiter takes it. */
+/** A person's linked Google account as Sync Google photo reads it: the stored id token and the access token. */
+interface LinkedGoogle {
+  readonly idToken?: string;
+  readonly accessToken?: string;
+}
+
 interface Rule {
   readonly window: number;
   readonly max: number;
@@ -534,12 +543,60 @@ export function createAuth({
     const picture = notedPicture(userId);
     if (picture !== undefined) await applyPicture(userId, picture);
   }
-  /** Profile's Sync Google photo, once Google is linked: how saving this request's picture went. */
-  async function syncPicture(userId: string): Promise<GooglePhotoResult> {
-    const picture = notedPicture(userId);
-    if (picture === undefined) return 'none';
+  /**
+   * Profile's Sync Google photo, once Google is linked: how saving Google's current picture went. The picture is
+   * the one this request noted, else the claim in the id token the link stored, else Google's userinfo for the
+   * link's access token (production's first syncs noted none, 23 Oct 2026). Logs which source answered, never the URL.
+   */
+  async function syncPicture(
+    userId: string,
+    linkedAccount: () => Promise<LinkedGoogle | undefined>,
+  ): Promise<GooglePhotoResult> {
+    const noted = googlePictures.getStore()?.length ?? -1;
+    // The hosts of pictures turned away (never their paths), so a log says why none was found.
+    const refused = new Set<string>();
+    const take = (candidate: string | undefined): string | undefined => {
+      const kept = served(userId, candidate);
+      if (candidate !== undefined && kept === undefined) {
+        refused.add(URL.canParse(candidate) ? new URL(candidate).hostname : 'unreadable');
+      }
+      return kept;
+    };
+    let source = 'request';
+    let picture = take(googlePictures.getStore()?.at(-1));
+    if (picture === undefined) {
+      const account = await linkedAccount();
+      source = 'id-token';
+      picture = take(idTokenPicture(account?.idToken));
+      if (picture === undefined && account?.accessToken !== undefined) {
+        source = 'userinfo';
+        picture = take(await userinfoPicture(account.accessToken));
+      }
+    }
+    if (picture === undefined) {
+      log.info('Google photo not found', { noted, source, refused: [...refused] });
+      return 'none';
+    }
     const current = await applyPicture(userId, picture);
+    log.info('Google photo found', { noted, source, saved: current ?? 'failed' });
     return current === undefined ? 'failed' : current ? 'synced' : 'kept';
+  }
+  /** The person's Google account as the link just stored it: its id token, and its access token decrypted. */
+  async function linkedGoogle(context: AuthContext, userId: string): Promise<LinkedGoogle | undefined> {
+    try {
+      const accounts = await context.internalAdapter.findAccounts(userId);
+      const account = accounts.find((each) => each.providerId === 'google');
+      if (account === undefined) return undefined;
+      const accessToken = account.accessToken ? await decryptOAuthToken(account.accessToken, context) : undefined;
+      return { idToken: account.idToken ?? undefined, accessToken: accessToken || undefined };
+    } catch (error) {
+      log.warn('Google account not read', { error: error instanceof Error ? error.name : typeof error });
+      return undefined;
+    }
+  }
+  /** `picture` when it is an account picture of Google's (allowlisted), else undefined. */
+  function served(userId: string, picture: string | undefined): string | undefined {
+    return picture !== undefined && servedPicture(userId, picture) !== undefined ? picture : undefined;
   }
   // The year old security history goes at most once a day per process, after a sign in (AC-898): no timer keeps
   // the database awake.
@@ -1090,7 +1147,9 @@ export function createAuth({
                 if (linked && state.serverContext[PHOTO_PURPOSE.wasLinked] === false) {
                   await keepEvent({ userId: link.userId, kind: 'google_linked' });
                 }
-                const result = linked ? await syncPicture(link.userId) : linkFailure(location);
+                const result = linked
+                  ? await syncPicture(link.userId, () => linkedGoogle(ctx.context, link.userId))
+                  : linkFailure(location);
                 if (result !== 'synced') log.info('Google photo not synced', { result });
                 throw ctx.redirect(profileWithResult(profile, result));
               }),

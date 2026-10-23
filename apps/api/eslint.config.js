@@ -9,6 +9,7 @@ export default server({
     { files: ['src/monitoring/posthog.ts'], allow: ['posthog-node'] },
     // Sign in and mail (spec 0005). The templates live in packages/emails, its one React Email wrapper.
     // Two factor (spec 0033): its plugin, and the cookie and crypto helpers its held back sign in needs.
+    // Sync Google photo (23 Oct 2026): oauth2's decryptOAuthToken reads the link's access token back.
     {
       files: ['src/auth/auth.ts'],
       allow: [
@@ -16,6 +17,7 @@ export default server({
         'better-auth/api',
         'better-auth/cookies',
         'better-auth/crypto',
+        'better-auth/oauth2',
         'better-auth/plugins/email-otp',
         'better-auth/plugins/two-factor',
       ],
