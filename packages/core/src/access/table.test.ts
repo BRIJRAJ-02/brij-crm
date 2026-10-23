@@ -68,6 +68,15 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'deletedEmail',
   'createWorkspace',
   'createUserWorkspace',
+  // The operator console (spec 0047): before any workspace, behind the api's operator gate; it reads across
+  // workspaces only through the crm_operator definers, which answer counts. periodDays is pure.
+  'operatorOverview',
+  'operatorUsers',
+  'operatorUser',
+  'operatorPages',
+  'operatorPage',
+  'operatorSite',
+  'periodDays',
   // Pure access functions.
   'can',
   // Calendar health's reach (spec 0037, AC-1307), read off a scope readCalendarHealth checks, and a colour mapping.
