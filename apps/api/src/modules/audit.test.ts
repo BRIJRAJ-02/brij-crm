@@ -86,7 +86,7 @@ describe('audit.list', () => {
     expect(await refusal(() => member.client.audit.list({ workspace: owner.slug }))).toEqual({
       code: 'FORBIDDEN',
       status: 403,
-      message: 'Only workspace owners and admins can read the audit log.',
+      message: 'Only workspace owners and admins can see workspace changes.',
     });
     const signedOut = rpcClient(app);
     expect((await failure(() => signedOut.audit.list({ workspace: owner.slug }))).status).toBe(401);

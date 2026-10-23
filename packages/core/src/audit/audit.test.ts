@@ -17,7 +17,7 @@ import { inviteMembers } from '../members/invitations.ts';
 import { setMemberRole } from '../members/members.ts';
 import { testScope } from '../testing.ts';
 import { updateWorkspace } from '../workspace/settings.ts';
-import { AUDIT_CURSOR_MESSAGE, listAuditEvents } from './audit.ts';
+import { AUDIT_CURSOR_MESSAGE, auditPageStatement, listAuditEvents } from './audit.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -115,7 +115,7 @@ describe('a member can’t read the log (AC-4622, AC-4634)', () => {
   it('refuses a member, and an admin just lowered to member, before any statement touches the log', async () => {
     const at = await workspace('member', counted);
     await threeChanges(at, 'Acme Ltd');
-    expect(FORBIDDEN.message).toBe('Only workspace owners and admins can read the audit log.');
+    expect(FORBIDDEN.message).toBe('Only workspace owners and admins can see workspace changes.');
     statements.length = 0;
     counting = true;
     try {
@@ -148,10 +148,12 @@ describe('a member can’t read the log (AC-4622, AC-4634)', () => {
     expect(statements).toEqual([]);
   });
 
-  it('refuses an API key without the audit.read scope', async () => {
+  it('refuses an API key, with or without the audit.read scope (a key never holds it)', async () => {
     const at = await workspace();
-    const key = testScope({ db, workspaceId: at.workspaceId, actor: { type: 'api_key', id: newId() }, scopes: [] });
-    expect(await refusalOf(listAuditEvents(key))).toEqual(FORBIDDEN);
+    for (const scopes of [[], ['audit.read', 'data.read']]) {
+      const key = testScope({ db, workspaceId: at.workspaceId, actor: { type: 'api_key', id: newId() }, scopes });
+      expect(await refusalOf(listAuditEvents(key))).toEqual(FORBIDDEN);
+    }
   });
 });
 
@@ -328,6 +330,44 @@ describe('statements and writes (AC-4625, AC-4628)', () => {
     expect(pageStatement).not.toMatch(/\bip\b|request_id/);
     for (const text of statements) expect(text).not.toMatch(/^\s*(insert|update|delete)\b/i);
     expect(await outboxCount(at.workspaceId)).toBe(outboxBefore);
+  });
+});
+
+/** Every node of an `explain (format json)` plan, depth first. */
+function planNodes(node: unknown): Record<string, unknown>[] {
+  if (typeof node !== 'object' || node === null) return [];
+  const here = node as Record<string, unknown>;
+  const children = Array.isArray(here.Plans) ? here.Plans.flatMap(planNodes) : [];
+  return [here, ...children];
+}
+
+describe('the page walks its index (AC-4626)', () => {
+  it('reads the first page and a keyset page by walking audit_events_at, with no Sort node', async () => {
+    const at = await workspace();
+    await threeChanges(at, 'Acme Ltd');
+    const { nextCursor } = await listAuditEvents(at.owner, { limit: 1 });
+    const position = JSON.parse(Buffer.from(nextCursor ?? '', 'base64url').toString('utf8')) as {
+      a: string;
+      i: string;
+    };
+    for (const after of [undefined, { at: position.a, id: position.i }]) {
+      const plan = await db.withWorkspace(at.workspaceId, async (tx) => {
+        // A handful of rows would make a sequential scan and a sort the cheapest plan; switched off, the planner
+        // shows whether the index can give the order at all (it can't without `nulls last`, and sorts anyway).
+        await tx.execute(sql`set local enable_seqscan = off`);
+        await tx.execute(sql`set local enable_bitmapscan = off`);
+        await tx.execute(sql`set local enable_sort = off`);
+        const found = await tx.execute<{ 'QUERY PLAN': unknown }>(
+          sql`explain (format json) ${auditPageStatement(at.workspaceId, after, 50)}`,
+        );
+        const json = found.rows[0]?.['QUERY PLAN'];
+        return (Array.isArray(json) ? (json[0] as { Plan?: unknown }) : undefined)?.Plan;
+      });
+      const nodes = planNodes(plan);
+      expect(nodes.map((node) => node['Node Type'])).not.toContain('Sort');
+      expect(nodes.map((node) => node['Node Type'])).not.toContain('Incremental Sort');
+      expect(nodes.find((node) => node['Node Type'] === 'Index Scan')?.['Index Name']).toBe('audit_events_at');
+    }
   });
 });
 

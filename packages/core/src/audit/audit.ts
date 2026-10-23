@@ -1,7 +1,9 @@
 // Settings › History › Workspace changes (spec 0046): a page of the workspace's
 // audit rows, newest first, behind `audit.read`. The permission is checked
 // before anything is read. One transaction, under a 3 second statement timeout:
-// the page in `audit_events_at`'s own order (`at desc, id asc`), keyset paged on
+// the page in `audit_events_at`'s own order (`at desc nulls last, id asc`: without
+// `nulls last` the index can't give the order and every page sorts the whole
+// log; `at` is never null, so the rows are the same), keyset paged on
 // (`at`, `id`) with `at` kept as Postgres's text to the microsecond (rows one
 // transaction wrote share `at`), then one statement naming every member,
 // invitation, request, round robin, form, booking page and booking the page
@@ -38,7 +40,7 @@ const LISTED = `{${Object.values(AUDIT_KINDS).flat().join(',')}}`;
 const AT_TEXT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 
 /** A position in the log: the last row's `at`, as the database's text, and its id. */
-interface Position {
+export interface Position {
   readonly at: string;
   readonly id: string;
 }
@@ -75,27 +77,36 @@ interface PageRow extends Record<string, unknown> {
   readonly after: unknown;
 }
 
-/** One page of rows in index order. Never `ip`, never `request_id`, never an unlisted action. */
-async function readPage(
-  tx: WorkspaceTx,
-  workspaceId: string,
-  after: Position | undefined,
-  limit: number,
-): Promise<readonly AuditRow[]> {
+/**
+ * The page statement: one page of rows in `audit_events_at`'s order, walked from the index with no sort (the EXPLAIN
+ * test in `audit.test.ts` holds it to that). Never `ip`, never `request_id`, never an unlisted action. Exported for
+ * that test alone.
+ */
+export function auditPageStatement(workspaceId: string, after: Position | undefined, limit: number): SQL {
   const from =
     after === undefined
       ? sql``
       : sql`and a.at <= ${after.at}::timestamptz and (a.at < ${after.at}::timestamptz or a.id > ${after.id}::uuid)`;
-  const found = await tx.execute<PageRow>(sql`
+  return sql`
     select a.id::text as id,
       to_char(a.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at,
       a.actor_type::text as actor_type, a.actor_member_id::text as actor_member_id,
       a.action, a.target_type, a.target_id, a.before, a.after
     from audit_events a
     where a.workspace_id = ${workspaceId}::uuid and a.action = any(${LISTED}::text[]) ${from}
-    order by a.at desc, a.id asc
+    order by a.at desc nulls last, a.id asc
     limit ${limit + 1}
-  `);
+  `;
+}
+
+/** One page of rows, and one more to tell whether another page follows. */
+async function readPage(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  after: Position | undefined,
+  limit: number,
+): Promise<readonly AuditRow[]> {
+  const found = await tx.execute<PageRow>(auditPageStatement(workspaceId, after, limit));
   return found.rows.map((row) => ({
     id: row.id,
     at: row.at,
@@ -120,7 +131,8 @@ interface NameRow extends Record<string, unknown> {
 /**
  * Every name a page mentions, in one statement: a `union all` with one branch per kind that has ids, each filtered
  * on the workspace as well as by row level security. A member is `deleted` once their account went (no user, and
- * the address account deletion leaves), `former` once removed. Never a member's or an asker's address.
+ * the address account deletion leaves), `former` once removed. Never a member's or an asker's address, and never an
+ * invitation's once the member it made deleted their account.
  */
 async function readNames(tx: WorkspaceTx, workspaceId: string, ids: AuditNameIds): Promise<AuditNames | undefined> {
   const ws = sql`${workspaceId}::uuid`;
@@ -136,8 +148,16 @@ async function readNames(tx: WorkspaceTx, workspaceId: string, ids: AuditNameIds
       from members m where m.workspace_id = ${ws} and m.id = any(${uuidList(ids.members)})`);
   }
   if (ids.invitations.length > 0) {
+    // A used invitation keeps its address, but once the member it made deleted their account the address is theirs
+    // to take with them: it reads as no address, as account deletion leaves their member row (AC-4610).
     branches.push(sql`
-      select 'invitation', i.id::text, i.email, i.kind, null::text
+      select 'invitation', i.id::text,
+        case when exists (
+          select 1 from members m
+          where m.workspace_id = i.workspace_id and m.id = i.used_by_member_id
+            and m.user_id is null and m.email = 'deleted-' || m.id::text || '@deleted.invalid'
+        ) then null else i.email end,
+        i.kind, null::text
       from invitations i where i.workspace_id = ${ws} and i.id = any(${uuidList(ids.invitations)})`);
   }
   if (ids.joinRequests.length > 0) {

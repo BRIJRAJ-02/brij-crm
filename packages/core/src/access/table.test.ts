@@ -299,7 +299,7 @@ describe('the walk: a principal without the access is refused', () => {
     const { scope } = await memberOf('member');
     expect(await refusalOf(core.listAuditEvents(scope))).toEqual({
       code: 'FORBIDDEN',
-      message: 'Only workspace owners and admins can read the audit log.',
+      message: 'Only workspace owners and admins can see workspace changes.',
     });
   });
 

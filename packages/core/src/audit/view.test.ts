@@ -471,4 +471,57 @@ describe('real rows through writeAudit and the names statement', () => {
     for (const entry of entries) expect(() => AuditEntryView.parse(entry)).not.toThrow();
     expect(JSON.stringify(entries)).not.toContain('203.0.113.9');
   });
+
+  it('leaves out a used invitation’s address once the member it made deleted their account', async () => {
+    const created = await createWorkspace(db, {
+      name: 'Acme',
+      slug: `audit-view-${newId().slice(-12)}`,
+      firstMember: { name: 'Ada', email: 'ada@example.com' },
+    });
+    const { workspaceId, memberId: ownerId } = created;
+    const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+    const bobId = newId();
+    const ceeId = newId();
+    const bobInvite = newId();
+    const ceeInvite = newId();
+    await db.withWorkspace(workspaceId, async (tx) => {
+      await tx.execute(sql`
+        insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values
+          (${workspaceId}, ${bobId}, 'Bob', 'bob@example.com', 'member', 'system', 'system'),
+          (${workspaceId}, ${ceeId}, 'Cee', 'cee@example.com', 'member', 'system', 'system')`);
+      await tx.execute(sql`
+        insert into invitations
+          (workspace_id, id, kind, email, role, status, token_hash, max_uses, uses, used_by_member_id,
+            created_by_type, updated_by_type)
+        values
+          (${workspaceId}, ${bobInvite}, 'email', 'bob@personal.example', 'member', 'used', ${'a'.repeat(64)}, 1, 1,
+            ${bobId}, 'system', 'system'),
+          (${workspaceId}, ${ceeInvite}, 'email', 'cee@personal.example', 'member', 'used', ${'b'.repeat(64)}, 1, 1,
+            ${ceeId}, 'system', 'system')`);
+      for (const invitation of [bobInvite, ceeInvite]) {
+        await writeAudit(
+          tx,
+          workspaceId,
+          { type: 'member', id: ownerId },
+          { action: 'invitation.created', targetType: 'invitation', targetId: invitation, after: { role: 'member' } },
+        );
+      }
+      // Bob deletes his account, as account deletion leaves his member row; Cee stays.
+      await tx.execute(
+        sql`update members set name = 'Deleted user', email = ${deletedEmail(bobId)}, user_id = null where id = ${bobId}`,
+      );
+    });
+
+    const { entries } = await listAuditEvents(owner);
+    const target = (id: string) =>
+      entries.find((entry) => entry.target.type === 'invitation' && entry.target.id === id);
+    expect(target(bobInvite)?.target).toEqual({ type: 'invitation', id: bobInvite, isLink: false });
+    expect(target(ceeInvite)?.target).toEqual({
+      type: 'invitation',
+      id: ceeInvite,
+      email: 'cee@personal.example',
+      isLink: false,
+    });
+    expect(JSON.stringify(entries)).not.toContain('bob@personal.example');
+  });
 });
