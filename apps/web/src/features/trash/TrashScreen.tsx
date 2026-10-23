@@ -416,7 +416,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                 count={state.count.count}
                 max={Infinity}
                 isAtLeast={state.count.atLeast}
-                label={strings.countLabel}
+                label={strings.countLabel(state.count.count)}
               />
             ),
           }

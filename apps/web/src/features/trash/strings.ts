@@ -1,8 +1,8 @@
 /** The Trash screen's copy (spec 0022). */
 export const strings = {
   title: 'Trash',
-  /** The count beside the title ("1,234 records"). */
-  countLabel: 'records',
+  /** The count beside the title, as a screen reader hears it: "1 record", "1,234 records" (Q98). */
+  countLabel: (count: number) => (count === 1 ? 'record' : 'records'),
   objectFilter: 'Object',
   allObjects: 'All objects',
   archived: (pluralName: string) => `${pluralName} (archived)`,
