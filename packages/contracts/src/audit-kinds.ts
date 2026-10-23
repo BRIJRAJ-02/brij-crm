@@ -54,9 +54,14 @@ export const AUDIT_KINDS = {
 /**
  * Actions stored but never listed in Workspace changes (spec 0046, owner
  * decision 7): a member's own display preferences are their choice, not a
- * workspace change, and would be the noisiest rows.
+ * workspace change, and would be the noisiest rows. The order of the
+ * sections on a member's own profile page is the same kind of choice, and a
+ * drag writes one row per drop.
  */
-export const AUDIT_NOT_LISTED = ['member.preferences_changed'] as const satisfies readonly AuditAction[];
+export const AUDIT_NOT_LISTED = [
+  'member.preferences_changed',
+  'booking_page.profile_reordered',
+] as const satisfies readonly AuditAction[];
 
 /** An action Workspace changes lists: every catalog action outside `AUDIT_NOT_LISTED`. */
 export type ListedAuditAction = (typeof AUDIT_KINDS)[AuditKindName][number];

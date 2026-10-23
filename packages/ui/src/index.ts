@@ -219,6 +219,13 @@ export {
   type LinkRow,
   type LinkToggle,
 } from './modules/LinkList/LinkList.tsx';
+/**
+ * The drag wrapper a LinkList's rows move in, passed as its `rowOrder` with `onMove` (Settings › Profile's order).
+ * A screen hands it in so LinkList itself never loads dnd-kit: the public profile draws LinkList too.
+ */
+export { LinkListRowOrder } from './modules/LinkList/RowOrder.tsx';
+/** Titled sections, each a Card, that move as wholes: a profile's sections in Settings › Profile (owner ask A102). */
+export { SectionList, type SectionListProps, type SectionListSection } from './modules/SectionList/SectionList.tsx';
 export {
   WeekCalendar,
   type WeekCalendarBlock,

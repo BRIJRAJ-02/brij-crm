@@ -2,6 +2,7 @@
 // set's surface test. Stories and tests only.
 import type { ActorDisplay, AttributeType, RecordRefDisplay } from '@crm/contracts/values';
 import type { FieldAttribute } from '../fields/types.ts';
+import { arraySource, type ListSource } from '../lib/list-source.ts';
 import { attributeOf } from './attributes.ts';
 import { SAMPLE_IDS } from './sample-ids.ts';
 
@@ -53,6 +54,25 @@ const COMPANIES: readonly RecordRefDisplay[] = [
 
 /** The members the actor stories pick from. */
 export const SAMPLE_MEMBERS = MEMBERS;
+
+/**
+ * The member search the stories hand a member picker, as the app's does: by
+ * name or email, ignoring case. While nothing is typed the first member (Me,
+ * pinned by the picker) is left out; once typed, Me leads the matches when it
+ * matches.
+ */
+export function sampleMemberSearch(query: string): ListSource<ActorDisplay> {
+  const [me] = MEMBERS;
+  const wanted = query.trim().toLowerCase();
+  const found =
+    wanted === ''
+      ? MEMBERS.filter((member) => member !== me)
+      : MEMBERS.filter(
+          (member) =>
+            member.name.toLowerCase().includes(wanted) || (member.email?.toLowerCase().includes(wanted) ?? false),
+        );
+  return arraySource(found, (member) => member.id ?? member.name);
+}
 
 /** The companies the record reference stories pick from. */
 export const SAMPLE_COMPANIES = COMPANIES;

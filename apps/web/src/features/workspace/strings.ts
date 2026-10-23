@@ -128,7 +128,7 @@ export const strings = {
   unnamed: (singularName: string) => `Unnamed ${singularName.toLowerCase()}`,
   /** A linked record this person can't see, or that was deleted. */
   unavailableRecord: 'Unavailable',
-  /** Why a company or Owner cell can't be edited in this loop. */
+  /** Why a reference cell that can't link (one way, or its far object hidden) can't be edited here. */
   referenceReadOnly: 'You can’t change this here yet.',
   /** Clearing a relation cell that shows only its first 20 links (spec 0014). */
   clearTooMany: (title: string) =>

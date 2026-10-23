@@ -164,6 +164,8 @@ export type {
   WeekStart,
 } from './preferences/store.ts';
 import type { SchedulesView } from './schedules/store.ts';
+import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
+export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
 import { createOperatorStore } from './operator/store.ts';
 import {
@@ -182,6 +184,7 @@ import {
   upsertFirst,
   type CaptureListView,
 } from './captures/list.ts';
+import { createProfileOrder, type ProfileMoveOutcome } from './captures/profile-order.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
 import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navigation/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
@@ -467,6 +470,7 @@ export type {
   PageDestinationState,
 } from './calendar/calendars.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
+export type { ProfileMoveOutcome } from './captures/profile-order.ts';
 export { connectUrl, needsReconnect, type ConnectReturn } from './calendar/store.ts';
 export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
@@ -603,7 +607,13 @@ export type {
   NotificationSettingsChange,
 } from './inbox/store.ts';
 export { UNREAD_PAST_CAP, type UnreadSource } from './inbox/unread.ts';
-export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
+export {
+  isEditableHere,
+  searchMembers,
+  toActorDisplays,
+  toFieldAttribute,
+  type FieldAttributeShape,
+} from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
 export type { Notice } from './notice.ts';
@@ -1117,10 +1127,12 @@ export function createDataLayer({
     });
     pendingOptions.clear();
     bookingPageLists.clear();
+    profileOrder.clear();
     pageRules.clear();
     formLists.clear();
     schedules.clear();
     preferences.clear();
+    pictureChoice.clear();
   };
   const reset = () => {
     forget();
@@ -1909,6 +1921,15 @@ export function createDataLayer({
     mintId,
     notify,
   });
+  // Settings › Account › Profile: whether the person's picture shows on their public pages, read with the profile.
+  const pictureChoice = createPictureChoiceStore({
+    api: {
+      get: (input) => call((options) => api.profile.get(input, options)),
+      update: (input) => call((options) => api.profile.update(input, options)),
+    },
+    mintId,
+    notify,
+  });
   /**
    * The member's time zone in a workspace: their Preferences once read (the workspace's pages read them first),
    * else the browser's. Relative dates in filters, rules, bulk targets and exports resolve in it.
@@ -1994,6 +2015,14 @@ export function createDataLayer({
   // New dialog, the editors), so the list never needs a refresh to show a change.
   const bookingPageLists = createCaptureList<BookingPageView>({
     read: (workspace) => call((options) => api.bookingPages.list({ workspace }, options)),
+  });
+  // Settings › Profile's order (owner ask A102): moves shown in that same list at once, sent one at a time.
+  const profileOrder = createProfileOrder({
+    list: bookingPageLists,
+    send: (workspace, pageIds) =>
+      call((options) =>
+        api.bookingPages.reorderProfile({ workspace, pageIds: [...pageIds], mutationId: mintId() }, options),
+      ),
   });
   // Settings › Rotations (spec 0029): one held list per workspace, patched by every rotation write below.
   const rotationLists = createCaptureList<RotationView>({
@@ -3121,6 +3150,16 @@ export function createDataLayer({
             ),
           ...shownDrop(bookingPageLists.items(workspace), pageId),
         }),
+      /**
+       * The reader's own pages in their profile's new order (owner ask A102): each id once, the order `/<handle>`
+       * lists them in, the reader's other pages after them. Shown in the held list at once (each page's
+       * `profilePosition`) and sent one move at a time: a move made while one is on its way waits, replacing any move
+       * already waiting, since each carries the whole order. Answers `saved`, or `replaced` for a move a later one
+       * carried. Only the last move of a run rejects when it is refused (`NOT_FOUND` for a page that isn't the
+       * reader's own), once the list is back in the order the server last confirmed.
+       */
+      reorderProfile: (workspace: string, pageIds: readonly string[]): Promise<ProfileMoveOutcome> =>
+        profileOrder.reorder(workspace, pageIds),
     },
     /**
      * Rotations (spec 0029): the pools round robin pages book from. Settings
@@ -3870,7 +3909,16 @@ export function createDataLayer({
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {
-      get: (workspace: string): Promise<MyProfile> => call((options) => api.profile.get({ workspace }, options)),
+      /** Reads the profile now (the route's loader); whether their picture shows comes with it, held below. */
+      get: (workspace: string): Promise<MyProfile> => pictureChoice.read(workspace),
+      /** Whether their picture shows on their booking pages and profile (owner ask A124), as the screen holds it. */
+      picture: (workspace: string): PictureChoiceHeld => pictureChoice.of(workspace),
+      /**
+       * Keeps their picture off their public pages (`true`) or shows it again, the same in every workspace: shown
+       * at once, put back with a toast and Try again if refused. Answers whether it landed.
+       */
+      setPictureHidden: (workspace: string, isHidden: boolean): Promise<boolean> =>
+        pictureChoice.change(workspace, isHidden),
       /**
        * Changes their name or time zone (null follows the workspace's), or their handle and bio (the person's, in
        * every workspace). The member list is read again; a new handle changes every page's address, so the

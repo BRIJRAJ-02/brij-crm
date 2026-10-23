@@ -13,7 +13,10 @@
    by the grid's hairline (border-subtle), on a subgrid so the facts and the end line up down the list. On a
    page they run edge to edge with the page's gutter (space-16) inside them; in a Card they keep to its
    padding, inset space-8 like a Table's cells. Under 480px of list, on a page the facts and the address give way to the title; in a card the row
-   takes a second line instead, the address wrapping under the title and the facts under that. */
+   takes a second line instead, the address wrapping under the title and the facts under that.
+
+   Rows that move (onMove, either density): a grip first in each row, in a cell of the handle's width, and the row
+   being dragged lifted (surface-raised, shadow-md) above the others, which slide out of its way. */
 @layer components {
   .frame {
     display: flex;
@@ -207,6 +210,25 @@
     display: inline-flex;
   }
 
+  /* Rows that move (onMove): each starts with its grip's cell, the handle's width whether it holds a grip or not
+     (a pending row, a loading one), so the titles line up; space-8 from the title rather than the row's gap. */
+  .grip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: calc(var(--size-icon-sm) + 2 * var(--space-2));
+    margin-inline-end: calc(var(--space-8) - var(--space-16));
+  }
+
+  /* The row being moved (the drag wrapper sets data-dragging): lifted above the rest, which slide out of its way. */
+  .row[data-dragging] {
+    position: relative;
+    z-index: var(--z-raised);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
   /* The skeleton rows: the title's line and the chips' line, at their heights. */
   .skeletonTitle,
   .skeletonChips {
@@ -230,6 +252,15 @@
 
     .main {
       flex-basis: 100%;
+    }
+
+    /* A row that moves keeps its grip beside the title, and its end wraps under the title rather than the grip. */
+    .frame[data-reorderable]:not([data-density='compact']) .main {
+      flex-basis: calc(100% - var(--size-icon-sm) - 2 * var(--space-2) - var(--space-8));
+    }
+
+    .frame[data-reorderable]:not([data-density='compact']) .end {
+      margin-inline-start: calc(var(--size-icon-sm) + 2 * var(--space-2) + var(--space-8));
     }
   }
 
@@ -287,6 +318,16 @@
 
   .frame[data-density='compact'] .row[data-loading] {
     display: flex;
+  }
+
+  /* In a Card no hairline under the last loading row either, though the loading words for screen readers follow it. */
+  .frame[data-placement='card'] .row[data-last] {
+    border-block-end: none;
+  }
+
+  /* Compact rows that move: the grips take a column of their own, first. */
+  .frame[data-density='compact'][data-reorderable] .root {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, max-content) auto;
   }
 
   .frame[data-density='compact'] .title {
@@ -359,6 +400,31 @@
     .frame[data-placement='card'] .end {
       grid-column: 2;
       grid-row: 1 / span 2;
+    }
+
+    /* Rows that move keep their grip's column first: the grip beside both lines, the rest one column on. */
+    .frame[data-density='compact'][data-reorderable] .root {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .frame[data-placement='card'][data-reorderable] .grip {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+    }
+
+    .frame[data-placement='card'][data-reorderable] .facts {
+      grid-column: 2;
+    }
+
+    .frame[data-placement='card'][data-reorderable] .end {
+      grid-column: 3;
+    }
+  }
+
+  /* Lifted, in forced colours, where the shadow and surface are gone. */
+  @media (forced-colors: active) {
+    .row[data-dragging] {
+      outline: var(--border-width-thick) solid Highlight;
     }
   }
 }

@@ -1,10 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { useState } from 'react';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { LinkList, type LinkRow } from './LinkList.tsx';
+import { LinkList, type LinkListProps, type LinkRow } from './LinkList.tsx';
+import { LinkListRowOrder } from './RowOrder.tsx';
 
 function icons(title: string, isOff = false) {
   return (
@@ -564,5 +566,148 @@ export const CompactInCardNarrow: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Mon to Fri, 9:00 AM to 5:00 PM')).toBeVisible();
     await expect(canvas.getByText('Your hours')).toBeVisible();
+  },
+};
+
+/** A profile's pages in the order its visitors see them, each with its lengths and Paused when it is. */
+function profilePages(): LinkRow[] {
+  return [
+    { id: 'intro', title: 'Intro call', address: '', chips: ['30 min'] },
+    { id: 'demo', title: 'Product demo', address: '', chips: ['45 min', '60 min'] },
+    { id: 'help', title: 'Help session', address: '', chips: ['15 min'], badge: 'Paused' },
+  ];
+}
+
+/** Rows that move, held as a screen holds them: a drop puts the row at its new index. */
+function MovingRows(
+  props: Omit<LinkListProps, 'rows' | 'onMove' | 'rowOrder'> & { readonly onMove: (id: string, to: number) => void },
+) {
+  const [rows, setRows] = useState(profilePages);
+  return (
+    <LinkList
+      {...props}
+      rows={rows}
+      rowOrder={LinkListRowOrder}
+      onMove={(id, to) => {
+        props.onMove(id, to);
+        setRows((was) => {
+          const next = was.filter((row) => row.id !== id);
+          const row = was.find((each) => each.id === id);
+          return row === undefined ? was : [...next.slice(0, to), row, ...next.slice(to)];
+        });
+      }}
+    />
+  );
+}
+
+/** Rows that move (Settings › Profile's order), in a Card: a grip starts each row, the titles lined up after it. */
+export const Reorderable: Story = {
+  args: { density: 'compact', placement: 'card', isToolbarHidden: true, label: 'Your pages', searchLabel: 'Pages' },
+  render: (args) => (
+    <Stage width="fill">
+      <Card title="Sales">
+        <MovingRows {...args} onMove={fn()} />
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole('button', { name: 'Move Intro call' })).toBeInTheDocument();
+    await expect(canvas.getAllByRole('button', { name: /^Move / })).toHaveLength(3);
+  },
+};
+
+/** By keyboard: Enter on a grip lifts the row, an arrow moves it, Enter drops it, and each step is said. */
+export const ReorderKeyboard: Story = {
+  args: {
+    density: 'compact',
+    placement: 'card',
+    isToolbarHidden: true,
+    label: 'Your pages',
+    searchLabel: 'Pages',
+    onMove: fn(),
+  },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <Card>
+        <MovingRows {...args} onMove={args.onMove ?? (() => undefined)} />
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const grip = await canvas.findByRole('button', { name: 'Move Intro call' });
+    grip.focus();
+    await userEvent.keyboard('{Enter}');
+    // Lifted: focus waits on the move itself, so the arrows move the row rather than focus between rows.
+    await waitFor(() => expect(grip).not.toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}');
+    await userEvent.keyboard('{Enter}');
+    // The drag wrapper's live region sits at the end of the page, outside the story's canvas.
+    await waitFor(() =>
+      expect(within(document.body).getByText('Intro call, moved to position 2 of 3.')).toBeInTheDocument(),
+    );
+    await expect(args.onMove).toHaveBeenCalledWith('intro', 1);
+    await waitFor(() => expect(canvas.getAllByRole('row')[1]).toHaveTextContent('Intro call'));
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Move Intro call' })).toHaveFocus());
+  },
+};
+
+/** Rows that move, in the comfortable rows: the grip before the title and its facts. */
+export const ReorderComfortable: Story = {
+  args: { label: 'Your pages', searchLabel: 'Search pages' },
+  render: (args) => (
+    <Stage width="fill">
+      <MovingRows {...args} onMove={fn()} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole('button', { name: 'Move Product demo' })).toBeInTheDocument();
+    await expect(canvas.getAllByRole('button', { name: /^Move / })).toHaveLength(3);
+  },
+};
+
+/** A search narrows the rows, and a narrowed list can't say where a row goes: the grips go away until it clears. */
+export const ReorderSearched: Story = {
+  args: { label: 'Your pages', searchLabel: 'Search pages' },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <MovingRows {...args} onMove={fn()} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole('button', { name: 'Move Product demo' })).toBeInTheDocument();
+    await userEvent.type(canvas.getByRole('searchbox', { name: 'Search pages' }), 'demo');
+    await waitFor(() => expect(canvas.queryByRole('button', { name: /^Move / })).toBeNull());
+    await expect(canvas.getAllByRole('row')).toHaveLength(1);
+    await userEvent.clear(canvas.getByRole('searchbox', { name: 'Search pages' }));
+    await expect(await canvas.findByRole('button', { name: 'Move Product demo' })).toBeInTheDocument();
+  },
+};
+
+/**
+ * Rows that move, in a narrow Card: the grip stays beside both lines of a row that takes a second one. The Card is
+ * stretched to the sidebar's width (`narrow-fill`): the list is a container query root, so it has no width of its own
+ * to give a Card that would otherwise shrink around it, down to its title's.
+ */
+export const ReorderNarrow: Story = {
+  args: { density: 'compact', placement: 'card', isToolbarHidden: true, label: 'Your pages', searchLabel: 'Pages' },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <Card title="Sales">
+        <MovingRows {...args} onMove={fn()} />
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const grip = await canvas.findByRole('button', { name: 'Move Product demo' });
+    const titleText = canvas.getByText('Product demo');
+    const title = titleText.getBoundingClientRect();
+    await expect(grip.getBoundingClientRect().right).toBeLessThanOrEqual(title.left);
+    // The title shows whole, and the facts take the row's second line, under it.
+    await expect(titleText.scrollWidth).toBeLessThanOrEqual(titleText.clientWidth);
+    const facts = canvas.getByText('45 min · 60 min');
+    await expect(facts).toBeVisible();
+    await expect(facts.getBoundingClientRect().top).toBeGreaterThanOrEqual(title.bottom);
   },
 };

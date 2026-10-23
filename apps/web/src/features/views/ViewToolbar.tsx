@@ -4,6 +4,7 @@
 // Leaves out: the view switcher, columns and view settings (the view bar).
 import {
   FILTER_EDIT_MS,
+  searchMembers,
   toFieldAttribute,
   type ActorDisplay,
   type AttributeDefinition,
@@ -182,7 +183,9 @@ export function ViewToolbar({
   const editorProps = (attribute: { readonly type: string }) =>
     attribute.type === 'actor_reference'
       ? {
-          onSearch: () => arraySource(members, (member) => member.id ?? member.name),
+          // The typed search narrows by name or email; Me is pinned while it's empty, so never listed twice.
+          onSearch: (query: string) =>
+            arraySource(searchMembers(members, query, me?.id ?? undefined), (member) => member.id ?? member.name),
           ...(me === undefined ? {} : { me }),
         }
       : {};

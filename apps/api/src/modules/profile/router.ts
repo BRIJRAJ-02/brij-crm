@@ -35,6 +35,7 @@ export const profileRouter = member.profile.router({
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
           ...(input.handle === undefined ? {} : { handle: input.handle }),
           ...(input.bio === undefined ? {} : { bio: input.bio }),
+          ...(input.pictureHidden === undefined ? {} : { pictureHidden: input.pictureHidden }),
         },
         extras,
         hooks,

@@ -1,6 +1,6 @@
 {
   "id": "d7d5c81e-fb12-4972-be31-496bc06eb971",
-  "prevId": "c9071b23-ba93-4a54-ad98-90406b28a0ec",
+  "prevId": "d60c8f36-8e2b-4177-8548-7ca7081c5cd9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4377,7 +4377,7 @@
       "checkConstraints": {
         "comment_reactions_emoji": {
           "name": "comment_reactions_emoji",
-          "value": "emoji in ('👍', '❤️', '🎉', '😄', '👀', '✅')"
+          "value": "emoji in ('\ud83d\udc4d', '\u2764\ufe0f', '\ud83c\udf89', '\ud83d\ude04', '\ud83d\udc40', '\u2705')"
         }
       },
       "isRLSEnabled": false
@@ -18860,6 +18860,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "picture_hidden": {
+          "name": "picture_hidden",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {},

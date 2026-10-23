@@ -3,7 +3,6 @@
 // Main task: read every attribute and edit it in place, saved through the data layer, a refusal said under the value.
 // Leaves out: relationship sections that hold many records (spec 0014, milestone 3) and attribute groups (#18).
 import {
-  toActorDisplays,
   toFieldAttribute,
   withPendingOptions,
   type AttributeDefinition,
@@ -19,6 +18,7 @@ import { useParams, useRouteContext } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { refsOf } from './details.ts';
 import { useLinkEditing } from './links.ts';
+import { useMemberPicker } from './members.ts';
 import { strings } from './strings.ts';
 
 /** Props for the record's details. */
@@ -56,7 +56,9 @@ export function RecordDetails({
   referenceDisplays,
   onCommit,
 }: RecordDetailsProps) {
-  const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
+  // An Owner edits through a Menu of the workspace's members, "Me" first (spec 0003).
+  const memberPicker = useMemberPicker(members);
+  const memberDisplays = memberPicker.displays;
   // An option a table's cell just made (spec 0012, AC-238) shows by its label here too, until the attribute lists it.
   const { data } = useRouteContext({ from: '__root__' });
   // The object's API name from the route: a network's editor tells a company from a person by it.
@@ -106,6 +108,7 @@ export function RecordDetails({
       emptyValues="fold"
       editorProps={(attribute) => {
         const definition = byId.get(attribute.id);
+        if (definition?.type === 'actor_reference') return memberPicker.extras;
         return (definition === undefined ? undefined : links.pickerFor(definition, record.id)) ?? {};
       }}
       {...(onCommit === undefined

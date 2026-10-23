@@ -179,9 +179,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_operator_workspaces', owner: 'crm_operator' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
+      { name: 'crm_pictures_hidden', owner: 'crm_handle' },
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
+      { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
       { name: 'crm_save_public_profile', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
@@ -226,9 +228,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_operator_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_pictures_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises the unique violation a taken handle is refused with.
       { name: 'crm_save_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       {
@@ -368,9 +372,21 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     [
       'crm_handle',
-      ['crm_save_public_profile', 'crm_public_profiles_of', 'crm_handle_owner'],
-      ['crm_save_public_profile(uuid, text, text)', 'crm_public_profiles_of(uuid[])', 'crm_handle_owner(text)'],
-      ['app', 'app', 'app'],
+      [
+        'crm_save_public_profile',
+        'crm_public_profiles_of',
+        'crm_handle_owner',
+        'crm_save_picture_hidden',
+        'crm_pictures_hidden',
+      ],
+      [
+        'crm_save_public_profile(uuid, text, text)',
+        'crm_public_profiles_of(uuid[])',
+        'crm_handle_owner(text)',
+        'crm_save_picture_hidden(uuid, boolean)',
+        'crm_pictures_hidden(uuid[])',
+      ],
+      ['app', 'app', 'app', 'app', 'app'],
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -1901,7 +1917,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
       where a.grantee = 'crm_handle'::regrole
       order by 1
     `);
-    // The handles read a person's name and picture for their profile, and change only the handle and bio.
+    // The handles read a person's name and picture for their profile, and change only the handle and bio; and
+    // (migration 0094) read and set whether the picture stays off their public pages, never where `/` takes them.
     expect(handles.rows.map((row) => row.grant)).toEqual([
       'auth."user".id SELECT',
       'auth."user".image SELECT',
@@ -1909,6 +1926,12 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth.public_profiles.bio UPDATE',
       'auth.public_profiles.handle UPDATE',
       'auth.public_profiles.updated_at UPDATE',
+      'auth.user_prefs.picture_hidden INSERT',
+      'auth.user_prefs.picture_hidden SELECT',
+      'auth.user_prefs.picture_hidden UPDATE',
+      'auth.user_prefs.updated_at UPDATE',
+      'auth.user_prefs.user_id INSERT',
+      'auth.user_prefs.user_id SELECT',
     ]);
     const search = await owner.query<{ usage: boolean }>(
       `select has_schema_privilege('crm_search', 'auth', 'USAGE') as usage`,

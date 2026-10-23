@@ -12,6 +12,18 @@ The member's preferences are kept per member per workspace on the server (`membe
 
 Built from library parts only: SettingsLayout (through `SettingsPage`), SettingsSection ("Appearance", "Dates and time", "Start page") around a Card, SettingsRow and Select (`isLabelHidden`, its label the row's title), Skeleton while loading and EmptyState if the read failed.
 
+## Settings › Account › Profile, Pages on your profile (`ProfilePagesSection.tsx`, owner ask A102)
+
+- **Purpose**: the order the person's profile at `/<handle>` lists their Public booking pages in, under their sections.
+- **Main task**: move a page within its section, or a whole section, by dragging its grip, by the keyboard on the grip (Enter, the arrows, Enter; Escape puts it back), or with Move up and Move down in its menu; each move saves at once, with no Save.
+- **Leaves out**: moving a page to another section (the page editor's Section field; each page's menu has Change section, which opens its editor), Link only pages (never listed), pages in the person's other workspaces, and anything else about a page (its row opens its editor).
+
+A section of Profile, under Public profile and above the Danger zone, with View profile (the public profile in a new tab) at its heading. The pages come from the data layer's held booking pages list (`data.bookingPages.view`, warmed by the route's loader beside the profile, never waited for), filtered to the person's own Public pages, live or paused (a paused page keeps its place, with a Paused badge and a muted title), in the server's order (position, then id), and grouped by `profileSections` from `@crm/contracts/handles`, the rule the public profile draws with: each section where its first page is. Several sections are each a Card (SectionList), titled, the pages with none under "No section", with a grip and a menu (Move up, Move down) in the header; one untitled section is a plain Card with no grip of its own. Each section's pages are a compact LinkList with `onMove` and `rowOrder={LinkListRowOrder}` (the drag wrapper, handed in so LinkList itself never loads dnd-kit for the public profile): a grip per row (none for a page alone in its section), the lengths as facts, and a menu with the moves there is room for and Change section.
+
+Every move sends the whole order (each section's pages in turn) through `data.bookingPages.reorderProfile`, which shows it at once in the held list, sends one move at a time and puts the confirmed order back on a refusal. A refusal reads the list again (a page may have gone elsewhere) and says so once in a danger toast with the server's reason and Try again, which sends the wanted order fitted to the pages there are now; the next move closes that toast. A drag is announced by the drag wrapper; a menu move by the section's own status region ("Intro call, moved to position 2 of 3."), and focus stays on the menu's button.
+
+States: no handle (claim one first, no View profile), loading (one Card of skeleton rows, also the route's pending page), failed (one row with Try again, which reads the list again), no Public pages (Go to Links), and no booking access (locked: the list isn't read at all).
+
 ## Settings › Account › Sign in and devices (`/w/$slug/settings/account/sign-in`, SecurityScreen; `/settings/account/security` redirects here)
 
 Named for what it holds (the owner, 22 October 2026: the sidebar showed Security twice). As Notion's own account page and GitHub's "Password and authentication" and "Sessions" do, the personal page says how you sign in and where you're signed in, and Workspace › Security keeps the plain word for the rules everyone follows, as Attio, Linear and Notion name their admin page. Delete account moved to Profile, the person's own page, as Notion keeps it on the account page and Linear keeps Leave workspace on Profile.
@@ -178,6 +190,14 @@ The same danger Modal as the confirm ("Remove Grace Hopper from Acme?", Cancel (
 - **Leaves out**: the in app inbox (always on, said in the Email InfoTip), other workspaces' settings, push notifications.
 
 Lean, as the owner's settings pages are: no page description, one Email section like every other settings page's (its heading above the card, its line saying the inbox always gets everything, AC-1179, and an InfoTip on when an email goes) with short rows, Mentions, Replies, Task assignments and Daily digest, each with an InfoTip saying when it comes (the digest's says it holds every kind still unread, even those switched off, and uses the time zone the browser had when it was turned on, SA28, SA32). Built from SettingsLayout (through `SettingsPage`), Card, SettingsRow (its `meta` slot), Switch and InfoTip, with no new component. Each switch saves at once through `data.inbox.setSettings`; once it lands, "Notifications saved" with Undo (SA31), whose Undo sends the switch back while the page still shows it; a refusal is put back with the data layer's toast, as Calendars' switch is. The settings follow a change made in another tab live (AC-1180). Turning the digest on sends the browser's time zone with it, for 8 in the morning there. Once the bar header lands (wip/recui), the title sits in the top bar like every settings page.
+
+## Settings › Account › Profile: Show my photo on booking pages (PhotoSwitch.tsx)
+
+- **Purpose**: whether the person's Google photo shows on their booking pages and their profile (owner ask A124, 23 October 2026). On by default.
+- **Main task**: turn it off, and their initials show there instead, or on again. It saves at once through `data.profile.setPictureHidden` (shown at once, put back with a toast and Try again if refused), then a quiet toast with Undo, one toast at a time.
+- **Leaves out**: changing the photo itself (Google's, or initials) and the photo inside the app, which stays as it is.
+
+A row in Profile's details card, right under the photo: SettingsRow and Switch (`isLabelHidden`, its label the row's title), a Spinner beside the title only while a slow save is on its way (`useDelayedLoading`), a Skeleton hint while the profile loads (`PhotoSwitchPending`), the read's message with Try again if it failed, and read only for a member with no sign in of their own. The choice is the person's, the same in every workspace (`auth.user_prefs.picture_hidden`), and comes with the profile's read; another device's change shows on the next visit. Copy in `photo-strings.ts`.
 
 ## The finish toast and the saved toast (toast.ts)
 

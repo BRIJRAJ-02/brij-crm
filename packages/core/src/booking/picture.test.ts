@@ -1,6 +1,7 @@
 // A host's account picture on the public pages (23 Oct 2026), against the real Postgres: only Google's picture hosts
 // are ever named, a personal page's facts point at our own origin's copy (never Google's URL), a team page names
-// none (AC-754), and a profile does the same under its current handle.
+// none (AC-754), and a profile does the same under its current handle. A person who keeps their picture off their
+// public pages (owner ask A124) is named by none of them, and the choice is theirs alone, audited.
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -10,8 +11,9 @@ import { enterBookingPage, enterBookingProfile, findHandleOwner } from '../acces
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
-import { updateMyMemberProfile } from '../members/profile.ts';
+import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
+import { greeting } from './chat/agent.ts';
 import { createBookingPage } from './pages.ts';
 import { accountPicture, isPictureHost, pictureVersion } from './picture.ts';
 import { getPublicBookingPage, readBookingProfile, readPagePicture, readProfilePicture } from './public.ts';
@@ -205,5 +207,190 @@ describe('a profile’s picture', () => {
       (error: unknown) => error,
     );
     expect(isRefusal(missing) ? missing.refusal.code : missing).toBe('NOT_FOUND');
+  });
+});
+
+/** The profile audit rows of a workspace, oldest first. */
+async function profileAudit(workspaceId: string) {
+  return testQuery<{ target_id: string; actor_member_id: string; before: unknown; after: unknown }>(
+    ownerUrl,
+    `select target_id, actor_member_id::text, before, after from audit_events
+     where workspace_id = $1 and action = 'member.profile_updated' order by at, id`,
+    [workspaceId],
+  );
+}
+
+/** A refusal's code and field, or what else the call ended in. */
+async function refusalOf(call: Promise<unknown>) {
+  try {
+    await call;
+  } catch (error) {
+    if (isRefusal(error)) return { code: error.refusal.code, field: error.refusal.field };
+    throw error;
+  }
+  throw new Error('It was let through.');
+}
+
+describe('a person who keeps their picture off their public pages (owner ask A124)', () => {
+  it('reads as shown until they hide it, and writes one audit row a change, none for no change', async () => {
+    const ada = await person('Ada Lovelace', GOOGLE);
+    expect((await getMyProfile(ada.scope)).pictureHidden).toBe(false);
+    expect(await updateMyMemberProfile(ada.scope, { pictureHidden: true })).toMatchObject({ pictureHidden: true });
+    expect((await getMyProfile(ada.scope)).pictureHidden).toBe(true);
+    await updateMyMemberProfile(ada.scope, { pictureHidden: true });
+    expect(await updateMyMemberProfile(ada.scope, { pictureHidden: false })).toMatchObject({ pictureHidden: false });
+    expect(await profileAudit(ada.workspaceId)).toEqual([
+      {
+        target_id: ada.memberId,
+        actor_member_id: ada.memberId,
+        before: { pictureHidden: false },
+        after: { pictureHidden: true },
+      },
+      {
+        target_id: ada.memberId,
+        actor_member_id: ada.memberId,
+        before: { pictureHidden: true },
+        after: { pictureHidden: false },
+      },
+    ]);
+  });
+
+  it('names no picture on the page, its route, the profile or its route, and never asks for it', async () => {
+    const ada = await person('Ada Lovelace', GOOGLE);
+    const handle = `ada-${randomUUID().slice(0, 8)}`;
+    await updateMyMemberProfile(ada.scope, { handle });
+    const page = await createBookingPage(ada.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const version = pictureVersion(ada.userId, GOOGLE);
+    const asked: string[] = [];
+    const counting = {
+      pictureOf: (userId: string) => {
+        asked.push(userId);
+        return pictureOf(userId);
+      },
+    };
+    await updateMyMemberProfile(ada.scope, { pictureHidden: true });
+
+    // A visitor's reads, each through the door anew, as an anonymous request makes them.
+    const entry = await enterBookingPage({ db }, page.publicKey);
+    const facts = await getPublicBookingPage(entry, counting);
+    expect(facts.hostImage).toBeUndefined();
+    expect(facts.hostName).toBe('Ada Lovelace');
+    expect(await readPagePicture(await enterBookingPage({ db }, page.publicKey), counting)).toBeUndefined();
+    expect(asked).toEqual([]);
+    const profile = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
+    expect(profile.image).toBeUndefined();
+    expect(profile.initials).toBe('AL');
+    expect(JSON.stringify(profile)).not.toContain('picture');
+    const owner = await findHandleOwner({ db }, handle);
+    expect(owner.image).toBeUndefined();
+    expect(readProfilePicture(owner)).toBeUndefined();
+    // The chat's greeting names the host in words only.
+    expect(greeting({ ...facts }, 30)).not.toContain('picture');
+
+    // Shown again: the same paths as before, since the picture itself didn't change.
+    await updateMyMemberProfile(ada.scope, { pictureHidden: false });
+    const again = await enterBookingPage({ db }, page.publicKey);
+    expect((await getPublicBookingPage(again, counting)).hostImage).toBe(
+      `/api/public/booking/${page.publicKey}/picture?v=${version}`,
+    );
+    expect(await readPagePicture(again, counting)).toEqual({ url: new URL(SIZED), version });
+    expect((await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }))).image).toBe(
+      `/api/public/profiles/${handle}/picture?v=${version}`,
+    );
+  });
+
+  it('is the person’s in every workspace: their pages elsewhere leave it off too', async () => {
+    const ada = await person('Ada Lovelace', GOOGLE);
+    const second = await createWorkspace(db, {
+      name: 'Second',
+      slug: `pictures-second-${String(Date.now())}-${String(count)}`,
+      firstMember: { name: 'Ada Lovelace', email: `${ada.userId}@example.com`, userId: ada.userId },
+    });
+    const there = testScope({
+      db,
+      workspaceId: second.workspaceId,
+      actor: { type: 'member', id: second.memberId },
+      userId: ada.userId,
+    });
+    const page = await createBookingPage(there, { id: newId(), title: 'Elsewhere', timeZone: 'UTC' });
+    await updateMyMemberProfile(ada.scope, { pictureHidden: true });
+    expect((await getMyProfile(there)).pictureHidden).toBe(true);
+    const entry = await enterBookingPage({ db }, page.publicKey);
+    expect((await getPublicBookingPage(entry, pictures)).hostImage).toBeUndefined();
+    expect(await readPagePicture(entry, pictures)).toBeUndefined();
+    // Each workspace audits the change made in it.
+    expect(await profileAudit(second.workspaceId)).toEqual([]);
+    expect(await profileAudit(ada.workspaceId)).toHaveLength(1);
+  });
+
+  it('is set by the person alone: a colleague’s change is their own, and no one else has one to make', async () => {
+    const ada = await person('Ada Lovelace', GOOGLE);
+    const beaUser = randomUUID();
+    await testQuery(ownerUrl, `insert into auth."user" (id, name, email, image) values ($1, 'Bea', $2, $3)`, [
+      beaUser,
+      `${beaUser}@example.com`,
+      GOOGLE,
+    ]);
+    const beaId = newId();
+    await db.withWorkspace(ada.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type)
+            values (${ada.workspaceId}, ${beaId}, ${beaUser}, 'Bea', ${`${beaUser}@example.com`}, 'admin', 'system', 'system')`,
+      ),
+    );
+    const bea = testScope({
+      db,
+      workspaceId: ada.workspaceId,
+      actor: { type: 'member', id: beaId },
+      role: 'admin',
+      userId: beaUser,
+    });
+    await updateMyMemberProfile(bea, { pictureHidden: true });
+    expect((await getMyProfile(bea)).pictureHidden).toBe(true);
+    expect((await getMyProfile(ada.scope)).pictureHidden).toBe(false);
+    const page = await createBookingPage(ada.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    expect((await getPublicBookingPage(await enterBookingPage({ db }, page.publicKey), pictures)).hostImage).toBe(
+      `/api/public/booking/${page.publicKey}/picture?v=${pictureVersion(ada.userId, GOOGLE)}`,
+    );
+
+    // An API key, or a page's own visitor actor, has no profile; a member with no sign in has no picture to hide.
+    const key = testScope({ db, workspaceId: ada.workspaceId, actor: { type: 'api_key', id: newId() } });
+    expect(await refusalOf(updateMyMemberProfile(key, { pictureHidden: true }))).toMatchObject({ code: 'FORBIDDEN' });
+    const visitor = (await enterBookingPage({ db }, page.publicKey)).scope;
+    expect(await refusalOf(updateMyMemberProfile(visitor, { pictureHidden: true }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    const unsigned = testScope({ db, workspaceId: ada.workspaceId, actor: { type: 'member', id: ada.memberId } });
+    expect((await getMyProfile(unsigned)).pictureHidden).toBeUndefined();
+    expect(await refusalOf(updateMyMemberProfile(unsigned, { pictureHidden: true }))).toEqual({
+      code: 'FORBIDDEN',
+      field: 'pictureHidden',
+    });
+    expect((await getMyProfile(ada.scope)).pictureHidden).toBe(false);
+    expect(await profileAudit(ada.workspaceId)).toEqual([
+      { target_id: beaId, actor_member_id: beaId, before: { pictureHidden: false }, after: { pictureHidden: true } },
+    ]);
+  });
+
+  it('keeps a team page without pictures, whatever its members chose (AC-754)', async () => {
+    const ada = await person('Ada Lovelace', GOOGLE);
+    await updateMyMemberProfile(ada.scope, { pictureHidden: true });
+    const page = await createBookingPage(ada.scope, { id: newId(), title: 'Panel', timeZone: 'UTC' });
+    await db.withWorkspace(ada.workspaceId, async (tx) => {
+      await tx.execute(sql`update booking_pages set kind = 'collective' where id = ${page.id}::uuid`);
+      await tx.execute(sql`delete from booking_page_members where page_id = ${page.id}::uuid`);
+      await tx.execute(
+        sql`insert into booking_page_members (workspace_id, page_id, member_id, position) values (${ada.workspaceId}, ${page.id}, ${ada.memberId}, 0)`,
+      );
+    });
+    for (const hidden of [true, false]) {
+      await updateMyMemberProfile(ada.scope, { pictureHidden: hidden });
+      const entry = await enterBookingPage({ db }, page.publicKey);
+      const facts = await getPublicBookingPage(entry, pictures);
+      expect(facts.team, String(hidden)).toBeDefined();
+      expect(facts.hostImage, String(hidden)).toBeUndefined();
+      expect(facts.team?.avatars.every((avatar) => avatar.image === undefined)).toBe(true);
+      expect(await readPagePicture(entry, pictures), String(hidden)).toBeUndefined();
+    }
   });
 });

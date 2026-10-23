@@ -61,17 +61,28 @@ export const MyProfile = z.object({
   suggestedHandle: z.string().optional(),
   /** Their one line bio on their public profile. */
   bio: z.string(),
+  /**
+   * Their account picture stays off their public pages (owner ask A124, 23 Oct 2026): their booking pages and their
+   * profile show initials instead. The person's own, the same in every workspace; false until they turn it on, and
+   * absent for a member with no sign in of their own, who has no picture to hide.
+   */
+  pictureHidden: z.boolean().optional(),
 });
 /** The caller's profile in this workspace. */
 export type MyProfile = z.infer<typeof MyProfile>;
 
-/** A change to the caller's own profile: a new name, a time zone (null follows the workspace's), or both. */
+/**
+ * A change to the caller's own profile: a new name, a time zone (null follows the workspace's), a handle and bio, or
+ * whether their picture stays off their public pages; any of them at once.
+ */
 export const UpdateMyProfileInput = WorkspaceScoped.extend({
   name: MemberName.optional(),
   timeZone: TimeZoneName.nullable().optional(),
   /** A new handle: the old one keeps working, moving to this one. */
   handle: PublicHandle.optional(),
   bio: PublicBio.optional(),
+  /** True keeps their account picture off their booking pages and profile; false shows it again. */
+  pictureHidden: z.boolean().optional(),
   mutationId: Uuid,
 });
 /** A change to the caller's own profile. */

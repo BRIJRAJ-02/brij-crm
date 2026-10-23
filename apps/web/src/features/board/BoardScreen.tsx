@@ -35,6 +35,7 @@ import {
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemberPicker } from '../records/members.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { NewRecordDialog } from '../workspace/NewRecordDialog.tsx';
 import { createEditors } from '../workspace/RecordsScreen.tsx';
@@ -133,6 +134,8 @@ export function BoardScreen(props: BoardScreenProps) {
     () => createEditors(object, attributes),
     [object, attributes],
   );
+  // The dialog's Owner: a Menu of the workspace's members, "Me" first.
+  const memberPicker = useMemberPicker(members);
   // Asked for from the command menu: the dialog opens once (a member who may only read gets the board), and
   // the request is handed back after, read through a ref so a new callback each render never hands it back twice.
   const [requestSeen, setRequestSeen] = useState(false);
@@ -240,6 +243,7 @@ export function BoardScreen(props: BoardScreenProps) {
               onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
               singularName={object.singularName}
               objectKey={object.standardKey ?? object.apiSlug}
+              memberPicker={memberPicker}
               onCreated={(record) => {
                 setCreating(false);
                 // Its column may be scrolled off or hidden while empty: say it was made, with a way to it.

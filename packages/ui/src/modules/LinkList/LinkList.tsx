@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ComponentType, type ReactNode } from 'react';
 import { GridList, GridListItem } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -11,6 +11,7 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './LinkList.module.css';
+import type { RowGrip, RowOrderProps } from './RowOrder.tsx';
 import { strings } from './strings.ts';
 
 /** A row's on or off switch: a booking page's visibility, a form's Accepting. */
@@ -113,6 +114,19 @@ export interface LinkListProps {
    * rows then take no `onOpen`, `toggle` or `actions`.
    */
   readonly rowsAreLinks?: boolean;
+  /**
+   * The rows move (owner ask A102, Settings › Profile's order), with `rowOrder`: a grip starts each row, dragged, or
+   * Space on it, the arrows and Space again, and a drop calls this with the row's id and its new index among `rows`.
+   * Not while the search narrows the rows, nor with `rowsAreLinks`. A row alone in the list, or pending, keeps its
+   * grip's place with no grip in it. Left out, the rows hold still.
+   */
+  readonly onMove?: (id: string, toIndex: number) => void;
+  /**
+   * With `onMove`, the drag wrapper the rows move in: pass `LinkListRowOrder`. It comes in from the screen rather
+   * than from this file, so a page whose rows hold still (a public profile, through `@crm/ui/public-booking`) never
+   * loads dnd-kit, and no lazy chunk splits the files every page loads first.
+   */
+  readonly rowOrder?: ComponentType<RowOrderProps>;
 }
 
 /** Props for LinkListToolbar. */
@@ -178,6 +192,7 @@ function matches(row: LinkRow, query: string): boolean {
  * badge when it is off, its switch, and its quiet icon actions. `compact`
  * draws the records area's one line rows with no frame (Captures). Arrows move
  * between rows, Enter opens one, and left and right reach a row's controls.
+ * With `onMove` the rows move by their grips.
  */
 export function LinkList({
   label,
@@ -195,17 +210,23 @@ export function LinkList({
   density = 'comfortable',
   placement = 'page',
   rowsAreLinks = false,
+  onMove,
+  rowOrder: RowOrder,
 }: LinkListProps) {
   const isCompact = density === 'compact';
   const isCard = isCompact && placement === 'card';
+  const [ownQuery, setOwnQuery] = useState('');
+  const query = heldQuery ?? ownQuery;
+  const setQuery = onQueryChange ?? setOwnQuery;
+  // A narrowed list can't say where a row goes among the ones it hides, so a search puts the grips away.
+  const moves =
+    onMove !== undefined && RowOrder !== undefined && !rowsAreLinks && query.trim() === '' ? onMove : undefined;
   const frameProps = {
     className: styles.frame,
     'data-density': density,
     'data-placement': isCompact ? placement : undefined,
+    'data-reorderable': moves === undefined ? undefined : '',
   };
-  const [ownQuery, setOwnQuery] = useState('');
-  const query = heldQuery ?? ownQuery;
-  const setQuery = onQueryChange ?? setOwnQuery;
   const showSkeleton = useDelayedLoading(status === 'loading');
   if (status === 'no-access') {
     return (
@@ -249,26 +270,46 @@ export function LinkList({
       <div {...frameProps}>
         {toolbar}
         <div className={styles.root} aria-busy="true">
-          {showSkeleton &&
-            Array.from({ length: SKELETON_ROWS }, (_, index) => (
-              <div key={index} className={styles.row} data-loading="">
-                <div className={styles.main}>
-                  <span className={styles.skeletonTitle}>
-                    <Skeleton width="medium" />
-                  </span>
-                  {!isCompact && (
-                    <span className={styles.skeletonChips}>
-                      <Skeleton width="short" />
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+          {showSkeleton && <SkeletonRows count={SKELETON_ROWS} isCompact={isCompact} hasGrip={moves !== undefined} />}
           <VisuallyHidden>{strings.loading(label)}</VisuallyHidden>
         </div>
       </div>
     );
   }
+  // The rows as React Aria's grid, each starting with its grip when they move (`grip` absent: its place held).
+  const grid = (grip: RowGrip | undefined) => (
+    <GridList
+      className={styles.root}
+      aria-label={label}
+      items={shown}
+      // A row draws again when its grip comes or goes (a search puts the grips away), not only when its item changes.
+      dependencies={[grip]}
+      disabledKeys={shown.flatMap((row) => (row.isPending === true ? [row.id] : []))}
+      onAction={(key) => {
+        onOpen(String(key));
+      }}
+    >
+      {(row) => (
+        <GridListItem
+          id={row.id}
+          className={styles.row}
+          textValue={row.title}
+          data-pressable={row.isPending === true ? undefined : ''}
+          data-pending={row.isPending === true || undefined}
+          data-off={row.isOff === true || undefined}
+          data-href={row.isPending === true ? undefined : row.href}
+        >
+          {moves !== undefined && (
+            <span className={styles.grip}>
+              {/* A row alone has nowhere to go, and a pending one isn't made yet: their grips' places stay empty. */}
+              {grip?.(row.id, strings.move(row.title), row.isPending === true || shown.length < 2)}
+            </span>
+          )}
+          <RowContent row={row} isCompact={isCompact} />
+        </GridListItem>
+      )}
+    </GridList>
+  );
   return (
     <div {...frameProps}>
       {toolbar}
@@ -298,33 +339,48 @@ export function LinkList({
             </li>
           ))}
         </ul>
+      ) : moves === undefined || RowOrder === undefined ? (
+        grid(undefined)
       ) : (
-        <GridList
-          className={styles.root}
-          aria-label={label}
-          items={shown}
-          disabledKeys={shown.flatMap((row) => (row.isPending === true ? [row.id] : []))}
-          onAction={(key) => {
-            onOpen(String(key));
-          }}
+        <RowOrder
+          ids={shown.map((row) => row.id)}
+          nameOf={(id) => shown.find((row) => row.id === id)?.title ?? id}
+          onMove={moves}
         >
-          {(row) => (
-            <GridListItem
-              id={row.id}
-              className={styles.row}
-              textValue={row.title}
-              data-pressable={row.isPending === true ? undefined : ''}
-              data-pending={row.isPending === true || undefined}
-              data-off={row.isOff === true || undefined}
-              data-href={row.isPending === true ? undefined : row.href}
-            >
-              <RowContent row={row} isCompact={isCompact} />
-            </GridListItem>
-          )}
-        </GridList>
+          {(grip) => grid(grip)}
+        </RowOrder>
       )}
     </div>
   );
+}
+
+/** Rows standing in for rows on their way: each row's skeleton lines, after its grip's place when the rows move. */
+function SkeletonRows({
+  count,
+  isCompact,
+  hasGrip,
+}: {
+  readonly count: number;
+  readonly isCompact: boolean;
+  readonly hasGrip: boolean;
+}) {
+  return Array.from({ length: count }, (_, index) => (
+    // The last one is marked: the loading words for screen readers follow it, so it isn't the last child.
+    <div key={index} className={styles.row} data-loading="" data-last={index === count - 1 || undefined}>
+      {/* The grip's place, so the titles that follow land where these lines stood. */}
+      {hasGrip && <span className={styles.grip} />}
+      <div className={styles.main}>
+        <span className={styles.skeletonTitle}>
+          <Skeleton width="medium" />
+        </span>
+        {!isCompact && (
+          <span className={styles.skeletonChips}>
+            <Skeleton width="short" />
+          </span>
+        )}
+      </div>
+    </div>
+  ));
 }
 
 /** A row's title line, description and chips, and its end: the same in a GridList row and a link row. */
