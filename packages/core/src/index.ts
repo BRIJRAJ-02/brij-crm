@@ -143,6 +143,7 @@ export {
   resendInvite,
   revokeInvite,
   setInviteLink,
+  typedMemberName,
   type AcceptedInvite,
   type AcceptingUser,
   type InviteOutcome,

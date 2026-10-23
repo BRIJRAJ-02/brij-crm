@@ -11,6 +11,10 @@ export const strings = {
   forAddress: (masked: string | undefined) => (masked === undefined ? '' : `Sent to ${masked}.`),
   newHere: 'New to Timefix? Signing in creates your account.',
   accept: 'Join workspace',
+  joining: 'Joining workspace',
+  /** The signed in card's one field (QA N14), as first run's. */
+  yourName: 'Your name',
+  yourNameHint: 'How your team sees you. You can change it later in Settings.',
   signInToAccept: 'Sign in to join',
   signedInAs: (email: string) => `Signed in as ${email}`,
   useAnother: 'Use another address',
