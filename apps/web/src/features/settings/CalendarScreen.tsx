@@ -123,7 +123,7 @@ function CalendarTable({
   readonly isHeaderHidden?: boolean;
 }) {
   const columns: readonly TableColumn[] = [
-    { id: 'name', label: strings.calendarColumn, isRowHeader: true, isInline: true, size: 'fill' },
+    { id: 'name', label: strings.calendarColumn, isRowHeader: true, isInline: true },
     { id: 'checkConflicts', label: strings.conflictsColumn, size: 'fit' },
     { id: 'showInWeek', label: strings.weekColumn, size: 'fit' },
     { id: 'more', label: strings.optionsColumn, isLabelHidden: true, size: 'fit', align: 'end', showsOnHover: true },
@@ -135,6 +135,8 @@ function CalendarTable({
       columns={columns}
       rows={calendars}
       getRowId={(calendar) => calendar.id}
+      // Narrower than its columns (a phone), the table scrolls sideways in its own frame (Q54).
+      isScrollable
       renderCell={(calendar, column) => {
         if (column === 'name') {
           return (
