@@ -58,7 +58,11 @@ export interface ReferencePickerProps<D extends Reference> {
   readonly allowMultiple: boolean;
   /** Searches outside. Leave it out when only `pinned` can be offered. */
   readonly onSearch?: (query: string) => ListSource<D>;
-  /** Offered first, before the results ("Me"). */
+  /**
+   * Offered first, before the results, while nothing is typed ("Me"). Once a search is typed only the results
+   * show, so the first of them is what Enter picks: a pinned item that matches comes back among them, still
+   * marked as pinned ("Me"), when `onSearch` answers it.
+   */
   readonly pinned?: readonly D[];
   readonly keyOf: (display: D) => string;
   readonly onChange: (chosen: readonly D[]) => void;
@@ -137,20 +141,23 @@ export function ReferencePicker<D extends Reference>({
     };
   }, [isOpenAtStart]);
   const results = onSearch?.(query);
+  // Pinned items lead only an empty search: kept first while typing, they took Enter from the person searched for.
+  const shownPinned = query.trim() === '' ? pinned : [];
   const offered: ListSource<D> =
     results === undefined
       ? arraySource(pinned, keyOf)
       : {
-          count: pinned.length + results.count,
-          getItem: (index) => (index < pinned.length ? pinned[index] : results.getItem(index - pinned.length)),
+          count: shownPinned.length + results.count,
+          getItem: (index) =>
+            index < shownPinned.length ? shownPinned[index] : results.getItem(index - shownPinned.length),
           getKey: keyOf,
           ...(results.onRangeChange === undefined
             ? {}
             : {
                 onRangeChange: ({ start, end }) => {
                   results.onRangeChange?.({
-                    start: Math.max(0, start - pinned.length),
-                    end: Math.max(0, end - pinned.length),
+                    start: Math.max(0, start - shownPinned.length),
+                    end: Math.max(0, end - shownPinned.length),
                   });
                 },
               }),

@@ -6,6 +6,7 @@ import {
   refusalSummary,
   TASK_RECORDS_MAX,
   TASK_TITLE_MAX,
+  searchMembers,
   toActorDisplays,
   type ActorDisplay,
   type DataError,
@@ -221,11 +222,9 @@ function TaskFields({
         {...(assignee === undefined ? {} : { display: assignee })}
         surface="form"
         {...(me === undefined ? {} : { me })}
-        onSearch={editorSearch((query) =>
-          arraySource(
-            memberDisplays.filter((member) => member.name.toLowerCase().includes(query.trim().toLowerCase())),
-            (member) => member.id ?? member.name,
-          ),
+        onSearch={editorSearch((query: string) =>
+          // By name or email, Me pinned while the search is empty and first among the matches once typed.
+          arraySource(searchMembers(memberDisplays, query, me?.id ?? undefined), (member) => member.id ?? member.name),
         )}
         onCommit={(value) => {
           onChange({ assigneeMemberId: memberIdOf(value) });

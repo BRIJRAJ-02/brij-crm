@@ -10,7 +10,13 @@ import type { AttributeType } from '@crm/contracts/values';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { attributeOf } from '../../workbench/attributes.ts';
 import { sampleColumn, sampleColumns, sampleRows, type SampleRow } from '../../workbench/grid-samples.ts';
-import { FIELD_SAMPLES, SAMPLE_COMPANIES, SAMPLE_MEMBERS, SAMPLE_STAGES } from '../../workbench/field-samples.ts';
+import {
+  FIELD_SAMPLES,
+  SAMPLE_COMPANIES,
+  SAMPLE_MEMBERS,
+  SAMPLE_STAGES,
+  sampleMemberSearch,
+} from '../../workbench/field-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DataGrid, type GridStatus, type RowNote, type RowSource } from './DataGrid.tsx';
 import type { GridEditorProps } from './GridCell.tsx';
@@ -126,9 +132,8 @@ function SampleGrid({
   const editorProps = (column: GridColumn): GridEditorProps => {
     if (column.attribute.type === 'actor_reference') {
       const me = SAMPLE_MEMBERS[0];
-      const others = SAMPLE_MEMBERS.filter((member) => member.id !== me?.id);
       return {
-        onSearch: () => arraySource(others, (member) => member.id ?? member.name) as never,
+        onSearch: sampleMemberSearch as never,
         ...(me === undefined ? {} : { me }),
       };
     }
@@ -1077,7 +1082,8 @@ export const PopoverEditors: Story = {
     await press(['{ArrowRight}'], '0:8');
     await press(['g']);
     await waitFor(() => expect(document.activeElement).toHaveValue('g'));
-    await press(['{ArrowDown}', '{ArrowDown}', '{Enter}'], '0:8');
+    // "g" matches Grace Hopper and Alan Turing; Me (Ada) isn't pinned once a search is typed.
+    await press(['{ArrowDown}', '{Enter}'], '0:8');
     await waitFor(() => expect(cell(canvasElement, 0, 8)).toHaveTextContent('Grace Hopper'));
   },
 };

@@ -37,6 +37,6 @@ export const strings = {
   addedPerson: (name: string) => `${name} added as a person`,
   /** A linked record this person can't see, or that was deleted. */
   unavailableRecord: 'Unavailable',
-  /** Why a reference or member value can't be edited here yet (#15 brings the record picker). */
+  /** Why a reference that can't link (one way, or its far object hidden) can't be edited here. */
   referenceReadOnly: 'You can’t change this here yet.',
 } as const;
