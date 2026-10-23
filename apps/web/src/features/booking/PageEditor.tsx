@@ -48,13 +48,14 @@ import {
   type SaveBarStatus,
   type SelectItem,
 } from '@crm/ui';
-import { useBlocker, useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { calendarSettingsHref, profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
+import { LeaveGuard } from './LeaveGuard.tsx';
 import { PageConflicts, PageDestination } from './PageDestination.tsx';
 import { HostsCard } from './HostsCard.tsx';
 import { recordFacts } from '../routing/facts.ts';
@@ -310,11 +311,6 @@ export function PageEditor({
   // Which lengths the chips refuse (a fifth), said under the chips rather than in the popover.
   const [chipsError, setChipsError] = useState<string | undefined>(undefined);
 
-  // Leaving with unsaved changes asks first, in the app and when the tab closes.
-  useBlocker({
-    shouldBlockFn: () => isDirty && !globalThis.confirm(strings.leaveConfirm),
-    enableBeforeUnload: () => isDirty,
-  });
   // Pause and Resume save at once, apart from the other groups, and their toast offers Undo.
   const setLive = (status: 'live' | 'paused') => {
     save({ status });
@@ -573,30 +569,35 @@ export function PageEditor({
                     </>
                   }
                   footer={
-                    <SaveBar
-                      status={barStatus}
-                      {...(barError === undefined ? {} : { error: barError })}
-                      {...(sendable(draft) && (!isWeekDirty || week.isValid)
-                        ? {}
-                        : {
-                            blockedReason: tabs.some((id) => hasError[id] && id !== shown)
-                              ? strings.fixTabs(tabs.filter((id) => hasError[id]).map((id) => tabLabel[id]))
-                              : strings.fixPage,
-                          })}
-                      onSave={() => {
-                        if (isPageDirty) save(dirty);
-                        if (isWeekDirty) week.save();
-                      }}
-                      onDiscard={() => {
-                        week.discard();
-                        setDraft(saved);
-                        setSlugLeft(false);
-                        setFailure(undefined);
-                        setChipsError(undefined);
-                        setJustSaved(false);
-                      }}
-                      onFocusAway={() => pageHeading(document)?.focus()}
-                    />
+                    <>
+                      <SaveBar
+                        status={barStatus}
+                        {...(barError === undefined ? {} : { error: barError })}
+                        {...(sendable(draft) && (!isWeekDirty || week.isValid)
+                          ? {}
+                          : {
+                              blockedReason: tabs.some((id) => hasError[id] && id !== shown)
+                                ? strings.fixTabs(tabs.filter((id) => hasError[id]).map((id) => tabLabel[id]))
+                                : strings.fixPage,
+                            })}
+                        onSave={() => {
+                          if (isPageDirty) save(dirty);
+                          if (isWeekDirty) week.save();
+                        }}
+                        onDiscard={() => {
+                          week.discard();
+                          setDraft(saved);
+                          setSlugLeft(false);
+                          setFailure(undefined);
+                          setChipsError(undefined);
+                          setJustSaved(false);
+                        }}
+                        onFocusAway={() => pageHeading(document)?.focus()}
+                      />
+                      {/* Leaving with unsaved changes asks first, in a Modal; the tabs (`?tab=`) keep the editor and its
+                        changes, so moving between them never asks. Closing the tab asks the browser's way. */}
+                      <LeaveGuard isDirty={isDirty} searchStays />
+                    </>
                   }
                 >
                   {shown === 'page' && (
