@@ -34,7 +34,7 @@ async function person(name = '') {
 describe('the account', () => {
   it('starts a workspace, names an unnamed account, and lists it', async () => {
     const user = await person();
-    expect(await getMe({ identity }, user)).toEqual({ user, workspaces: [] });
+    expect(await getMe({ identity }, user, false)).toEqual({ user, workspaces: [], isOperator: false });
 
     const input = { id: newId(), name: 'Acme', slug: `acme-${tag()}`, memberName: ' Ada Lovelace ' };
     const created = await startWorkspace({ db, identity }, user, input);
@@ -43,7 +43,7 @@ describe('the account', () => {
       milestones: [{ milestone: 'workspace_created', workspaceId: input.id, reachedAt: expect.any(String) as string }],
     });
     expect((await identity.getUser(user.id))?.name).toBe('Ada Lovelace');
-    expect((await getMe({ identity }, user)).workspaces).toEqual([created.workspace]);
+    expect((await getMe({ identity }, user, false)).workspaces).toEqual([created.workspace]);
 
     // The same request again returns the same workspace, and keeps the name.
     expect(await startWorkspace({ db, identity }, user, { ...input, memberName: 'Someone' })).toEqual({
@@ -77,14 +77,14 @@ describe('the last workspace (spec 0031, AC-802)', () => {
       });
     const first = await make('First');
     const second = await make('Second');
-    expect((await getMe({ identity }, user)).lastWorkspaceId).toBeUndefined();
+    expect((await getMe({ identity }, user, false)).lastWorkspaceId).toBeUndefined();
     await setLastWorkspace({ db, identity, rules: NO_RULE_SOURCE }, user, second.workspace.slug, signedInNow());
-    expect((await getMe({ identity }, user)).lastWorkspaceId).toBe(second.workspace.id);
+    expect((await getMe({ identity }, user, false)).lastWorkspaceId).toBe(second.workspace.id);
     await setLastWorkspace({ db, identity, rules: NO_RULE_SOURCE }, user, first.workspace.slug, signedInNow());
-    expect((await getMe({ identity }, user)).lastWorkspaceId).toBe(first.workspace.id);
+    expect((await getMe({ identity }, user, false)).lastWorkspaceId).toBe(first.workspace.id);
     // Gone from the directory (they left): no longer answered, so `/` falls back to the oldest.
     await identity.dropMembership(user.id, first.workspace.id);
-    expect(await getMe({ identity }, user)).toEqual({ user, workspaces: [second.workspace] });
+    expect(await getMe({ identity }, user, false)).toEqual({ user, workspaces: [second.workspace], isOperator: false });
   });
 
   it("refuses a workspace the person isn't in, as the door does, and writes nothing", async () => {

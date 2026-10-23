@@ -61,6 +61,13 @@ const READS: ReadonlySet<string> = new Set([
   'access.mine',
   // Settings › History's Workspace changes (spec 0046).
   'audit.list',
+  // The operator console (spec 0047): read only, across workspaces, behind the operator gate.
+  'operator.overview',
+  'operator.users',
+  'operator.user',
+  'operator.pages',
+  'operator.page',
+  'operator.site',
   // The roles every role picker offers (spec 0037, AC-1439).
   'roles.list',
   'records.query',

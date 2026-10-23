@@ -28,6 +28,7 @@
 // busy times (at most 3 seconds, failing open) and answers which slots clash
 // and which are Best (spec 0028, AC-723 to AC-726), never the busy times.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { isMachine, utcDay, visitorId } from '../analytics/visitor.ts';
 import {
   errorStatus,
   HANDLE_PATTERN,
@@ -61,6 +62,7 @@ import {
 import {
   addGuests,
   bookPublicSlot,
+  countPageView,
   cancelBooking,
   readHandoffPrefill,
   chatTurn,
@@ -146,6 +148,11 @@ export interface PublicBookingServices {
     /** Outside local the cookies are Secure. */
     readonly secure: boolean;
   };
+  /**
+   * Counting page views (spec 0047, AC-1625): the visitor id key, and a way to keep the process alive for the
+   * count, which never holds up the answer. Absent, nothing is counted.
+   */
+  readonly views?: { readonly visitorKey: Buffer; readonly keepAlive: (work: Promise<unknown>) => void };
 }
 
 /** The guest state's version. */
@@ -692,6 +699,22 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     try {
       const entry = await enterBookingPage({ db }, key);
       const { visitor, setCookies, isHost } = await visitorOf(c, entry);
+      // One view per page load (the page asks this once, never in the editor's preview), never a host's own.
+      const userAgent = c.req.header('user-agent');
+      if (services.views !== undefined && isHost !== true && !isMachine(userAgent) && userAgent !== undefined) {
+        const counted = countPageView(
+          entry,
+          visitorId(services.views.visitorKey, {
+            day: utcDay(services.now?.() ?? new Date()),
+            ip: c.get('clientIp'),
+            userAgent,
+            place: entry.pageId,
+          }),
+        ).catch((error: unknown) => {
+          log.warn('booking.view.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+        });
+        services.views.keepAlive(counted);
+      }
       const body: PublicViewerAnswer = {
         ...(visitor === undefined ? {} : { viewer: visitor.viewer }),
         isHost: isHost === true,

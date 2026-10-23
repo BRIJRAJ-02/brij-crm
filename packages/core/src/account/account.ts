@@ -18,11 +18,13 @@ export interface AccountUser {
 /**
  * Who is signed in and their workspaces, oldest first (from the directory,
  * which grants nothing), with the one they last opened while it is still
- * among them (spec 0031, AC-802).
+ * among them (spec 0031, AC-802), and whether the api counts them a super
+ * admin (spec 0047, AC-1619: the account menu's link only, never access).
  */
 export async function getMe(
   deps: { readonly identity: Pick<IdentityStore, 'workspacesOf' | 'lastWorkspaceOf'> },
   user: AccountUser,
+  isOperator: boolean,
 ): Promise<Me> {
   const [workspaces, last] = await Promise.all([
     deps.identity.workspacesOf(user.id),
@@ -33,6 +35,7 @@ export async function getMe(
     user: { id: user.id, name: user.name, email: user.email },
     workspaces: workspaces.map(({ id, slug, name }) => ({ id, slug, name })),
     ...(lastWorkspaceId === undefined ? {} : { lastWorkspaceId }),
+    isOperator,
   };
 }
 

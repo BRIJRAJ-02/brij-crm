@@ -206,6 +206,11 @@ export interface AuthSession {
    * milestone 4). A session older than the field reads as its creation.
    */
   readonly verifiedAt: Date;
+  /**
+   * How it last proved itself: with a second factor (an app or backup code), or an email code or Google alone (a
+   * remembered device skips the app). Absent reads as `email`. The operator console asks for `second_factor`.
+   */
+  readonly verifiedWith?: 'email' | 'second_factor';
   /** Whether the person has the authenticator app on, their one second factor. */
   readonly twoFactorEnabled: boolean;
 }
@@ -435,6 +440,11 @@ const SECOND_STEP_ROUTES: ReadonlySet<string> = new Set(['/two-factor/verify-tot
 
 /** What a second step's backup code may send: the code, and whether to remember the device. */
 const SecondStepBody = z.strictObject({ code: z.string().max(40), trustDevice: z.boolean().optional() });
+
+/** How a session last proved itself, as the adapter hands it: `second_factor` only when it says so. */
+function verifiedWithOf(session: object): 'email' | 'second_factor' {
+  return 'verifiedWith' in session && session.verifiedWith === 'second_factor' ? 'second_factor' : 'email';
+}
 
 /** A session's `verifiedAt` as the adapter hands it (a Date, or its text), else when the session was made. */
 function verifiedAtOf(value: unknown, createdAt: Date): Date {
@@ -1195,6 +1205,7 @@ export function createAuth({
         user: { id, name, email, emailVerified, ...(typeof image === 'string' ? { image } : {}) },
         setCookies: answered.getSetCookie(),
         verifiedAt: verifiedAtOf(verified, response.session.createdAt),
+        verifiedWith: verifiedWithOf(response.session),
         twoFactorEnabled: isTwoFactorUser(response.user),
       };
     },
