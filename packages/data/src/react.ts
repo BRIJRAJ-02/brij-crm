@@ -7,6 +7,7 @@ import type { DataError } from './errors.ts';
 import type { OperatorHeld } from './operator/store.ts';
 import type { RecordFacts, RecordFactsState } from './records/facts.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
+import type { LinkSection, LinkSectionState } from './links/sections.ts';
 import type { AccountSecurityState, AccountSecurityView } from './account/security.ts';
 import type { AccountSessionsState, AccountSessionsView } from './account/sessions.ts';
 import type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
@@ -209,6 +210,15 @@ export function useRecord(record: RecordSubscription): RecordState {
 /** A record's timeline (spec 0017), re-rendering when entries arrive. Held while the screen is mounted. */
 export function useActivity(feed: ActivityFeed): ActivityState {
   return useRetained(feed);
+}
+
+/**
+ * One record's related section (spec 0017, milestone 3): its rows, total and
+ * state, this tab's own Add and Remove shown at once, re-rendering when they
+ * change. Held while the screen is mounted, so changes anywhere reach it.
+ */
+export function useLinkSection(section: LinkSection): LinkSectionState {
+  return useRetained(section);
 }
 
 /**
