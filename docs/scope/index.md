@@ -99,7 +99,7 @@ Build order is the order of the rows below (a feature added later takes the next
 | 48 | Forms | Slice 15 | [Integrations](integrations.md) | in-progress |
 | 49 | Slack and Zapier | Slice 15 | [Integrations](integrations.md) | planned |
 | 50 | CRM connectors | Slice 16 | [Integrations](integrations.md) | planned |
-| 51 | Lists and pipelines | Slice 17 | [Data engine](engine.md) | planned |
+| 51 | Lists and pipelines | Slice 17 | [Data engine](engine.md) | in-progress |
 | 52 | Reports and dashboards | Slice 18 | [Records and views](records-and-views.md) | planned |
 | 53 | Automations | Slice 19 | [Intelligence](intelligence.md) | planned |
 | 54 | AI assistant | Slice 20 | [Intelligence](intelligence.md) | dropped |
@@ -118,6 +118,7 @@ Out of scope for the current plan, kept here so it stays honest.
 - **Browser extension**: add people and companies while browsing LinkedIn or Gmail · needs a decision
 - **Data residency**: choose EU or US hosting per workspace · needs a decision · GA
 - **Marketing site**: public landing, pricing and SEO. A first version exists in `apps/marketing` (built outside this scope, no spec); pricing and SEO still need a decision · needs a decision
+- **List extras** (from spec 0048): per list access, removed entries in the Trash, list changes in a record's Activity, exporting a list view, record reference fields on lists · needs a decision
 
 ## Legend
 
