@@ -144,6 +144,25 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * factor on. A system read per workspace, in packages/core.
    */
   requiredBy: (userId: string) => Promise<readonly string[]>;
+  /** The super admins (spec 0047, AC-1617): whether a signed in person is on `OPERATOR_EMAILS`, by verified email. */
+  operators: OperatorList;
+  /**
+   * Notes that a signed in person used the app today (spec 0047, AC-1624): at
+   * most once per person every 10 minutes in this process, never awaited, a
+   * failure logged and dropped.
+   */
+  noteActivity: (userId: string) => void;
+}
+
+/** Who the console counts a super admin: a verified email on the list. Never a workspace role. */
+export interface OperatorList {
+  readonly isListed: (user: { readonly email: string; readonly emailVerified: boolean }) => boolean;
+}
+
+/** The list from `OPERATOR_EMAILS` (already lowercased by the env schema): empty or unset, nobody. */
+export function operatorList(emails: readonly string[] | undefined): OperatorList {
+  const listed = new Set(emails ?? []);
+  return { isListed: (user) => user.emailVerified && listed.has(user.email.toLowerCase()) };
 }
 
 /** What `authed` adds: the signed in person, and which of their sessions this request carries (its id only). */
@@ -174,7 +193,11 @@ export const requireSession = os.$context<RequestContext>().middleware(async ({ 
   setRequestScope({ userId: session.user.id });
   for (const cookie of session.setCookies) context.resHeaders?.append('set-cookie', cookie);
   // Someone is using the app: the worker stays awake, or wakes (at most once a minute; it never slows the request).
-  if (!NOT_USE.has(path.join('.'))) context.wakeOnUse();
+  if (!NOT_USE.has(path.join('.'))) {
+    context.wakeOnUse();
+    // And the console's "last active" (spec 0047): today's row, at most every 10 minutes per person here.
+    context.noteActivity(session.user.id);
+  }
   return next({
     context: {
       user: session.user,
@@ -231,8 +254,57 @@ export const requireMember = os
     return next({ context: { scope, db: TAKEN_AWAY, identity: TAKEN_AWAY } });
   });
 
+/** How recently a super admin's session must have proved itself (spec 0047, AC-1618). */
+export const OPERATOR_FRESH_MS = 12 * 60 * 60 * 1000;
+
+/** The id an operator read names, when it names one: the person or the booking page. */
+function operatorTarget(input: unknown): { readonly target?: string; readonly period?: string } {
+  if (typeof input !== 'object' || input === null) return {};
+  const fields = input as Record<string, unknown>;
+  const target = [fields['userId'], fields['pageId']].find((value) => typeof value === 'string');
+  const period = fields['period'];
+  return {
+    ...(typeof target === 'string' && UUID.test(target) ? { target } : {}),
+    ...(typeof period === 'string' && /^(7|30|90)d$/.test(period) ? { period } : {}),
+  };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The operator gate (spec 0047): a person on `OPERATOR_EMAILS` with a
+ * verified email, else NOT_FOUND, as for a procedure that doesn't exist;
+ * then two factor on (TWO_FACTOR_REQUIRED) and a sign in or step up within
+ * 12 hours (SIGN_IN_AGAIN). Each read is written to `auth.operator_event`
+ * before it runs, and fails if that write fails (AC-1620).
+ */
+export const requireOperator = os
+  .$context<RequestContext & SessionContext>()
+  .middleware(async ({ context, next, path }, input: unknown) => {
+    if (!context.operators.isListed(context.user)) throw apiError('NOT_FOUND', 'There is nothing at this address.');
+    if (!(await context.doorSession.hasSecondFactor())) {
+      throw apiError(
+        'TWO_FACTOR_REQUIRED',
+        'Turn on two factor in Account, Sign in and devices, to open the super admin pages.',
+      );
+    }
+    if (Date.now() - context.doorSession.verifiedAt.getTime() > OPERATOR_FRESH_MS) {
+      throw apiError('SIGN_IN_AGAIN', 'Sign in again to open the super admin pages.');
+    }
+    await context.identity.logOperatorEvent({
+      userId: context.user.id,
+      action: path.join('.'),
+      requestId: context.requestId,
+      ...operatorTarget(input),
+    });
+    return next();
+  });
+
 /** Procedures for a signed in person, before any workspace (the bootstrap list). */
 export const authed = base.use(requireSession);
 
 /** Procedures inside a workspace: a session and an active member row there. */
 export const member = authed.use(requireMember);
+
+/** The operator console's procedures (spec 0047): a session that passes the operator gate. */
+export const operator = authed.use(requireOperator);

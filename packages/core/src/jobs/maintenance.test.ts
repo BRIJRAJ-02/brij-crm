@@ -382,6 +382,39 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     });
   });
 
+  it('removes booking page view rows older than a year, and keeps the rest (spec 0047, AC-1628)', async () => {
+    const t = await team([]);
+    const pageId = newId();
+    await testQuery(
+      ownerUrl,
+      `insert into booking_pages (workspace_id, id, public_key, slug, owner_member_id, title, durations, location, availability, created_by_type, updated_by_type)
+       values ($1, $2, $3, $4, $5, 'Intro call', '{30}', '{"type":"video"}', '{}', 'system', 'system')`,
+      [t.workspaceId, pageId, newId().replaceAll('-', '').slice(0, 16), `intro-${newId().slice(0, 8)}`, t.ownerId],
+    );
+    for (const [age, visitor] of [
+      [400, 'a'],
+      [366, 'b'],
+      [364, 'c'],
+      [0, 'd'],
+    ] as const) {
+      await testQuery(
+        ownerUrl,
+        `insert into booking_page_views (workspace_id, page_id, day, visitor) values ($1, $2, (now() at time zone 'UTC')::date - $3::integer, $4)`,
+        [t.workspaceId, pageId, age, visitor.repeat(32)],
+      );
+    }
+    const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    const left = await testQuery<{ visitor: string }>(
+      ownerUrl,
+      'select left(visitor, 1) as visitor from booking_page_views where page_id = $1 order by 1',
+      [pageId],
+    );
+    expect(left.map((row) => row.visitor)).toEqual(['c', 'd']);
+    const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
+    expect(job.result).toMatchObject({ cleanup: { views: 2 } });
+  });
+
   it('removes notifications done more than 90 days ago, and keeps newer done, read and unread ones (spec 0038)', async () => {
     const t = await team([]);
     // One notification a task: a member has one per task assignment.

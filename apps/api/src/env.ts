@@ -194,6 +194,18 @@ const allowlist = z
     ]),
   );
 
+// The super admins (spec 0047, AC-1617): emails, comma separated, compared lowercased. Unset or empty, nobody is
+// one. Never `*`: every entry is one person's address.
+const operatorEmails = z
+  .string()
+  .transform((value) =>
+    value
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
+  )
+  .pipe(z.array(z.email('OPERATOR_EMAILS holds emails, comma separated.')));
+
 // Calendar sync (spec 0024): off unless `CALENDAR_SYNC=on`, so the app boots without it. On, it needs a Google
 // OAuth client with the Calendar API enabled (it may be sign in's client, with the redirect URI
 // `<APP_URL>/api/calendar/google/callback` added), the 32 byte key members' tokens are sealed with, and (outside
@@ -356,6 +368,9 @@ export const ApiEnv = z
     GOOGLE_CLIENT_ID: optional(z.string()),
     GOOGLE_CLIENT_SECRET: optional(z.string()),
     SIGNUP_ALLOWLIST: optional(allowlist),
+    // The operator console (spec 0047): its super admins, and the marketing sites whose beacon is kept.
+    OPERATOR_EMAILS: optional(operatorEmails),
+    SITE_ORIGINS: optional(origins),
     // Mail: Resend when its key is set, else Mailpit (local only).
     RESEND_API_KEY: optional(z.string()),
     MAIL_FROM: optional(sender),

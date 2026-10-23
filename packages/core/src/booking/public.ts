@@ -895,6 +895,28 @@ export async function readHandoffPrefill(
   return inWorkspace(entry.scope, (tx) => handoffVisitor(tx, submissionId, entry.pageId));
 }
 
+/** A daily visitor id (spec 0047, AC-1626): 32 lowercase hex digits, an HMAC the api made; never an address. */
+const VISITOR_ID = /^[0-9a-f]{32}$/;
+
+/**
+ * Counts one view of the page (spec 0047, AC-1625): today's row for this
+ * visitor (UTC), made or bumped. The caller decides it counts (not a host,
+ * not the editor's preview). Only the count: nothing about the visitor but
+ * the daily id is kept.
+ */
+export async function countPageView(entry: BookingEntry, visitor: string): Promise<void> {
+  checkEntry(entry);
+  if (!VISITOR_ID.test(visitor)) throw new TypeError('A visitor is 32 lowercase hex digits.');
+  await inWorkspace(entry.scope, (tx) =>
+    tx.execute(sql`
+      insert into booking_page_views (workspace_id, page_id, day, visitor)
+      values (${entry.scope.workspaceId}, ${entry.pageId}, (now() at time zone 'UTC')::date, ${visitor})
+      on conflict (workspace_id, page_id, day, visitor)
+        do update set views = booking_page_views.views + 1, last_at = now()
+    `),
+  );
+}
+
 /**
  * The booking a manage token opens, as its guest sees it (AC-674): its state
  * (confirmed, cancelled, or past once it ended), the time, the page's facts,

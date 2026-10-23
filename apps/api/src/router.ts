@@ -16,6 +16,7 @@ import { jobsRouter } from './modules/jobs/router.ts';
 import { linksRouter } from './modules/links/router.ts';
 import { invitationsRouter } from './modules/invitations/router.ts';
 import { meRouter } from './modules/me/router.ts';
+import { operatorRouter } from './modules/operator/router.ts';
 import { membersRouter } from './modules/members/router.ts';
 import { navRouter } from './modules/nav/router.ts';
 import { joinRequestsRouter, joinRouter } from './modules/join/router.ts';
@@ -48,6 +49,7 @@ import { base } from './orpc.ts';
 export const router = base.router({
   system: systemRouter,
   me: meRouter,
+  operator: operatorRouter,
   account: accountRouter,
   workspaces: workspacesRouter,
   objects: objectsRouter,

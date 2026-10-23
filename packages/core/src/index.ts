@@ -614,3 +614,15 @@ export { recordsImport } from './imports/kind.ts';
 export { recordsImportUndo } from './imports/undo.ts';
 /** Records exports (spec 0040): a view's records as CSV, on the submissions export's rows, chunks and download. */
 export { getRecordsExport, recordsExport, startRecordsExport, type RecordsExportRecord } from './exports/records.ts';
+// The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.
+export {
+  operatorOverview,
+  operatorPage,
+  operatorPages,
+  operatorSite,
+  operatorUser,
+  operatorUsers,
+  periodDays,
+  type OperatorDeps,
+  type PeriodDays,
+} from './operator/reads.ts';
