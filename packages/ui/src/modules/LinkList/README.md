@@ -16,14 +16,30 @@ On 19 October 2026 the owner asked for Links and Forms to look the same, since a
 
 ## Rows that move
 
-`onMove` makes the rows movable (owner ask A102, 23 October 2026): Settings › Profile arranges the Public booking pages a person's profile lists, a compact list in a Card per section. Why a variant and not a new list: the rows are the same rows (title, facts, the Paused badge, the row menu, opening the page), only their order changes, and the library's sortable rows (Table, QuestionList) each draw their own row look.
+`onMove` with `rowOrder` makes the rows movable (owner ask A102, 23 October 2026): Settings › Profile arranges the Public booking pages a person's profile lists, a compact list in a Card per section. Why a variant and not a new list: the rows are the same rows (title, facts, the Paused badge, the row menu, opening the page), only their order changes, and the library's sortable rows (Table, QuestionList) each draw their own row look.
 
 - A grip starts each row, in a cell of the handle's width, so the titles line up; space-8 from the title. A row alone in its list (nowhere to go) and a pending row keep the cell and have no grip.
 - Drag a grip, or press Enter or Space on it, then the arrow keys and Enter or Space again (Escape puts it back). The others slide out of the way, the row being moved is lifted (`surface-raised`, `shadow-md`, an outline in forced colours), each step is said ("Intro call, moved to position 2 of 3."), and focus comes back to the grip. A drop calls `onMove(id, toIndex)` with the row's new index among `rows`.
 - While the search narrows the rows the grips go away: a narrowed list can't say where a row lands among the ones it hides. `rowsAreLinks` never moves.
 - In a narrow card the grip stays beside both lines of a row that takes a second one.
-- The drag wrapper (dnd-kit) loads on demand: a public profile's links, which never move, never load it. A list with `onMove` asks for it as soon as it draws, loading or not, so it is usually there before the rows are. If the rows come first, they wait as boxes of their size (skeleton lines after the loading delay) until it arrives: nothing below them moves, and nothing can be pressed that would then be swapped out from under the pointer.
+- The drag wrapper (dnd-kit) comes in from the screen: `rowOrder={LinkListRowOrder}` beside `onMove`, from `@crm/ui`. LinkList never imports it, so a public profile's links (`@crm/ui/public-booking`), which never move, never load dnd-kit. Why not a lazy import: it was one on 23 October 2026, and its chunk split the shared files every page loads first (41, past the build's 40, and 1.4 kB more gzipped on the app, the hosted form and the booking page). Without `rowOrder` the rows hold still, `onMove` or not. While the rows load, their skeleton rows keep the grips' places too.
 - Give each row a menu with Move up and Move down too (`actions`): the single pointer way (WCAG 2.5.7), and the one a screen announces itself.
+
+```tsx
+import { LinkList, LinkListRowOrder } from '@crm/ui';
+
+<LinkList
+  density="compact"
+  placement="card"
+  isToolbarHidden
+  label="Pages under Sales"
+  searchLabel="Pages under Sales"
+  rows={rows} // in the order they move in, each with its Move up and Move down menu in `actions`
+  onOpen={open}
+  onMove={(id, toIndex) => move(id, toIndex)}
+  rowOrder={LinkListRowOrder}
+/>
+```
 
 ## Density
 

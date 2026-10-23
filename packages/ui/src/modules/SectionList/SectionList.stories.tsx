@@ -6,6 +6,7 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkList, type LinkRow } from '../LinkList/LinkList.tsx';
+import { RowOrder } from '../LinkList/RowOrder.tsx';
 import { SectionList, type SectionListSection } from './SectionList.tsx';
 
 /** One section of a profile, as the story holds it. */
@@ -120,7 +121,7 @@ function Profile({
         isToolbarHidden
         rows={group.rows}
         onOpen={() => undefined}
-        {...(isReadOnly ? {} : { onMove: moveRow(group.id) })}
+        {...(isReadOnly ? {} : { onMove: moveRow(group.id), rowOrder: RowOrder })}
       />
     ),
   }));
@@ -161,7 +162,6 @@ export const Default: Story = {
       'No section',
     ]);
     await expect(canvas.getByRole('button', { name: 'Move the Support section' })).toBeInTheDocument();
-    // The rows' grips load with the drag wrapper, on demand.
     await expect(await canvas.findByRole('button', { name: 'Move Intro call' })).toBeInTheDocument();
   },
 };

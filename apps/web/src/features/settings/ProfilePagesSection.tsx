@@ -13,6 +13,7 @@ import {
   Card,
   EmptyState,
   LinkList,
+  LinkListRowOrder,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -94,8 +95,8 @@ export function ProfilePagesSection({ data, slug, profile }: ProfilePagesSection
 }
 
 /**
- * The pages while they load: one card of skeleton rows after the loading delay, each grip's place held. Its `onMove`
- * is what holds those places, and it starts the drag wrapper loading, so the grips arrive with the rows.
+ * The pages while they load: one card of skeleton rows after the loading delay, each grip's place held (its `onMove`
+ * and `rowOrder` are what hold those places), so the titles land where the lines stood.
  */
 export function ProfilePagesLoading() {
   return (
@@ -110,6 +111,7 @@ export function ProfilePagesLoading() {
         status="loading"
         onOpen={() => undefined}
         onMove={() => undefined}
+        rowOrder={LinkListRowOrder}
       />
     </Card>
   );
@@ -323,6 +325,7 @@ function ProfilePages({
           onMove={(id, toIndex) => {
             send(withPageMoved(groups, id, toIndex));
           }}
+          rowOrder={LinkListRowOrder}
         />
       ),
     };

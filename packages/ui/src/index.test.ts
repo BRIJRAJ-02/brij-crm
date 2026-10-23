@@ -97,6 +97,7 @@ describe('@crm/ui', () => {
       'LinkChip',
       'LinkGrid',
       'LinkList',
+      'LinkListRowOrder',
       'LinkListToolbar',
       'LoadingNow',
       'LockReason',

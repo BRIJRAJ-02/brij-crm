@@ -1,8 +1,10 @@
 // Brief
 // Purpose: the drag wrapper around a LinkList whose rows move (`onMove`): the sorting list, and each row's grip.
 // Main task: hand LinkList a grip per row, and turn a drop into the row's id and its new index.
-// Leaves out: the rows themselves (LinkList draws them); this file loads on demand, so a list that never moves (a
-// public profile's links) never loads the drag wrapper and dnd-kit with it.
+// Leaves out: the rows themselves (LinkList draws them). LinkList takes only this file's types: a screen whose rows
+// move passes the wrapper in (`rowOrder={LinkListRowOrder}`), so a page whose rows hold still (a public profile's
+// links) never loads the drag wrapper and dnd-kit with it. (A lazy import did the same on 23 Oct 2026, but its chunk split the
+// files every page loads first: 41 of them past the budget's 40, and 1.4 kB more gzipped on each page.)
 import type { ReactNode } from 'react';
 import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 
@@ -24,7 +26,7 @@ export interface RowOrderProps {
 /** The grip of one row, inside the row React Aria renders (see `SortableRowGrip`). */
 const grip: RowGrip = (id, label, isDisabled) => <SortableRowGrip id={id} label={label} isDisabled={isDisabled} />;
 
-/** The sorting list around a LinkList's rows. LinkList loads it lazily. */
+/** The sorting list around a LinkList's rows, handed to LinkList as its `rowOrder` by a screen whose rows move. */
 export function RowOrder({ ids, nameOf, onMove, children }: RowOrderProps) {
   return (
     <SortableList

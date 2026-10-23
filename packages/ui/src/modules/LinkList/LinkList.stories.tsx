@@ -6,6 +6,7 @@ import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkList, type LinkListProps, type LinkRow } from './LinkList.tsx';
+import { RowOrder } from './RowOrder.tsx';
 
 function icons(title: string, isOff = false) {
   return (
@@ -579,13 +580,14 @@ function profilePages(): LinkRow[] {
 
 /** Rows that move, held as a screen holds them: a drop puts the row at its new index. */
 function MovingRows(
-  props: Omit<LinkListProps, 'rows' | 'onMove'> & { readonly onMove: (id: string, to: number) => void },
+  props: Omit<LinkListProps, 'rows' | 'onMove' | 'rowOrder'> & { readonly onMove: (id: string, to: number) => void },
 ) {
   const [rows, setRows] = useState(profilePages);
   return (
     <LinkList
       {...props}
       rows={rows}
+      rowOrder={RowOrder}
       onMove={(id, to) => {
         props.onMove(id, to);
         setRows((was) => {
@@ -609,7 +611,6 @@ export const Reorderable: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    // The grips load with the drag wrapper, on demand.
     await expect(await canvas.findByRole('button', { name: 'Move Intro call' })).toBeInTheDocument();
     await expect(canvas.getAllByRole('button', { name: /^Move / })).toHaveLength(3);
   },

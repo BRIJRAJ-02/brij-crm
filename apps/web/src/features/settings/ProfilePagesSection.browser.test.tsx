@@ -132,7 +132,6 @@ describe('Pages on your profile', () => {
   it('lists my Public pages under their sections, in the profile’s order, with View profile', async () => {
     await renderSection();
     await expect.poll(headings).toEqual(['Pages on your profile', 'Sales', 'No section', 'Support']);
-    // The rows come with the drag wrapper, which loads on demand.
     await expect.poll(() => document.querySelectorAll('[role="row"]').length).toBe(4);
     const rows = [...document.querySelectorAll('[role="row"]')].map((row) => row.textContent);
     expect(rows[0]).toContain('Intro call');
