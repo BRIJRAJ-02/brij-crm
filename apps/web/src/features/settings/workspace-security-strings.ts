@@ -13,7 +13,7 @@ export const strings = {
   require: 'Require two factor sign in',
   requireInfo:
     'A code from an app on their phone, after the email code. Someone who gets into a person’s email still can’t open the workspace.',
-  requireOff: 'Everyone signs in with an authenticator app as well as email.',
+  requireOff: 'When on, everyone signs in with an authenticator app as well as email.',
   requireOn: (without: number) =>
     without === 0
       ? 'Everyone here has two factor sign in set up.'
@@ -21,7 +21,7 @@ export const strings = {
         ? '1 person hasn’t set it up yet. They’re asked to the next time they open the workspace.'
         : `${String(without)} people haven’t set it up yet. They’re asked to the next time they open the workspace.`,
   /** The row's line while the switch is off limits, the Set up yours link after it. */
-  youFirst: 'Set up two factor for yourself first.',
+  youFirst: 'You need two factor sign in yourself first.',
   setUpYours: 'Set up yours',
   confirmRequireTitle: 'Require two factor sign in?',
   confirmRequireText: (without: number, workspace: string) =>

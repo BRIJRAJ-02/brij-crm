@@ -148,7 +148,7 @@ describe('the page’s words (SW10, SW11, SW13)', () => {
     expect(text).not.toContain('How long a sign in lasts here');
     // Off limits until the owner has two factor: the row says why, its link inline, and no Callout above the card.
     expect(page.getByRole('note').elements()).toHaveLength(0);
-    expect(text).toContain('Set up two factor for yourself first. Set up yours');
+    expect(text).toContain('You need two factor sign in yourself first. Set up yours');
     await expect
       .element(page.getByRole('link', { name: 'Set up yours' }))
       .toHaveAttribute('href', '/w/acme/settings/account/sign-in');

@@ -78,7 +78,9 @@ describe('the Object column’s InfoTip (SW15)', () => {
     await expect.element(page.getByRole('rowheader', { name: /People/ })).toBeVisible();
     const header = page.getByRole('columnheader', { name: /Object/ });
     await header.getByRole('button').click();
-    await expect.element(page.getByText('Drag to change the order objects show in the sidebar.')).toBeVisible();
+    await expect
+      .element(page.getByText('Drag, or use Move up and Move down, to change the order objects show in the sidebar.'))
+      .toBeVisible();
   });
 
   it('is left out for someone who can’t drag', async () => {
