@@ -8,8 +8,8 @@ import type { IconName } from '@crm/ui';
 import { bookingsHref, capturesHref, inboxHref, navObjects, tasksHref } from './objects.ts';
 import { strings } from './strings.ts';
 
-/** A page the sidebar marks current that isn't an object's: Tasks, Bookings, Captures and the trash. */
-export type SidebarPage = 'home' | 'inbox' | 'tasks' | 'bookings' | 'captures' | 'trash';
+/** A page the sidebar marks current that isn't an object's: Tasks, Bookings and Captures (the trash is in Settings). */
+export type SidebarPage = 'home' | 'inbox' | 'tasks' | 'bookings' | 'captures';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {

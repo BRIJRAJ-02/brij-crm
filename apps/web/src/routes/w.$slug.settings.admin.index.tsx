@@ -1,8 +1,9 @@
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { strings } from '../features/admin/strings.ts';
+import { navStrings as strings } from '../features/admin/nav-strings.ts';
 import { SettingsFailed } from '../features/settings/SettingsPage.tsx';
-import { DEFAULT_PERIOD, periodSearch } from '../features/admin/figures.ts';
+import { DEFAULT_PERIOD } from '../features/admin/figures.ts';
+import { periodOf, periodSearch } from '../features/admin/search.ts';
 import { OverviewBody, OverviewScreen } from '../features/admin/OverviewScreen.tsx';
 
 // Settings › Super admin › Overview (spec 0047, AC-1629): the whole app's numbers for a period (`?period=`). The
@@ -12,7 +13,7 @@ export const Route = createFileRoute('/w/$slug/settings/admin/')({
   loader: async ({ context, location }) => {
     const search = periodSearch(location.search);
     // Warmed only: a refusal shows in the screen, which holds the same read.
-    await context.data.operator.overview(search.period ?? DEFAULT_PERIOD).ready();
+    await context.data.operator.overview(periodOf(search)).ready();
   },
   pendingComponent: OverviewLoading,
   errorComponent: ConsoleError,

@@ -635,3 +635,9 @@ export {
   type OperatorDeps,
   type PeriodDays,
 } from './operator/reads.ts';
+/**
+ * Settings › History › Workspace changes (spec 0046): `listAuditEvents` pages the audit log for `audit.read`, and
+ * `toEntryView` is its pure row mapping (only known keys, never a linked record, AC-4610).
+ */
+export { listAuditEvents, AUDIT_CURSOR_MESSAGE } from './audit/audit.ts';
+export { toEntryView, type AuditNames, type AuditRow } from './audit/view.ts';

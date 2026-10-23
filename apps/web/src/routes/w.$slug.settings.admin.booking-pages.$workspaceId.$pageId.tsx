@@ -1,8 +1,9 @@
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { strings } from '../features/admin/strings.ts';
+import { navStrings as strings } from '../features/admin/nav-strings.ts';
 import { SettingsFailed } from '../features/settings/SettingsPage.tsx';
-import { DEFAULT_PERIOD, periodSearch } from '../features/admin/figures.ts';
+import { DEFAULT_PERIOD } from '../features/admin/figures.ts';
+import { periodOf, periodSearch } from '../features/admin/search.ts';
 import { PageBody, PageScreen } from '../features/admin/PagesScreen.tsx';
 
 // Settings › Super admin › Booking pages › one page, by its workspace and id (spec 0047, AC-1631): its figures against the period before and
@@ -12,7 +13,7 @@ export const Route = createFileRoute('/w/$slug/settings/admin/booking-pages/$wor
   loader: async ({ context, params, location }) => {
     const search = periodSearch(location.search);
     // Warmed only: a refusal shows in the screen, which holds the same read.
-    await context.data.operator.page(params.workspaceId, params.pageId, search.period ?? DEFAULT_PERIOD).ready();
+    await context.data.operator.page(params.workspaceId, params.pageId, periodOf(search)).ready();
   },
   pendingComponent: PageLoading,
   errorComponent: ConsoleError,

@@ -1,8 +1,9 @@
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { strings } from '../features/admin/strings.ts';
+import { navStrings as strings } from '../features/admin/nav-strings.ts';
 import { SettingsFailed } from '../features/settings/SettingsPage.tsx';
-import { DEFAULT_PERIOD, periodSearch } from '../features/admin/figures.ts';
+import { DEFAULT_PERIOD } from '../features/admin/figures.ts';
+import { periodOf, periodSearch } from '../features/admin/search.ts';
 import { SiteBody, SiteScreen } from '../features/admin/SiteScreen.tsx';
 
 // Settings › Super admin › Website (spec 0047, AC-1632): the marketing site's visits for a period. The loader warms
@@ -12,7 +13,7 @@ export const Route = createFileRoute('/w/$slug/settings/admin/website')({
   loader: async ({ context, location }) => {
     const search = periodSearch(location.search);
     // Warmed only: a refusal shows in the screen, which holds the same read.
-    await context.data.operator.site(search.period ?? DEFAULT_PERIOD).ready();
+    await context.data.operator.site(periodOf(search)).ready();
   },
   pendingComponent: SiteLoading,
   errorComponent: ConsoleError,

@@ -1,5 +1,6 @@
 import { accessContract, rolesContract } from './access.ts';
 import { accountContract } from './account.ts';
+import { auditContract } from './audit.ts';
 import { attributesContract } from './attributes.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
@@ -40,6 +41,7 @@ export * from './access.ts';
 export * from './account.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
+export * from './audit.ts';
 export * from './board-model.ts';
 export * from './booking/index.ts';
 export * from './booking/blocks.ts';
@@ -147,6 +149,8 @@ export const contract = {
   preferences: preferencesContract,
   // Lead routing (spec 0043): the per rule report.
   routing: routingContract,
+  // Settings › History › Workspace changes (spec 0046): the audit log, `audit.read` only.
+  audit: auditContract,
   imports: importsContract,
   exports: exportsContract,
 };

@@ -1,35 +1,16 @@
-// Settings › Super admin (spec 0047): the period in the address and the
-// numbers as words. Pure: the locale and the server's figures come in.
+// Settings › Super admin (spec 0047): the numbers as words. Pure: the locale and the server's figures come in.
 import type { OperatorFigure, OperatorPeriod } from '@crm/data';
 import { strings } from './strings.ts';
 
-/** The periods a page reads, shortest first (the contract's `OPERATOR_PERIODS`). */
+/**
+ * The periods a page reads, shortest first, and the one it reads when the address names none. The same as
+ * `search.ts`'s (a test holds them equal): kept apart so the routes, which load up front, share no file with the
+ * screens and add none to the first load.
+ */
 export const PERIODS: readonly OperatorPeriod[] = ['7d', '30d', '90d'];
 
 /** The period a page reads when the address names none. */
 export const DEFAULT_PERIOD: OperatorPeriod = '30d';
-
-/** A console page's address: its period, kept as `?period=`. */
-export interface PeriodSearch {
-  readonly period?: OperatorPeriod;
-}
-
-/** The period an address names, or none (the default then applies). */
-export function periodSearch(search: Record<string, unknown>): PeriodSearch {
-  const period = PERIODS.find((each) => each === search['period']);
-  return period === undefined || period === DEFAULT_PERIOD ? {} : { period };
-}
-
-/** The users list's address: the period and the search. */
-export interface UsersSearch extends PeriodSearch {
-  readonly q?: string;
-}
-
-/** The users list's address, read safely: a search of at most 100 characters. */
-export function usersSearch(search: Record<string, unknown>): UsersSearch {
-  const q = typeof search['q'] === 'string' ? search['q'].trim().slice(0, 100) : '';
-  return { ...periodSearch(search), ...(q === '' ? {} : { q }) };
-}
 
 /** How many days a period covers. */
 export const PERIOD_LENGTH: Readonly<Record<OperatorPeriod, number>> = { '7d': 7, '30d': 30, '90d': 90 };

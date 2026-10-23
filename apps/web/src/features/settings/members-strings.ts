@@ -4,8 +4,12 @@ import type { RemovalPreview } from '@crm/data';
 export const strings = {
   title: 'Members',
   membersTab: 'Members',
-  invitationsTab: 'Invitations',
-  tabsLabel: 'Members and invitations',
+  /** Everyone on their way in: requests to join, pending invitations, and the link and company email (SW1). */
+  joiningTab: 'Joining',
+  tabsLabel: 'Members and people joining',
+  askingSection: 'Asking to join',
+  pendingSection: 'Pending invitations',
+  otherWaysSection: 'Other ways to join',
   invite: 'Invite people',
   columns: {
     name: 'Name',
@@ -36,20 +40,25 @@ export const strings = {
   roleChanged: (name: string, role: string) =>
     `${name} is now ${role === 'Admin' || role === 'Owner' ? 'an' : 'a'} ${role}.`,
   removed: (name: string) => `${name} was removed from the workspace.`,
-  readOnlyNote: 'Only workspace owners and admins can invite people or change roles.',
-  noInvitations: 'No open invitations',
+  /** The one read only note, the same words on every settings page (cross page note 1). */
+  readOnlyNote: 'Only owners and admins can change this.',
+  /** Invite pressed with no role this person may invite as: the server lets only owners and admins invite. */
+  inviteForbidden: 'Only workspace owners and admins can invite people or change roles.',
+  noInvitations: 'No pending invitations',
   expired: 'Expired',
   resend: 'Resend',
-  revoke: 'Revoke',
+  revoke: 'Cancel invite',
   invitationActions: (email: string) => `Actions for the invitation to ${email}`,
   resent: (email: string) => `Invitation sent again to ${email}.`,
   resentUnsent: (email: string) =>
     `The invitation to ${email} is renewed, but its email didn’t go out. Try Resend again.`,
-  revoked: (email: string) => `Invitation to ${email} revoked.`,
+  revoked: (email: string) => `Invitation to ${email} cancelled.`,
   // The confirms (the owner, 21 October 2026: anything that ends something asks first).
-  revokeTitle: (email: string) => `Revoke the invitation to ${email}?`,
+  revokeTitle: (email: string) => `Cancel the invitation to ${email}?`,
   revokeText: 'The link in their email stops working at once.',
-  revokeAction: 'Revoke invitation',
+  revokeAction: 'Cancel invitation',
+  /** The confirm's way out when its verb is itself a Cancel: never two buttons called Cancel (as Jobs' Keep job). */
+  keepInvitation: 'Keep invitation',
   removeTitle: (name: string, workspace: string) => `Remove ${name} from ${workspace}?`,
   removeText: 'They lose access at once, and their work stays.',
   removeAction: 'Remove member',
@@ -80,9 +89,6 @@ export const strings = {
   transferTitle: (name: string, workspace: string) => `Make ${name} the owner of ${workspace}?`,
   transferText: 'They get every permission, and you become an admin.',
   transferAction: 'Transfer ownership',
-  selfRoleTitle: (role: string) => `Change your own role to ${role}?`,
-  selfRoleText: 'Only an owner or admin can give back what you lose.',
-  selfRoleAction: 'Change my role',
   failedTitle: 'Couldn’t load the members',
   failedText: 'Check your connection, then try again.',
   somethingWrong: 'Something went wrong. Try again in a moment.',
@@ -114,15 +120,22 @@ export const strings = {
   linkOffText: 'The link stops working at once. Turning it on again makes a new one.',
   linkOffAction: 'Turn off link',
   linkTurnedOff: 'The invite link is off.',
+  /** Expires or Most uses changed (the save rule): Undo puts the previous value back. */
+  linkSaved: 'Invite link saved.',
+  undo: 'Undo',
+  undone: 'Change undone.',
+  /** An Undo pressed after the link changed again (here or by another admin): it leaves the newer value alone. */
+  undoStale: 'The invite link changed again since, so nothing was undone.',
   // Domain join (spec 0031, AC-819, AC-820).
-  domainTitle: 'Email domain',
-  domainOff: (domain: string) => `Let people at @${domain} ask to join.`,
+  domainTitle: 'Company email',
+  domainOff: (domain: string) => `When on, anyone with an @${domain} email can ask to join. You approve each one.`,
+  /** The server's rule: only the reader's own verified email's domain, and never a public mail domain. */
+  domainInfo: 'Only the domain of your own verified email can be used. Public mail like Gmail can’t.',
   domainOn: (domain: string) => `People at @${domain} can ask to join. You approve each one.`,
   domainTurnedOn: (domain: string) => `People at @${domain} can now ask to join.`,
   domainSaving: (domain: string) => `Turning on for @${domain}`,
   domainPublic: 'Your address is at a public mail domain, so it can’t be used.',
   domainUnverified: 'Verify your email address to use its domain.',
-  requestsTab: 'Join requests',
   requested: 'Requested',
   approve: 'Approve',
   decline: 'Decline',
@@ -131,14 +144,13 @@ export const strings = {
   declineText: 'They won’t be told, and their request stays open on their side.',
   declineAction: 'Decline request',
   declined: (name: string) => `Declined ${name}’s request.`,
-  noRequests: 'No requests to join',
   approveFor: (name: string) => `Approve ${name}`,
   declineFor: (name: string) => `Decline ${name}`,
   requestActions: (name: string) => `Answer ${name}’s request`,
-  domainOffTitle: 'Turn off the email domain?',
+  domainOffTitle: 'Turn off company email?',
   domainOffText: (domain: string) => `People at @${domain} can no longer ask, and open requests from them close.`,
-  domainOffAction: 'Turn off domain',
-  domainTurnedOff: 'The email domain is off.',
+  domainOffAction: 'Turn off company email',
+  domainTurnedOff: 'Company email is off.',
   // Help beside labels that don't say it all (the owner's Settings sweep, 21 October 2026).
   linkMostUsesInfo: 'How many people can join with the link before it stops working.',
   // The invite dialog.
@@ -165,7 +177,7 @@ export const strings = {
   alreadyMembers: (list: string) => `Already members: ${list}.`,
   inviteMore: 'Invite more',
   done: 'Done',
-  unsent: (list: string) => `Saved, but the email didn’t go out to ${list}. Use Resend on the Invitations tab.`,
+  unsent: (list: string) => `Saved, but the email didn’t go out to ${list}. Use Resend on the Joining tab.`,
   // The invite dialog opened outside Settings › Members (InviteTeamDialog), when its first read fails.
   inviteLoadFailed: 'Couldn’t load your team. Check your connection, then try again.',
   inviteTryAgain: 'Try again',

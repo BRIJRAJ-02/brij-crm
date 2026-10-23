@@ -162,8 +162,6 @@ export const strings = {
   siteNote: 'Counted by the site’s own beacon: no cookies, and a visitor is counted once a day.',
 
   // States.
-  failedTitle: 'Couldn’t load the numbers',
-  failedText: 'Something went wrong drawing this page. Try again.',
   allShown: (count: string) => `All ${count} users shown.`,
   twoFactorTitle: 'Turn on two factor to open these pages',
   twoFactorText: 'The super admin pages show every account, so they ask for two factor.',

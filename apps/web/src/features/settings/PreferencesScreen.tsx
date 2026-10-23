@@ -1,13 +1,14 @@
 // Brief
 // Purpose: Settings › Account › Preferences (spec 0026): how the app looks and reads for this person.
-// Main task: pick the theme, time zone, date format, week start and start page; each applies the moment it changes;
-// open Customise sidebar (spec 0034). The theme is kept on this browser and shows at once, so it has no toast; the
-// rest save with a toast and Undo.
+// Main task: pick the theme, time zone, date format, week start and start page, and show or hide the setup checklist;
+// each applies the moment it changes; open Customise sidebar (spec 0034). The theme is kept on this browser and shows
+// at once, so it has no toast; the rest save with a toast and Undo.
 // Leaves out: the language (the browser's) and the clock's 12 or 24 hours (both later).
 import type { MemberPreferences, ObjectSummary, PreferencesChange, PreferencesState } from '@crm/data';
 import {
   Card,
   EmptyState,
+  InfoTip,
   Select,
   SettingsRow,
   SettingsSection,
@@ -101,7 +102,7 @@ export function PreferencesScreen({
         </EmptyState>
       )}
       {customiseSidebar !== undefined && (
-        <SettingsSection title={strings.sidebar} description={strings.sidebarDescription}>
+        <SettingsSection title={strings.sidebar}>
           <Card>
             <SettingsRow title={strings.customise} description={strings.customiseDescription}>
               {customiseSidebar}
@@ -113,7 +114,7 @@ export function PreferencesScreen({
   );
 }
 
-/** The member's own preferences: each select saves at once, with a quiet toast whose Undo puts it back. */
+/** The member's own preferences: each select and the switch save at once, with a quiet toast whose Undo puts it back. */
 function MemberSections({
   preferences,
   objects,
@@ -152,13 +153,16 @@ function MemberSections({
   const weeks = useMemo(() => weekStartChoices(), []);
   const landings = useMemo(() => landingChoices(objects), [objects]);
 
-  const pick = (field: 'timeZone' | 'dateFormat' | 'weekStart' | 'landing', id: string | null) => {
+  // The last "Preferences saved": a newer one replaces it, so several changes leave one toast, not a stack.
+  const lastSaved = useRef<string | undefined>(undefined);
+  const pick = (field: 'timeZone' | 'dateFormat' | 'weekStart' | 'landing' | 'homeSetup', id: string | null) => {
     if (id === null) return;
     const edit = editOf(preferences, field, id);
     if (edit === undefined) return;
     void onChange(edit.change).then((landed) => {
       if (!landed) return;
-      toasts.toast({
+      if (lastSaved.current !== undefined) toasts.dismiss(lastSaved.current);
+      lastSaved.current = toasts.toast({
         tone: 'success',
         message: strings.saved,
         action: {
@@ -178,7 +182,12 @@ function MemberSections({
     <>
       <SettingsSection title={strings.dates}>
         <Card>
-          <SettingsRow title={strings.timeZone} description={strings.timeZoneDescription} control="field">
+          <SettingsRow
+            title={strings.timeZone}
+            description={strings.timeZoneDescription}
+            meta={<InfoTip label={strings.timeZone}>{strings.timeZoneInfo}</InfoTip>}
+            control="field"
+          >
             <Select
               label={strings.timeZone}
               isLabelHidden
@@ -225,10 +234,7 @@ function MemberSections({
               label={strings.homeSetup}
               isLabelHidden
               isSelected={!(preferences.homeHidden ?? []).includes('setup')}
-              onChange={(isOn) => {
-                const others = (preferences.homeHidden ?? []).filter((key) => key !== 'setup');
-                void onChange({ homeHidden: isOn ? others : [...others, 'setup'] });
-              }}
+              onChange={(isOn) => pick('homeSetup', isOn ? 'on' : 'off')}
             />
           </SettingsRow>
         </Card>

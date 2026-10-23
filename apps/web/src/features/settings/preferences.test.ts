@@ -3,7 +3,15 @@
 import type { MemberPreferences, ObjectSummary } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import { landingTarget } from '../workspace/landing.ts';
-import { dateFormatChoices, editOf, landingChoices, landingId, landingOf, weekStartChoices } from './preferences.ts';
+import {
+  dateFormatChoices,
+  editOf,
+  landingChoices,
+  landingId,
+  landingOf,
+  stillShows,
+  weekStartChoices,
+} from './preferences.ts';
 
 const DEFAULTS: MemberPreferences = { dateFormat: 'auto', weekStart: 'auto', landing: { kind: 'home' } };
 
@@ -66,6 +74,33 @@ describe('a choice’s change and its Undo', () => {
       change: { dateFormat: 'ymd' },
       undo: { dateFormat: 'auto' },
     });
+  });
+});
+
+describe('the Setup checklist switch', () => {
+  it('puts the checklist away, and Undo shows it again', () => {
+    expect(editOf(DEFAULTS, 'homeSetup', 'off')).toEqual({
+      change: { homeHidden: ['setup'] },
+      undo: { homeHidden: [] },
+    });
+  });
+
+  it('shows it again, keeping other sections put away', () => {
+    expect(editOf({ ...DEFAULTS, homeHidden: ['tasks', 'setup'] }, 'homeSetup', 'on')).toEqual({
+      change: { homeHidden: ['tasks'] },
+      undo: { homeHidden: ['tasks', 'setup'] },
+    });
+  });
+
+  it('changes nothing when the switch already says so', () => {
+    expect(editOf(DEFAULTS, 'homeSetup', 'on')).toBeUndefined();
+    expect(editOf({ ...DEFAULTS, homeHidden: ['setup'] }, 'homeSetup', 'off')).toBeUndefined();
+  });
+
+  it('lets an Undo through only while the checklist still shows as it set', () => {
+    const edit = editOf(DEFAULTS, 'homeSetup', 'off');
+    expect(edit && stillShows({ ...DEFAULTS, homeHidden: ['setup'] }, edit.change)).toBe(true);
+    expect(edit && stillShows(DEFAULTS, edit.change)).toBe(false);
   });
 });
 

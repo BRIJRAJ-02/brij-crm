@@ -165,7 +165,7 @@ export function useInvite({
     const groups = inviteGroups(valid, roles);
     // No role this person may invite as (the server lets only owners and admins invite): say so, send nothing.
     if (groups.length === 0) {
-      setFailure(strings.readOnlyNote);
+      setFailure(strings.inviteForbidden);
       return;
     }
     setBusy(true);

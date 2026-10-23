@@ -367,10 +367,9 @@ export function AttributesTab({
           }}
         />
       </Card>
-      <Disclosure title={strings.archived} count={archived.length}>
-        {archived.length === 0 ? (
-          <EmptyState title={strings.noArchived}>{strings.noArchivedText}</EmptyState>
-        ) : (
+      {/* Only while something is archived (SW18): "Archived 0" opened onto nothing. */}
+      {archived.length > 0 && (
+        <Disclosure title={strings.archived} count={archived.length}>
           <Table
             label={strings.archivedAttributes}
             columns={COLUMNS}
@@ -378,8 +377,8 @@ export function AttributesTab({
             getRowId={(attribute) => attribute.id}
             renderCell={archivedCell}
           />
-        )}
-      </Disclosure>
+        </Disclosure>
+      )}
       <AttributeDialog
         slug={slug}
         objectId={object.id}

@@ -1,8 +1,9 @@
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { strings } from '../features/admin/strings.ts';
+import { navStrings as strings } from '../features/admin/nav-strings.ts';
 import { SettingsFailed } from '../features/settings/SettingsPage.tsx';
-import { DEFAULT_PERIOD, usersSearch } from '../features/admin/figures.ts';
+import { DEFAULT_PERIOD } from '../features/admin/figures.ts';
+import { periodOf, usersSearch } from '../features/admin/search.ts';
 import { UsersScreen } from '../features/admin/UsersScreen.tsx';
 
 // Settings › Super admin › Users (spec 0047, AC-1630): every user, newest first, 50 at a time. The address keeps the
@@ -13,7 +14,7 @@ export const Route = createFileRoute('/w/$slug/settings/admin/users/')({
   loader: async ({ context, location }) => {
     const search = usersSearch(location.search);
     // Warmed only: a refusal shows in the screen, which holds the same read.
-    await context.data.operator.users(search.period ?? DEFAULT_PERIOD, search.q ?? '').ready();
+    await context.data.operator.users(periodOf(search), search.q ?? '').ready();
   },
   pendingComponent: UsersLoading,
   errorComponent: ConsoleError,

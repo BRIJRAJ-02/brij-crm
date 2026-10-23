@@ -2,8 +2,10 @@
 // order, groups left out when the member may open none of their pages, and
 // which page an address marks current.
 import { describe, expect, it } from 'vitest';
+import type { Permission } from '@crm/data';
 import {
   calendarSettingsHref,
+  historyHref,
   preferencesHref,
   settingsGroupOf,
   settingsNav,
@@ -19,7 +21,7 @@ describe('settingsNav', () => {
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Sign in and devices', 'Notifications'],
       ['Calendars', 'Round robin'],
-      ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'Trash'],
+      ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'History', 'Trash'],
       ['Overview', 'Users', 'Booking pages', 'Website'],
     ]);
   });
@@ -37,18 +39,17 @@ describe('settingsNav', () => {
       'workspace-security': '/w/acme/settings/security',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
+      history: '/w/acme/settings/history',
       rotations: '/w/acme/settings/scheduling/round-robin',
-      // The trash keeps its own address (the owner, 22 October 2026): the one entry outside Settings.
-      trash: '/w/acme/trash',
+      // The trash opens inside Settings, its sidebar and trail kept (A120, 23 October 2026).
+      trash: '/w/acme/settings/trash',
       // The operator console (spec 0047).
       'admin-overview': '/w/acme/settings/admin',
       'admin-users': '/w/acme/settings/admin/users',
       'admin-pages': '/w/acme/settings/admin/booking-pages',
       'admin-website': '/w/acme/settings/admin/website',
     });
-    expect(
-      entries.filter((entry) => entry.id !== 'trash').every((entry) => entry.href.startsWith('/w/acme/settings/')),
-    ).toBe(true);
+    expect(entries.every((entry) => entry.href.startsWith('/w/acme/settings/'))).toBe(true);
     expect(entries.filter((entry) => entry.meta !== undefined)).toEqual([]);
     expect(preferencesHref('acme')).toBe('/w/acme/settings/account/preferences');
     expect(calendarSettingsHref('acme')).toBe('/w/acme/settings/scheduling/calendars');
@@ -86,7 +87,7 @@ describe('visibleSettingsNav', () => {
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications'],
       ['calendars'],
-      ['general', 'members', 'objects', 'jobs', 'trash'],
+      ['general', 'members', 'objects', 'jobs', 'history', 'trash'],
     ]);
   });
 
@@ -97,6 +98,22 @@ describe('visibleSettingsNav', () => {
       );
     expect(ids(false)).toEqual(['account', 'scheduling', 'workspace']);
     expect(ids(true)).toEqual(['account', 'scheduling', 'workspace', 'admin']);
+  });
+
+  // History (spec 0046, AC-4600): one entry for every member, its Workspace changes tab checked on the page itself.
+  it('puts History between Background jobs and Trash for every role, with the clock icon', () => {
+    const owner: Permission[] = ['booking.manage', 'security.manage', 'audit.read', 'jobs.manage'];
+    for (const permissions of [owner, ['booking.manage', 'audit.read'], ['booking.manage'], []] as Permission[][]) {
+      const workspace = visibleSettingsNav(settingsNav('acme'), permissions).find((group) => group.id === 'workspace');
+      const ids = workspace?.entries.map((entry) => entry.id) ?? [];
+      expect(ids.slice(ids.indexOf('jobs'), ids.indexOf('jobs') + 3)).toEqual(['jobs', 'history', 'trash']);
+    }
+    const entry = settingsNav('acme')
+      .flatMap((group) => group.entries)
+      .find((each) => each.id === 'history');
+    expect(entry).toEqual({ id: 'history', label: 'History', href: '/w/acme/settings/history', icon: 'clock' });
+    expect(historyHref('acme', 'changes')).toBe('/w/acme/settings/history/changes');
+    expect(historyHref('acme', 'sign-ins')).toBe('/w/acme/settings/history/sign-ins');
   });
 
   it('leaves out a page the member may not open, keeping the rest of its group', () => {
@@ -126,6 +143,9 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/objects')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/jobs/')).toBe('jobs');
+    expect(settingsPageOf('/w/acme/settings/history')).toBe('history');
+    expect(settingsPageOf('/w/acme/settings/history/changes')).toBe('history');
+    expect(settingsPageOf('/w/acme/settings/history/sign-ins')).toBe('history');
     expect(settingsPageOf('/w/acme/settings/members')).toBe('members');
     expect(settingsPageOf('/w/acme/settings/scheduling/round-robin')).toBe('rotations');
     expect(settingsPageOf('/w/acme/settings/admin')).toBe('admin-overview');
@@ -133,6 +153,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/admin/booking-pages')).toBe('admin-pages');
     expect(settingsPageOf('/w/acme/settings/admin/website')).toBe('admin-website');
     expect(settingsPageOf('/w/acme/settings/scheduling/rotations')).toBe('rotations');
+    expect(settingsPageOf('/w/acme/settings/trash')).toBe('trash');
   });
 
   it('keeps the old Calendar address current on Calendars while it redirects', () => {
@@ -144,6 +165,8 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings')).toBeUndefined();
     expect(settingsPageOf('/w/acme/captures/links')).toBeUndefined();
     expect(settingsPageOf('/w/acme/objects/settings/jobs')).toBeUndefined();
+    // The trash's old address redirects into Settings; it marks nothing itself.
+    expect(settingsPageOf('/w/acme/trash')).toBeUndefined();
   });
 
   it('finds the group a page sits in, for its trail', () => {
@@ -152,6 +175,8 @@ describe('settingsPageOf', () => {
     expect(settingsGroupOf(groups, 'calendars')?.label).toBe('Scheduling');
     expect(settingsGroupOf(groups, 'jobs')?.label).toBe('Workspace');
     expect(settingsGroupOf(groups, 'rotations')?.label).toBe('Scheduling');
+    // Settings › Workspace › Trash.
+    expect(settingsGroupOf(groups, 'trash')?.label).toBe('Workspace');
     expect(settingsGroupOf(groups, undefined)).toBeUndefined();
   });
 });

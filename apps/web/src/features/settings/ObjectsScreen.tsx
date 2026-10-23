@@ -10,6 +10,7 @@ import {
   Disclosure,
   EmptyState,
   Icon,
+  InfoTip,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -44,6 +45,13 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'attributes', label: strings.attributesColumn, align: 'end' },
   { id: 'actions', label: strings.actionsColumn, isLabelHidden: true, align: 'end' },
 ];
+
+/** The same columns for someone who may drag the rows: the Object header says what the order is for (SW15). */
+const DRAG_COLUMNS: readonly TableColumn[] = COLUMNS.map((column) =>
+  column.id === 'object'
+    ? { ...column, info: <InfoTip label={strings.objectColumn}>{strings.objectOrderInfo}</InfoTip> }
+    : column,
+);
 
 const number = (value: number) => new Intl.NumberFormat().format(value);
 
@@ -199,7 +207,7 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
   // The live objects' table: the same for everyone, with handles only for those who may move them.
   const liveTable = {
     label: strings.objects,
-    columns: COLUMNS,
+    columns: canManage ? DRAG_COLUMNS : COLUMNS,
     rows: live,
     getRowId: (object: ObjectSummary) => object.id,
     renderCell: liveCell,
@@ -252,10 +260,9 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
       ) : (
         <Table {...liveTable} />
       )}
-      <Disclosure title={strings.archived} count={archived.length}>
-        {archived.length === 0 ? (
-          <EmptyState title={strings.noArchived}>{strings.noArchivedText}</EmptyState>
-        ) : (
+      {/* Only while something is archived (SW18): "Archived 0" opened onto nothing. */}
+      {archived.length > 0 && (
+        <Disclosure title={strings.archived} count={archived.length}>
           <Table
             label={strings.archivedObjects}
             columns={COLUMNS}
@@ -267,8 +274,8 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
               if (object !== undefined) open(object);
             }}
           />
-        )}
-      </Disclosure>
+        </Disclosure>
+      )}
       <NewObjectDialog
         isOpen={isCreating}
         onOpenChange={setCreating}
@@ -306,7 +313,7 @@ export function ObjectsPending() {
       {canManage && <Skeleton width="long" />}
       <Table
         label={strings.objects}
-        columns={COLUMNS}
+        columns={canManage ? DRAG_COLUMNS : COLUMNS}
         rows={[]}
         getRowId={() => ''}
         renderCell={() => null}

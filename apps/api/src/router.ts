@@ -1,5 +1,6 @@
 import { accessRouter } from './modules/access/router.ts';
 import { attributesRouter } from './modules/attributes/router.ts';
+import { auditRouter } from './modules/audit/router.ts';
 import { calendarRouter } from './modules/calendar/router.ts';
 import { formsRouter } from './modules/forms/router.ts';
 import { homeRouter } from './modules/home/router.ts';
@@ -86,6 +87,7 @@ export const router = base.router({
   schedules: schedulesRouter,
   rotations: rotationsRouter,
   routing: routingRouter,
+  audit: auditRouter,
   search: searchRouter,
   recents: recentsRouter,
   nav: navRouter,
