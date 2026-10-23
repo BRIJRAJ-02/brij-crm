@@ -91,6 +91,10 @@ const figure = (value: number, before: number): OperatorFigure => ({ value, befo
 interface TotalsRow extends Record<string, unknown> {
   workspaces: number;
   workspaces_made: number;
+}
+
+interface DailyRow extends Record<string, unknown> {
+  day: string;
   records_made: number;
   bookings_made: number;
   submissions: number;
@@ -111,8 +115,6 @@ interface MemberRow extends Record<string, unknown> {
   role: string;
   status: string;
   records_made: number;
-  notes_made: number;
-  tasks_made: number;
   bookings_hosted: number;
   pages_owned: number;
 }
@@ -135,21 +137,34 @@ interface PageRow extends Record<string, unknown> {
 const totals = (db: Database, from: string, to: string) =>
   definer<TotalsRow>(db, sql`select * from crm_operator_totals(${from}::date, ${to}::date)`).then((rows) => rows[0]);
 
-const workspacesOf = (db: Database, ids: readonly string[], days: DayRange) =>
+const workspacesOf = (db: Database, ids: readonly string[]) =>
   chunked(ids, (chunk) =>
     definer<WorkspaceRow>(
       db,
-      sql`select workspace_id, name, slug, deleted_at::text, members, records from crm_operator_workspaces(${uuids(chunk)}, ${days.from}::date, ${days.to}::date)`,
+      sql`select workspace_id, name, slug, deleted_at::text, members, records from crm_operator_workspaces(${uuids(chunk)})`,
     ),
   );
 
-const membersOf = (db: Database, userIds: readonly string[], days: DayRange) =>
-  chunked(userIds, (chunk) =>
-    definer<MemberRow>(
-      db,
-      sql`select * from crm_operator_members(${uuids(chunk)}, ${days.from}::date, ${days.to}::date)`,
+/** The most (workspace, person) pairs one members call takes. */
+const PAIRS_MAX = 400;
+
+/** Each member row of these people, asked by the (workspace, person) pairs the directory holds. */
+async function membersOf(deps: OperatorDeps, userIds: readonly string[], days: DayRange): Promise<MemberRow[]> {
+  const pairs = await deps.identity.operatorMemberships(userIds);
+  const chunks: (typeof pairs)[number][][] = [];
+  for (let start = 0; start < pairs.length; start += PAIRS_MAX) chunks.push(pairs.slice(start, start + PAIRS_MAX));
+  const answers = await Promise.all(
+    chunks.map((chunk) =>
+      definer<MemberRow>(
+        deps.db,
+        sql`select * from crm_operator_members(${uuids(chunk.map((pair) => pair.workspaceId))}, ${uuids(
+          chunk.map((pair) => pair.userId),
+        )}, ${days.from}::date, ${days.to}::date)`,
+      ),
     ),
   );
+  return answers.flat();
+}
 
 const pageDays = (db: Database, from: string, to: string, page?: { workspaceId: string; pageId: string }) =>
   definer<OperatorPageDay & Record<string, unknown>>(
@@ -172,27 +187,36 @@ const pageTotals = (days: readonly OperatorPageDay[], before: readonly OperatorP
 /** Overview (AC-1629): people, activity, workspaces, records, bookings and submissions, with daily bars. */
 export async function operatorOverview(deps: OperatorDeps, period: OperatorPeriod): Promise<OperatorOverview> {
   const days = periodDays(period, deps.now?.() ?? new Date());
+  // One daily read over both periods: each tenant's recent rows are read once, then summed on either side of `from`.
   const [people, now, before, daily] = await Promise.all([
     deps.identity.operatorPeople(days, days.today),
     totals(deps.db, days.from, days.to),
     totals(deps.db, days.before, days.from),
-    definer<{ day: string; records_made: number; bookings_made: number }>(
+    definer<DailyRow>(
       deps.db,
-      sql`select to_char(day, 'YYYY-MM-DD') as day, records_made, bookings_made from crm_operator_daily(${days.from}::date, ${days.to}::date)`,
+      sql`select to_char(day, 'YYYY-MM-DD') as day, records_made, bookings_made, submissions from crm_operator_daily(${days.before}::date, ${days.to}::date)`,
     ),
   ]);
   const made = new Map(daily.map((row) => [row.day, row]));
+  const sum = (key: 'records_made' | 'bookings_made' | 'submissions', inPeriod: boolean) =>
+    daily.reduce((total, row) => total + (row.day >= days.from === inPeriod ? row[key] : 0), 0);
+  const both = (key: 'records_made' | 'bookings_made' | 'submissions') => figure(sum(key, true), sum(key, false));
   return {
     ...rangeOf(days),
     people: { total: people.total, new: figure(people.made, people.madeBefore) },
-    active: { today: people.activeToday, week: people.activeWeek, month: people.activeMonth },
+    active: {
+      period: figure(people.activePeriod, people.activeBefore),
+      today: people.activeToday,
+      week: people.activeWeek,
+      month: people.activeMonth,
+    },
     workspaces: {
       total: now?.workspaces ?? 0,
       new: figure(now?.workspaces_made ?? 0, before?.workspaces_made ?? 0),
     },
-    records: figure(now?.records_made ?? 0, before?.records_made ?? 0),
-    bookings: figure(now?.bookings_made ?? 0, before?.bookings_made ?? 0),
-    submissions: figure(now?.submissions ?? 0, before?.submissions ?? 0),
+    records: both('records_made'),
+    bookings: both('bookings_made'),
+    submissions: both('submissions'),
     days: people.days.map((day) => ({
       day: day.day,
       signups: day.signups,
@@ -231,7 +255,7 @@ export async function operatorUsers(
   });
   const usage = usageByUser(
     await membersOf(
-      deps.db,
+      deps,
       people.map((person) => person.id),
       days,
     ),
@@ -278,9 +302,9 @@ export async function operatorUser(
   const days = periodDays(input.period, deps.now?.() ?? new Date());
   const person = await deps.identity.operatorPerson(input.userId, days);
   if (person === undefined) throw refuse('NOT_FOUND', 'There is no account with that id.');
-  const members = await membersOf(deps.db, [person.id], days);
+  const members = await membersOf(deps, [person.id], days);
   const ids = [...new Set([...person.workspaceIds, ...members.map((member) => member.workspace_id)])];
-  const workspaces = new Map((await workspacesOf(deps.db, ids, days)).map((row) => [row.workspace_id, row]));
+  const workspaces = new Map((await workspacesOf(deps.db, ids)).map((row) => [row.workspace_id, row]));
   const usage = usageByUser(members).get(person.id);
   const active = new Set(person.days);
   const list: OperatorUserWorkspace[] = members.flatMap((member) => {
@@ -297,8 +321,6 @@ export async function operatorUser(
         members: workspace.members,
         records: workspace.records,
         recordsMade: member.records_made,
-        notesMade: member.notes_made,
-        tasksMade: member.tasks_made,
         bookingsHosted: member.bookings_hosted,
         pagesOwned: member.pages_owned,
       },
@@ -401,6 +423,7 @@ export async function operatorSite(deps: OperatorDeps, period: OperatorPeriod): 
   const facts = await deps.identity.siteFacts(days);
   return {
     ...rangeOf(days),
+    hasVisits: facts.hasVisits,
     visitors: figure(facts.visitors, facts.visitorsBefore),
     views: figure(facts.views, facts.viewsBefore),
     days: [...facts.days],

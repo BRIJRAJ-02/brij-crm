@@ -353,8 +353,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_operator_page_days',
       ],
       [
-        'crm_operator_workspaces(uuid[], date, date)',
-        'crm_operator_members(uuid[], date, date)',
+        'crm_operator_workspaces(uuid[])',
+        'crm_operator_members(uuid[], uuid[], date, date)',
         'crm_operator_totals(date, date)',
         'crm_operator_daily(date, date)',
         'crm_operator_pages(date, date, uuid)',
@@ -470,9 +470,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       form_submissions: ['form_id', 'received_at', 'workspace_id'],
       forms: ['id', 'workspace_id'],
       members: ['id', 'role', 'status', 'user_id', 'workspace_id'],
-      notes: ['created_at', 'created_by_member_id', 'workspace_id'],
       records: ['created_at', 'created_by_member_id', 'deleted_at', 'object_id', 'workspace_id'],
-      tasks: ['created_at', 'created_by_member_id', 'workspace_id'],
       workspaces: ['created_at', 'deleted_at', 'id', 'name', 'slug'],
     };
     expect(columns.rows).toEqual(

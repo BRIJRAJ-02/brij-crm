@@ -176,6 +176,8 @@ export interface SessionContext {
   sessionId: string;
   /** What the access door asks of this session: its last proof, and whether its person has a second factor. */
   doorSession: DoorSession;
+  /** How this session last proved itself: the operator console asks for a second factor (spec 0047). */
+  verifiedWith: 'email' | 'second_factor';
 }
 
 export const base = implement(contract).$context<RequestContext>();
@@ -208,6 +210,7 @@ export const requireSession = os.$context<RequestContext>().middleware(async ({ 
       user: session.user,
       sessionId: session.sessionId,
       doorSession: doorSession(session),
+      verifiedWith: session.verifiedWith ?? 'email',
     },
   });
 });
@@ -263,14 +266,17 @@ export const requireMember = os
 export const OPERATOR_FRESH_MS = 12 * 60 * 60 * 1000;
 
 /** The id an operator read names, when it names one: the person or the booking page. */
-function operatorTarget(input: unknown): { readonly target?: string; readonly period?: string } {
+function operatorTarget(input: unknown): { readonly target?: string; readonly period?: string; readonly q?: string } {
   if (typeof input !== 'object' || input === null) return {};
   const fields = input as Record<string, unknown>;
   const target = [fields['userId'], fields['pageId']].find((value) => typeof value === 'string');
   const period = fields['period'];
+  const q = fields['q'];
   return {
     ...(typeof target === 'string' && UUID.test(target) ? { target } : {}),
     ...(typeof period === 'string' && /^(7|30|90)d$/.test(period) ? { period } : {}),
+    // Who looked whom up: the users list's search, as typed (the contract caps it at 100).
+    ...(typeof q === 'string' && q.trim() !== '' ? { q: q.trim().slice(0, 100) } : {}),
   };
 }
 
@@ -279,8 +285,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * The operator gate (spec 0047): a person on `OPERATOR_EMAILS` with a
  * verified email, else NOT_FOUND, as for a procedure that doesn't exist;
- * then two factor on (TWO_FACTOR_REQUIRED) and a sign in or step up within
- * 12 hours (SIGN_IN_AGAIN). Each read is written to `auth.operator_event`
+ * then two factor on (TWO_FACTOR_REQUIRED) and this session proven with it
+ * within 12 hours, at sign in or by a step up (SIGN_IN_AGAIN). Each read is written to `auth.operator_event`
  * before it runs, and fails if that write fails (AC-1620).
  */
 export const requireOperator = os
@@ -293,8 +299,12 @@ export const requireOperator = os
         'Turn on two factor in Account, Sign in and devices, to open the super admin pages.',
       );
     }
-    if (Date.now() - context.doorSession.verifiedAt.getTime() > OPERATOR_FRESH_MS) {
-      throw apiError('SIGN_IN_AGAIN', 'Sign in again to open the super admin pages.');
+    // Proven with the app within 12 hours: a remembered device, or an email code step up, isn't enough here.
+    if (
+      context.verifiedWith !== 'second_factor' ||
+      Date.now() - context.doorSession.verifiedAt.getTime() > OPERATOR_FRESH_MS
+    ) {
+      throw apiError('SIGN_IN_AGAIN', 'Confirm it’s you with your authenticator app to open the super admin pages.');
     }
     await context.identity.logOperatorEvent({
       userId: context.user.id,

@@ -1,5 +1,5 @@
 {
-  "id": "ef757ff8-089c-4f41-83ca-56598267b020",
+  "id": "856ee3c7-df97-49ca-a4a3-52209e11da8c",
   "prevId": "6cabf1ce-2685-4631-a80a-ddfe941e450f",
   "version": "7",
   "dialect": "postgresql",
@@ -17775,6 +17775,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "q": {
+          "name": "q",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "request_id": {
           "name": "request_id",
           "type": "text",
@@ -17815,6 +17821,10 @@
         "operator_event_request": {
           "name": "operator_event_request",
           "value": "char_length(\"auth\".\"operator_event\".\"request_id\") between 1 and 100"
+        },
+        "operator_event_q": {
+          "name": "operator_event_q",
+          "value": "char_length(\"auth\".\"operator_event\".\"q\") between 1 and 100"
         }
       },
       "isRLSEnabled": false
@@ -18735,6 +18745,27 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_created": {
+          "name": "user_created",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}

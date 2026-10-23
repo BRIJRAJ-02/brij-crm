@@ -58,6 +58,8 @@ export type OperatorOverviewDay = z.infer<typeof OperatorOverviewDay>;
 export const OperatorOverview = OperatorRange.extend({
   people: z.object({ total: z.number().int().nonnegative(), new: OperatorFigure }),
   active: z.object({
+    /** Users active on any day of the period, against the period before. */
+    period: OperatorFigure,
     today: z.number().int().nonnegative(),
     week: z.number().int().nonnegative(),
     month: z.number().int().nonnegative(),
@@ -123,10 +125,9 @@ export const OperatorUserWorkspace = z.object({
   status: z.string(),
   deleted: z.boolean(),
   members: z.number().int().nonnegative(),
+  /** Live records in the workspace, counted to `OPERATOR_RECORDS_CAP` at most: past it, read as "100,000+". */
   records: z.number().int().nonnegative(),
   recordsMade: z.number().int().nonnegative(),
-  notesMade: z.number().int().nonnegative(),
-  tasksMade: z.number().int().nonnegative(),
   bookingsHosted: z.number().int().nonnegative(),
   pagesOwned: z.number().int().nonnegative(),
 });
@@ -212,8 +213,16 @@ export const OperatorRank = z.object({
 /** A ranked count. */
 export type OperatorRank = z.infer<typeof OperatorRank>;
 
+/** The most live records a workspace is counted to (its row reads "100,000+" past it). */
+export const OPERATOR_RECORDS_CAP = 100_000;
+
+/** The most booking pages the list holds, most viewed first. */
+export const OPERATOR_PAGES_MAX = 500;
+
 /** The website's figures (AC-1632). */
 export const OperatorSite = OperatorRange.extend({
+  /** Whether the site ever sent a visit: false means it isn't counting yet. */
+  hasVisits: z.boolean(),
   visitors: OperatorFigure,
   views: OperatorFigure,
   days: z.array(

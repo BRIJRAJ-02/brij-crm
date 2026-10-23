@@ -40,6 +40,8 @@ export interface OperatorEventInput {
   readonly target?: string;
   readonly period?: string;
   readonly requestId: string;
+  /** The users list's search, when there was one (at most 100 characters). */
+  readonly q?: string;
 }
 
 /** The people side of Overview. */
@@ -50,6 +52,9 @@ export interface OperatorPeopleFacts {
   readonly activeToday: number;
   readonly activeWeek: number;
   readonly activeMonth: number;
+  /** People active on any day of the range, and of the range before it. */
+  readonly activePeriod: number;
+  readonly activeBefore: number;
   /** Every day in the range, in order. */
   readonly days: readonly { readonly day: string; readonly signups: number; readonly active: number }[];
 }
@@ -86,6 +91,8 @@ export interface SiteRank {
 
 /** The website's figures. */
 export interface SiteFacts {
+  /** Whether the site ever sent a visit: none means it isn't counting yet. */
+  readonly hasVisits: boolean;
   readonly visitors: number;
   readonly views: number;
   readonly visitorsBefore: number;
@@ -120,6 +127,10 @@ export interface OperatorIdentity {
   }): Promise<{ readonly people: readonly OperatorPerson[]; readonly total: number }>;
   /** One person's page, or undefined when there is no such account. */
   operatorPerson(userId: string, range: DayRange): Promise<OperatorPersonDetail | undefined>;
+  /** The workspaces each of these people is in, from the directory: what the members definer is asked about. */
+  operatorMemberships(
+    userIds: readonly string[],
+  ): Promise<readonly { readonly userId: string; readonly workspaceId: string }[]>;
   /** People by id, for naming booking page owners: id, name and email only. */
   operatorNames(
     userIds: readonly string[],
@@ -140,17 +151,33 @@ const checkRange = (range: DayRange) => DAY.test(range.from) && DAY.test(range.t
 
 /** The console's piece of the identity store, on the identity login's Drizzle instance. */
 export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown>>): OperatorIdentity {
-  const rank = async (range: DayRange, column: SQL): Promise<SiteRank[]> => {
-    const result = await db.execute<{ name: string; visitors: number; views: number }>(sql`
-      select ${column} as name, count(distinct (v.at at time zone 'UTC')::date || v.visitor)::int as visitors,
+  /** Every ranking in one pass over the range's visits (grouping sets), each cut to its top `RANK_MAX`. */
+  const ranks = async (range: DayRange) => {
+    const result = await db.execute<{ kind: string; name: string | null; visitors: number; views: number }>(sql`
+      select
+        case grouping(v.path, v.referrer, v.source, v.country, v.device)
+          when 15 then 'pages' when 23 then 'referrers' when 27 then 'sources' when 29 then 'countries'
+          else 'devices' end as kind,
+        coalesce(v.path, v.referrer, v.source, v.country, v.device) as name,
+        count(distinct (v.at at time zone 'UTC')::date || v.visitor)::int as visitors,
         count(*)::int as views
       from auth.site_visit v
-      where v.at >= ${startOf(range.from)} and v.at < ${startOf(range.to)} and ${column} is not null
-      group by 1
-      order by 2 desc, 3 desc, 1
-      limit ${RANK_MAX}
+      where v.at >= ${startOf(range.from)} and v.at < ${startOf(range.to)}
+      group by grouping sets ((v.path), (v.referrer), (v.source), (v.country), (v.device))
     `);
-    return result.rows;
+    const of = (kind: string): SiteRank[] =>
+      result.rows
+        .filter((row): row is typeof row & { name: string } => row.kind === kind && row.name !== null)
+        .map(({ name, visitors, views }) => ({ name, visitors, views }))
+        .sort((a, b) => b.visitors - a.visitors || b.views - a.views || (a.name < b.name ? -1 : 1))
+        .slice(0, RANK_MAX);
+    return {
+      pages: of('pages'),
+      referrers: of('referrers'),
+      sources: of('sources'),
+      countries: of('countries'),
+      devices: of('devices'),
+    };
   };
 
   return {
@@ -160,6 +187,7 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
         insert into auth.activity_day (user_id, day)
         values (${userId}, (now() at time zone 'UTC')::date)
         on conflict (user_id, day) do update set last_at = now()
+          where auth.activity_day.last_at < now() - interval '5 minutes'
       `);
     },
 
@@ -173,8 +201,9 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
 
     async logOperatorEvent(event) {
       await db.execute(sql`
-        insert into auth.operator_event (user_id, action, target, period, request_id)
-        values (${event.userId}, ${event.action}, ${event.target ?? null}, ${event.period ?? null}, ${event.requestId})
+        insert into auth.operator_event (user_id, action, target, period, request_id, q)
+        values (${event.userId}, ${event.action}, ${event.target ?? null}, ${event.period ?? null}, ${event.requestId},
+          ${event.q === undefined || event.q === '' ? null : event.q.slice(0, 100)})
       `);
     },
 
@@ -187,6 +216,8 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
         today: number;
         week: number;
         month: number;
+        active_period: number;
+        active_before: number;
       }>(sql`
         select
           (select count(*)::int from auth.user) as total,
@@ -198,19 +229,29 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
           (select count(distinct a.user_id)::int from auth.activity_day a
             where a.day > ${today}::date - 7 and a.day <= ${today}::date) as week,
           (select count(distinct a.user_id)::int from auth.activity_day a
-            where a.day > ${today}::date - 30 and a.day <= ${today}::date) as month
+            where a.day > ${today}::date - 30 and a.day <= ${today}::date) as month,
+          (select count(distinct a.user_id)::int from auth.activity_day a
+            where a.day >= ${range.from}::date and a.day < ${range.to}::date) as active_period,
+          (select count(distinct a.user_id)::int from auth.activity_day a
+            where a.day >= ${range.before}::date and a.day < ${range.from}::date) as active_before
       `);
       const days = await db.execute<{ day: string; signups: number; active: number }>(sql`
-        select to_char(d.day, 'YYYY-MM-DD') as day,
-          (select count(*)::int from auth.user u
-            where u.created_at >= d.day::timestamp at time zone 'UTC'
-              and u.created_at < (d.day + 1)::timestamp at time zone 'UTC') as signups,
-          (select count(*)::int from auth.activity_day a where a.day = d.day) as active
+        select to_char(d.day, 'YYYY-MM-DD') as day, coalesce(s.n, 0)::int as signups, coalesce(a.n, 0)::int as active
         from (
           select g::date as day
           from generate_series(${range.from}::date::timestamp, ${range.to}::date::timestamp - interval '1 day',
             interval '1 day') g
         ) d
+        left join (
+          select (u.created_at at time zone 'UTC')::date as day, count(*) as n from auth.user u
+          where u.created_at >= ${startOf(range.from)} and u.created_at < ${startOf(range.to)}
+          group by 1
+        ) s on s.day = d.day
+        left join (
+          select a.day, count(*) as n from auth.activity_day a
+          where a.day >= ${range.from}::date and a.day < ${range.to}::date
+          group by 1
+        ) a on a.day = d.day
         order by d.day
       `);
       const row = totals.rows[0];
@@ -221,6 +262,8 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
         activeToday: row?.today ?? 0,
         activeWeek: row?.week ?? 0,
         activeMonth: row?.month ?? 0,
+        activePeriod: row?.active_period ?? 0,
+        activeBefore: row?.active_before ?? 0,
         days: days.rows,
       };
     },
@@ -332,6 +375,19 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
       };
     },
 
+    async operatorMemberships(userIds) {
+      const ids = [...new Set(userIds.filter((id) => UUID.test(id)))];
+      if (ids.length === 0) return [];
+      const rows = await db.execute<{ user_id: string; workspace_id: string }>(sql`
+        select m.user_id, m.workspace_id from auth.workspace_membership m
+        where m.user_id in (${sql.join(
+          ids.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})
+      `);
+      return rows.rows.map((row) => ({ userId: row.user_id, workspaceId: row.workspace_id }));
+    },
+
     async operatorNames(userIds) {
       const ids = [...new Set(userIds.filter((id) => UUID.test(id)))];
       if (ids.length === 0) return new Map();
@@ -380,14 +436,13 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
         order by d.day
       `);
       const row = totals.rows[0];
-      const [pages, referrers, sources, countries, devices] = await Promise.all([
-        rank(range, sql`v.path`),
-        rank(range, sql`v.referrer`),
-        rank(range, sql`v.source`),
-        rank(range, sql`v.country`),
-        rank(range, sql`v.device`),
+      const [ranked, ever] = await Promise.all([
+        ranks(range),
+        db.execute<{ any: boolean }>(sql`select exists (select 1 from auth.site_visit) as any`),
       ]);
+      const { pages, referrers, sources, countries, devices } = ranked;
       return {
+        hasVisits: ever.rows[0]?.any === true,
         visitors: row?.visitors ?? 0,
         views: row?.views ?? 0,
         visitorsBefore: row?.visitors_before ?? 0,

@@ -300,8 +300,9 @@ export interface IdentityStore extends OperatorIdentity {
   noteDevice(userId: string, deviceKey: string): Promise<void>;
   /**
    * Deletes security events and known devices last seen before `before`, and
-   * the operator console's activity days, site visits and log rows (spec 0047,
-   * AC-1628), at most `limit` of each (AC-898's year). Answers how many went.
+   * the operator console's activity days and site visits (spec 0047,
+   * AC-1628), at most `limit` of each (AC-898's year), and the console's own
+   * log a year later. Answers how many went.
    */
   sweepAuthHistory(before: Date, limit: number): Promise<number>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
@@ -764,8 +765,10 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
       const visits = await db.execute<{ id: string }>(
         sql`delete from auth.site_visit where id in (select id from auth.site_visit where at < ${before.toISOString()}::timestamptz order by at limit ${cap}) returning id`,
       );
+      // The console's own log is kept a year longer than what it reads (spec 0047): two years in all.
+      const logBefore = new Date(before.getTime() - 365 * 86_400_000).toISOString();
       const reads = await db.execute<{ id: string }>(
-        sql`delete from auth.operator_event where id in (select id from auth.operator_event where at < ${before.toISOString()}::timestamptz order by at limit ${cap}) returning id`,
+        sql`delete from auth.operator_event where id in (select id from auth.operator_event where at < ${logBefore}::timestamptz order by at limit ${cap}) returning id`,
       );
       return events.rows.length + devices.rows.length + days.rows.length + visits.rows.length + reads.rows.length;
     },

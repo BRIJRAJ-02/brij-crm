@@ -57,6 +57,8 @@ export const user = auth.table(
   },
   (t) => [
     uniqueIndex('user_email').on(t.email),
+    // The operator console's users list, newest first (spec 0047), and its sign ups a day.
+    index('user_created').on(t.createdAt, t.id),
     // Better Auth lowercases every email it writes; this keeps any other writer from making a second identity.
     check('user_email_lowercase', sql`${t.email} = lower(${t.email})`),
   ],
@@ -474,7 +476,7 @@ export const siteVisit = auth.table(
 /**
  * The operator console's own log (spec 0047, AC-1620): one row per read, written
  * before the read runs. No foreign key to the operator: the log outlives the
- * account. Deleted after a year by the identity sweep.
+ * account. Deleted after two years by the identity sweep.
  */
 export const operatorEvent = auth.table(
   'operator_event',
@@ -488,6 +490,8 @@ export const operatorEvent = auth.table(
     target: uuid('target'),
     /** The period the read asked for: `7d`, `30d` or `90d`. */
     period: text('period'),
+    /** The users list's search as typed, when there was one: who looked whom up is what this log answers. */
+    q: text('q'),
     requestId: text('request_id').notNull(),
   },
   (t) => [
@@ -495,5 +499,6 @@ export const operatorEvent = auth.table(
     check('operator_event_action', sql`${t.action} ~ '^operator\\.[a-zA-Z]{1,40}$'`),
     check('operator_event_period', sql`${t.period} in ('7d', '30d', '90d')`),
     check('operator_event_request', sql`char_length(${t.requestId}) between 1 and 100`),
+    check('operator_event_q', sql`char_length(${t.q}) between 1 and 100`),
   ],
 );

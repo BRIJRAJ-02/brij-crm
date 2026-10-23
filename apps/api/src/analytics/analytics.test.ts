@@ -1,7 +1,7 @@
 // The console's counting helpers (spec 0047): daily visitor ids, device
 // classes, machines, the beacon's cleaning, and the activity throttle.
 import { describe, expect, it } from 'vitest';
-import { cleanPath, cleanReferrer, cleanSource } from '../public/site.ts';
+import { cleanPath, cleanReferrer, cleanSource, limitAddress } from '../public/site.ts';
 import { createActivityNoter } from './activity.ts';
 import { deviceOf, isMachine, visitorId, visitorKey } from './visitor.ts';
 
@@ -39,6 +39,14 @@ describe("the beacon's cleaning (AC-1627)", () => {
     expect(cleanPath('pricing')).toBeUndefined();
     expect(cleanPath('/a b')).toBeUndefined();
     expect(cleanPath(`/${'a'.repeat(300)}`)).toHaveLength(200);
+  });
+
+  it('counts an IPv6 address by its /64, and an IPv4 one as is', () => {
+    expect(limitAddress('2001:db8:85a3:0042:1000:8a2e:0370:7334')).toBe('2001:db8:85a3:42::/64');
+    expect(limitAddress('2001:db8:85a3:42::1')).toBe('2001:db8:85a3:42::/64');
+    expect(limitAddress('2001:db8::1')).toBe('2001:db8:0:0::/64');
+    expect(limitAddress('10.0.0.1')).toBe('10.0.0.1');
+    expect(limitAddress(undefined)).toBe('unknown');
   });
 
   it('keeps a referring host, never the site itself, and a plain source', () => {

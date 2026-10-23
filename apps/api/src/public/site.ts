@@ -17,6 +17,28 @@ export const SITE_HIT_PATH = '/api/public/site/hit';
 /** 60 hits a minute per address (AC-1627): a person reading fast, never a script. */
 export const SITE_HIT_LIMIT = { max: 60, windowMs: 60_000 } as const;
 
+/**
+ * 3,000 hits a minute per site in each api instance, whatever their addresses: a flood from many addresses (a /64
+ * of IPv6 ones costs nothing) never grows the table faster than a busy day's real traffic.
+ */
+export const SITE_HIT_SITE_LIMIT = { max: 3_000, windowMs: 60_000 } as const;
+
+/** The address a limit counts: an IPv4 address as is, an IPv6 one by its /64, which one subscriber holds. */
+export function limitAddress(ip: string | undefined): string {
+  if (ip === undefined) return 'unknown';
+  if (!ip.includes(':')) return ip;
+  const [head = '', tail = ''] = ip.toLowerCase().split('::');
+  const left = head === '' ? [] : head.split(':');
+  const right = tail === '' ? [] : tail.split(':');
+  const groups = ip.includes('::')
+    ? [...left, ...Array<string>(8 - left.length - right.length).fill('0'), ...right]
+    : left;
+  return `${groups
+    .slice(0, 4)
+    .map((group) => group.replace(/^0+(?=.)/, ''))
+    .join(':')}::/64`;
+}
+
 /** The largest beacon body read: a path, a host and a source. */
 const BODY_MAX = 2048;
 
@@ -77,7 +99,9 @@ export function mountSiteHits(app: Hono<{ Variables: SiteVariables }>, deps: Sit
     const userAgent = c.req.header('user-agent');
     if (isMachine(userAgent) || userAgent === undefined) return done();
     const ip = c.get('clientIp');
-    if (!deps.limiter(`site:${ip ?? 'unknown'}`, SITE_HIT_LIMIT).allowed) return done();
+    const site = new URL(origin).hostname;
+    if (!deps.limiter(`site:all:${site}`, SITE_HIT_SITE_LIMIT).allowed) return done();
+    if (!deps.limiter(`site:${limitAddress(ip)}`, SITE_HIT_LIMIT).allowed) return done();
     const text = await c.req.text();
     if (text.length > BODY_MAX) return done();
     let body: unknown;
@@ -90,7 +114,6 @@ export function mountSiteHits(app: Hono<{ Variables: SiteVariables }>, deps: Sit
     if (!hit.success) return done();
     const path = cleanPath(hit.data.path);
     if (path === undefined) return done();
-    const site = new URL(origin).hostname;
     const referrer = cleanReferrer(hit.data.referrer, site);
     const source = cleanSource(hit.data.source);
     const country = c.get('geo')?.country;
