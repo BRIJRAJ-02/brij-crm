@@ -582,6 +582,8 @@ export function MembersScreen({
                     rows={requests}
                     getRowId={(request) => request.id}
                     renderCell={requestCell}
+                    // On a phone the table scrolls sideways in its own frame, as Members' does.
+                    isScrollable
                     emptyState={<EmptyState icon="user-plus" title={strings.noRequests} />}
                   />
                 </SettingsSection>
@@ -593,6 +595,8 @@ export function MembersScreen({
                   rows={invitations}
                   getRowId={(invitation) => invitation.id}
                   renderCell={invitationCell}
+                  // On a phone the table scrolls sideways in its own frame, as Members' does.
+                  isScrollable
                   emptyState={<EmptyState icon="mail" title={strings.noInvitations} />}
                 />
               </SettingsSection>
