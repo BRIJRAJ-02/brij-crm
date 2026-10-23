@@ -89,7 +89,7 @@ describe('the confirmation (AC-636)', () => {
     });
     expect(visitor?.rows).toContainEqual({
       label: 'When',
-      value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM (Europe/London)',
+      value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM, London time (GMT)',
     });
     expect(visitor?.ics?.method).toBe('REQUEST');
     expect(visitor?.ics?.content).toContain(`UID:${b.bookingId}@app.example`);
@@ -101,6 +101,13 @@ describe('the confirmation (AC-636)', () => {
     expect(unfolded(host?.ics?.content)).toContain('MAILTO:grace@navy.example');
     expect(unfolded(host?.ics?.content)).toContain('MAILTO:ada@example.com');
     expect(host?.rows).toContainEqual({ label: 'Note', value: 'About the compiler.' });
+    // A video call with no calendar to make its link promises none: the host sends it (QA Q77).
+    expect(visitor?.rows).toContainEqual({ label: 'Where', value: 'Video call. Ada Host will send you the link.' });
+    expect(guest?.rows).toContainEqual({ label: 'Where', value: 'Video call. Ada Host will send you the link.' });
+    expect(host?.rows).toContainEqual({
+      label: 'Where',
+      value: 'Video call. No link was made, so send the guest one.',
+    });
     // Each reader's footer says why they got it.
     expect(visitor?.why).toBe('You got this email because this address was used to book Intro call with Ada Host.');
     expect(host?.why).toBe('You got this email because you host Intro call.');
@@ -131,7 +138,7 @@ describe('changes (AC-638 to AC-640)', () => {
     expect(moved.messages.map((mail) => mail.to)).toEqual(['grace@navy.example', 'ada@example.com']);
     expect(moved.messages[0]?.rows).toContainEqual({
       label: 'Was',
-      value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM (Europe/London)',
+      value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM, London time (GMT)',
     });
     expect(moved.messages[0]?.ics?.content).not.toContain('SEQUENCE:0');
     expect(moved.messages[1]?.ics?.method).toBe('REQUEST');
@@ -199,7 +206,16 @@ describe('reminders (AC-637)', () => {
 describe('whenLine', () => {
   it('writes the range in the zone, the zone named', () => {
     expect(whenLine(new Date('2026-11-02T09:00:00Z'), new Date('2026-11-02T09:30:00Z'), 'America/New_York')).toBe(
-      'Monday 2 November 2026, 4:00 AM to 4:30 AM (America/New York)',
+      'Monday 2 November 2026, 4:00 AM to 4:30 AM, New York time (GMT-5)',
     );
+  });
+
+  it('names the zone as the booking pages do, never by its raw or old id (QA Q78)', () => {
+    const start = new Date('2026-10-27T04:00:00Z');
+    const end = new Date('2026-10-27T04:30:00Z');
+    expect(whenLine(start, end, 'Asia/Calcutta')).toBe(
+      'Tuesday 27 October 2026, 9:30 AM to 10:00 AM, Kolkata time (GMT+5:30)',
+    );
+    expect(whenLine(start, end, 'UTC')).toBe('Tuesday 27 October 2026, 4:00 AM to 4:30 AM, UTC');
   });
 });

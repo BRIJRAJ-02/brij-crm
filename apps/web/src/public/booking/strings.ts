@@ -126,7 +126,8 @@ export const strings = {
   outlook: 'Outlook',
   apple: 'Apple / .ics',
   icsFile: 'Apple or any calendar, as an .ics file',
-  video: 'Video call: the link comes with the invitation.',
+  /** A video call with no link made (no calendar that makes one): its host sends it, never a promise (QA Q77). */
+  video: (host: string) => `Video call. ${host} will send you the link.`,
   phoneCall: 'Phone call to the number you gave.',
   cancelledNext: 'Nothing more to do here.',
   pastNext: 'This one has already happened.',

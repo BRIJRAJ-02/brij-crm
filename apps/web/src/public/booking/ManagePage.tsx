@@ -65,7 +65,7 @@ function whereOf(booking: PublicManagedBooking): string {
   if (booking.videoUrl !== undefined) return booking.videoUrl;
   switch (booking.location.type) {
     case 'video':
-      return strings.video;
+      return strings.video(booking.hostName);
     case 'phone':
       return strings.phoneCall;
     default:
@@ -230,7 +230,9 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
                 isAnnounced
                 title={notice === 'moved' ? changeStrings.moved : changeStrings.cancelled}
               >
-                {notice === 'moved' ? changeStrings.movedText : changeStrings.cancelledText(booking.hostName)}
+                {notice === 'moved'
+                  ? changeStrings.movedText(booking.hostName)
+                  : changeStrings.cancelledText(booking.hostName)}
               </Callout>
             ),
           })}
