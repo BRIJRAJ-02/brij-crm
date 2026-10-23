@@ -92,6 +92,27 @@ describe('inviting and accepting (AC-803 to AC-806)', () => {
     });
   });
 
+  it('names the joiner with the invite card’s Your name, made plain, and refuses one too long (QA N14)', async () => {
+    const owner = await memberWithWorkspace(app);
+    const invitee = await signIn(app);
+    await owner.client.invitations.create({
+      workspace: owner.slug,
+      emails: [invitee.email],
+      role: 'member',
+      mutationId: newId(),
+    });
+    const token = tokenIn(invitations.findLast((message) => message.to === invitee.email));
+    const client = rpcClient(app, invitee.cookie);
+    // Too long is refused at the door, and nothing joins.
+    expect((await refusal(() => client.invitations.accept({ token, memberName: 'x'.repeat(81) }))).code).toBe(
+      'INPUT_INVALID',
+    );
+    expect((await client.me.get()).workspaces).toEqual([]);
+    expect(await client.invitations.accept({ token, memberName: ' Joanna\n Smith ' })).toEqual({ slug: owner.slug });
+    const listed = await owner.client.members.list({ workspace: owner.slug });
+    expect(listed.members.map((each) => each.name).sort()).toEqual(['Ada', 'Joanna Smith']);
+  });
+
   it('refuses a member who tries to invite, and a non member', async () => {
     const owner = await memberWithWorkspace(app);
     const outsider = await signIn(app);

@@ -57,6 +57,7 @@ const PHASES = [
   'emails',
   'nav',
   'notifications',
+  'views',
   'expired',
   'items',
   'jobs',
@@ -64,6 +65,9 @@ const PHASES = [
   'exports',
   'imports',
 ] as const;
+
+/** How long a booking page's view counts are kept (spec 0047, AC-1628): a year, by day. */
+const PAGE_VIEWS_KEPT_DAYS = 365;
 
 /** How long a done notification is kept (spec 0038, AC-1175). */
 const DONE_NOTIFICATIONS_KEPT = '90 days';
@@ -95,6 +99,8 @@ const Totals = z.object({
   sidebars: Count.default(0),
   // Added by spec 0038.
   notifications: Count.default(0),
+  // Added by spec 0047: booking page view rows past a year.
+  views: Count.default(0),
   expired: Count,
   items: Count,
   jobs: Count,
@@ -116,6 +122,7 @@ const NO_TOTALS: Totals = {
   emails: 0,
   sidebars: 0,
   notifications: 0,
+  views: 0,
   expired: 0,
   items: 0,
   jobs: 0,
@@ -173,6 +180,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   emails: totals.emails + (more.emails ?? 0),
   sidebars: totals.sidebars + (more.sidebars ?? 0),
   notifications: totals.notifications + (more.notifications ?? 0),
+  views: totals.views + (more.views ?? 0),
   expired: totals.expired + (more.expired ?? 0),
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
@@ -271,6 +279,24 @@ async function oldNotifications(context: WriteContext, at: Checkpoint, limit: nu
   `);
   const count = removed.rowCount ?? 0;
   const totals = plus(at.totals, { notifications: count });
+  return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1f (spec 0047, AC-1628): booking page view rows older than a year,
+ * `limit` a batch, oldest days first. Counts only; no event is stored.
+ */
+async function oldPageViews(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const removed = await context.tx.execute(sql`
+    delete from booking_page_views where (workspace_id, page_id, day, visitor) in (
+      select workspace_id, page_id, day, visitor from booking_page_views
+      where workspace_id = ${context.scope.workspaceId}
+        and day < (now() at time zone 'UTC')::date - ${PAGE_VIEWS_KEPT_DAYS}::integer
+      order by day limit ${limit}
+    )
+  `);
+  const count = removed.rowCount ?? 0;
+  const totals = plus(at.totals, { views: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
 
@@ -541,6 +567,8 @@ export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceP
           return navRows(context, at, limit);
         case 'notifications':
           return oldNotifications(context, at, limit);
+        case 'views':
+          return oldPageViews(context, at, limit);
         case 'expired':
           return expired(context, at, limit);
         case 'items':

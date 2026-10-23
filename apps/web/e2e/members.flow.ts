@@ -2,8 +2,8 @@
 // Members, and each invitation's email reaches Mailpit with its link; the second person, signed in through the link
 // as themself, opens the first person's link and is refused with the address masked, joining nothing; the first
 // signs in through their link, accepts and lands in the workspace, and the owner's Members page shows them; the used
-// link then reads as no longer valid, like any other bad link; Revoke asks first, Cancel keeps the invitation, and
-// Revoke invitation ends it. Then the owner finds the newcomer by search, makes them an admin at once and removes them
+// link then reads as no longer valid, like any other bad link; Cancel invite asks first, Keep invitation keeps the
+// invitation, and Cancel invitation ends it. Then the owner finds the newcomer by search, makes them an admin at once and removes them
 // behind a confirm, after which they are in no workspace. axe in light and dark on the invitation page and the Members
 // page (AC-803 to AC-806, AC-810, AC-811, AC-833).
 import { randomUUID } from 'node:crypto';
@@ -71,7 +71,7 @@ async function workspacesOf(page: Page): Promise<string[]> {
   return me.workspaces.map((workspace) => workspace.slug);
 }
 
-test('invites two people: the wrong address is refused, the invited one joins, and Revoke asks first', async ({
+test('invites two people: the wrong address is refused, the invited one joins, and Cancel invite asks first', async ({
   page,
   browser,
 }, info) => {
@@ -106,8 +106,13 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await invite.getByRole('button', { name: 'Invite 2 people' }).click();
   await expect(invite.getByText(`Invited ${invitee}, ${other}.`, { exact: false })).toBeVisible();
   await invite.getByRole('button', { name: 'Done' }).click();
-  await page.getByRole('tab', { name: /Invitations/ }).click();
+  await page.getByRole('tab', { name: /Joining/ }).click();
   await expect(page.getByRole('rowheader', { name: invitee })).toBeVisible();
+  // Joining holds the pending invitations, then the other ways in: the invite link, then the company email.
+  await expect(page.getByRole('heading', { name: 'Pending invitations' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Other ways to join' })).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'Invite link' })).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'Company email' })).toBeVisible();
   await checkScreen(page, 'members-invitations');
   const link = await inviteLinkFor(page.request, invitee);
 
@@ -136,46 +141,46 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   // The owner's Members page shows the newcomer, and their invitation is gone.
   if (!isLive) await page.reload();
   await page.getByRole('tab', { name: /Members/ }).click();
-  await expect(page.getByRole('rowheader', { name: /grace/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('rowheader', { name: /grace/i })).toBeVisible({ timeout: 15_000 });
   await checkScreen(page, 'members-list');
-  await page.getByRole('tab', { name: /Invitations/ }).click();
+  await page.getByRole('tab', { name: /Joining/ }).click();
   await expect(page.getByRole('rowheader', { name: invitee })).toHaveCount(0);
 
   // The used link now reads as no longer valid, like any other bad link.
   await stranger.goto(link);
   await expect(stranger.getByRole('heading', { level: 1, name: 'This invitation is no longer valid' })).toBeVisible();
 
-  // Revoke asks first: Cancel keeps the invitation; Revoke invitation ends it.
+  // Cancel invite asks first: Keep invitation keeps it; Cancel invitation ends it.
   const actions = page.getByRole('button', { name: `Actions for the invitation to ${other}` });
   await actions.click();
-  await page.getByRole('menuitem', { name: 'Revoke' }).click();
-  const confirm = page.getByRole('alertdialog', { name: `Revoke the invitation to ${other}?` });
+  await page.getByRole('menuitem', { name: 'Cancel invite' }).click();
+  const confirm = page.getByRole('alertdialog', { name: `Cancel the invitation to ${other}?` });
   await expect(confirm).toBeVisible();
-  await confirm.getByRole('button', { name: 'Cancel' }).click();
+  await confirm.getByRole('button', { name: 'Keep invitation' }).click();
   await expect(confirm).toBeHidden();
   await expect(page.getByRole('rowheader', { name: other })).toBeVisible();
   await actions.click();
-  await page.getByRole('menuitem', { name: 'Revoke' }).click();
-  await confirm.getByRole('button', { name: 'Revoke invitation' }).click();
-  await expect(page.getByText(`Invitation to ${other} revoked.`)).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Cancel invite' }).click();
+  await confirm.getByRole('button', { name: 'Cancel invitation' }).click();
+  await expect(page.getByText(`Invitation to ${other} cancelled.`)).toBeVisible();
   await expect(page.getByRole('rowheader', { name: other })).toHaveCount(0);
 
   // Slice 3: the owner finds the newcomer by search, makes them an admin at once, then removes them, which asks first.
   await page.getByRole('tab', { name: /Members/ }).click();
   await page.getByRole('textbox', { name: 'Search members' }).fill('grace');
-  await expect(page).toHaveURL(/[?&]q=grace/);
+  await expect(page).toHaveURL(/[?&]q=grace/i);
   await expect(page.getByRole('rowheader', { name: /Ada Lovelace/ })).toHaveCount(0);
-  const grace = page.getByRole('rowheader', { name: /grace/ });
+  const grace = page.getByRole('rowheader', { name: /grace/i });
   await expect(grace).toBeVisible();
-  await page.getByRole('button', { name: /Role for grace/ }).click();
+  await page.getByRole('button', { name: /Role for grace/i }).click();
   await page.getByRole('option', { name: 'Admin' }).click();
   await expect(page.getByText(/is now an Admin\./)).toBeVisible();
-  await page.getByRole('button', { name: /^Actions for grace/ }).click();
+  await page.getByRole('button', { name: /^Actions for grace/i }).click();
   await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();
-  const remove = page.getByRole('alertdialog', { name: /^Remove grace.* from / });
+  const remove = page.getByRole('alertdialog', { name: /^Remove grace.* from /i });
   await remove.getByRole('button', { name: 'Cancel' }).click();
   await expect(grace).toBeVisible();
-  await page.getByRole('button', { name: /^Actions for grace/ }).click();
+  await page.getByRole('button', { name: /^Actions for grace/i }).click();
   await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();
   // Slice 5: it reads what the removal does first; nothing names them, so there is nobody to hand work to.
   await expect(remove.getByRole('button', { name: 'Remove member' })).toBeEnabled();

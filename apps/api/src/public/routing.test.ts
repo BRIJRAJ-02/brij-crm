@@ -4,11 +4,13 @@
 // a company's field by an option, and a visit's hidden field; a form's rules read a hidden field and send a Large
 // budget on to the team page with one host. Every public answer that carries the page is read as an anonymous
 // visitor: the page's facts, its slots (plain and handed off), the prefill, the viewer, a chat turn, both bookings,
-// the guest page with its slots, calendar file, move and cancel, the handle profile and address, the form and its
-// submit answer, whose signed hand off holds the submission and the page only. None holds a rule: no field, option,
-// host or rotation id, no rule id, name or value, nor the guest's record facts; only what the visitor needs to
-// answer the questions (a question's Show when) leaves the server. The bookings still route by the rules. Then a
-// record fact key of 36 dashes is refused as INPUT_INVALID on a team page and on a form, never answered 500.
+// the guest page with its slots, calendar file, move, guests added and removed, and cancel, the handle profile and
+// address, the form and its submit answer, whose signed hand off holds the submission and the page only. None holds
+// a rule: no field, option, host or rotation id, no rule id, name or value, nor the guest's record facts; only what
+// the visitor needs to answer the questions (a question's Show when) leaves the server. The bookings still route by
+// the rules, as their stored decisions name. Then a record fact key of 36 dashes is refused as INPUT_INVALID on a
+// team page and on a form, never answered 500; and a well formed one on a form's draft is refused as CONFIG_INVALID,
+// in publish's words, with nothing stored, since only a team page's rules read a person's or a company's field.
 import { defaultAvailability, type RoutingRule } from '@crm/contracts';
 import { newId, type BookingCalendar } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
@@ -19,7 +21,7 @@ import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
 import { createMailpitMailer } from '../mail/mailpit.ts';
 import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts';
 import { MAILPIT_URL, newIp, testConnections } from '../../test/sign-in.ts';
-import { failure, memberWithWorkspace } from '../../test/workspace.ts';
+import { failure, memberWithWorkspace, refusalsOf } from '../../test/workspace.ts';
 import { createMemoryLimiter } from './limits.ts';
 
 const { ownerUrl } = inject('testDatabase');
@@ -370,6 +372,16 @@ describe('a team page’s routing rules and an anonymous visitor (spec 0043, spe
     expect(await sentText('guest calendar file', visit(`${guest}/ics`))).toContain('BEGIN:VCALENDAR');
     // Moved later the same afternoon: the guest keeps the host the rule chose.
     await answered('guest move', visit(`${guest}/move`, { start: at('16:00') }));
+    // Two guests invited and one taken off again: each answer is the guest list.
+    expect(
+      await answered(
+        'guest add guests',
+        visit(`${guest}/guests`, { emails: ['ash@visitor.example', 'bo@visitor.example'] }),
+      ),
+    ).toEqual({ added: 2, guests: ['ash@visitor.example', 'bo@visitor.example'] });
+    expect(
+      await answered('guest remove guest', visit(`${guest}/guests/remove`, { email: 'bo@visitor.example' })),
+    ).toEqual({ guests: ['ash@visitor.example'] });
 
     // Ada's handle: the profile lists the team page, and its address names it.
     const handle = `ada-${newId().slice(-8)}`;
@@ -383,6 +395,18 @@ describe('a team page’s routing rules and an anonymous visitor (spec 0043, spe
     expect(booked.map((each) => [each.visitorEmail, each.startsAt, each.hostMemberId])).toEqual([
       ['grace@navy.example', at('15:00'), kimId],
       ['lin@visitor.example', at('16:00'), kimId],
+    ]);
+    // Grace's 15:00 is in Kim's hours alone, so her host can't tell a rule chose: her booking's decision names it.
+    const decided = await testQuery<{ email: string; surface: string; rule: string | null; hosts: string[] | null }>(
+      ownerUrl,
+      `select b.visitor_email as email, d.surface_kind as surface, d.rule_id as rule, d.hosts::text[] as hosts
+       from routing_decisions d join bookings b on b.workspace_id = d.workspace_id and b.id = d.booking_id
+       where d.workspace_id = $1 order by b.starts_at`,
+      [m.workspace.id],
+    );
+    expect(decided).toEqual([
+      { email: 'grace@navy.example', surface: 'booking_page', rule: 'secret-rule', hosts: [kimId] },
+      { email: 'lin@visitor.example', surface: 'form', rule: 'form-route-rule', hosts: [kimId] },
     ]);
     await answered('guest cancel', visit(`${guest}/cancel`, { reason: 'Plans changed.' }));
     expect(read).toEqual([
@@ -400,6 +424,8 @@ describe('a team page’s routing rules and an anonymous visitor (spec 0043, spe
       'guest page slots',
       'guest calendar file',
       'guest move',
+      'guest add guests',
+      'guest remove guest',
       'profile',
       'address',
       'guest cancel',
@@ -462,5 +488,53 @@ describe('a malformed record fact key (it answered 500)', () => {
       mutationId: newId(),
     });
     expect(kept.routing?.rules.map((each) => each.when.rules[0]?.key)).toEqual([jobTitle]);
+  });
+});
+
+describe('a person’s or a company’s field on a form’s draft (security review, 23 October 2026)', () => {
+  it('is refused at save as CONFIG_INVALID, in publish’s words, and nothing is stored', async () => {
+    const m = await memberWithWorkspace(app);
+    const created = await m.client.forms.create({
+      workspace: m.slug,
+      id: newId(),
+      name: 'Contact us',
+      mainObjectId: m.people.id,
+      mutationId: newId(),
+    });
+    const jobTitle = m.attribute('job_title');
+    const refused = await failure(() =>
+      m.client.forms.saveDraft({
+        workspace: m.slug,
+        formId: created.id,
+        expectedRevision: created.revision,
+        mutationId: newId(),
+        document: {
+          ...created.draft,
+          routing: {
+            rules: [
+              {
+                id: 'buyers',
+                name: 'Buyers',
+                when: { join: 'all', rules: [{ key: `person.${jobTitle}`, op: 'is', value: 'zebra cto' }] },
+                then: { kind: 'message', message: '' },
+              },
+            ],
+          },
+        },
+      }),
+    );
+    expect({ code: refused.code, status: refused.status, message: refused.message }).toEqual({
+      code: 'CONFIG_INVALID',
+      status: 422,
+      message: 'Rule 1, “Buyers”, reads a record field, which only a team page’s rules can read. Change it in Routing.',
+    });
+    expect(refusalsOf(refused).map((each) => each.field)).toEqual(['routing']);
+    // Nothing was kept: the draft and its revision are as the form was made, with no trace of the field.
+    const opened = await m.client.forms.get({ workspace: m.slug, formId: created.id });
+    expect({ revision: opened.revision, draft: opened.draft }).toEqual({
+      revision: created.revision,
+      draft: created.draft,
+    });
+    expect(JSON.stringify(opened)).not.toContain(jobTitle);
   });
 });

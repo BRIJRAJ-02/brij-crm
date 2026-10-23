@@ -7,6 +7,7 @@ import {
   handleProblem,
   HANDLE_PATTERN,
   isReservedHandle,
+  profileSections,
   RESERVED_HANDLES,
 } from './handles.ts';
 
@@ -100,5 +101,28 @@ describe('handles', () => {
     expect(PublicBio.safeParse('two\nlines').success).toBe(false);
     expect(PublicBio.safeParse('x'.repeat(161)).success).toBe(false);
     expect(HANDLE_PATTERN.test('ada')).toBe(true);
+  });
+});
+
+describe('profileSections', () => {
+  const page = (id: string, section?: string | null) => ({ id, section });
+
+  it('groups items under their sections where each first appears, ignoring case and spaces, spelled as the first', () => {
+    const sections = profileSections(
+      [page('a'), page('b', 'Sales'), page('c', ' sales '), page('d', null), page('e', 'Support')],
+      (item) => item.section,
+    );
+    expect(sections.map((each) => [each.key, each.title, each.items.map((item) => item.id)])).toEqual([
+      ['', undefined, ['a', 'd']],
+      ['sales', 'Sales', ['b', 'c']],
+      ['support', 'Support', ['e']],
+    ]);
+  });
+
+  it('reads a blank heading as none, and has no sections for no items', () => {
+    expect(profileSections([page('a', '   ')], (item) => item.section)).toEqual([
+      { key: '', items: [{ id: 'a', section: '   ' }] },
+    ]);
+    expect(profileSections([], () => undefined)).toEqual([]);
   });
 });

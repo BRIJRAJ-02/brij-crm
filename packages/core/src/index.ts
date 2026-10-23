@@ -143,6 +143,7 @@ export {
   resendInvite,
   revokeInvite,
   setInviteLink,
+  typedMemberName,
   type AcceptedInvite,
   type AcceptingUser,
   type InviteOutcome,
@@ -386,6 +387,7 @@ export {
   getBookingPage,
   listBookingPages,
   listBookings,
+  reorderProfilePages,
   updateBookingPage,
 } from './booking/pages.ts';
 // Availability schedules (spec 0035): a member's named hours, the one the slot engine resolves for a page, and the
@@ -623,3 +625,21 @@ export { recordsImport } from './imports/kind.ts';
 export { recordsImportUndo } from './imports/undo.ts';
 /** Records exports (spec 0040): a view's records as CSV, on the submissions export's rows, chunks and download. */
 export { getRecordsExport, recordsExport, startRecordsExport, type RecordsExportRecord } from './exports/records.ts';
+// The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.
+export {
+  operatorOverview,
+  operatorPage,
+  operatorPages,
+  operatorSite,
+  operatorUser,
+  operatorUsers,
+  periodDays,
+  type OperatorDeps,
+  type PeriodDays,
+} from './operator/reads.ts';
+/**
+ * Settings › History › Workspace changes (spec 0046): `listAuditEvents` pages the audit log for `audit.read`, and
+ * `toEntryView` is its pure row mapping (only known keys, never a linked record, AC-4610).
+ */
+export { listAuditEvents, AUDIT_CURSOR_MESSAGE } from './audit/audit.ts';
+export { toEntryView, type AuditNames, type AuditRow } from './audit/view.ts';

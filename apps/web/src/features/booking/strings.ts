@@ -110,6 +110,13 @@ export const strings = {
   durations: 'Durations',
   location: 'Location',
   locations: { video: 'Video', address: 'In person', phone: 'Phone', custom: 'Somewhere else' },
+  /** Under Location's Video when the page's owner has no live calendar, so no video link is made (Q57, Q77). */
+  noVideoLink: 'No calendar is connected, so no video link is made. Connect one, or send the link yourself.',
+  /** The same, where calendars can't be connected here (calendar sync off). */
+  noVideoLinkNoSync: 'No calendar is connected, so no video link is made. Send the link yourself.',
+  /** The same, when their calendar's account has expired and needs reconnecting in Settings › Calendars. */
+  noVideoLinkReconnect:
+    'Your calendar needs reconnecting, so no video link is made. Reconnect it in Settings, or send the link yourself.',
   addressOrRoom: 'Address or room',
   numberToCall: 'Number to call',
   where: 'Where',
@@ -233,7 +240,6 @@ export const strings = {
   fixPage: 'Fix what’s marked in red to save.',
   /** The save bar's reason, naming the tabs that hold what's red. */
   fixTabs: (tabs: readonly string[]) => `Fix ${tabs.join(' and ')} to save.`,
-  leaveConfirm: 'You have unsaved changes. Leave without saving?',
   /** Add events to: the page's own destination calendar (spec 0024, AC-997). */
   addBookingsTo: 'Add bookings to',
   addBookingsHint: 'Saves as soon as you choose.',

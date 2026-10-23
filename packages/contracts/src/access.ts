@@ -38,7 +38,7 @@ export const PERMISSIONS = {
   'api_keys.manage': { message: 'Only workspace owners and admins can manage API keys.' },
   'webhooks.manage': { message: 'Only workspace owners and admins can manage webhooks.' },
   'automations.manage': { message: 'Only workspace owners and admins can manage automations.' },
-  'audit.read': { message: 'Only workspace owners and admins can read the audit log.' },
+  'audit.read': { message: 'Only workspace owners and admins can see workspace changes.' },
   'workspace.export': { message: 'Only workspace owners can export the whole workspace.' },
   'billing.manage': { message: 'Only workspace owners can manage billing.' },
   'support.grant': { message: 'Only workspace owners can let support into the workspace.' },
@@ -85,7 +85,9 @@ export const ROLE_PERMISSIONS = {
 /**
  * The permissions an API key can never hold (#34): managing people, teams,
  * rules, billing and support access, and deleting the workspace stay with
- * people.
+ * people. So does reading the audit log (spec 0046): History names invitees'
+ * addresses and askers' names, which a key, never holding `members.invite`,
+ * may not read either.
  */
 export const KEY_FORBIDDEN_PERMISSIONS: readonly Permission[] = [
   'members.manage',
@@ -96,6 +98,7 @@ export const KEY_FORBIDDEN_PERMISSIONS: readonly Permission[] = [
   'workspace.delete',
   'support.grant',
   'security.manage',
+  'audit.read',
 ];
 
 /** The data level a key holds on every object, as a scope. A key with neither reads and writes no data. */

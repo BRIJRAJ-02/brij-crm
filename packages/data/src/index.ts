@@ -93,6 +93,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
+import type { AuditLog } from './audit/log.ts';
 import { createAuth } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
 import { createRecordFactsStore, type RecordFacts } from './records/facts.ts';
@@ -105,6 +106,7 @@ import {
   withRetryAfter,
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
+import { refusalFor, refusalSummary } from './refusals.ts';
 import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
@@ -165,6 +167,7 @@ import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
 export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
+import { createOperatorStore } from './operator/store.ts';
 import {
   createCalendarsStore,
   type CalendarChange,
@@ -181,6 +184,7 @@ import {
   upsertFirst,
   type CaptureListView,
 } from './captures/list.ts';
+import { createProfileOrder, type ProfileMoveOutcome } from './captures/profile-order.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
 import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navigation/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
@@ -238,6 +242,31 @@ import type {
 
 export type { GlobalSearch, GlobalSearchState } from './search/global.ts';
 export type { RecentItem, RecordHit, SearchMatch, ViewHit } from '@crm/contracts';
+// The operator console (spec 0047): the super admin's read only analytics.
+export type {
+  OperatorHeld,
+  OperatorState,
+  OperatorStore,
+  OperatorUsersHeld,
+  OperatorUsersState,
+} from './operator/store.ts';
+export type {
+  OperatorFigure,
+  OperatorOverview,
+  OperatorOverviewDay,
+  OperatorPageDay,
+  OperatorPageDetail,
+  OperatorPageRow,
+  OperatorPages,
+  OperatorPageTotals,
+  OperatorPeriod,
+  OperatorRank,
+  OperatorSite,
+  OperatorUserDetail,
+  OperatorUserPage,
+  OperatorUserRow,
+  OperatorUserWorkspace,
+} from '@crm/contracts';
 export type {
   CreateTimeBlockInput,
   TimeBlockKind,
@@ -346,6 +375,12 @@ export type {
   WorkspaceSecurity,
   ActivityPage,
   SecurityActivity,
+  AuditChange,
+  AuditEntryView,
+  AuditKind,
+  AuditPerson,
+  AuditTarget,
+  AuditValue,
   Role,
   RemovalPreview,
   RoleOption,
@@ -400,6 +435,7 @@ export type {
   RoutingReportState,
   RoutingReportSurface,
 } from './routing/reports.ts';
+export type { AuditLog, AuditLogState, AuditLogStatus } from './audit/log.ts';
 export type { PageRulesHeld } from './routing/page-rules.ts';
 export type {
   EmailPreference,
@@ -434,12 +470,22 @@ export type {
   PageDestinationState,
 } from './calendar/calendars.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
+export type { ProfileMoveOutcome } from './captures/profile-order.ts';
 export { connectUrl, needsReconnect, type ConnectReturn } from './calendar/store.ts';
 export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
+/** History's kinds of change (spec 0046), with no Zod: which kind each listed action is, for Workspace changes. */
+export {
+  AUDIT_KIND_NAMES,
+  AUDIT_KINDS,
+  AUDIT_NOT_LISTED,
+  auditKindOf,
+  type AuditKindName,
+  type ListedAuditAction,
+} from '@crm/contracts/audit-kinds';
 // A schedule's week as words (spec 0035): plain, no Zod, the one summary the screens and the server's notices share.
 export { clockLabel, weekSummary } from '@crm/contracts/hours';
 export {
@@ -465,8 +511,6 @@ export {
   dataError,
   isDataError,
   isFetchFailure,
-  refusalFor,
-  refusalSummary,
   SIGN_IN_CODES,
   type DataError,
   type DataErrorCode,
@@ -474,6 +518,7 @@ export {
   type DataFault,
   type SignInCode,
 } from './errors.ts';
+export { refusalFor, refusalSummary };
 export type { FetchLike } from './fetch.ts';
 export type { NavFavourite, NavState } from '@crm/contracts';
 export type { NavChangeOptions, NavSnapshot, NavSource } from './navigation/store.ts';
@@ -562,7 +607,13 @@ export type {
   NotificationSettingsChange,
 } from './inbox/store.ts';
 export { UNREAD_PAST_CAP, type UnreadSource } from './inbox/unread.ts';
-export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
+export {
+  isEditableHere,
+  searchMembers,
+  toActorDisplays,
+  toFieldAttribute,
+  type FieldAttributeShape,
+} from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
 export type { Notice } from './notice.ts';
@@ -940,6 +991,8 @@ export function createDataLayer({
   let usage = new Map<string, Promise<Usage>>();
   let members = new Map<string, Promise<MemberView[]>>();
   let access = new Map<string, Promise<MyAccess>>();
+  // The audit log a History screen holds, per workspace (spec 0046): opening it again while held answers this one.
+  const auditLogs = new Map<string, AuditLog>();
   // The roles every role picker offers (spec 0037, AC-1439), per workspace, for the app load.
   let roles = new Map<string, Promise<RolesList>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
@@ -961,6 +1014,26 @@ export function createDataLayer({
   let comments: Promise<CommentsStore> | undefined;
   // The inbox's lists and settings (spec 0038), loaded with the inbox or the notification settings.
   let inbox: Promise<InboxStore> | undefined;
+  // The operator console's reads (spec 0047), held per question for the app load.
+  const operatorStore = createOperatorStore({
+    overview: (period) => call((options) => api.operator.overview({ period }, options)),
+    users: (input) =>
+      call((options) =>
+        api.operator.users(
+          {
+            period: input.period,
+            ...(input.q === undefined || input.q.trim() === '' ? {} : { q: input.q.trim() }),
+            ...(input.after === undefined ? {} : { after: input.after }),
+          },
+          options,
+        ),
+      ),
+    user: (userId, period) => call((options) => api.operator.user({ userId, period }, options)),
+    pages: (period) => call((options) => api.operator.pages({ period }, options)),
+    page: (workspaceId, pageId, period) =>
+      call((options) => api.operator.page({ workspaceId, pageId, period }, options)),
+    site: (period) => call((options) => api.operator.site({ period }, options)),
+  });
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
@@ -1008,6 +1081,7 @@ export function createDataLayer({
     usage = new Map();
     members = new Map();
     access = new Map();
+    auditLogs.clear();
     roles = new Map();
     attributes = new Map();
     allAttributes = new Map();
@@ -1053,6 +1127,7 @@ export function createDataLayer({
     });
     pendingOptions.clear();
     bookingPageLists.clear();
+    profileOrder.clear();
     pageRules.clear();
     formLists.clear();
     schedules.clear();
@@ -1742,7 +1817,21 @@ export function createDataLayer({
     },
   });
 
-  // Bookings (spec 0025): the workspace's upcoming and past lists, read again when the person comes back.
+  // Bookings' held reads (owner ask A115): read again when the person comes back and, while live updates are paused
+  // or off (no event says a meeting or booking arrived), every minute while the page shows (`bookings/fresh.ts`).
+  const bookingsFresh = {
+    live: {
+      status: () => liveStatus,
+      subscribe: (listener: () => void) => {
+        liveListeners.add(listener);
+        return () => {
+          liveListeners.delete(listener);
+        };
+      },
+    },
+    random,
+  };
+  // Bookings (spec 0025): the workspace's upcoming and past lists and its weeks, kept current while held.
   const bookingsLists = createBookingsStore({
     api: {
       listAll: (input) =>
@@ -1750,6 +1839,7 @@ export function createDataLayer({
       calendar: (input) =>
         beforeRead(input.workspace).then(() => call((options) => api.bookings.calendar(input, options))),
     },
+    ...bookingsFresh,
   });
 
   // Home (spec 0041): Team today and the metrics row, read again when the person comes back.
@@ -1802,11 +1892,12 @@ export function createDataLayer({
       schedules.changed(workspace);
       return answer;
     };
-  // Bookings' list of every meeting, a page at a time (the owner's ask of 21 October 2026).
+  // Bookings' list of every meeting, a page at a time (the owner's ask of 21 October 2026), kept current while held.
   const meetings = createMeetingsStore({
     api: {
       page: (input) => beforeRead(input.workspace).then(() => call((options) => api.bookings.meetings(input, options))),
     },
+    ...bookingsFresh,
   });
   /** A booking or a calendar changed: every held Bookings read of the workspace reads again. */
   const reloadBookings = (workspace: string) => {
@@ -1881,6 +1972,11 @@ export function createDataLayer({
     },
     mintId,
     notify,
+    // Sync now ran (owner ask A115): what Bookings shows now is read again at once, keeping the pages More opened.
+    onSynced: (workspace) => {
+      bookingsLists.refreshHeld(workspace);
+      meetings.refreshHeld(workspace);
+    },
   });
 
   // Each calendar of the member's accounts (spec 0024 milestone 5): their switches, colours and destination, and a
@@ -1919,6 +2015,14 @@ export function createDataLayer({
   // New dialog, the editors), so the list never needs a refresh to show a change.
   const bookingPageLists = createCaptureList<BookingPageView>({
     read: (workspace) => call((options) => api.bookingPages.list({ workspace }, options)),
+  });
+  // Settings › Profile's order (owner ask A102): moves shown in that same list at once, sent one at a time.
+  const profileOrder = createProfileOrder({
+    list: bookingPageLists,
+    send: (workspace, pageIds) =>
+      call((options) =>
+        api.bookingPages.reorderProfile({ workspace, pageIds: [...pageIds], mutationId: mintId() }, options),
+      ),
   });
   // Settings › Rotations (spec 0029): one held list per workspace, patched by every rotation write below.
   const rotationLists = createCaptureList<RotationView>({
@@ -2554,6 +2658,7 @@ export function createDataLayer({
   const tasksStore = (): Promise<TasksStore> => {
     tasks ??= import('./tasks/store.ts').then(({ createTasksStore }) =>
       createTasksStore({
+        refusals: { refusalFor, refusalSummary },
         api: {
           list: (input) =>
             beforeRead(input.workspace).then(() =>
@@ -2723,6 +2828,7 @@ export function createDataLayer({
         api: recordsApi,
         notify,
         mintId,
+        refusals: { refusalFor, refusalSummary },
         watch,
         mutations,
         beforeRead,
@@ -3044,6 +3150,16 @@ export function createDataLayer({
             ),
           ...shownDrop(bookingPageLists.items(workspace), pageId),
         }),
+      /**
+       * The reader's own pages in their profile's new order (owner ask A102): each id once, the order `/<handle>`
+       * lists them in, the reader's other pages after them. Shown in the held list at once (each page's
+       * `profilePosition`) and sent one move at a time: a move made while one is on its way waits, replacing any move
+       * already waiting, since each carries the whole order. Answers `saved`, or `replaced` for a move a later one
+       * carried. Only the last move of a run rejects when it is refused (`NOT_FOUND` for a page that isn't the
+       * reader's own), once the list is back in the order the server last confirmed.
+       */
+      reorderProfile: (workspace: string, pageIds: readonly string[]): Promise<ProfileMoveOutcome> =>
+        profileOrder.reorder(workspace, pageIds),
     },
     /**
      * Rotations (spec 0029): the pools round robin pages book from. Settings
@@ -3154,6 +3270,38 @@ export function createDataLayer({
           ...shownDrop(rotationLists.items(workspace), rotationId),
         }),
     },
+    audit: {
+      /**
+       * Settings › History › Workspace changes (spec 0046): one paged read of the workspace's audit log, its first
+       * page started at once (the route's loader opens it). Loaded with `import()`, never live, never in the record
+       * store: each visit opens it afresh, and the screen retains it while shown (let go, it aborts and stops).
+       * While a screen holds a workspace's log, opening it again answers that same log.
+       */
+      openLog: async (workspace: string): Promise<AuditLog> => {
+        // A log a screen holds is handed back as it is, so the page reloading its data while it shows (a live
+        // attribute change invalidates the router) keeps the rows read so far and Show more's place.
+        const held = auditLogs.get(workspace);
+        if (held !== undefined) return held;
+        const { openAuditLog } = await import('./audit/log.ts');
+        const log: AuditLog = openAuditLog(
+          {
+            list: (input, signal) =>
+              call((options) => api.audit.list(input, options), signal).catch((error: unknown) => {
+                // The reader lost `audit.read`: their held access is stale, so History's next visit opens their
+                // sign ins (AC-4618).
+                if (toDataError(error).code === 'FORBIDDEN') access.delete(workspace);
+                throw error;
+              }),
+            onHeld: () => auditLogs.set(workspace, log),
+            onDisposed: () => {
+              if (auditLogs.get(workspace) === log) auditLogs.delete(workspace);
+            },
+          },
+          workspace,
+        );
+        return log;
+      },
+    },
     routing: {
       /**
        * A form's or a team page's per rule report (spec 0043, AC-1612), held while its card shows it
@@ -3263,19 +3411,23 @@ export function createDataLayer({
       /**
        * Bookings, the workspace's list: every booking the reader may see,
        * upcoming or past, held while a screen shows it (`useBookings`) and
-       * read again whenever the person comes back to the page.
+       * read again whenever the person comes back to the page, and every
+       * minute while the page shows and live updates are paused or off.
        */
       view: (workspace: string, when: BookingsTab): BookingsView => bookingsLists.view(workspace, when),
       /**
        * Bookings' week: a range's bookings (cancelled too) and the reader's own
        * calendar events, held while a screen shows it (`useBookingsCalendar`)
-       * and read again whenever the person comes back to the page.
+       * and read again whenever the person comes back to the page, and every
+       * minute while the page shows and live updates are paused or off.
        */
       calendar: (workspace: string, from: string, to: string): BookingsCalendarHeld =>
         bookingsLists.calendar(workspace, from, to),
       /**
        * Bookings' list: every meeting on a tab (bookings and the member's own calendar events), narrowed to a source
-       * and the calendars panel's pick, a page at a time (`useMeetings`; More reads the next).
+       * and the calendars panel's pick, a page at a time (`useMeetings`; More reads the next). While held, what it
+       * shows is read again on the person's return, and every minute while the page shows and live updates are
+       * paused or off, keeping the pages More opened.
        */
       meetings: (workspace: string, query: MeetingsQuery): MeetingsHeld => meetings.list(workspace, query),
       /** Reads every bookings list and range a screen holds again. */
@@ -3595,7 +3747,12 @@ export function createDataLayer({
      */
     workspaceSecurity: {
       get: (workspace: string): Promise<WorkspaceSecurity> =>
-        call((options) => api.workspaceSecurity.get({ workspace }, options)),
+        call((options) => api.workspaceSecurity.get({ workspace }, options)).catch((error: unknown) => {
+          // The reader lost `security.manage`: their held access is stale, so the nav and Security's next visit match
+          // the server.
+          if (toDataError(error).code === 'FORBIDDEN') access.delete(workspace);
+          throw error;
+        }),
       set: (
         workspace: string,
         change: { readonly requireTwoFactor?: boolean; readonly sessionLengthDays?: SessionLengthDays | null },
@@ -3646,11 +3803,13 @@ export function createDataLayer({
       /** What an invitation link shows before accepting, with no session needed; `INVITE_INVALID` for any bad link. */
       peek: (token: string): Promise<InvitePeek> => attempt((options) => api.invitations.peek({ token }, options)),
       /**
-       * Accepts an invitation as the signed in person: answers the workspace's
-       * address. The person's workspaces are read again after.
+       * Accepts an invitation as the signed in person, with the name they typed on the invite card (may be empty):
+       * answers the workspace's address. The person's workspaces are read again after.
        */
-      async accept(token: string): Promise<{ slug: string }> {
-        const accepted = await call((options) => api.invitations.accept({ token }, options));
+      async accept(token: string, memberName?: string): Promise<{ slug: string }> {
+        const accepted = await call((options) =>
+          api.invitations.accept({ token, ...(memberName === undefined ? {} : { memberName }) }, options),
+        );
         me = undefined;
         return accepted;
       },
@@ -4555,6 +4714,16 @@ export function createDataLayer({
       load: (workspace: string): Promise<MemberPreferences> => preferences.load(workspace),
       change: (workspace: string, change: PreferencesChange): Promise<boolean> => preferences.change(workspace, change),
     },
+    /**
+     * The operator console (spec 0047): the super admin's read only analytics
+     * across every workspace, held per question (`operator/store.ts`): a
+     * screen holds one through `useOperator`, so a new period or search loads
+     * in place. Anyone the api doesn't count a super admin is refused
+     * NOT_FOUND; a super admin without two factor TWO_FACTOR_REQUIRED, or
+     * whose session wasn't proven with the app in 12 hours SIGN_IN_AGAIN, in
+     * the held state, never thrown.
+     */
+    operator: operatorStore,
     account: {
       /**
        * The signed in person's own sessions (spec 0033), newest activity

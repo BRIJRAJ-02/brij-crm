@@ -172,3 +172,32 @@ export function bookingPagePath(page: {
     ? `/b/${encodeURIComponent(page.publicKey)}`
     : `/${encodeURIComponent(page.handle)}/${encodeURIComponent(page.slug)}`;
 }
+
+/** One section of a profile: its key, its heading as its first item spells it (none for items without one), and its items. */
+export interface ProfileSection<Item> {
+  /** The heading trimmed and in lower case: what makes two items one section. Empty for items with no heading. */
+  readonly key: string;
+  readonly title?: string;
+  readonly items: readonly Item[];
+}
+
+/**
+ * A profile's items under their sections (22 Oct 2026), in the owner's order: each section where its first item is,
+ * its items in their order. Headings compare trimmed and ignoring case, so "Sales", "sales" and "Sales " are one
+ * section, spelled as the first one is. The profile at `/<handle>` and Settings › Profile's order group by this one
+ * rule, so what the owner arranges is what visitors see.
+ */
+export function profileSections<Item>(
+  items: readonly Item[],
+  sectionOf: (item: Item) => string | null | undefined,
+): readonly ProfileSection<Item>[] {
+  const groups = new Map<string, { readonly key: string; readonly title?: string; readonly items: Item[] }>();
+  for (const item of items) {
+    const title = sectionOf(item)?.trim() ?? '';
+    const key = title.toLocaleLowerCase();
+    const group = groups.get(key) ?? { key, ...(title === '' ? {} : { title }), items: [] };
+    group.items.push(item);
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}

@@ -111,6 +111,8 @@ export interface WorkspaceFrameProps {
   readonly settings?: SettingsSidebar;
   /** The person's permissions here, which settings pages they may open; undefined while they load. */
   readonly permissions?: readonly Permission[];
+  /** Whether the person is a super admin (spec 0047): Settings shows its Super admin group. */
+  readonly isOperator?: boolean;
   /** The page's TopBar. */
   readonly topBar?: ReactNode;
   /** The view's ViewBar, on an object's page. */
@@ -143,6 +145,7 @@ export function WorkspaceFrame({
   currentPage,
   settings,
   permissions,
+  isOperator = false,
   topBar,
   viewBar,
   toolbar,
@@ -232,7 +235,7 @@ export function WorkspaceFrame({
   const sidebar = useMemo(
     () =>
       settings !== undefined ? (
-        <SettingsNavigation slug={slug} settings={settings} permissions={permissions} />
+        <SettingsNavigation slug={slug} settings={settings} permissions={permissions} isOperator={isOperator} />
       ) : (
         <Sidebar
           workspace={workspaceName ?? strings.product}
@@ -352,6 +355,7 @@ export function WorkspaceFrame({
       settings,
       slug,
       permissions,
+      isOperator,
       workspaceName,
       isMissing,
       commandMenu,
@@ -514,10 +518,12 @@ function SettingsNavigation({
   slug,
   settings,
   permissions,
+  isOperator,
 }: {
   readonly slug: string;
   readonly settings: SettingsSidebar;
   readonly permissions: readonly Permission[] | undefined;
+  readonly isOperator: boolean;
 }) {
   return (
     <Sidebar
@@ -526,7 +532,7 @@ function SettingsNavigation({
       label={settingsStrings.settings}
       keyboard="arrows"
     >
-      {visibleSettingsNav(settingsNav(slug), permissions).map((group) => (
+      {visibleSettingsNav(settingsNav(slug), permissions, isOperator).map((group) => (
         <NavGroup key={group.id} label={group.label} isLabelShown>
           {group.entries.map((entry) => (
             <NavItem

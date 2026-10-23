@@ -378,6 +378,11 @@ export interface MonthCalendarProps {
    * one band, as Google Calendar's small month marks its week.
    */
   readonly shown?: { readonly start: DateString; readonly end: DateString };
+  /**
+   * Focus the chosen day as it mounts: for a month opened in a popover (Bookings' Go to date), so the arrows move
+   * through the days at once, as DatePicker's own popover does. Inline beside a view, leave it off.
+   */
+  readonly autoFocus?: boolean;
 }
 
 /**
@@ -385,7 +390,7 @@ export interface MonthCalendarProps {
  * date beside a view (Bookings' calendars panel, as Google Calendar keeps one over its calendars). The month, its
  * arrows, its keys, today's dot and the chosen day are DatePicker's; the days are shorter, to fit a side column.
  */
-export function MonthCalendar({ label, value, onChange, shown }: MonthCalendarProps) {
+export function MonthCalendar({ label, value, onChange, shown, autoFocus = false }: MonthCalendarProps) {
   const today = useToday();
   const { weekStart } = useFormatSettings();
   return (
@@ -393,6 +398,8 @@ export function MonthCalendar({ label, value, onChange, shown }: MonthCalendarPr
       className={styles.calendar}
       data-inline=""
       aria-label={label}
+      // eslint-disable-next-line jsx-a11y-x/no-autofocus -- only a month opened from its own button asks for it
+      autoFocus={autoFocus}
       value={parseDate(value)}
       onChange={(next) => {
         const day = fromDate(next);

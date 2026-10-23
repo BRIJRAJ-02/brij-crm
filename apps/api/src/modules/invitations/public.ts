@@ -56,8 +56,15 @@ export const invitationsPublic = {
     // A server made mutation id: the browser that accepts has no events of this workspace to skip yet.
     const accepted = await commitWrite(context, { mutationId: newId() }, (hooks) =>
       acceptInvite(
-        { db: context.db },
-        { id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified },
+        { db: context.db, identity: context.identity },
+        {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          // The invite card's Your name (QA N14); core makes it plain as every join does.
+          ...(input.memberName === undefined ? {} : { typedName: input.memberName }),
+        },
         input.token,
         hooks,
         { source: sourceOf(context) },

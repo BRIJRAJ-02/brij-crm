@@ -58,3 +58,66 @@ export const Empty: Story = {
     await expect(canvas.getByText('Week 1: 0')).toBeInTheDocument();
   },
 };
+
+/** A chart: thirty days across the container's width, the axis naming both ends (the operator console, spec 0047). */
+export const Chart: Story = {
+  args: {
+    size: 'chart',
+    label: 'Visitors per day',
+    bars: Array.from({ length: 30 }, (_, index) => ({
+      id: `d${String(index)}`,
+      label: `Day ${String(index + 1)}: ${String((index * 7) % 11)}`,
+      value: (index * 7) % 11,
+    })),
+    axis: { start: '24 Sep', end: 'Today' },
+  },
+  render: (args) => (
+    <Stage>
+      <BarStrip {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Day 2: 7')).toBeInTheDocument();
+    await expect(canvas.getByText('Today')).toBeInTheDocument();
+  },
+};
+
+/** A chart with nothing in its period: every day a stub on the baseline, the axis still naming both ends. */
+export const ChartEmpty: Story = {
+  args: {
+    size: 'chart',
+    label: 'Visitors per day',
+    bars: Array.from({ length: 30 }, (_, index) => ({
+      id: `d${String(index)}`,
+      label: `Day ${String(index + 1)}: 0`,
+      value: 0,
+    })),
+    axis: { start: '24 Sep', end: 'Today' },
+  },
+  render: (args) => (
+    <Stage>
+      <BarStrip {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Day 30: 0')).toBeInTheDocument();
+  },
+};
+
+/** Loading: the chart's days as stubs, no tooltips, busy for screen readers. */
+export const ChartLoading: Story = {
+  args: {
+    size: 'chart',
+    label: 'Visitors per day',
+    isLoading: true,
+    bars: Array.from({ length: 30 }, (_, index) => ({ id: `d${String(index)}`, label: '', value: 0 })),
+  },
+  render: (args) => (
+    <Stage>
+      <BarStrip {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Visitors per day')).toBeInTheDocument();
+  },
+};

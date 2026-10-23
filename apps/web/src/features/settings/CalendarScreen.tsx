@@ -1,8 +1,8 @@
 // Brief
-// Purpose: Settings › Scheduling › Calendars: the member's own accounts (Google, Outlook) and every calendar in each, so their meetings reach the records they're with and their bookings land where they choose.
+// Purpose: Settings › Scheduling › Calendars: the member's own accounts (Google, Outlook) and the calendars in use in each, so their meetings reach the records they're with and their bookings land where they choose.
 // Main task: connect an account; pick the one calendar bookings go on; per calendar, check it for conflicts, show it on the week,
 // log its meetings to the CRM (its row's menu) and pick its colour; disconnect an account.
-// Leaves out: other members' calendars. Owners and admins also choose whether meetings add people.
+// Leaves out: other members' calendars, and calendars not in use. Owners and admins also choose whether meetings add people.
 import {
   isDataError,
   needsReconnect,
@@ -24,9 +24,7 @@ import {
   Callout,
   Card,
   Checkbox,
-  Disclosure,
   EmptyState,
-  Field,
   focusLater,
   HuePicker,
   InfoTip,
@@ -51,6 +49,7 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useMemo, useRef, useState } from 'react';
+import { isCalendarInUse } from '../calendars/in-use.ts';
 import { strings, type ConnectResult } from './calendar-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -106,9 +105,6 @@ interface CalendarActions {
   readonly onMakeDefault: (calendar: CalendarItem) => void;
 }
 
-/** More than this many other calendars in an account, and a search sits over them. */
-const SEARCH_FROM = 10;
-
 /** An account's calendar table: the colour dot and name, Conflicts and Show on my week, and a menu shown on hover. */
 function CalendarTable({
   label,
@@ -123,7 +119,7 @@ function CalendarTable({
   readonly isHeaderHidden?: boolean;
 }) {
   const columns: readonly TableColumn[] = [
-    { id: 'name', label: strings.calendarColumn, isRowHeader: true, isInline: true, size: 'fill' },
+    { id: 'name', label: strings.calendarColumn, isRowHeader: true, isInline: true },
     { id: 'checkConflicts', label: strings.conflictsColumn, size: 'fit' },
     { id: 'showInWeek', label: strings.weekColumn, size: 'fit' },
     { id: 'more', label: strings.optionsColumn, isLabelHidden: true, size: 'fit', align: 'end', showsOnHover: true },
@@ -135,6 +131,8 @@ function CalendarTable({
       columns={columns}
       rows={calendars}
       getRowId={(calendar) => calendar.id}
+      // Narrower than its columns (a phone), the table scrolls sideways in its own frame (Q54).
+      isScrollable
       renderCell={(calendar, column) => {
         if (column === 'name') {
           return (
@@ -181,15 +179,12 @@ function CalendarTable({
   );
 }
 
-/** Whether a calendar was switched on in any way, or is where bookings go: it stays above the fold. */
-const isInUse = (calendar: CalendarItem): boolean =>
-  calendar.isPrimary || calendar.checkConflicts || calendar.showInWeek || calendar.sync || calendar.isDestination;
-
 /**
- * An account's calendars (the owner, 22 October 2026: "I have connected one email and its calendar, show me
- * that"): its main calendar and any already switched on, then every other one Google lists (subscribed, shared,
- * read only) behind one folded "Other calendars in this account", with a search past ten. Which side a calendar
- * sits on is read once, so checking one in the fold never moves it out from under the pointer.
+ * An account's calendars in use (the owner, 22 October 2026: "I have connected one email and its calendar, show me
+ * that"; 23 October: the rest, "don't show this anywhere"): its main calendar, any switched on, and where bookings
+ * go. The others (subscribed, shared, read only, and the member's own extra calendars with nothing on) never show.
+ * Which ones show is read once, so switching one off never moves it out from under the pointer; it goes on the next
+ * visit, and its toast says so.
  */
 function AccountCalendars({
   account,
@@ -200,49 +195,20 @@ function AccountCalendars({
   readonly calendars: readonly CalendarItem[];
   readonly actions: CalendarActions;
 }) {
-  const [shownIds] = useState(() => new Set(calendars.filter(isInUse).map((calendar) => calendar.id)));
-  const [query, setQuery] = useState('');
-  // Where bookings go always shows, even when it was picked from the fold.
-  const isShown = (calendar: CalendarItem) => shownIds.has(calendar.id) || calendar.isDestination;
-  const shown = calendars.filter(isShown);
-  const others = calendars.filter((calendar) => !isShown(calendar));
-  const typed = query.trim().toLocaleLowerCase();
-  const matching =
-    typed === '' ? others : others.filter((calendar) => calendar.name.toLocaleLowerCase().includes(typed));
-  const warned = calendars.filter((calendar) => calendar.warning !== undefined);
+  const [shownIds] = useState(() => new Set(calendars.filter(isCalendarInUse).map((calendar) => calendar.id)));
+  // One switched on since (in another tab, or picked for bookings) shows too.
+  const shown = calendars.filter((calendar) => shownIds.has(calendar.id) || isCalendarInUse(calendar));
+  const warned = shown.filter((calendar) => calendar.warning !== undefined);
   return (
     <>
       {shown.length > 0 && <CalendarTable label={strings.calendarsIn(account)} calendars={shown} actions={actions} />}
-      {others.length > 0 && (
-        <Disclosure title={strings.otherCalendars} count={others.length}>
-          {others.length > SEARCH_FROM && (
-            <Field
-              label={strings.searchCalendars}
-              isLabelHidden
-              variant="search"
-              type="search"
-              placeholder={strings.searchCalendars}
-              value={query}
-              onChange={setQuery}
-            />
-          )}
-          {matching.length === 0 ? (
-            <EmptyState layout="row" icon="search" title={strings.noCalendarMatches} />
-          ) : (
-            <CalendarTable
-              label={strings.otherCalendarsIn(account)}
-              calendars={matching}
-              actions={actions}
-              isHeaderHidden={shown.length > 0}
-            />
-          )}
-        </Disclosure>
-      )}
       {warned.length > 0 && (
         <Callout tone="warning">
           {warned.map((calendar) => strings.warningLine(calendar.name, calendar.warning?.message ?? '')).join(' ')}
         </Callout>
       )}
+      {/* Only when no main calendar was listed: the main one is always in use. */}
+      {shown.length === 0 && <EmptyState layout="row" icon="calendar" title={strings.noneInUse} />}
     </>
   );
 }
@@ -384,8 +350,17 @@ function useCalendarActions(data: DataLayer, slug: string, toasts: Toasts, desti
       });
     };
     return {
-      onSwitch: (calendar, name, isOn) =>
-        change(calendar, { [name]: isOn }, { [name]: !isOn }, strings.saved[name](calendar.name, isOn)),
+      onSwitch: (calendar, name, isOn) => {
+        const saved = strings.saved[name](calendar.name, isOn);
+        // Its last use switched off: it keeps its row for now, and the toast says it won't be listed next time.
+        const isLeaving = !isCalendarInUse({ ...calendar, [name]: isOn });
+        change(
+          calendar,
+          { [name]: isOn },
+          { [name]: !isOn },
+          isLeaving ? strings.noLongerListed(saved, calendar.name) : saved,
+        );
+      },
       onColour: (calendar, hue) =>
         change(
           calendar,
@@ -395,11 +370,14 @@ function useCalendarActions(data: DataLayer, slug: string, toasts: Toasts, desti
         ),
       onMakeDefault: (calendar) => {
         const was = destination;
+        const saved = strings.defaultSaved(calendar.name);
+        // Taking bookings was the old default's only use: it won't be listed next time.
+        const leaving = was !== undefined && !isCalendarInUse({ ...was, isDestination: false }) ? was : undefined;
         void data.calendar.setDestination(slug, calendar.id).then((isDone) => {
           if (!isDone) return;
           say({
             tone: 'success',
-            message: strings.defaultSaved(calendar.name),
+            message: leaving === undefined ? saved : strings.noLongerListed(saved, leaving.name),
             ...(was === undefined
               ? {}
               : { action: { label: strings.undo, onAction: () => void data.calendar.setDestination(slug, was.id) } }),
@@ -411,14 +389,14 @@ function useCalendarActions(data: DataLayer, slug: string, toasts: Toasts, desti
 }
 
 /**
- * "Add bookings to"'s options: every calendar that can take bookings, across the member's accounts, in its own
+ * "Add bookings to"'s options: every calendar in use that can take bookings, across the member's accounts, in its own
  * colour; under its account's address only when that account has two or more, so one calendar never sits under a
  * heading that repeats it. TODO(bookeditor): use the shared calendar options helper the booking page editor's
  * "Add bookings to" builds, once it lands, so both Selects list calendars one way.
  */
 function destinationOptions(accounts: readonly CalendarAccountView[]): SelectItem[] {
   return accounts.flatMap((account) => {
-    const writable = account.calendars.filter((calendar) => calendar.canBeDestination);
+    const writable = account.calendars.filter((calendar) => calendar.canBeDestination && isCalendarInUse(calendar));
     return writable.map((calendar) => ({
       id: calendar.id,
       label: calendar.name,

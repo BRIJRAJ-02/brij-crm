@@ -31,6 +31,14 @@
 // (`NoticeResult`) is answered in our ids and the provider's codes only, so
 // the api logs them (`calendar.channel`, `calendar.notice`) and a channel that
 // never opened, or a notice that went elsewhere, shows in the logs.
+//
+// A calendar the provider can't watch (Google answers 400
+// `pushNotSupportedForRequestedResource` for holidays and birthdays) would
+// otherwise cost a refused watch call and a warn line on every run. So a
+// watch refused with a 4xx other than 401, 403 or 429 (those are about the
+// grant or the minute we asked in) marks the calendar's `channel` with
+// `noPushUntil`, a day on, and runs skip its watch until then, saying nothing:
+// the poll keeps it current, and only the first refusal of each day is logged.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { Database } from '@crm/db';
@@ -49,6 +57,9 @@ import {
 
 /** A channel expiring within this is replaced (spec: renewed when it expires within 48 hours). */
 export const CHANNEL_RENEW_MS = 48 * 3_600_000;
+
+/** How long a calendar whose watch the provider refused for good waits before its watch is asked for again. */
+export const NO_PUSH_MS = 24 * 3_600_000;
 
 /** The longest channel token a notice may carry (Google's limit; Graph's `clientState` takes 128). */
 const TOKEN_MAX = 256;
@@ -76,8 +87,32 @@ export function needsChannel(channel: StoredChannel | undefined, now: Date): boo
   return !Number.isFinite(expires) || expires - now.getTime() < CHANNEL_RENEW_MS;
 }
 
-/** Why a stored channel was ended: its calendar is no longer pulled, or its workspace was deleted. */
-export type ChannelStopReason = 'not-pulled' | 'workspace-deleted';
+/**
+ * Whether a calendar's watch waits (read from its `channel` column): the provider refused it for good less than a day
+ * ago (`noPushUntil` still ahead), so no run asks again until then. A malformed mark waits for nothing.
+ */
+export function pushPaused(value: unknown, now: Date): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  const { noPushUntil } = value as Record<string, unknown>;
+  if (typeof noPushUntil !== 'string') return false;
+  const until = Date.parse(noPushUntil);
+  return Number.isFinite(until) && until > now.getTime();
+}
+
+/**
+ * Whether a refused watch is the calendar's for good, not the grant's or the moment's: a 4xx other than 401 and 403
+ * (the grant, which the sync itself hears) and 429 (too many requests, a passing failure).
+ */
+export function watchRefusedForGood(failure: ProviderFailure): boolean {
+  const { status } = failure;
+  return status !== undefined && status >= 400 && status < 500 && status !== 401 && status !== 403 && status !== 429;
+}
+
+/**
+ * Why a stored channel was ended: its calendar is no longer pulled, its workspace was deleted, or its connection was
+ * revoked (its member removed, or its workspace purged).
+ */
+export type ChannelStopReason = 'not-pulled' | 'workspace-deleted' | 'revoked';
 
 /**
  * What became of one calendar's push channel in a run, for the `calendar.channel` log line: the calendar's row id,
@@ -86,8 +121,11 @@ export type ChannelStopReason = 'not-pulled' | 'workspace-deleted';
 export type ChannelReport =
   /** A channel is open and stored; `renewed` when it took over from one about to run out, which was then stopped. */
   | { readonly calendarId: string; readonly outcome: 'opened'; readonly expiresAt: string; readonly renewed: boolean }
-  /** The provider refused to open one, or didn't answer: the poll keeps the calendar current, the next run retries. */
-  | ({ readonly calendarId: string; readonly outcome: 'failed' } & ProviderFailure)
+  /**
+   * The provider refused to open one, or didn't answer: the poll keeps the calendar current, and the next run tries
+   * again, or (`noPushUntil`, a refusal for good) the first run after that time does.
+   */
+  | ({ readonly calendarId: string; readonly outcome: 'failed'; readonly noPushUntil?: string } & ProviderFailure)
   /**
    * One opened, but nothing could keep it: the calendar was switched off, or its account disconnected or its
    * workspace deleted, while it opened. It was stopped at once.
@@ -101,8 +139,9 @@ export type ChannelReport =
 /**
  * Opens a channel for one calendar and stores it, then stops the one it replaces. Answers what happened: `opened`,
  * `failed` (the provider refused, with its code, status and reason; the poll keeps the calendar current and the
- * next run tries again; never the sync's failure), or `dropped` (it opened, but the calendar stopped being pulled,
- * or its account or workspace stopped, before it was stored, so it was stopped at once). Anything else throws.
+ * next run tries again, or, refused for good, the first run a day on: `noPushUntil`, stored on the calendar; never
+ * the sync's failure), or `dropped` (it opened, but the calendar stopped being pulled, or its account or workspace
+ * stopped, before it was stored, so it was stopped at once). Anything else throws.
  */
 export async function openChannel(
   scope: EngineScope,
@@ -115,6 +154,8 @@ export async function openChannel(
     readonly calendarId: string;
     readonly address: string;
     readonly previous: StoredChannel | undefined;
+    /** The run's clock, for `noPushUntil`. */
+    readonly now?: Date;
   },
 ): Promise<ChannelReport> {
   const calendarId = input.calendarRowId;
@@ -124,8 +165,20 @@ export async function openChannel(
   try {
     channel = await input.provider.watch(input.tokens, input.calendarId, input.address, token);
   } catch (error) {
-    if (isProviderError(error)) return { calendarId, outcome: 'failed', ...failureOf(error) };
-    throw error;
+    if (!isProviderError(error)) throw error;
+    const failure = failureOf(error);
+    if (!watchRefusedForGood(failure)) return { calendarId, outcome: 'failed', ...failure };
+    // Refused for good (a calendar the provider can't watch): no run asks again for a day. A channel it still has
+    // stays beside the mark, so it is stopped as any other when the calendar stops being pulled.
+    const noPushUntil = new Date((input.now ?? new Date()).getTime() + NO_PUSH_MS).toISOString();
+    await inWorkspace(scope, (tx) =>
+      tx.execute(sql`
+        update calendar_calendars
+        set channel = coalesce(channel, '{}'::jsonb) || jsonb_build_object('noPushUntil', ${noPushUntil}::text)
+        where id = ${input.calendarRowId}::uuid
+      `),
+    );
+    return { calendarId, outcome: 'failed', ...failure, noPushUntil };
   }
   const stored: StoredChannel = { ...channel, tokenHash: hashOf(secret) };
   const kept = await inWorkspace(scope, (tx) =>

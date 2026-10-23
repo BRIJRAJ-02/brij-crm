@@ -1,5 +1,5 @@
 // Brief
-// Purpose: the workspace's trash: every record deleted in the last 30 days that the person may see, newest first.
+// Purpose: Settings › Workspace › Trash: each record deleted in the last 30 days that the person may see, newest first.
 // Main task: find a record deleted by mistake and restore it (several at once), seeing why one can't come back.
 // Leaves out: opening or editing trashed records; Delete forever and Empty trash show only to owners and admins.
 import {
@@ -9,6 +9,7 @@ import {
   type BulkTarget,
   type MemberSummary,
   type ObjectSummary,
+  type TrashRow,
   type TrashView,
 } from '@crm/data';
 import { useTrash } from '@crm/data/react';
@@ -20,8 +21,8 @@ import {
   EmptyState,
   Modal,
   Select,
+  Skeleton,
   Toolbar,
-  TopBar,
   VisuallyHidden,
   useFormatSettings,
 } from '@crm/ui';
@@ -33,10 +34,12 @@ import {
   selectedCount,
   type GridColumn,
   type GridSelection,
+  type RowSource,
 } from '@crm/ui/grid';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useId, useMemo, useState } from 'react';
-import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { SettingsPage } from '../settings/SettingsPage.tsx';
+import { useCan } from '../workspace/WorkspacePage.tsx';
 import { BULK_EXCEPT_MAX, BULK_IDS_MAX, bulkPath, bulkStrings, recordsWord } from '../workspace/bulk.ts';
 import { isFocusLost, useBulkJob, type NotesIn } from '../workspace/useBulkJob.ts';
 import { strings } from './strings.ts';
@@ -80,7 +83,37 @@ const COLUMNS: readonly GridColumn[] = TRASH_ATTRIBUTES.map((attribute) => ({
   width: Math.max(columnWidthFor(attribute), TEXT_WIDTH),
 }));
 
-/** The trash: TopBar with the count, the object filter, the read only grid, and Restore in the bulk bar. */
+/** No rows yet: the grid draws its loading rows at the columns' widths. */
+const NO_ROWS: RowSource<TrashRow> = { count: 0, getItem: () => undefined, getKey: (row) => row.id };
+
+/**
+ * The trash while its route loads, in Settings: the bar with its trail and title, the filter row and the grid's
+ * loading rows, each where the loaded page draws it, so nothing moves when the rows arrive.
+ */
+export function TrashPending() {
+  return (
+    <SettingsPage title={strings.title} fillsView>
+      <Toolbar label={strings.filterLabel}>
+        <Skeleton width="short" />
+      </Toolbar>
+      <DataGrid
+        label={strings.title}
+        columns={COLUMNS}
+        pinnedCount={1}
+        rows={NO_ROWS}
+        getValue={() => undefined}
+        rowHeader={TRASH_NAME_COLUMN}
+        hideColumnLocks
+        status="loading"
+      />
+    </SettingsPage>
+  );
+}
+
+/**
+ * The trash, inside Settings (A120): the bar with its trail, the count and Empty trash, the object filter, the read
+ * only grid filling the view, and Restore in the bulk bar.
+ */
 export function TrashScreen({ slug, objects, members, view, objectId }: TrashScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -372,187 +405,179 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
       : strings.confirmPurgeText;
   const purgeWords = recordsWord(lastAsked.length, names);
   return (
-    <WorkspacePage
-      currentPage="trash"
-      page={{
-        topBar: (
-          <TopBar
-            title={strings.title}
-            icon="trash"
-            {...(state.status === 'ready'
-              ? {
-                  meta: (
-                    <Badge
-                      count={state.count.count}
-                      max={Infinity}
-                      isAtLeast={state.count.atLeast}
-                      label={strings.countLabel}
-                    />
-                  ),
-                }
-              : {})}
-          >
-            {/* Owners and admins only (AC-535); always a job, counted and reviewed first. Quiet: the danger is its confirm's. */}
-            {canPurge && state.status === 'ready' && state.count.count > 0 && (
-              <>
-                <Button
-                  variant="ghost"
-                  icon="trash"
-                  isPending={isEmptyStarting}
-                  isDisabled={isEmptyOff}
-                  {...(isEmptyOff ? { 'aria-describedby': waitId } : {})}
-                  onPress={emptyTrash}
-                >
-                  {filteredLabel === undefined ? strings.emptyTrash : strings.emptyObjectTrash(filteredLabel)}
-                </Button>
-                {/* Why it is off, to screen readers: the bar shows the change it waits for. */}
-                {isEmptyOff && <VisuallyHidden id={waitId}>{strings.waitForChange}</VisuallyHidden>}
-              </>
-            )}
-          </TopBar>
-        ),
-        viewBar: (
-          <Toolbar label={strings.filterLabel}>
-            <Select
-              label={strings.objectFilter}
-              isLabelHidden
-              size="sm"
-              items={[
-                { id: ALL, label: strings.allObjects },
-                ...objects.map((object) => ({
-                  id: object.id,
-                  label: object.isArchived ? strings.archived(object.pluralName) : object.pluralName,
-                  icon: object.icon,
-                  hue: object.hue,
-                })),
-              ]}
-              value={objectId ?? ALL}
-              onChange={(id) => {
-                void navigate({
-                  to: '/w/$slug/trash',
-                  params: { slug },
-                  search: id === null || id === ALL ? {} : { object: id },
-                });
-              }}
-            />
-          </Toolbar>
-        ),
-        body: (
+    <SettingsPage
+      title={strings.title}
+      fillsView
+      // The count only while something is in the trash: the empty state already says there is nothing.
+      {...(state.status === 'ready' && state.count.count > 0
+        ? {
+            meta: (
+              <Badge
+                count={state.count.count}
+                max={Infinity}
+                isAtLeast={state.count.atLeast}
+                label={strings.countLabel(state.count.count)}
+              />
+            ),
+          }
+        : {})}
+      actions={
+        // Owners and admins only (AC-535); always a job, counted and reviewed first. Quiet: the danger is its confirm's.
+        canPurge &&
+        state.status === 'ready' &&
+        state.count.count > 0 && (
           <>
-            <DataGrid
-              label={strings.title}
-              columns={COLUMNS}
-              pinnedCount={1}
-              rows={state.source}
-              getValue={(row, columnId) => cellValue(row, columnId, byId, dayOf)}
-              getDisplay={(row, columnId) => {
-                if (columnId === TRASH_COLUMNS.name) return row.item.display;
-                if (columnId === TRASH_COLUMNS.deletedBy) {
-                  const by = deleters(row);
-                  return by === undefined ? undefined : [by];
-                }
-                return undefined;
-              }}
-              rowHeader={TRASH_NAME_COLUMN}
-              hideColumnLocks
-              selection={selection}
-              onSelectionChange={select}
-              cellErrors={state.cellErrors}
-              status={state.status}
-              onRetry={view.retry}
-              {...(state.error === undefined ? {} : { errorText: state.error.message })}
-              emptyState={
-                filtered === undefined ? (
-                  <EmptyState title={strings.emptyTitle} icon="trash">
-                    {strings.emptyText}
-                  </EmptyState>
-                ) : (
-                  <EmptyState
-                    title={strings.emptyObject(filtered.pluralName)}
-                    icon={filtered.icon}
-                    actions={
-                      <Button
-                        onPress={() => {
-                          void navigate({ to: '/w/$slug/trash', params: { slug }, search: {} });
-                        }}
-                      >
-                        {strings.showAll}
-                      </Button>
-                    }
-                  >
-                    {strings.emptyObjectText(filtered.pluralName)}
-                  </EmptyState>
-                )
-              }
-              {...(focusRow === undefined ? {} : { focusRow })}
-              {...(bar === undefined ? {} : { floatingBar: bar })}
-            />
-            {/* Delete forever of up to 500 picked records asks first (AC-535). */}
-            <Modal
-              title={strings.confirmPurgeTitle(purgeWords)}
-              tone="danger"
-              isOpen={asking !== undefined}
-              onOpenChange={(isOpen) => {
-                if (!isOpen) setAsking(undefined);
-              }}
+            <Button
+              variant="ghost"
+              icon="trash"
+              isPending={isEmptyStarting}
+              isDisabled={isEmptyOff}
+              {...(isEmptyOff ? { 'aria-describedby': waitId } : {})}
+              onPress={emptyTrash}
+            >
+              {filteredLabel === undefined ? strings.emptyTrash : strings.emptyObjectTrash(filteredLabel)}
+            </Button>
+            {/* Why it is off, to screen readers: the bar shows the change it waits for. */}
+            {isEmptyOff && <VisuallyHidden id={waitId}>{strings.waitForChange}</VisuallyHidden>}
+          </>
+        )
+      }
+    >
+      <Toolbar label={strings.filterLabel}>
+        <Select
+          label={strings.objectFilter}
+          isLabelHidden
+          size="sm"
+          items={[
+            { id: ALL, label: strings.allObjects },
+            ...objects.map((object) => ({
+              id: object.id,
+              label: object.isArchived ? strings.archived(object.pluralName) : object.pluralName,
+              icon: object.icon,
+              hue: object.hue,
+            })),
+          ]}
+          value={objectId ?? ALL}
+          onChange={(id) => {
+            void navigate({
+              to: '/w/$slug/settings/trash',
+              params: { slug },
+              search: id === null || id === ALL ? {} : { object: id },
+            });
+          }}
+        />
+      </Toolbar>
+      <DataGrid
+        label={strings.title}
+        columns={COLUMNS}
+        pinnedCount={1}
+        rows={state.source}
+        getValue={(row, columnId) => cellValue(row, columnId, byId, dayOf)}
+        getDisplay={(row, columnId) => {
+          if (columnId === TRASH_COLUMNS.name) return row.item.display;
+          if (columnId === TRASH_COLUMNS.deletedBy) {
+            const by = deleters(row);
+            return by === undefined ? undefined : [by];
+          }
+          return undefined;
+        }}
+        rowHeader={TRASH_NAME_COLUMN}
+        hideColumnLocks
+        selection={selection}
+        onSelectionChange={select}
+        cellErrors={state.cellErrors}
+        status={state.status}
+        onRetry={view.retry}
+        {...(state.error === undefined ? {} : { errorText: state.error.message })}
+        emptyState={
+          filtered === undefined ? (
+            <EmptyState title={strings.emptyTitle} icon="trash">
+              {strings.emptyText}
+            </EmptyState>
+          ) : (
+            <EmptyState
+              title={strings.emptyObject(filtered.pluralName)}
+              icon={filtered.icon}
               actions={
-                <>
-                  <Button slot="close" kbd="ESC">
-                    {strings.cancel}
-                  </Button>
-                  <Button
-                    variant="danger-solid"
-                    icon="trash"
-                    onPress={() => {
-                      const confirmed = asking;
-                      setAsking(undefined);
-                      if (confirmed !== undefined) purgeIds(confirmed);
-                    }}
-                  >
-                    {strings.deleteRecordsForever(purgeWords)}
-                  </Button>
-                </>
+                <Button
+                  onPress={() => {
+                    void navigate({ to: '/w/$slug/settings/trash', params: { slug }, search: {} });
+                  }}
+                >
+                  {strings.showAll}
+                </Button>
               }
             >
-              {strings.confirmPurgeText}
-            </Modal>
-            {/*
+              {strings.emptyObjectText(filtered.pluralName)}
+            </EmptyState>
+          )
+        }
+        {...(focusRow === undefined ? {} : { focusRow })}
+        {...(bar === undefined ? {} : { floatingBar: bar })}
+      />
+      {/* Delete forever of up to 500 picked records asks first (AC-535). */}
+      <Modal
+        title={strings.confirmPurgeTitle(purgeWords)}
+        tone="danger"
+        isOpen={asking !== undefined}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setAsking(undefined);
+        }}
+        actions={
+          <>
+            <Button slot="close" kbd="ESC">
+              {strings.cancel}
+            </Button>
+            <Button
+              variant="danger-solid"
+              icon="trash"
+              onPress={() => {
+                const confirmed = asking;
+                setAsking(undefined);
+                if (confirmed !== undefined) purgeIds(confirmed);
+              }}
+            >
+              {strings.deleteRecordsForever(purgeWords)}
+            </Button>
+          </>
+        }
+      >
+        {strings.confirmPurgeText}
+      </Modal>
+      {/*
               A counted change (a restore or Delete forever past 500, all matching, or Empty trash), opened by Review:
               the exact number. Declining cancels it; either way focus goes on to the bar, which keeps it.
             */}
-            <Modal
-              title={jobTitle}
-              tone={isRestoreJob ? 'default' : 'danger'}
-              isOpen={isReviewing && bulkJob.isCounted}
-              onOpenChange={(isOpen) => {
-                if (isOpen) return;
-                if (bulkJob.isCounted) bulkJob.cancel();
+      <Modal
+        title={jobTitle}
+        tone={isRestoreJob ? 'default' : 'danger'}
+        isOpen={isReviewing && bulkJob.isCounted}
+        onOpenChange={(isOpen) => {
+          if (isOpen) return;
+          if (bulkJob.isCounted) bulkJob.cancel();
+          setReviewing(false);
+        }}
+        actions={
+          <>
+            <Button slot="close" kbd="ESC">
+              {strings.cancel}
+            </Button>
+            <Button
+              variant={isRestoreJob ? 'primary' : 'danger-solid'}
+              icon={isRestoreJob ? 'archive-restore' : 'trash'}
+              onPress={() => {
                 setReviewing(false);
+                setHeld({ view, selection: noRows() });
+                bulkJob.confirm();
               }}
-              actions={
-                <>
-                  <Button slot="close" kbd="ESC">
-                    {strings.cancel}
-                  </Button>
-                  <Button
-                    variant={isRestoreJob ? 'primary' : 'danger-solid'}
-                    icon={isRestoreJob ? 'archive-restore' : 'trash'}
-                    onPress={() => {
-                      setReviewing(false);
-                      setHeld({ view, selection: noRows() });
-                      bulkJob.confirm();
-                    }}
-                  >
-                    {isRestoreJob ? strings.restoreRecords(jobWords) : strings.deleteRecordsForever(jobWords)}
-                  </Button>
-                </>
-              }
             >
-              {jobText}
-            </Modal>
+              {isRestoreJob ? strings.restoreRecords(jobWords) : strings.deleteRecordsForever(jobWords)}
+            </Button>
           </>
-        ),
-      }}
-    />
+        }
+      >
+        {jobText}
+      </Modal>
+    </SettingsPage>
   );
 }

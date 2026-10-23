@@ -59,6 +59,15 @@ const READS: ReadonlySet<string> = new Set([
   'profile.get',
   'deletedWorkspace.deleted',
   'access.mine',
+  // Settings › History's Workspace changes (spec 0046).
+  'audit.list',
+  // The operator console (spec 0047): read only, across workspaces, behind the operator gate.
+  'operator.overview',
+  'operator.users',
+  'operator.user',
+  'operator.pages',
+  'operator.page',
+  'operator.site',
   // The roles every role picker offers (spec 0037, AC-1439).
   'roles.list',
   'records.query',
@@ -1291,6 +1300,18 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookingPages.delete({ workspace: m.slug, pageId: page.id, mutationId });
     return [];
   },
+  // The profile's order (owner ask A102): settings too, so no outbox row; one poke.
+  'bookingPages.reorderProfile': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.reorderProfile({ workspace: m.slug, pageIds: [page.id], mutationId });
+    return [];
+  },
   // The default schedule's hours (spec 0035): the first save stores "Working hours", one `schedules` row.
   'bookings.setHours': async (m, mutationId) => {
     const { availability } = await m.client.bookings.hours({ workspace: m.slug, timeZone: 'UTC' });
@@ -2037,6 +2058,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'rotations.update': 2,
   'rotations.delete': 2,
   'bookingPages.delete': 2,
+  'bookingPages.reorderProfile': 2,
   'bookings.blocks.remove': 2,
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,

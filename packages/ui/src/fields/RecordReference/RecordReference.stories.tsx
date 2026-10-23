@@ -243,6 +243,7 @@ export const ResultNotes: Story = {
     });
     await expect(items[1]).toHaveAccessibleDescription('At Acme');
     await expect(items[2]).toHaveAccessibleDescription('Linked elsewhere');
-    await expect(items[0]?.querySelector('[role="img"]')).not.toBeNull();
+    // Already linked: its check is drawn, and screen readers hear "Current" after its name.
+    await expect(items[0]).toHaveAccessibleDescription('Current');
   },
 };

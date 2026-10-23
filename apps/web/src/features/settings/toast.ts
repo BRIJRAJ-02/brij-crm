@@ -1,4 +1,5 @@
-// The toast a job this browser started raises when it ends (spec 0008, AC-119).
+// Settings' toasts: the one a job this browser started raises when it ends (spec 0008, AC-119), and the one a
+// setting that saves at once raises (the owner's save rule, 21 October 2026).
 import type { JobView, Notice } from '@crm/data';
 import { strings } from './jobs-strings.ts';
 
@@ -17,5 +18,17 @@ export function jobFinishedToast(job: Pick<JobView, 'label' | 'status' | 'refuse
     tone: job.status === 'failed' ? 'danger' : 'success',
     message: strings.finished(job.label, jobEnding(job)),
     action: { label: strings.view, onAction: onView },
+  };
+}
+
+/**
+ * A setting saved at once: says what saved ("Invite link saved."), with Undo when `undo` is given, which puts the
+ * previous value back. Leave `undo` out when the previous value can't be put back exactly.
+ */
+export function savedToast(message: string, undo?: { readonly label: string; readonly onUndo: () => void }): Notice {
+  return {
+    tone: 'success',
+    message,
+    ...(undo === undefined ? {} : { action: { label: undo.label, onAction: undo.onUndo } }),
   };
 }

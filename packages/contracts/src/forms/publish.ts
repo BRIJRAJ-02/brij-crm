@@ -1,6 +1,7 @@
 // The publish check (spec 0023, 0023-experience.md, Publishing; AC-546,
 // AC-655): one function the builder and the server both run, answering the
 // first problem with a draft as one full sentence and the question at fault.
+// A draft save refuses a condition over a record field in the same words.
 // Plain TypeScript: the caller hands in what it knows of the attributes.
 import { CHOICE_TYPES, fitsAttribute, FORM_SLUG } from './answer-types.ts';
 import type { AttributeType } from '../values/attribute-values.ts';
@@ -50,6 +51,23 @@ export interface PublishProblem {
 const named = (question: { readonly label: string; readonly key: string }) =>
   `“${question.label.trim() === '' ? question.key : question.label.trim()}”`;
 
+/** A rule's name in a sentence: "Rule 2", or "Rule 2, “Enterprise”," when it has a name. */
+const ruleNamed = (rule: { readonly name?: string | undefined }, index: number) =>
+  rule.name === undefined || rule.name === ''
+    ? `Rule ${String(index + 1)}`
+    : `Rule ${String(index + 1)}, “${rule.name}”,`;
+
+/** What a condition over a person's or a company's field is refused for, on publish and on save alike. */
+const READS_RECORD_FIELD = 'reads a record field, which only a team page’s rules can read';
+
+/** The refusal of a question's Show when: the question, the problem, and where to change it. */
+const showWhenMessage = (question: { readonly label: string; readonly key: string }, problem: string) =>
+  `${named(question)} ${problem}. Change its Show when.`;
+
+/** The refusal of a routing rule: the rule, the problem, and where to change it. */
+const ruleMessage = (rule: { readonly name?: string | undefined }, index: number, problem: string) =>
+  `${ruleNamed(rule, index)} ${problem}. Change it in Routing.`;
+
 /** What a condition may read: the questions before it, by key. */
 type Readable = ReadonlyMap<string, FormDocument['questions'][number]>;
 
@@ -70,7 +88,7 @@ function conditionProblem(
 ): string | undefined {
   const question = readable.get(condition.key);
   if (question === undefined) {
-    if (isRecordFact(condition.key)) return 'reads a record field, which only a team page’s rules can read';
+    if (isRecordFact(condition.key)) return READS_RECORD_FIELD;
     if (isHiddenFact(condition.key)) {
       if (!isRule) return 'reads a hidden field such as a UTM tag, which only routing rules can read';
       return NUMBER_OPS.includes(condition.op) ? 'compares a hidden field as a number, but it holds text' : undefined;
@@ -151,11 +169,7 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
     const hidden = showWhenProblem(question.showWhen, before, all);
     before.set(question.key, question);
     if (hidden !== undefined) {
-      return {
-        code: 'SHOW_WHEN_INVALID',
-        message: `${named(question)} ${hidden}. Change its Show when.`,
-        questionId: question.id,
-      };
+      return { code: 'SHOW_WHEN_INVALID', message: showWhenMessage(question, hidden), questionId: question.id };
     }
     if (
       question.showWhen !== undefined &&
@@ -217,11 +231,7 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
   for (const [index, rule] of (input.document.routing?.rules ?? []).entries()) {
     const problem = showWhenProblem(rule.when, all, all, true);
     if (problem !== undefined) {
-      const name =
-        rule.name === undefined || rule.name === ''
-          ? `Rule ${String(index + 1)}`
-          : `Rule ${String(index + 1)}, “${rule.name}”,`;
-      return { code: 'ROUTING_INVALID', message: `${name} ${problem}. Change it in Routing.`, ruleId: rule.id };
+      return { code: 'ROUTING_INVALID', message: ruleMessage(rule, index, problem), ruleId: rule.id };
     }
     if (rule.then.kind === 'hosts') {
       return {
@@ -232,4 +242,31 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
     }
   }
   return undefined;
+}
+
+/**
+ * The first question whose Show when, or else the first routing rule, reads a person's or a company's field, in
+ * the words `publishProblem` refuses it with, or undefined. A form's conditions read its answers and the visit's
+ * hidden fields only: its editor never offers a record field, and only a team page's rules read one. The draft save
+ * refuses one too (security review, 23 October 2026): every member who sees a form reads its draft, so a stored
+ * condition would show them a field's id and the value it looks for, even a field hidden from them.
+ */
+export function recordFactProblem(
+  document: Pick<FormDocument, 'questions'> & { readonly routing?: FormDocument['routing'] },
+): PublishProblem | undefined {
+  const readsField = (showWhen: ShowWhen | undefined) =>
+    (showWhen?.rules ?? []).some((condition) => isRecordFact(condition.key));
+  const question = document.questions.find((each) => readsField(each.showWhen));
+  if (question !== undefined) {
+    return {
+      code: 'SHOW_WHEN_INVALID',
+      message: showWhenMessage(question, READS_RECORD_FIELD),
+      questionId: question.id,
+    };
+  }
+  const rules = document.routing?.rules ?? [];
+  const index = rules.findIndex((rule) => readsField(rule.when));
+  const rule = rules[index];
+  if (rule === undefined) return undefined;
+  return { code: 'ROUTING_INVALID', message: ruleMessage(rule, index, READS_RECORD_FIELD), ruleId: rule.id };
 }

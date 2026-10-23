@@ -14,6 +14,7 @@ import {
   bigint,
   boolean,
   check,
+  date,
   foreignKey,
   index,
   inet,
@@ -56,6 +57,8 @@ export const user = auth.table(
   },
   (t) => [
     uniqueIndex('user_email').on(t.email),
+    // The operator console's users list, newest first (spec 0047), and its sign ups a day.
+    index('user_created').on(t.createdAt, t.id),
     // Better Auth lowercases every email it writes; this keeps any other writer from making a second identity.
     check('user_email_lowercase', sql`${t.email} = lower(${t.email})`),
   ],
@@ -372,7 +375,7 @@ export const workspaceMembership = auth.table(
  * the workspace they last opened, where `/` and sign in take them. Written
  * only for the caller, and only for a workspace the door let them into; read
  * only to choose where to go, never for access. And whether their account
- * picture stays off their public pages (owner ask A124, migration 0092),
+ * picture stays off their public pages (owner ask A124, migration 0094),
  * written and read only through crm_handle's functions.
  */
 export const userPrefs = auth.table(
@@ -415,5 +418,91 @@ export const knownDevice = auth.table(
     foreignKey({ name: 'known_device_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     check('known_device_key', sql`${t.deviceKey} ~ '^[0-9a-f]{64}$'`),
     index('known_device_last_seen').on(t.lastSeen),
+  ],
+);
+
+/**
+ * The days a person used the app (spec 0047, AC-1624): one row per person and
+ * UTC day, written from the session check at most once per person every 10
+ * minutes per api process. What the operator console's "last active" and
+ * "active days" read. Deleted with the person, and after a year by the
+ * identity sweep.
+ */
+export const activityDay = auth.table(
+  'activity_day',
+  {
+    userId: uuid('user_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    firstAt: timestamptz('first_at').notNull().defaultNow(),
+    lastAt: timestamptz('last_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'activity_day_pkey', columns: [t.userId, t.day] }),
+    foreignKey({ name: 'activity_day_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    index('activity_day_day').on(t.day, t.userId),
+  ],
+);
+
+/**
+ * One page shown on the marketing site (spec 0047, AC-1627), from its own
+ * beacon to our api: the path with no query, the referring site's host, the
+ * `utm_source`, the country from the edge, a device class and a daily visitor
+ * id (an HMAC of the day, the address and the user agent; neither is kept).
+ * No foreign key: nobody is signed in. Deleted after a year by the identity
+ * sweep.
+ */
+export const siteVisit = auth.table(
+  'site_visit',
+  {
+    id: authId(),
+    at: timestamptz('at').notNull().defaultNow(),
+    /** The marketing site's host, from the hit's Origin (one on `SITE_ORIGINS`). */
+    site: text('site').notNull(),
+    path: text('path').notNull(),
+    referrer: text('referrer'),
+    source: text('source'),
+    country: text('country'),
+    device: text('device', { enum: ['mobile', 'tablet', 'desktop'] }).notNull(),
+    visitor: text('visitor').notNull(),
+  },
+  (t) => [
+    index('site_visit_at').on(t.at),
+    check('site_visit_path', sql`char_length(${t.path}) between 1 and 200 and left(${t.path}, 1) = '/'`),
+    check('site_visit_site', sql`char_length(${t.site}) between 1 and 120`),
+    check('site_visit_referrer', sql`char_length(${t.referrer}) between 1 and 120`),
+    check('site_visit_source', sql`char_length(${t.source}) between 1 and 60`),
+    check('site_visit_country', sql`${t.country} ~ '^[A-Z]{2}$'`),
+    check('site_visit_device', sql`${t.device} in ('mobile', 'tablet', 'desktop')`),
+    check('site_visit_visitor', sql`${t.visitor} ~ '^[0-9a-f]{32}$'`),
+  ],
+);
+
+/**
+ * The operator console's own log (spec 0047, AC-1620): one row per read, written
+ * before the read runs. No foreign key to the operator: the log outlives the
+ * account. Deleted after two years by the identity sweep.
+ */
+export const operatorEvent = auth.table(
+  'operator_event',
+  {
+    id: authId(),
+    at: timestamptz('at').notNull().defaultNow(),
+    userId: uuid('user_id').notNull(),
+    /** The procedure, such as `operator.user`. */
+    action: text('action').notNull(),
+    /** The person or page read, by id, when the read names one. */
+    target: uuid('target'),
+    /** The period the read asked for: `7d`, `30d` or `90d`. */
+    period: text('period'),
+    /** The users list's search as typed, when there was one: who looked whom up is what this log answers. */
+    q: text('q'),
+    requestId: text('request_id').notNull(),
+  },
+  (t) => [
+    index('operator_event_at').on(t.at),
+    check('operator_event_action', sql`${t.action} ~ '^operator\\.[a-zA-Z]{1,40}$'`),
+    check('operator_event_period', sql`${t.period} in ('7d', '30d', '90d')`),
+    check('operator_event_request', sql`char_length(${t.requestId}) between 1 and 100`),
+    check('operator_event_q', sql`char_length(${t.q}) between 1 and 100`),
   ],
 );

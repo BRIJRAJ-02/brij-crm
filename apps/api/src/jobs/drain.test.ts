@@ -292,6 +292,45 @@ describe('the after request trigger', () => {
   });
 });
 
+describe('a wake from use with no time left for its turn', () => {
+  it('is dropped with the turn it waited on, so a later request’s turn is not logged as by use', async () => {
+    let clock = 0;
+    const lines: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+    const reports: DrainReport[] = [
+      { outcome: 'idle', ms: 18_000 },
+      { outcome: 'idle', ms: 700 },
+    ];
+    const drain: JobDrain = {
+      run: () => {
+        clock += 18_000;
+        return Promise.resolve(reports.shift() ?? { outcome: 'nothing', ms: 1 });
+      },
+      running: () => false,
+      nextDue: () => undefined,
+    };
+    const kept: Promise<unknown>[] = [];
+    const wake = createDrainWake({
+      drain,
+      keepAlive: (work) => kept.push(work),
+      budgetMs: 20_000,
+      cooldownMs: 0,
+      log: { ...quiet, info: (message, fields) => lines.push({ message, fields }) },
+      now: () => clock,
+    });
+    // A request's turn runs 18 of its 20 seconds; a wake from use arrives meanwhile, with 2 seconds left for it.
+    wake();
+    wake('use');
+    await kept[0];
+    // Later, a request's own turn.
+    wake();
+    await kept[1];
+    expect(lines).toEqual([
+      { message: 'jobs.drain', fields: { outcome: 'idle', ms: 18_000, by: 'request' } },
+      { message: 'jobs.drain', fields: { outcome: 'idle', ms: 700, by: 'request' } },
+    ]);
+  });
+});
+
 describe('the wake from use', () => {
   function counting(due: () => number | undefined) {
     let clock = 1_000_000;

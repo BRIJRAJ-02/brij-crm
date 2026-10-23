@@ -20,7 +20,7 @@ Ported from the artifact's DatePicker card. It is the date attribute's editor (c
 
 ### MonthCalendar
 
-`<MonthCalendar label="Go to date" value={day} onChange={setDay} />` is the same calendar inline and compact: no field and no popover, shorter days, as wide as its column up to a menu's width. Why a variant: Bookings' calendars panel keeps a small month for jumping to a date, as Google Calendar does; it is DatePicker's month, so it reuses its grid, keys and look rather than adding a calendar. `shown={{ start, end }}` tints the days the view beside it shows (Bookings' week) as one band in `surface-selected`, its ends rounded (at the month's edge too), the chosen day still accent and no hover inside it (the hover surface is lighter than the band, so a hovered day would seem to leave the week), as Google Calendar's small month marks its week.
+`<MonthCalendar label="Go to date" value={day} onChange={setDay} />` is the same calendar inline and compact: no field and no popover, shorter days, as wide as its column up to a menu's width. Why a variant: Bookings' calendars panel keeps a small month for jumping to a date, as Google Calendar does; it is DatePicker's month, so it reuses its grid, keys and look rather than adding a calendar. `shown={{ start, end }}` tints the days the view beside it shows (Bookings' week) as one band in `surface-selected`, its ends rounded (at the month's edge too), the chosen day still accent and no hover inside it (the hover surface is lighter than the band, so a hovered day would seem to leave the week), as Google Calendar's small month marks its week. `autoFocus` puts focus on the chosen day as it mounts, for a month opened in a popover (Bookings' Go to date), so the arrows work at once; inline beside a view it stays off.
 
 ## States
 
@@ -31,6 +31,8 @@ Empty (placeholder segments), chosen, focus (accent border and ring), invalid, r
 Enter in the date submits the form around it, as in any text field (Availability's Add a day off).
 
 Type into each segment, or use Up and Down to change it and Left and Right to move. Alt Down (or the calendar button) opens the calendar; arrows move by day, Page Up and Page Down by month; Enter chooses; Esc closes it and returns focus.
+
+MonthCalendar with `autoFocus` (as a popover opens it, like Bookings' Go to date) starts with focus on the chosen day, so the arrows move from it at once.
 
 ## Differences from the artifact
 

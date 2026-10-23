@@ -309,7 +309,7 @@ describe("migration 0018's closing check", () => {
     'revoke all on auth.public_handles, auth.public_profiles from crm_handle',
     'revoke all (handle, bio, updated_at) on auth.public_profiles from crm_handle',
     'revoke all (id, name, image) on auth."user" from crm_handle',
-    // And migration 0092's picture choice, with its own closing check.
+    // And migration 0094's picture choice, with its own closing check.
     'revoke all (user_id, picture_hidden, updated_at) on auth.user_prefs from crm_handle',
   ];
 

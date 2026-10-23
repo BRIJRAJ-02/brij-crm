@@ -80,7 +80,11 @@ describe('signing in by email code', () => {
     expect(cookie).toMatch(/Max-Age=2592000/);
 
     const me = await rpcClient(app, cookieFrom(signedIn)).me.get();
-    expect(me).toEqual({ user: { id: expect.any(String) as string, name: '', email }, workspaces: [] });
+    expect(me).toEqual({
+      user: { id: expect.any(String) as string, name: '', email },
+      workspaces: [],
+      isOperator: false,
+    });
     // The session is 30 days, in the database, with the trusted IP.
     const session = await authSql<{ days: number; ip_address: string | null }>(
       `select round(extract(epoch from expires_at - now()) / 86400)::int as days, ip_address

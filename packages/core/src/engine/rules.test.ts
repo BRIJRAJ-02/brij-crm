@@ -481,6 +481,14 @@ describe('actor values', () => {
         ['ATTRIBUTE_VALUE_INVALID', owner],
       ]);
     }
+    // A create naming another workspace's member as Owner (New deal) is refused on Owner, and makes nothing.
+    const made = await refusals(
+      createRecord(scope, {
+        objectId: dealsObject,
+        values: { [id(deals.name)]: 'C', [owner]: { type: 'member', id: elsewhere.memberId } },
+      }),
+    );
+    expect(made.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([['ATTRIBUTE_VALUE_INVALID', owner]]);
     const results = await setValuesBatch(scope, {
       items: [
         { recordId: firstId, values: { [owner]: { value: { type: 'member', id: elsewhere.memberId } } } },

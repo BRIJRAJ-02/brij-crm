@@ -21,12 +21,20 @@ export const FactKey = z
     error: 'Pick a question or a field.',
   });
 
+/** A condition's typed value: at most 200 characters. */
+const RuleValueText = z.string().trim().max(200, { error: 'Keep the value to 200 characters.' });
+
 /** One condition (AC-1602): a value fitting its operator. */
 export const ConditionSchema = z
   .strictObject({
     key: FactKey,
     op: z.enum(CONDITION_OPS),
-    value: z.union([z.string().trim().max(200), z.array(z.string().trim().max(200)).min(1).max(20)]).optional(),
+    value: z
+      .union([
+        RuleValueText,
+        z.array(RuleValueText).min(1, { error: 'Pick at least one.' }).max(20, { error: 'Pick 20 or fewer.' }),
+      ])
+      .optional(),
   })
   .superRefine((condition, context) => {
     const blank =
@@ -68,6 +76,8 @@ const RouteUrl = z
   .max(2_048)
   .refine(
     (value) => {
+      // Zod runs this even after `.url()` refused the value: a throw here would answer a typed address with a 500.
+      if (!URL.canParse(value)) return false;
       const url = new URL(value);
       return url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost');
     },
@@ -84,9 +94,12 @@ export const Route = z.discriminatedUnion('kind', [
     kind: z.literal('book'),
     bookingPageId: uuidWith('Pick a booking page.'),
     hosts: RouteHosts.optional(),
-    message: z.string().trim().max(2_000).default(''),
+    message: z.string().trim().max(2_000, { error: 'Keep the message to 2,000 characters.' }).default(''),
   }),
-  z.strictObject({ kind: z.literal('message'), message: z.string().trim().max(2_000).default('') }),
+  z.strictObject({
+    kind: z.literal('message'),
+    message: z.string().trim().max(2_000, { error: 'Keep the message to 2,000 characters.' }).default(''),
+  }),
   z.strictObject({ kind: z.literal('redirect'), url: RouteUrl }),
   z.strictObject({ kind: z.literal('hosts'), hosts: RouteHosts }),
 ]);

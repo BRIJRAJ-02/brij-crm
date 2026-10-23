@@ -16,5 +16,7 @@ export const strings = {
   appMissing: 'Enter the 6 digit code from your app.',
   expired: 'This sign in has expired. Sign in again.',
   signInAgain: 'Sign in again',
+  /** The footer's way back to /sign-in, as /verify words it. */
+  useAnotherEmail: 'Use a different email',
   failed: 'Couldn’t check that code. Check your connection, then try again.',
 } as const;

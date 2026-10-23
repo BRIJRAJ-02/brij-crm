@@ -126,11 +126,19 @@ export const strings = {
   outlook: 'Outlook',
   apple: 'Apple / .ics',
   icsFile: 'Apple or any calendar, as an .ics file',
-  video: 'Video call: the link comes with the invitation.',
+  /** A video call with no link made (no calendar that makes one): its host sends it, never a promise (QA Q77). */
+  video: (host: string) => `Video call. ${host} will send you the link.`,
   phoneCall: 'Phone call to the number you gave.',
   cancelledNext: 'Nothing more to do here.',
   pastNext: 'This one has already happened.',
   bookAnother: (host: string) => `Book another time with ${host}`,
   bookAgain: 'Book again',
-  linkGone: 'This link doesn’t open a booking.',
+  // A title, so no full stop, and a way on (QA Q80).
+  linkGone: 'This link doesn’t open a booking',
+  linkGoneText: 'The link may be incomplete or out of date. Open the one in the latest email about this booking.',
 } as const;
+
+/** A tab's title: the page's heading, then the product, as every public page names its tab (QA Q76). */
+export function tabTitle(heading: string): string {
+  return `${heading} · ${strings.product}`;
+}

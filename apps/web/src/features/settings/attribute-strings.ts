@@ -15,8 +15,6 @@ export const strings = {
   noAttributes: 'No attributes yet',
   noAttributesText: 'Add one with New attribute. Every table of this object shows it as a column.',
   noAttributesMemberText: 'A workspace owner or admin can add one.',
-  noArchived: 'Nothing is archived',
-  noArchivedText: 'Archived attributes show here, with their values kept.',
   /** Badges (AC-227). */
   primary: 'Primary',
   /** Primary's InfoTip in the Rules column. */
@@ -52,7 +50,7 @@ export const strings = {
   saved: (title: string) => `${title} saved.`,
   /** Two ends, as one toast names them. */
   both: (first: string, second: string) => `${first} and ${second}`,
-  readOnlyNote: 'Only workspace owners and admins can change objects and attributes.',
+  readOnlyNote: 'Only owners and admins can change this.',
   /** Why a dialog opened read only. */
   systemReason: (title: string) => `${title} is set by the system.`,
   memberReason: 'Only workspace owners and admins can change attributes.',

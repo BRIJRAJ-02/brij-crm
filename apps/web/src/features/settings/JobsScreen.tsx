@@ -99,7 +99,7 @@ function Progress({ job }: { readonly job: JobView }) {
   );
 }
 
-/** The result cell: why it failed, when it retries or expires, or its refusals and skips by code. */
+/** The result cell: why it failed, when it retries or expires, or its refusals (in words, never a code) and skips. */
 function Result({ job }: { readonly job: JobView }) {
   if (job.error !== undefined) return <>{job.error.message}</>;
   if (job.status === 'ready' && job.expiresAt !== undefined) {

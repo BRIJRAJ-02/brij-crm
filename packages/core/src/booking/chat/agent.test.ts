@@ -119,9 +119,7 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
   it('answers questions without booking, keeping a held time', () => {
     const turn = words(['tomorrow at 3pm', 'Ada, ada@example.com', 'where is it?']);
     expect(turn.state.intent).toBe('location');
-    expect(turn.text).toBe(
-      'It’s a video call. The link comes with the confirmation. Tomorrow at 3:00 PM is still yours.',
-    );
+    expect(turn.text).toBe('It’s a video call. Ada will send you the link. Tomorrow at 3:00 PM is still yours.');
     expect(words(['how long is it?']).text).toMatch(/^It’s 30 minutes\./);
     expect(words(['can I cancel if something comes up?']).state.intent).toBe('change-policy');
   });

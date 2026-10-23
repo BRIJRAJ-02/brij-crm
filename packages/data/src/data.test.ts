@@ -7,7 +7,10 @@ import {
   defaultAvailability,
   type AttributeDefinition,
   type BookingPageView,
+  type BookingsCalendarView,
   type AttributeOption,
+  type AuditListInput,
+  type AuditPage,
   type ChangeEvent,
   type DeleteManyResults,
   type GlobalSearchResults,
@@ -34,12 +37,15 @@ import {
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { describe, expect, it, vi } from 'vitest';
-import { dataError, isUnseenFault, parseRetryAfter, refusalFor, refusalSummary } from './errors.ts';
+import { dataError, isUnseenFault, parseRetryAfter } from './errors.ts';
+import { refusalFor, refusalSummary } from './refusals.ts';
 import {
   createDataLayer,
   createIdMinter,
   isDataError,
   isEditableHere,
+  searchMembers,
+  toActorDisplays,
   toFieldAttribute,
   withPendingOptions,
   type DataError,
@@ -54,6 +60,7 @@ const ORIGIN = 'https://crm.test';
 const ME: Me = {
   user: { id: '0199a6f2-0000-7000-8000-000000000001', name: 'Ada Lovelace', email: 'ada@example.com' },
   workspaces: [{ id: '0199a6f2-0000-7000-8000-000000000002', slug: 'acme', name: 'Acme' }],
+  isOperator: false,
 };
 
 const PEOPLE: ObjectSummary = {
@@ -146,6 +153,10 @@ interface Behaviour {
   activity: (recordId: string, cursor?: string) => RecordActivity;
   /** A record in the trash (spec 0017). */
   trashed: (recordId: string) => TrashedRecord;
+  /** A page of the audit log (spec 0046). */
+  auditList: (input: AuditListInput) => AuditPage;
+  /** A workspace's sign in rules (spec 0033). */
+  workspaceSecurityGet: () => never;
   /** What every option write answers (spec 0012, milestone 3). */
   optionWrite: () => AttributeOption;
   /** What both relationship writes answer (spec 0014). */
@@ -177,6 +188,8 @@ interface Behaviour {
   }) => BookingPageView | Promise<BookingPageView>;
   /** What `account.deletion.confirm` answers (spec 0033). */
   deleteAccount: () => Promise<{ deleted: true }>;
+  /** What `bookings.calendar` answers: Bookings' week (spec 0025). */
+  bookingsCalendar: () => BookingsCalendarView;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -215,6 +228,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     usage: () => ({ attributes: { [PEOPLE.id]: { used: 20, limit: 250 } }, optionsPerAttribute: 500 }),
     activity: notServed,
     trashed: notServed,
+    auditList: notServed,
+    workspaceSecurityGet: notServed,
     optionWrite: notServed,
     relationshipWrite: notServed,
     viewsList: notServed,
@@ -231,6 +246,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     recents: () => [],
     bookingPagesGet: notServed,
     bookingPagesUpdate: notServed,
+    bookingsCalendar: notServed,
     ...overrides,
   };
   const calls: string[] = [];
@@ -435,7 +451,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       transferOwnership: os.members.transferOwnership.handler(notServed),
     },
     workspaceSecurity: {
-      get: os.workspaceSecurity.get.handler(notServed),
+      get: os.workspaceSecurity.get.handler(() => behaviour.workspaceSecurityGet()),
       set: os.workspaceSecurity.set.handler(notServed),
       signOutEveryone: os.workspaceSecurity.signOutEveryone.handler(notServed),
     },
@@ -543,6 +559,15 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       settings: os.notifications.settings.handler(notServed),
       setSettings: os.notifications.setSettings.handler(notServed),
     },
+    // The operator console (spec 0047) is read through to the api as is; its gate and reads are the api's tests.
+    operator: {
+      overview: os.operator.overview.handler(notServed),
+      users: os.operator.users.handler(notServed),
+      user: os.operator.user.handler(notServed),
+      pages: os.operator.pages.handler(notServed),
+      page: os.operator.page.handler(notServed),
+      site: os.operator.site.handler(notServed),
+    },
     // Account sessions (spec 0033) are driven against their own fake in `account/sessions.test.ts`.
     account: {
       sessions: {
@@ -648,6 +673,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return behaviour.bookingPagesUpdate(input);
       }),
       delete: os.bookingPages.delete.handler(notServed),
+      reorderProfile: os.bookingPages.reorderProfile.handler(notServed),
     },
     home: {
       teamToday: os.home.teamToday.handler(notServed),
@@ -657,7 +683,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.bookings.list.handler(notServed),
       listAll: os.bookings.listAll.handler(notServed),
       meetings: os.bookings.meetings.handler(notServed),
-      calendar: os.bookings.calendar.handler(notServed),
+      calendar: os.bookings.calendar.handler(() => behaviour.bookingsCalendar()),
       hours: os.bookings.hours.handler(notServed),
       setHours: os.bookings.setHours.handler(notServed),
       bookAsHost: os.bookings.bookAsHost.handler(notServed),
@@ -700,6 +726,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     },
     routing: {
       report: os.routing.report.handler(notServed),
+    },
+    audit: {
+      list: os.audit.list.handler(({ input }) => {
+        calls.push(`audit.list ${input.cursor ?? 'first'}`);
+        return behaviour.auditList(input);
+      }),
     },
   });
   const handler = new RPCHandler(router);
@@ -1205,7 +1237,7 @@ describe('members and attributes', () => {
     expect(count(api.calls, '/api/rpc/attributes/list')).toBe(6);
   });
 
-  it('maps an attribute to the field set’s, reading members and unlinkable references as read only', () => {
+  it('maps an attribute to the field set’s, members editable and unlinkable references read only', () => {
     expect(toFieldAttribute(TITLE)).toEqual({
       id: TITLE.id,
       name: 'Job title',
@@ -1218,9 +1250,14 @@ describe('members and attributes', () => {
       isReadOnly: false,
     });
     const owner = { ...TITLE, type: 'actor_reference' as const, title: 'Owner' };
-    expect(toFieldAttribute(owner, 'Set on the record page')).toMatchObject({
+    // A member (Owner) edits through the member picker everywhere, a create form and a bulk edit too.
+    expect(toFieldAttribute(owner, 'Set on the record page')).toMatchObject({ isReadOnly: false });
+    expect(toFieldAttribute(owner, 'Set on the record page')).not.toHaveProperty('readOnlyReason');
+    expect(isEditableHere(owner)).toBe(true);
+    // The server's own reason still makes it read only (spec 0009, AC-142).
+    expect(toFieldAttribute({ ...owner, readOnly: { reason: "Your role can't change Owner." } })).toMatchObject({
       isReadOnly: true,
-      readOnlyReason: 'Set on the record page',
+      readOnlyReason: "Your role can't change Owner.",
     });
     const company = { ...TITLE, type: 'record_reference' as const, isMulti: true };
     // A side with no relationship the person can see (one way, or its far object hidden) can't link from here.
@@ -1240,6 +1277,25 @@ describe('members and attributes', () => {
     const createdAt = { ...TITLE, type: 'timestamp' as const, isSystem: true };
     expect(toFieldAttribute(createdAt, 'unused')).toMatchObject({ isReadOnly: true });
     expect(toFieldAttribute(createdAt, 'unused').readOnlyReason).toBeUndefined();
+  });
+
+  it('offers members by name or email, ignoring case, Me pinned by the picker while empty and first once matched', () => {
+    const members = toActorDisplays([
+      { id: '0192a000-0000-7000-8000-000000000001', name: 'Ada Lovelace', email: 'ada@acme.test' },
+      { id: '0192a000-0000-7000-8000-000000000002', name: 'Grace Hopper', email: 'grace@navy.test' },
+      { id: '0192a000-0000-7000-8000-000000000003', name: 'Alan Turing', email: 'alan@acme.test' },
+    ]);
+    const names = (query: string, meId?: string) => searchMembers(members, query, meId).map((each) => each.name);
+    expect(names('')).toEqual(['Ada Lovelace', 'Grace Hopper', 'Alan Turing']);
+    expect(names('  HOPPER ')).toEqual(['Grace Hopper']);
+    expect(names('acme.test')).toEqual(['Ada Lovelace', 'Alan Turing']);
+    const me = '0192a000-0000-7000-8000-000000000003';
+    // Nothing typed: Me is left out, since the picker pins Me first.
+    expect(names('', me)).toEqual(['Ada Lovelace', 'Grace Hopper']);
+    // Typed: the picker pins nothing, so Me leads the matches when it matches, and is absent when it doesn't.
+    expect(names('a', me)).toEqual(['Alan Turing', 'Ada Lovelace', 'Grace Hopper']);
+    expect(names('grace', me)).toEqual(['Grace Hopper']);
+    expect(names('zzz')).toEqual([]);
   });
 
   it('makes a field the server says the person may only read read only, with the server’s reason (AC-142)', () => {
@@ -2107,6 +2163,23 @@ describe('refusal wording', () => {
     expect(refusalFor(whole, 'a2')).toBe('This object is full.');
     expect(refusalSummary(whole)).toBe('This object is full.');
   });
+
+  it('shows the safety net’s words on their field only: a toast says the answer’s sentence', () => {
+    const missing = dataError('INPUT_INVALID', 'Some of what you entered isn’t valid.', {
+      issues: [{ path: ['values', 'a1'], message: 'Add this.' }],
+    });
+    expect(refusalFor(missing, 'a1')).toBe('Add this.');
+    expect(refusalSummary(missing)).toBe('Some of what you entered isn’t valid.');
+    const tooLong = dataError('INPUT_INVALID', 'Some of what you entered isn’t valid.', {
+      issues: [{ path: ['values', 'a1'], message: 'Use 2,000 characters or fewer.' }],
+    });
+    expect(refusalSummary(tooLong)).toBe('Some of what you entered isn’t valid.');
+    // A schema's own words name their field, so they still lead.
+    const named = dataError('INPUT_INVALID', 'Some of what you entered isn’t valid.', {
+      issues: [{ path: ['title'], message: 'Give the task a title.' }],
+    });
+    expect(refusalSummary(named)).toBe('Give the task a title.');
+  });
 });
 
 describe('parseRetryAfter', () => {
@@ -2130,6 +2203,103 @@ describe('the layer has no state at module level', () => {
     await layer(two).data.me.get();
     expect(count(one.calls, '/api/rpc/me/get')).toBe(1);
     expect(count(two.calls, '/api/rpc/me/get')).toBe(1);
+  });
+});
+
+describe('audit (spec 0046)', () => {
+  const entry = (n: number) => ({
+    id: `0199f0a0-0000-7000-8000-${String(n).padStart(12, '0')}`,
+    at: '2026-10-23T06:52:11.123456Z',
+    actor: { kind: 'system' as const },
+    action: 'workspace.restored' as const,
+    target: { type: 'workspace' as const },
+    params: {},
+    changes: [],
+  });
+
+  it('opens a workspace’s log through audit.list, then reads on with the cursor', async () => {
+    const api = fakeApi({
+      auditList: (input) =>
+        input.cursor === undefined ? { entries: [entry(1)], nextCursor: 'next-1' } : { entries: [entry(2)] },
+    });
+    const { data } = layer(api);
+    const log = await data.audit.openLog('acme');
+    await expect.poll(() => log.getSnapshot().status).toBe('ready');
+    expect(log.getSnapshot()).toMatchObject({ entries: [entry(1)], hasMore: true });
+    log.more();
+    await expect.poll(() => log.getSnapshot().entries).toEqual([entry(1), entry(2)]);
+    expect(log.getSnapshot().hasMore).toBe(false);
+    expect(api.calls.filter((each) => each.startsWith('audit.list'))).toEqual([
+      'audit.list first',
+      'audit.list next-1',
+    ]);
+  });
+
+  it('hands back the log a screen holds, so a reload of the page keeps its rows, and opens afresh once let go', async () => {
+    const api = fakeApi({
+      auditList: (input) =>
+        input.cursor === undefined ? { entries: [entry(1)], nextCursor: 'next-1' } : { entries: [entry(2)] },
+    });
+    const { data } = layer(api);
+    const reads = () => api.calls.filter((each) => each.startsWith('audit.list')).length;
+    const log = await data.audit.openLog('acme');
+    const release = log.retain();
+    await expect.poll(() => log.getSnapshot().status).toBe('ready');
+    log.more();
+    await expect.poll(() => log.getSnapshot().entries).toHaveLength(2);
+    // The router reloads the route (a live attribute change): the same log, the same rows, nothing read again.
+    expect(await data.audit.openLog('acme')).toBe(log);
+    expect(reads()).toBe(2);
+    // Another workspace's log is its own.
+    const other = await data.audit.openLog('globex');
+    expect(other).not.toBe(log);
+    other.dispose();
+    release();
+    log.dispose();
+    const fresh = await data.audit.openLog('acme');
+    expect(fresh).not.toBe(log);
+    await expect.poll(() => fresh.getSnapshot().status).toBe('ready');
+    expect(fresh.getSnapshot().entries).toEqual([entry(1)]);
+    fresh.dispose();
+  });
+
+  it('answers a refused read as forbidden, with the server’s words', async () => {
+    const api = fakeApi({
+      auditList: () => {
+        throw new ORPCError('FORBIDDEN', {
+          status: 403,
+          message: 'Only workspace owners and admins can see workspace changes.',
+        });
+      },
+    });
+    const { data } = layer(api);
+    await data.access.mine('acme');
+    const log = await data.audit.openLog('acme');
+    await expect.poll(() => log.getSnapshot().status).toBe('forbidden');
+    expect(log.getSnapshot().message).toBe('Only workspace owners and admins can see workspace changes.');
+    log.dispose();
+    // Their held access was stale: it is read again, so History's next visit opens the sign ins (AC-4618).
+    const asked = () => api.calls.filter((each) => each.endsWith('/access/mine')).length;
+    expect(asked()).toBe(1);
+    await data.access.mine('acme');
+    expect(asked()).toBe(2);
+  });
+});
+
+describe('workspace security', () => {
+  it('drops held access when the read is refused, so the next visit asks again', async () => {
+    const api = fakeApi({
+      workspaceSecurityGet: () => {
+        throw new ORPCError('FORBIDDEN', { status: 403, message: 'Only workspace owners and admins can do this.' });
+      },
+    });
+    const { data } = layer(api);
+    await data.access.mine('acme');
+    await expect(data.workspaceSecurity.get('acme')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const asked = () => api.calls.filter((each) => each.endsWith('/access/mine')).length;
+    expect(asked()).toBe(1);
+    await data.access.mine('acme');
+    expect(asked()).toBe(2);
   });
 });
 
@@ -2906,5 +3076,38 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     const after = data.routing.pageRules('acme', page.id);
     expect(after).not.toBe(held);
     expect(after.getSnapshot()).toBeUndefined();
+  });
+});
+
+describe('Bookings kept current (owner ask A115)', () => {
+  it('reads a held week again every minute while live updates are off, and stops once no screen holds it', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let reads = 0;
+      const api = fakeApi({
+        bookingsCalendar: () => {
+          reads += 1;
+          return { bookings: [], events: [], busy: [], blocks: [] };
+        },
+      });
+      const { data } = layer(api, '/w/acme/bookings/calendar', { random: () => 0.5 });
+      expect(data.live.status()).toBe('off');
+      const week = data.bookings.calendar('acme', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z');
+      const release = week.retain();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(reads).toBe(1);
+      expect(week.getSnapshot()).toMatchObject({ status: 'ready' });
+      await vi.advanceTimersByTimeAsync(59_000);
+      expect(reads).toBe(1);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(reads).toBe(2);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(reads).toBe(3);
+      release();
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(reads).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

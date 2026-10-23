@@ -209,9 +209,14 @@ export function DistributionPanel({ data, slug, rotation, onNotice }: Distributi
   };
   return (
     <SettingsStack>
-      <Callout tone="info">{strings.distribution.intro(value.windowDays)}</Callout>
+      {/* What the numbers are, as the section's one line rather than a Callout over it (SS-R9). */}
       <SectionBar
-        title={strings.distribution.shareTitle(value.windowDays)}
+        title={strings.distribution.shareTitle}
+        description={
+          value.canAdjust
+            ? strings.distribution.intro(value.windowDays)
+            : strings.distribution.ownIntro(value.windowDays)
+        }
         end={
           value.canAdjust ? (
             <Button

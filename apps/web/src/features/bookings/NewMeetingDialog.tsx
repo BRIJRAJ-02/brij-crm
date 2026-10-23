@@ -41,6 +41,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { calendarOptions } from '../calendars/calendar-options.ts';
+import { isCalendarInUse } from '../calendars/in-use.ts';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { zoneDisplay } from '../../public/booking/time.ts';
 import { instantOf, type DrawnSpan } from './span.ts';
@@ -215,6 +216,7 @@ export function NewMeetingDialog({
   const shown = putAway === typed ? [] : found;
   const isListOpen = shown.length > 0 && !busy;
   const activeIndex = active < shown.length ? active : -1;
+  // Every calendar that takes events; CalendarChoice offers those in use and the page's own, with two or more.
   const writable = (calendars?.status === 'ready' ? calendars.accounts : []).flatMap((account) =>
     account.calendars.filter((calendar) => calendar.canBeDestination),
   );
@@ -497,9 +499,10 @@ export function NewMeetingDialog({
 }
 
 /**
- * Calendar: the member's calendars that take events, each in its colour (an account with two or more under its
- * address). It starts on the page's own "Add events to" when that is one of theirs, else their default, as the
- * server picks with no choice made; only a pick is sent.
+ * Calendar: the member's calendars in use that take events, each in its colour (an account with two or more under
+ * its address), and the page's own "Add events to" even when not in use; nothing with fewer than two to choose
+ * between. It starts on the page's own when that is one of theirs, else their default, as the server picks with no
+ * choice made; only a pick is sent.
  */
 function CalendarChoice({
   calendars,
@@ -515,10 +518,13 @@ function CalendarChoice({
   readonly isDisabled: boolean;
 }) {
   const held = usePageDestination(destination);
-  const writable = calendars.accounts.flatMap((account) =>
-    account.calendars.filter((calendar) => calendar.canBeDestination),
-  );
   const pageOwn = held.status === 'ready' ? held.destination.calendarId : undefined;
+  const writable = calendars.accounts.flatMap((account) =>
+    account.calendars.filter(
+      (calendar) => calendar.canBeDestination && (isCalendarInUse(calendar) || calendar.id === pageOwn),
+    ),
+  );
+  if (writable.length < 2) return null;
   const fallback =
     writable.find((calendar) => calendar.id === pageOwn) ??
     writable.find((calendar) => calendar.isDestination) ??
@@ -526,7 +532,11 @@ function CalendarChoice({
   return (
     <Select
       label={strings.calendarChoice}
-      items={calendarOptions({ accounts: calendars.accounts, include: (calendar) => calendar.canBeDestination })}
+      items={calendarOptions({
+        accounts: calendars.accounts,
+        include: (calendar) => calendar.canBeDestination,
+        chosen: pageOwn,
+      })}
       optionStyle="dot"
       value={calendarId ?? fallback?.id ?? null}
       isDisabled={isDisabled}

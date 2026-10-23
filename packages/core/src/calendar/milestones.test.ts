@@ -11,15 +11,17 @@ import { testQuery } from '@crm/db/testing';
 import { systemScope } from '../access/door.ts';
 import { connectedCalendar } from '../booking/connected.ts';
 import { bookAsHost } from '../booking/host.ts';
-import { readBookingsCalendar } from '../booking/list.ts';
+import { listMeetings, readBookingsCalendar } from '../booking/list.ts';
 import { createBookingPage } from '../booking/pages.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
+import { readTeamToday } from '../home/team-today.ts';
 import { rescope, testScope } from '../testing.ts';
-import { deleteWorkspace, restoreWorkspace } from '../workspace/settings.ts';
+import { removeMember } from '../members/members.ts';
+import { CALENDAR_SPREAD_SECONDS, deleteWorkspace, restoreWorkspace } from '../workspace/settings.ts';
 import { updateMemberCalendar } from './calendars.ts';
 import { connectCalendar, listCalendarConnections, syncCalendarNow, updateCalendarConnection } from './connections.ts';
 import { createCalendarEvents } from './events.ts';
@@ -27,7 +29,7 @@ import { createFakeCalendarProvider } from './fake.ts';
 import { listMeetingsForRecord } from './meetings.ts';
 import { addMeetingAttendee, readCalendarSettings, updateCalendarSettings } from './people.ts';
 import type { ProviderAttendee, ProviderEvent } from './provider.ts';
-import { openChannel, takeCalendarNotice } from './push.ts';
+import { NO_PUSH_MS, openChannel, takeCalendarNotice } from './push.ts';
 import { syncConnection, type CalendarSyncDeps } from './sync.ts';
 import { decodeTokenKey, sealTokens } from './tokens.ts';
 
@@ -264,6 +266,99 @@ describe('busy times (the owner’s call, 20 October 2026)', () => {
   });
 });
 
+describe('a meeting someone else organised with the account its one guest (owner report, 23 October 2026)', () => {
+  /** The organiser as the adapters now list them: among the attendees, marked, never the account. */
+  const organizer = (email: string, name?: string): ProviderAttendee => ({ ...guest(email, name), isOrganizer: true });
+  /** The account invited, not organising, yet to answer. */
+  const invited = (email: string): ProviderAttendee => ({
+    ...self(email),
+    isOrganizer: false,
+    response: 'needs_action',
+  });
+
+  it('is a meeting with the organiser on the week, titled as in the calendar, no longer a Busy block', async () => {
+    const w = await world();
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    const range = { from: day(0, 0), to: day(7, 0) };
+    // As Google's change list read before the fix: the account alone, so only busy time.
+    const before = event('anish', day(2, 5), [invited('ada@acme.dev')], {
+      title: 'meeting with Anish',
+      organizerEmail: 'anish@globex.com',
+      videoUrl: 'https://meet.google.com/abc-defg-hij',
+    });
+    w.fake.put('ada@acme.dev', before);
+    await w.sync(conn.id);
+    expect((await busyOf(w)).map((row) => row.event)).toEqual(['anish']);
+    expect(await meetingIds(w)).toEqual([]);
+
+    // The same event listed again with its organiser (the next change to it, or a full sync): it heals in place.
+    w.fake.put('ada@acme.dev', {
+      ...before,
+      attendees: [organizer('anish@globex.com', 'Anish Tripathi'), invited('ada@acme.dev')],
+    });
+    await w.sync(conn.id);
+    expect(await busyOf(w)).toEqual([]);
+    expect(await meetingIds(w)).toEqual([{ ical_uid: 'anish@google.com' }]);
+    const week = await readBookingsCalendar(w.owner, range);
+    expect(week.busy).toEqual([]);
+    expect(week.events).toEqual([
+      expect.objectContaining({
+        connectionId: conn.id,
+        title: 'meeting with Anish',
+        startsAt: new Date(day(2, 5)).toISOString(),
+        endsAt: plus(day(2, 5), 30),
+        videoUrl: 'https://meet.google.com/abc-defg-hij',
+      }),
+    ]);
+    // The organiser is an attendee like any other: unknown here, no member, no person made (the setting is off).
+    const attendees = await w.query<{ email: string; is_organizer: boolean; match: string; member: boolean }>(sql`
+      select email, is_organizer, match::text as match, member_id is not null as member
+      from meeting_attendees order by position
+    `);
+    expect(attendees).toEqual([
+      { email: 'anish@globex.com', is_organizer: true, match: 'unknown', member: false },
+      { email: 'ada@acme.dev', is_organizer: false, match: 'member', member: true },
+    ]);
+    expect(
+      await w.query(sql`select id from records r where r.deleted_at is null and exists (
+      select 1 from "values" v where v.record_id = r.id and lower(v.text_value) = 'anish@globex.com')`),
+    ).toEqual([]);
+  });
+
+  it('matches the organiser by the workspace’s own rules: a person by email, a member as a member', async () => {
+    const w = await world();
+    const globex = await w.company('Globex', ['globex.com']);
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    const range = { from: day(0, 0), to: day(7, 0) };
+    w.fake.put(
+      'ada@acme.dev',
+      event('external', day(1), [organizer('anish@globex.com'), invited('ada@acme.dev')], {
+        title: 'meeting with Anish',
+      }),
+    );
+    // A colleague's booking with the account: an internal meeting, on the week, on no record.
+    w.fake.put(
+      'ada@acme.dev',
+      event('colleague', day(3), [organizer('bea@acme.dev'), invited('ada@acme.dev')], { title: 'Sync with Bea' }),
+    );
+    await w.sync(conn.id);
+    const page = await listMeetingsForRecord(w.owner, { recordId: globex });
+    expect(page.items.map((each) => each.title)).toEqual(['meeting with Anish']);
+    const rows = await w.query<{ title: string; is_internal: boolean; match: string; member: string | null }>(sql`
+      select m.title, m.is_internal, a.match::text as match, a.member_id::text as member
+      from meetings m join meeting_attendees a on a.meeting_id = m.id and a.is_organizer order by m.starts_at
+    `);
+    expect(rows).toEqual([
+      { title: 'meeting with Anish', is_internal: false, match: 'unknown', member: null },
+      { title: 'Sync with Bea', is_internal: true, match: 'member', member: w.bea },
+    ]);
+    expect((await readBookingsCalendar(w.owner, range)).events.map((each) => each.title)).toEqual([
+      'meeting with Anish',
+      'Sync with Bea',
+    ]);
+  });
+});
+
 describe('health (AC-619, AC-620)', () => {
   it('marks a connection failed after 6 hours of failures, keeps trying, and heals on the next sync', async () => {
     const w = await world();
@@ -416,22 +511,13 @@ describe('push channels (AC-602, AC-622)', () => {
     expect((await w.sync(conn.id)).channels).toEqual([
       { calendarId: main, outcome: 'opened', expiresAt: w.fake.watched()[1]?.channel.expiresAt, renewed: true },
     ]);
-    // The provider refuses a calendar it can't watch: the code, its status and its reason, never its words.
+    // The provider doesn't answer for a watch: the code, its status and its reason, never its words.
     await updateMemberCalendar(w.owner, { calendarId: team, showInWeek: true });
-    w.fake.failNext('watch', 'CALENDAR_UNAVAILABLE', 1, {
-      status: 400,
-      reason: 'pushNotSupportedForRequestedResource',
-    });
+    w.fake.failNext('watch', 'CALENDAR_UNAVAILABLE', 1, { status: 503, reason: 'backendError' });
     const refused = await w.sync(conn.id);
     expect(refused).toMatchObject({ kind: 'synced' });
     expect(refused.channels).toEqual([
-      {
-        calendarId: team,
-        outcome: 'failed',
-        code: 'CALENDAR_UNAVAILABLE',
-        status: 400,
-        reason: 'pushNotSupportedForRequestedResource',
-      },
+      { calendarId: team, outcome: 'failed', code: 'CALENDAR_UNAVAILABLE', status: 503, reason: 'backendError' },
     ]);
     // The next run tries again, and opens it.
     expect((await w.sync(conn.id)).channels).toMatchObject([{ calendarId: team, outcome: 'opened' }]);
@@ -456,6 +542,62 @@ describe('push channels (AC-602, AC-622)', () => {
       sql`select channel from calendar_calendars where id = ${team}::uuid`,
     );
     expect(teamRow?.channel).toBeNull();
+  });
+});
+
+describe('a calendar the provider can’t watch (owner ask A115)', () => {
+  it('asks once, says so once, and asks again only a day on, while the poll keeps the calendar current', async () => {
+    const w = await world({ push: true });
+    w.fake.addCalendar('ada@acme.dev', { id: 'holidays@acme.dev', name: 'Holidays', accessRole: 'reader' });
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    await w.sync(conn.id);
+    const [holidays] = await w.query<{ id: string }>(
+      sql`select id::text as id from calendar_calendars where provider_calendar_id = 'holidays@acme.dev'`,
+    );
+    const id = holidays?.id ?? '';
+    await updateMemberCalendar(w.owner, { calendarId: id, showInWeek: true });
+    const watches = w.fake.calls('watch');
+    // Google answers 400 pushNotSupportedForRequestedResource for holidays and birthdays, every time it is asked.
+    const unwatchable = { status: 400, reason: 'pushNotSupportedForRequestedResource' };
+    w.fake.failNext('watch', 'CALENDAR_UNAVAILABLE', 10, unwatchable);
+    const refused = await w.sync(conn.id);
+    expect(refused).toMatchObject({ kind: 'synced' });
+    const until = refused.channels?.[0]?.outcome === 'failed' ? refused.channels[0].noPushUntil : undefined;
+    expect(refused.channels).toEqual([
+      { calendarId: id, outcome: 'failed', code: 'CALENDAR_UNAVAILABLE', ...unwatchable, noPushUntil: until },
+    ]);
+    expect(Date.parse(until ?? '') - Date.now()).toBeGreaterThan(NO_PUSH_MS - 60_000);
+    const [marked] = await w.query<{ channel: unknown }>(
+      sql`select channel from calendar_calendars where id = ${id}::uuid`,
+    );
+    expect(marked?.channel).toEqual({ noPushUntil: until });
+    // The runs after it sync the calendar by the poll, ask for no watch and say nothing.
+    w.fake.put('ada@acme.dev', event('day-off', day(4), [self('ada@acme.dev')]), 'holidays@acme.dev');
+    const quiet = await w.sync(conn.id);
+    expect(quiet).toMatchObject({ kind: 'synced', events: 1 });
+    expect(quiet.channels).toBeUndefined();
+    expect((await w.sync(conn.id)).channels).toBeUndefined();
+    expect(w.fake.calls('watch')).toBe(watches + 1);
+    // A day on, it is asked again (and refused again: one more line, and another day).
+    await w.query(
+      sql`update calendar_calendars set channel = jsonb_build_object('noPushUntil',
+        to_char((now() - interval '1 minute') at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) where id = ${id}::uuid`,
+    );
+    expect((await w.sync(conn.id)).channels).toMatchObject([{ calendarId: id, outcome: 'failed', status: 400 }]);
+    expect(w.fake.calls('watch')).toBe(watches + 2);
+  });
+
+  it('keeps asking after a refusal that is the grant’s or the moment’s: 401, 403, 429 and 5xx', async () => {
+    const w = await world({ push: true });
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    for (const status of [401, 403, 429, 500]) {
+      w.fake.failNext('watch', status === 500 ? 'CALENDAR_UNAVAILABLE' : 'CALENDAR_AUTH', 1, { status });
+      const [report] = (await w.sync(conn.id)).channels ?? [];
+      expect(report, String(status)).toMatchObject({ outcome: 'failed', status });
+      expect(report !== undefined && 'noPushUntil' in report, String(status)).toBe(false);
+    }
+    expect(await w.query(sql`select channel from calendar_calendars where channel is not null`)).toEqual([]);
+    expect((await w.sync(conn.id)).channels).toMatchObject([{ outcome: 'opened' }]);
   });
 });
 
@@ -594,6 +736,45 @@ describe('a deleted workspace’s calendars (spec 0031, AC-823)', () => {
     expect(await channelOf(other)).toBeNull();
   });
 
+  it('spreads a deletion’s and a restore’s runs a second apart, and starts a failed account again on a restore', async () => {
+    const w = await world({ push: true });
+    const ada = await w.connect(w.ownerId, 'ada@acme.dev');
+    const bea = await w.connect(w.bea, 'bea@acme.dev');
+    await w.sync(ada.id);
+    await w.sync(bea.id);
+    const runs = () =>
+      testQuery<{ id: string; run_at: Date; priority: number }>(
+        ownerUrl,
+        `select payload->>'connectionId' as id, run_at, priority from graphile_worker._private_jobs
+         where payload->>'workspaceId' = $1 order by run_at, id`,
+        [w.workspaceId],
+      );
+    const spread = CALENDAR_SPREAD_SECONDS * 1_000;
+    await deleteWorkspace(w.owner, { confirmName: 'Calendar two' });
+    const deleting = await runs();
+    expect(deleting.map((each) => each.id)).toEqual([ada.id, bea.id]);
+    expect((deleting[1]?.run_at.getTime() ?? 0) - (deleting[0]?.run_at.getTime() ?? 0)).toBe(spread);
+    // Bea's account failed meanwhile: its own retries end with the deletion's run, so only a restore starts it again.
+    await w.query(sql`update calendar_connections set status = 'failed' where id = ${bea.id}::uuid`);
+    await testQuery(ownerUrl, `delete from graphile_worker._private_jobs where payload->>'workspaceId' = $1`, [
+      w.workspaceId,
+    ]);
+    await restoreWorkspace(w.owner);
+    const restoring = await runs();
+    expect(restoring.map((each) => each.id)).toEqual([ada.id, bea.id]);
+    expect((restoring[1]?.run_at.getTime() ?? 0) - (restoring[0]?.run_at.getTime() ?? 0)).toBe(spread);
+    // Queued at once (priority 0, what a person asked for), and still failed until a sync heals it.
+    expect(restoring.map((each) => each.priority)).toEqual([0, 0]);
+    expect(await w.query(sql`select status::text as status from calendar_connections order by id`)).toEqual([
+      { status: 'connected' },
+      { status: 'failed' },
+    ]);
+    expect(await w.sync(bea.id)).toMatchObject({ kind: 'synced' });
+    expect(
+      await w.query(sql`select status::text as status from calendar_connections where id = ${bea.id}::uuid`),
+    ).toEqual([{ status: 'connected' }]);
+  });
+
   it('refuses a connect into a workspace deleted while its member was at the consent screen', async () => {
     const w = await world();
     // The door let the member in before the deletion: the connect itself finds the workspace gone.
@@ -608,6 +789,38 @@ describe('a deleted workspace’s calendars (spec 0031, AC-823)', () => {
       [w.workspaceId],
     );
     expect(queued).toEqual([]);
+  });
+});
+
+describe('revoking an account another workspace still holds (spec 0031, AC-815)', () => {
+  it('keeps the grant, ending only this connection’s channels and tokens, and ends it once nothing else holds it', async () => {
+    // An account no other test connects: whether it is held elsewhere looks across every workspace.
+    const account = `kim-${newId().slice(-12)}@acme.dev`;
+    const here = await world({ push: true });
+    const elsewhere = await world();
+    const mine = await here.connect(here.bea, account);
+    await here.sync(mine.id);
+    const [opened] = here.fake.watched();
+    const [main] = await here.query<{ id: string }>(sql`select id::text as id from calendar_calendars`);
+    const theirs = await elsewhere.connect(elsewhere.bea, account);
+    await elsewhere.sync(theirs.id);
+    // Bea leaves this workspace: Google would end her whole grant, and with it her connection elsewhere.
+    await removeMember(here.owner, { memberId: here.bea }, [outboxHook()]);
+    expect(await here.sync(mine.id)).toEqual({
+      kind: 'stopped',
+      reason: 'revoked',
+      grantKept: true,
+      channels: [{ calendarId: main?.id, outcome: 'stopped', why: 'revoked' }],
+    });
+    expect(here.fake.calls('revoke')).toBe(0);
+    expect(here.fake.stopped()).toEqual([opened?.channel.id]);
+    expect(await here.query(sql`select 1 from calendar_connections where member_id = ${here.bea}::uuid`)).toEqual([]);
+    // Her connection elsewhere still syncs.
+    expect(await elsewhere.sync(theirs.id)).toMatchObject({ kind: 'synced' });
+    // Then she leaves there too: nothing else holds the account, so its grant ends.
+    await removeMember(elsewhere.owner, { memberId: elsewhere.bea }, [outboxHook()]);
+    expect(await elsewhere.sync(theirs.id)).toEqual({ kind: 'stopped', reason: 'revoked' });
+    expect(elsewhere.fake.calls('revoke')).toBe(1);
   });
 });
 
@@ -921,5 +1134,160 @@ describe('a booking whose event the host removes (owner report, 20 October 2026)
     w.fake.cancel('ada@acme.dev', eventId);
     await w.sync(mine.id);
     expect(await bookingOf(w, bookingId)).toMatchObject({ status: 'confirmed', meeting_id: null });
+  });
+});
+
+describe('a cancelled booking whose event still lives in the calendar (owner report, 23 October 2026)', () => {
+  /** A booking the owner made for Grace `offset` days from now, its event on the owner's main calendar. */
+  async function booked(w: World, offset: number) {
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'Quick Chat', timeZone: 'UTC' });
+    const calendar = connectedCalendar({ db, providers: { google: w.fake.provider }, tokenKey, hooks: [outboxHook()] });
+    const made = await bookAsHost(
+      w.owner,
+      { calendar, linkKey: Buffer.alloc(32, 1), now: () => new Date(Date.parse(day(offset)) - 3_600_000) },
+      {
+        idempotencyKey: newId(),
+        pageId: page.id,
+        start: new Date(day(offset)),
+        minutes: 30,
+        name: 'Grace Hopper',
+        email: 'grace@navy.example',
+        timeZone: 'UTC',
+        guests: [],
+        message: '',
+      },
+    );
+    const [meeting] = await w.query<{ id: string; event: string; ical_uid: string }>(sql`
+      select m.id::text, s.provider_event_id as event, m.ical_uid from meeting_sources s
+      join meetings m on m.id = s.meeting_id where m.booking_id = ${made.bookingId}::uuid
+    `);
+    return {
+      bookingId: made.bookingId,
+      meetingId: meeting?.id ?? '',
+      eventId: meeting?.event ?? '',
+      icalUid: meeting?.ical_uid ?? '',
+    };
+  }
+
+  /** The event as Google holds it in `account`'s calendar, under `id`. */
+  const copyOf = (id: string, icalUid: string, offset: number, title: string, self: string) =>
+    event(
+      id,
+      day(offset),
+      [
+        { email: self, response: 'accepted', isOrganizer: self === 'ada@acme.dev', isSelf: true },
+        ...(self === 'ada@acme.dev' ? [] : [guest('ada@acme.dev')]),
+        guest('grace@navy.example'),
+      ],
+      { icalUid, title },
+    );
+
+  /**
+   * The production case: the booking is cancelled while its event stays confirmed in Google (renamed there), and
+   * the meeting row still names the booking, as rows written before this fix do.
+   */
+  async function cancelledButLive(w: World) {
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    const made = await booked(w, 3);
+    await w.sync(conn.id);
+    const range = { from: day(3, 0), to: day(4, 0) };
+    // While the booking is confirmed, it shows and its event doesn't.
+    expect((await readBookingsCalendar(w.owner, range)).events).toEqual([]);
+    await w.query(sql`update bookings set status = 'cancelled' where id = ${made.bookingId}::uuid`);
+    w.fake.put('ada@acme.dev', copyOf(made.eventId, made.icalUid, 3, 'Meeting with Anish', 'ada@acme.dev'));
+    await w.sync(conn.id);
+    const [row] = await w.query<{ booking_id: string | null; created_by_crm: boolean }>(
+      sql`select booking_id::text, created_by_crm from meetings where id = ${made.meetingId}::uuid`,
+    );
+    expect(row).toEqual({ booking_id: made.bookingId, created_by_crm: true });
+    return { ...made, range };
+  }
+
+  it('shows the event on Bookings › Calendar beside the struck-through booking', async () => {
+    const w = await world();
+    const { bookingId, meetingId, range } = await cancelledButLive(w);
+    const week = await readBookingsCalendar(w.owner, range);
+    expect(week.bookings.map((each) => [each.id, each.status])).toEqual([[bookingId, 'cancelled']]);
+    expect(week.events).toMatchObject([{ id: meetingId, title: 'Meeting with Anish', status: 'confirmed' }]);
+    // A meeting the CRM made with no booking at all stays off the week.
+    await w.events.createEvent(w.system, {
+      memberId: w.ownerId,
+      title: 'Made here',
+      start: day(3, 12),
+      end: plus(day(3, 12), 30),
+      attendees: [{ email: 'cy@northwind.com' }],
+      timeZone: 'UTC',
+      video: false,
+      requestId: newId(),
+    });
+    expect((await readBookingsCalendar(w.owner, range)).events.map((each) => each.title)).toEqual([
+      'Meeting with Anish',
+    ]);
+  });
+
+  it('lists the event among upcoming meetings, and the booking under cancelled', async () => {
+    const w = await world();
+    const { bookingId, meetingId } = await cancelledButLive(w);
+    const upcoming = await listMeetings(w.owner, { when: 'upcoming' });
+    expect(upcoming.items).toMatchObject([{ kind: 'event', event: { id: meetingId, title: 'Meeting with Anish' } }]);
+    const cancelled = await listMeetings(w.owner, { when: 'cancelled' });
+    expect(cancelled.items).toMatchObject([{ kind: 'booking', booking: { id: bookingId } }]);
+  });
+
+  it('shows the event in Home’s team today', async () => {
+    const w = await world();
+    const { meetingId, range } = await cancelledButLive(w);
+    const view = await readTeamToday(w.owner, range, { now: new Date(range.from) });
+    const mine = view.members.find((each) => each.memberId === w.ownerId)?.items ?? [];
+    expect(mine).toMatchObject([{ id: meetingId, kind: 'meeting', title: 'Meeting with Anish' }]);
+  });
+
+  it('keeps the booking when its copy leaves one calendar while another of the host’s still holds it', async () => {
+    const w = await world();
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    w.fake.addCalendar('ada@acme.dev', { id: 'team@group.calendar', name: 'Team', accessRole: 'writer' });
+    await w.sync(conn.id);
+    const [team] = await w.query<{ id: string }>(
+      sql`select id::text from calendar_calendars where provider_calendar_id = 'team@group.calendar'`,
+    );
+    await updateMemberCalendar(w.owner, { calendarId: team?.id ?? '', showInWeek: true });
+    const { bookingId, meetingId, eventId, icalUid } = await booked(w, 3);
+    w.fake.put('ada@acme.dev', copyOf('team-copy', icalUid, 3, 'Quick Chat', 'ada@acme.dev'), 'team@group.calendar');
+    await w.sync(conn.id);
+    const status = async () =>
+      (await w.query<{ status: string }>(sql`select status from bookings where id = ${bookingId}::uuid`))[0]?.status;
+    // The host takes it off their main calendar; the Team calendar still holds the meeting.
+    w.fake.cancel('ada@acme.dev', eventId);
+    await w.sync(conn.id);
+    expect(await status()).toBe('confirmed');
+    expect(await w.query(sql`select calendar_id from meeting_sources where meeting_id = ${meetingId}::uuid`)).toEqual([
+      { calendar_id: 'team@group.calendar' },
+    ]);
+    // Gone from every calendar: the booking goes too.
+    w.fake.cancel('ada@acme.dev', 'team-copy', 'team@group.calendar');
+    await w.sync(conn.id);
+    expect(await status()).toBe('cancelled');
+  });
+
+  it('lets go of a meeting another calendar still holds when the sync cancels its booking', async () => {
+    const w = await world();
+    const mine = await w.connect(w.ownerId, 'ada@acme.dev');
+    const beas = await w.connect(w.bea, 'bea@acme.dev');
+    const { bookingId, meetingId, eventId, icalUid } = await booked(w, 2);
+    await w.sync(mine.id);
+    // Bea was invited too: her calendar holds a copy of the same meeting.
+    w.fake.put('bea@acme.dev', copyOf('bea-copy', icalUid, 2, 'Quick Chat', 'bea@acme.dev'));
+    await w.sync(beas.id);
+    w.fake.cancel('ada@acme.dev', eventId);
+    await w.sync(mine.id);
+    expect(await w.query(sql`select status, meeting_id::text from bookings where id = ${bookingId}::uuid`)).toEqual([
+      { status: 'cancelled', meeting_id: null },
+    ]);
+    // The meeting stays while Bea's calendar holds it, no longer the booking's or the CRM's.
+    expect(
+      await w.query(sql`select booking_id::text, created_by_crm from meetings where id = ${meetingId}::uuid`),
+    ).toEqual([{ booking_id: null, created_by_crm: false }]);
+    const range = { from: day(2, 0), to: day(3, 0) };
+    expect((await readBookingsCalendar(w.as(w.bea), range)).events.map((each) => each.id)).toEqual([meetingId]);
   });
 });

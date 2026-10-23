@@ -102,6 +102,8 @@ export const ACCESS_TABLE = {
   getWorkspaceSecurity: { permission: 'security.manage' },
   setWorkspaceSecurity: { permission: 'security.manage' },
   signOutEveryone: { permission: 'security.manage' },
+  // Settings › History › Workspace changes (spec 0046, AC-4622): owners and admins read the audit log.
+  listAuditEvents: { permission: 'audit.read' },
   // Invitations (spec 0031, slice 2).
   inviteMembers: { permission: 'members.invite' },
   listInvitations: { permission: 'members.invite' },
@@ -331,6 +333,8 @@ export const ACCESS_TABLE = {
   createBookingPage: { bookingPages: true },
   updateBookingPage: { bookingPages: true },
   deleteBookingPage: { bookingPages: true },
+  // The owner's profile order (owner ask A102): their own pages alone, whoever else may change them.
+  reorderProfilePages: { bookingPages: true },
   listBookings: { bookingPages: true },
   listWorkspaceBookings: { bookingPages: true },
   listMeetings: { bookingPages: true },

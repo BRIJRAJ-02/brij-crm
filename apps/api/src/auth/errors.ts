@@ -2,11 +2,13 @@
 // `{ code, message }` every other API error has. Our own refusals in its
 // hooks already carry codes from the shared map (`SIGNUP_CLOSED`,
 // `RATE_LIMITED`, `INPUT_INVALID`); its own keep their codes (`INVALID_OTP`,
-// `OTP_EXPIRED`, `TOO_MANY_ATTEMPTS`) with a plain sentence; its rate limiter
+// `OTP_EXPIRED`, `TOO_MANY_ATTEMPTS`) with a plain sentence; its body check
+// (`VALIDATION_ERROR`) becomes `INPUT_INVALID` in plain words; its rate limiter
 // becomes `RATE_LIMITED` with `Retry-After`; and a fault is `INTERNAL`,
 // logged, never detailed.
 import { type ErrorCode, errorStatus, retryAfterSeconds } from '@crm/contracts';
 import * as z from 'zod';
+import { INPUT_INVALID_MESSAGE } from '../errors.ts';
 import { log } from '../log.ts';
 import { captureFault } from '../monitoring/sentry.ts';
 
@@ -85,6 +87,14 @@ export async function authErrorResponse(response: Response, route = ''): Promise
     return json({ code: 'INTERNAL', message: 'Something went wrong. Try again.' }, 500, response.headers);
   }
   if (ours !== undefined) return json(ours, errorStatus(ours.code), response.headers);
+  // Better Auth's own body check: its message is Zod's text with the field's path ("[body.code] ..."), never shown.
+  if (code === 'VALIDATION_ERROR') {
+    return json(
+      { code: 'INPUT_INVALID', message: INPUT_INVALID_MESSAGE },
+      errorStatus('INPUT_INVALID'),
+      response.headers,
+    );
+  }
   const answered = code ?? BY_STATUS[response.status] ?? 'INPUT_INVALID';
   return json(
     { code: answered, message: MESSAGES[answered] ?? message ?? 'This request was refused.' },

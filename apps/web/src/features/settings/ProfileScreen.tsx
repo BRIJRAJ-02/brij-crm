@@ -3,7 +3,8 @@
 // Main task: change their name (the SaveBar at the view’s foot shows once it changed), or delete the account.
 // Also their public profile (22 Oct 2026): the handle their booking addresses start with (/<handle>/<slug>) and a one
 // line bio, the person's own in every workspace; a new handle keeps the old one working. And Sync Google photo beside
-// the picture where Google sign in is on (23 Oct 2026): their Google account's current photo, linking Google first.
+// the picture where Google sign in is on (23 Oct 2026): their Google account's current photo, linking Google first. Under it, the order the profile
+// lists their Public pages in (owner ask A102, ProfilePagesSection), each move saved at once.
 // Leaves out: the picture upload (#32: Google's picture or initials until then), editing the email (the account's), the time zone (Preferences, right above in the nav). Deleting the account sits last, in its Danger zone (moved here from Account › Security, 22 October 2026).
 import { isDataError, type DataLayer, type MyProfile } from '@crm/data';
 import { useAccountSecurity } from '@crm/data/react';
@@ -19,13 +20,16 @@ import {
   Skeleton,
   type SaveBarStatus,
 } from '@crm/ui';
-import { useBlocker, useRouteContext } from '@tanstack/react-router';
+import { useRouteContext } from '@tanstack/react-router';
 import { handleProblem } from '@crm/contracts/handles';
 import { useEffect, useRef, useState } from 'react';
 import { publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
+import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { DeleteAccountSection } from './DeleteAccountSection.tsx';
 import { PhotoSwitch, PhotoSwitchPending } from './PhotoSwitch.tsx';
+import { ProfilePagesLoading, ProfilePagesSection } from './ProfilePagesSection.tsx';
+import { strings as pagesCopy } from './profile-pages-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings as securityCopy } from './security-strings.ts';
 import { strings, type GooglePhotoResult } from './workspace-strings.ts';
@@ -121,11 +125,6 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
       : isBioWithoutHandle
         ? strings.bioNeedsHandle
         : undefined;
-  // An unsaved name isn't lost by leaving the page without a word.
-  useBlocker({
-    shouldBlockFn: () => isDirty && !globalThis.confirm(strings.leaveConfirm),
-    enableBeforeUnload: () => isDirty,
-  });
 
   const send = (change: { readonly name?: string; readonly handle?: string; readonly bio?: string }) => {
     setSaving(true);
@@ -331,8 +330,12 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
           )}
         </Card>
       </SettingsSection>
+      {/* The order the profile lists their Public pages in (owner ask A102): moves save at once, apart from the bar. */}
+      <ProfilePagesSection data={data} slug={slug} profile={profile} />
       {/* Last on the person's own page, set apart under its own heading (the owner, 22 October 2026). */}
       <DeleteAccountSection data={data} security={security} />
+      {/* An unsaved name isn't lost by leaving the page without a word. */}
+      <LeaveGuard isDirty={isDirty} />
     </SettingsPage>
   );
 }
@@ -367,6 +370,9 @@ export function ProfilePending() {
             <Skeleton shape="field" />
           </SettingsRow>
         </Card>
+      </SettingsSection>
+      <SettingsSection title={pagesCopy.section} description={pagesCopy.sectionText}>
+        <ProfilePagesLoading />
       </SettingsSection>
       <SettingsSection title={securityCopy.deletion.section}>
         <Card>

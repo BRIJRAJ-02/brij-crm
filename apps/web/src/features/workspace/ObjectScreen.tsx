@@ -64,11 +64,6 @@ export function ObjectPendingPage() {
   return <WorkspacePage {...(object === undefined ? {} : { currentObject: object })} page={objectPendingPage()} />;
 }
 
-/** The trash while it loads: its bar and its filter row (the Trash's Toolbar) holding their places. */
-export function trashPendingPage() {
-  return { ...pendingPage(), viewBar: pendingToolbar() };
-}
-
 /**
  * A view this person can't open (spec 0020, AC-463), never saying whether it
  * is unknown, deleted or private: the object's bar, and the way to its

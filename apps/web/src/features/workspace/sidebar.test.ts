@@ -29,8 +29,11 @@ describe('the sidebar’s routes (AC-944)', () => {
     for (const link of Object.values(PAGE_LINKS)) expect(redirects).not.toContain(link.href('$slug'));
   });
 
-  it('links the foot’s Trash and Settings to routes', () => {
+  it('links Trash (in Settings since A120) and Settings to routes', () => {
+    expect(trashHref('$slug')).toBe('/w/$slug/settings/trash');
     expect(isRoute(trashHref('$slug'))).toBe(true);
+    // The old address stays a route, which redirects there.
+    expect(isRoute('/w/$slug/trash')).toBe(true);
     expect(isRoute(settingsHomeHref('$slug'))).toBe(true);
   });
 

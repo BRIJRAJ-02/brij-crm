@@ -6,7 +6,8 @@
 // for a fresh sign in first (STEP_UP_REQUIRED) nothing changes, no toast is
 // raised and the answer says so, for the confirm to explain. Sessions are named by id only; no token ever reaches the browser.
 import type { AccountSession, RevokedSessions, SessionPage } from '@crm/contracts';
-import { refusalSummary, toDataError } from '../errors.ts';
+import { toDataError } from '../errors.ts';
+import { refusalSummary } from '../refusals.ts';
 import type { Notice } from '../notice.ts';
 
 /** The calls the store makes. */

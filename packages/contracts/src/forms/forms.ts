@@ -37,7 +37,7 @@ export const FormOrigin = z
   .string()
   .trim()
   .toLowerCase()
-  .max(200)
+  .max(200, { error: 'Keep each site address to 200 characters.' })
   .transform((value, context) => {
     const candidate = /^[a-z][a-z0-9+.-]*:\/\//.test(value) ? value : `https://${value}`;
     try {
@@ -45,7 +45,7 @@ export const FormOrigin = z
       if (!url.hostname.includes('.') && url.hostname !== 'localhost') throw new Error('no host');
       return `${url.protocol}//${url.host}`;
     } catch {
-      context.addIssue({ code: 'custom', message: `“${value}” isn’t a web address, such as acme.com.` });
+      context.addIssue({ code: 'custom', message: 'Enter a web address, such as acme.com.' });
       return z.NEVER;
     }
   });
@@ -216,7 +216,10 @@ export const DuplicateFormInput = FormIdInput.extend({
 export type DuplicateFormInput = z.infer<typeof DuplicateFormInput>;
 
 /** Whether an address is free (the first publish checks as typed). */
-export const SlugInput = WorkspaceScoped.extend({ formId: Uuid, slug: z.string().max(60) });
+export const SlugInput = WorkspaceScoped.extend({
+  formId: Uuid,
+  slug: z.string().max(60, { error: 'The address needs 2 to 40 lowercase letters, numbers or hyphens.' }),
+});
 /** Whether an address is free. */
 export type SlugInput = z.infer<typeof SlugInput>;
 

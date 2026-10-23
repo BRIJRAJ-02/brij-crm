@@ -14,6 +14,7 @@ import {
   INVITE_LINK_USES_MAX,
   INVITES_LIMIT,
   maskEmail,
+  memberNameFor,
   OWNER_RULES_MESSAGE,
   PERMISSIONS,
   ROLE_PERMISSIONS,
@@ -25,7 +26,7 @@ import {
   type InviteRefused,
   type Role,
 } from '@crm/contracts';
-import { schema, type Database, type WorkspaceTx } from '@crm/db';
+import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@crm/db';
 import { checkId, newId } from '../engine/ids.ts';
 import { limitsOf } from '../engine/limits.ts';
 import { refuse } from '../engine/refusals.ts';
@@ -655,6 +656,8 @@ export interface AcceptingUser {
   readonly name: string;
   readonly email: string;
   readonly emailVerified: boolean;
+  /** The name they typed on the invite card (QA N14): made plain, it wins over the account's; empty, it is skipped. */
+  readonly typedName?: string;
 }
 
 /** The workspace an accepted invitation opened, and the member it made (or found). */
@@ -679,11 +682,17 @@ function mismatch(email: string) {
  * a new row), their directory membership, the invitation used, a `members`
  * outbox row (through `hooks`) and an audit row. A person already in the
  * workspace (two tabs accepting) is answered with the workspace again and
- * joins once. Refuses `INVITE_INVALID`, `INVITE_EMAIL_MISMATCH` and
+ * joins once. A new member is named with what they typed on the invite
+ * card, made plain (QA N14), else as before; once the accept stands, that
+ * name also fills in an account name still empty. Refuses `INVITE_INVALID`, `INVITE_EMAIL_MISMATCH` and
  * `SEAT_LIMIT`.
  */
 export async function acceptInvite(
-  deps: { readonly db: Database },
+  deps: {
+    readonly db: Database;
+    /** Fills in the account's name from the typed one when it is still empty, as first run does (QA N14). */
+    readonly identity?: Pick<IdentityStore, 'setUserNameIfEmpty'>;
+  },
   user: AcceptingUser,
   token: string,
   hooks: readonly AfterWrite[] = [],
@@ -751,7 +760,9 @@ export async function acceptInvite(
         throw refuse('SEAT_LIMIT', SEAT_LIMIT_MESSAGE);
       }
       const memberId = newId();
-      const name = user.name.trim() === '' ? (email.split('@')[0] ?? email) : user.name.trim();
+      // The name typed on the invite card made plain (QA N14), else their account's, else one made from the address
+      // as first run makes it ("Jo Smith", QA Q83).
+      const name = joinerName(user.typedName, user.name, email);
       await tx.insert(members).values({
         workspaceId: scope.workspaceId,
         id: memberId,
@@ -788,6 +799,12 @@ export async function acceptInvite(
     },
     hooks,
   );
+  // After the accept commits (a join, or one already in): the account's name, only while it has none (first run's
+  // rule). Best effort: the join stands either way, so a failure here never reads as a refused invitation.
+  const typed = typedMemberName(user.typedName);
+  if (typed !== '' && deps.identity !== undefined) {
+    await deps.identity.setUserNameIfEmpty(user.id, typed).catch(() => false);
+  }
   return result;
 }
 
@@ -829,7 +846,12 @@ async function joinByLink(
     .limit(1);
   if (taken !== undefined) throw inviteInvalid();
   await checkSeats(tx, scope, 1);
-  const memberId = await addJoiner(tx, scope.workspaceId, { id: user.id, name: user.name, email }, held.role);
+  const memberId = await addJoiner(
+    tx,
+    scope.workspaceId,
+    { id: user.id, name: user.name, email, ...(user.typedName === undefined ? {} : { typedName: user.typedName }) },
+    held.role,
+  );
   // The link stays open for the next person; its uses count up to its most.
   await tx
     .update(invitations)
@@ -1033,19 +1055,65 @@ export async function setInviteLink(
 }
 
 /**
+ * A person's name as a member is made with it, and as admins read it in the tab and the email (an accepted invite, a
+ * link join, a request): control characters and line breaks become spaces, runs of space one, at most 80 characters;
+ * a name made from the address when nothing is left, as first run makes it (QA Q83).
+ */
+export function plainName(raw: string, email: string): string {
+  return memberNameFor(plainText(raw), '', email);
+}
+
+/**
+ * Control characters and line breaks as spaces, runs of space as one, trimmed: `plainName`'s cleaning, alone. Marks
+ * that turn text around or hide in it (direction overrides and isolates, the left and right marks, zero width space,
+ * the byte order mark) go, so a name can't read as another's; the zero width joiners stay, which emoji and some
+ * scripts need.
+ */
+function plainText(raw: string): string {
+  return (
+    raw
+      .replace(/[\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+}
+
+/**
+ * The name typed on the invite card (QA N14) made plain, at most 80 characters, or empty when nothing is left: what
+ * a joiner's account is named when it has no name yet, as first run does with its Your name.
+ */
+export function typedMemberName(typed: string | undefined): string {
+  // By characters, so a cut never splits an emoji in two.
+  return Array.from(plainText(typed ?? ''))
+    .slice(0, 80)
+    .join('');
+}
+
+/**
+ * A joiner's name: what they typed on the invite card, made plain (QA N14); when nothing of it is left, their
+ * account's name made plain, else one made from the address (`plainName`).
+ */
+export function joinerName(typed: string | undefined, accountName: string, email: string): string {
+  const name = typedMemberName(typed);
+  return name === '' ? plainName(accountName, email) : name;
+}
+
+/**
  * Adds a signed in person as an active member with `role` (a link join, an
- * approved request): their name in the workspace (their account's, else the
- * address's local part), and their directory row, in the caller's
+ * approved request): their name in the workspace (what they typed on the invite card, else their account's, else
+ * one made from the address, as first run makes it), and their directory row, in the caller's
  * transaction. Answers the new member's id. The caller has checked the seat.
  */
 export async function addJoiner(
   tx: WorkspaceTx,
   workspaceId: string,
-  user: { readonly id: string; readonly name: string; readonly email: string },
+  user: { readonly id: string; readonly name: string; readonly email: string; readonly typedName?: string },
   role: Role,
 ): Promise<string> {
   const memberId = newId();
-  const name = user.name.trim() === '' ? (user.email.split('@')[0] ?? user.email) : user.name.trim();
+  const name = joinerName(user.typedName, user.name, user.email);
   await tx.insert(members).values({
     workspaceId,
     id: memberId,

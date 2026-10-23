@@ -74,6 +74,8 @@ export const AUDIT_ACTIONS = [
   // Spec 0033 (AC-899): an owner changed the workspace's sign in rules, or signed everyone out of it.
   'workspace_security.changed',
   'workspace_security.signed_out_everyone',
+  // Owner ask A102 (22 Oct 2026): a person put their Public booking pages in a new order on their profile.
+  'booking_page.profile_reordered',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);
@@ -191,12 +193,30 @@ export const SetInviteLinkInput = WorkspaceScoped.extend({
     .union(INVITE_LINK_DAYS.map((days) => z.literal(days)))
     .nullable()
     .optional(),
-  maxUses: z.number().int().min(1).max(INVITE_LINK_USES_MAX).nullable().optional(),
+  maxUses: z
+    .number()
+    .int({ error: 'Use a whole number.' })
+    .min(1, { error: 'Allow at least 1 use.' })
+    .max(INVITE_LINK_USES_MAX, { error: `Allow at most ${INVITE_LINK_USES_MAX.toLocaleString('en')} uses.` })
+    .nullable()
+    .optional(),
   reset: z.boolean().optional(),
   mutationId: Uuid,
 });
 /** A change to the invite link. */
 export type SetInviteLinkInput = z.infer<typeof SetInviteLinkInput>;
+
+/**
+ * Accepting an invitation (AC-805, QA N14): the link's token, and the name the person typed on the invite card, which
+ * may be empty. The server makes it plain as every join does (`plainName`); empty, the account's name or one made
+ * from the address stands in, as before.
+ */
+export const AcceptInviteInput = z.object({
+  token: InviteToken,
+  memberName: z.string().trim().max(80, 'Use at most 80 characters.').optional(),
+});
+/** Accepting an invitation. */
+export type AcceptInviteInput = z.infer<typeof AcceptInviteInput>;
 
 /** The workspace an accepted invitation opened (AC-806). */
 export const InviteAccepted = z.object({ slug: z.string() });
@@ -409,7 +429,9 @@ export type WorkspaceDomainsView = z.infer<typeof WorkspaceDomainsView>;
 
 /** Sets the workspace's email domains (AC-819): only the caller's own verified email's, never a public one. */
 export const SetWorkspaceDomainsInput = WorkspaceScoped.extend({
-  domains: z.array(z.string().trim().toLowerCase().max(253)).max(10),
+  domains: z
+    .array(z.string().trim().toLowerCase().max(253, { error: 'Keep each domain to 253 characters.' }))
+    .max(10, { error: 'List at most 10 domains.' }),
   mutationId: Uuid,
 });
 /** Setting the workspace's email domains. */
@@ -477,7 +499,7 @@ export const invitationsContract = {
   resend: oc.input(InvitationInput).output(z.object({ invitation: InvitationView, sent: z.boolean() })),
   revoke: oc.input(InvitationInput).output(z.void()),
   peek: oc.input(z.object({ token: InviteToken })).output(InvitePeek),
-  accept: oc.input(z.object({ token: InviteToken })).output(InviteAccepted),
+  accept: oc.input(AcceptInviteInput).output(InviteAccepted),
   /** The invite link (slice 6, AC-818): `members.invite`. */
   link: oc.input(WorkspaceScoped).output(InviteLinkView),
   setLink: oc.input(SetInviteLinkInput).output(InviteLinkView),

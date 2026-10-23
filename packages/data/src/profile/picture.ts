@@ -5,7 +5,8 @@
 // is put back and a toast says why, with Try again. Only the person holds it, so no live event carries it: another
 // device's change shows when a screen next holds it.
 import type { MyProfile, UpdateMyProfileInput } from '@crm/contracts';
-import { refusalSummary, toDataError } from '../errors.ts';
+import { toDataError } from '../errors.ts';
+import { refusalSummary } from '../refusals.ts';
 import type { Notice } from '../notice.ts';
 
 /** The person's picture choice as a screen holds it. */

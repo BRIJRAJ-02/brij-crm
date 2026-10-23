@@ -1,8 +1,8 @@
 // Where New meeting starts (free.ts): the next free half hour of the week on screen, inside the member's hours and
-// clear of what holds their time, in the member's zone (Asia/Kolkata here, whatever zone the runner is in).
+// clear of what holds their time, else the first in the next two weeks (Q72), in the member's zone (Asia/Kolkata here, whatever zone the runner is in).
 import type { BookingAvailability, BookingsCalendarView } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { busyOf, nextFreeSpan, workingRanges } from './free.ts';
+import { busyOf, findFreeSpan, freeSpanIn, lookAheadWeeks, nextFreeSpan, workingRanges } from './free.ts';
 import { instantOf } from './span.ts';
 
 /** Monday 19 October 2026, the week the tests look at. */
@@ -88,6 +88,104 @@ describe('nextFreeSpan', () => {
       startMinute: 9 * 60,
       endMinute: 9 * 60 + 30,
     });
+  });
+});
+
+describe('looking ahead when the week on screen has no free time left (Q72)', () => {
+  it('starts at the first free half hour of next week, inside the member’s hours, not tonight', () => {
+    // Friday at five, the day's hours over: Monday at nine, not 5:30 tonight.
+    const now = at('2026-10-23', 17 * 60);
+    const laterWeeks = lookAheadWeeks(WEEK, now, ZONE);
+    expect(laterWeeks).toEqual(['2026-10-26', '2026-11-02']);
+    expect(freeSpanIn({ now, week: WEEK, minutes: 30, busy: [], availability: NINE_TO_FIVE, zone: ZONE })).toBe(
+      undefined,
+    );
+    expect(
+      nextFreeSpan({ now, week: WEEK, laterWeeks, minutes: 30, busy: [], availability: NINE_TO_FIVE, zone: ZONE }),
+    ).toEqual({ dayKey: '2026-10-26', startMinute: 9 * 60, endMinute: 9 * 60 + 30 });
+  });
+
+  it('steps past next week’s busy times, into the week after', () => {
+    const now = at('2026-10-23', 17 * 60);
+    const laterWeeks = lookAheadWeeks(WEEK, now, ZONE);
+    // Next week held from Monday morning to Friday evening: the Monday after at nine.
+    const busy = [{ start: at('2026-10-26', 0).getTime(), end: at('2026-10-31', 0).getTime() }];
+    expect(nextFreeSpan({ now, week: WEEK, laterWeeks, minutes: 30, busy, zone: ZONE })).toEqual({
+      dayKey: '2026-11-02',
+      startMinute: 9 * 60,
+      endMinute: 9 * 60 + 30,
+    });
+  });
+
+  it('falls back to the next half hour from now only when two weeks ahead are full too', () => {
+    const now = at('2026-10-23', 17 * 60 + 10);
+    const laterWeeks = lookAheadWeeks(WEEK, now, ZONE);
+    const busy = [{ start: at('2026-10-26', 0).getTime(), end: at('2026-11-09', 0).getTime() }];
+    expect(nextFreeSpan({ now, week: WEEK, laterWeeks, minutes: 30, busy, zone: ZONE })).toEqual({
+      dayKey: '2026-10-23',
+      startMinute: 17 * 60 + 30,
+      endMinute: 18 * 60,
+    });
+  });
+
+  it('looks in this week and the next when the week on screen is long past', () => {
+    const now = at('2026-10-21', 10 * 60);
+    expect(lookAheadWeeks('2026-08-03', now, ZONE)).toEqual(['2026-10-19', '2026-10-26']);
+    // A week starting on Sunday keeps its first day.
+    expect(lookAheadWeeks('2026-10-18', now, ZONE)).toEqual(['2026-10-25', '2026-11-01']);
+  });
+});
+
+describe('findFreeSpan: reading a week at a time (Q72)', () => {
+  const FRIDAY_FIVE = at('2026-10-23', 17 * 60);
+  const base = { now: FRIDAY_FIVE, week: WEEK, minutes: 30, availability: NINE_TO_FIVE, zone: ZONE };
+
+  it('reads only the week on screen when it has room', async () => {
+    const read: string[] = [];
+    const span = await findFreeSpan({
+      ...base,
+      now: at('2026-10-20', 10 * 60),
+      busyIn: (week) => {
+        read.push(week);
+        return Promise.resolve([]);
+      },
+    });
+    expect(span).toEqual({ dayKey: '2026-10-20', startMinute: 10 * 60, endMinute: 10 * 60 + 30 });
+    expect(read).toEqual([WEEK]);
+  });
+
+  it('reads next week only once this one is full, and the week after only once that one is', async () => {
+    const read: string[] = [];
+    const fullWeek = (monday: string) => [{ start: at(monday, 0).getTime(), end: at(monday, 7 * 1440).getTime() }];
+    const span = await findFreeSpan({
+      ...base,
+      busyIn: (week) => {
+        read.push(week);
+        return Promise.resolve(week === '2026-10-26' ? fullWeek(week) : []);
+      },
+    });
+    expect(span).toEqual({ dayKey: '2026-11-02', startMinute: 9 * 60, endMinute: 9 * 60 + 30 });
+    expect(read).toEqual([WEEK, '2026-10-26', '2026-11-02']);
+  });
+
+  it('ends the look at a week it couldn’t read, then falls back to the next half hour from now', async () => {
+    const read: string[] = [];
+    const span = await findFreeSpan({
+      ...base,
+      busyIn: (week) => {
+        read.push(week);
+        return Promise.resolve(week === WEEK ? [] : undefined);
+      },
+    });
+    expect(span).toEqual({ dayKey: '2026-10-23', startMinute: 17 * 60 + 30, endMinute: 18 * 60 });
+    expect(read).toEqual([WEEK, '2026-10-26']);
+    // The week on screen unread: never a guess that it is free.
+    const unread = await findFreeSpan({
+      ...base,
+      now: at('2026-10-20', 10 * 60),
+      busyIn: () => Promise.resolve(undefined),
+    });
+    expect(unread).toEqual({ dayKey: '2026-10-20', startMinute: 10 * 60 + 30, endMinute: 11 * 60 });
   });
 });
 

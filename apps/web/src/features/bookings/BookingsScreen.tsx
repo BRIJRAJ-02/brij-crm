@@ -1044,6 +1044,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
           >
             <MonthCalendar
               label={strings.goToDate}
+              // Opened from its button, focus is on the chosen day, so the arrows move at once (Q70).
+              // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the month opens only when its button is pressed
+              autoFocus
               value={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
               onChange={(day) => {
                 setJumpOpen(false);
@@ -1229,6 +1232,15 @@ function WeekView(props: BookingsCalendarScreenProps) {
     setAsking(undefined);
     setFocusDay({ dayKey: asked.dayKey, ...(asked.kind === 'remove' ? {} : { blockId: asked.pieceId }) });
   };
+  // A booking moved to another day is a new block there (a block's id is `<booking>:<day>`): once it shows, focus
+  // follows it rather than falling to the day it left (Q56). Set while rendering, once, as `lastAsked` is.
+  const asked = focusDay?.blockId;
+  if (asked !== undefined && !pieces.some(({ piece }) => piece.id === asked)) {
+    const cut = asked.lastIndexOf(':');
+    const sourceId = cut === -1 ? asked : asked.slice(0, cut);
+    const moved = pieces.find(({ piece }) => piece.sourceId === sourceId);
+    if (moved !== undefined) setFocusDay({ dayKey: moved.piece.dayKey, blockId: moved.piece.id });
+  }
   const openBooking = open?.kind === 'booking' ? byBooking.get(open.piece.sourceId) : undefined;
   const openEvent = open?.kind === 'event' ? byEvent.get(open.piece.sourceId) : undefined;
   const openTurn = open?.kind === 'closed' ? byTurn.get(open.piece.sourceId) : undefined;
@@ -1653,7 +1665,9 @@ function ListBar({
           {search.source !== 'bookings' && search.link === undefined && (
             <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={hasNoCalendar} />
           )}
-          <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources />
+          {/* Which meetings show is a choice only with a calendar connected: without one there are only bookings, and
+              "Calendar events only" could only show an empty list (Q71). */}
+          <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources={!hasNoCalendar} />
         </>
       }
     />
@@ -1716,7 +1730,7 @@ function useFocusAfterMore(label: string, isReady: boolean, isShown: boolean, co
  */
 export function BookingsListScreen({
   slug,
-  search,
+  search: asked,
   meetings,
   calendars,
   onDismissNotice,
@@ -1737,6 +1751,10 @@ export function BookingsListScreen({
     ),
   );
   const hasCalendar = calendarList.status === 'ready' && calendarList.accounts.length > 0;
+  const hasNoCalendar = calendarList.status === 'ready' && !hasCalendar;
+  // With no calendar there are only bookings, and Show is hidden: a source left in the address (an old link, or one
+  // from before a disconnect) reads as All, so it can't empty the list with nothing on screen to undo it.
+  const search = hasNoCalendar && asked.source !== 'all' ? { ...asked, source: 'all' as const } : asked;
   const panel = useCalendarsPanel(calendarList.status === 'ready' ? hasCalendar : undefined);
   // The open meeting by row id, read from the list as it is now: a change shows in the panel.
   // A colleague's booking (an admin's view, a team page) names its host rather than "You".
@@ -1784,7 +1802,7 @@ export function BookingsListScreen({
       search={search}
       pages={pages}
       panel={panel}
-      hasNoCalendar={calendarList.status === 'ready' && !hasCalendar}
+      hasNoCalendar={hasNoCalendar}
       onSearch={onSearch}
     />
   );

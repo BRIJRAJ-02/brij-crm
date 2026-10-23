@@ -5,7 +5,6 @@
 import {
   isEditableHere,
   queryKey,
-  toActorDisplays,
   toFieldAttribute,
   withPendingOptions,
   type AttributeDefinition,
@@ -44,6 +43,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { useLinkEditing } from '../records/links.ts';
+import { useMemberPicker } from '../records/members.ts';
 import { importHref } from '../imports/paths.ts';
 import { strings as importStrings } from '../imports/strings.ts';
 import { strings as attributeStrings } from '../settings/attribute-strings.ts';
@@ -178,7 +178,7 @@ function columnsFor(
  * The create dialog's editors for an object (spec 0012, AC-240): the primary
  * attribute, then the required ones, then the rest, each by position, and
  * only those the field set edits in a form here (no system values, and no
- * references or members yet, #15).
+ * record references yet, #15; a member through the member picker).
  */
 export function createEditors(
   object: ObjectSummary,
@@ -347,7 +347,9 @@ export function RecordsScreen({
   });
   // Paused only while the live connection is down; off (previews) shows nothing.
   const live = useLiveStatus(data.live);
-  const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
+  // Owner cells (spec 0003): a Menu of the workspace's members, "Me" first.
+  const memberPicker = useMemberPicker(members);
+  const memberDisplays = memberPicker.displays;
   const actorColumns = useMemo(
     () => new Set(attributes.filter((attribute) => attribute.type === 'actor_reference').map((each) => each.id)),
     [attributes],
@@ -429,6 +431,7 @@ export function RecordsScreen({
     slug,
     object,
     attributes,
+    memberPicker,
     ticked,
     total: state.count.count,
     isTotalAtLeast: state.count.atLeast,
@@ -631,6 +634,7 @@ export function RecordsScreen({
               {...(state.error === undefined ? {} : { errorText: state.error.message })}
               members={memberDisplays}
               editorProps={(column, rowId) => {
+                if (actorColumns.has(column.id)) return memberPicker.extras;
                 const definition = references.get(column.id);
                 return (
                   (definition === undefined || rowId === undefined ? undefined : links.pickerFor(definition, rowId)) ??
@@ -720,6 +724,7 @@ export function RecordsScreen({
               onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
               singularName={object.singularName}
               objectKey={objectKey}
+              memberPicker={memberPicker}
               onCreated={(record) => {
                 setCreating(false);
                 // A record made here sits first (spec 0006, AC-56).

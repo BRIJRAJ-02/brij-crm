@@ -17,6 +17,7 @@ New. Truncated text, exact times, icon only buttons and disabled reasons all nee
 
 - It adds to a name and never replaces it: an icon only button keeps its own `label`.
 - `isTextTrigger` wraps plain text, which shows the tooltip on hover and when something focuses it on purpose (a grid cell); it adds no tab stop.
+- `isTriggerShared` (with `isTextTrigger`) makes the trigger take an equal share of its flex row. Why a variant: BarStrip's `chart` size (spec 0047) shares its width between its bars, and the bar's trigger is the row's item; styling the trigger from BarStrip would reach into this component.
 - `placement`: `top` (the default), `bottom`, `start` or `end`.
 - It opens after 500 ms of resting (spec 0003), at once while another is showing, and at once on keyboard focus.
 - `AnchoredTooltip` is the same look opened from outside against an element with no trigger of its own: the grid shows one for all its cells, waiting `TOOLTIP_DELAY_MS` on hover as this does. Labels that may be cut mark themselves `data-truncated`, so such a host can show their full text.

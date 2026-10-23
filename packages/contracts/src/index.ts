@@ -1,5 +1,6 @@
 import { accessContract, rolesContract } from './access.ts';
 import { accountContract } from './account.ts';
+import { auditContract } from './audit.ts';
 import { attributesContract } from './attributes.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
@@ -16,6 +17,7 @@ import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
 import { notificationsContract } from './notifications.ts';
+import { operatorContract } from './operator.ts';
 import { membersContract } from './members.ts';
 import { workspaceSecurityContract } from './workspace-security.ts';
 import { objectsContract } from './objects.ts';
@@ -39,6 +41,7 @@ export * from './access.ts';
 export * from './account.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
+export * from './audit.ts';
 export * from './board-model.ts';
 export * from './booking/index.ts';
 export * from './booking/blocks.ts';
@@ -58,12 +61,15 @@ export * from './jobs.ts';
 export * from './csv.ts';
 export * from './me.ts';
 export * from './members.ts';
+export * from './member-names.ts';
 export * from './nav-model.ts';
 export * from './navigation.ts';
 export * from './notifications.ts';
 export * from './workspace-security.ts';
 export * from './objects.ts';
+export * from './operator.ts';
 export * from './options.ts';
+export * from './plain-errors.ts';
 export * from './realtime.ts';
 export * from './records.ts';
 export * from './relations.ts';
@@ -92,6 +98,8 @@ export * from './profile.ts';
 export const contract = {
   system: systemContract,
   me: meContract,
+  // The operator console (spec 0047): a session on OPERATOR_EMAILS with two factor, never a workspace role.
+  operator: operatorContract,
   // The signed in person's own sessions and devices (spec 0033): a session, no workspace.
   account: accountContract,
   workspaces: workspacesContract,
@@ -142,6 +150,8 @@ export const contract = {
   preferences: preferencesContract,
   // Lead routing (spec 0043): the per rule report.
   routing: routingContract,
+  // Settings › History › Workspace changes (spec 0046): the audit log, `audit.read` only.
+  audit: auditContract,
   imports: importsContract,
   exports: exportsContract,
 };

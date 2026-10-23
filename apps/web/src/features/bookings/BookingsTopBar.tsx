@@ -1,14 +1,15 @@
 // Brief
 // Purpose: the Bookings TopBar, drawn once by the layout: the scheduling tile, the title and New, as People's TopBar has.
-// Main task: book someone in from any tab: New opens New meeting at the next free half hour of the week on screen.
+// Main task: book someone in from any tab: New opens New meeting at the next free half hour of the week on screen,
+// else of the next two weeks.
 // Leaves out: drawing a span on the week (the calendar's own way into the same dialog) and the tabs (the layout's).
 import type { BookingPageView } from '@crm/data';
 import { useCalendar, useCalendarList, useCaptureList } from '@crm/data/react';
 import { Button, ButtonLink, TopBar, useFormatSettings } from '@crm/ui';
 import { useMatch, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SCHEDULING_HUE } from '../scheduling.ts';
-import { busyOf, nextFreeSpan } from './free.ts';
+import { busyOf, findFreeSpan, freeSpanIn } from './free.ts';
 import { NewMeetingDialog } from './NewMeetingDialog.tsx';
 import { bookingsSearchOf, parseBookingsSearch } from './search.ts';
 import type { DrawnSpan } from './span.ts';
@@ -59,19 +60,58 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
     calendar.status === 'ready' ? calendar.connections.filter((connection) => connection.status !== 'revoked') : [];
   const hasNoPage = pages.status === 'ready' && bookable.length === 0;
 
+  // Reading what New needs first (the week on screen off the Calendar tab, the member's hours, the next weeks when
+  // this one is full): New waits, busy, meanwhile.
+  const [isFinding, setFinding] = useState(false);
+  // The workspace and week now, so a look that comes back after either changed opens nothing.
+  const current = useRef({ slug, week });
+  useEffect(() => {
+    current.current = { slug, week };
+  }, [slug, week]);
   const open = () => {
-    const range = weekRange(week, timeZone);
-    const shown = data.bookings.calendar(slug, range.from, range.to).getSnapshot();
-    setMeeting(
-      nextFreeSpan({
-        now: new Date(),
+    if (isFinding) return;
+    const now = new Date();
+    const minutes = bookable[0]?.durations[0] ?? 30;
+    const rangeOf = (monday: string) => {
+      const range = weekRange(monday, timeZone);
+      return data.bookings.calendar(slug, range.from, range.to);
+    };
+    const shown = rangeOf(week).getSnapshot();
+    // The Calendar's week read and its hours known: its free time opens the dialog at once.
+    if (shown.status === 'ready' && availability !== undefined) {
+      const here = freeSpanIn({ now, week, minutes, busy: busyOf(shown), availability, zone: timeZone });
+      if (here !== undefined) {
+        setMeeting(here);
+        return;
+      }
+    }
+    // Else read as the look needs (Q72): the member's hours, then each week, where not yet read or last failed.
+    const asked = { slug, week };
+    setFinding(true);
+    void (async () => {
+      const hours =
+        availability ??
+        (await data.bookings.hours(slug, timeZone).then(
+          (answer) => answer.availability,
+          () => undefined,
+        ));
+      const span = await findFreeSpan({
+        now,
         week,
-        minutes: bookable[0]?.durations[0] ?? 30,
-        busy: busyOf(shown.status === 'ready' ? shown : undefined),
-        ...(availability === undefined ? {} : { availability }),
+        minutes,
+        ...(hours === undefined ? {} : { availability: hours }),
         zone: timeZone,
-      }),
-    );
+        busyIn: async (monday) => {
+          const held = rangeOf(monday);
+          if (held.getSnapshot().status !== 'ready') await held.ready();
+          const read = held.getSnapshot();
+          return read.status === 'ready' ? busyOf(read) : undefined;
+        },
+      });
+      if (current.current.slug === asked.slug && current.current.week === asked.week) setMeeting(span);
+    })().finally(() => {
+      setFinding(false);
+    });
   };
 
   // Pages but none on: New goes to them to turn one on, rather than making another.
@@ -98,6 +138,7 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
         icon="plus"
         label={strings.newMeeting}
         isDisabled={bookable.length === 0}
+        isPending={isFinding}
         onPress={open}
       >
         {strings.newButton}

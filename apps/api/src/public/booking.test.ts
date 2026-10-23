@@ -5,7 +5,8 @@
 // check, the rate limits and an unknown key.
 import { newId, type BookingCalendar, type BookingEvent } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { testQuery } from '@crm/db/testing';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createApp } from '../app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
 import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts';
@@ -50,11 +51,21 @@ afterAll(async () => {
 });
 
 /** A request as the public page sends it through the edge, from one client address. */
-function visit(path: string, init: { method?: string; body?: unknown; ip?: string; origin?: string | null } = {}) {
+function visit(
+  path: string,
+  init: {
+    method?: string;
+    body?: unknown;
+    ip?: string;
+    origin?: string | null;
+    headers?: Record<string, string>;
+  } = {},
+) {
   const headers: Record<string, string> = {
     [EDGE_HEADER]: TEST_EDGE_SECRET,
     'x-forwarded-for': init.ip ?? newIp(),
     'content-type': 'application/json',
+    ...init.headers,
   };
   if (init.origin !== null) {
     // The edge forwards it as its own header; locally (no edge) the browser's Origin is read.
@@ -156,6 +167,68 @@ describe('handle addresses (22 Oct 2026)', () => {
     expect((await handles(`${handle}/nothing-here`)).status).toBe(404);
     expect((await handles(`nobody-${newId().slice(-8)}`)).status).toBe(404);
     expect((await handles(`${handle}?after=nonsense`)).status).toBe(400);
+  });
+
+  it('lists the profile in the order Settings saved at once, never from a cache (owner ask A102)', async () => {
+    const m = await memberWithWorkspace(app);
+    const handle = `order-${newId().slice(-8)}`;
+    await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
+    const make = (title: string, profileSection?: string) =>
+      m.client.bookingPages.create({
+        workspace: m.slug,
+        id: newId(),
+        title,
+        timeZone: 'UTC',
+        ...(profileSection === undefined ? {} : { settings: { profileSection } }),
+        mutationId: newId(),
+      });
+    const intro = await make('Intro call', 'Sales');
+    const coffee = await make('Coffee chat');
+    const demo = await make('Demo', 'Sales');
+    /** The profile's links as a visitor reads them: each title and its section. */
+    const listed = async () => {
+      const read = await handles(handle);
+      expect(read.headers.get('cache-control')).toContain('no-store');
+      const body = (await read.json()) as { readonly links: readonly { title: string; section?: string }[] };
+      return body.links.map((link) => [link.title, link.section ?? null]);
+    };
+    // New pages join the end, in the order they were made.
+    expect(await listed()).toEqual([
+      ['Intro call', 'Sales'],
+      ['Coffee chat', null],
+      ['Demo', 'Sales'],
+    ]);
+    const answer = await m.client.bookingPages.reorderProfile({
+      workspace: m.slug,
+      pageIds: [coffee.id, demo.id, intro.id],
+      mutationId: newId(),
+    });
+    expect(answer.pages.map((each) => [each.id, each.profilePosition])).toEqual([
+      [coffee.id, 0],
+      [demo.id, 1],
+      [intro.id, 2],
+    ]);
+    expect(await listed()).toEqual([
+      ['Coffee chat', null],
+      ['Demo', 'Sales'],
+      ['Intro call', 'Sales'],
+    ]);
+    // Someone else's page refuses the whole move as absent; a page named twice is refused at the boundary.
+    const other = await memberWithWorkspace(app);
+    const theirs = await pageOf(other);
+    const refused = await failure(() =>
+      m.client.bookingPages.reorderProfile({ workspace: m.slug, pageIds: [coffee.id, theirs.id], mutationId: newId() }),
+    );
+    expect(refused.code).toBe('NOT_FOUND');
+    const twice = await failure(() =>
+      m.client.bookingPages.reorderProfile({ workspace: m.slug, pageIds: [coffee.id, coffee.id], mutationId: newId() }),
+    );
+    expect(twice.code).toBe('INPUT_INVALID');
+    expect(await listed()).toEqual([
+      ['Coffee chat', null],
+      ['Demo', 'Sales'],
+      ['Intro call', 'Sales'],
+    ]);
   });
 });
 
@@ -362,5 +435,32 @@ describe('the guest page’s changes and the host’s (milestone 2: AC-638 to AC
     ).toEqual({ cancelled: true });
     const seen = await visit(`manage/${token}`);
     expect(await seen.json()).toMatchObject({ state: 'cancelled', cancelReason: 'Ill.' });
+  });
+});
+
+describe('page views for the operator console (spec 0047, AC-1625)', () => {
+  const CHROME =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+  const { ownerUrl } = inject('testDatabase');
+  const viewsOf = (pageId: string) =>
+    testQuery<{ views: number }>(ownerUrl, 'select views from booking_page_views where page_id = $1 order by views', [
+      pageId,
+    ]);
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 200));
+
+  it('counts each load of a visitor once a day, by visitor, and never a host, a bot or no browser at all', async () => {
+    const m = await memberWithWorkspace(app);
+    const page = await pageOf(m);
+    const ip = newIp();
+    for (let load = 0; load < 2; load += 1) {
+      expect((await visit(`${page.publicKey}/viewer`, { ip, headers: { 'user-agent': CHROME } })).status).toBe(200);
+    }
+    await visit(`${page.publicKey}/viewer`, { headers: { 'user-agent': CHROME } });
+    // The host on their own page, a crawler, and a request with no user agent: none counted.
+    await visit(`${page.publicKey}/viewer`, { headers: { 'user-agent': CHROME, cookie: m.cookie } });
+    await visit(`${page.publicKey}/viewer`, { headers: { 'user-agent': 'Googlebot/2.1' } });
+    await visit(`${page.publicKey}/viewer`);
+    await settle();
+    expect((await viewsOf(page.id)).map((row) => row.views)).toEqual([1, 2]);
   });
 });

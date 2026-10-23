@@ -1,6 +1,17 @@
 // Settings, Background jobs: the page's copy, apart from the objects pages' own (strings.ts).
 import type { JobStatus } from '@crm/data';
 
+/** Why records in a job were refused, by the code the server gave (SW33): the reasons a bulk change meets. */
+const REFUSAL_WORDS: ReadonlyMap<string, (count: string) => string> = new Map([
+  ['FORBIDDEN', (count: string) => `${count} you can’t change`],
+  ['NOT_FOUND', (count: string) => `${count} no longer there`],
+  ['UNIQUE_CONFLICT', (count: string) => `${count} with a value another record has`],
+  ['VALUE_REQUIRED', (count: string) => `${count} missing a required value`],
+  ['ATTRIBUTE_VALUE_INVALID', (count: string) => `${count} with a value that doesn’t fit`],
+  ['ATTRIBUTE_READ_ONLY', (count: string) => `${count} with a field that can’t be changed`],
+  ['VERSION_CHANGED', (count: string) => `${count} changed by someone else meanwhile`],
+]);
+
 /** Settings, Background jobs: the page's copy (spec 0008, AC-118, AC-119). */
 export const strings = {
   /** An import's link to its summary, and a finished export's download (spec 0040). */
@@ -44,8 +55,9 @@ export const strings = {
   progressUnknown: (done: string) => `${done} so far`,
   refused: (count: string) => `${count} refused`,
   skipped: (count: string) => `${count} skipped`,
-  /** One refusal group: "100 refused: SIMULATED_REFUSAL". */
-  refusalGroup: (count: string, code: string) => `${count} refused: ${code}`,
+  /** One refusal group in words, never its raw code: a code the page knows, else "100 couldn’t be changed". */
+  refusalGroup: (count: string, code: string) =>
+    (REFUSAL_WORDS.get(code) ?? ((n: string) => `${n} couldn’t be changed`))(count),
   retrying: 'Retrying',
   /** A prepared job waiting for its confirm: "Expires in 59 minutes" (AC-109). */
   expires: 'Expires',

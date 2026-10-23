@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CalendarItem } from '@crm/data';
-import { destinationChoice, destinationHint } from './destination.ts';
+import { destinationChoice, destinationHint, noVideoLinkReason } from './destination.ts';
 
 const calendar = (id: string, name: string, changes: Partial<CalendarItem> = {}): CalendarItem => ({
   id,
@@ -81,5 +81,30 @@ describe('destinationChoice', () => {
 
   it('changes nothing when the default is chosen again', () => {
     expect(destinationChoice({ status: 'default', isOwner: true }).send('default')).toBeUndefined();
+  });
+});
+
+describe('noVideoLinkReason (Q57, Q77)', () => {
+  it('says so on the reader’s own one on one page with no live calendar', () => {
+    expect(noVideoLinkReason({ kind: 'personal', isOwner: true, connections: [] })).toBe('none');
+    expect(noVideoLinkReason({ kind: 'personal', isOwner: true, connections: ['revoked'] })).toBe('none');
+    // An expired account is listed as needing reconnecting: the line says so.
+    expect(noVideoLinkReason({ kind: 'personal', isOwner: true, connections: ['revoked', 'expired'] })).toBe(
+      'reconnect',
+    );
+  });
+
+  it('stays quiet with a live calendar, which still makes links while its sync fails', () => {
+    for (const status of ['syncing', 'connected', 'failed']) {
+      expect(noVideoLinkReason({ kind: 'personal', isOwner: true, connections: ['expired', status] })).toBe(undefined);
+    }
+  });
+
+  it('stays quiet on a colleague’s page, a team page, and while a read is on its way', () => {
+    expect(noVideoLinkReason({ kind: 'personal', isOwner: false, connections: [] })).toBe(undefined);
+    expect(noVideoLinkReason({ kind: 'round_robin', isOwner: true, connections: [] })).toBe(undefined);
+    expect(noVideoLinkReason({ kind: 'collective', isOwner: true, connections: [] })).toBe(undefined);
+    expect(noVideoLinkReason({ kind: 'personal', isOwner: undefined, connections: [] })).toBe(undefined);
+    expect(noVideoLinkReason({ kind: 'personal', isOwner: true, connections: undefined })).toBe(undefined);
   });
 });

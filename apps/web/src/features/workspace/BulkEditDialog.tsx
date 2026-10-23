@@ -1,7 +1,7 @@
 // Brief
 // Purpose: change one field on every ticked record at once (spec 0022, milestone 2).
 // Main task: pick the field, the change (Set, Clear, Add, Remove, Replace), the value through the field's own editor, then Apply.
-// Leaves out: several fields in one go, relationships (owner decision 3), members (edited nowhere yet) and per record previews.
+// Leaves out: several fields in one go, relationships (owner decision 3) and per record previews.
 import {
   bulkOpsFor,
   isEditableHere,
@@ -27,6 +27,7 @@ import {
   type FormRefusal,
 } from '@crm/ui';
 import { useEffect, useId, useMemo, useState } from 'react';
+import type { MemberPicker } from '../records/members.ts';
 import { bulkStrings, recordsWord } from './bulk.ts';
 
 /** An attribute the dialog offers, with the changes its type takes (AC-529). */
@@ -41,8 +42,9 @@ const SEARCH_PAST = 15;
 /**
  * The attributes a bulk edit offers (AC-529): those the member may write and
  * the dialog can edit, leaving out the primary, system, archived, file,
- * interaction and relationship attributes (`bulkOpsFor` answers none), and
- * members, which no screen edits yet. In the object's order.
+ * interaction and relationship attributes (`bulkOpsFor` answers none). A
+ * member (Owner) is offered, chosen through the member picker. In the
+ * object's order.
  */
 export function offeredAttributes(attributes: readonly AttributeDefinition[]): readonly Offered[] {
   return attributes.flatMap((definition) => {
@@ -83,6 +85,8 @@ export interface BulkEditDialogProps {
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly object: ObjectSummary;
   readonly attributes: readonly AttributeDefinition[];
+  /** The member picker an Owner's value is chosen with, "Me" first. */
+  readonly memberPicker: MemberPicker;
   /** How many records it changes (Set on a unique attribute is refused for more than one). */
   readonly count: number;
   /** The records in words for the title ("48 people", "all 10,000+ matching people"). */
@@ -97,6 +101,7 @@ export function BulkEditDialog({
   onOpenChange,
   object,
   attributes,
+  memberPicker,
   count,
   records: named,
   onApply,
@@ -151,6 +156,7 @@ export function BulkEditDialog({
         blockedId={blockedId}
         object={object}
         attributes={attributes}
+        memberPicker={memberPicker}
         count={count}
         records={records}
         isBusy={isBusy}
@@ -167,7 +173,10 @@ export function BulkEditDialog({
 }
 
 /** Props for the dialog's form. */
-interface BulkEditFormProps extends Pick<BulkEditDialogProps, 'object' | 'attributes' | 'count' | 'onApply'> {
+interface BulkEditFormProps extends Pick<
+  BulkEditDialogProps,
+  'object' | 'attributes' | 'memberPicker' | 'count' | 'onApply'
+> {
   readonly formId: string;
   /** The id the unique rule's line takes, so Apply can name it. */
   readonly blockedId: string;
@@ -186,6 +195,7 @@ function BulkEditForm({
   blockedId,
   object,
   attributes,
+  memberPicker,
   count,
   records,
   isBusy,
@@ -363,6 +373,9 @@ function BulkEditForm({
               }}
               value={value ?? null}
               surface="form"
+              {...(definition.type === 'actor_reference'
+                ? { display: memberPicker.displays, ...memberPicker.extras }
+                : {})}
               onCommit={(next) => {
                 setValue(definition.isMulti && next !== null && !Array.isArray(next) ? [next] : next);
                 setValueError(undefined);

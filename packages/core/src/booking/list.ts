@@ -28,6 +28,7 @@ import { checkId, isUuid } from '../engine/ids.ts';
 import { inputInvalid } from '../engine/refusals.ts';
 import { blockOccurrences } from './blocks.ts';
 import { handLinkOf, linkedRecords, linksOf, seenLinks } from './links.ts';
+import { shownAsEvent } from './owned.ts';
 
 const { bookingPages, bookings, members } = schema;
 
@@ -237,7 +238,7 @@ export async function readBookingsCalendar(
                 and k.provider_calendar_id = s.calendar_id and k.show_in_week
               where c.member_id = ${member}::uuid
                 and m.starts_at < ${to.toISOString()}::timestamptz and m.ends_at > ${from.toISOString()}::timestamptz
-                and m.booking_id is null and not m.created_by_crm and m.status <> 'cancelled'
+                and m.status <> 'cancelled' and ${shownAsEvent()}
                 -- A booking's own event, synced back from the calendar it was written to: the same host, start and
                 -- end, and the booking's video link or its visitor among the attendees. The booking shows instead.
                 and not exists (
@@ -461,7 +462,7 @@ export async function listMeetings(
                 join calendar_calendars k on k.workspace_id = s.workspace_id and k.connection_id = s.connection_id
                   and k.provider_calendar_id = s.calendar_id and k.show_in_week
                 where c.member_id = ${member}::uuid and ${tab} and ${picked} and ${keyset}
-                  and m.booking_id is null and not m.created_by_crm
+                  and ${shownAsEvent()}
                   -- A booking's own event, synced back: the booking shows instead (as on the week).
                   and not exists (
                     select 1 from bookings b

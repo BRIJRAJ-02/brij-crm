@@ -14,6 +14,33 @@ On 19 October 2026 the owner asked for Links and Forms to look the same, since a
 
 `rowsAreLinks` draws each row as a plain link to its `href` (a list of `a` elements) instead of a GridList row: for a public page whose visitors open rows in a new tab or copy their address, and whose crawlers follow them. A profile's booking links use it (BookingProfile, 22 October 2026). Such rows carry no switch or actions and take no `onOpen`; Tab moves from link to link.
 
+## Rows that move
+
+`onMove` with `rowOrder` makes the rows movable (owner ask A102, 23 October 2026): Settings › Profile arranges the Public booking pages a person's profile lists, a compact list in a Card per section. Why a variant and not a new list: the rows are the same rows (title, facts, the Paused badge, the row menu, opening the page), only their order changes, and the library's sortable rows (Table, QuestionList) each draw their own row look.
+
+- A grip starts each row, in a cell of the handle's width, so the titles line up; space-8 from the title. A row alone in its list (nowhere to go) and a pending row keep the cell and have no grip.
+- Drag a grip, or press Enter or Space on it, then the arrow keys and Enter or Space again (Escape puts it back). The others slide out of the way, the row being moved is lifted (`surface-raised`, `shadow-md`, an outline in forced colours), each step is said ("Intro call, moved to position 2 of 3."), and focus comes back to the grip. A drop calls `onMove(id, toIndex)` with the row's new index among `rows`.
+- While the search narrows the rows the grips go away: a narrowed list can't say where a row lands among the ones it hides. `rowsAreLinks` never moves.
+- In a narrow card the grip stays beside both lines of a row that takes a second one.
+- The drag wrapper (dnd-kit) comes in from the screen: `rowOrder={LinkListRowOrder}` beside `onMove`, from `@crm/ui`. LinkList never imports it, so a public profile's links (`@crm/ui/public-booking`), which never move, never load dnd-kit. Why not a lazy import: it was one on 23 October 2026, and its chunk split the shared files every page loads first (41, past the build's 40, and 1.4 kB more gzipped on the app, the hosted form and the booking page). Without `rowOrder` the rows hold still, `onMove` or not. While the rows load, their skeleton rows keep the grips' places too.
+- Give each row a menu with Move up and Move down too (`actions`): the single pointer way (WCAG 2.5.7), and the one a screen announces itself.
+
+```tsx
+import { LinkList, LinkListRowOrder } from '@crm/ui';
+
+<LinkList
+  density="compact"
+  placement="card"
+  isToolbarHidden
+  label="Pages under Sales"
+  searchLabel="Pages under Sales"
+  rows={rows} // in the order they move in, each with its Move up and Move down menu in `actions`
+  onOpen={open}
+  onMove={(id, toIndex) => move(id, toIndex)}
+  rowOrder={LinkListRowOrder}
+/>
+```
+
 ## Density
 
 On 20 October 2026 the owner asked for the Captures screens, ported from timefix, to be built on our own design system: the records area's look, not Cal.com's event types cards. So LinkList has two densities.
@@ -103,12 +130,12 @@ A compact row has no second line, so PagesHours puts the hours ("Mon to Fri, 9:0
 
 ## States
 
-Both densities: rows, off (badge and switch), not published (badge, switch disabled), pending, searched and no matches, loading (skeleton rows), failed (Try again), no access, empty (the caller's EmptyState). Hover on a row (pointer only), focus (the inset ring); the controls' own hover, focus and pressed states.
+Both densities: rows, off (badge and switch), not published (badge, switch disabled), pending, searched and no matches, loading (skeleton rows), failed (Try again), no access, empty (the caller's EmptyState). Hover on a row (pointer only), focus (the inset ring); the controls' own hover, focus and pressed states. With `onMove`: grips (the skeleton rows keep their place too), a row lifted while it moves, and no grips while a search narrows the rows.
 
 ## Keyboard
 
-Tab reaches the search field, the list's action, then the list on a row. The up and down arrows move between rows, Enter opens the focused one, and left and right move between a row's controls (the switch, Open, Copy link, the menu). Tab leaves the list.
+Tab reaches the search field, the list's action, then the list on a row. The up and down arrows move between rows, Enter opens the focused one, and left and right move between a row's controls (the grip, the switch, Open, Copy link, the menu). Tab leaves the list. On a grip, Enter or Space lifts the row, the arrows move it, Enter or Space drops it and Escape puts it back.
 
 ## Differences from the artifact
 
-Not in the artifact yet. `density` and `placement` are new (20 October 2026). Spec 0025's `tag` gave way to `badge` and `toggle`, the title is no longer a Button, `searchLabel` and `actions` are new, and the actions are ghost icon Buttons with no frame (20 October 2026).
+Not in the artifact yet. `density` and `placement` are new (20 October 2026), `onMove` and `rowOrder` (with the `LinkListRowOrder` export) too (23 October 2026). Spec 0025's `tag` gave way to `badge` and `toggle`, the title is no longer a Button, `searchLabel` and `actions` are new, and the actions are ghost icon Buttons with no frame (20 October 2026).

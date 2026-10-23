@@ -1,7 +1,30 @@
 // The line under a booking page's "Add bookings to" (spec 0024, AC-997): where the page's bookings go, and, when its
-// own calendar stopped taking bookings or went, which one stopped and the default the page uses instead.
+// own calendar stopped taking bookings or went, which one stopped and the default the page uses instead. Also whether
+// a Video page makes no link, for the line under Location (Q57, Q77).
 import type { CalendarItem, PageDestinationView } from '@crm/data';
 import { strings } from './strings.ts';
+
+/** A connection whose calendar can still take a booking's event, and its video link: as the event writer reads it. */
+const LIVE_CONNECTIONS: ReadonlySet<string> = new Set(['syncing', 'connected', 'failed']);
+
+/**
+ * Why Location says a Video page makes no link, or undefined when it doesn't: the reader's own one on one page with no
+ * live calendar among their connections, `reconnect` when one of them has expired (Settings › Calendars lists it as
+ * needing reconnecting), else `none`. A team page's host varies, and a colleague's calendars aren't the reader's to
+ * read, so neither is told; nor is anyone while either read is still on its way.
+ */
+export function noVideoLinkReason(input: {
+  readonly kind: 'personal' | 'collective' | 'round_robin';
+  /** The reader owns the page (its destination's read), or undefined while that read is on its way. */
+  readonly isOwner: boolean | undefined;
+  /** The reader's own connections' statuses, or undefined while they are on their way. */
+  readonly connections: readonly string[] | undefined;
+}): 'none' | 'reconnect' | undefined {
+  const { kind, isOwner, connections } = input;
+  if (kind !== 'personal' || isOwner !== true || connections === undefined) return undefined;
+  if (connections.some((status) => LIVE_CONNECTIONS.has(status))) return undefined;
+  return connections.includes('expired') ? 'reconnect' : 'none';
+}
 
 /** The value meaning "the owner's own destination". */
 export const DEFAULT_DESTINATION = 'default';
