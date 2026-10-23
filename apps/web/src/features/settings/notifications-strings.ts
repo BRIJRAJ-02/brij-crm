@@ -13,7 +13,6 @@ export const strings = {
   replies: 'Replies',
   repliesInfo: 'When someone replies in a comment thread you wrote in.',
   assignments: 'Task assignments',
-  assignmentsInfo: 'When someone gives you a task.',
   digest: 'Daily digest',
   /** Says truthfully which zone it uses today: the browser's when it was turned on, not Preferences' (SA28). */
   digestInfo:

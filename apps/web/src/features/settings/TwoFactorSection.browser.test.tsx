@@ -1,7 +1,7 @@
 // Two factor setup in Chromium (spec 0033, A122, SA20, SA22, SA34, SA35): the check step's button says what the
-// press does ("Email me a code", then "Continue"); the scan step puts the three steps beside the QR code at a
-// desktop width and under it on a phone, with the code's large boxes under step 3 and the setup key in a box that
-// keeps its groups whole with Copy inside; six digits reach the codes step, ten whole codes in two columns of five;
+// press does ("Email me a code", then "Continue"); the scan step puts the three steps and the setup key beside the QR
+// code at a desktop width and under it on a phone, the key in a box that keeps its groups whole with Copy inside, and
+// the code's large boxes under it all at the dialog's full width; six digits reach the codes step, ten whole codes in two columns of five;
 // Done waits for "I’ve saved these"; each change tells the page (Recent activity reads again); Turn off is quiet in
 // its row. axe passes in light and dark.
 import '@crm/ui/styles.css';
@@ -163,24 +163,31 @@ describe('two factor setup', () => {
     for (const step of steps) expect(step.left).toBeGreaterThanOrEqual(code.right);
     expect(Math.round(steps[0]?.top ?? 0)).toBe(Math.round(code.top));
 
-    // The code's boxes: large, under step 3, in the same column.
-    const boxes = dialog.element().querySelector('[data-size="lg"]');
-    expect(boxes).not.toBeNull();
-    const field = boxes?.getBoundingClientRect();
-    expect(field?.top).toBeGreaterThanOrEqual(steps[2]?.bottom ?? Infinity);
-    expect(Math.round(field?.left ?? 0)).toBe(Math.round(steps[2]?.left ?? -1));
-    await expect.element(dialog.getByRole('textbox', { name: 'Code from your authenticator app' })).toHaveFocus();
-
-    // The setup key, under the code: whole groups, Copy inside its box.
+    // The setup key: beside the code too, between step 2 and step 3, in whole groups with Copy inside its box.
     const key = dialog.getByRole('group', { name: 'Setup key' });
     const keyCode = key.element().querySelector('code');
     if (keyCode === null) throw new Error('The setup key shows');
     expect(keyCode.textContent).toBe(setupKey(TOTP_URI));
-    expect(keyCode.getBoundingClientRect().top).toBeGreaterThanOrEqual(code.bottom);
+    const keyBox = keyCode.getBoundingClientRect();
+    expect(keyBox.left).toBeGreaterThanOrEqual(code.right);
+    expect(keyBox.top).toBeGreaterThanOrEqual(steps[1]?.bottom ?? Infinity);
+    expect(keyBox.bottom).toBeLessThanOrEqual(steps[2]?.top ?? -Infinity);
     groupsWhole(keyCode);
     expect(keyCode.parentElement?.contains(key.getByRole('button', { name: 'Copy the setup key' }).element())).toBe(
       true,
     );
+
+    // The code's boxes: large, under the code and the steps, across the dialog's full width, so each is big enough
+    // to read and press (A122: inside the steps' column each was about 30px wide).
+    const field = dialog.element().querySelector('[data-size="lg"]');
+    if (field === null) throw new Error('The code’s boxes show');
+    const fieldBox = field.getBoundingClientRect();
+    expect(fieldBox.top).toBeGreaterThanOrEqual(Math.max(code.bottom, steps[2]?.bottom ?? Infinity));
+    expect(Math.round(fieldBox.left)).toBe(Math.round(code.left));
+    const boxes = [...field.querySelectorAll('span[aria-hidden="true"]')];
+    expect(boxes).toHaveLength(6);
+    for (const box of boxes) expect(box.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    await expect.element(dialog.getByRole('textbox', { name: 'Code from your authenticator app' })).toHaveFocus();
     await axeBothThemes(dialog.element());
   });
 
@@ -236,7 +243,7 @@ describe('two factor, on', () => {
     await render(ON, data, () => undefined);
     const turnOff = page.getByRole('button', { name: 'Turn off' });
     await expect.element(turnOff).toHaveAttribute('data-variant', 'secondary');
-    await expect.element(page.getByText('Ask for a code from an app each time you sign in.')).toBeVisible();
+    await expect.element(page.getByText('Ask for a code from an app when you sign in.')).toBeVisible();
     await expect.element(page.getByRole('button', { name: 'About Authenticator app' })).toBeVisible();
     const section = turnOff.element().closest('section');
     if (section === null) throw new Error('The section shows');

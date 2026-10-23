@@ -118,3 +118,40 @@ export const List: Story = {
     await expect(canvasElement.querySelector('code')?.parentElement?.contains(copy)).toBe(true);
   },
 };
+
+/** The box's sides match when there is no Copy inside it; without Copy, the end keeps the start's padding. */
+async function evenSides(canvasElement: HTMLElement) {
+  const box = canvasElement.querySelector('code')?.parentElement;
+  if (box === null || box === undefined) throw new Error('The box renders');
+  const style = getComputedStyle(box);
+  await expect(style.paddingInlineEnd).toBe(style.paddingInlineStart);
+}
+
+/** BlockPlain: a setup key without Copy. The box keeps even sides, and the groups still wrap whole. */
+export const BlockPlain: Story = {
+  args: { children: 'JBSW Y3DP EHPK 3PXP KRUG S4ZA MFZG CYLT', variant: 'block', isCopyable: false },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <Code {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.queryByRole('button')).toBeNull();
+    await evenSides(canvasElement);
+  },
+};
+
+/** ListPlain: ten backup codes without Copy, in the same two columns, with even sides. */
+export const ListPlain: Story = {
+  args: { children: BACKUP_CODES, variant: 'list', isCopyable: false },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <Code {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.queryByRole('button')).toBeNull();
+    await expect(canvasElement.querySelectorAll('code > span')).toHaveLength(10);
+    await evenSides(canvasElement);
+  },
+};

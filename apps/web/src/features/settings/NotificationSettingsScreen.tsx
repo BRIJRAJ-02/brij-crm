@@ -11,12 +11,19 @@ import { useEffect, useRef } from 'react';
 import { strings } from './notifications-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
-/** The email switches, in order: each kind, by its setting, with its InfoTip saying when it comes. */
-const KINDS = [
+/** One email switch: its setting, its name, and an InfoTip saying when it comes where the name doesn't say it. */
+interface Kind {
+  readonly key: 'emailMentions' | 'emailReplies' | 'emailAssignments';
+  readonly title: string;
+  readonly info?: string;
+}
+
+/** The email switches, in order. Task assignments has no InfoTip: it would only repeat its name. */
+const KINDS: readonly Kind[] = [
   { key: 'emailMentions', title: strings.mentions, info: strings.mentionsInfo },
   { key: 'emailReplies', title: strings.replies, info: strings.repliesInfo },
-  { key: 'emailAssignments', title: strings.assignments, info: strings.assignmentsInfo },
-] as const;
+  { key: 'emailAssignments', title: strings.assignments },
+];
 
 /** True while `shown` still has every switch `change` set: an Undo for an older change does nothing. */
 export function stillShown(shown: NotificationSettings | undefined, change: NotificationSettingsChange): boolean {
@@ -106,7 +113,11 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
       >
         <Card>
           {KINDS.map((kind) => (
-            <SettingsRow key={kind.key} title={kind.title} meta={<InfoTip label={kind.title}>{kind.info}</InfoTip>}>
+            <SettingsRow
+              key={kind.key}
+              title={kind.title}
+              {...(kind.info === undefined ? {} : { meta: <InfoTip label={kind.title}>{kind.info}</InfoTip> })}
+            >
               <Switch
                 label={kind.title}
                 isLabelHidden

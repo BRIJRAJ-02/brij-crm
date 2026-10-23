@@ -309,28 +309,29 @@ export function TwoFactorSection({
         {step === 'check' && plain.fields}
         {step === 'scan' && setup !== undefined && (
           <>
-            {/* The three steps beside the code (under it on a phone), and the code's boxes under step 3. */}
+            {/* The steps and the setup key beside the code (under it on a phone); the code's boxes under all of it,
+                at the dialog's full width, so each box is large enough to read and press. */}
             <QrCode value={setup.totpUri} label={copy.qrLabel}>
-              {copy.steps.map((line) => (
-                <p key={line}>{line}</p>
-              ))}
-              <CodeInput
-                ref={firstCodeField}
-                label={copy.firstCode}
-                // Step 3 says what the boxes are for; screen readers still hear the label.
-                isLabelHidden
-                size="lg"
-                value={firstCode}
-                onChange={setFirstCode}
-                onComplete={(code) => void confirm(code)}
-                {...(error === undefined ? {} : { error })}
-              />
+              <p>{copy.steps[0]}</p>
+              <p>{copy.steps[1]}</p>
+              <FieldGroup label={copy.key}>
+                <Code variant="block" isCopyable copyLabel={copy.copyKey}>
+                  {setupKey(setup.totpUri)}
+                </Code>
+              </FieldGroup>
+              <p>{copy.steps[2]}</p>
             </QrCode>
-            <FieldGroup label={copy.key}>
-              <Code variant="block" isCopyable copyLabel={copy.copyKey}>
-                {setupKey(setup.totpUri)}
-              </Code>
-            </FieldGroup>
+            <CodeInput
+              ref={firstCodeField}
+              label={copy.firstCode}
+              // Step 3 says what the boxes are for; screen readers still hear the label.
+              isLabelHidden
+              size="lg"
+              value={firstCode}
+              onChange={setFirstCode}
+              onComplete={(code) => void confirm(code)}
+              {...(error === undefined ? {} : { error })}
+            />
           </>
         )}
         {step === 'codes' && setup !== undefined && (

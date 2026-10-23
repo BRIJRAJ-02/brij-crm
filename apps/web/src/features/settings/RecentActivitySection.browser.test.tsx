@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { page } from 'vitest/browser';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
-import { RecentActivitySection } from './RecentActivitySection.tsx';
+import { RecentActivityPending, RecentActivitySection } from './RecentActivitySection.tsx';
 
 const event = (id: string, kind: SecurityActivity['kind']): SecurityActivity => ({
   id: `00000000-0000-4000-8000-00000000000${id}`,
@@ -101,6 +101,9 @@ describe('Recent activity', () => {
 
     const retry = later<ActivityPage | undefined>();
     harness.swap(retry.promise);
+    // While it reads again, the failure's place says it is loading, not that it failed.
+    await expect.element(page.getByRole('status')).toHaveTextContent('Loading recent activity');
+    await expect.element(page.getByText('Couldn’t load your recent activity')).not.toBeInTheDocument();
     retry.settle(FIRST);
     await expect.element(page.getByText('Signed in with an email code')).toBeVisible();
 
@@ -122,5 +125,28 @@ describe('Recent activity', () => {
     await expect.element(page.getByRole('heading', { name: 'Your sign ins' })).toBeVisible();
     await expect.element(page.getByText('Where and when you signed in.')).toBeVisible();
     await expect.element(page.getByRole('heading', { name: 'Recent activity' })).not.toBeInTheDocument();
+  });
+
+  it('has a pending screen with the loaded section’s heading, line and loading rows', async () => {
+    shown = await renderInApp(() => <RecentActivityPending />, {
+      data: {},
+      pattern: '/w/$slug/settings/account/sign-in',
+      at: '/w/acme/settings/account/sign-in',
+    });
+    await expect.element(page.getByRole('heading', { name: 'Recent activity' })).toBeVisible();
+    await expect
+      .element(page.getByText('Sign ins and changes to how you sign in, from the last 90 days.'))
+      .toBeVisible();
+    expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(1);
+    shown.unmount();
+    shown = await renderInApp(() => <RecentActivityPending title="Your sign ins" />, {
+      data: {},
+      pattern: '/w/$slug/settings/account/sign-in',
+      at: '/w/acme/settings/account/sign-in',
+    });
+    await expect.element(page.getByRole('heading', { name: 'Your sign ins' })).toBeVisible();
+    await expect
+      .element(page.getByText('Sign ins and changes to how you sign in, from the last 90 days.'))
+      .toBeVisible();
   });
 });

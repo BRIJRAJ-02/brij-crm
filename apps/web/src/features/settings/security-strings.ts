@@ -28,6 +28,8 @@ export const strings = {
     methods: { email_code: 'with an email code', google: 'with Google', passkey: 'with a passkey' },
     empty: 'No activity in the last 90 days',
     failedTitle: 'Couldn’t load your recent activity',
+    /** What screen readers hear while a failed read is tried again. */
+    loading: 'Loading recent activity',
     failedMore: 'Couldn’t load older activity',
     showMore: 'Show more',
   },
@@ -77,7 +79,7 @@ export const strings = {
   /** Two factor sign in (AC-881, AC-883, AC-885). */
   twoFactor: {
     section: 'Two factor sign in',
-    description: 'Ask for a code from an app each time you sign in.',
+    description: 'Ask for a code from an app when you sign in.',
     app: 'Authenticator app',
     /** The Authenticator app row's InfoTip: why it is worth it (SettingsSection has no slot beside its heading). */
     appInfo: 'Even if someone gets into your email, they can’t sign in without your phone.',
@@ -93,7 +95,7 @@ export const strings = {
     newCodes: 'Make new codes',
     failedTitle: 'Couldn’t load two factor sign in',
     setupTitle: 'Set up two factor sign in',
-    /** Beside the QR code, in order; the code's boxes sit under the third. */
+    /** Beside the QR code, in order, with the setup key after the second; the code’s boxes sit under all of it. */
     steps: [
       '1. Open an authenticator app, like Google Authenticator, 1Password or Authy.',
       '2. Scan the code, or type the key.',

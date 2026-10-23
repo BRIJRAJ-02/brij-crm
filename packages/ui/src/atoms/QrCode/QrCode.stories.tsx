@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { CodeInput } from '../../molecules/CodeInput/CodeInput.tsx';
+import { Code } from '../Code/Code.tsx';
 import { QrCode } from './QrCode.tsx';
 
 const meta = {
@@ -24,14 +24,16 @@ export const Dense: Story = {
   args: { value: `otpauth://totp/Timefix:${'a'.repeat(60)}%40example.com?secret=${'J'.repeat(52)}&issuer=Timefix` },
 };
 
-/** Two factor setup's column: three steps, then the code's boxes under step 3. */
+/** Two factor setup's column: three steps, with the setup key after the second. The code's boxes go under it all. */
 function SetupSteps() {
   return (
     <>
       <p>1. Open an authenticator app, like Google Authenticator, 1Password or Authy.</p>
       <p>2. Scan the code, or type the key.</p>
+      <Code variant="block" isCopyable copyLabel="Copy the setup key">
+        JBSW Y3DP EHPK 3PXP
+      </Code>
       <p>3. Enter the 6 digit code it shows.</p>
-      <CodeInput label="Code from your authenticator app" isLabelHidden size="lg" />
     </>
   );
 }

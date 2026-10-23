@@ -16,17 +16,45 @@ export function activityLine(event: SecurityActivity): string {
   return event.kind === 'sign_in' && event.method !== undefined ? `${what} ${copy.methods[event.method]}` : what;
 }
 
+/** The section's heading and the line under it, where another page shows the same list. */
+export interface RecentActivityHeading {
+  /** The section's heading, where another page shows the same list (History's "Your sign ins"); "Recent activity". */
+  readonly title?: string;
+  /** The line under the heading; the last 90 days' line when left out. */
+  readonly description?: ReactNode;
+}
+
 /** Props for Recent activity. */
-export interface RecentActivitySectionProps {
+export interface RecentActivitySectionProps extends RecentActivityHeading {
   readonly data: DataLayer;
   /** The first page as the route's loader started it; undefined once read when that read failed. */
   readonly first: Promise<ActivityPage | undefined>;
   /** Reads the first page again (this route's loader alone), after a failure. */
   readonly onRetry: () => void;
-  /** The section's heading, where another page shows the same list (History's "Your sign ins"); "Recent activity". */
-  readonly title?: string;
-  /** The line under the heading; the last 90 days' line when left out. */
-  readonly description?: ReactNode;
+}
+
+/** Three loading rows in the list's card, while the first page arrives. */
+function LoadingRows() {
+  return (
+    <Card isBusy>
+      {[0, 1, 2].map((index) => (
+        <SettingsRow key={index} title="" description={<Skeleton width="medium" />} />
+      ))}
+    </Card>
+  );
+}
+
+/**
+ * Recent activity while its page is still loading: the same heading and line as the loaded section, over the same
+ * loading rows it shows itself. For a route's pending screen (History's "Your sign ins"), so nothing moves or
+ * renames when the list arrives.
+ */
+export function RecentActivityPending({ title = copy.section, description = copy.description }: RecentActivityHeading) {
+  return (
+    <SettingsSection title={title} description={description}>
+      <LoadingRows />
+    </SettingsSection>
+  );
 }
 
 /**
@@ -44,15 +72,7 @@ export function RecentActivitySection({
   const shown = useDeferredValue(first);
   return (
     <SettingsSection title={title} description={description}>
-      <Suspense
-        fallback={
-          <Card isBusy>
-            {[0, 1, 2].map((index) => (
-              <SettingsRow key={index} title="" description={<Skeleton width="medium" />} />
-            ))}
-          </Card>
-        }
-      >
+      <Suspense fallback={<LoadingRows />}>
         <ActivityTable data={data} first={shown} onRetry={onRetry} isStale={shown !== first} />
       </Suspense>
     </SettingsSection>
@@ -68,7 +88,15 @@ function ActivityTable({
   // Always called, on every render, with the promise the loader made: never a new one made here.
   const page = use(first);
   if (page === undefined) {
-    return <EmptyState tone="error" title={copy.failedTitle} onRetry={onRetry} isLoading={isStale} />;
+    // While it reads again, screen readers hear that it is loading, not the failure.
+    return (
+      <EmptyState
+        tone="error"
+        title={isStale ? copy.loading : copy.failedTitle}
+        onRetry={onRetry}
+        isLoading={isStale}
+      />
+    );
   }
   // A new first page (a retry) starts the older pages over.
   return <ActivityRows key={page.items[0]?.id ?? 'none'} data={data} page={page} isStale={isStale} />;
