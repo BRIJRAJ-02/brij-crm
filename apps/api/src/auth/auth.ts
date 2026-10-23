@@ -294,6 +294,8 @@ export function forwardedHeaders(headers: Headers, clientIp: string | undefined,
 
 /** The body of a route that names an email: the shared email schema (trimmed, lowercased, 254 at most). */
 const EmailBody = z.looseObject({ email: EmailValue });
+/** What a sign in body without a usable email answers with. */
+const EMAIL_NEEDED = 'Enter an email address, such as ada@example.com.';
 const SendCodeBody = z.object({ email: EmailValue, type: z.string() });
 const SignInCodeBody = z.object({ email: EmailValue });
 
@@ -323,9 +325,7 @@ async function checkEmail(request: Request): Promise<Request | Response> {
   const parsed = EmailBody.safeParse(body);
   if (!parsed.success) {
     const issue = parsed.error.issues.find((found) => found.path[0] === 'email');
-    return emailInvalid(
-      issue === undefined || issue.code === 'invalid_type' ? 'Send an email address.' : issue.message,
-    );
+    return emailInvalid(issue === undefined || issue.code === 'invalid_type' ? EMAIL_NEEDED : issue.message);
   }
   const headers = new Headers(request.headers);
   headers.delete('content-length');
@@ -348,8 +348,9 @@ function hasIdToken(body: unknown): boolean {
   return typeof body === 'object' && body !== null && 'idToken' in body && body.idToken !== undefined;
 }
 
-function inputInvalid(): APIError {
-  return new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message: 'Send an email address.' });
+/** A body this route can't take, refused in the words that say what to send (an email, unless told otherwise). */
+function inputInvalid(message: string = EMAIL_NEEDED): APIError {
+  return new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message });
 }
 
 /**
@@ -845,7 +846,8 @@ export function createAuth({
           if (ctx.path === '/two-factor/enable') {
             const { userId, sessionId } = signedIn();
             // Only the app: the email second factor is off, and the issuer is ours.
-            if (!EnableBody.safeParse(ctx.body ?? {}).success) throw inputInvalid();
+            if (!EnableBody.safeParse(ctx.body ?? {}).success)
+              throw inputInvalid('Set up two factor sign in with an authenticator app.');
             await requireFreshSession(userId, sessionId);
           } else if (ctx.path === '/two-factor/generate-backup-codes') {
             const { userId, sessionId } = signedIn();
@@ -869,7 +871,8 @@ export function createAuth({
             if (owner !== undefined) {
               throw new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message: 'Backup codes are for signing in.' });
             }
-            if (!SecondStepBody.safeParse(ctx.body ?? {}).success) throw inputInvalid();
+            if (!SecondStepBody.safeParse(ctx.body ?? {}).success)
+              throw inputInvalid('Enter one of your backup codes.');
           } else if (ctx.path === '/two-factor/verify-totp' && owner !== undefined) {
             // Signed in, this route only finishes setting the app up.
             const state = await identity.twoFactorState(owner.userId);

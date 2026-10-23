@@ -17,6 +17,9 @@ export const INTERNAL_MESSAGE = 'Something went wrong. Try again.';
 /** Input issues sent back at most, so a huge bad payload can't produce a huger answer. */
 export const MAX_INPUT_ISSUES = 50;
 
+/** The sentence bad input answers with when no issue says it better. */
+export const INPUT_INVALID_MESSAGE = 'Some of what you entered isn\u2019t valid.';
+
 /** An oRPC error with one of the map's codes, at the status the map gives it. */
 export function apiError(code: ErrorCode, message: string, data?: ApiError['data']): ApiORPCError {
   return new ORPCError(code, { status: ERROR_MAP[code].status, message, data });
@@ -28,11 +31,56 @@ export interface MappedError {
   readonly expected: boolean;
 }
 
-function issuePath(path: ValidationError['issues'][number]['path']): InputIssue['path'] {
+/** One problem a schema found, as Zod or oRPC hands it: where, what, and Zod's issue code. */
+export interface SchemaIssue {
+  readonly path?: ValidationError['issues'][number]['path'];
+  readonly message: string;
+  readonly code?: unknown;
+}
+
+function issuePath(path: SchemaIssue['path']): InputIssue['path'] {
   return (path ?? []).map((segment) => {
     const key = typeof segment === 'object' ? segment.key : segment;
     return typeof key === 'number' ? key : String(key);
   });
+}
+
+/** An INPUT_INVALID answer's sentence and the issues it lists. */
+export interface InputProblems {
+  readonly message: string;
+  readonly issues: InputIssue[];
+}
+
+/** How `inputProblems` words its answer: how many issues it lists, and whether a field's sentence may lead. */
+export interface InputProblemsOptions {
+  readonly limit?: number;
+  /** The first field's sentence leads, when no rule over the whole input does (a public page's one form). */
+  readonly leadWithField?: boolean;
+}
+
+/**
+ * What a schema's issues say on the wire. An issue on a field stays in
+ * `issues`, so a form shows it on that field. An issue on no field (a rule
+ * over the whole input, "The end time has to be after the start time.") is
+ * said in the sentence only. Otherwise the sentence is `INPUT_INVALID_MESSAGE`
+ * (or the first field's, with `leadWithField`), as it is for an input that
+ * isn't even the right shape, which nobody typed. The words are the schema's
+ * own or the plain safety net's (`installPlainErrors`): where and what, never
+ * the input.
+ */
+export function inputProblems(
+  found: readonly SchemaIssue[],
+  { limit = MAX_INPUT_ISSUES, leadWithField = false }: InputProblemsOptions = {},
+): InputProblems {
+  const kept = found.slice(0, limit);
+  const issues = kept
+    .map((issue) => ({ path: issuePath(issue.path), message: issue.message }))
+    .filter((issue) => issue.path.length > 0);
+  const whole = kept.find(
+    (issue) => (issue.path ?? []).length === 0 && issue.code !== 'invalid_type' && issue.message !== '',
+  );
+  const lead = leadWithField ? issues[0]?.message : undefined;
+  return { message: whole?.message ?? lead ?? INPUT_INVALID_MESSAGE, issues };
 }
 
 // What a refusal may carry onto the wire: code, message and attribute, nothing else.
@@ -91,10 +139,8 @@ export function toApiError(error: unknown): MappedError {
     }
     // oRPC's own input check: the contract's schema refused the input.
     if (error.code === 'BAD_REQUEST' && error.cause instanceof ValidationError) {
-      const issues = error.cause.issues
-        .slice(0, MAX_INPUT_ISSUES)
-        .map((issue) => ({ path: issuePath(issue.path), message: issue.message }));
-      return { error: apiError('INPUT_INVALID', 'Some of the input is invalid.', { issues }), expected: true };
+      const { message, issues } = inputProblems(error.cause.issues);
+      return { error: apiError('INPUT_INVALID', message, { issues }), expected: true };
     }
     // oRPC refusing the request itself before any procedure: a body it couldn't
     // decode, or a GET on a procedure that only takes POST.

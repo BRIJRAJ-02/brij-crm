@@ -16,7 +16,8 @@
 // Plain TypeScript with no runtime imports beyond the layer's own types, so it
 // sits in the first load.
 import type { JobStarter, JobStatus, JobView } from '@crm/contracts';
-import { refusalSummary, toDataError, type DataError } from '../errors.ts';
+import { toDataError, type DataError } from '../errors.ts';
+import { refusalSummary } from '../refusals.ts';
 import type { MutationLog } from '../live/mutations.ts';
 import type { LiveEventOf } from '../live/router.ts';
 import type { Notice } from '../notice.ts';

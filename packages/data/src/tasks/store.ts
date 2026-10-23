@@ -39,7 +39,8 @@ import type {
   TaskTotal,
   TaskView,
 } from '@crm/contracts';
-import { refusalSummary, toDataError, type DataError } from '../errors.ts';
+import { toDataError, type DataError } from '../errors.ts';
+import type { RefusalWords } from '../refusals.ts';
 import type { MutationLog } from '../live/mutations.ts';
 import type { LiveEventOf } from '../live/router.ts';
 import type { Notice } from '../notice.ts';
@@ -111,6 +112,8 @@ export interface TasksDeps {
   readonly mintId: () => string;
   readonly mutations: MutationLog;
   readonly notify: (notice: Notice) => void;
+  /** A refused write's words (`refusals.ts`), handed over as the records layer's are (`RecordsLayerOptions`). */
+  readonly refusals: RefusalWords;
   /** Listens to a workspace's change events while a list or task is shown; the answer stops. */
   readonly watch: (workspace: string) => () => void;
   /** Runs `work` once after a random 0 to 2 seconds, however often it is asked meanwhile (per `key`). */
@@ -1015,7 +1018,7 @@ export function createTasksStore(deps: TasksDeps) {
       drop(workspace, [task.id]);
       deps.notify({
         tone: 'danger',
-        message: `${TASK_WORDS.notCreated} ${refusalSummary(toDataError(failed))}`,
+        message: `${TASK_WORDS.notCreated} ${deps.refusals.refusalSummary(toDataError(failed))}`,
         action: {
           label: TASK_WORDS.retry,
           onAction: () => {
@@ -1032,7 +1035,7 @@ export function createTasksStore(deps: TasksDeps) {
     if (failure === undefined) return true;
     deps.notify({
       tone: 'danger',
-      message: `${TASK_WORDS.notTicked} ${refusalSummary(failure)}`,
+      message: `${TASK_WORDS.notTicked} ${deps.refusals.refusalSummary(failure)}`,
       action: {
         label: TASK_WORDS.retry,
         onAction: () => {

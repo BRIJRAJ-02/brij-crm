@@ -101,9 +101,14 @@ describe('input errors', () => {
     );
     expect(error.status).toBe(400);
     expect(error.code).toBe('INPUT_INVALID');
-    const { issues } = error.data as { issues: { path: unknown[]; message: string }[] };
-    expect(issues.map((issue) => issue.path)).toEqual([['name'], ['tags', 0]]);
-    for (const issue of issues) expect(issue.message).not.toBe('');
+    // The schema sets no words of its own: the app answers in the safety net's, never Zod's.
+    expect(error.message).toBe('Some of what you entered isn’t valid.');
+    expect(error.data).toEqual({
+      issues: [
+        { path: ['name'], message: 'Add this.' },
+        { path: ['tags', 0], message: 'This isn’t valid.' },
+      ],
+    });
   });
 
   it('sends only where and what for each issue, never the input itself', async () => {

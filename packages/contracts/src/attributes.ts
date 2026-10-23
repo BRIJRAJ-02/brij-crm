@@ -173,7 +173,7 @@ export const CreateAttributeInput = WorkspaceScoped.extend({
   id: uuidV7('The attribute id must be a UUID v7.'),
   title: AttributeTitle,
   type: PickerAttributeType,
-  apiSlug: z.string().max(100).optional(),
+  apiSlug: z.string().max(100, { error: 'Keep the API name to 100 characters.' }).optional(),
   description: AttributeDescription.optional(),
   isMulti: z.boolean().optional(),
   isRequired: z.boolean().optional(),

@@ -27,7 +27,7 @@ import type { Auth, SessionUser } from './auth/auth.ts';
 import { doorSession } from './auth/door-session.ts';
 import type { CalendarServices } from './calendar/services.ts';
 import type { Mailer } from './mail/mailer.ts';
-import { apiError } from './errors.ts';
+import { apiError, inputProblems } from './errors.ts';
 import { log } from './log.ts';
 import type { ReadGate } from './gate.ts';
 import type { Analytics } from './monitoring/posthog.ts';
@@ -222,9 +222,10 @@ export const requireMember = os
   .middleware(async ({ context, next }, input: unknown) => {
     const scoped = WorkspaceScoped.safeParse(input);
     if (!scoped.success) {
-      throw apiError('INPUT_INVALID', 'Some of the input is invalid.', {
-        issues: [{ path: ['workspace'], message: 'Name the workspace by its address.' }],
-      });
+      const { message, issues } = inputProblems([
+        { path: ['workspace'], message: 'Name the workspace by its address.' },
+      ]);
+      throw apiError('INPUT_INVALID', message, { issues });
     }
     const scope = await enterWorkspace(memberDoor(context), {
       userId: context.user.id,

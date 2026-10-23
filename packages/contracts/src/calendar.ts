@@ -404,7 +404,11 @@ export type MeetingCursor = z.infer<typeof MeetingCursor>;
 export const AddMeetingAttendeeInput = WorkspaceScoped.extend({
   recordId: Uuid,
   meetingId: Uuid,
-  email: z.string().trim().min(3).max(320),
+  email: z
+    .string()
+    .trim()
+    .min(3, { error: 'Enter an email address, such as ada@example.com.' })
+    .max(320, { error: 'Enter an email address, such as ada@example.com.' }),
   mutationId: Uuid,
 });
 /** Adding a meeting's attendee as a person. */

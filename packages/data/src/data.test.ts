@@ -34,7 +34,8 @@ import {
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { describe, expect, it, vi } from 'vitest';
-import { dataError, isUnseenFault, parseRetryAfter, refusalFor, refusalSummary } from './errors.ts';
+import { dataError, isUnseenFault, parseRetryAfter } from './errors.ts';
+import { refusalFor, refusalSummary } from './refusals.ts';
 import {
   createDataLayer,
   createIdMinter,
@@ -2106,6 +2107,23 @@ describe('refusal wording', () => {
     const whole = dataError('LIMIT_REACHED', 'This object is full.');
     expect(refusalFor(whole, 'a2')).toBe('This object is full.');
     expect(refusalSummary(whole)).toBe('This object is full.');
+  });
+
+  it('shows the safety net’s words on their field only: a toast says the answer’s sentence', () => {
+    const missing = dataError('INPUT_INVALID', 'Some of what you entered isn’t valid.', {
+      issues: [{ path: ['values', 'a1'], message: 'Add this.' }],
+    });
+    expect(refusalFor(missing, 'a1')).toBe('Add this.');
+    expect(refusalSummary(missing)).toBe('Some of what you entered isn’t valid.');
+    const tooLong = dataError('INPUT_INVALID', 'Some of what you entered isn’t valid.', {
+      issues: [{ path: ['values', 'a1'], message: 'Use 2,000 characters or fewer.' }],
+    });
+    expect(refusalSummary(tooLong)).toBe('Some of what you entered isn’t valid.');
+    // A schema's own words name their field, so they still lead.
+    const named = dataError('INPUT_INVALID', 'Some of what you entered isn’t valid.', {
+      issues: [{ path: ['title'], message: 'Give the task a title.' }],
+    });
+    expect(refusalSummary(named)).toBe('Give the task a title.');
   });
 });
 

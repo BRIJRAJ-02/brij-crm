@@ -43,7 +43,7 @@ export type UpdateWorkspaceInput = z.infer<typeof UpdateWorkspaceInput>;
 
 /** Deleting the workspace: the owner types its name to confirm (AC-823, the owner, 21 October 2026). */
 export const DeleteWorkspaceInput = WorkspaceScoped.extend({
-  confirmName: z.string().max(200),
+  confirmName: z.string().max(200, { error: 'Type the workspace’s name to confirm.' }),
   mutationId: Uuid,
 });
 /** Deleting the workspace. */

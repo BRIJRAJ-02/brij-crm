@@ -162,7 +162,13 @@ export const AccountDeletionCheck = z.object({ blockers: z.array(DeletionBlocker
 export type AccountDeletionCheck = z.infer<typeof AccountDeletionCheck>;
 
 /** Deleting the account: its email typed in full, to confirm (AC-903). */
-export const DeleteAccountInput = z.object({ email: z.string().trim().min(1).max(320) });
+export const DeleteAccountInput = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, { error: 'Type your email address to confirm.' })
+    .max(320, { error: 'Type your email address to confirm.' }),
+});
 /** Deleting the account. */
 export type DeleteAccountInput = z.infer<typeof DeleteAccountInput>;
 
