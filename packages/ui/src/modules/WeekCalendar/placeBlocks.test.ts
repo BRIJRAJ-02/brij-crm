@@ -1,7 +1,7 @@
 // Google Calendar style lanes for a day's blocks: side by side when they start within a quarter hour, indented over an
 // earlier one when they start later, and "+N" when a lane would be too narrow.
 import { describe, expect, it } from 'vitest';
-import { placeBlocks, type Timed } from './placeBlocks.ts';
+import { liftClosed, placeBlocks, type Timed } from './placeBlocks.ts';
 
 const at = (id: string, from: number, to: number): Timed => ({ id, startMinute: from * 60, endMinute: to * 60 });
 /** The same in minutes, for starts closer than a quarter hour. */
@@ -93,5 +93,36 @@ describe('placeBlocks', () => {
   it('keeps clusters apart: blocks that never overlap each take the whole column', () => {
     const layout = placeBlocks([at('a', 9, 10), at('b', 9, 10), at('c', 11, 12)]);
     expect(slot(layout, 'c')).toMatchObject({ lane: 0, lanes: 1, indent: 0 });
+  });
+});
+
+describe('liftClosed', () => {
+  it('lifts Busy that a booking at the same time would hide', () => {
+    expect([...liftClosed([at('busy', 10, 11)], [at('booking', 10, 11)])]).toEqual(['busy']);
+  });
+
+  it('lifts Busy that an earlier block runs into', () => {
+    expect([...liftClosed([atMinute('busy', 585, 615)], [atMinute('call', 540, 600)])]).toEqual(['busy']);
+  });
+
+  it('keeps closed time that starts clearly earlier under the rest', () => {
+    expect(liftClosed([at('blocked', 9, 17)], [at('booking', 10, 11)]).size).toBe(0);
+  });
+
+  it('keeps closed time nothing overlaps under the rest', () => {
+    expect(liftClosed([at('busy', 9, 10)], [at('booking', 10, 11)]).size).toBe(0);
+  });
+
+  it('lifts two closed blocks that start together, and leaves a later one over an earlier', () => {
+    expect([...liftClosed([at('a', 9, 10), at('b', 9, 10)], [])].sort()).toEqual(['a', 'b']);
+    expect(liftClosed([at('day', 9, 17), at('gym', 12, 13)], []).size).toBe(0);
+  });
+
+  it('lifts closed time that a lifted one would cover', () => {
+    const lifted = liftClosed(
+      [atMinute('busy', 540, 600), atMinute('hold', 570, 660)],
+      [atMinute('booking', 540, 600)],
+    );
+    expect([...lifted].sort()).toEqual(['busy', 'hold']);
   });
 });

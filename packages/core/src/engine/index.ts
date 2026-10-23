@@ -95,6 +95,7 @@ export {
   type ValueInput,
 } from './records.ts';
 export { changeLinks, LINKS_PER_DELTA, type DeltaOutcome, type LinksDelta } from './link-delta.ts';
+export { pageLinks, UNKNOWN_SIDE, type LinkPageAnswer, type LinkPageInput } from './link-page.ts';
 export {
   searchRecords,
   SEARCH_LIMIT_DEFAULT,

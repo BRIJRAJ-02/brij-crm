@@ -158,6 +158,8 @@ export const ACCESS_TABLE = {
   readTrashedRecord: { data: 'read' },
   // The record picker's search (spec 0014): only records the reader may see.
   searchRecords: { data: 'read' },
+  // A record page's related sections (spec 0014, milestone 3): only linked records the reader may see, on a side they may see.
+  pageLinks: { data: 'read' },
   // The command menu (spec 0039): it searches, lists and keeps only what the reader may read; the rest is absent.
   searchWorkspace: { data: 'read' },
   listRecents: { data: 'read' },

@@ -2,7 +2,7 @@
 // header's name as it is typed, and which addresses name a tab or a record.
 import type { AttributeDefinition, ObjectSummary, RecordView } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { detailAttributes, isRecordId, isRecordTab, recordHref, recordName, refsOf } from './details.ts';
+import { detailAttributes, isRecordId, isRecordTab, recordHref, recordName, refsOf, relatedSides } from './details.ts';
 
 const attribute = (overrides: Partial<AttributeDefinition>): AttributeDefinition => ({
   id: '0199a6f2-0000-7000-8000-000000000001',
@@ -86,5 +86,56 @@ describe('addresses', () => {
     expect(recordHref('acme', 'people', 'r1', 'activity')).toBe('/w/acme/objects/people/r1/activity');
     expect(refsOf({ objectId: 'o', recordId: 'r' })).toEqual([{ objectId: 'o', recordId: 'r' }]);
     expect(refsOf(null)).toEqual([]);
+  });
+});
+
+describe('relatedSides (spec 0017, AC-375)', () => {
+  const COMPANIES = {
+    ...PEOPLE,
+    id: '0199a6f2-0000-7000-8000-00000000000b',
+    apiSlug: 'companies',
+    pluralName: 'Companies',
+  };
+  const relationship = (targetObjectId: string) => ({
+    id: '0199a6f2-0000-7000-8000-0000000000r1',
+    cardinality: 'one_to_many' as const,
+    side: 'to' as const,
+    targetObjectIds: [targetObjectId],
+    farHoldsOne: true,
+  });
+  it('lists the sides that hold many, in attribute order, with the object their records come from', () => {
+    const team = attribute({
+      id: 't',
+      title: 'Team',
+      type: 'record_reference',
+      isMulti: true,
+      position: 4,
+      relationship: relationship(PEOPLE.id),
+    });
+    const deals = attribute({
+      id: 'd',
+      title: 'Deals',
+      type: 'record_reference',
+      isMulti: true,
+      position: 2,
+      relationship: relationship(COMPANIES.id),
+    });
+    const one = attribute({
+      id: 'o',
+      title: 'Parent',
+      type: 'record_reference',
+      isMulti: false,
+      relationship: relationship(COMPANIES.id),
+    });
+    const text = attribute({ id: 'x', type: 'text' });
+    const sides = relatedSides([team, one, deals, text], [PEOPLE, COMPANIES]);
+    expect(sides.map((side) => [side.attribute.title, side.farObject.apiSlug])).toEqual([
+      ['Deals', 'companies'],
+      ['Team', 'people'],
+    ]);
+  });
+  it('leaves out a side whose far object the person can’t see', () => {
+    const team = attribute({ id: 't', type: 'record_reference', isMulti: true, relationship: relationship(PEOPLE.id) });
+    expect(relatedSides([team], [COMPANIES])).toEqual([]);
   });
 });

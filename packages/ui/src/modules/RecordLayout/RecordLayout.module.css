@@ -58,6 +58,12 @@
     overflow: auto;
   }
 
+  /* Each block a tab holds keeps its own height and the panel scrolls, rather than squeezing the cards
+     (Overview's Related cards, spec 0017, take it past one screen). */
+  .panel > * {
+    flex-shrink: 0;
+  }
+
   .sidebar {
     flex: none;
     box-sizing: border-box;
@@ -73,6 +79,14 @@
     flex-direction: column;
     min-block-size: 0;
     overflow: auto;
+  }
+
+  /* What the sidebar holds, stacked: Details, then each related section (spec 0017), space-16 apart. */
+  .sidebarStack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    min-inline-size: 0;
   }
 
   .folded {

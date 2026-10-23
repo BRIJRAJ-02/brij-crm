@@ -74,6 +74,7 @@ const NOT_WRITES = [
   'newId',
   'outboxEvents',
   'outboxHook',
+  'pageLinks',
   'queryGroups',
   'queryPage',
   'queryTrash',

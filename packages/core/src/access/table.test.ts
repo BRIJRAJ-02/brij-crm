@@ -33,6 +33,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'peekInvite',
   'acceptInvite',
   'isInvitedEmail',
+  // The name typed on the invite card, cleaned and cut to 80 characters: pure, it reads nothing.
+  'typedMemberName',
   // Domain join (spec 0031, slice 6): the signed in person's own workspaces to ask, through the door's domain
   // lookup and a system scope in each.
   'listJoinable',
@@ -796,6 +798,10 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   // The record picker's search (spec 0014): an object the reader can't see is absent.
   searchRecords: refused('NOT_FOUND', (scope, world) =>
     core.searchRecords(scope, { objectId: world.people, query: '' }),
+  ),
+  // A record's related section (spec 0014): a record on an object the reader can't see is absent.
+  pageLinks: refused('NOT_FOUND', (scope, world) =>
+    core.pageLinks(scope, { recordId: world.recordId, attributeId: world.associatedDeals }),
   ),
   // The command menu (spec 0039): a record or view on an object the principal can't see is never found, listed as
   // recent (even one they opened while they could), or kept by a visit.

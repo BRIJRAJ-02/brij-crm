@@ -38,7 +38,10 @@
 // watch refused with a 4xx other than 401, 403 or 429 (those are about the
 // grant or the minute we asked in) marks the calendar's `channel` with
 // `noPushUntil`, a day on, and runs skip its watch until then, saying nothing:
-// the poll keeps it current, and only the first refusal of each day is logged.
+// the poll keeps it current. A calendar Google says can never be watched
+// (`pushNotSupportedForRequestedResource`) waits a week instead, and the mark
+// keeps the reason (`noPushReason`), so the same refusal asked again is told
+// as a repeat (`repeat`, logged at info): each calendar warns once.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { Database } from '@crm/db';
@@ -60,6 +63,12 @@ export const CHANNEL_RENEW_MS = 48 * 3_600_000;
 
 /** How long a calendar whose watch the provider refused for good waits before its watch is asked for again. */
 export const NO_PUSH_MS = 24 * 3_600_000;
+
+/** How long a calendar Google can never watch (holidays, birthdays, other people's) waits: a week. */
+export const NO_PUSH_UNSUPPORTED_MS = 7 * 24 * 3_600_000;
+
+/** Google's reason for a calendar that takes no push channel at all. */
+const PUSH_UNSUPPORTED = 'pushNotSupportedForRequestedResource';
 
 /** The longest channel token a notice may carry (Google's limit; Graph's `clientState` takes 128). */
 const TOKEN_MAX = 256;
@@ -99,6 +108,13 @@ export function pushPaused(value: unknown, now: Date): boolean {
   return Number.isFinite(until) && until > now.getTime();
 }
 
+/** The reason a calendar's watch was last refused for good, from its `channel` column; undefined for none. */
+function noPushReasonOf(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { noPushReason } = value as Record<string, unknown>;
+  return typeof noPushReason === 'string' ? noPushReason : undefined;
+}
+
 /**
  * Whether a refused watch is the calendar's for good, not the grant's or the moment's: a 4xx other than 401 and 403
  * (the grant, which the sync itself hears) and 429 (too many requests, a passing failure).
@@ -125,7 +141,13 @@ export type ChannelReport =
    * The provider refused to open one, or didn't answer: the poll keeps the calendar current, and the next run tries
    * again, or (`noPushUntil`, a refusal for good) the first run after that time does.
    */
-  | ({ readonly calendarId: string; readonly outcome: 'failed'; readonly noPushUntil?: string } & ProviderFailure)
+  | ({
+      readonly calendarId: string;
+      readonly outcome: 'failed';
+      readonly noPushUntil?: string;
+      /** The calendar was refused for this same reason last time: already said, so logged quietly. */
+      readonly repeat?: true;
+    } & ProviderFailure)
   /**
    * One opened, but nothing could keep it: the calendar was switched off, or its account disconnected or its
    * workspace deleted, while it opened. It was stopped at once.
@@ -154,6 +176,8 @@ export async function openChannel(
     readonly calendarId: string;
     readonly address: string;
     readonly previous: StoredChannel | undefined;
+    /** The calendar's `channel` as stored, for the reason of an earlier refusal for good. */
+    readonly stored?: unknown;
     /** The run's clock, for `noPushUntil`. */
     readonly now?: Date;
   },
@@ -168,17 +192,27 @@ export async function openChannel(
     if (!isProviderError(error)) throw error;
     const failure = failureOf(error);
     if (!watchRefusedForGood(failure)) return { calendarId, outcome: 'failed', ...failure };
-    // Refused for good (a calendar the provider can't watch): no run asks again for a day. A channel it still has
-    // stays beside the mark, so it is stopped as any other when the calendar stops being pulled.
-    const noPushUntil = new Date((input.now ?? new Date()).getTime() + NO_PUSH_MS).toISOString();
+    // Refused for good (a calendar the provider can't watch): no run asks again for a day, or a week when Google
+    // says it never takes a channel. A channel it still has stays beside the mark, so it is stopped as any other
+    // when the calendar stops being pulled.
+    const wait = failure.reason === PUSH_UNSUPPORTED ? NO_PUSH_UNSUPPORTED_MS : NO_PUSH_MS;
+    const noPushUntil = new Date((input.now ?? new Date()).getTime() + wait).toISOString();
+    const reason = failure.reason ?? `status ${String(failure.status)}`;
     await inWorkspace(scope, (tx) =>
       tx.execute(sql`
         update calendar_calendars
-        set channel = coalesce(channel, '{}'::jsonb) || jsonb_build_object('noPushUntil', ${noPushUntil}::text)
+        set channel = coalesce(channel, '{}'::jsonb)
+          || jsonb_build_object('noPushUntil', ${noPushUntil}::text, 'noPushReason', ${reason}::text)
         where id = ${input.calendarRowId}::uuid
       `),
     );
-    return { calendarId, outcome: 'failed', ...failure, noPushUntil };
+    return {
+      calendarId,
+      outcome: 'failed',
+      ...failure,
+      noPushUntil,
+      ...(noPushReasonOf(input.stored) === reason ? { repeat: true as const } : {}),
+    };
   }
   const stored: StoredChannel = { ...channel, tokenHash: hashOf(secret) };
   const kept = await inWorkspace(scope, (tx) =>

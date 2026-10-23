@@ -5,7 +5,7 @@
 // and who holds it ("At Acme"); a pick or a removed chip goes to the data
 // layer as one link delta (`records.editLinks`), a pick marked "At …" moving
 // the record from its holder.
-import type { AttributeDefinition, RecordRefDisplay, RecordSearch, SearchResult } from '@crm/data';
+import type { AttributeDefinition, LinkChange, RecordRefDisplay, RecordSearch, SearchResult } from '@crm/data';
 import { arraySource, type AttributeEditorProps, type ListSource, type ResultState } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
@@ -151,7 +151,37 @@ export function useLinkEditing(slug: string) {
       },
     });
   };
-  return { pickerFor, commit };
+  /**
+   * A related section's Add (spec 0017, AC-375): the record picked on a side
+   * that holds many, as one link delta, moved from its holder when the search
+   * marked it "At …" (the marker is the warning, as in a cell).
+   */
+  const addFor = (
+    definition: AttributeDefinition,
+    recordId: string,
+    display: RecordRefDisplay,
+  ): { readonly change: LinkChange; readonly movedFromName?: string } => {
+    const key = keyFor(definition, recordId);
+    const result = key === undefined ? undefined : peek(key)?.resultOf(display.recordId);
+    const holder = result === undefined || result.linked ? undefined : result.takenBy;
+    const paired = definition.relationship?.pairedAttributeId;
+    const change: LinkChange = {
+      kind: 'add',
+      recordId,
+      attributeId: definition.id,
+      target: { objectId: display.objectId, recordId: display.recordId },
+      isMulti: definition.isMulti,
+      display,
+      ...(paired === undefined ? {} : { pairedAttributeId: paired }),
+      ...(holder === undefined ? {} : { move: true }),
+      ...(holder === undefined || 'hidden' in holder
+        ? {}
+        : { movedFrom: { objectId: holder.objectId, recordId: holder.recordId } }),
+    };
+    // The holder by name for the toast ("Moved … from Acme"); one the person can't see is never named.
+    return holder === undefined || 'hidden' in holder ? { change } : { change, movedFromName: holder.name };
+  };
+  return { pickerFor, commit, addFor };
 }
 
 /**

@@ -18,7 +18,7 @@ import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Popover, type PopoverPlacement } from '../../molecules/Popover/Popover.tsx';
 import type { Hue } from '../../hue.ts';
-import { placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
+import { liftClosed, placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
 import styles from './WeekCalendar.module.css';
 import { strings } from './strings.ts';
 
@@ -99,7 +99,7 @@ function sizeOf(length: number): 'tiny' | 'pair' | 'short' | 'tall' {
 /** How far a finger may move, in CSS pixels, and still be a tap rather than a scroll. */
 const TAP_SLOP = 8;
 
-/** Time the member closed, or is busy: it sits under bookings and events rather than in their lanes. */
+/** Time the member closed, or is busy: it sits under bookings and events rather than in their lanes, unless one would hide it. */
 const isClosed = (block: WeekCalendarBlock) =>
   block.kind === 'blocked' || block.kind === 'held' || block.kind === 'busy';
 
@@ -433,15 +433,26 @@ export function WeekCalendar({
   /** A day's timed blocks as laid out: closed time full width under the rest, then bookings and events in lanes. */
   const layoutOf = (dayKey: string) => {
     const ofDay = blocks.filter((block) => block.dayKey === dayKey);
-    // Closed time sits under bookings and events, full width, out of their lanes (AC-705).
-    const closed: Placed[] = ofDay.filter((block) => isClosed(block)).map((block) => ({ ...block, ...WHOLE }));
     // Laid out as tall as they are drawn: a short block is never under one line (`size-chip`), so two back to back
     // quarter hours overlap on screen and must share the width or cascade, not paint over each other.
-    const timed = ofDay.filter((block) => !isClosed(block));
-    const ends = new Map(timed.map((block) => [block.id, block.endMinute]));
-    const layout = placeBlocks(
-      timed.map((block) => ({ ...block, endMinute: Math.max(block.endMinute, block.startMinute + DRAWN_MINUTES) })),
+    const drawn = (block: WeekCalendarBlock) => ({
+      ...block,
+      endMinute: Math.max(block.endMinute, block.startMinute + DRAWN_MINUTES),
+    });
+    // Closed time sits under bookings and events, full width, out of their lanes (AC-705), later over earlier;
+    // where a block would cover its title (a booking at the same time as Busy, even a cancelled one) it takes a
+    // lane beside it instead, so it never hides.
+    const lifted = liftClosed(
+      ofDay.filter((block) => isClosed(block)).map(drawn),
+      ofDay.filter((block) => !isClosed(block)).map(drawn),
     );
+    const closed: Placed[] = ofDay
+      .filter((block) => isClosed(block) && !lifted.has(block.id))
+      .sort((a, b) => a.startMinute - b.startMinute)
+      .map((block) => ({ ...block, ...WHOLE }));
+    const timed = ofDay.filter((block) => !isClosed(block) || lifted.has(block.id));
+    const ends = new Map(timed.map((block) => [block.id, block.endMinute]));
+    const layout = placeBlocks(timed.map(drawn));
     const placed = layout.blocks.map((block) => ({ ...block, endMinute: ends.get(block.id) ?? block.endMinute }));
     const dayBlocks = [...closed, ...placed];
     // Up and Down walk what shows, "+N" chips among the blocks, by start.

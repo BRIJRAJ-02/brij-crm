@@ -187,6 +187,37 @@ export async function dropSources(
     | 'all',
   options: { readonly cancelBookings?: boolean } = {},
 ): Promise<readonly MeetingChange[]> {
+  // The meetings whose copies go, locked first (in id order, so two drops never wait on each other in a ring): two
+  // connections dropping the last copies of one meeting at once would each still see the other's copy, and neither
+  // would cancel its booking or delete it. The second now waits for the first to commit, then sees its copy gone.
+  await tx.execute(
+    where === 'all'
+      ? sql`
+        select m.id from meetings m
+        where m.id in (
+          select s.meeting_id from meeting_sources s
+          where s.connection_id = ${connectionId}::uuid and s.calendar_id = ${calendarId}
+        )
+        order by m.id for update of m`
+      : 'eventIds' in where
+        ? sql`
+        select m.id from meetings m
+        where m.id in (
+          select s.meeting_id from meeting_sources s
+          where s.connection_id = ${connectionId}::uuid and s.calendar_id = ${calendarId}
+            and s.provider_event_id = any(${textList(where.eventIds)})
+        )
+        order by m.id for update of m`
+        : sql`
+        select m.id from meetings m
+        where m.id in (
+          select s.meeting_id from meeting_sources s
+          where s.connection_id = ${connectionId}::uuid and s.calendar_id = ${calendarId}
+            and not (s.provider_event_id = any(${textList(where.allBut)}))
+        )
+          and m.starts_at < ${where.to}::timestamptz and m.ends_at >= ${where.from}::timestamptz
+        order by m.id for update of m`,
+  );
   const dropped = await tx.execute<{ meeting_id: string; created_by_crm: boolean }>(
     where === 'all'
       ? sql`

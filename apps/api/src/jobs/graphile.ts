@@ -372,7 +372,10 @@ function calendarTask(options: JobRunnersOptions, sync: NonNullable<JobRunnersOp
     // provider's code, status and reason when it refused. Never a token or a channel id.
     for (const channel of outcome.channels ?? []) {
       const fields = { workspaceId: parsed.data.workspaceId, connectionId: parsed.data.connectionId, ...channel };
-      if (channel.outcome === 'failed' || channel.outcome === 'unstopped') options.log.warn('calendar.channel', fields);
+      // A calendar refused again for the reason it was refused for last time was already said: once is enough.
+      const quiet = channel.outcome === 'failed' && channel.repeat === true;
+      if ((channel.outcome === 'failed' && !quiet) || channel.outcome === 'unstopped')
+        options.log.warn('calendar.channel', fields);
       else options.log.info('calendar.channel', fields);
     }
     if (outcome.kind === 'stopped') return;

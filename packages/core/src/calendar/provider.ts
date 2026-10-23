@@ -297,3 +297,22 @@ export function isPersistentCode(code: CalendarErrorCode): boolean {
 export function normaliseEmail(email: string): string {
   return email.trim().toLowerCase();
 }
+
+/**
+ * Whether an address is a Google calendar's own id rather than a person's: its domain is `calendar.google.com` or
+ * ends with it (a secondary calendar's `group.calendar.google.com`, an imported one's `import.calendar.google.com`,
+ * a room's `resource.calendar.google.com`, a holiday calendar's `group.v.calendar.google.com`). Google names such a
+ * calendar the organiser of an event made on it, so the address still makes the event a meeting, but it is never
+ * filed as a person.
+ */
+export function isGoogleCalendarId(email: string): boolean {
+  const at = email.lastIndexOf('@');
+  const domain =
+    at === -1
+      ? ''
+      : email
+          .slice(at + 1)
+          .trim()
+          .toLowerCase();
+  return domain === 'calendar.google.com' || domain.endsWith('.calendar.google.com');
+}

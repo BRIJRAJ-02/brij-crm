@@ -1,0 +1,67 @@
+/* RelatedRecords: one side's related records. Each row is a RecordChip a
+   row tall, its Remove at the end, shown under a pointer or with focus in the
+   row and always on touch. "Show more" and "View all" sit under the rows,
+   their words lined up with the chips', as AttributeList's "Show empty
+   values" is. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .list,
+  .loading {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    justify-content: space-between;
+    min-block-size: var(--size-row);
+    min-inline-size: 0;
+  }
+
+  .chip {
+    display: inline-flex;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .action {
+    display: flex;
+    flex: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .action {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .row:hover .action,
+    .row:focus-within .action {
+      opacity: 1;
+    }
+  }
+
+  .more {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    align-items: center;
+    margin-inline-start: calc(-1 * var(--space-6));
+  }
+
+  .moreFailed {
+    color: var(--text-secondary);
+    font: var(--text-label);
+  }
+}

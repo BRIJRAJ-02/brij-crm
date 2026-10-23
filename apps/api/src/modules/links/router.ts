@@ -1,4 +1,4 @@
-import { addRecordLinks, removeRecordLinks } from '@crm/core';
+import { addRecordLinks, pageLinks, removeRecordLinks } from '@crm/core';
 import { commitCounted } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -31,5 +31,15 @@ export const linksRouter = member.links.router({
       ),
     );
     return { ...result, written: { ...result.written }, changedRecordIds: [...result.changedRecordIds], echoes };
+  }),
+  // A read (spec 0014, milestone 3): one side's linked records the reader may see, a page at a time, with the total.
+  page: member.links.page.handler(async ({ context, input }) => {
+    const answer = await pageLinks(context.scope, {
+      recordId: input.recordId,
+      attributeId: input.attributeId,
+      ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      ...(input.limit === undefined ? {} : { limit: input.limit }),
+    });
+    return { ...answer, items: [...answer.items] };
   }),
 });
