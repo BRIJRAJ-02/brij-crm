@@ -102,13 +102,13 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
       (error: unknown) => setLoaded({ state: isDataError(error) && error.code === 'NOT_FOUND' ? 'gone' : 'failed' }),
     );
   }, [client, token, attempt]);
-  const titleOf = (now: Loaded): string | undefined => {
-    if (now.state !== 'ready') {
-      if (now.state === 'loading') return undefined;
-      return now.state === 'gone' ? strings.linkGone : strings.failedTitle;
+  const titleOf = (state: Loaded): string | undefined => {
+    if (state.state !== 'ready') {
+      if (state.state === 'loading') return undefined;
+      return state.state === 'gone' ? strings.linkGone : strings.failedTitle;
     }
-    if (now.booking.state === 'cancelled') return strings.titles.cancelled;
-    if (now.booking.state === 'past') return strings.titles.past;
+    if (state.booking.state === 'cancelled') return strings.titles.cancelled;
+    if (state.booking.state === 'past') return strings.titles.past;
     return isWelcome && notice === undefined ? strings.titles.welcome : strings.titles.confirmed;
   };
   const title = titleOf(loaded);

@@ -134,7 +134,7 @@ export const strings = {
   bookAgain: 'Book again',
   // A title, so no full stop, and a way on (QA Q80).
   linkGone: 'This link doesn’t open a booking',
-  linkGoneText: 'It may be cut short or out of date. Open the link in the latest email about this booking.',
+  linkGoneText: 'The link may be incomplete or out of date. Open the one in the latest email about this booking.',
 } as const;
 
 /** A tab's title: the page's heading, then the product, as every public page names its tab (QA Q76). */

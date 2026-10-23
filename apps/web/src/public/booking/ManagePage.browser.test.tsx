@@ -42,7 +42,7 @@ describe('ManagePage', () => {
       .element(page.getByRole('heading', { level: 1, name: 'This link doesn’t open a booking' }))
       .toBeVisible();
     await expect
-      .element(page.getByText('Open the link in the latest email about this booking.', { exact: false }))
+      .element(page.getByText('Open the one in the latest email about this booking.', { exact: false }))
       .toBeVisible();
     expect(document.title).toBe('This link doesn’t open a booking · Timefix');
   });
@@ -60,5 +60,33 @@ describe('ManagePage', () => {
       .element(page.getByRole('heading', { level: 1, name: 'This link doesn’t open a booking' }))
       .toBeVisible();
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('puts focus on the booking’s heading once Try again reads it, as the button it pressed is gone', async () => {
+    const booking = {
+      state: 'confirmed',
+      publicKey: 'intro',
+      title: 'Intro call',
+      hostName: 'Ada Host',
+      start: '2099-11-02T09:00:00.000Z',
+      end: '2099-11-02T09:30:00.000Z',
+      timeZone: 'UTC',
+      location: { type: 'video' },
+      visitorName: 'Grace Hopper',
+      visitorEmail: 'grace@example.com',
+      guests: [],
+      workspaceSlug: 'acme',
+      canChange: false,
+      canMove: false,
+    };
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(answer(500, { code: 'INTERNAL', message: 'Something went wrong.' }))
+      .mockResolvedValue(answer(200, booking));
+    show();
+    await page.getByRole('button', { name: 'Try again' }).click();
+    const heading = page.getByRole('heading', { level: 1, name: 'Your booking' });
+    await expect.element(heading).toBeVisible();
+    await expect.poll(() => document.activeElement).toBe(heading.element());
+    expect(document.title).toBe('Your booking · Timefix');
   });
 });
