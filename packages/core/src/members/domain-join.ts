@@ -27,7 +27,14 @@ import { refuse } from '../engine/refusals.ts';
 import { actorRow, type EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit } from './audit.ts';
-import { addJoiner, checkActingNow, checkInvites, checkSeats, type InviteWriteOptions } from './invitations.ts';
+import {
+  addJoiner,
+  checkActingNow,
+  checkInvites,
+  checkSeats,
+  plainName,
+  type InviteWriteOptions,
+} from './invitations.ts';
 
 const { joinRequests, members, workspaceDomains, workspaces } = schema;
 
@@ -46,20 +53,6 @@ export interface SessionPerson {
   readonly name: string;
   readonly email: string;
   readonly emailVerified: boolean;
-}
-
-/**
- * The asker's name as admins read it in the tab and the email: control
- * characters and line breaks become spaces, runs of space one, at most 80
- * characters; the address's local part when nothing is left.
- */
-export function plainName(raw: string, email: string): string {
-  const clean = raw
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return (clean === '' ? (email.split('@')[0] ?? email) : clean).slice(0, 80);
 }
 
 /** Whether a domain is a public mail domain (gmail.com and the like). */
