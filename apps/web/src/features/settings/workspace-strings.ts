@@ -33,6 +33,8 @@ export const strings = {
   moved: (to: string) => `The workspace is now at /w/${to}.`,
   /** It moved, but the page couldn't open there. */
   movedReload: (to: string) => `The workspace is now at /w/${to}. Reload the page to open it there.`,
+  /** On General's note after such a move: opens the page at the new address. */
+  reload: 'Reload',
   /** A rename that didn't go through for a reason other than the name: the reason comes as a toast. */
   nameNotSaved: 'Not saved. Press Enter to try again.',
   nameMissing: 'Name the workspace.',
@@ -59,6 +61,8 @@ export const strings = {
   exportFirst: 'Export anything you want to keep first.',
   typeName: (name: string) => `Type “${name}” to confirm`,
   cancel: 'Cancel',
+  /** The address dialog's Cancel, once the workspace moved and there is nothing left to cancel. */
+  close: 'Close',
   deleted: (name: string) => `${name} was deleted.`,
   restore: 'Restore',
   restored: (name: string) => `${name} is back.`,

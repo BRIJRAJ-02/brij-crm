@@ -10,6 +10,7 @@ import {
   Card,
   CopyButton,
   Field,
+  focusLater,
   InfoTip,
   Select,
   SettingsRow,
@@ -52,7 +53,9 @@ export interface GeneralScreenProps {
  * the field, and Esc puts it back; a failure for any other reason is also a toast, as focus may have left); the
  * web address as its whole link with Copy, and Change, which opens the address dialog; the time zone, saved at once
  * with Undo. Readers who can't change them get one note at the top and locked fields. Owners also get a Danger zone
- * with Delete workspace, which opens the typed name confirm.
+ * with Delete workspace, which opens the typed name confirm. A move whose page then couldn't open leaves a warning at
+ * the top with Reload, which opens the page at the new address, and the page locked until then, as each change would
+ * go to the old address.
  */
 export function GeneralScreen({
   data,
@@ -77,6 +80,10 @@ export function GeneralScreen({
   // A fresh address dialog per opening, so its field starts from the address again.
   const [opened, setOpened] = useState(0);
   const [isDeleting, setDeleting] = useState(false);
+  // Where the workspace moved, when the page then couldn't open there; nothing more is sent from this page.
+  const [movedTo, setMovedTo] = useState<string | undefined>(undefined);
+  const reloadRef = useRef<HTMLButtonElement>(null);
+  const canEdit = mayManage && movedTo === undefined;
   const zones = useMemo(() => zoneItems(settings.timeZone, new Date()), [settings.timeZone]);
   const link = `${origin}/w/${settings.slug}`;
   const fail = (error: unknown) => {
@@ -114,6 +121,7 @@ export function GeneralScreen({
           isDataError(error) && error.data?.refusals?.some((each) => each.field === 'name') === true;
         if (isNameRefused) {
           setNameError(error.message);
+          fail(error);
           return;
         }
         setNameError(strings.nameNotSaved);
@@ -124,7 +132,7 @@ export function GeneralScreen({
       });
   };
   const commitName = () => {
-    if (!mayManage) return;
+    if (!canEdit) return;
     const commit = nameCommit(settings.name, name);
     if (commit.kind === 'missing') {
       setNameError(strings.nameMissing);
@@ -182,6 +190,24 @@ export function GeneralScreen({
     <SettingsPage title={strings.generalTitle}>
       {/* Said once for the page; each field keeps its lock. */}
       {!mayManage && <Callout tone="info">{strings.readOnly}</Callout>}
+      {movedTo !== undefined && (
+        <Callout
+          tone="warning"
+          isAnnounced
+          actions={
+            <Button
+              ref={reloadRef}
+              onPress={() => {
+                window.location.assign(`/w/${movedTo}/settings/general`);
+              }}
+            >
+              {strings.reload}
+            </Button>
+          }
+        >
+          {strings.movedReload(movedTo)}
+        </Callout>
+      )}
       <SettingsSection title={strings.workspaceSection}>
         <Card>
           <SettingsRow title={strings.name} control="field">
@@ -200,7 +226,7 @@ export function GeneralScreen({
                 setNameError(undefined);
               }}
               maxLength={64}
-              isReadOnly={!mayManage}
+              isReadOnly={!canEdit}
               {...(nameError === undefined ? {} : { error: nameError })}
             />
           </SettingsRow>
@@ -217,6 +243,7 @@ export function GeneralScreen({
             {mayManage && (
               <Button
                 label={strings.changeAddressLabel}
+                isDisabled={!canEdit}
                 onPress={() => {
                   setOpened((count) => count + 1);
                   setChanging(true);
@@ -239,7 +266,7 @@ export function GeneralScreen({
               filter={zoneMatches}
               isSearchable
               value={settings.timeZone}
-              isReadOnly={!mayManage}
+              isReadOnly={!canEdit}
               isDisabled={zoneBusy}
               onChange={(zone) => {
                 if (zone !== null && zone !== settings.timeZone) setZone(zone, settings.timeZone, true);
@@ -252,7 +279,7 @@ export function GeneralScreen({
         <SettingsSection title={strings.danger}>
           <Card>
             <SettingsRow title={strings.deleteRow} description={strings.deleteRowText}>
-              <Button variant="danger" onPress={() => setDeleting(true)}>
+              <Button variant="danger" isDisabled={movedTo !== undefined} onPress={() => setDeleting(true)}>
                 {strings.deleteAction}
               </Button>
             </SettingsRow>
@@ -266,10 +293,20 @@ export function GeneralScreen({
           slug={slug}
           from={settings.slug}
           isOpen={isChanging}
-          onClose={() => setChanging(false)}
+          onClose={() => {
+            setChanging(false);
+            // Change is locked now, so focus goes to Reload rather than back to it.
+            if (movedTo !== undefined) focusLater(() => reloadRef.current);
+          }}
           onMoved={async (to) => {
+            try {
+              await onMoved(to);
+            } catch (error: unknown) {
+              // It moved, but the page couldn't open there: no "now at", and the page waits for Reload.
+              setMovedTo(to);
+              throw error;
+            }
             toasts.toast({ tone: 'success', message: strings.moved(to) });
-            await onMoved(to);
           }}
         />
       )}

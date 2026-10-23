@@ -1,8 +1,10 @@
 // Settings › General in Chromium, saving at once (SS-G1 to SS-G4): a rename saves when the field is left (once, even
 // after Enter, and once while it is on its way) with "Name changed." and Undo; an empty name is refused on the field
-// and nothing is sent; a refused name stays in the field with the reason, and one lost for another reason is a toast
-// too; Change opens the address dialog with its field focused, checked as typed, and Change address waits for a free
-// one; a move whose page couldn't open says where it went and sends nothing more; there is no Save bar and no browser
+// and nothing is sent; a refused name stays in the field with the reason, said in a toast too, as is one lost for
+// another reason; Change opens the address dialog with its field focused, checked as typed, and Change address waits
+// for a free one, said once the page opened there; once an address is typed a click outside keeps the dialog; a move
+// whose page couldn't open says where it went (announced, focus on Close), sends nothing more, says no "now at", and
+// leaves General locked with the same warning and Reload at the top; there is no Save bar and no browser
 // confirm on leaving, and a name still typed then is saved; a member reads one note and finds the fields locked; the
 // delete confirm says what happens in the open; axe is clean at 390 in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
@@ -143,7 +145,7 @@ describe('the name', () => {
     await expect.element(nameField()).toHaveValue('Acme Labs');
   });
 
-  it('keeps a refused name in the field, with the reason under it', async () => {
+  it('keeps a refused name in the field, with the reason under it and in a toast', async () => {
     const reason = 'Use 1 to 64 characters for the name.';
     await renderGeneral({
       answer: () =>
@@ -156,7 +158,10 @@ describe('the name', () => {
     await userEvent.clear(nameField());
     await userEvent.type(nameField(), 'Acme Labs');
     await userEvent.tab();
-    await expect.element(page.getByText(reason)).toBeVisible();
+    // On the field, and in a toast, said even though focus has left the field.
+    await vi.waitFor(() => {
+      expect(page.getByText(reason).elements()).toHaveLength(2);
+    });
     await expect.element(nameField()).toHaveValue('Acme Labs');
     expect(page.getByText(strings.nameChanged).elements()).toEqual([]);
   });
@@ -215,6 +220,29 @@ describe('the web address', () => {
       expect(onMoved).toHaveBeenCalledWith('acme-labs');
     });
     expect(update).toHaveBeenCalledWith('acme', { slug: 'acme-labs' });
+    // Said once the page opened there.
+    await expect.element(page.getByText(strings.moved('acme-labs'))).toBeVisible();
+  });
+
+  it('keeps the dialog on a click outside once an address is typed', async () => {
+    await renderGeneral();
+    const open = page.getByRole('button', { name: strings.changeAddressLabel });
+    const dialog = page.getByRole('dialog', { name: strings.moveTitle });
+    // The page's corner, under the scrim (the page behind a modal is hidden from roles).
+    const clickOutside = () => userEvent.click(page.elementLocator(document.body), { position: { x: 4, y: 4 } });
+    // Nothing typed: a click outside closes it, so the click does reach outside.
+    await userEvent.click(open);
+    await expect.element(dialog).toBeVisible();
+    await clickOutside();
+    await expect.element(dialog).not.toBeInTheDocument();
+
+    await userEvent.click(open);
+    const field = dialog.getByRole('textbox', { name: strings.webAddress });
+    await userEvent.clear(field);
+    await userEvent.type(field, 'acme-labs');
+    await clickOutside();
+    await expect.element(dialog).toBeVisible();
+    await expect.element(field).toHaveValue('acme-labs');
   });
 
   it('says where it went when the page couldn’t open there, and sends nothing more', async () => {
@@ -227,10 +255,30 @@ describe('the web address', () => {
     const change = dialog.getByRole('button', { name: strings.moveAction });
     await expect.element(change).toBeEnabled();
     await userEvent.click(change);
-    await expect.element(dialog.getByText(strings.movedReload('acme-labs'))).toBeVisible();
+    // Announced, and focus on Close rather than lost from the now disabled Change address.
+    const warning = dialog.getByRole('status').filter({ hasText: strings.movedReload('acme-labs') });
+    await expect.element(warning).toBeVisible();
     expect(dialog.getByText(strings.somethingWrong).elements()).toEqual([]);
     await expect.element(change).toBeDisabled();
+    // The footer's Close, which has words; the title bar's has only its icon.
+    const close = dialog.getByRole('button', { name: strings.close, exact: true }).filter({ hasText: strings.close });
+    await expect.element(close).toHaveFocus();
+    expect(dialog.getByRole('button', { name: strings.cancel, exact: true }).elements()).toEqual([]);
     expect(update).toHaveBeenCalledTimes(1);
+    // It never says it is now there.
+    expect(page.getByText(strings.moved('acme-labs'), { exact: true }).elements()).toEqual([]);
+
+    // Closed, General keeps the same warning with Reload, which takes focus, and stays locked until then.
+    await userEvent.click(close);
+    await expect.element(dialog).not.toBeInTheDocument();
+    const onPage = page.getByRole('status').filter({ hasText: strings.movedReload('acme-labs') });
+    await expect.element(onPage).toBeVisible();
+    const reload = onPage.getByRole('button', { name: strings.reload });
+    await expect.element(reload).toHaveFocus();
+    await expect.element(nameField()).toHaveAttribute('readonly');
+    await expect.element(page.getByRole('button', { name: strings.changeAddressLabel })).toBeDisabled();
+    await expect.element(page.getByRole('button', { name: strings.deleteAction })).toBeDisabled();
+    expect(page.getByText(strings.moved('acme-labs'), { exact: true }).elements()).toEqual([]);
   });
 });
 

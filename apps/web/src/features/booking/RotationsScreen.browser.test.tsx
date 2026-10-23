@@ -2,8 +2,9 @@
 // bar's, SS-R2); the group dialog's name error goes as soon as a name is typed (SS-R3); who can join is said in the
 // member picker's hint, as plain text, and the server's refusal of someone who can't offers to remove them and their
 // hours in a new tab, for the member that was sent even after the draft changes; a refusal of someone no longer
-// active offers only the remove (SS-R1); without booking.manage the page isn't there (SS-R10); axe is clean at 390
-// in light and dark.
+// active offers only the remove (SS-R1); a member removed from the refusal or their row hands focus to Save or the
+// next row's remove, never the title bar's Close; without booking.manage the page isn't there (SS-R10); axe is clean
+// at 390 in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
 import { dataError, type DataLayer, type MemberSummary, type MyAccess, type RotationView } from '@crm/data';
@@ -204,20 +205,80 @@ describe('the group dialog', () => {
     await userEvent.click(page.getByRole('button', { name: strings.save, exact: true }));
     const alert = page.getByRole('alert').filter({ hasText: refused });
     await expect.element(alert).toBeVisible();
-    const toHours = alert.getByRole('link', { name: strings.setHours });
+    const toHours = alert.getByRole('link', { name: strings.setHoursFor(MAYA.name), exact: true });
+    await expect.element(toHours).toHaveTextContent(strings.setHours);
     expect(toHours.element().getAttribute('href')).toBe(`/w/acme/bookings/availability?member=${MAYA.id}`);
     // A new tab, so the group being made stays.
     expect(toHours.element().getAttribute('target')).toBe('_blank');
 
-    // Ada leaves the draft from above Maya: the refusal still names Maya, and still opens Maya's hours.
+    // Ada leaves the draft from above Maya: the refusal still names Maya, and still opens Maya's hours. Focus moves
+    // on to the next row's remove.
     await userEvent.click(page.getByRole('button', { name: strings.remove(ADA.name), exact: true }));
     await expect.element(alert).toBeVisible();
     expect(toHours.element().getAttribute('href')).toBe(`/w/acme/bookings/availability?member=${MAYA.id}`);
+    await expect.element(page.getByRole('button', { name: strings.remove(MAYA.name), exact: true })).toHaveFocus();
 
-    // Removing Maya takes the refusal with her.
-    await userEvent.click(alert.getByRole('button', { name: strings.removeRefused(MAYA.name) }));
+    // Removing Maya takes the refusal with her, and focus goes to Save, not the title bar's Close.
+    const removeMaya = alert.getByRole('button', { name: strings.removeRefused(MAYA.name), exact: true });
+    await expect.element(removeMaya).toHaveTextContent(strings.removeFromGroup);
+    await userEvent.click(removeMaya);
     expect(page.getByRole('alert').filter({ hasText: refused }).elements()).toEqual([]);
     expect(page.getByRole('button', { name: strings.remove(MAYA.name), exact: true }).elements()).toEqual([]);
+    const save = page.getByRole('button', { name: strings.save, exact: true });
+    await expect.element(save).toHaveFocus();
+
+    // The last row's remove, with no row after it, hands focus to Save too.
+    await userEvent.click(page.getByRole('button', { name: strings.remove(LEE.name), exact: true }));
+    expect(page.getByRole('button', { name: strings.remove(LEE.name), exact: true }).elements()).toEqual([]);
+    await expect.element(save).toHaveFocus();
+  });
+
+  it('keeps Remove from group to its short words for a long name at 390', async () => {
+    await page.viewport(390, 844);
+    const LONG: MemberSummary = {
+      id: '0199a6f2-0000-7000-8000-000000000004',
+      name: 'Maximiliana Wolfeschlegelsteinhausen Bergerdorff',
+      email: 'max@acme.dev',
+    };
+    const [ada] = SALES.members;
+    if (ada === undefined) throw new Error('Sales has Ada.');
+    const withLong: RotationView = {
+      ...SALES,
+      members: [...SALES.members, { ...ada, memberId: LONG.id, name: LONG.name }],
+    };
+    const refused = `${LONG.name} needs to set hours or connect a calendar first.`;
+    const data = layerWith([withLong], () =>
+      Promise.reject(
+        dataError('CONFIG_INVALID', refused, {
+          refusals: [{ code: 'CONFIG_INVALID', message: refused, field: 'members.2' }],
+        }),
+      ),
+    );
+    shown = await renderInApp(
+      () => (
+        <RotationDialog
+          data={data}
+          slug="acme"
+          people={[ADA, MAYA, LONG]}
+          rotation={withLong}
+          isOpen
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/settings/scheduling/round-robin', at: '/w/acme/settings/scheduling/round-robin' },
+    );
+    await userEvent.click(page.getByRole('button', { name: strings.save, exact: true }));
+    const alert = page.getByRole('alert').filter({ hasText: refused });
+    await expect.element(alert).toBeVisible();
+    const remove = alert.getByRole('button', { name: strings.removeRefused(LONG.name), exact: true });
+    await expect.element(remove).toHaveTextContent(strings.removeFromGroup);
+    // Nothing in the refusal reaches past its own box.
+    const box = alert.element().getBoundingClientRect();
+    for (const action of [remove, alert.getByRole('link', { name: strings.setHoursFor(LONG.name), exact: true })]) {
+      expect(action.element().getBoundingClientRect().right).toBeLessThanOrEqual(box.right);
+    }
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
   });
 
   it('offers only to remove someone no longer active, whose hours wouldn’t help', async () => {

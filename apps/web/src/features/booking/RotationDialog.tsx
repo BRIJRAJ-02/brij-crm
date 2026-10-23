@@ -16,6 +16,7 @@ import {
   ButtonLink,
   Callout,
   Field,
+  focusLater,
   InfoTip,
   Modal,
   Radio,
@@ -28,7 +29,7 @@ import {
   type TableColumn,
   RecordChip,
 } from '@crm/ui';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { availabilityHref } from './links.ts';
 import { strings } from './rotation-strings.ts';
 
@@ -125,10 +126,17 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
   // and, while they are an active member (so hours are what they lack), their hours in a new tab, so the group stays.
   const refused = failure?.memberId;
   const isRefusedActive = refused !== undefined && people.some((person) => person.id === refused);
-  const removeMember = (memberId: string) => {
+  // Where focus goes once a member's row or the refusal's Remove from group leaves with them: Create or Save, or the
+  // next row's remove button. Left to itself it would fall to the title bar's Close, where Enter loses the draft.
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const removeRefs = useRef(new Map<string, HTMLButtonElement>());
+  const removeMember = (memberId: string, focusNext: 'row' | 'save') => {
+    const index = members.findIndex((each) => each.memberId === memberId);
+    const next = focusNext === 'row' ? members[index + 1]?.memberId : undefined;
     setMembers((current) => current.filter((each) => each.memberId !== memberId));
     // The refusal was about them, so it goes with them.
     if (failure?.memberId === memberId) setFailure(undefined);
+    focusLater(() => (next === undefined ? undefined : removeRefs.current.get(next)) ?? saveRef.current);
   };
 
   const submit = () => {
@@ -248,8 +256,12 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
             variant="ghost"
             icon="x"
             label={strings.remove(who)}
+            ref={(element: HTMLButtonElement | null) => {
+              if (element === null) removeRefs.current.delete(member.memberId);
+              else removeRefs.current.set(member.memberId, element);
+            }}
             onPress={() => {
-              removeMember(member.memberId);
+              removeMember(member.memberId, 'row');
             }}
           />
         );
@@ -272,7 +284,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
             <Button slot="close" isDisabled={isBusy} kbd="ESC">
               {strings.cancel}
             </Button>
-            <Button variant="primary" isPending={isBusy} onPress={submit}>
+            <Button variant="primary" ref={saveRef} isPending={isBusy} onPress={submit}>
               {rotation === undefined
                 ? isBusy
                   ? strings.creating
@@ -294,14 +306,20 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
                     actions: (
                       <>
                         <Button
+                          label={strings.removeRefused(nameOf(refused))}
                           onPress={() => {
-                            removeMember(refused);
+                            removeMember(refused, 'save');
                           }}
                         >
-                          {strings.removeRefused(nameOf(refused))}
+                          {strings.removeFromGroup}
                         </Button>
                         {isRefusedActive && (
-                          <ButtonLink href={availabilityHref(slug, refused)} isExternal icon="external-link">
+                          <ButtonLink
+                            href={availabilityHref(slug, refused)}
+                            isExternal
+                            icon="external-link"
+                            label={strings.setHoursFor(nameOf(refused))}
+                          >
                             {strings.setHours}
                           </ButtonLink>
                         )}

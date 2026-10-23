@@ -3,8 +3,8 @@
 // Main task: type the part after "/w/" (checked as typed, free ones offered when it's taken), read what happens to old links, then Change address.
 // Leaves out: the name and time zone (they save on the page), and a typed confirm: nothing is lost, old links keep working.
 import { isDataError, type DataLayer } from '@crm/data';
-import { Button, Callout, Field, Icon, Modal, Spinner, VisuallyHidden } from '@crm/ui';
-import { useCallback, useMemo, useState } from 'react';
+import { Button, Callout, Field, focusLater, Icon, Modal, Spinner, VisuallyHidden } from '@crm/ui';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { addressAsTyped, addressCandidates, SLUG_MAX } from '../address/address.ts';
 import { useAddress } from '../address/useAddress.ts';
 import { strings } from './workspace-strings.ts';
@@ -18,7 +18,7 @@ export interface ChangeAddressDialogProps {
   readonly from: string;
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  /** The workspace moved: the page says so and opens itself at the new address. */
+  /** The workspace moved: the page says so and opens itself at the new address, or rejects when it couldn't. */
   readonly onMoved: (to: string) => Promise<void>;
 }
 
@@ -28,8 +28,9 @@ export interface ChangeAddressDialogProps {
  * then Cancel (ESC) and Change address, which waits until a new address is free (or couldn't be checked: the server
  * checks it again). The field takes focus on opening, and once a new address is typed a click outside no longer
  * closes it. It stays open while the change is sent; a refusal shows on the field, anything else above it. If the
- * workspace moved but the page couldn't open there, it says so and sends nothing more. Mount it afresh for each
- * opening (a `key`), so the field starts from the address again.
+ * workspace moved but the page couldn't open there, it says so (announced, with focus on Cancel, which now reads
+ * Close) and sends nothing more. Mount it afresh for each opening (a `key`), so the field starts from the address
+ * again.
  */
 export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved }: ChangeAddressDialogProps) {
   const [draft, setDraft] = useState(from);
@@ -50,12 +51,16 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
     [draft, from],
   );
   const address = useAddress(check, candidates, draft);
+  // Change address turns disabled once the move is lost, so focus goes to Close rather than fall out of the dialog.
+  const closeRef = useRef<HTMLButtonElement>(null);
   const isNew = draft !== from;
   // No check, hint or mark while the field still holds the address it has now.
   const state = isNew ? address.state : undefined;
   const suggestions = isNew ? address.suggestions : [];
   const canChange =
     isNew && refusal === undefined && movedTo === undefined && (state === 'free' || state === 'unknown');
+  // "Moves from /w/a to /w/b" stays put while the address is checked, and goes only for one it can't move to.
+  const saysWhere = isNew && refusal === undefined && movedTo === undefined && state !== 'invalid' && state !== 'taken';
 
   const commit = () => {
     if (!canChange || isBusy) return;
@@ -69,6 +74,7 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
           // It moved, but the page couldn't open there: the dialog waits no longer, and says where it is now.
           setBusy(false);
           setMovedTo(updated.slug);
+          focusLater(() => closeRef.current);
         });
       },
       (error: unknown) => {
@@ -110,8 +116,8 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC" isDisabled={isBusy}>
-            {strings.cancel}
+          <Button slot="close" kbd="ESC" ref={closeRef} isDisabled={isBusy}>
+            {movedTo === undefined ? strings.cancel : strings.close}
           </Button>
           <Button variant="primary" isDisabled={!canChange} isPending={isBusy} onPress={commit}>
             {strings.moveAction}
@@ -120,7 +126,9 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
       }
     >
       {movedTo !== undefined ? (
-        <Callout tone="warning">{strings.movedReload(movedTo)}</Callout>
+        <Callout tone="warning" isAnnounced>
+          {strings.movedReload(movedTo)}
+        </Callout>
       ) : (
         failure !== undefined && <Callout tone="danger">{failure}</Callout>
       )}
@@ -162,8 +170,8 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
               : ''}
         </span>
       </VisuallyHidden>
-      {/* "Moves from /w/a to /w/b" only for an address it can move to; until then, what happens to the old one. */}
-      <span>{canChange ? strings.moveText(from, draft) : strings.moveTextAny(from)}</span>
+      {/* "Moves from /w/a to /w/b" unless the address can't be moved to; otherwise, what happens to the old one. */}
+      <span>{saysWhere ? strings.moveText(from, draft) : strings.moveTextAny(from)}</span>
     </Modal>
   );
 }
