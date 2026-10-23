@@ -138,4 +138,4 @@ Tab reaches the search field, the list's action, then the list on a row. The up 
 
 ## Differences from the artifact
 
-Not in the artifact yet. `density` and `placement` are new (20 October 2026), `onMove` too (23 October 2026). Spec 0025's `tag` gave way to `badge` and `toggle`, the title is no longer a Button, `searchLabel` and `actions` are new, and the actions are ghost icon Buttons with no frame (20 October 2026).
+Not in the artifact yet. `density` and `placement` are new (20 October 2026), `onMove` and `rowOrder` (with the `LinkListRowOrder` export) too (23 October 2026). Spec 0025's `tag` gave way to `badge` and `toggle`, the title is no longer a Button, `searchLabel` and `actions` are new, and the actions are ghost icon Buttons with no frame (20 October 2026).
