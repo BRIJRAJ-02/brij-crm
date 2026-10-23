@@ -103,9 +103,9 @@ function cell(member: Member, column: string) {
 }
 
 /**
- * How round robin works, in four plain steps, beside the title and in the empty state (the owner, 22 October 2026):
- * true to how the server assigns (spec 0029, `rotation/pick.ts`): a time shows when someone in the group is free,
- * and the booking goes to a free member by the group's rule, Fair by default.
+ * How round robin works, in three plain steps beside the title (the owner, 22 October 2026; shortened 23 October):
+ * true to how the server assigns (spec 0029, `rotation/pick.ts`): the booking goes to a free member by the group's
+ * rule, Fair by default.
  */
 function RoundRobinHelp({ slug }: { readonly slug: string }) {
   return (
@@ -220,13 +220,15 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
     </Button>
   ) : undefined;
 
-  const isAloneEmpty = canManage && people.length < 2 && state.status === 'ready' && state.items.length === 0;
+  const isEmpty = state.status === 'ready' && state.items.length === 0;
+  const isAloneEmpty = canManage && people.length < 2 && isEmpty;
   return (
     <SettingsPage
       title={strings.title}
       meta={<RoundRobinHelp slug={slug} />}
-      // Alone with no groups, Invite teammates is the one primary, in the empty state.
-      {...(newButton === undefined || isAloneEmpty ? {} : { actions: newButton })}
+      // One New group at a time: the empty state's while there are no groups (or Invite teammates, alone), then the
+      // bar's once a group exists (SS-R2).
+      {...(newButton === undefined || isEmpty ? {} : { actions: newButton })}
     >
       {state.status === 'loading' ? (
         <Card isBusy>
@@ -267,17 +269,8 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
           <EmptyState
             icon="users-round"
             title={strings.emptyTitle}
-            // New group is the bar's one primary; here it is the quiet way in beside the words, and the help sits
-            // once, beside the page's title.
-            {...(canManage
-              ? {
-                  actions: (
-                    <Button icon="plus" onPress={() => open('new')}>
-                      {strings.newRotation}
-                    </Button>
-                  ),
-                }
-              : {})}
+            // No groups yet: New group is the page's one primary, here; the help sits once, beside the page's title.
+            {...(canManage ? { actions: newButton } : {})}
           >
             {canManage ? strings.emptyText : strings.emptyMemberText}
           </EmptyState>

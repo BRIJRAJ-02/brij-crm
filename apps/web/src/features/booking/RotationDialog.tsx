@@ -1,7 +1,9 @@
 // Brief
 // Purpose: make or change a rotation (spec 0029, AC-728, AC-729; spec 0037): its name, how it picks, the window it counts over, where returning guests go, and its 2 to 20 members.
 // Main task: add the people who share the meetings, set each one's weight, priority, daily and weekly caps and on or off, then Create or Save.
-// Leaves out: shares and history (the Rotations screen), and teams (#23 brings rotations that follow a team).
+// Leaves out: shares and history (the Rotations screen), teams (#23 brings rotations that follow a team), and marking who
+// can't join in the picker (that needs the server to say who can host; until then a line under it says who can, and
+// links to their hours).
 import {
   isDataError,
   type DataLayer,
@@ -13,6 +15,8 @@ import {
   Button,
   Callout,
   Field,
+  InfoTip,
+  Link,
   Modal,
   Radio,
   RadioGroup,
@@ -25,6 +29,7 @@ import {
   RecordChip,
 } from '@crm/ui';
 import { useState } from 'react';
+import { availabilityHref } from './links.ts';
 import { strings } from './rotation-strings.ts';
 
 /** Props for the dialog. */
@@ -110,6 +115,9 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     .filter((person) => !members.some((member) => member.memberId === person.id))
     .map((person) => ({ id: person.id, label: person.name, description: person.email }));
   const countError = members.length < 2 ? strings.needTwo : members.length > 20 ? strings.tooMany : undefined;
+  // A refusal about one member ("Maya Patel needs to set hours or connect a calendar first.") links to their hours.
+  const refused = failure?.field?.startsWith('members.') === true ? failure.field.slice('members.'.length) : undefined;
+  const refusedHours = refused === undefined ? undefined : availabilityHref(slug, members[Number(refused)]?.memberId);
 
   const submit = () => {
     if (isBusy) return;
@@ -261,13 +269,23 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
         }
       >
         <SettingsStack>
-          {failure !== undefined && failure.field === undefined && <Callout tone="danger">{failure.message}</Callout>}
-          {failure?.field?.startsWith('members.') === true && <Callout tone="danger">{failure.message}</Callout>}
+          {failure !== undefined && (
+            <Callout
+              tone="danger"
+              {...(refusedHours === undefined ? {} : { actions: <Link href={refusedHours}>{strings.setHours}</Link> })}
+            >
+              {failure.message}
+            </Callout>
+          )}
           <Field
             label={strings.name}
             placeholder={strings.namePlaceholder}
             value={name}
-            onChange={setName}
+            onChange={(next) => {
+              setName(next);
+              // Typing is the fix: the error goes as soon as there is a name again (SS-R3).
+              setNameError(undefined);
+            }}
             maxLength={80}
             isRequired
             {...(nameError === undefined ? {} : { error: nameError })}
@@ -293,6 +311,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           )}
           <Select
             label={strings.window}
+            info={<InfoTip label={strings.window}>{strings.windowInfo}</InfoTip>}
             items={WINDOWS}
             value={String(windowDays)}
             onChange={(value) => setWindowDays(value === '7' ? 7 : value === '90' ? 90 : 30)}
@@ -323,6 +342,10 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
               ]);
             }}
           />
+          {/* Who can join, until the picker can mark those who can't (SS-R1): with their hours a click away. */}
+          <Callout tone="info" actions={<Link href={availabilityHref(slug)}>{strings.setHours}</Link>}>
+            {strings.canJoin}
+          </Callout>
           {members.length > 0 && (
             <Table
               label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}

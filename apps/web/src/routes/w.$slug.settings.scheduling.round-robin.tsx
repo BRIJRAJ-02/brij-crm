@@ -7,12 +7,15 @@ import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPa
 
 // Settings › Scheduling › Round robin (spec 0029; the old /rotations address redirects here; spec 0037 AC-1433 gives it its own Settings entry): the rotations
 // the reader may see, from the data layer's held list (`rotations.view`), which every rotation write patches. Owners
-// and admins (`booking.admin`) make and change them; anyone else sees the ones they're in.
+// and admins (`booking.admin`) make and change them; anyone else who makes booking pages (`booking.manage`) sees the
+// ones they're in. Without `booking.manage` there is no such page (hidden means absent), as the navigation never
+// offers it (SS-R10): the access read comes first, from the data layer's cache, so nothing else is asked for then.
 export const Route = createFileRoute('/w/$slug/settings/scheduling/round-robin')({
   loader: async ({ context, params }) => {
     try {
-      const [access, people] = await Promise.all([
-        context.data.access.mine(params.slug),
+      const access = await context.data.access.mine(params.slug);
+      if (!access.permissions.includes('booking.manage')) return { page: undefined };
+      const [people] = await Promise.all([
         context.data.members.list(params.slug),
         context.data.rotations.view(params.slug).ready(),
       ]);
