@@ -3637,7 +3637,12 @@ export function createDataLayer({
      */
     workspaceSecurity: {
       get: (workspace: string): Promise<WorkspaceSecurity> =>
-        call((options) => api.workspaceSecurity.get({ workspace }, options)),
+        call((options) => api.workspaceSecurity.get({ workspace }, options)).catch((error: unknown) => {
+          // The reader lost `security.manage`: their held access is stale, so the nav and Security's next visit match
+          // the server.
+          if (toDataError(error).code === 'FORBIDDEN') access.delete(workspace);
+          throw error;
+        }),
       set: (
         workspace: string,
         change: { readonly requireTwoFactor?: boolean; readonly sessionLengthDays?: SessionLengthDays | null },
