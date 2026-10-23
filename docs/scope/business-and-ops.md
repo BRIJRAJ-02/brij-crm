@@ -15,7 +15,7 @@ See errors, slow requests, realtime delay and key product events from the first 
    - [x] Live delay, backlog and the heartbeat
 - [x] Verify it: `/check verify monitoring and product analytics`
 - [x] Test it: `/test monitoring and product analytics`
-Spec [0010](../specs/0010-monitoring-analytics/index.md) · code in `apps/api/src/monitoring/` · still yours: create the Sentry and PostHog accounts and set their keys
+Spec [0010](../specs/0010-monitoring-analytics/index.md) · code in `apps/api/src/monitoring/`
 
 ### 12. Scale budget and load harness · done
 Write down the targets (100 online, room for 1,000, a million records per workspace, response and delivery times) and build the tools that prove them, so every later slice is checked against them.
