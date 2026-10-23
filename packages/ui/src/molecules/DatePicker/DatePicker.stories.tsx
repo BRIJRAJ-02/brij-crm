@@ -121,6 +121,27 @@ export const Inline: Story = {
   },
 };
 
+/** MonthCalendar with `autoFocus`, as a popover opens it (Bookings' Go to date): focus is on the chosen day, and the
+ * arrows move from it at once. */
+export const InlineFocused: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render() {
+    const [day, setDay] = useState('2026-10-15');
+    return (
+      <Stage width="narrow">
+        {/* eslint-disable-next-line jsx-a11y-x/no-autofocus -- the story shows the popover case */}
+        <MonthCalendar label="Go to date" value={day} onChange={setDay} autoFocus />
+      </Stage>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    await expect(document.activeElement).toHaveTextContent('15');
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(document.activeElement).toHaveTextContent('16');
+    await expect(canvasElement.contains(document.activeElement)).toBe(true);
+  },
+};
+
 /** MonthCalendar with `shown`: the week the view beside it shows, 12 to 18 October, tinted as one band. */
 export const InlineWeekShown: Story = {
   parameters: { crm: { screenshot: false } },
