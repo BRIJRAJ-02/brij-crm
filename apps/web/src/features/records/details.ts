@@ -33,6 +33,33 @@ export function detailAttributes(attributes: readonly AttributeDefinition[]): re
     .toSorted((a, b) => a.position - b.position);
 }
 
+/** One side of the record that holds many records, for a related section and its Overview card (spec 0017). */
+export interface RelatedSide {
+  readonly attribute: AttributeDefinition;
+  /** The object its records come from: their noun ("people") and pages. */
+  readonly farObject: ObjectSummary;
+}
+
+/**
+ * The record's related sections (spec 0017, AC-375): every live, visible,
+ * non system record reference that holds many, in attribute order, whose far
+ * object the person can see (one they can't leaves its section out, as a
+ * hidden attribute is). `attributes.list` and `objects.list` answer only what
+ * the person may see.
+ */
+export function relatedSides(
+  attributes: readonly AttributeDefinition[],
+  objects: readonly ObjectSummary[],
+): readonly RelatedSide[] {
+  return attributes
+    .filter((attribute) => attribute.type === 'record_reference' && attribute.isMulti && !attribute.isSystem)
+    .toSorted((a, b) => a.position - b.position)
+    .flatMap((attribute) => {
+      const farObject = objects.find((object) => object.id === attribute.relationship?.targetObjectIds[0]);
+      return farObject === undefined ? [] : [{ attribute, farObject }];
+    });
+}
+
 /** A reference value's links, as a list: one link, several, or none. */
 export function refsOf(value: unknown): readonly RecordRef[] {
   const list: readonly unknown[] = Array.isArray(value) ? value : value === null || value === undefined ? [] : [value];

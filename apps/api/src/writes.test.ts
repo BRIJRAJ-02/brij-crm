@@ -79,6 +79,8 @@ const READS: ReadonlySet<string> = new Set([
   'records.stageSince',
   'records.getTrashed',
   'records.search',
+  // A record page's related section (spec 0014, milestone 3): one side's linked records, a page at a time.
+  'links.page',
   'realtime.connectionToken',
   'realtime.subscriptionToken',
   'realtime.catchUp',

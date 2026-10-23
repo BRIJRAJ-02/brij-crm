@@ -64,6 +64,21 @@ export const Label: Story = {
   },
 };
 
+/** A count shown whole and read with its noun (`countLabel`), as a record's related section heads its side. */
+export const WholeCount: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Disclosure title="Team" variant="label" count={150_000} countLabel="people" defaultExpanded>
+        The first twenty people.
+      </Disclosure>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('150,000')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Team 150,000 people' })).toBeInTheDocument();
+  },
+};
+
 /**
  * The quiet variant, as Home's setup checklist folds its done steps: a control sized to its words, its chevron
  * centred in a 16px icon's column on the content edge and its words `space-12` after it; the panel flush.
