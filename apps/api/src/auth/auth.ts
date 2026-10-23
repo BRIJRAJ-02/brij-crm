@@ -111,13 +111,13 @@ export const CODE_CHECKS_PER_EMAIL_DAY = { window: 24 * 60 * 60, max: 40 } as co
  */
 export const OTHER_AUTH_ROUTES_PER_IP = { window: 600, max: 600 } as const;
 
-/** A fixed window limit, as Better Auth's limiter takes it. */
 /** A person's linked Google account as Sync Google photo reads it: the stored id token and the access token. */
 interface LinkedGoogle {
   readonly idToken?: string;
   readonly accessToken?: string;
 }
 
+/** A fixed window limit, as Better Auth's limiter takes it. */
 interface Rule {
   readonly window: number;
   readonly max: number;
@@ -584,8 +584,10 @@ export function createAuth({
   /** The person's Google account as the link just stored it: its id token, and its access token decrypted. */
   async function linkedGoogle(context: AuthContext, userId: string): Promise<LinkedGoogle | undefined> {
     try {
-      const accounts = await context.internalAdapter.findAccounts(userId);
-      const account = accounts.find((each) => each.providerId === 'google');
+      // The one the link just wrote is the newest Google row, should a person ever have two.
+      const account = (await context.internalAdapter.findAccounts(userId))
+        .filter((each) => each.providerId === 'google')
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
       if (account === undefined) return undefined;
       const accessToken = account.accessToken ? await decryptOAuthToken(account.accessToken, context) : undefined;
       return { idToken: account.idToken ?? undefined, accessToken: accessToken || undefined };

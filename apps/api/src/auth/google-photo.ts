@@ -58,6 +58,9 @@ export const GOOGLE_USERINFO = 'https://openidconnect.googleapis.com/v1/userinfo
 /** How long the sync waits for Google's userinfo before it answers without it. */
 const USERINFO_TIMEOUT_MS = 3000;
 
+/** The most of Google's userinfo answer read: a profile is well under 2 KB. */
+const USERINFO_MAX_BYTES = 64 * 1024;
+
 /** The one claim read here, from an id token's payload or the userinfo answer; anything else is ignored. */
 const PictureClaim = z.object({ picture: z.string().max(2048).optional() });
 
@@ -85,7 +88,9 @@ export async function userinfoPicture(accessToken: string): Promise<string | und
       signal: AbortSignal.timeout(USERINFO_TIMEOUT_MS),
     });
     if (!response.ok) return undefined;
-    const claims = PictureClaim.safeParse(await response.json());
+    const body = await response.text();
+    if (body.length > USERINFO_MAX_BYTES) return undefined;
+    const claims = PictureClaim.safeParse(JSON.parse(body));
     return claims.success ? claims.data.picture : undefined;
   } catch {
     return undefined;

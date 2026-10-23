@@ -640,6 +640,21 @@ describe('Sync Google photo, Settings › Profile (23 Oct 2026)', () => {
     expect(google.userinfoCalls()).toBe(1);
   });
 
+  it('saves nothing when userinfo names a picture that isn’t Google’s', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, cookie, userId, profile } = await profilePerson(app);
+    const google = fakeGoogle({
+      sub: randomUUID(),
+      email,
+      emailVerified: true,
+      picture: 'https://pictures.example/me.png',
+      pictureInIdToken: false,
+    });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=none`);
+    expect(google.userinfoCalls()).toBe(1);
+    expect(await identity.userImage(userId)).toBeUndefined();
+  });
+
   it('asks userinfo nothing when the request already names the photo', async () => {
     const { app } = signInApp({ db, identity }, GOOGLE);
     const { email, cookie, profile } = await profilePerson(app);
@@ -672,11 +687,18 @@ describe('Sync Google photo, Settings › Profile (23 Oct 2026)', () => {
     const otherId = (await stored(other)).users[0]?.id ?? '';
     vi.unstubAllGlobals();
     const { email, cookie, userId, profile } = await profilePerson(app);
-    fakeGoogle({ sub, email, emailVerified: true, picture: 'https://lh3.googleusercontent.com/a/mine=s96-c' });
+    const google = fakeGoogle({
+      sub,
+      email,
+      emailVerified: true,
+      picture: 'https://lh3.googleusercontent.com/a/mine=s96-c',
+    });
     expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=other-account`);
     expect(await identity.userImage(userId)).toBeUndefined();
     expect(await identity.userImage(otherId)).toBe(theirs);
     expect(await linkedEvents(userId)).toBe(0);
+    // A refused link reads no one's stored token.
+    expect(google.userinfoCalls()).toBe(0);
   });
 
   it('never takes a sign in’s own data for the photo link: only the server marks one', async () => {
