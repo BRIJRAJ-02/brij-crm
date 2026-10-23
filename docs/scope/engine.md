@@ -69,7 +69,15 @@ Spec [0018](../specs/0018-attribute-groups-layouts/index.md)
 
 ## Slice 17: Lists and pipelines
 
-### 51. Lists and pipelines · needs a decision
+### 51. Lists and pipelines · in-progress
 Collections of records with fields of their own, such as a hiring pipeline over People or a partner list over Companies.
 **Done when:** a member creates a list over any object, adds records one by one or in bulk, and gives the list its own fields (like stage); one record can sit in many lists; each list has table and board views.
-- [ ] Design it (spec): `/architect lists and pipelines`
+- [x] Design it (spec): `/architect lists and pipelines`
+- [ ] Build it: `/develop lists and pipelines`
+   - [ ] One list, end to end: the migration, `lists.manage`, the lists and entries API, the entry store with live updates, the sidebar Lists section, a Blank list's table, adding, editing and removing entries (AC-4801, AC-4803 to AC-4807, AC-4809 to AC-4814, AC-4816 to AC-4819, AC-4834 to AC-4840, AC-4842)
+   - [ ] Views and boards: the Pipeline template, list views with filters and sorts over both sides, boards over list or object fields, the scale run (AC-4801, AC-4802, AC-4808, AC-4815, AC-4820, AC-4821, AC-4841)
+   - [ ] Lists around the record: the record page Lists section, Add to list from the record, the bulk bars and their jobs, ⌘K (AC-4812, AC-4817, AC-4822 to AC-4827)
+   - [ ] Settings, archive and import: Settings › Lists, General and Fields tabs, archive and restore, import into a list from CSV or Excel (AC-4828 to AC-4833, AC-4842)
+- [ ] Verify it: `/check verify lists and pipelines`
+- [ ] Test it: `/test lists and pipelines`
+Spec [0048](../specs/0048-lists-pipelines/index.md)
