@@ -18,7 +18,7 @@ import {
 } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sectionsOf } from './sections.ts';
-import { strings } from './strings.ts';
+import { strings, tabTitle } from './strings.ts';
 
 /** Past this many links, a search sits above the list. */
 const SEARCH_FROM = 8;
@@ -114,7 +114,10 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
     return () => globalThis.clearTimeout(timer);
   }, [query, searched]);
   useEffect(() => {
-    if (loaded.state === 'ready') document.title = loaded.profile.name;
+    // The tab says what the heading says, with the product, as the booking pages' tabs do (QA Q76).
+    if (loaded.state === 'ready') document.title = tabTitle(loaded.profile.name);
+    else if (loaded.state === 'gone') document.title = tabTitle(strings.notFoundTitle);
+    else if (loaded.state === 'failed') document.title = tabTitle(strings.failedTitle);
   }, [loaded]);
 
   const more = () => {

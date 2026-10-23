@@ -133,5 +133,12 @@ export const strings = {
   pastNext: 'This one has already happened.',
   bookAnother: (host: string) => `Book another time with ${host}`,
   bookAgain: 'Book again',
-  linkGone: 'This link doesn’t open a booking.',
+  // A title, so no full stop, and a way on (QA Q80).
+  linkGone: 'This link doesn’t open a booking',
+  linkGoneText: 'The link may be incomplete or out of date. Open the one in the latest email about this booking.',
 } as const;
+
+/** A tab's title: the page's heading, then the product, as every public page names its tab (QA Q76). */
+export function tabTitle(heading: string): string {
+  return `${heading} · ${strings.product}`;
+}
