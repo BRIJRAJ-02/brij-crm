@@ -4,6 +4,8 @@
 // `members` outbox row, so other members' screens read the name again.
 // The handle and bio (22 Oct 2026) are the person's, the same in every
 // workspace: they live in schema auth, read and claimed through `booking/handles.ts`.
+// So is whether their picture shows on their public pages (owner ask A124,
+// 23 Oct 2026), read and set through `booking/picture-choice.ts`.
 import { BIO_MAX, handleProblem, type MyProfile, type UpdateMyProfileInput } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq } from 'drizzle-orm';
@@ -11,6 +13,7 @@ import { checkScope } from '../access/mint.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import { publicProfilesOf, savePublicProfile, suggestHandle } from '../booking/handles.ts';
+import { isPictureHidden, savePictureHidden } from '../booking/picture-choice.ts';
 import { touched } from '../engine/definitions.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
@@ -75,6 +78,8 @@ async function readProfile(
   const held = userId === undefined ? undefined : (await publicProfilesOf(tx, [userId])).get(userId);
   // While they have no handle, the field starts from a free one made from their name.
   const suggested = held === undefined && userId !== undefined ? await suggestHandle(tx, row.name) : undefined;
+  // The person's choice; a member with no identity of their own has none to make.
+  const pictureHidden = userId === undefined ? undefined : await isPictureHidden(tx, userId);
   return {
     memberId,
     name: row.name,
@@ -85,6 +90,7 @@ async function readProfile(
     ...(held === undefined ? {} : { handle: held.handle }),
     ...(suggested === undefined ? {} : { suggestedHandle: suggested }),
     bio: held?.bio ?? '',
+    ...(pictureHidden === undefined ? {} : { pictureHidden }),
   };
 }
 
@@ -96,14 +102,16 @@ export async function getMyProfile(scope: EngineScope, extras: ProfileExtras = {
 
 /**
  * Changes the caller's own name (1 to 80 characters) and time zone in this
- * workspace (AC-821): `timeZone` null goes back to the workspace's. A change
+ * workspace (AC-821): `timeZone` null goes back to the workspace's. Their
+ * handle and bio, and whether their picture shows on their public pages
+ * (`pictureHidden`), are the person's, in every workspace. A change
  * that changes nothing writes nothing. Otherwise one audit row with only the
  * changed fields, and a `members` outbox row so other members' screens read
  * the name again.
  */
 export async function updateMyMemberProfile(
   scope: EngineScope,
-  input: Pick<UpdateMyProfileInput, 'name' | 'timeZone' | 'handle' | 'bio'> = {},
+  input: Pick<UpdateMyProfileInput, 'name' | 'timeZone' | 'handle' | 'bio' | 'pictureHidden'> = {},
   extras: ProfileExtras = {},
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
@@ -154,6 +162,16 @@ export async function updateMyMemberProfile(
           before.bio = now.bio;
           after.bio = bio;
         }
+      }
+      // Their picture on their public pages: the person's, in schema auth, like the handle. Only for themself.
+      if (input.pictureHidden !== undefined && input.pictureHidden !== now.pictureHidden) {
+        const userId = selfUserId(scope);
+        if (userId === undefined) {
+          throw refuseOn('FORBIDDEN', 'Only a signed in person has a photo to hide.', 'pictureHidden');
+        }
+        await savePictureHidden(tx, userId, input.pictureHidden);
+        before.pictureHidden = now.pictureHidden ?? false;
+        after.pictureHidden = input.pictureHidden;
       }
       if (Object.keys(after).length === 0) return now;
       if (after.name !== undefined || 'timeZone' in after) {

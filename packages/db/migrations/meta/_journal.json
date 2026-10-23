@@ -638,6 +638,13 @@
       "when": 1792698521160,
       "tag": "0090_record_fact_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1792706516816,
+      "tag": "0091_user_picture_hidden",
+      "breakpoints": true
     }
   ]
 }

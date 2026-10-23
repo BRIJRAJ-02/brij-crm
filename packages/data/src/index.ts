@@ -162,6 +162,8 @@ export type {
   WeekStart,
 } from './preferences/store.ts';
 import type { SchedulesView } from './schedules/store.ts';
+import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
+export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
 import {
   createCalendarsStore,
@@ -1055,6 +1057,7 @@ export function createDataLayer({
     formLists.clear();
     schedules.clear();
     preferences.clear();
+    pictureChoice.clear();
   };
   const reset = () => {
     forget();
@@ -1823,6 +1826,15 @@ export function createDataLayer({
     api: {
       get: (input) => beforeRead(input.workspace).then(() => call((options) => api.preferences.get(input, options))),
       update: (input) => call((options) => api.preferences.update(input, options)),
+    },
+    mintId,
+    notify,
+  });
+  // Settings › Account › Profile: whether the person's picture shows on their public pages, read with the profile.
+  const pictureChoice = createPictureChoiceStore({
+    api: {
+      get: (input) => call((options) => api.profile.get(input, options)),
+      update: (input) => call((options) => api.profile.update(input, options)),
     },
     mintId,
     notify,
@@ -3738,7 +3750,16 @@ export function createDataLayer({
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {
-      get: (workspace: string): Promise<MyProfile> => call((options) => api.profile.get({ workspace }, options)),
+      /** Reads the profile now (the route's loader); whether their picture shows comes with it, held below. */
+      get: (workspace: string): Promise<MyProfile> => pictureChoice.read(workspace),
+      /** Whether their picture shows on their booking pages and profile (owner ask A124), as the screen holds it. */
+      picture: (workspace: string): PictureChoiceHeld => pictureChoice.of(workspace),
+      /**
+       * Keeps their picture off their public pages (`true`) or shows it again, the same in every workspace: shown
+       * at once, put back with a toast and Try again if refused. Answers whether it landed.
+       */
+      setPictureHidden: (workspace: string, isHidden: boolean): Promise<boolean> =>
+        pictureChoice.change(workspace, isHidden),
       /**
        * Changes their name or time zone (null follows the workspace's), or their handle and bio (the person's, in
        * every workspace). The member list is read again; a new handle changes every page's address, so the

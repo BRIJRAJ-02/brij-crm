@@ -42,6 +42,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry, HandleOwner, ProfilePageEntry } from '../access/door.ts';
 import { pagePath } from './handles.ts';
 import { servedPicture, type AccountPicture, type AccountPictureReader } from './picture.ts';
+import { isPictureHidden } from './picture-choice.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -191,8 +192,9 @@ export interface PublicPictureDeps {
 
 /**
  * The page's facts for its public page (AC-644: no member email, no internal id). With `pictures`, a personal
- * page whose owner's account has a Google picture names our own path to it (`hostImage`); a team page never does
- * (AC-754). The picture is read after the transaction, so no tenant connection waits on the identity login.
+ * page whose owner's account has a Google picture names our own path to it (`hostImage`), unless the owner keeps
+ * it off their public pages (owner ask A124); a team page never does (AC-754). The picture is read after the
+ * transaction, so no tenant connection waits on the identity login.
  */
 export async function getPublicBookingPage(
   entry: BookingEntry,
@@ -217,33 +219,41 @@ export async function getPublicBookingPage(
       // Once the owner has a handle, a plain `/b/<key>` visit moves to `/<handle>/<slug>`.
       ...(path.startsWith('/b/') ? {} : { path }),
     };
-    return { facts, pictureUser: pictureOwner(page) };
+    return { facts, pictureUser: pictures === undefined ? undefined : await shownPictureOwner(tx, page) };
   });
   if (pictures === undefined || pictureUser === undefined) return facts;
   const picture = servedPicture(pictureUser, await pictures.pictureOf(pictureUser));
   return picture === undefined ? facts : { ...facts, hostImage: bookingPicturePath(facts.publicKey, picture.version) };
 }
 
-/** Whose picture a page shows: a personal page's owner; a team page, or a kind yet to come, names no member (AC-754). */
-function pictureOwner(page: PageRecord): string | undefined {
-  return page.kind === 'personal' ? (page.ownerUserId ?? undefined) : undefined;
+/**
+ * Whose picture a page shows: a personal page's owner, unless they keep it off their public pages (owner ask A124:
+ * the page then shows initials, and its picture route answers as for a person with none); a team page, or a kind
+ * yet to come, names no member (AC-754). Asked in the page's own transaction, before any read of the picture.
+ */
+async function shownPictureOwner(tx: WorkspaceTx, page: PageRecord): Promise<string | undefined> {
+  const owner = page.kind === 'personal' ? (page.ownerUserId ?? undefined) : undefined;
+  return owner === undefined || (await isPictureHidden(tx, owner)) ? undefined : owner;
 }
 
 /**
  * A personal page's host picture to serve (23 Oct 2026): the owner's account picture, when it is one of Google's
- * (`servedPicture`), else undefined; a team page has none (AC-754). The same door and liveness as the page's facts,
- * so a picture shows only where the page does.
+ * (`servedPicture`) and they show it, else undefined; a team page has none (AC-754). The same door and liveness as
+ * the page's facts, so a picture shows only where the page does.
  */
 export async function readPagePicture(
   entry: BookingEntry,
   pictures: PublicPictureDeps,
 ): Promise<AccountPicture | undefined> {
   checkEntry(entry);
-  const owner = await inWorkspace(entry.scope, async (tx) => pictureOwner(await livePage(tx, entry)));
+  const owner = await inWorkspace(entry.scope, async (tx) => shownPictureOwner(tx, await livePage(tx, entry)));
   return owner === undefined ? undefined : servedPicture(owner, await pictures.pictureOf(owner));
 }
 
-/** A handle's profile picture to serve: their account's, when one of Google's (`servedPicture`), else undefined. */
+/**
+ * A handle's profile picture to serve: their account's, when one of Google's (`servedPicture`), else undefined.
+ * `crm_handle_owner` answers no picture for a person who keeps it off their public pages (owner ask A124).
+ */
 export function readProfilePicture(owner: HandleOwner): AccountPicture | undefined {
   return servedPicture(owner.userId, owner.image);
 }

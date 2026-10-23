@@ -23,6 +23,7 @@ import { useState } from 'react';
 import { publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
 import { DeleteAccountSection } from './DeleteAccountSection.tsx';
+import { PhotoSwitch, PhotoSwitchPending } from './PhotoSwitch.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings as securityCopy } from './security-strings.ts';
 import { strings } from './workspace-strings.ts';
@@ -158,6 +159,7 @@ export function ProfileScreen({ data, slug, profile, onChanged }: ProfileScreenP
             }
             {...(profile.image === undefined ? {} : { description: strings.fromGoogle })}
           />
+          <PhotoSwitch data={data} slug={slug} hasPhoto={profile.image !== undefined} />
           <SettingsRow title={strings.yourName} control="field">
             <Field
               label={strings.yourName}
@@ -266,6 +268,7 @@ export function ProfilePending() {
             leadingAlign="center"
             leading={<Skeleton shape="circle" />}
           />
+          <PhotoSwitchPending />
           <SettingsRow title={strings.yourName} control="field">
             <Skeleton shape="field" />
           </SettingsRow>

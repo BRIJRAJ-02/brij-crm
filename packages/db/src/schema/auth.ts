@@ -371,13 +371,17 @@ export const workspaceMembership = auth.table(
  * A person's own preferences that follow them to every device (spec 0031):
  * the workspace they last opened, where `/` and sign in take them. Written
  * only for the caller, and only for a workspace the door let them into; read
- * only to choose where to go, never for access.
+ * only to choose where to go, never for access. And whether their account
+ * picture stays off their public pages (owner ask A124, migration 0091),
+ * written and read only through crm_handle's functions.
  */
 export const userPrefs = auth.table(
   'user_prefs',
   {
     userId: uuid('user_id').notNull().primaryKey(),
     lastWorkspaceId: uuid('last_workspace_id'),
+    /** Their booking pages and profile show initials, never their account picture. No row reads as false. */
+    pictureHidden: boolean('picture_hidden').notNull().default(false),
     updatedAt: updatedAt(),
   },
   (t) => [

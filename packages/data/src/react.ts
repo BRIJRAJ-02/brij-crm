@@ -26,6 +26,7 @@ import type { JobView, RoutingRule } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { PreferencesHeld, PreferencesState } from './preferences/store.ts';
+import type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { NavSnapshot, NavSource } from './navigation/store.ts';
 import type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
@@ -393,6 +394,11 @@ export function useCalendarSettings(held: CalendarSettingsHeld): CalendarSetting
 
 /** The member's own preferences in a workspace (Settings › Account › Preferences), read when first held. */
 export function usePreferences(held: PreferencesHeld): PreferencesState {
+  return useRetained(held);
+}
+
+/** Whether the person's picture shows on their public pages (Settings › Account › Profile), read when first held. */
+export function usePictureChoice(held: PictureChoiceHeld): PictureChoiceState {
   return useRetained(held);
 }
 

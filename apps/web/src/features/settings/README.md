@@ -147,6 +147,14 @@ The same danger Modal as the confirm ("Remove Grace Hopper from Acme?", Cancel (
 
 Lean, as the owner's settings pages are: no page description, one Email section like every other settings page's (its heading above the card, its line saying the inbox always gets every notification, AC-1179, and an InfoTip on what an email holds) with short rows, Mentions, Replies, Task assignments, and Daily digest with its own InfoTip. Built from SettingsLayout (through `SettingsPage`), Card, SettingsRow (its `info` slot), Switch and InfoTip, with no new component. Each switch saves at once through `data.inbox.setSettings` and is put back with a toast on a refusal, as Calendars' switch is. The settings follow a change made in another tab live (AC-1180). Turning the digest on sends the browser's time zone with it, for 8 in the morning there. Once the bar header lands (wip/recui), the title sits in the top bar like every settings page.
 
+## Settings › Account › Profile: Show my photo on booking pages (PhotoSwitch.tsx)
+
+- **Purpose**: whether the person's Google photo shows on their booking pages and their profile (owner ask A124, 23 October 2026). On by default.
+- **Main task**: turn it off, and their initials show there instead, or on again. It saves at once through `data.profile.setPictureHidden` (shown at once, put back with a toast and Try again if refused), then a quiet toast with Undo, one toast at a time.
+- **Leaves out**: changing the photo itself (Google's, or initials) and the photo inside the app, which stays as it is.
+
+A row in Profile's details card, right under the photo: SettingsRow and Switch (`isLabelHidden`, its label the row's title), a Spinner beside the title only while a slow save is on its way (`useDelayedLoading`), a Skeleton hint while the profile loads (`PhotoSwitchPending`), the read's message with Try again if it failed, and read only for a member with no sign in of their own. The choice is the person's, the same in every workspace (`auth.user_prefs.picture_hidden`), and comes with the profile's read; another device's change shows on the next visit. Copy in `photo-strings.ts`.
+
 ## The finish toast (toast.ts)
 
 - **Purpose**: tell the person when a job they started in this browser ends while the app is open (AC-119).
