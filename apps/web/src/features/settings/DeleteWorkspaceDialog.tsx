@@ -1,9 +1,9 @@
 // Brief
 // Purpose: the owner's last check before deleting the workspace (spec 0031, AC-823): what happens, in one sentence.
 // Main task: type the workspace's name, then Delete workspace; the server checks the name again.
-// Leaves out: restoring (the workspace's own address does that for 30 days) and exporting (suggested in the help).
+// Leaves out: restoring (the workspace's own address does that for 30 days) and exporting (a quiet line suggests it first).
 import { isDataError, namesMatch, type DataLayer, type DeletedWorkspace } from '@crm/data';
-import { Button, Field, InfoTip, Modal } from '@crm/ui';
+import { Button, Field, Modal } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './workspace-strings.ts';
 
@@ -20,9 +20,9 @@ export interface DeleteWorkspaceDialogProps {
 }
 
 /**
- * A danger Modal a click outside won't close: one sentence, an InfoTip on
- * the restore window, the name field, then Cancel (ESC) and Delete workspace,
- * which stays disabled until the typed name matches.
+ * A danger Modal a click outside won't close: one sentence saying what happens and the 30 days to restore, the name
+ * field with a quiet line to export first, then Cancel (ESC) and Delete workspace, which stays disabled until the
+ * typed name matches.
  */
 export function DeleteWorkspaceDialog({ data, slug, name, isOpen, onClose, onDeleted }: DeleteWorkspaceDialogProps) {
   const [typed, setTyped] = useState('');
@@ -70,15 +70,14 @@ export function DeleteWorkspaceDialog({ data, slug, name, isOpen, onClose, onDel
         </>
       }
     >
-      <span>
-        {strings.deleteText} <InfoTip label={strings.deleteInfoLabel}>{strings.deleteInfo}</InfoTip>
-      </span>
+      <span>{strings.deleteText}</span>
       <Field
         label={strings.typeName(name)}
         value={typed}
         onChange={setTyped}
         onSubmit={commit}
         autoComplete="off"
+        hint={strings.exportFirst}
         {...(failure === undefined ? {} : { error: failure })}
       />
     </Modal>

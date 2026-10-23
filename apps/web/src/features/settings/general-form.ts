@@ -1,29 +1,13 @@
-// Settings › Workspace › General's text fields as one form: what Save would
-// send, so Save shows only while something changed, and whether the change
-// moves the workspace's address (which asks first). Pure, tested on its own.
+// Settings › Workspace › General's name, saved on its own once an edit ends (Enter, or leaving the field): what the
+// edit does. The address has its own dialog and check (ChangeAddressDialog). Pure, tested on its own.
 
-/** The saved values the fields start from. */
-export interface GeneralSaved {
-  readonly name: string;
-  readonly slug: string;
-}
+/** What a finished edit of the name does: nothing, a save of the trimmed name, or a refusal said on the field. */
+export type NameEdit =
+  { readonly kind: 'same' } | { readonly kind: 'save'; readonly name: string } | { readonly kind: 'missing' };
 
-/** What Save sends: only the fields that differ from the saved ones. */
-export interface GeneralChange {
-  readonly name?: string;
-  readonly slug?: string;
-}
-
-/** The change the drafts make: the name trimmed, each field left out while it matches what is saved. */
-export function generalChange(saved: GeneralSaved, name: string, slug: string): GeneralChange {
-  const trimmed = name.trim();
-  return {
-    ...(trimmed === saved.name ? {} : { name: trimmed }),
-    ...(slug === saved.slug ? {} : { slug }),
-  };
-}
-
-/** True when Save has something to send. */
-export function isChanged(change: GeneralChange): boolean {
-  return change.name !== undefined || change.slug !== undefined;
+/** The edit `typed` makes to the `saved` name: trimmed, unchanged when it matches, missing when nothing is left. */
+export function nameEdit(saved: string, typed: string): NameEdit {
+  const trimmed = typed.trim();
+  if (trimmed === '') return { kind: 'missing' };
+  return trimmed === saved ? { kind: 'same' } : { kind: 'save', name: trimmed };
 }

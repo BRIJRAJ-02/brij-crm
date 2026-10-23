@@ -141,20 +141,27 @@ async function grid(): Promise<HTMLElement> {
   return table.element() as HTMLElement;
 }
 
-/** Theme changes start colour transitions; finish them so axe reads the final colours. */
+/**
+ * Theme changes start colour transitions, and a dialog grows in from its centre; finish them so axe reads the final
+ * colours and sizes (a spinner's endless turn is left alone).
+ */
 function settleTransitions() {
   for (const animation of document.getAnimations()) {
-    if (animation instanceof CSSTransition) animation.finish();
+    if (animation.effect?.getTiming().iterations !== Infinity) animation.finish();
   }
 }
 
 /** The page's WCAG A and AA violations, as `rule: elements` lines. */
 async function violations(): Promise<string[]> {
   settleTransitions();
-  const results = await axe.run(document.body, {
-    runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
-    resultTypes: ['violations'],
-  });
+  // React Aria's live announcer can still hold an earlier test's announcement, naming an element gone since.
+  const results = await axe.run(
+    { include: [document.body], exclude: [['[data-live-announcer]']] },
+    {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+      resultTypes: ['violations'],
+    },
+  );
   return results.violations.map(
     (violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`,
   );

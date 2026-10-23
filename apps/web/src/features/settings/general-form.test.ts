@@ -1,29 +1,20 @@
-// Settings › Workspace › General's Save: shown only for a real change, and
-// sending only the fields that changed.
+// Settings › Workspace › General's name: saved on its own once an edit ends, only for a real change, and never
+// empty.
 import { describe, expect, it } from 'vitest';
-import { generalChange, isChanged } from './general-form.ts';
+import { nameEdit } from './general-form.ts';
 
-const saved = { name: 'Acme', slug: 'acme' };
-
-describe('the General form', () => {
-  it('has nothing to save while the fields match, spaces round the name included', () => {
-    const change = generalChange(saved, '  Acme ', 'acme');
-    expect(change).toEqual({});
-    expect(isChanged(change)).toBe(false);
+describe('the General name', () => {
+  it('does nothing while it matches the saved name, spaces round it included', () => {
+    expect(nameEdit('Acme', 'Acme')).toEqual({ kind: 'same' });
+    expect(nameEdit('Acme', '  Acme ')).toEqual({ kind: 'same' });
   });
 
-  it('sends the trimmed name alone when only the name changed', () => {
-    expect(generalChange(saved, ' Acme Labs ', 'acme')).toEqual({ name: 'Acme Labs' });
+  it('saves the trimmed name when it changed', () => {
+    expect(nameEdit('Acme', ' Acme Labs ')).toEqual({ kind: 'save', name: 'Acme Labs' });
   });
 
-  it('sends the address alone when only the address changed, and both when both did', () => {
-    expect(generalChange(saved, 'Acme', 'acme-labs')).toEqual({ slug: 'acme-labs' });
-    const both = generalChange(saved, 'Halcyon', 'halcyon');
-    expect(both).toEqual({ name: 'Halcyon', slug: 'halcyon' });
-    expect(isChanged(both)).toBe(true);
-  });
-
-  it('counts an emptied name as a change, so Save can say it is missing', () => {
-    expect(generalChange(saved, '   ', 'acme')).toEqual({ name: '' });
+  it('refuses an emptied name, spaces only included, so the field can say it is missing', () => {
+    expect(nameEdit('Acme', '')).toEqual({ kind: 'missing' });
+    expect(nameEdit('Acme', '   ')).toEqual({ kind: 'missing' });
   });
 });
