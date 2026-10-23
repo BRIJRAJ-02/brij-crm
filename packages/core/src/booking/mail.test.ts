@@ -106,7 +106,7 @@ describe('the confirmation (AC-636)', () => {
     expect(guest?.rows).toContainEqual({ label: 'Where', value: 'Video call. Ada Host will send you the link.' });
     expect(host?.rows).toContainEqual({
       label: 'Where',
-      value: 'Video call. No link was made, so send the guest one.',
+      value: 'Video call. No link was made. Send the guest one.',
     });
     // Each reader's footer says why they got it.
     expect(visitor?.why).toBe('You got this email because this address was used to book Intro call with Ada Host.');
@@ -184,6 +184,8 @@ describe('changes (AC-638 to AC-640)', () => {
       'ada@example.com',
     ]);
     expect(cancelled.messages[2]?.subject).toBe('Cancelled by guest: Intro call with Grace Hopper');
+    // Said of what we do, never of calendars we may not hold (QA Q79).
+    expect(cancelled.messages[0]?.intro).toBe('Ada Host has been told. Nothing else to do.');
   });
 });
 

@@ -17,6 +17,7 @@
 // A guest never gets the visitor's link: it is the visitor's key.
 import { and, eq, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
+import { zoneDisplay } from '@crm/contracts/zones';
 import { schema } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -74,39 +75,12 @@ export interface PreparedMail {
   readonly skipped?: string;
 }
 
-/** Zones some browsers still name by their old spelling, by their current name (as the booking page has them). */
-const RENAMED_ZONES: Readonly<Record<string, string>> = Object.freeze({
-  'Asia/Calcutta': 'Asia/Kolkata',
-  'Asia/Katmandu': 'Asia/Kathmandu',
-  'Asia/Rangoon': 'Asia/Yangon',
-  'Asia/Saigon': 'Asia/Ho_Chi_Minh',
-  'Europe/Kiev': 'Europe/Kyiv',
-  'America/Godthab': 'America/Nuuk',
-  'Atlantic/Faeroe': 'Atlantic/Faroe',
-});
-
-/**
- * A zone as the booking pages say it, at `at`: "Kolkata time (GMT+5:30)", "London time (GMT)"; a zone with no city
- * keeps its name ("UTC"). Never the raw id, "Asia/Calcutta" (QA Q78).
- */
-function zoneWords(zone: string, at: DateTime): string {
-  if (!zone.includes('/') || zone.startsWith('Etc/')) return zone.replace(/_/g, ' ');
-  const city = (RENAMED_ZONES[zone] ?? zone).split('/').pop()?.replace(/_/g, ' ') ?? zone;
-  const minutes = at.offset;
-  const sign = minutes < 0 ? '-' : '+';
-  const hours = Math.floor(Math.abs(minutes) / 60);
-  const rest = Math.abs(minutes) % 60;
-  const offset =
-    minutes === 0 ? 'GMT' : `GMT${sign}${String(hours)}${rest === 0 ? '' : `:${String(rest).padStart(2, '0')}`}`;
-  return `${city} time (${offset})`;
-}
-
 /** "Monday 2 November 2026, 9:00 AM to 9:30 AM, London time (GMT)", in `zone`. */
 export function whenLine(start: Date, end: Date, zone: string): string {
   const from = DateTime.fromJSDate(start, { zone }).setLocale('en-GB');
   const to = DateTime.fromJSDate(end, { zone }).setLocale('en-GB');
   const time = (at: DateTime) => at.setLocale('en-US').toFormat('h:mm a');
-  return `${from.toFormat('cccc d LLLL yyyy')}, ${time(from)} to ${time(to)}, ${zoneWords(zone, from)}`;
+  return `${from.toFormat('cccc d LLLL yyyy')}, ${time(from)} to ${time(to)}, ${zoneDisplay(zone, start.getTime())}`;
 }
 
 /**
@@ -124,7 +98,7 @@ function whereOf(
     case 'video':
       return reader.kind === 'guest'
         ? `Video call. ${reader.hostName} will send you the link.`
-        : 'Video call. No link was made, so send the guest one.';
+        : 'Video call. No link was made. Send the guest one.';
     case 'phone':
       return phone === undefined ? 'Phone call' : `Phone call to ${phone}`;
     default:
@@ -425,7 +399,7 @@ export async function prepareBookingMail(
           heading: byHost ? `${hostName} cancelled your booking` : 'Your booking is cancelled',
           intro: byHost
             ? `${hostName} cancelled ${page.title}. It comes off your calendar.`
-            : 'It comes off both calendars. Nothing else to do.',
+            : `${hostName} has been told. Nothing else to do.`,
           rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), ...reasonRow],
           button: { label: byHost ? 'Book another time' : 'Book again', url: bookAgainUrl },
           why: visitorWhy,
