@@ -233,7 +233,6 @@ export const strings = {
   fixPage: 'Fix what’s marked in red to save.',
   /** The save bar's reason, naming the tabs that hold what's red. */
   fixTabs: (tabs: readonly string[]) => `Fix ${tabs.join(' and ')} to save.`,
-  leaveConfirm: 'You have unsaved changes. Leave without saving?',
   /** Add events to: the page's own destination calendar (spec 0024, AC-997). */
   addBookingsTo: 'Add bookings to',
   addBookingsHint: 'Saves as soon as you choose.',
