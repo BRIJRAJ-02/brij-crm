@@ -345,6 +345,19 @@ describe('entrySentence', () => {
   });
 });
 
+describe('a row this page doesn’t know yet', () => {
+  it('reads as a plain change rather than failing, and names an unknown actor as someone removed', () => {
+    const newer = {
+      ...base,
+      action: 'booking_page.profile_reordered',
+      target: workspace,
+      params: {},
+    } as unknown as AuditEntryView;
+    expect(entrySentence(newer, format)).toEqual({ full: 'Ada Lovelace made a change', change: 'Made a change' });
+    expect(whoOf({ kind: 'robot' } as unknown as AuditPerson)).toEqual({ name: 'Someone removed from this workspace' });
+  });
+});
+
 describe('whoOf', () => {
   it('names the actor with what happened to them (AC-4606)', () => {
     expect(whoOf(ada)).toEqual({ name: 'Ada Lovelace' });

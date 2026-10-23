@@ -2183,10 +2183,16 @@ describe('audit (spec 0046)', () => {
       },
     });
     const { data } = layer(api);
+    await data.access.mine('acme');
     const log = await data.audit.openLog('acme');
     await expect.poll(() => log.getSnapshot().status).toBe('forbidden');
     expect(log.getSnapshot().message).toBe('Only workspace owners and admins can read the audit log.');
     log.dispose();
+    // Their held access was stale: it is read again, so History's next visit opens the sign ins (AC-4618).
+    const asked = () => api.calls.filter((each) => each.endsWith('/access/mine')).length;
+    expect(asked()).toBe(1);
+    await data.access.mine('acme');
+    expect(asked()).toBe(2);
   });
 });
 

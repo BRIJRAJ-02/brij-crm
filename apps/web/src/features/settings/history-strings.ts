@@ -196,6 +196,8 @@ export const strings = {
   who: 'Who',
   change: 'Change',
   showMore: 'Show more',
+  /** An action this page has no sentence for yet (a newer server), after the actor's name. */
+  someChange: 'made a change',
   /** Who did it, beyond a member's name (AC-4606). */
   people: {
     former: 'Former member',

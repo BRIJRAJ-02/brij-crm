@@ -46,7 +46,8 @@ export function whoOf(person: AuditPerson): Who {
       return { name: people.system };
     case 'api_key':
       return { name: people.apiKey };
-    case 'unknown':
+    default:
+      // An unknown row, or a kind of actor this page doesn't know yet.
       return { name: people.unknown };
   }
 }
@@ -91,8 +92,14 @@ const capitalised = (text: string): string => text.charAt(0).toUpperCase() + tex
  * changed Bea Rao’s role from Member to Admin"). The Change column leaves the actor out and starts with a capital.
  */
 export function entrySentence(entry: AuditEntryView, format: HistoryFormat): RowSentence {
-  const template = strings.sentences[entry.action] as (entry: AuditEntryView, w: SentenceWords) => Sentence;
-  const sentence = template(entry, wordsFor(format));
+  // A newer server may list an action this page doesn't know yet (a deploy in between): a plain line, not a crash.
+  const template = (
+    strings.sentences as Partial<Record<string, (entry: AuditEntryView, w: SentenceWords) => Sentence>>
+  )[entry.action];
+  const sentence =
+    template === undefined
+      ? { subject: 'actor' as const, text: strings.someChange }
+      : template(entry, wordsFor(format));
   if (sentence.subject === 'none') return { full: sentence.text, change: sentence.text };
   return { full: `${whoOf(entry.actor).name} ${sentence.text}`, change: capitalised(sentence.text) };
 }

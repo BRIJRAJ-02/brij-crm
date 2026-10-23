@@ -3167,7 +3167,15 @@ export function createDataLayer({
        */
       openLog: async (workspace: string): Promise<AuditLog> =>
         (await import('./audit/log.ts')).openAuditLog(
-          { list: (input, signal) => call((options) => api.audit.list(input, options), signal) },
+          {
+            list: (input, signal) =>
+              call((options) => api.audit.list(input, options), signal).catch((error: unknown) => {
+                // The reader lost `audit.read`: their held access is stale, so History's next visit opens their
+                // sign ins (AC-4618).
+                if (toDataError(error).code === 'FORBIDDEN') access.delete(workspace);
+                throw error;
+              }),
+          },
           workspace,
         ),
     },
