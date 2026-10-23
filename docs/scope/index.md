@@ -19,21 +19,25 @@ A generic, multi tenant CRM sold as SaaS, as flexible as Attio. Any company can 
 
 _These are recommendations to keep your build orderly, not requirements. Skip anything that does not fit: if you already know how to build a feature, use `/develop` and skip `/architect`. You decide when a feature is `done`._
 
+## Current plan
+
+The phased plan from 23 October 2026 (Phases 0 to 6, and what waits on you) is in [docs/plan/phases-2026-10-23.md](../plan/phases-2026-10-23.md). It says what comes next; this scope says what each feature is and where it stands.
+
 ## Areas
 
-- [Foundations](foundations.md): stack, tooling, tokens, components, data model, client state, realtime, jobs, access, edge only API access · 3 done, 1 in progress, 6 planned
-- [Data engine](engine.md): the core loop, objects, attributes, relations, computed attributes, the schema map, layouts, lists · 8 planned
-- [Records and views](records-and-views.md): record page, notes and tasks, table and board views, bulk actions, reports · 6 planned
-- [Team and security](team-and-security.md): workspaces, members, teams, access rules, account security, audit and privacy · 4 planned
-- [Collaboration](collaboration.md): presence, shared notes, notifications, comments · 4 planned
-- [Data in and out](data-in-out.md): import, export, merge, files, search, API, webhooks, backups · 7 planned
-- [Business and operations](business-and-ops.md): monitoring, scale, plans, operator console, onboarding, billing · 7 planned
-- [Integrations](integrations.md): email, calendar, round robin, booking, sending, sequences, enrichment, forms, Slack, Zapier, other CRMs · 1 in progress, 9 planned
-- [Intelligence](intelligence.md): automations, AI assistant, AI attributes · 3 planned
+- [Foundations](foundations.md): stack, tooling, tokens, components, data model, client state, realtime, jobs, access, edge only API access · 5 done, 5 in progress
+- [Data engine](engine.md): the core loop, objects, attributes, relations, computed attributes, the schema map, layouts, lists · 1 done, 3 in progress, 4 planned
+- [Records and views](records-and-views.md): record page, notes and tasks, table and board views, bulk actions, reports, the sidebar, settings and Home · 5 done, 3 in progress, 1 planned
+- [Team and security](team-and-security.md): sign in and first run, workspaces, members, teams, access rules, account security, history and privacy · 2 done, 2 in progress, 1 planned
+- [Collaboration](collaboration.md): presence, shared notes, notifications, comments · 2 in progress, 2 planned
+- [Data in and out](data-in-out.md): import, export, merge, files, search, API, webhooks, backups · 2 in progress, 5 planned
+- [Business and operations](business-and-ops.md): monitoring, scale, plans, operator console, onboarding, billing · 2 done, 2 in progress, 3 planned
+- [Integrations](integrations.md): calendar, booking, round robin, availability, lead routing, team calendar, forms, Slack, Zapier, other CRMs, and last email and sequences · 4 done, 2 in progress, 6 planned, 1 dropped
+- [Intelligence](intelligence.md): automations (the AI features were dropped) · 1 planned, 2 dropped
 
 ## At a glance
 
-Build order is the order of the rows below (a feature added later takes the next free `#` and sits in its build position). Slices 1 to 10 are the first release; slices 11 to 20 come after it.
+Build order is the order of the rows below (a feature added later takes the next free `#` and sits in its build position). Slices 1 to 10 are the first release; slices 11 to 20 come after it, and the Gmail rows come last of all. Statuses were reconciled with the code on 23 October 2026.
 
 | # | Feature | Phase | Area | Status |
 |---|---------|-------|------|--------|
@@ -42,60 +46,67 @@ Build order is the order of the rows below (a feature added later takes the next
 | 3 | Design tokens | Foundation | [Foundations](foundations.md) | done |
 | 4 | Component library | Foundation | [Foundations](foundations.md) | in-progress |
 | 5 | Data model | Foundation | [Foundations](foundations.md) | in-progress |
-| 6 | Client data and state | Foundation | [Foundations](foundations.md) | planned |
-| 7 | Change events and realtime | Foundation | [Foundations](foundations.md) | planned |
-| 8 | Background jobs | Foundation | [Foundations](foundations.md) | planned |
-| 9 | Access model | Foundation | [Foundations](foundations.md) | planned |
-| 57 | Edge only API access | Foundation | [Foundations](foundations.md) | planned |
-| 10 | Core loop | Slice 1 | [Data engine](engine.md) | in-progress |
-| 11 | Monitoring and product analytics | Slice 1 | [Business and operations](business-and-ops.md) | planned |
-| 12 | Scale budget and load harness | Slice 1 | [Business and operations](business-and-ops.md) | planned |
-| 13 | Objects and attributes | Slice 2 | [Data engine](engine.md) | planned |
-| 14 | Validation and type changes | Slice 2 | [Data engine](engine.md) | planned |
-| 15 | Relations | Slice 3 | [Data engine](engine.md) | planned |
+| 6 | Client data and state | Foundation | [Foundations](foundations.md) | in-progress |
+| 7 | Change events and realtime | Foundation | [Foundations](foundations.md) | in-progress |
+| 8 | Background jobs | Foundation | [Foundations](foundations.md) | done |
+| 9 | Access model | Foundation | [Foundations](foundations.md) | in-progress |
+| 57 | Edge only API access | Foundation | [Foundations](foundations.md) | done |
+| 10 | Core loop | Slice 1 | [Data engine](engine.md) | done |
+| 11 | Monitoring and product analytics | Slice 1 | [Business and operations](business-and-ops.md) | done |
+| 12 | Scale budget and load harness | Slice 1 | [Business and operations](business-and-ops.md) | done |
+| 13 | Objects and attributes | Slice 2 | [Data engine](engine.md) | in-progress |
+| 14 | Validation and type changes | Slice 2 | [Data engine](engine.md) | in-progress |
+| 15 | Relations | Slice 3 | [Data engine](engine.md) | in-progress |
 | 16 | Computed attributes | Slice 3 | [Data engine](engine.md) | planned |
 | 56 | Schema map | Slice 3 | [Data engine](engine.md) | planned |
-| 17 | Record page | Slice 4 | [Records and views](records-and-views.md) | planned |
+| 17 | Record page | Slice 4 | [Records and views](records-and-views.md) | in-progress |
 | 18 | Attribute groups and layouts | Slice 4 | [Data engine](engine.md) | planned |
-| 19 | Notes and tasks | Slice 4 | [Records and views](records-and-views.md) | planned |
-| 20 | Table views and saved views | Slice 5 | [Records and views](records-and-views.md) | planned |
-| 21 | Board view | Slice 5 | [Records and views](records-and-views.md) | planned |
-| 22 | Bulk actions and trash | Slice 5 | [Records and views](records-and-views.md) | planned |
-| 23 | Workspaces, members and teams | Slice 6 | [Team and security](team-and-security.md) | planned |
+| 19 | Notes and tasks | Slice 4 | [Records and views](records-and-views.md) | done |
+| 20 | Table views and saved views | Slice 5 | [Records and views](records-and-views.md) | in-progress |
+| 21 | Board view | Slice 5 | [Records and views](records-and-views.md) | in-progress |
+| 22 | Bulk actions and trash | Slice 5 | [Records and views](records-and-views.md) | done |
+| 60 | App shell and sidebar | Slice 5 | [Records and views](records-and-views.md) | done |
+| 61 | Settings area | Slice 5 | [Records and views](records-and-views.md) | done |
+| 62 | Home | Slice 5 | [Records and views](records-and-views.md) | done |
+| 63 | Sign in and first run | Slice 6 | [Team and security](team-and-security.md) | done |
+| 23 | Workspaces, members and teams | Slice 6 | [Team and security](team-and-security.md) | in-progress |
 | 24 | Access rules | Slice 6 | [Team and security](team-and-security.md) | planned |
-| 25 | Account security | Slice 6 | [Team and security](team-and-security.md) | planned |
+| 25 | Account security | Slice 6 | [Team and security](team-and-security.md) | done |
 | 26 | Presence | Slice 7 | [Collaboration](collaboration.md) | planned |
 | 27 | Shared notes | Slice 7 | [Collaboration](collaboration.md) | planned |
-| 28 | Notifications | Slice 7 | [Collaboration](collaboration.md) | planned |
-| 29 | Comments and mentions | Slice 7 | [Collaboration](collaboration.md) | planned |
-| 30 | Import and export | Slice 8 | [Data in and out](data-in-out.md) | planned |
+| 28 | Notifications | Slice 7 | [Collaboration](collaboration.md) | in-progress |
+| 29 | Comments and mentions | Slice 7 | [Collaboration](collaboration.md) | in-progress |
+| 30 | Import and export | Slice 8 | [Data in and out](data-in-out.md) | in-progress |
 | 31 | Duplicate detection and merge | Slice 8 | [Data in and out](data-in-out.md) | planned |
 | 32 | File attachments | Slice 8 | [Data in and out](data-in-out.md) | planned |
-| 33 | Global search | Slice 8 | [Data in and out](data-in-out.md) | planned |
+| 33 | Global search | Slice 8 | [Data in and out](data-in-out.md) | in-progress |
 | 34 | Public API and keys | Slice 9 | [Data in and out](data-in-out.md) | planned |
 | 35 | Webhooks | Slice 9 | [Data in and out](data-in-out.md) | planned |
-| 36 | Audit log and privacy tools | Slice 10 | [Team and security](team-and-security.md) | planned |
+| 36 | Audit log and privacy tools | Slice 10 | [Team and security](team-and-security.md) | in-progress |
 | 37 | Backups and full export | Slice 10 | [Data in and out](data-in-out.md) | planned |
 | 38 | Plans and limits | Slice 10 | [Business and operations](business-and-ops.md) | planned |
-| 39 | Operator console | Slice 10 | [Business and operations](business-and-ops.md) | planned |
-| 40 | Templates and onboarding | Slice 10 | [Business and operations](business-and-ops.md) | planned |
+| 39 | Operator console | Slice 10 | [Business and operations](business-and-ops.md) | in-progress |
+| 40 | Templates and onboarding | Slice 10 | [Business and operations](business-and-ops.md) | in-progress |
 | 41 | Scale hardening | Slice 10 | [Business and operations](business-and-ops.md) | planned |
 | 42 | Billing | Slice 11 | [Business and operations](business-and-ops.md) | planned |
-| 43 | Email sync | Slice 12 | [Integrations](integrations.md) | planned |
-| 44 | Calendar sync | Slice 12 | [Integrations](integrations.md) | planned |
-| 58 | Round robin assignment | Slice 12 | [Integrations](integrations.md) | planned |
-| 59 | Booking pages | Slice 12 | [Integrations](integrations.md) | planned |
-| 45 | Send email from records | Slice 12 | [Integrations](integrations.md) | planned |
-| 46 | Sequences | Slice 13 | [Integrations](integrations.md) | planned |
-| 47 | Enrichment | Slice 14 | [Integrations](integrations.md) | planned |
+| 44 | Calendar sync | Slice 12 | [Integrations](integrations.md) | done |
+| 58 | Round robin assignment | Slice 12 | [Integrations](integrations.md) | done |
+| 59 | Booking pages | Slice 12 | [Integrations](integrations.md) | done |
+| 64 | Availability schedules | Slice 12 | [Integrations](integrations.md) | in-progress |
+| 65 | Lead routing | Slice 12 | [Integrations](integrations.md) | done |
+| 66 | Team calendar | Slice 12 | [Integrations](integrations.md) | planned |
+| 47 | Enrichment | Slice 14 | [Integrations](integrations.md) | dropped |
 | 48 | Forms | Slice 15 | [Integrations](integrations.md) | in-progress |
 | 49 | Slack and Zapier | Slice 15 | [Integrations](integrations.md) | planned |
 | 50 | CRM connectors | Slice 16 | [Integrations](integrations.md) | planned |
 | 51 | Lists and pipelines | Slice 17 | [Data engine](engine.md) | planned |
 | 52 | Reports and dashboards | Slice 18 | [Records and views](records-and-views.md) | planned |
 | 53 | Automations | Slice 19 | [Intelligence](intelligence.md) | planned |
-| 54 | AI assistant | Slice 20 | [Intelligence](intelligence.md) | planned |
-| 55 | AI attributes | Slice 20 | [Intelligence](intelligence.md) | planned |
+| 54 | AI assistant | Slice 20 | [Intelligence](intelligence.md) | dropped |
+| 55 | AI attributes | Slice 20 | [Intelligence](intelligence.md) | dropped |
+| 43 | Email sync | Last | [Integrations](integrations.md) | planned |
+| 45 | Send email from records | Last | [Integrations](integrations.md) | planned |
+| 46 | Sequences | Last | [Integrations](integrations.md) | planned |
 
 ## Deferred
 Out of scope for the current plan, kept here so it stays honest.
@@ -106,7 +117,7 @@ Out of scope for the current plan, kept here so it stays honest.
 - **SSO and SCIM**: company sign in and automatic member provisioning · needs a decision · GA
 - **Browser extension**: add people and companies while browsing LinkedIn or Gmail · needs a decision
 - **Data residency**: choose EU or US hosting per workspace · needs a decision · GA
-- **Marketing site**: public landing, pricing and SEO · needs a decision
+- **Marketing site**: public landing, pricing and SEO. A first version exists in `apps/marketing` (built outside this scope, no spec); pricing and SEO still need a decision · needs a decision
 
 ## Legend
 
