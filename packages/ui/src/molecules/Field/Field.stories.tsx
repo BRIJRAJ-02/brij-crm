@@ -380,3 +380,22 @@ export const LongPrefix: Story = {
     await expect(input.getBoundingClientRect().width).toBeGreaterThanOrEqual(80);
   },
 };
+
+/**
+ * Typed exactly as shown (`isVerbatim`): a backup code with no automatic capitals, corrections or spell check, so a
+ * phone's keyboard never capitalises its first letter. Behaviour only, no look of its own: no screenshot.
+ */
+export const Verbatim: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow">
+      <Field label="Backup code" name="backupCode" autoComplete="off" isVerbatim />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const input = canvas.getByRole('textbox', { name: 'Backup code' });
+    await expect(input).toHaveAttribute('autocapitalize', 'off');
+    await expect(input).toHaveAttribute('autocorrect', 'off');
+    await expect(input).toHaveAttribute('spellcheck', 'false');
+  },
+};

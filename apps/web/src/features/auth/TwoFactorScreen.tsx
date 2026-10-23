@@ -89,7 +89,8 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
       isBusy={isChecking}
       // The way back /verify has too: the wrong address, or neither the app nor a code to hand.
       footer={
-        <ButtonLink variant="link" icon="arrow-left" href={signInAgainHref}>
+        // Off while a code is being checked, as the rest of the card is: the check may still sign them in.
+        <ButtonLink variant="link" icon="arrow-left" href={signInAgainHref} isDisabled={isChecking}>
           {strings.useAnotherEmail}
         </ButtonLink>
       }
