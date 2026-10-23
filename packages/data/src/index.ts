@@ -955,6 +955,8 @@ export function createDataLayer({
   let usage = new Map<string, Promise<Usage>>();
   let members = new Map<string, Promise<MemberView[]>>();
   let access = new Map<string, Promise<MyAccess>>();
+  // The audit log a History screen holds, per workspace (spec 0046): opening it again while held answers this one.
+  const auditLogs = new Map<string, AuditLog>();
   // The roles every role picker offers (spec 0037, AC-1439), per workspace, for the app load.
   let roles = new Map<string, Promise<RolesList>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
@@ -1023,6 +1025,7 @@ export function createDataLayer({
     usage = new Map();
     members = new Map();
     access = new Map();
+    auditLogs.clear();
     roles = new Map();
     attributes = new Map();
     allAttributes = new Map();
@@ -3164,9 +3167,15 @@ export function createDataLayer({
        * Settings › History › Workspace changes (spec 0046): one paged read of the workspace's audit log, its first
        * page started at once (the route's loader opens it). Loaded with `import()`, never live, never in the record
        * store: each visit opens it afresh, and the screen retains it while shown (let go, it aborts and stops).
+       * While a screen holds a workspace's log, opening it again answers that same log.
        */
-      openLog: async (workspace: string): Promise<AuditLog> =>
-        (await import('./audit/log.ts')).openAuditLog(
+      openLog: async (workspace: string): Promise<AuditLog> => {
+        // A log a screen holds is handed back as it is, so the page reloading its data while it shows (a live
+        // attribute change invalidates the router) keeps the rows read so far and Show more's place.
+        const held = auditLogs.get(workspace);
+        if (held !== undefined) return held;
+        const { openAuditLog } = await import('./audit/log.ts');
+        const log: AuditLog = openAuditLog(
           {
             list: (input, signal) =>
               call((options) => api.audit.list(input, options), signal).catch((error: unknown) => {
@@ -3175,9 +3184,15 @@ export function createDataLayer({
                 if (toDataError(error).code === 'FORBIDDEN') access.delete(workspace);
                 throw error;
               }),
+            onHeld: () => auditLogs.set(workspace, log),
+            onDisposed: () => {
+              if (auditLogs.get(workspace) === log) auditLogs.delete(workspace);
+            },
           },
           workspace,
-        ),
+        );
+        return log;
+      },
     },
     routing: {
       /**

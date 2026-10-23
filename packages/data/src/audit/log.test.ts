@@ -121,13 +121,13 @@ describe('openAuditLog', () => {
     api.call(0).answer({ entries: [entry(1)], nextCursor: 'c1' });
     await settle();
     log.more();
-    api.call(1).fail(failure('FORBIDDEN', 'Only workspace owners and admins can read the audit log.'));
+    api.call(1).fail(failure('FORBIDDEN', 'Only workspace owners and admins can see workspace changes.'));
     await settle();
     expect(log.getSnapshot()).toEqual({
       status: 'forbidden',
       entries: [],
       hasMore: false,
-      message: 'Only workspace owners and admins can read the audit log.',
+      message: 'Only workspace owners and admins can see workspace changes.',
     });
     log.retry();
     log.more();
@@ -165,5 +165,25 @@ describe('openAuditLog', () => {
     again();
     await settle();
     expect(api.call(0).signal.aborted).toBe(true);
+  });
+
+  it('says when a screen first holds it and when it is disposed, so the layer can hand the held log back', async () => {
+    const api = fakeList();
+    const heard: string[] = [];
+    const log = openAuditLog(
+      { list: api.list, onHeld: () => heard.push('held'), onDisposed: () => heard.push('disposed') },
+      'acme',
+    );
+    const first = log.retain();
+    const second = log.retain();
+    expect(heard).toEqual(['held']);
+    first();
+    second();
+    await settle();
+    expect(heard).toEqual(['held', 'disposed']);
+    // Disposed is final: held again, it says nothing more.
+    log.retain();
+    log.dispose();
+    expect(heard).toEqual(['held', 'disposed']);
   });
 });

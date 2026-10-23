@@ -8,9 +8,13 @@
 import type { AuditEntryView, AuditListInput, AuditPage } from '@crm/contracts';
 import { toDataError } from '../errors.ts';
 
-/** What the log needs: the one read, which takes a signal to cancel it. */
+/** What the log needs: the one read, which takes a signal to cancel it, and who to tell when it is held and let go. */
 export interface AuditLogDeps {
   readonly list: (input: AuditListInput, signal: AbortSignal) => Promise<AuditPage>;
+  /** A screen holds it (the first holder, or a holder again before it was disposed). */
+  readonly onHeld?: () => void;
+  /** It was disposed: nothing holds it, and nothing it reads lands. */
+  readonly onDisposed?: () => void;
 }
 
 /** Where the log is: its first page loading or failed, ready, a later page loading or failed, or refused. */
@@ -103,6 +107,7 @@ export function openAuditLog(deps: AuditLogDeps, workspace: string): AuditLog {
     reading?.abort();
     reading = undefined;
     listeners.clear();
+    deps.onDisposed?.();
   };
 
   read(undefined);
@@ -122,6 +127,7 @@ export function openAuditLog(deps: AuditLogDeps, workspace: string): AuditLog {
     },
     retain() {
       holders += 1;
+      if (holders === 1 && !disposed) deps.onHeld?.();
       if (letGo !== undefined) {
         clearTimeout(letGo);
         letGo = undefined;

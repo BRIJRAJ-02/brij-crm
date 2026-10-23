@@ -2173,12 +2173,40 @@ describe('audit (spec 0046)', () => {
     ]);
   });
 
+  it('hands back the log a screen holds, so a reload of the page keeps its rows, and opens afresh once let go', async () => {
+    const api = fakeApi({
+      auditList: (input) =>
+        input.cursor === undefined ? { entries: [entry(1)], nextCursor: 'next-1' } : { entries: [entry(2)] },
+    });
+    const { data } = layer(api);
+    const reads = () => api.calls.filter((each) => each.startsWith('audit.list')).length;
+    const log = await data.audit.openLog('acme');
+    const release = log.retain();
+    await expect.poll(() => log.getSnapshot().status).toBe('ready');
+    log.more();
+    await expect.poll(() => log.getSnapshot().entries).toHaveLength(2);
+    // The router reloads the route (a live attribute change): the same log, the same rows, nothing read again.
+    expect(await data.audit.openLog('acme')).toBe(log);
+    expect(reads()).toBe(2);
+    // Another workspace's log is its own.
+    const other = await data.audit.openLog('globex');
+    expect(other).not.toBe(log);
+    other.dispose();
+    release();
+    log.dispose();
+    const fresh = await data.audit.openLog('acme');
+    expect(fresh).not.toBe(log);
+    await expect.poll(() => fresh.getSnapshot().status).toBe('ready');
+    expect(fresh.getSnapshot().entries).toEqual([entry(1)]);
+    fresh.dispose();
+  });
+
   it('answers a refused read as forbidden, with the server’s words', async () => {
     const api = fakeApi({
       auditList: () => {
         throw new ORPCError('FORBIDDEN', {
           status: 403,
-          message: 'Only workspace owners and admins can read the audit log.',
+          message: 'Only workspace owners and admins can see workspace changes.',
         });
       },
     });
@@ -2186,7 +2214,7 @@ describe('audit (spec 0046)', () => {
     await data.access.mine('acme');
     const log = await data.audit.openLog('acme');
     await expect.poll(() => log.getSnapshot().status).toBe('forbidden');
-    expect(log.getSnapshot().message).toBe('Only workspace owners and admins can read the audit log.');
+    expect(log.getSnapshot().message).toBe('Only workspace owners and admins can see workspace changes.');
     log.dispose();
     // Their held access was stale: it is read again, so History's next visit opens the sign ins (AC-4618).
     const asked = () => api.calls.filter((each) => each.endsWith('/access/mine')).length;
