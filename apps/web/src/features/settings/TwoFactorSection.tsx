@@ -282,8 +282,10 @@ export function TwoFactorSection({
         title={step === 'codes' ? copy.codesTitle : copy.setupTitle}
         isOpen={isOpen}
         isBusy={isBusy}
-        // The codes won't be shown again: a click outside never closes them; the close button and Esc still do.
+        // The codes won't be shown again: a click outside never closes them, and until "I've saved these" is ticked
+        // there is no close button and Esc does nothing (Q103). Make new codes is the way back if they were lost.
         isDismissable={step !== 'codes'}
+        isClosable={step !== 'codes' || saved}
         onOpenChange={(next) => {
           if (!next) close();
         }}
@@ -383,7 +385,9 @@ export function TwoFactorSection({
         title={step === 'codes' ? copy.codesTitle : copy.newCodesTitle}
         isOpen={isOpen}
         isBusy={isBusy}
+        // As setup's codes: kept until "I've saved these" is ticked (Q103).
         isDismissable={step !== 'codes'}
+        isClosable={step !== 'codes' || saved}
         onOpenChange={(next) => {
           if (!next) close();
         }}

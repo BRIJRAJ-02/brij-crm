@@ -85,6 +85,12 @@ export interface ModalProps {
   readonly isDismissable?: boolean;
   /** While it works (a form saving, a confirm's commit): the title bar's close button, a click outside and Esc wait. */
   readonly isBusy?: boolean;
+  /**
+   * `false` keeps the person on a step until they answer it with the footer's buttons: no close button in the title
+   * bar, and Esc and a click outside do nothing. For what can't be shown again (two factor's backup codes, until
+   * "I've saved these" is ticked); never for an ordinary form, which Esc should always be able to leave.
+   */
+  readonly isClosable?: boolean;
   /** For a Modal opened without a ModalTrigger. */
   readonly isOpen?: boolean;
   readonly onOpenChange?: (isOpen: boolean) => void;
@@ -98,7 +104,9 @@ export interface ModalProps {
  * grows from the centre over a scrim; opened from the keyboard it appears at
  * once. Focus stays inside until it closes, then goes
  * back to its trigger. Esc closes it, and so does a click outside unless it
- * asks before something destructive, holds typed input, or is busy saving.
+ * asks before something destructive, holds typed input, or is busy saving. A
+ * step that must be answered (`isClosable={false}`) has no close button and
+ * ignores both, until its caller lets it close.
  */
 export function Modal({
   title,
@@ -113,6 +121,7 @@ export function Modal({
   tone = 'default',
   isDismissable = true,
   isBusy = false,
+  isClosable = true,
   isOpen,
   onOpenChange,
 }: ModalProps) {
@@ -126,8 +135,8 @@ export function Modal({
     <ModalOverlay
       className={styles.scrim}
       data-variant={variant}
-      isDismissable={!isAlert && isDismissable && !isBusy}
-      isKeyboardDismissDisabled={isBusy}
+      isDismissable={!isAlert && isDismissable && !isBusy && isClosable}
+      isKeyboardDismissDisabled={isBusy || !isClosable}
       data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
       {...(isOpen === undefined ? {} : { isOpen })}
       {...(onOpenChange === undefined ? {} : { onOpenChange })}
@@ -163,18 +172,23 @@ export function Modal({
               </Heading>
             )}
             {context !== undefined && <span className={styles.context}>{context}</span>}
-            {/* Every dialog but the palette and an alert has the close button in its title bar. */}
-            {variant !== 'palette' && !isAlert && (
-              <span className={styles.close}>
-                {status !== undefined && (
-                  <span className={styles.status} role="status" aria-live="polite">
-                    {status}
-                  </span>
-                )}
-                {headerActions}
-                <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
-              </span>
-            )}
+            {/* Every dialog but the palette and an alert has the close button in its title bar, unless it keeps the
+                person until they answer (isClosable false). */}
+            {variant !== 'palette' &&
+              !isAlert &&
+              (isClosable || status !== undefined || headerActions !== undefined) && (
+                <span className={styles.close}>
+                  {status !== undefined && (
+                    <span className={styles.status} role="status" aria-live="polite">
+                      {status}
+                    </span>
+                  )}
+                  {headerActions}
+                  {isClosable && (
+                    <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
+                  )}
+                </span>
+              )}
           </div>
           {/* A dialog opened from inside a popover is a page of its own: its fields keep their halo. */}
           <InPopover value={false}>

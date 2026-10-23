@@ -41,6 +41,7 @@ Ported from the artifact's Modal card. Confirms, invites, exports, imports and m
 - `tone="danger"` makes it an alert dialog with a warning icon; a click outside won't close it, so a destructive answer is always deliberate. Its body is the dialog's description (`aria-describedby`), so a screen reader says what happens with the question.
 - **One inset.** The title bar, the body and the footer share `--overlay-inset` (styles/base.css, `space-16`): the title, the fields and the footer's buttons start and end on the same lines, the body's top padding is the gap under the title bar's hairline, and the footer is the title bar's height. The close button's glyph, not its box, ends on the inset. Put the body's pieces straight in the Modal: no `SettingsStack`, Card or other padded wrapper around them, since the body already stacks its children `space-16` apart (the owner, 22 October 2026: "the popup has the same padding issues across").
 - `isDismissable={false}` keeps a click outside from closing a form once something is typed in it, so only Cancel or Esc throws input away (as Outlook does). `isBusy` while its form saves (or a confirm's commit works) disables the title bar's close button, the click outside and Esc; disable the footer's Cancel yourself.
+- `isClosable={false}` keeps the person on a step until they answer it with the footer's buttons: the title bar has no close button, and Esc and a click outside do nothing. It is for what can't be shown again, as two factor's backup codes are until "I've saved these" is ticked (then the caller sets it back to `true` and Done ends it). Why a flag: `isBusy` disables Close for a moment's work and says "wait", while this step says "answer first", so Close is gone rather than greyed; never use it on an ordinary form or confirm, which Esc should always be able to leave (Q103, 23 October 2026).
 - Open it from a `ModalTrigger`, or control it with `isOpen` and `onOpenChange`.
 
 ## When to ask first
@@ -63,9 +64,9 @@ Opening grows it from the centre over the scrim in `duration-modal`; closing fad
 
 ## Keyboard
 
-Focus moves into it when it opens and stays inside; Tab cycles. The title bar and footer are plain boxes, never `header` and `footer`, so an open dialog adds no second banner or contentinfo landmark. Esc closes it (unless the caller keeps it open) and focus returns to the trigger.
+Focus moves into it when it opens and stays inside; Tab cycles. The title bar and footer are plain boxes, never `header` and `footer`, so an open dialog adds no second banner or contentinfo landmark. Esc closes it (unless the caller keeps it open: `isBusy`, or `isClosable={false}`) and focus returns to the trigger.
 
 ## Differences from the artifact
 
 - `variant`, `icon`, `actions` and `context` keep their meaning; `width` is gone (`size-dialog` 480px or `size-dialog-wide` 780px); `ariaLabel` is the `title`. The `peek` variant is new (21 October 2026).
-- `tone="danger"` (an alert dialog that a click outside won't close), `isDismissable`, `isBusy` and the exit animation are new.
+- `tone="danger"` (an alert dialog that a click outside won't close), `isDismissable`, `isBusy`, `isClosable` and the exit animation are new.

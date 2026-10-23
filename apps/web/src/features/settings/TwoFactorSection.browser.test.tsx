@@ -2,7 +2,8 @@
 // press does ("Email me a code", then "Continue"); the scan step puts the three steps and the setup key beside the QR
 // code at a desktop width and under it on a phone, the key in a box that keeps its groups whole with Copy inside, and
 // the code's large boxes under it all at the dialog's full width; six digits reach the codes step, ten whole codes in two columns of five;
-// Done waits for "I’ve saved these", with focus on Download, never Close (Q103); Turn off and Make new codes open
+// Done waits for "I’ve saved these", with focus on Download, and until the tick there is no Close and Esc does
+// nothing (Q103); Turn off and Make new codes open
 // in the app code’s boxes (Q86), and a backup code there is taken as typed (Q84); each change tells the page (Recent activity reads again); Turn off is quiet in
 // its row. axe passes in light and dark.
 import '@crm/ui/styles.css';
@@ -235,8 +236,13 @@ describe('two factor setup', () => {
     await expect.element(codesDialog.getByRole('button', { name: 'Download' })).toHaveFocus();
     const done = codesDialog.getByRole('button', { name: 'Done' });
     await expect.element(done).toBeDisabled();
+    // Kept until the tick: no Close in the title bar, and Esc leaves the codes showing.
+    expect(codesDialog.element().querySelector('button[aria-label="Close"]')).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    await expect.element(codesDialog).toBeVisible();
     await codesDialog.getByText('I’ve saved these').click();
     await expect.element(done).toBeEnabled();
+    await expect.element(codesDialog.getByRole('button', { name: 'Close' })).toBeVisible();
     await axeBothThemes(codesDialog.element());
     await done.click();
     await expect.element(dialog).not.toBeInTheDocument();
@@ -291,6 +297,10 @@ describe('two factor, on', () => {
     const saved = page.getByRole('dialog', { name: 'Save your backup codes' });
     await expect.element(saved).toBeVisible();
     await expect.element(saved.getByRole('button', { name: 'Download' })).toHaveFocus();
+    // As setup's codes: kept until "I’ve saved these" is ticked (Q103).
+    expect(saved.element().querySelector('button[aria-label="Close"]')).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    await expect.element(saved).toBeVisible();
   });
 
   it('takes a backup code as typed: no capitals, corrections or spell check on a phone (Q84)', async () => {
