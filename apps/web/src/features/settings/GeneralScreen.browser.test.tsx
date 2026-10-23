@@ -406,6 +406,8 @@ describe('deleting', () => {
     await expect.element(dialog.getByText(strings.deleteText)).toBeVisible();
     await expect.element(dialog.getByText(strings.exportFirst)).toBeVisible();
     expect(dialog.getByRole('button', { name: /^About/ }).elements()).toEqual([]);
+    // Typing the name is its one task: the field has focus as it opens (Q102).
+    await expect.element(dialog.getByRole('textbox', { name: strings.typeName('Acme') })).toHaveFocus();
   });
 });
 
