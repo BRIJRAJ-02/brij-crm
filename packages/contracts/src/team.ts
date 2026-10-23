@@ -191,7 +191,13 @@ export const SetInviteLinkInput = WorkspaceScoped.extend({
     .union(INVITE_LINK_DAYS.map((days) => z.literal(days)))
     .nullable()
     .optional(),
-  maxUses: z.number().int().min(1).max(INVITE_LINK_USES_MAX).nullable().optional(),
+  maxUses: z
+    .number()
+    .int({ error: 'Use a whole number of uses.' })
+    .min(1, { error: 'Allow at least 1 use.' })
+    .max(INVITE_LINK_USES_MAX, { error: `Allow at most ${INVITE_LINK_USES_MAX.toLocaleString('en')} uses.` })
+    .nullable()
+    .optional(),
   reset: z.boolean().optional(),
   mutationId: Uuid,
 });
@@ -409,7 +415,9 @@ export type WorkspaceDomainsView = z.infer<typeof WorkspaceDomainsView>;
 
 /** Sets the workspace's email domains (AC-819): only the caller's own verified email's, never a public one. */
 export const SetWorkspaceDomainsInput = WorkspaceScoped.extend({
-  domains: z.array(z.string().trim().toLowerCase().max(253)).max(10),
+  domains: z
+    .array(z.string().trim().toLowerCase().max(253, { error: 'Keep each domain to 253 characters.' }))
+    .max(10, { error: 'List at most 10 domains.' }),
   mutationId: Uuid,
 });
 /** Setting the workspace's email domains. */

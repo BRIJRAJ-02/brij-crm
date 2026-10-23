@@ -46,6 +46,17 @@ describe('authErrorResponse', () => {
     });
   });
 
+  it('answers its body check as INPUT_INVALID in plain words, never Zod’s text or the field’s path', async () => {
+    const refused = await authErrorResponse(
+      answer(400, {
+        code: 'VALIDATION_ERROR',
+        message: '[body.code] Invalid input: expected string, received undefined',
+      }),
+    );
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toEqual({ code: 'INPUT_INVALID', message: 'Some of what you entered isn’t valid.' });
+  });
+
   it('gives a refusal without a code one from its status', async () => {
     expect(await (await authErrorResponse(answer(404, undefined))).json()).toEqual({
       code: 'NOT_FOUND',

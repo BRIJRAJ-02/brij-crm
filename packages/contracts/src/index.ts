@@ -64,6 +64,7 @@ export * from './notifications.ts';
 export * from './workspace-security.ts';
 export * from './objects.ts';
 export * from './options.ts';
+export * from './plain-errors.ts';
 export * from './realtime.ts';
 export * from './records.ts';
 export * from './relations.ts';

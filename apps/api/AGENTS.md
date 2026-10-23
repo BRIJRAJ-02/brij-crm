@@ -15,7 +15,7 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 | `src/app.ts` | The Hono app: request ids, the edge guard, health checks, the `Origin` check on writes, the 1 MB body limit and `/api/rpc/*`, the 404 and 500 shapes |
 | `src/edge.ts` | The edge guard: refuses `/api/*` (health checks aside) without `x-crm-edge` outside local, and `clientIp()` for trusted requests only |
 | `src/rpc.ts` | The RPC handler and its error interceptors: every error leaves with a code from `ERROR_MAP` in `@crm/contracts` |
-| `src/errors.ts` | `toApiError()`: refusals keep their code and list every refusal, bad input is `INPUT_INVALID`, anything else `INTERNAL` |
+| `src/errors.ts` | `toApiError()`: refusals keep their code and list every refusal, bad input is `INPUT_INVALID`, anything else `INTERNAL`. `inputProblems()` words bad input for the RPC and the public routes alike: issues on their fields, a rule over the whole input in the sentence only, Zod's own text never (the plain safety net, `installPlainErrors` in `createApp`) |
 | `src/router.ts` | Joins the module routers into the one router the contract describes |
 | `src/modules/<feature>/router.ts` | Thin handlers for one feature, each calling a service in `packages/core` |
 | `src/orpc.ts` | `RequestContext` and the three procedure bases: `pub`, `authed` (a session) and `member` (a session plus the access door, `context.scope`) |

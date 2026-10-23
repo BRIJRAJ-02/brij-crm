@@ -111,7 +111,7 @@ export const BookingCountdown = z
 export const FormAfter = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('message'),
-    message: z.string().trim().max(2_000).default(''),
+    message: z.string().trim().max(2_000, { error: 'Keep the message to 2,000 characters.' }).default(''),
     offerMeeting: z.strictObject({ bookingPageId: Uuid }).optional(),
   }),
   z.strictObject({ kind: z.literal('redirect'), url: RedirectUrl }),
@@ -119,7 +119,7 @@ export const FormAfter = z.discriminatedUnion('kind', [
     kind: z.literal('booking'),
     bookingPageId: uuidWith('Pick a booking page.'),
     countdownSeconds: BookingCountdown.default(BOOKING_COUNTDOWN.default),
-    message: z.string().trim().max(2_000).default(''),
+    message: z.string().trim().max(2_000, { error: 'Keep the message to 2,000 characters.' }).default(''),
   }),
 ]);
 /** What follows a submit. */
@@ -150,9 +150,14 @@ export const FormDocument = z
       main: z.strictObject({ objectId: Uuid, matchAttributeId: Uuid.optional() }).optional(),
     }),
     look: FormLook.default({ colour: 'light', corners: 'rounded' }),
-    headline: z.string().trim().max(120).default(DEFAULT_HEADLINE),
-    subheading: z.string().trim().max(240).optional(),
-    buttonText: z.string().trim().min(1, { error: 'Give the button some text.' }).max(40).default(DEFAULT_BUTTON_TEXT),
+    headline: z.string().trim().max(120, { error: 'Keep the headline to 120 characters.' }).default(DEFAULT_HEADLINE),
+    subheading: z.string().trim().max(240, { error: 'Keep the subheading to 240 characters.' }).optional(),
+    buttonText: z
+      .string()
+      .trim()
+      .min(1, { error: 'Give the button some text.' })
+      .max(40, { error: 'Keep the button text to 40 characters.' })
+      .default(DEFAULT_BUTTON_TEXT),
     language: z.enum(FORM_LANGUAGES).default('en'),
     after: FormAfter.default({ kind: 'message', message: '' }),
     /** Routing rules (spec 0043, AC-1604): tried in order at submit; none matching means `after`. */
