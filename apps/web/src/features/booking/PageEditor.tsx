@@ -19,7 +19,7 @@ import {
   type ScheduleView,
   type SchedulesView,
 } from '@crm/data';
-import { useCalendar, useCaptureList, useSchedules } from '@crm/data/react';
+import { useCalendar, useCaptureList, usePageDestination, useSchedules } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
@@ -55,6 +55,7 @@ import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { calendarSettingsHref, profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
+import { noVideoLinkReason } from './destination.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { PageConflicts, PageDestination } from './PageDestination.tsx';
 import { HostsCard } from './HostsCard.tsx';
@@ -298,6 +299,21 @@ export function PageEditor({
   // The route primes the list, so the note is in the first paint's layout and never pushes the cards down.
   const hasNoCalendar = calendar.status === 'ready' && calendar.connections.length === 0;
   const [isNoteDismissed, setNoteDismissed] = useState(() => readDismissed(slug));
+  // Video with no live calendar makes no link, and Location says so (Q57, Q77): `noVideoLinkReason` says when.
+  const destination = usePageDestination(data.calendar.pageDestination(slug, page.id));
+  const noLinkReason = noVideoLinkReason({
+    kind: page.kind,
+    isOwner: destination.status === 'ready' ? destination.destination.isOwner : undefined,
+    connections: calendar.status === 'ready' ? calendar.connections.map((connection) => connection.status) : undefined,
+  });
+  const noLinkHint =
+    noLinkReason === 'reconnect'
+      ? strings.noVideoLinkReconnect
+      : noLinkReason === 'none'
+        ? calendar.status === 'ready' && !calendar.enabled
+          ? strings.noVideoLinkNoSync
+          : strings.noVideoLink
+        : undefined;
   // A custom length typed in minutes, added to the page's lengths on Add or Enter.
   const [lengthText, setLengthText] = useState('');
   const [lengthError, setLengthError] = useState<string | undefined>(undefined);
@@ -822,6 +838,7 @@ export function PageEditor({
                           items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}
                           value={location.type}
                           isReadOnly={isLocked}
+                          {...(location.type === 'video' && noLinkHint !== undefined ? { hint: noLinkHint } : {})}
                           onChange={(type) => {
                             if (type === 'video' || type === 'phone') change({ location: { type } });
                             if (type === 'address' || type === 'custom')
