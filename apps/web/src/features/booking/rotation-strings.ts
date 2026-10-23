@@ -81,8 +81,8 @@ export const strings = {
   setHoursFor: (name: string) => `Set hours for ${name}, in a new tab`,
   /** On the server's refusal of one member: save the group without them. Short, so a long name never widens it. */
   removeFromGroup: 'Remove from group',
-  /** Remove from group's name, with the member it removes. */
-  removeRefused: (name: string) => `Remove ${name} from the group`,
+  /** Remove from group's name: its visible words first (WCAG 2.5.3), then the member it removes. */
+  removeRefused: (name: string) => `Remove from group: ${name}`,
   noMembersLeft: 'Everyone is in it already.',
   /** The member picker's hint: how many, and who can join. */
   membersHint: (count: number) => `${String(count)} of 20 members. ${CAN_JOIN}`,
