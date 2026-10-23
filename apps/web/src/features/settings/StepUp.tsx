@@ -25,6 +25,8 @@ export interface StepUp {
   readonly prove: () => Promise<boolean>;
   /** Clears what was typed (the dialog opened again). */
   readonly reset: () => void;
+  /** Puts focus in the code's field once it shows, so a dialog that opens asking for a code takes it at once (Q86). */
+  readonly focus: () => void;
 }
 
 /** Whether this session must step up before the change. */
@@ -140,6 +142,8 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
             value={code}
             onChange={setCode}
             autoComplete="off"
+            // Backup codes are mixed case and checked exactly: a phone's capitals or corrections would spoil one (Q84).
+            isVerbatim
             onSubmit={() => need.onComplete?.()}
             {...errorProps}
           />
@@ -184,5 +188,5 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
       </>
     );
   }
-  return { isNeeded, willSend: isNeeded && !twoFactorOn && !sent, fields, prove, reset };
+  return { isNeeded, willSend: isNeeded && !twoFactorOn && !sent, fields, prove, reset, focus: refocus };
 }

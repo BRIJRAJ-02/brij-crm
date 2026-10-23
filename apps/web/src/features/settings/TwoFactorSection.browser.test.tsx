@@ -2,7 +2,8 @@
 // press does ("Email me a code", then "Continue"); the scan step puts the three steps and the setup key beside the QR
 // code at a desktop width and under it on a phone, the key in a box that keeps its groups whole with Copy inside, and
 // the code's large boxes under it all at the dialog's full width; six digits reach the codes step, ten whole codes in two columns of five;
-// Done waits for "I’ve saved these"; each change tells the page (Recent activity reads again); Turn off is quiet in
+// Done waits for "I’ve saved these", with focus on Download, never Close (Q103); Turn off and Make new codes open
+// in the app code’s boxes (Q86), and a backup code there is taken as typed (Q84); each change tells the page (Recent activity reads again); Turn off is quiet in
 // its row. axe passes in light and dark.
 import '@crm/ui/styles.css';
 import type { AccountSecurityState, DataLayer } from '@crm/data';
@@ -76,7 +77,10 @@ function layer() {
           calls.push(`confirm ${code}`);
           return Promise.resolve();
         },
-        turnOff: () => Promise.resolve(),
+        turnOff: () => {
+          calls.push('off');
+          return Promise.resolve();
+        },
         newBackupCodes: () => Promise.resolve(CODES),
       },
     },
@@ -227,6 +231,8 @@ describe('two factor setup', () => {
       codesDialog.element().contains(codesDialog.getByRole('button', { name: 'Copy the backup codes' }).element()),
     );
 
+    // Focus starts on Download, not on the title bar's Close, where an Enter would end the only showing (Q103).
+    await expect.element(codesDialog.getByRole('button', { name: 'Download' })).toHaveFocus();
     const done = codesDialog.getByRole('button', { name: 'Done' });
     await expect.element(done).toBeDisabled();
     await codesDialog.getByText('I’ve saved these').click();
@@ -266,5 +272,36 @@ describe('two factor, on', () => {
     await dialog.getByRole('button', { name: 'Make new codes' }).click();
     await expect.element(page.getByRole('dialog', { name: 'Save your backup codes' })).toBeVisible();
     expect(changed).toBe(1);
+  });
+
+  it('opens Turn off and Make new codes in the app code’s boxes, so a code typed at once is taken (Q86)', async () => {
+    const { data, calls } = layer();
+    await render(ON, data, () => undefined);
+    await page.getByRole('button', { name: 'Turn off' }).click();
+    const off = page.getByRole('alertdialog', { name: 'Turn off two factor sign in?' });
+    await expect.element(off.getByRole('textbox', { name: 'Code from your authenticator app' })).toHaveFocus();
+    await userEvent.keyboard('123456');
+    await expect.element(off).not.toBeInTheDocument();
+    expect(calls).toEqual(['verify', 'off']);
+
+    await page.getByRole('button', { name: 'Make new codes' }).click();
+    const codes = page.getByRole('dialog', { name: 'Make new backup codes?' });
+    await expect.element(codes.getByRole('textbox', { name: 'Code from your authenticator app' })).toHaveFocus();
+    await userEvent.keyboard('654321');
+    const saved = page.getByRole('dialog', { name: 'Save your backup codes' });
+    await expect.element(saved).toBeVisible();
+    await expect.element(saved.getByRole('button', { name: 'Download' })).toHaveFocus();
+  });
+
+  it('takes a backup code as typed: no capitals, corrections or spell check on a phone (Q84)', async () => {
+    const { data } = layer();
+    await render(ON, data, () => undefined);
+    await page.getByRole('button', { name: 'Turn off' }).click();
+    const off = page.getByRole('alertdialog', { name: 'Turn off two factor sign in?' });
+    await off.getByRole('button', { name: 'Use a backup code' }).click();
+    const field = off.getByRole('textbox', { name: 'Backup code' });
+    await expect.element(field).toHaveAttribute('autocapitalize', 'off');
+    await expect.element(field).toHaveAttribute('autocorrect', 'off');
+    await expect.element(field).toHaveAttribute('spellcheck', 'false');
   });
 });
