@@ -11,6 +11,7 @@ Decide the language, framework, database, hosting and sign in approach, then sca
    - [x] Local services and images: Docker Compose with the connection pooler, and both service images build (DW-2, DW-3)
    - [x] Deploys to a preview and to production, each with its own database (DW-3)
 Spec [0001](../specs/0001-stack-architecture/index.md) · code in `apps/`, `packages/`, `infra/`
+Hosting since then: the api runs as a Vercel Function beside the web app, spec [0045](../specs/0045-api-on-vercel/index.md) (built, live since 22 Oct); the move to Render, spec [0044](../specs/0044-hosting-on-render/index.md), is parked.
 
 ### 2. Coding standards & tooling · done
 Capture conventions from the real scaffold, including the house rules, then install linting, formatting, type checks, pre commit hooks, and CI that blocks a red build.
@@ -36,14 +37,14 @@ Spec [0002](../specs/0002-design-tokens/index.md) · code in `packages/tokens/`,
 
 ### 4. Component library · in-progress · GA
 A large design system built up front for the whole plan, not piece by piece: atoms (button, input, checkbox, avatar, badge, icon, tooltip), molecules (one field editor and display per attribute type, menu, select, date picker, filter row) and modules (app shell and navigation, data grid, board, record panel, timeline, filter and sort builder, command palette, dialogs, presence bar, notification inbox, comment thread, import mapper, charts, schema map canvas).
-**Done when:** every component the 56 features need is in the library with its states (empty, loading, error, read only, disabled) and a preview; each attribute type has exactly one field design, used everywhere; every atom works by keyboard, shows a visible focus ring and meets contrast in light and dark; a grid of 100,000 rows scrolls smoothly; every component records why it exists, and variants are added to existing components rather than new CSS written for the same element.
+**Done when:** every component the features need is in the library with its states (empty, loading, error, read only, disabled) and a preview; each attribute type has exactly one field design, used everywhere; every atom works by keyboard, shows a visible focus ring and meets contrast in light and dark; a grid of 100,000 rows scrolls smoothly; every component records why it exists, and variants are added to existing components rather than new CSS written for the same element.
 - [x] Design it (spec): `/architect component library`
 - [ ] Build it: `/develop component library`
    - [x] One component through the whole pipeline: Storybook, tests in three browsers, screenshots, the artifact publish with React 19, lint guards and the size budget (AC-1, AC-2, AC-6, AC-10 to AC-13, AC-15 to AC-19)
    - [x] Atoms, overlays, the value schemas in contracts, the field set, molecules, and the status screen on the library (AC-1 to AC-6, AC-10, AC-11, AC-13, AC-14, AC-22)
    - [x] The new size and success tokens, the data grid at 100,000 rows, the app shell and view modules, and the board (AC-4, AC-6 to AC-9, AC-11, AC-21)
-   - [ ] Rich text, collaboration, mail, data in and out, settings, auth and builder modules (AC-1, AC-2, AC-14). Deferred until after #10 (the core loop), as agreed on 2026-10-02: build it then, so a working CRM comes first.
-   - [ ] Charts, the dashboard, the schema map, and the full publish with design and interaction reviews (AC-1, AC-17, AC-18, AC-20, AC-21). Deferred until after #10 too.
+   - [ ] Rich text, collaboration, mail, data in and out, settings, auth and builder modules (AC-1, AC-2, AC-14). Partly built as features needed them: the rich text editor, notes, comment thread, meeting card, notification list, settings and auth layouts are in. Still to come: the collaboration hook, the email composer, version history, presence, the import mapper, the merge view and file preview.
+   - [ ] Charts, the dashboard, the schema map, and the full publish with design and interaction reviews (AC-1, AC-17, AC-18, AC-20, AC-21). Not started; it comes with #52 and #56.
 - [ ] Verify it: `/check verify component library`
 - [ ] Test it: `/test component library`
 - [ ] Review it (fresh model): `/check review component library`
@@ -61,42 +62,67 @@ The engine every feature stands on, modelled on how Attio works (not on Timefix)
    - [x] The whole query engine at scale: every operator and sort, filters through relationships, counts, and the million record benchmark grid against the split table variant (AC-6, AC-14, AC-15)
    - [x] One stored sort key through every layer: the `sort_keys` table, text keys written in every save and delete, and exact text jumps and cursors measured at scale ([0004-stored-sort-keys](../specs/0004-data-model/0004-stored-sort-keys.md); AC-20, AC-21, AC-22)
    - [x] Every key kind: number, currency, date, time, option and checkbox keys, stored key filters, big first groups, list views by record attributes, the empties, and capped counts (AC-20 to AC-23)
-   - [ ] Fast contains and the proof: the workspace scoped search function (or the narrowed fallback), the extended grid, and the run on a paid Neon branch (AC-22, AC-24, AC-25, AC-26)
+   - [ ] Fast contains and the proof: the workspace scoped search function (or the narrowed fallback), the extended grid, and the run on a paid Neon branch (AC-22, AC-24, AC-25, AC-26). The search function and the extended grid are built and ran locally; the paid Neon run was waived by you on 12 October, so AC-26 stays open.
 - [ ] Verify it: `/check verify data model`
 - [ ] Test it: `/test data model`
 - [ ] Review it (fresh model): `/check review data model`
 - [ ] Document it: `/document data model`
 Spec [0004](../specs/0004-data-model/index.md) · code in `packages/db/`, `packages/core/`, `packages/contracts/`
 
-### 6. Client data and state · GA
+### 6. Client data and state · in-progress · GA
 The backbone of the app and the top priority: one client data layer that holds every record a screen shows in one place, so a record shown in a table, a board, a record page and a search result is a single copy that updates everywhere at once.
 **Done when:** no screen fetches or stores records on its own; an edit appears instantly everywhere that record is shown, and rolls back with a message if the server refuses it; incoming changes patch every open view in place, with no reload; two people saving the same field get one clear winner (the last save) and the other sees a notice; the last change can be undone; memory stays flat while you scroll an object with a million records.
 - [x] Design it (spec): `/architect client data and state`
 - [ ] Build it: `/develop client data and state`
-Spec [0006](../specs/0006-client-data-state/index.md)
+   - [x] Versions, the replaced notice and undo
+   - [x] Windows over a million records
+   - [ ] Live everywhere, definitions and reconnects: `records.one`, the live router and resync are in; the separate definitions store, the offline health probe and the burst numbers in `verify.md` are left
+- [ ] Verify it: `/check verify client data and state`
+- [x] Test it: `/test client data and state`
+Spec [0006](../specs/0006-client-data-state/index.md) · code in `packages/data/`
 
-### 7. Change events and realtime
+### 7. Change events and realtime · in-progress
 Every write produces one change event that names the records it touched. Those events reach every open screen allowed to see them, feed the client data layer, and later feed search, notifications, webhooks, automations and sync.
 **Done when:** a change shows on every permitted open screen within one second (p95) with 100 people online; a screen that drops its connection catches up on reconnect with no gap and no refresh; an event never carries data the viewer may not see.
 - [x] Design it (spec): `/architect change events and realtime`
 - [ ] Build it: `/develop change events and realtime`
-Spec [0007](../specs/0007-realtime/index.md)
+   - [x] A screen that was away catches up
+   - [x] Every kind of change is live
+   - [x] The outbox pruned
+   - [ ] Each audience receives only what it may see (per audience channels, one release with #9's last milestone; needed before access rules, #24)
+   - [ ] Measured and proven (the load scenarios exist; the milestone 5 numbers are not in `verify.md` yet)
+- [ ] Verify it: `/check verify change events and realtime`
+- [x] Test it: `/test change events and realtime`
+Spec [0007](../specs/0007-realtime/index.md) · code in `apps/api/src/realtime/`, `packages/core/src/realtime/`
 
-### 8. Background jobs
+### 8. Background jobs · done
 A dependable way to run long work (imports, exports, recomputing, indexing, notifications, webhooks, sync) outside the request, so screens stay fast.
 **Done when:** a job survives a restart, retries on failure, reports progress and can be cancelled; one workspace's huge import never slows another workspace's work.
 - [x] Design it (spec): `/architect background jobs`
-- [ ] Build it: `/develop background jobs`
-Spec [0008](../specs/0008-background-jobs/index.md)
+- [x] Build it: `/develop background jobs`
+   - [x] One job, start to finish, on a page (Settings › Background jobs)
+   - [x] Dependable and fair
+   - [x] The daily cleanup and a sleeping database (two follow ups open: revoking `crm_outbox_workspaces` from the app role, and per phase totals on the page)
+- [x] Verify it: `/check verify background jobs`
+- [x] Test it: `/test background jobs`
+Spec [0008](../specs/0008-background-jobs/index.md) · code in `packages/core/src/jobs/`, `apps/api/src/jobs/`
 
-### 9. Access model · GA
+### 9. Access model · in-progress · GA
 One permission model for the whole product: workspace roles as flat lists of permissions, teams, and rules per object, per field and per record, all checked at one door that every read and write passes through.
 **Done when:** screens, live events, search, notifications, export and the API all get their data through the same check; an unknown role or a missing rule means no access; an API key is an actor with its own scoped permissions; the last owner can never be removed.
 - [x] Design it (spec): `/architect access model`
 - [ ] Build it: `/develop access model`
-Spec [0009](../specs/0009-access-model/index.md)
+   - [x] Roles, the sealed scope and schema permission, in production
+   - [x] Hidden means absent, in every read and write
+   - [ ] Live events and access changes (the client resync is in; the audience channels and the forced disconnect ship with #7's milestone 4)
+- [ ] Verify it: `/check verify access model`
+- [x] Test it: `/test access model`
+Spec [0009](../specs/0009-access-model/index.md) · code in `packages/core/src/access/`
 
-### 57. Edge only API access · needs a decision · GA
+### 57. Edge only API access · done · GA
 The API should accept traffic only through the edge in front of the web app, so the forwarded details it reads (like the client IP) can be trusted. Today its host address is public, so anyone can call it directly and fake those headers. This came up during the scaffold build.
 **Done when:** a request sent straight to the API's host address is refused in preview and production; the client IP and other forwarded details the API reads can only come from the edge; a missing or wrong edge credential means refused, never allowed; local development still works without the edge.
-- [ ] Design it (spec): `/architect edge only API access`
+- [x] Design it (spec): decided inside the core loop (spec 0005, tasks 1 and 2) and kept by spec 0045; there is no spec of its own
+- [x] Build it: every request without the edge secret header is refused with `EDGE_REQUIRED` (only the health checks pass); the secret is required outside local; the Vercel middleware sets the header and overwrites any copy a client sent
+- [x] Test it: `/test edge only API access`
+Spec [0005](../specs/0005-core-loop/index.md), [0045](../specs/0045-api-on-vercel/index.md) · code in `apps/api/src/edge.ts`, `apps/web/middleware.ts`
