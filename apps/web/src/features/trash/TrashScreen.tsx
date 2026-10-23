@@ -408,7 +408,8 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     <SettingsPage
       title={strings.title}
       fillsView
-      {...(state.status === 'ready'
+      // The count only while something is in the trash: the empty state already says there is nothing.
+      {...(state.status === 'ready' && state.count.count > 0
         ? {
             meta: (
               <Badge

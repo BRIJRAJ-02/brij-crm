@@ -65,6 +65,20 @@ describe('the back link', () => {
     expect(backHref(storage, 'acme')).toBe('/w/acme/objects/people');
   });
 
+  it('never remembers or returns to the trash’s old address, which redirects into Settings', () => {
+    const storage = memoryStorage();
+    rememberPlace(storage, '/w/acme/objects/people');
+    rememberPlace(storage, '/w/acme/trash');
+    rememberPlace(storage, '/w/acme/trash?object=abc');
+    expect(backHref(storage, 'acme')).toBe('/w/acme/objects/people');
+    // A value saved before the move, still in this tab's storage.
+    storage.setItem(SETTINGS_BACK_KEY, '/w/acme/trash?object=abc');
+    expect(backHref(storage, 'acme')).toBe('/w/acme');
+    // A record page is not the trash.
+    storage.setItem(SETTINGS_BACK_KEY, '/w/acme/trashcan');
+    expect(backHref(storage, 'acme')).toBe('/w/acme/trashcan');
+  });
+
   it('never returns into Settings, even from a value written by hand', () => {
     const storage = memoryStorage();
     storage.setItem(SETTINGS_BACK_KEY, '/w/acme/settings/objects');

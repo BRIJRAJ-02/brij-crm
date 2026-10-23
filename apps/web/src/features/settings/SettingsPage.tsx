@@ -12,8 +12,8 @@ import { objectsSettingsHref, preferencesHref, settingsGroupOf, settingsNav, set
 import { strings } from './strings.ts';
 import { useSettingsTopBarSlot } from './topBarSlot.ts';
 
-/** Props for one settings page. */
-export interface SettingsPageProps {
+/** What every settings page takes, whatever its body's shape. */
+interface SettingsPageBase {
   /** The page's h1 ("Objects", "Projects"), and the last place in its trail. */
   readonly title: string;
   /** Places between the page's group and its title: Objects, on an object's page. */
@@ -24,22 +24,38 @@ export interface SettingsPageProps {
   readonly meta?: ReactNode;
   /** The page's one primary action, at the bar's end ("New object", "Connect Google calendar"). */
   readonly actions?: ReactNode;
+  /** The visible title, for a page that moves focus to it itself (a cancelled job's Cancel goes away). */
+  readonly titleRef?: Ref<HTMLHeadingElement>;
+  readonly children: ReactNode;
+}
+
+/** A page in the settings column (SettingsLayout): most of them. */
+interface ColumnSettingsPageProps extends SettingsPageBase {
   readonly isLoading?: boolean;
   /** While loading: a tile's place before the title, for a page that will have one (an object's). */
   readonly hasTile?: boolean;
-  /** The visible title, for a page that moves focus to it itself (a cancelled job's Cancel goes away). */
-  readonly titleRef?: Ref<HTMLHeadingElement>;
   /** The body opens with Tabs: their underline divides the page in place of the header's hairline. */
   readonly hasTabs?: boolean;
   /** At the view's foot: the library SaveBar, for a page that saves its changes with one Save. */
   readonly footer?: ReactNode;
-  /**
-   * The body is a grid that fills the view and scrolls itself (Trash): it sits straight under the bar, edge to
-   * edge, with no settings column around it, as a records table does.
-   */
-  readonly fillsView?: boolean;
-  readonly children: ReactNode;
+  readonly fillsView?: false;
 }
+
+/**
+ * The body is a grid that fills the view and scrolls itself (Trash): it sits straight under the bar, edge to
+ * edge, with no settings column around it, as a records table does. SettingsLayout is skipped, so the props only
+ * it reads (loading, tabs, a footer) can't be given: the body draws its own loading rows.
+ */
+interface FillSettingsPageProps extends SettingsPageBase {
+  readonly fillsView: true;
+  readonly isLoading?: never;
+  readonly hasTile?: never;
+  readonly hasTabs?: never;
+  readonly footer?: never;
+}
+
+/** Props for one settings page: in the settings column, or (`fillsView`) a grid that fills the view. */
+export type SettingsPageProps = ColumnSettingsPageProps | FillSettingsPageProps;
 
 /**
  * A settings page: a TopBar with the page's trail (Settings, its group, any
