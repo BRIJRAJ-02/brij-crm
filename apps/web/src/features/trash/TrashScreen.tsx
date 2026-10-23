@@ -1,5 +1,5 @@
 // Brief
-// Purpose: the workspace's trash: every record deleted in the last 30 days that the person may see, newest first.
+// Purpose: Settings › Workspace › Trash: each record deleted in the last 30 days that the person may see, newest first.
 // Main task: find a record deleted by mistake and restore it (several at once), seeing why one can't come back.
 // Leaves out: opening or editing trashed records; Delete forever and Empty trash show only to owners and admins.
 import {
@@ -110,7 +110,10 @@ export function TrashPending() {
   );
 }
 
-/** The trash: in Settings: the bar with the count and Empty trash, the object filter, the read only grid, and Restore in the bulk bar. */
+/**
+ * The trash, inside Settings (A120): the bar with its trail, the count and Empty trash, the object filter, the read
+ * only grid filling the view, and Restore in the bulk bar.
+ */
 export function TrashScreen({ slug, objects, members, view, objectId }: TrashScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
