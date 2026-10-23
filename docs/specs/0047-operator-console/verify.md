@@ -1,6 +1,6 @@
 # 0047. Verify: the operator console
 
-Run after `OPERATOR_EMAILS` (the owner's address) and `SITE_ORIGINS` are set on the app's api, and `VITE_SITE_HIT_URL` on the marketing site's build.
+Run after `OPERATOR_EMAILS` (the owner's address) and `SITE_ORIGINS` (`https://timefix.ai`) are set on the app's api, and the marketing site is deployed with the beacon.
 
 | AC | How to check | Result |
 |---|---|---|

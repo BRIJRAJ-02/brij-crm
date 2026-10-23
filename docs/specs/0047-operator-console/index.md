@@ -38,7 +38,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-1624**: A signed in person's use is kept per day in `auth.activity_day` (user, UTC day, first and last time seen): written from `requireSession` at most once per person every 10 minutes per api process, never awaited by the request, and a failure is logged and dropped. Background token renewals don't count.
 - **AC-1625**: A booking page view is counted when its page loads for someone who isn't one of its hosts (the `viewer` read, which the page makes once per load). It is kept in `booking_page_views` (tenant, forced row level security, the standard policy), one row per page, UTC day and visitor, with a view count. The editor's preview never counts.
 - **AC-1626**: A visitor is an HMAC of the day, the address and the user agent under a key derived from the server's secret, cut to 32 hex characters. The address and the user agent themselves are never stored. The same browser on the next day is a new visitor, on purpose.
-- **AC-1627**: The marketing site sends one beacon per page shown (first load and each in site navigation) to `POST /api/public/site/hit`: the path (no query), the referrer's host when it is another site, and `utm_source` when present. The api keeps it in `auth.site_visit` with the site's host, the country from the edge, the device class (mobile, tablet or desktop from the user agent) and the visitor (AC-1626). Known bots and automation are dropped, 60 hits a minute per address are kept, and a hit from an origin not on `SITE_ORIGINS` is refused `FORBIDDEN_ORIGIN`. Without `VITE_SITE_HIT_URL` the site sends nothing. No cookie, no local storage and no third party.
+- **AC-1627**: The marketing site sends one beacon per page shown (first load and each in site navigation) to `POST /api/public/site/hit`: the path (no query), the referrer's host when it is another site, and `utm_source` when present. The api keeps it in `auth.site_visit` with the site's host, the country from the edge, the device class (mobile, tablet or desktop from the user agent) and the visitor (AC-1626). Known bots and automation are dropped, 60 hits a minute per address are kept, and a hit from an origin not on `SITE_ORIGINS` is refused `FORBIDDEN_ORIGIN`. The built site posts to the app's own api (`VITE_SITE_HIT_URL` overrides the address; the dev server and a browser under automation send nothing), allowed by its CSP's `connect-src`. No cookie, no local storage and no third party.
 - **AC-1628**: Visits, activity days and operator events older than a year go with the identity sweep; booking page views older than a year go with the daily cleanup.
 
 *The screens*
@@ -94,7 +94,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 | `me.get` (exists) | | adds `isOperator` | session |
 | `POST /api/public/site/hit` | `{ path, referrer?, source? }` as text | 204 | public, `SITE_ORIGINS`, 60 a minute per address |
 
-**Environment**: `OPERATOR_EMAILS` and `SITE_ORIGINS` (api, optional), `VITE_SITE_HIT_URL` (marketing site build, optional).
+**Environment**: `OPERATOR_EMAILS` and `SITE_ORIGINS` (api, optional), `VITE_SITE_HIT_URL` (marketing site build, optional, an override).
 
 **Screens**: under `/w/$slug/settings/admin`: Overview, `users`, `users/$userId`, `booking-pages`, `booking-pages/$pageId` and `website`, each `?period=7d|30d|90d` (30d by default). The workspace in the address only places the pages in the app's frame; access never depends on it.
 
