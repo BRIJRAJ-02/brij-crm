@@ -52,7 +52,7 @@ describe('LeaveGuard', () => {
     await go(inApp, '/w/acme/elsewhere');
     const dialog = openDialog('alertdialog');
     expect(dialog?.textContent).toContain('Leave without saving?');
-    expect(dialog?.textContent).toContain('Your unsaved changes are lost.');
+    expect(dialog?.textContent).toContain('Your changes here won’t be saved.');
     expect(confirm).not.toHaveBeenCalled();
     await press('Keep editing');
     expect(openDialog('alertdialog')).toBeNull();

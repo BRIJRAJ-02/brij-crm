@@ -55,7 +55,7 @@ import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { calendarSettingsHref, profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
-import { LeaveGuard } from './LeaveGuard.tsx';
+import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { PageConflicts, PageDestination } from './PageDestination.tsx';
 import { HostsCard } from './HostsCard.tsx';
 import { recordFacts } from '../routing/facts.ts';
@@ -513,7 +513,8 @@ export function PageEditor({
                 data.bookingPages.remove(slug, gone.id).then(() => {
                   setDeleting(false);
                   toasts.toast({ tone: 'success', message: strings.deleted(gone.title) });
-                  void navigate({ href: linksHref(slug) });
+                  // The page is gone, so its unsaved changes are too: going back to Links never asks.
+                  void navigate({ href: linksHref(slug), ignoreBlocker: true });
                 })
               }
             />

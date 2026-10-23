@@ -1,5 +1,5 @@
 // Brief
-// Purpose: ask before leaving an editor with unsaved changes (the booking page editor, Availability), in a Modal like
+// Purpose: ask before leaving an editor with unsaved changes (the booking page editor, Availability, Profile), in a Modal like
 // every other ending action (the owner's rule), not the browser's own confirm.
 // Main task: Keep editing (Esc), or Leave without saving.
 // Leaves out: closing the tab or reloading, which only the browser's own prompt can ask about (`enableBeforeUnload`).

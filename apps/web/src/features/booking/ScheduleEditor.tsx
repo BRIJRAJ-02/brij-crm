@@ -18,7 +18,7 @@ import {
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, type ReactNode } from 'react';
 import { DaysOff } from './DaysOff.tsx';
-import { LeaveGuard } from './LeaveGuard.tsx';
+import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
 import { pageEditorHref } from './links.ts';
 import { useScheduleDraft, type ScheduleSaveNotice } from './scheduleDraft.ts';

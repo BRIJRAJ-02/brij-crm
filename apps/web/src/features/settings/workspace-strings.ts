@@ -146,7 +146,6 @@ export const strings = {
   yourName: 'Your name',
   email: 'Email',
   emailUse: 'Used to sign in',
-  leaveConfirm: 'Leave without saving your change?',
   sameAsWorkspace: (zone: string) => `Same as the workspace (${zone})`,
   zoneFollows: 'Your time zone now follows the workspace.',
 } as const;
