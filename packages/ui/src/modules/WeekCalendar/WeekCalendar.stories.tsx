@@ -621,6 +621,114 @@ export const Overlap: Story = {
   },
 };
 
+/** Closed and busy time under the rest of a week: what would hide it takes a lane beside it instead. */
+function underCards(): WeekCalendarBlock[] {
+  const block = (
+    id: string,
+    dayKey: string,
+    from: number,
+    to: number,
+    rest: Pick<WeekCalendarBlock, 'title' | 'time' | 'kind'> & Partial<WeekCalendarBlock>,
+  ): WeekCalendarBlock => ({ id, dayKey, startMinute: from, endMinute: to, ...rest });
+  return [
+    // The owner's case: a booking cancelled, the calendar still holding the time.
+    block('alan', '2026-10-05', 10 * 60, 11 * 60, {
+      title: 'Alan Turing',
+      time: '10:00 – 11:00 AM',
+      detail: 'Site visit',
+      kind: 'booking',
+      hue: 'orange',
+      isCancelled: true,
+    }),
+    block('busy-alan', '2026-10-05', 10 * 60, 11 * 60, {
+      title: 'Busy',
+      time: '10:00 – 11:00 AM',
+      kind: 'busy',
+      provider: 'google-calendar',
+    }),
+    // A clash: a live booking over time the calendar holds.
+    block('grace', '2026-10-06', 11 * 60, 11 * 60 + 30, {
+      title: 'Grace Hopper',
+      time: '11:00 – 11:30 AM',
+      kind: 'booking',
+      hue: 'purple',
+    }),
+    block('busy-grace', '2026-10-06', 11 * 60, 12 * 60, {
+      title: 'Busy',
+      time: '11:00 AM – 12:00 PM',
+      kind: 'busy',
+      provider: 'google-calendar',
+    }),
+    // A long day closed: it stays whole under what is on it, its title above.
+    block('offsite', '2026-10-07', 9 * 60, 17 * 60, {
+      title: 'Blocked',
+      time: '9:00 AM – 5:00 PM',
+      detail: 'Offsite',
+      kind: 'blocked',
+    }),
+    block('ada', '2026-10-07', 10 * 60, 11 * 60, {
+      title: 'Ada Lovelace',
+      time: '10:00 – 11:00 AM',
+      kind: 'booking',
+      hue: 'sky',
+    }),
+    // An event running into a hold: the hold sits over it, indented, both titles showing.
+    block('standup', '2026-10-08', 9 * 60, 10 * 60, {
+      title: 'Team standup',
+      time: '9:00 – 10:00 AM',
+      kind: 'event',
+      hue: 'green',
+      provider: 'google-calendar',
+    }),
+    block('hold', '2026-10-08', 9 * 60 + 45, 10 * 60 + 45, {
+      title: 'Reserved time',
+      time: '9:45 – 10:45 AM',
+      kind: 'held',
+    }),
+  ];
+}
+
+/**
+ * Busy never hides under a card (the owner, 23 October 2026). Closed time sits under bookings and events, full width,
+ * except where a block would cover its title: Busy beside a cancelled booking on Monday and beside a clashing one
+ * on Tuesday, a long blocked day whole under its booking on Wednesday, and a hold over the event that runs into it
+ * on Thursday.
+ */
+export const UnderCards: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={underCards()} scrollToMinute={9 * 60} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const rect = (day: string, name: string) =>
+      within(canvas.getByRole('group', { name: new RegExp(`^${day}`) }))
+        .getByRole('button', { name })
+        .getBoundingClientRect();
+    const apart = (a: DOMRect, b: DOMRect) => a.right <= b.left + 1 || b.right <= a.left + 1;
+    // Busy and the cancelled booking share the time side by side, neither over the other.
+    await expect(
+      apart(
+        rect('Monday', 'Busy, 10:00 – 11:00 AM'),
+        rect('Monday', 'Alan Turing, 10:00 – 11:00 AM, Site visit, cancelled'),
+      ),
+    ).toBe(true);
+    await expect(
+      apart(rect('Tuesday', 'Busy, 11:00 AM – 12:00 PM'), rect('Tuesday', 'Grace Hopper, 11:00 – 11:30 AM')),
+    ).toBe(true);
+    // The long blocked day keeps the whole column under its booking, its title above it.
+    const offsite = rect('Wednesday', 'Blocked, 9:00 AM – 5:00 PM, Offsite');
+    const ada = rect('Wednesday', 'Ada Lovelace, 10:00 – 11:00 AM');
+    await expect(offsite.width).toBe(ada.width);
+    await expect(offsite.top).toBeLessThan(ada.top);
+    // The hold sits over the event, indented, so the event's title still shows.
+    const standup = rect('Thursday', 'Team standup, 9:00 – 10:00 AM');
+    const hold = rect('Thursday', 'Reserved time, 9:45 – 10:45 AM');
+    await expect(hold.left).toBeGreaterThan(standup.left);
+    await expect(hold.top).toBeGreaterThan(standup.top);
+  },
+};
+
 /** Filling a page: PageColumn `align="fill"`, AsideLayout `isFill` and the grid's `isFill`, the hours scrolling inside. */
 export const Fill: Story = {
   parameters: { crm: { screenshot: false } },

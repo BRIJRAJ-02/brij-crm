@@ -1,7 +1,7 @@
 // Brief
 // Purpose: everything about one record in one place: its details, and what happened to it.
 // Main task: read and edit its details in place, and see who changed what and when, live.
-// Leaves out: deleting and restoring it (#22), presence (#26), related records (milestone 3).
+// Leaves out: deleting and restoring it (#22), presence (#26), editing related records' own values.
 import type {
   ActivityFeed as ActivityFeedSource,
   AttributeDefinition,
@@ -42,9 +42,10 @@ import {
   TopBar,
   AttributeDisplay,
   type RecordStat,
+  type RelatedRecordsHandle,
 } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CommentsTab, LoadingThreads } from '../comments/CommentsTab.tsx';
 import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
@@ -63,6 +64,7 @@ import { ActivityTab } from './ActivityTab.tsx';
 import { isRecordTab, recordHref, recordName, type RecordTab } from './details.ts';
 import { OverviewTab } from './OverviewTab.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
+import { RelatedCards, RelatedSections, type RelatedSource } from './RelatedSections.tsx';
 import { strings } from './strings.ts';
 import { recordLinks } from './timeline.ts';
 
@@ -75,6 +77,8 @@ export interface RecordPageProps {
   readonly objects: readonly ObjectSummary[];
   /** The attributes Details lists. */
   readonly attributes: readonly AttributeDefinition[];
+  /** The sides that hold many, each with its section source (spec 0017, milestone 3); undefined with no record. */
+  readonly related: readonly RelatedSource[] | undefined;
   readonly members: readonly MemberSummary[];
   readonly recordId: string;
   /** The record, subscribed; undefined when the address names no record at all. */
@@ -335,6 +339,7 @@ function RecordScreen({
   object,
   objects,
   attributes,
+  related,
   members,
   recordId,
   record,
@@ -378,6 +383,28 @@ function RecordScreen({
     [data, slug, recordId, toasts],
   );
   const router = useRouter();
+  // The narrow page's Details fold, opened by a Related card's "View all" before focus moves into it.
+  const [isSidebarExpanded, setSidebarExpanded] = useState(false);
+  const relatedHandles = useRef(new Map<string, RelatedRecordsHandle>());
+  // One ref callback per side for the page's life, so a section's handle isn't let go and taken again each render.
+  const handleRefs = useRef(new Map<string, (handle: RelatedRecordsHandle | null) => void>());
+  const handleRef = useCallback((attributeId: string) => {
+    const known = handleRefs.current.get(attributeId);
+    if (known !== undefined) return known;
+    const made = (handle: RelatedRecordsHandle | null) => {
+      if (handle === null) relatedHandles.current.delete(attributeId);
+      else relatedHandles.current.set(attributeId, handle);
+    };
+    handleRefs.current.set(attributeId, made);
+    return made;
+  }, []);
+  const viewAllRelated = (attributeId: string) => {
+    setSidebarExpanded(true);
+    // A frame for the narrow page's Details fold to open; the section then opens itself if folded and takes focus.
+    requestAnimationFrame(() => {
+      relatedHandles.current.get(attributeId)?.focus();
+    });
+  };
   const openTotal = useTaskTotal(open);
   const notesTotal = useNoteTotal(notes);
   const commentCount = useCommentCount(comments);
@@ -574,6 +601,10 @@ function RecordScreen({
             openTab('activity');
           }}
         />
+        {/* A trashed record's links are hidden until it is restored (AC-376): no Related cards. */}
+        {related !== undefined && trashed?.status !== 'trashed' && !(state.status === 'deleted' && state.isLost) && (
+          <RelatedCards related={related} link={link} onViewAll={viewAllRelated} />
+        )}
       </>
     );
   }
@@ -764,22 +795,38 @@ function RecordScreen({
               selectedTab={tab}
               onTabChange={openTab}
               sidebarLabel={strings.details}
+              isSidebarExpanded={isSidebarExpanded}
+              onSidebarExpandedChange={setSidebarExpanded}
               {...(notice === undefined ? {} : { notice })}
               sidebar={
-                <RecordDetails
-                  attributes={attributes}
-                  members={members}
-                  record={shown}
-                  cellErrors={state.cellErrors}
-                  referenceDisplays={state.referenceDisplays}
-                  {...(canEdit
-                    ? {
-                        onCommit: (attributeId: string, value: unknown) => {
-                          data.records.setValue(slug, { rowId: recordId, columnId: attributeId, value });
-                        },
-                      }
-                    : {})}
-                />
+                <>
+                  <RecordDetails
+                    attributes={attributes}
+                    members={members}
+                    record={shown}
+                    cellErrors={state.cellErrors}
+                    referenceDisplays={state.referenceDisplays}
+                    {...(canEdit
+                      ? {
+                          onCommit: (attributeId: string, value: unknown) => {
+                            data.records.setValue(slug, { rowId: recordId, columnId: attributeId, value });
+                          },
+                        }
+                      : {})}
+                  />
+                  {/* Left out for a record in the trash (its links come back with a restore) or one no longer there. */}
+                  {related !== undefined && !isTrashed && !isLost && (
+                    <RelatedSections
+                      slug={slug}
+                      recordId={recordId}
+                      recordName={name}
+                      related={related}
+                      canChange={canEdit}
+                      link={link}
+                      handleRef={handleRef}
+                    />
+                  )}
+                </>
               }
             >
               {tabContent}

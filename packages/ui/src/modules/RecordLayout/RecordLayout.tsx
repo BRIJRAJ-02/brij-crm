@@ -145,7 +145,7 @@ export function RecordLayout({
               {...(isSidebarExpanded === undefined ? { defaultExpanded: false } : { isExpanded: isSidebarExpanded })}
               {...(onSidebarExpandedChange === undefined ? {} : { onExpandedChange: onSidebarExpandedChange })}
             >
-              {sidebar}
+              <div className={styles.sidebarStack}>{sidebar}</div>
             </Disclosure>
           </aside>
           {tabbed}
@@ -157,7 +157,7 @@ export function RecordLayout({
             {tabbed}
           </div>
           <aside className={styles.sidebar} aria-label={sidebarLabel}>
-            {sidebar}
+            <div className={styles.sidebarStack}>{sidebar}</div>
           </aside>
         </div>
       )}

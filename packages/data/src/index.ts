@@ -93,6 +93,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
+import type { LinkSection, LinkSections, SectionKey } from './links/sections.ts';
 import type { AuditLog } from './audit/log.ts';
 import { createAuth } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
@@ -427,6 +428,9 @@ export type {
   LinkedRecordShape,
   MeetingAttendeeShape,
 } from './activity/feed.ts';
+export type { LinkSection, LinkSectionState, LinkSectionStatus, SectionKey } from './links/sections.ts';
+/** How many related records an Overview card shows per side (spec 0017, AC-383). */
+export { RELATED_PREVIEW } from '@crm/contracts/activity-keys';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 export type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 export type {
@@ -1004,6 +1008,8 @@ export function createDataLayer({
   const pendingOptions = createPendingOptions();
   // Records' timelines (spec 0017), loaded with the first record page.
   let activity: Promise<ActivityFeeds> | undefined;
+  // A record page's related sections (spec 0014's section source, spec 0017 milestone 3), loaded with it.
+  let sections: Promise<LinkSections> | undefined;
   // The trash (spec 0022), loaded with the first trash screen.
   let trash: Promise<Trash> | undefined;
   // Tasks (spec 0019), loaded with the first screen that shows one.
@@ -1107,6 +1113,9 @@ export function createDataLayer({
     calendars.clear();
     void activity?.then((feeds) => {
       feeds.clear();
+    });
+    void sections?.then((held) => {
+      held.clear();
     });
     void tasks?.then((store) => {
       store.clear();
@@ -1525,6 +1534,21 @@ export function createDataLayer({
         });
       });
     }
+    // Open related sections (spec 0017) read again for a change naming their record and side, a far record they
+    // hold, or the far object's trash; each coalesces a burst to two reads a second.
+    if (sections !== undefined) {
+      const open = sections;
+      const tellSections = () => {
+        void open.then((held) => {
+          held.changed(workspace, event);
+        });
+      };
+      // A coarse change, or records trashed or restored, may concern every section of the object in every tab: a
+      // random moment first, once per object, so a whole team doesn't read in step.
+      const moved = (event.deletedIds?.length ?? 0) + (event.restoredIds?.length ?? 0) > 0;
+      if (event.coarse === true || moved) spread(`sections ${workspace} ${event.objectId}`, tellSections);
+      else tellSections();
+    }
     // Open timelines (spec 0017) read their first page again for a change naming their record; a coarse one,
     // for every record of the object, waits a random moment first so a whole team doesn't read in step.
     if (activity === undefined) return;
@@ -1540,6 +1564,16 @@ export function createDataLayer({
   router.on('definitions', (workspace, event) => {
     // A list's own definitions: no screen holds lists yet.
     if (event.listId !== undefined) return;
+    // A side archived, hidden or renamed: the object's open related sections read again (or go, when nobody shows
+    // them), spread a random moment so a whole team doesn't read in step.
+    if (sections !== undefined) {
+      const open = sections;
+      spread(`sections definitions ${workspace} ${event.objectId ?? ''}`, () => {
+        void open.then((held) => {
+          held.definitionsChanged(workspace, event.objectId);
+        });
+      });
+    }
     // An attribute archived, hidden or renamed: the object's open timelines start again (spec 0017), spread a
     // random moment so a whole team doesn't read in step (each feed also coalesces a burst).
     if (activity !== undefined) {
@@ -1692,6 +1726,9 @@ export function createDataLayer({
     });
     void activity?.then((feeds) => {
       feeds.resync(workspace);
+    });
+    void sections?.then((held) => {
+      held.resync(workspace);
     });
     void refreshAttributes(workspace);
     // The workspace's objects, usage and members are read again on the next page load, which a resync asks for.
@@ -2217,6 +2254,19 @@ export function createDataLayer({
       return value;
     });
 
+  /**
+   * A link written here landed, from a cell, a section or an undo (its echo
+   * never comes back): the workspace's open related sections read again, since
+   * it may change either side of any of them.
+   */
+  const linksLanded = <T>(workspace: string, answer: Promise<T>): Promise<T> =>
+    answer.then((value) => {
+      void sections?.then((held) => {
+        held.ownWrite(workspace);
+      });
+      return value;
+    });
+
   const recordsApi: RecordsApi = {
     query: (input, signal) =>
       call((options) => api.records.query({ ...input, attributeIds: [...input.attributeIds] }, options), signal),
@@ -2277,14 +2327,20 @@ export function createDataLayer({
         call((options) => api.records.updateMany({ ...input, recordIds: [...input.recordIds] }, options)),
       ),
     linksAdd: (input) =>
-      landed(
+      linksLanded(
         input.workspace,
-        call((options) => api.links.add({ ...input, targets: [...input.targets] }, options)),
+        landed(
+          input.workspace,
+          call((options) => api.links.add({ ...input, targets: [...input.targets] }, options)),
+        ),
       ),
     linksRemove: (input) =>
-      landed(
+      linksLanded(
         input.workspace,
-        call((options) => api.links.remove({ ...input, targetRecordIds: [...input.targetRecordIds] }, options)),
+        landed(
+          input.workspace,
+          call((options) => api.links.remove({ ...input, targetRecordIds: [...input.targetRecordIds] }, options)),
+        ),
       ),
   };
 
@@ -2604,6 +2660,52 @@ export function createDataLayer({
       return feeds;
     });
     return activity;
+  };
+
+  const linkSections = (): Promise<LinkSections> => {
+    sections ??= import('./links/sections.ts').then(({ createLinkSections }) => {
+      // A hidden tab's sections read nothing; what changed meanwhile is read when it is shown again.
+      const isHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      const held = createLinkSections({
+        page: (workspace, input) =>
+          beforeRead(workspace).then(() => call((options) => api.links.page({ workspace, ...input }, options))),
+        watch,
+        isHidden,
+      });
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', () => {
+          if (!isHidden()) held.shown();
+        });
+      }
+      return held;
+    });
+    return sections;
+  };
+
+  /**
+   * One link delta from a related section (spec 0017, AC-375): the section
+   * shows it at once (a Remove's row leaves, an Add's joins), and the near
+   * record's cell with it, through the records layer's `changeLink` (its
+   * undo entry, rollback and toast on a refusal); the section keeps showing
+   * it until a read after the write lands, or drops it on a refusal.
+   */
+  const sectionLink = async (workspace: string, change: LinkChange): Promise<LinkOutcome> => {
+    const held = await linkSections();
+    const shown =
+      change.kind === 'remove'
+        ? held.hide(workspace, change.recordId, change.attributeId, change.target.recordId)
+        : change.display === undefined
+          ? undefined
+          : held.show(workspace, change.recordId, change.attributeId, change.display);
+    try {
+      const outcome = await (await recordsLayer()).changeLink(workspace, change);
+      shown?.settle(outcome.kind === 'done');
+      return outcome;
+    } catch (error) {
+      // The records layer failed to load (offline): the row comes back as it was.
+      shown?.settle(false);
+      throw error;
+    }
   };
 
   const trashStore = (): Promise<Trash> => {
@@ -4472,6 +4574,27 @@ export function createDataLayer({
       /** The same timeline cut to its newest five entries (Overview's "Recent activity"), sharing the first page. */
       recent: async (workspace: string, recordId: string, objectId?: string): Promise<ActivityFeed> =>
         (await activityFeeds()).recent(workspace, recordId, objectId),
+    },
+    links: {
+      /**
+       * One record's side that holds many, as a record page's related
+       * section and Overview card show it (spec 0014's section source, spec
+       * 0017 milestone 3): pages of `links.page` in the side's order, 20 at
+       * first and 20 more with each `showMore`, the exact total, displays
+       * only (never record bodies). Shared by every screen asking for the
+       * same record and side; live while shown (a change naming the record
+       * and side, a far record it holds, the far object's trash, this tab's
+       * own writes). Read it through `useLinkSection`.
+       */
+      section: async (workspace: string, side: SectionKey): Promise<LinkSection> =>
+        (await linkSections()).section(workspace, side),
+      /**
+       * Adds or removes one related record from a section (spec 0017, AC-375):
+       * shown at once in the section and on the record, sent as one link
+       * delta, rolled back with a toast and Retry on a refusal. A landed
+       * change answers its undo entry (`undoId`) for the toast's Undo.
+       */
+      change: (workspace: string, change: LinkChange): Promise<LinkOutcome> => sectionLink(workspace, change),
     },
     tasks: {
       /**

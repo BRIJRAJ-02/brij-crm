@@ -183,14 +183,22 @@ export function meetingUrlOf(event: Pick<GoogleEvent, 'hangoutLink' | 'conferenc
  * block rather than a meeting. Only an event this calendar is invited to (`self` among the attendees) gains its
  * organiser: an event with no attendees (a holiday or birthday calendar's, a shared calendar's own time) stays as
  * it is. The organiser is listed first, as an attendee like any other: matched as a member or a person by email,
- * with no trust of its own.
+ * with no trust of its own. An event made on a secondary calendar names that calendar as its organiser (an address
+ * at `group.calendar.google.com`, its name the calendar's): it is kept, so the invite still reads as a meeting, and
+ * core never files such an address as a person (`isGoogleCalendarId`). Its own events gain this calendar as
+ * organiser too, when they list guests without it, as Outlook's adapter does.
  */
 function withOrganizer(
   listed: readonly ProviderAttendee[],
   organizer: GoogleEvent['organizer'],
 ): readonly ProviderAttendee[] {
-  if (organizer?.email === undefined || organizer.self === true) return listed;
-  if (!listed.some((each) => each.isSelf)) return listed;
+  if (organizer?.email === undefined) return listed;
+  const isSelf = organizer.self === true;
+  // Someone else's event counts its organiser only when this calendar is among its guests; this calendar's own
+  // event, only when it lists guests and not this calendar (made through the API, which leaves the organiser out),
+  // so every member's copy of one meeting lists the same people, as Outlook's do.
+  if (isSelf ? listed.length === 0 || listed.some((each) => each.isSelf) : !listed.some((each) => each.isSelf))
+    return listed;
   const email = normaliseEmail(organizer.email);
   if (email === '' || listed.some((each) => each.email === email)) return listed;
   return [
@@ -199,7 +207,7 @@ function withOrganizer(
       ...(organizer.displayName === undefined ? {} : { name: organizer.displayName }),
       response: 'accepted',
       isOrganizer: true,
-      isSelf: false,
+      isSelf,
     },
     ...listed,
   ];

@@ -348,7 +348,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return behaviour.attributeWrite();
       }),
     },
-    links: { add: os.links.add.handler(notServed), remove: os.links.remove.handler(notServed) },
+    links: {
+      add: os.links.add.handler(notServed),
+      remove: os.links.remove.handler(notServed),
+      page: os.links.page.handler(notServed),
+    },
     relationships: {
       create: os.relationships.create.handler(({ input }) => {
         mutationIds.push(input.mutationId);

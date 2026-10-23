@@ -22,7 +22,7 @@ import { loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { runWrite, type AfterWrite, type MeetingChange, type WriteContext } from '../engine/write.ts';
 import { checkMeetingRecord } from './meetings.ts';
 import { domainOf, holders, matchEvent, recordsOf, shouldSync, type Lookups } from './match.ts';
-import { normaliseEmail, type ProviderEvent } from './provider.ts';
+import { isGoogleCalendarId, normaliseEmail, type ProviderEvent } from './provider.ts';
 
 /** What an attendee that can't be added answers: the same whether they are a member, matched, or hidden. */
 export const ATTENDEE_NOT_ADDABLE = 'That attendee can’t be added as a person.';
@@ -157,6 +157,19 @@ async function linkEmail(tx: WorkspaceTx, email: string, personId: string): Prom
   return linkable.map((meetingId) => ({ meetingId, recordIds: after.get(meetingId) ?? [] }));
 }
 
+/**
+ * Whether the sync may file an event's unknown attendees as people (AC-609): not from an invite the account hasn't
+ * answered whose only other party is its organiser. Anyone can send such an invite (a stranger's booking, spam), so
+ * it makes nobody until the member accepts; the meeting itself still shows. An invite listing other guests, or one
+ * the member answered, files as before.
+ */
+export function filesPeople(event: ProviderEvent): boolean {
+  const self = event.attendees.find((attendee) => attendee.isSelf);
+  if (self?.response !== 'needs_action') return true;
+  const others = event.attendees.filter((attendee) => !attendee.isSelf);
+  return !others.every((attendee) => attendee.isOrganizer);
+}
+
 /** Whether the workspace makes people for unknown attendees (AC-609): off until an admin turns it on. */
 export async function createsUnknownPeople(tx: WorkspaceTx): Promise<boolean> {
   const rows = await tx.execute<{ on: boolean }>(sql`select create_unknown_people as on from calendar_settings`);
@@ -165,7 +178,9 @@ export async function createsUnknownPeople(tx: WorkspaceTx): Promise<boolean> {
 
 /**
  * Makes a person, as the write's actor, for each unknown external attendee of
- * the batch's meetings (AC-609, the workspace setting on), each under its own
+ * the batch's meetings (AC-609, the workspace setting on), never a Google
+ * calendar's own id nor from an unanswered invite by its organiser alone
+ * (`filesPeople`), each under its own
  * savepoint so one refused (a full workspace, a rule) makes the rest still.
  * Answers how many it made; the caller reads the lookups again when any.
  */
@@ -177,11 +192,11 @@ export async function fileUnknownAttendees(
 ): Promise<number> {
   const unknown = new Map<string, string | undefined>();
   for (const event of events) {
-    if (!shouldSync(event)) continue;
+    if (!shouldSync(event) || !filesPeople(event)) continue;
     const { attendees, isInternal } = matchEvent(event, connectionMemberId, lookups);
     if (isInternal) continue;
     for (const attendee of attendees) {
-      if (attendee.match !== 'unknown' || unknown.has(attendee.email)) continue;
+      if (attendee.match !== 'unknown' || unknown.has(attendee.email) || isGoogleCalendarId(attendee.email)) continue;
       unknown.set(attendee.email, attendee.name ?? undefined);
     }
   }
