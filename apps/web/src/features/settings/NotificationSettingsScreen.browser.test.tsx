@@ -111,6 +111,17 @@ describe('Notifications', () => {
     expect(sent).toEqual([{ emailReplies: true }, { emailReplies: false }]);
   });
 
+  it('keeps one saved toast when several switches change', async () => {
+    await render();
+    await press(page.getByRole('switch', { name: 'Replies' }));
+    await expect.element(page.getByText('Notifications saved')).toBeVisible();
+    await press(page.getByRole('switch', { name: 'Mentions' }));
+    await vi.waitFor(() => {
+      expect(page.getByText('Notifications saved').elements()).toHaveLength(1);
+    });
+    await expect.element(page.getByRole('switch', { name: 'Mentions' })).not.toBeChecked();
+  });
+
   it('puts a refused switch back, with no saved toast', async () => {
     const sent = await render(true);
     const replies = page.getByRole('switch', { name: 'Replies' });

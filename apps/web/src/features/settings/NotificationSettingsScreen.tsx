@@ -57,11 +57,14 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
   useEffect(() => {
     latest.current = state.settings;
   }, [state.settings]);
+  // The last "Notifications saved": a newer one replaces it, so flipping several switches leaves one toast, not a stack.
+  const lastSaved = useRef<string | undefined>(undefined);
   /** Sends `change`; once it lands, the toast whose Undo sends `undo` while the switches still show the change. */
   const save = (change: NotificationSettingsChange, undo: NotificationSettingsChange) => {
     void data.inbox.setSettings(slug, change).then((refused) => {
       if (refused !== undefined) return;
-      toasts.toast({
+      if (lastSaved.current !== undefined) toasts.dismiss(lastSaved.current);
+      lastSaved.current = toasts.toast({
         tone: 'success',
         message: strings.saved,
         action: {

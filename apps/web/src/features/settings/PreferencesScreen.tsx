@@ -153,13 +153,16 @@ function MemberSections({
   const weeks = useMemo(() => weekStartChoices(), []);
   const landings = useMemo(() => landingChoices(objects), [objects]);
 
+  // The last "Preferences saved": a newer one replaces it, so several changes leave one toast, not a stack.
+  const lastSaved = useRef<string | undefined>(undefined);
   const pick = (field: 'timeZone' | 'dateFormat' | 'weekStart' | 'landing' | 'homeSetup', id: string | null) => {
     if (id === null) return;
     const edit = editOf(preferences, field, id);
     if (edit === undefined) return;
     void onChange(edit.change).then((landed) => {
       if (!landed) return;
-      toasts.toast({
+      if (lastSaved.current !== undefined) toasts.dismiss(lastSaved.current);
+      lastSaved.current = toasts.toast({
         tone: 'success',
         message: strings.saved,
         action: {
