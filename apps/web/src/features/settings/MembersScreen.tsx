@@ -48,6 +48,7 @@ import {
 } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { focusTitle } from '../navigation/focus-title.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { InviteDialog } from './InviteDialog.tsx';
 import { EmailDomainRow } from './EmailDomainRow.tsx';
@@ -150,12 +151,16 @@ export function MembersScreen({
   const [isInviting, setInviting] = useState(false);
   // The request being approved: its Approve spins and its Decline waits, so one press makes one decision.
   const [approving, setApproving] = useState<string | undefined>(undefined);
-  // The tab shown: the search belongs to the Members tab alone.
-  const [tab, setTab] = useState('members');
+  // The tab shown: the search belongs to the Members tab alone. It opens on Joining while someone waits to join,
+  // since join requests send no other notice (the Joining count alone can't tell them from invitations).
+  const [tab, setTab] = useState(() => (requests.length > 0 ? 'joining' : 'members'));
   // The invitations whose Resend is on its way: their row's menu waits for the answer.
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
-  // The change the page is asking about, if any, and what to say once it is done.
-  const [question, setQuestion] = useState<(MemberQuestion & { readonly done: string }) | undefined>(undefined);
+  // The change the page is asking about, if any, what to say once it is done, and whether its row goes with it (focus
+  // then moves to the title, since the control that asked went away).
+  const [question, setQuestion] = useState<
+    (MemberQuestion & { readonly done: string; readonly removesRow?: boolean }) | undefined
+  >(undefined);
   // The member the remove dialog asks about, if any (it reads what their removal does, AC-816).
   const [removing, setRemoving] = useState<MemberView | undefined>(undefined);
   // A role shown at once while its change is sent, put back if the server refuses (by member id).
@@ -297,15 +302,16 @@ export function MembersScreen({
     });
   };
 
-  // Cancelling ends the link, so it asks first; its way out is Keep it, never a second Cancel.
+  // Cancelling ends the link, so it asks first; its way out is Keep invitation, never a second Cancel.
   const revoke = (invitation: InvitationView) => {
     setQuestion({
       title: strings.revokeTitle(invitation.email),
       text: strings.revokeText,
       action: strings.revokeAction,
-      dismiss: strings.keepIt,
+      dismiss: strings.keepInvitation,
       run: () => data.invitations.revoke(slug, invitation.id),
       done: strings.revoked(invitation.email),
+      removesRow: true,
     });
   };
 
@@ -396,6 +402,8 @@ export function MembersScreen({
         async () => {
           await reload();
           toasts.toast({ tone: 'success', message: strings.approved(request.name) });
+          // Its row went (and Asking to join with the last one), Approve with it.
+          focusTitle();
         },
         (error: unknown) => {
           toasts.toast({ tone: 'danger', message: messageOf(error) });
@@ -412,6 +420,7 @@ export function MembersScreen({
       action: strings.declineAction,
       run: () => data.joinRequests.decide(slug, request.id, false),
       done: strings.declined(request.name),
+      removesRow: true,
     });
   };
 
@@ -584,7 +593,6 @@ export function MembersScreen({
                     renderCell={requestCell}
                     // On a phone the table scrolls sideways in its own frame, as Members' does.
                     isScrollable
-                    emptyState={<EmptyState icon="user-plus" title={strings.noRequests} />}
                   />
                 </SettingsSection>
               )}
@@ -600,26 +608,26 @@ export function MembersScreen({
                   emptyState={<EmptyState icon="mail" title={strings.noInvitations} />}
                 />
               </SettingsSection>
-              {/* Set once, so last: the invite link, then the company email, one Card of rows. */}
+              {/* Set once, so last: the invite link, then the company email, a Card each, so each way reads apart. */}
               {(link !== undefined || domains !== undefined) && (
                 <SettingsSection title={strings.otherWaysSection}>
-                  <Card>
-                    {link !== undefined && (
+                  {link !== undefined && (
+                    <Card>
                       <InviteLinkRows
                         data={data}
                         slug={slug}
                         link={link}
                         ask={setQuestion}
                         onChanged={reload}
-                        onSaved={(notice) => {
-                          toasts.toast(notice);
-                        }}
+                        toasts={toasts}
                         onFailed={(message) => {
                           toasts.toast({ tone: 'danger', message });
                         }}
                       />
-                    )}
-                    {domains !== undefined && (
+                    </Card>
+                  )}
+                  {domains !== undefined && (
+                    <Card>
                       <EmailDomainRow
                         data={data}
                         slug={slug}
@@ -633,8 +641,8 @@ export function MembersScreen({
                           toasts.toast({ tone: 'danger', message });
                         }}
                       />
-                    )}
-                  </Card>
+                    </Card>
+                  )}
                 </SettingsSection>
               )}
             </SettingsStack>
@@ -654,8 +662,11 @@ export function MembersScreen({
         }}
         onDone={() => {
           const said = question?.done;
+          const removesRow = question?.removesRow === true;
           setQuestion(undefined);
-          void reload();
+          void reload().then(() => {
+            if (removesRow) focusTitle();
+          });
           if (said !== undefined) toasts.toast({ tone: 'success', message: said });
         }}
       />

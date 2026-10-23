@@ -25,7 +25,7 @@ export interface EmailDomainRowProps {
 }
 
 /**
- * One SettingsRow, Company email, for the Card it shares with the invite link: the reader's own domain and a
+ * One SettingsRow, Company email, in its own Card after the invite link's: the reader's own domain and a
  * switch, an InfoTip saying which domain can be used (the server's rule). Its one quiet line says what it does, or
  * why it can't be turned on (a public or unverified address). Waits for the server: meanwhile the switch stands
  * where it is going, disabled, and the line says so. Turning it off asks first (the confirm shows its own wait),

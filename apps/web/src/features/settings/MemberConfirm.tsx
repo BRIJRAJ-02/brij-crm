@@ -14,7 +14,7 @@ export interface MemberQuestion {
   readonly text: string;
   /** The commit's verb ("Cancel invitation"), never OK or Yes. */
   readonly action: string;
-  /** The way out's words, when Cancel would clash with the verb ("Keep it" beside "Cancel invitation"). */
+  /** The way out's words, when Cancel would clash with the verb ("Keep invitation" beside "Cancel invitation"). */
   readonly dismiss?: string;
   /** The change: resolves once the server agrees, throws its refusal otherwise. */
   readonly run: () => Promise<void>;

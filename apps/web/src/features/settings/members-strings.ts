@@ -57,8 +57,8 @@ export const strings = {
   revokeTitle: (email: string) => `Cancel the invitation to ${email}?`,
   revokeText: 'The link in their email stops working at once.',
   revokeAction: 'Cancel invitation',
-  /** The confirm's way out when its verb is itself a Cancel: never two buttons called Cancel. */
-  keepIt: 'Keep it',
+  /** The confirm's way out when its verb is itself a Cancel: never two buttons called Cancel (as Jobs' Keep job). */
+  keepInvitation: 'Keep invitation',
   removeTitle: (name: string, workspace: string) => `Remove ${name} from ${workspace}?`,
   removeText: 'They lose access at once, and their work stays.',
   removeAction: 'Remove member',
@@ -124,9 +124,11 @@ export const strings = {
   linkSaved: 'Invite link saved.',
   undo: 'Undo',
   undone: 'Change undone.',
+  /** An Undo pressed after the link changed again (here or by another admin): it leaves the newer value alone. */
+  undoStale: 'The invite link changed again since, so nothing was undone.',
   // Domain join (spec 0031, AC-819, AC-820).
   domainTitle: 'Company email',
-  domainOff: (domain: string) => `Anyone with an @${domain} email can ask to join. You approve each one.`,
+  domainOff: (domain: string) => `When on, anyone with an @${domain} email can ask to join. You approve each one.`,
   /** The server's rule: only the reader's own verified email's domain, and never a public mail domain. */
   domainInfo: 'Only the domain of your own verified email can be used. Public mail like Gmail can’t.',
   domainOn: (domain: string) => `People at @${domain} can ask to join. You approve each one.`,
@@ -142,7 +144,6 @@ export const strings = {
   declineText: 'They won’t be told, and their request stays open on their side.',
   declineAction: 'Decline request',
   declined: (name: string) => `Declined ${name}’s request.`,
-  noRequests: 'No requests to join',
   approveFor: (name: string) => `Approve ${name}`,
   declineFor: (name: string) => `Decline ${name}`,
   requestActions: (name: string) => `Answer ${name}’s request`,

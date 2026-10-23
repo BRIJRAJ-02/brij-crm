@@ -2,7 +2,7 @@
 // Members, and each invitation's email reaches Mailpit with its link; the second person, signed in through the link
 // as themself, opens the first person's link and is refused with the address masked, joining nothing; the first
 // signs in through their link, accepts and lands in the workspace, and the owner's Members page shows them; the used
-// link then reads as no longer valid, like any other bad link; Cancel invite asks first, Keep it keeps the
+// link then reads as no longer valid, like any other bad link; Cancel invite asks first, Keep invitation keeps the
 // invitation, and Cancel invitation ends it. Then the owner finds the newcomer by search, makes them an admin at once and removes them
 // behind a confirm, after which they are in no workspace. axe in light and dark on the invitation page and the Members
 // page (AC-803 to AC-806, AC-810, AC-811, AC-833).
@@ -150,13 +150,13 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await stranger.goto(link);
   await expect(stranger.getByRole('heading', { level: 1, name: 'This invitation is no longer valid' })).toBeVisible();
 
-  // Cancel invite asks first: Keep it keeps the invitation; Cancel invitation ends it.
+  // Cancel invite asks first: Keep invitation keeps it; Cancel invitation ends it.
   const actions = page.getByRole('button', { name: `Actions for the invitation to ${other}` });
   await actions.click();
   await page.getByRole('menuitem', { name: 'Cancel invite' }).click();
   const confirm = page.getByRole('alertdialog', { name: `Cancel the invitation to ${other}?` });
   await expect(confirm).toBeVisible();
-  await confirm.getByRole('button', { name: 'Keep it' }).click();
+  await confirm.getByRole('button', { name: 'Keep invitation' }).click();
   await expect(confirm).toBeHidden();
   await expect(page.getByRole('rowheader', { name: other })).toBeVisible();
   await actions.click();

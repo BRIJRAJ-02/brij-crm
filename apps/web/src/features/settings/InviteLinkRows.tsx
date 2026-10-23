@@ -1,18 +1,12 @@
 // Brief
 // Purpose: let an owner or admin share one link anyone can join the workspace through (spec 0031, AC-818).
 // Main task: turn the link on, copy it, and limit how long and how many; reset or turn it off (both ask first).
-// The first rows of Members › Joining › Other ways to join, its Card shared with Company email after it.
+// The first Card of Members › Joining › Other ways to join, Company email's after it.
 // Leaves out: guests (slice 9), email domains (the row after it), and who joined (the Members tab).
-import {
-  INVITE_LINK_DAYS,
-  isDataError,
-  type DataLayer,
-  type InviteLinkDays,
-  type InviteLinkView,
-  type Notice,
-} from '@crm/data';
-import { Button, Callout, Field, InfoTip, Select, SettingsRow, Switch } from '@crm/ui';
-import { useRef, useState } from 'react';
+import { INVITE_LINK_DAYS, isDataError, type DataLayer, type InviteLinkDays, type InviteLinkView } from '@crm/data';
+import { Button, Callout, Field, InfoTip, Select, SettingsRow, Switch, type Toasts } from '@crm/ui';
+import { useEffect, useRef, useState } from 'react';
+import { UNDO_MS } from '../tasks/undo-delete.ts';
 import type { MemberQuestion } from './MemberConfirm.tsx';
 import { strings } from './members-strings.ts';
 import { savedToast } from './toast.ts';
@@ -26,6 +20,19 @@ type LinkChange = Parameters<DataLayer['invitations']['setLink']>[1];
 /** Which control a change came from: it waits for the server meanwhile. */
 type Busy = 'enabled' | 'expiry' | 'uses';
 
+/**
+ * Whether the link still reads as `settings` left it: on, and the limit that change set unchanged. An Undo acts only
+ * then, so it never turns a link back on that was turned off since, or overwrites a newer limit (another admin's too).
+ */
+export function linkStillReads(link: InviteLinkView, settings: LinkChange): boolean {
+  if (!link.enabled) return false;
+  if (settings.maxUses !== undefined && (link.maxUses ?? null) !== settings.maxUses) return false;
+  if (settings.expiresInDays !== undefined && (settings.expiresInDays === null) !== (link.expiresAt === undefined)) {
+    return false;
+  }
+  return true;
+}
+
 /** Props for the invite link's rows. */
 export interface InviteLinkRowsProps {
   readonly data: DataLayer;
@@ -36,8 +43,8 @@ export interface InviteLinkRowsProps {
   readonly ask: (question: MemberQuestion & { readonly done: string }) => void;
   /** A change landed: the page reads the link again. */
   readonly onChanged: () => Promise<void>;
-  /** Expires or Most uses saved: the page says so in a toast, with Undo when it can put the old value back. */
-  readonly onSaved: (notice: Notice) => void;
+  /** The app's toasts: "Invite link saved." (with Undo when the old value can come back), and closing a stale one. */
+  readonly toasts: Pick<Toasts, 'toast' | 'dismiss'>;
   /** A change was refused: the page says why in a toast. */
   readonly onFailed: (message: string) => void;
 }
@@ -45,54 +52,72 @@ export interface InviteLinkRowsProps {
 /**
  * SettingsRows for a Card the page holds: the switch first (with Reset beside it while on), then, while on, the
  * link to copy (Field's copy variant, whole on its own line), when it stops working and how many it may let in.
- * Every change waits for the server (a setting, not CRM data), the changed control disabled meanwhile. Expires and
- * Most uses then say "Invite link saved." with Undo (the save rule); turning it off and Reset end the current
- * link, so they ask first.
+ * Every change waits for the server (a setting, not CRM data), the changed control disabled meanwhile, then says
+ * "Invite link saved." (the save rule). Expires and Most uses add Undo, for 10 seconds; turning it off and Reset end
+ * the current link, so they ask first. Any later change, and leaving the rows, closes an open Undo, and an Undo
+ * acts only while the link still reads as its change left it.
  */
-export function InviteLinkRows({ data, slug, link, ask, onChanged, onSaved, onFailed }: InviteLinkRowsProps) {
+export function InviteLinkRows({ data, slug, link, ask, onChanged, toasts, onFailed }: InviteLinkRowsProps) {
   const [busy, setBusy] = useState<Busy | undefined>(undefined);
-  // Each change's turn: an Undo puts its value back only while no later change has landed since.
-  const turn = useRef(0);
+  // The open "Invite link saved." toast with Undo, if any: the next change closes it, so an old Undo can't act.
+  const undoKey = useRef<string | undefined>(undefined);
+  // The link as last read, for an Undo pressed later: the route reloads it after every change, any admin's.
+  const latest = useRef(link);
+  useEffect(() => {
+    latest.current = link;
+  }, [link]);
+  /** Closes the open Undo, if any: a newer change is on its way. */
+  const closeUndo = () => {
+    if (undoKey.current !== undefined) toasts.dismiss(undoKey.current);
+    undoKey.current = undefined;
+  };
+  // Leaving the rows (another tab, another page) closes the Undo too, since these rows are what guard it.
+  useEffect(
+    () => () => {
+      if (undoKey.current !== undefined) toasts.dismiss(undoKey.current);
+    },
+    [toasts],
+  );
   const failed = (error: unknown) => {
     onFailed(isDataError(error) ? error.message : strings.somethingWrong);
   };
   /** Puts a limit back as it was before the change whose Undo was pressed. */
   const undo = (what: Busy, before: LinkChange) => {
     setBusy(what);
-    turn.current += 1;
     data.invitations
       .setLink(slug, before)
       .then(onChanged)
       .then(() => {
-        onSaved(savedToast(strings.undone));
+        toasts.toast(savedToast(strings.undone));
       }, failed)
       .finally(() => {
         setBusy(undefined);
       });
   };
-  /** Saves `settings`; a limit changed then says so, with Undo putting `before` back while it is still the latest. */
+  /** Saves `settings`, then says so; a limit changed offers Undo, which puts `before` back while nothing newer has. */
   const change = (what: Busy, settings: LinkChange, before?: LinkChange) => {
+    closeUndo();
     setBusy(what);
-    turn.current += 1;
-    const mine = turn.current;
     data.invitations
       .setLink(slug, settings)
       .then(onChanged)
       .then(() => {
-        if (what === 'enabled') return;
-        onSaved(
-          savedToast(
-            strings.linkSaved,
-            before === undefined
-              ? undefined
-              : {
-                  label: strings.undo,
-                  onUndo: () => {
-                    if (turn.current === mine) undo(what, before);
-                  },
-                },
-          ),
+        if (before === undefined) {
+          toasts.toast(savedToast(strings.linkSaved));
+          return;
+        }
+        const key = toasts.toast(
+          savedToast(strings.linkSaved, {
+            label: strings.undo,
+            onUndo: () => {
+              if (undoKey.current === key) undoKey.current = undefined;
+              if (linkStillReads(latest.current, settings)) undo(what, before);
+              else toasts.toast({ tone: 'info', message: strings.undoStale });
+            },
+          }),
+          { timeout: UNDO_MS },
         );
+        undoKey.current = key;
       }, failed)
       .finally(() => {
         setBusy(undefined);
@@ -131,7 +156,10 @@ export function InviteLinkRows({ data, slug, link, ask, onChanged, onSaved, onFa
                 title: strings.linkResetTitle,
                 text: strings.linkResetText,
                 action: strings.linkResetAction,
-                run: () => data.invitations.setLink(slug, { enabled: true, reset: true }).then(() => undefined),
+                run: () => {
+                  closeUndo();
+                  return data.invitations.setLink(slug, { enabled: true, reset: true }).then(() => undefined);
+                },
                 done: strings.linkWasReset,
               });
             }}
@@ -153,7 +181,10 @@ export function InviteLinkRows({ data, slug, link, ask, onChanged, onSaved, onFa
               title: strings.linkOffTitle,
               text: strings.linkOffText,
               action: strings.linkOffAction,
-              run: () => data.invitations.setLink(slug, { enabled: false }).then(() => undefined),
+              run: () => {
+                closeUndo();
+                return data.invitations.setLink(slug, { enabled: false }).then(() => undefined);
+              },
               done: strings.linkTurnedOff,
             });
           }}

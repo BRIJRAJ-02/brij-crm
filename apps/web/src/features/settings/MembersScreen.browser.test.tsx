@@ -1,5 +1,5 @@
 // The Members page in Chromium. Its confirms (the owner, 21 October 2026: anything that ends something asks first):
-// Cancel invite on an invitation (Keep it, never a second Cancel), Remove from workspace and Transfer ownership on a
+// Cancel invite on an invitation (Keep invitation, never a second Cancel), Remove from workspace and Transfer ownership on a
 // member each open a danger confirm; the way out changes nothing, and the verb runs once, busy while the server
 // works, with the server's refusal inside the dialog, which stays open. Someone else's role changes at once, no
 // confirm. The Joining tab: Asking to join, Pending invitations, then Other ways to join (the invite link, whose
@@ -22,10 +22,11 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router';
-import { act } from 'react';
+import { act, useSyncExternalStore } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
+import { linkStillReads } from './InviteLinkRows.tsx';
 import { MembersScreen } from './MembersScreen.tsx';
 
 const ADA: MemberView = {
@@ -113,9 +114,41 @@ const stillLoading = {
   retain: () => () => undefined,
 };
 
-/** A data layer whose revoke, remove, role and invite link changes are counted, each answering with `answer`. */
-function layerWith(answer: () => Promise<void>) {
-  const calls = { revoke: 0, remove: 0, setRole: 0, transfer: 0, setLink: [] as unknown[] };
+/** A link change as the data layer takes it. */
+type LinkChange = Parameters<DataLayer['invitations']['setLink']>[1];
+
+/** The link after `change`, as the server would answer: what the route reads again after a save. */
+function linkAfter(link: InviteLinkView, change: LinkChange): InviteLinkView {
+  const { maxUses: _maxUses, expiresAt: _expiresAt, ...rest } = link;
+  const maxUses = change.maxUses === undefined ? link.maxUses : (change.maxUses ?? undefined);
+  const expiresAt =
+    change.expiresInDays === undefined
+      ? link.expiresAt
+      : change.expiresInDays === null
+        ? undefined
+        : '2026-10-30T09:00:00.000Z';
+  return {
+    ...rest,
+    enabled: change.enabled,
+    ...(maxUses === undefined ? {} : { maxUses }),
+    ...(expiresAt === undefined ? {} : { expiresAt }),
+  };
+}
+
+/**
+ * A data layer whose revoke, remove, role, invite link and join request changes are counted, each answering with
+ * `answer`. The link it holds follows each setLink, as the server's would, for a page reading it with `liveLink`.
+ */
+function layerWith(answer: () => Promise<void>, startLink: InviteLinkView = LINK) {
+  const calls = {
+    revoke: 0,
+    remove: 0,
+    setRole: 0,
+    transfer: 0,
+    setLink: [] as LinkChange[],
+    decide: [] as boolean[],
+  };
+  const state = { link: startLink };
   const layer = {
     calendar: { view: () => calendarView },
     // The frame's sidebar and Tasks badge (spec 0034), still loading.
@@ -146,14 +179,31 @@ function layerWith(answer: () => Promise<void>) {
         calls.revoke += 1;
         return answer();
       },
-      setLink: async (_workspace: string, change: unknown) => {
+      setLink: async (_workspace: string, change: LinkChange) => {
         calls.setLink.push(change);
         await answer();
-        return LINK;
+        state.link = linkAfter(state.link, change);
+        return state.link;
+      },
+    },
+    joinRequests: {
+      decide: async (_workspace: string, _id: string, approve: boolean) => {
+        calls.decide.push(approve);
+        await answer();
       },
     },
   } as unknown as DataLayer;
-  return { layer, revokes: () => calls.revoke, calls };
+  return {
+    layer,
+    revokes: () => calls.revoke,
+    calls,
+    /** The link as the server holds it now: hand it to the page as `liveLink`. */
+    link: () => state.link,
+    /** Another admin's change, straight to the server's copy. */
+    elsewhere: (change: LinkChange) => {
+      state.link = linkAfter(state.link, change);
+    },
+  };
 }
 
 /** A refusal as the data layer throws it. */
@@ -165,6 +215,8 @@ function refusal(code: string, message: string): Error {
 interface Extras {
   readonly requests?: readonly JoinRequestView[];
   readonly link?: InviteLinkView;
+  /** The link as the server holds it, read again on each load of the route, as the real loader reads it. */
+  readonly liveLink?: () => InviteLinkView;
   readonly domains?: WorkspaceDomainsView;
   readonly access?: MyAccess;
   /** `none` for someone who can't invite (no tabs at all). */
@@ -172,13 +224,24 @@ interface Extras {
 }
 
 /** Renders the Members page at its address inside a memory router, as an owner with one open invitation. */
-async function renderMembers(layer: DataLayer, extras: Extras = {}): Promise<Toasts> {
+async function renderMembers(
+  layer: DataLayer,
+  extras: Extras = {},
+): Promise<{ readonly toasts: Toasts; readonly reload: () => Promise<void> }> {
   const toasts = createToasts();
+  // Each load of the route (the first, and every invalidate: the page's own reload after a change, or a live
+  // event) counts one read, so the page shows `liveLink` as of its last read, as the real route's loader does.
+  const reads = { count: 0, listeners: new Set<() => void>() };
+  const subscribe = (listener: () => void) => {
+    reads.listeners.add(listener);
+    return () => {
+      reads.listeners.delete(listener);
+    };
+  };
   const rootRoute = createRootRouteWithContext<{ data: DataLayer; toasts: Toasts }>()();
-  const members = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/w/$slug/settings/members',
-    component: () => (
+  const Members = () => {
+    useSyncExternalStore(subscribe, () => reads.count);
+    return (
       <MembersScreen
         data={layer}
         toasts={toasts}
@@ -189,12 +252,22 @@ async function renderMembers(layer: DataLayer, extras: Extras = {}): Promise<Toa
         onSearch={() => undefined}
         invitations={extras.invitations === 'none' ? undefined : (extras.invitations ?? [GRACE])}
         {...(extras.requests === undefined ? {} : { requests: extras.requests })}
+        {...(extras.liveLink === undefined ? {} : { link: extras.liveLink() })}
         {...(extras.link === undefined ? {} : { link: extras.link })}
         {...(extras.domains === undefined ? {} : { domains: extras.domains })}
         access={extras.access ?? ACCESS}
         roles={ROLES_LIST}
       />
-    ),
+    );
+  };
+  const members = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/w/$slug/settings/members',
+    loader: () => {
+      reads.count += 1;
+      for (const listener of reads.listeners) listener();
+    },
+    component: Members,
   });
   const router = createRouter({
     routeTree: rootRoute.addChildren([members]),
@@ -221,7 +294,15 @@ async function renderMembers(layer: DataLayer, extras: Extras = {}): Promise<Toa
     );
     await router.load();
   });
-  return toasts;
+  return {
+    toasts,
+    // The live members event: the route reads the page again.
+    reload: async () => {
+      await act(async () => {
+        await router.invalidate();
+      });
+    },
+  };
 }
 
 /** Opens the Joining tab and picks Cancel invite on Grace's row. */
@@ -232,16 +313,16 @@ async function pickCancelInvite(): Promise<void> {
 }
 
 describe('cancelling an invitation asks first', () => {
-  it('names the address, and Keep it cancels nothing', async () => {
+  it('names the address, and Keep invitation cancels nothing', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer);
     await pickCancelInvite();
     const dialog = page.getByRole('alertdialog', { name: 'Cancel the invitation to grace@example.com?' });
     await expect.element(dialog).toBeVisible();
     expect(dialog.element().textContent).toContain('The link in their email stops working at once.');
-    // Never two buttons called Cancel: the way out is Keep it, the verb Cancel invitation.
+    // Never two buttons called Cancel: the way out is Keep invitation, the verb Cancel invitation.
     expect(dialog.getByRole('button', { name: 'Cancel', exact: true }).elements()).toHaveLength(0);
-    await dialog.getByRole('button', { name: 'Keep it' }).click();
+    await dialog.getByRole('button', { name: 'Keep invitation' }).click();
     await expect.element(dialog).not.toBeInTheDocument();
     expect(counted.revokes()).toBe(0);
   });
@@ -403,7 +484,7 @@ describe('the Joining tab', () => {
     const email = panel.getByRole('switch', { name: 'Company email' }).element();
     expect(link.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(panel.element().textContent).toContain(
-      'Anyone with an @acme.com email can ask to join. You approve each one.',
+      'When on, anyone with an @acme.com email can ask to join. You approve each one.',
     );
   });
 
@@ -416,8 +497,8 @@ describe('the Joining tab', () => {
   });
 
   it('says the invite link saved, and Undo puts the old limit back', async () => {
-    const counted = layerWith(() => Promise.resolve());
-    await renderMembers(counted.layer, { link: { ...LINK, maxUses: 25 } });
+    const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
+    await renderMembers(counted.layer, { liveLink: counted.link });
     await page.getByRole('tab', { name: /Joining/ }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
@@ -429,6 +510,99 @@ describe('the Joining tab', () => {
       { enabled: true, maxUses: 50 },
       { enabled: true, maxUses: 25 },
     ]);
+  });
+
+  it('never turns the link back on: turning it off closes the open Undo', async () => {
+    const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
+    await renderMembers(counted.layer, { liveLink: counted.link });
+    await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('button', { name: /people Most uses/ }).click();
+    await page.getByRole('option', { name: '50 people' }).click();
+    await expect.element(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+    // A click on the switch's own input, which the row's text covers in this unstyled page.
+    (page.getByRole('switch', { name: 'Invite link' }).element() as HTMLElement).click();
+    const dialog = page.getByRole('alertdialog');
+    await dialog.getByRole('button', { name: 'Turn off link' }).click();
+    await expect.element(page.getByText('The invite link is off.')).toBeVisible();
+    // The old toast went with its Undo, so nothing can turn the link back on.
+    await expect.element(page.getByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    expect(counted.calls.setLink).toEqual([{ enabled: true, maxUses: 50 }, { enabled: false }]);
+    expect(counted.link().enabled).toBe(false);
+  });
+
+  it('closes the open Undo when the tab is left, so a remount can’t act on an old one', async () => {
+    const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
+    await renderMembers(counted.layer, { liveLink: counted.link });
+    await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('button', { name: /people Most uses/ }).click();
+    await page.getByRole('option', { name: '50 people' }).click();
+    await expect.element(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+    await page.getByRole('tab', { name: /^Members/ }).click();
+    await expect.element(page.getByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    expect(counted.calls.setLink).toEqual([{ enabled: true, maxUses: 50 }]);
+  });
+
+  it('leaves another admin’s newer value alone, and says so', async () => {
+    const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
+    const { reload } = await renderMembers(counted.layer, { liveLink: counted.link });
+    await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('button', { name: /people Most uses/ }).click();
+    await page.getByRole('option', { name: '50 people' }).click();
+    await expect.element(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+    // Another admin turns the link off; the live event reads the page again.
+    counted.elsewhere({ enabled: false });
+    await reload();
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect.element(page.getByText('The invite link changed again since, so nothing was undone.')).toBeVisible();
+    expect(counted.calls.setLink).toEqual([{ enabled: true, maxUses: 50 }]);
+    expect(counted.link().enabled).toBe(false);
+  });
+
+  it('says the link saved when it is turned on, with no Undo', async () => {
+    const counted = layerWith(() => Promise.resolve(), { enabled: false, uses: 0, isSpent: false });
+    await renderMembers(counted.layer, { liveLink: counted.link });
+    await page.getByRole('tab', { name: /Joining/ }).click();
+    // A click on the switch's own input, which the row's text covers in this unstyled page.
+    (page.getByRole('switch', { name: 'Invite link' }).element() as HTMLElement).click();
+    await expect.element(page.getByText('Invite link saved.')).toBeVisible();
+    expect(page.getByRole('button', { name: 'Undo' }).elements()).toHaveLength(0);
+    expect(counted.calls.setLink).toEqual([{ enabled: true }]);
+  });
+
+  it('opens on Joining while someone asks to join', async () => {
+    const waiting = layerWith(() => Promise.resolve());
+    await renderMembers(waiting.layer, { requests: [REQUEST] });
+    await expect.element(page.getByRole('tab', { name: /Joining/ })).toHaveAttribute('aria-selected', 'true');
+    await expect.element(page.getByRole('heading', { name: 'Asking to join' })).toBeVisible();
+  });
+
+  it('opens on Members while nobody asks', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    await renderMembers(counted.layer);
+    await expect.element(page.getByRole('tab', { name: /^Members/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('moves focus off the page body once the last request is approved', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    await renderMembers(counted.layer, { requests: [REQUEST] });
+    await page.getByRole('button', { name: /Approve/ }).click();
+    await expect.element(page.getByText('Mary Shelley joined the workspace.')).toBeVisible();
+    expect(counted.calls.decide).toEqual([true]);
+    await expect.poll(() => document.activeElement === document.body).toBe(false);
+  });
+});
+
+describe('linkStillReads', () => {
+  it('is true only while the link is on and the limit the change set still holds', () => {
+    const on: InviteLinkView = { ...LINK, maxUses: 50 };
+    expect(linkStillReads(on, { enabled: true, maxUses: 50 })).toBe(true);
+    expect(linkStillReads({ ...on, enabled: false }, { enabled: true, maxUses: 50 })).toBe(false);
+    expect(linkStillReads({ ...on, maxUses: 10 }, { enabled: true, maxUses: 50 })).toBe(false);
+    expect(linkStillReads(LINK, { enabled: true, maxUses: null })).toBe(true);
+    expect(linkStillReads(LINK, { enabled: true, expiresInDays: 7 })).toBe(false);
+    expect(
+      linkStillReads({ ...LINK, expiresAt: '2026-10-30T09:00:00.000Z' }, { enabled: true, expiresInDays: 7 }),
+    ).toBe(true);
   });
 });
 
