@@ -505,7 +505,7 @@ function Booking({
           onBooked(booked.manageToken);
           return { kind: 'done' };
         },
-        (error: unknown): BookingDetailsOutcome => {
+        (error: unknown): BookingDetailsOutcome | Promise<BookingDetailsOutcome> => {
           if (!isDataError(error)) return { kind: 'failed', message: strings.errors.failed };
           if (error.code === 'SLOT_TAKEN') {
             // Back to fresh times, with the reason over them.
@@ -526,10 +526,12 @@ function Booking({
               fields[refusal.field] = refusal.message;
           }
           // The answer's sentence goes too, when a visitor can read it: the form says it when none of these is a field it shows.
-          if (Object.keys(fields).length > 0) {
-            const message = refusalLine(error.message, fields);
-            return { kind: 'invalid', fields, ...(message === undefined ? {} : { message }) };
-          }
+          if (Object.keys(fields).length > 0)
+            return refusalLine(error.message, fields).then((message): BookingDetailsOutcome => ({
+              kind: 'invalid',
+              fields,
+              ...(message === undefined ? {} : { message }),
+            }));
           return {
             kind: 'failed',
             message:

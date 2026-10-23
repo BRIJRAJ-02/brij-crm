@@ -59,6 +59,8 @@ const READS: ReadonlySet<string> = new Set([
   'profile.get',
   'deletedWorkspace.deleted',
   'access.mine',
+  // Settings › History's Workspace changes (spec 0046).
+  'audit.list',
   // The roles every role picker offers (spec 0037, AC-1439).
   'roles.list',
   'records.query',

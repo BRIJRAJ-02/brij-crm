@@ -170,8 +170,10 @@ describe('the first load', () => {
   // Rolldown merges shared chunks into the entries that need them, unless any module in the build uses top level
   // await: then every route's file becomes its own chunk, and the first load went from 30 files to 65, 42 kB
   // more gzipped (21 October 2026). Keep top level await out of every entry (src/public/main.ts runs a function).
+  // 41 since the plain words became a file of their own (23 October 2026): the app loads them up front and the
+  // booking page only after a refusal, so the build can't merge them into the app's entry. Same bytes, one file.
   it('stays merged into a few dozen files, as it is with no top level await in the build', () => {
-    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(40);
+    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(41);
   });
 
   it('never loads the grid, editor, charts or schema map chunk up front', () => {
