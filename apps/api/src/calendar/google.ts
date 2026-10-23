@@ -60,7 +60,7 @@ const MAX_PAGES = 20;
 
 /** The event fields a sync reads: never the description or attachments (AC-613). */
 const EVENT_FIELDS =
-  'id,etag,status,iCalUID,summary,start,end,originalStartTime,location,hangoutLink,conferenceData(entryPoints(entryPointType,uri),conferenceSolution/key/type,createRequest/status),organizer(email,self),attendees(email,displayName,responseStatus,organizer,self),visibility,transparency';
+  'id,etag,status,iCalUID,summary,start,end,originalStartTime,location,hangoutLink,conferenceData(entryPoints(entryPointType,uri),conferenceSolution/key/type,createRequest/status),organizer(email,displayName,self),attendees(email,displayName,responseStatus,organizer,self),visibility,transparency';
 
 /** Calendars one list page asks for (Google's most is 250). */
 const CALENDAR_PAGE_SIZE = 250;
@@ -135,7 +135,7 @@ interface GoogleEvent {
     readonly entryPoints?: readonly { readonly entryPointType?: string; readonly uri?: string }[];
     readonly createRequest?: { readonly status?: { readonly statusCode?: string } };
   };
-  readonly organizer?: { readonly email?: string; readonly self?: boolean };
+  readonly organizer?: { readonly email?: string; readonly displayName?: string; readonly self?: boolean };
   readonly attendees?: readonly {
     readonly email?: string;
     readonly displayName?: string;
@@ -176,6 +176,35 @@ export function meetingUrlOf(event: Pick<GoogleEvent, 'hangoutLink' | 'conferenc
   return event.conferenceData?.entryPoints?.find((entry) => entry.entryPointType === 'video')?.uri;
 }
 
+/**
+ * The attendees with the organiser among them, as Outlook's adapter lists them: Google leaves the organiser out
+ * of `attendees` when someone else's calendar made the event with only this calendar invited (a booking on another
+ * scheduler's page, the owner's case of 23 October 2026), so the event would read as the account alone, a Busy
+ * block rather than a meeting. Only an event this calendar is invited to (`self` among the attendees) gains its
+ * organiser: an event with no attendees (a holiday or birthday calendar's, a shared calendar's own time) stays as
+ * it is. The organiser is listed first, as an attendee like any other: matched as a member or a person by email,
+ * with no trust of its own.
+ */
+function withOrganizer(
+  listed: readonly ProviderAttendee[],
+  organizer: GoogleEvent['organizer'],
+): readonly ProviderAttendee[] {
+  if (organizer?.email === undefined || organizer.self === true) return listed;
+  if (!listed.some((each) => each.isSelf)) return listed;
+  const email = normaliseEmail(organizer.email);
+  if (email === '' || listed.some((each) => each.email === email)) return listed;
+  return [
+    {
+      email,
+      ...(organizer.displayName === undefined ? {} : { name: organizer.displayName }),
+      response: 'accepted',
+      isOrganizer: true,
+      isSelf: false,
+    },
+    ...listed,
+  ];
+}
+
 /** A Google event as core's. A deleted one may carry only its id and status. */
 export function eventOf(event: GoogleEvent): ProviderEvent | undefined {
   if (event.id === undefined) return undefined;
@@ -183,7 +212,7 @@ export function eventOf(event: GoogleEvent): ProviderEvent | undefined {
   const end = timeOf(event.end);
   const originalStart = timeOf(event.originalStartTime);
   const videoUrl = meetingUrlOf(event);
-  const attendees = (event.attendees ?? []).flatMap((attendee): ProviderAttendee[] =>
+  const listed = (event.attendees ?? []).flatMap((attendee): ProviderAttendee[] =>
     attendee.email === undefined
       ? []
       : [
@@ -196,6 +225,7 @@ export function eventOf(event: GoogleEvent): ProviderEvent | undefined {
           },
         ],
   );
+  const attendees = withOrganizer(listed, event.organizer);
   return {
     id: event.id,
     status: event.status === 'cancelled' ? 'cancelled' : event.status === 'tentative' ? 'tentative' : 'confirmed',

@@ -265,6 +265,99 @@ describe('busy times (the owner’s call, 20 October 2026)', () => {
   });
 });
 
+describe('a meeting someone else organised with the account its one guest (owner report, 23 October 2026)', () => {
+  /** The organiser as the adapters now list them: among the attendees, marked, never the account. */
+  const organizer = (email: string, name?: string): ProviderAttendee => ({ ...guest(email, name), isOrganizer: true });
+  /** The account invited, not organising, yet to answer. */
+  const invited = (email: string): ProviderAttendee => ({
+    ...self(email),
+    isOrganizer: false,
+    response: 'needs_action',
+  });
+
+  it('is a meeting with the organiser on the week, titled as in the calendar, no longer a Busy block', async () => {
+    const w = await world();
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    const range = { from: day(0, 0), to: day(7, 0) };
+    // As Google's change list read before the fix: the account alone, so only busy time.
+    const before = event('anish', day(2, 5), [invited('ada@acme.dev')], {
+      title: 'meeting with Anish',
+      organizerEmail: 'anish@globex.com',
+      videoUrl: 'https://meet.google.com/abc-defg-hij',
+    });
+    w.fake.put('ada@acme.dev', before);
+    await w.sync(conn.id);
+    expect((await busyOf(w)).map((row) => row.event)).toEqual(['anish']);
+    expect(await meetingIds(w)).toEqual([]);
+
+    // The same event listed again with its organiser (the next change to it, or a full sync): it heals in place.
+    w.fake.put('ada@acme.dev', {
+      ...before,
+      attendees: [organizer('anish@globex.com', 'Anish Tripathi'), invited('ada@acme.dev')],
+    });
+    await w.sync(conn.id);
+    expect(await busyOf(w)).toEqual([]);
+    expect(await meetingIds(w)).toEqual([{ ical_uid: 'anish@google.com' }]);
+    const week = await readBookingsCalendar(w.owner, range);
+    expect(week.busy).toEqual([]);
+    expect(week.events).toEqual([
+      expect.objectContaining({
+        connectionId: conn.id,
+        title: 'meeting with Anish',
+        startsAt: new Date(day(2, 5)).toISOString(),
+        endsAt: plus(day(2, 5), 30),
+        videoUrl: 'https://meet.google.com/abc-defg-hij',
+      }),
+    ]);
+    // The organiser is an attendee like any other: unknown here, no member, no person made (the setting is off).
+    const attendees = await w.query<{ email: string; is_organizer: boolean; match: string; member: boolean }>(sql`
+      select email, is_organizer, match::text as match, member_id is not null as member
+      from meeting_attendees order by position
+    `);
+    expect(attendees).toEqual([
+      { email: 'anish@globex.com', is_organizer: true, match: 'unknown', member: false },
+      { email: 'ada@acme.dev', is_organizer: false, match: 'member', member: true },
+    ]);
+    expect(
+      await w.query(sql`select id from records r where r.deleted_at is null and exists (
+      select 1 from "values" v where v.record_id = r.id and lower(v.text_value) = 'anish@globex.com')`),
+    ).toEqual([]);
+  });
+
+  it('matches the organiser by the workspace’s own rules: a person by email, a member as a member', async () => {
+    const w = await world();
+    const globex = await w.company('Globex', ['globex.com']);
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    const range = { from: day(0, 0), to: day(7, 0) };
+    w.fake.put(
+      'ada@acme.dev',
+      event('external', day(1), [organizer('anish@globex.com'), invited('ada@acme.dev')], {
+        title: 'meeting with Anish',
+      }),
+    );
+    // A colleague's booking with the account: an internal meeting, on the week, on no record.
+    w.fake.put(
+      'ada@acme.dev',
+      event('colleague', day(3), [organizer('bea@acme.dev'), invited('ada@acme.dev')], { title: 'Sync with Bea' }),
+    );
+    await w.sync(conn.id);
+    const page = await listMeetingsForRecord(w.owner, { recordId: globex });
+    expect(page.items.map((each) => each.title)).toEqual(['meeting with Anish']);
+    const rows = await w.query<{ title: string; is_internal: boolean; match: string; member: string | null }>(sql`
+      select m.title, m.is_internal, a.match::text as match, a.member_id::text as member
+      from meetings m join meeting_attendees a on a.meeting_id = m.id and a.is_organizer order by m.starts_at
+    `);
+    expect(rows).toEqual([
+      { title: 'meeting with Anish', is_internal: false, match: 'unknown', member: null },
+      { title: 'Sync with Bea', is_internal: true, match: 'member', member: w.bea },
+    ]);
+    expect((await readBookingsCalendar(w.owner, range)).events.map((each) => each.title)).toEqual([
+      'meeting with Anish',
+      'Sync with Bea',
+    ]);
+  });
+});
+
 describe('health (AC-619, AC-620)', () => {
   it('marks a connection failed after 6 hours of failures, keeps trying, and heals on the next sync', async () => {
     const w = await world();
