@@ -1,8 +1,11 @@
 /* QrCode: dark modules on a light ground in either theme (light-dark picks the
-   pair the theme's color-scheme makes light), with the card's corners. */
+   pair the theme's color-scheme makes light), with the card's corners. With a
+   column beside it, the code is size-column wide and the column sits beside it
+   where the slot has room, under it where it doesn't. */
 @layer components {
   .root {
     display: block;
+    flex: none;
     inline-size: var(--size-menu);
     max-inline-size: 100%;
     block-size: auto;
@@ -15,5 +18,27 @@
 
   .modules {
     fill: light-dark(var(--text), var(--on-inverse));
+  }
+
+  /* The slot's width decides the layout, not the window's: a dialog is narrower than the page. The code (size-column)
+     and a column of at least size-column fit side by side in a 480px dialog; in a narrower slot (a dialog on a
+     phone) the column wraps under the code, at the slot's full width. Wrapping needs no breakpoint, so any slot works. */
+  .layout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-16);
+  }
+
+  .layout > .root {
+    inline-size: var(--size-column);
+  }
+
+  .aside {
+    display: flex;
+    flex: 1 1 var(--size-column);
+    flex-direction: column;
+    gap: var(--space-12);
+    min-inline-size: 0;
   }
 }

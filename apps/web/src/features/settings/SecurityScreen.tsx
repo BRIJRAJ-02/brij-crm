@@ -107,7 +107,7 @@ export interface SecurityScreenProps {
   readonly toasts: Toasts;
   /** Recent activity's first page as the route's loader started it: undefined once read when that read failed. */
   readonly activity?: Promise<ActivityPage | undefined>;
-  /** Reads Recent activity again after a failure. */
+  /** Reads Recent activity's first page again: after a failure, and after a change here lands (a device signed out). */
   readonly onActivityRetry?: () => void;
 }
 
@@ -165,7 +165,9 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     focusDevices();
     // Gone from the table at once; a refusal puts it back with a toast from the data layer.
     void data.account.signOut(session.id).then((landed) => {
-      if (landed) toasts.toast({ tone: 'success', message: strings.signedOut(deviceName(session)) });
+      if (!landed) return;
+      toasts.toast({ tone: 'success', message: strings.signedOut(deviceName(session)) });
+      onActivityRetry();
     });
   };
 
@@ -181,6 +183,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
       setIsOpen(false);
       focusTitle();
       toasts.toast({ tone: 'success', message: strings.signedOutOthers(answer.count) });
+      onActivityRetry();
     } else if (answer.code === 'STEP_UP_REQUIRED') {
       // The check ran out meanwhile: read the state again, so the confirm asks for it inline.
       void data.account.security().reload();
@@ -277,7 +280,13 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   const onePlace = one === undefined ? undefined : devicePlace(one);
   return (
     <SettingsPage title={strings.title} titleRef={titleRef}>
-      <TwoFactorSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
+      <TwoFactorSection
+        data={data}
+        security={security}
+        toasts={toasts}
+        onFocusLost={focusTitle}
+        onChanged={onActivityRetry}
+      />
       {body}
       {activity !== undefined && <RecentActivitySection data={data} first={activity} onRetry={onActivityRetry} />}
       <Modal
@@ -293,8 +302,15 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
             <Button slot="close" kbd="ESC" isDisabled={isBusy}>
               {strings.cancel}
             </Button>
+            {/* The press that only emails a code says so; once the code's field shows, it signs out. */}
             <Button variant="danger-solid" isPending={isBusy} onPress={() => commit.current()}>
-              {isBusy ? strings.signingOut : one === undefined ? strings.signOutOthers : strings.signOut}
+              {stepUp.willSend
+                ? strings.stepUp.send
+                : isBusy
+                  ? strings.signingOut
+                  : one === undefined
+                    ? strings.signOutOthers
+                    : strings.signOut}
             </Button>
           </>
         }

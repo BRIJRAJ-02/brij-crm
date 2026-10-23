@@ -1,6 +1,7 @@
 import { usePreferences } from '@crm/data/react';
 import { createFileRoute, getRouteApi } from '@tanstack/react-router';
 import { PreferencesScreen } from '../features/settings/PreferencesScreen.tsx';
+import { strings } from '../features/settings/preferences-strings.ts';
 import { CustomiseSidebarButton } from '../features/workspace/CustomiseSidebarButton.tsx';
 
 // Settings › Account › Preferences (spec 0026): the interface theme, kept in this browser, the member's own time
@@ -26,7 +27,9 @@ function PreferencesRoute() {
       onChange={(change) => data.preferences.change(slug, change)}
       toasts={toasts}
       onRetry={() => void data.preferences.load(slug).catch(() => undefined)}
-      customiseSidebar={<CustomiseSidebarButton data={data} slug={slug} objects={objects ?? []} />}
+      customiseSidebar={
+        <CustomiseSidebarButton data={data} slug={slug} objects={objects ?? []} text={strings.customiseAction} />
+      }
     />
   );
 }
