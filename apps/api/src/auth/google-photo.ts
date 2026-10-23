@@ -52,6 +52,51 @@ export function isProfileReturn(address: string, appOrigin: string): boolean {
   );
 }
 
+/** Google's userinfo endpoint: the profile, picture included, for an access token with the `profile` scope. */
+export const GOOGLE_USERINFO = 'https://openidconnect.googleapis.com/v1/userinfo';
+
+/** How long the sync waits for Google's userinfo before it answers without it. */
+const USERINFO_TIMEOUT_MS = 3000;
+
+/** The most of Google's userinfo answer read: a profile is well under 2 KB. */
+const USERINFO_MAX_BYTES = 64 * 1024;
+
+/** The one claim read here, from an id token's payload or the userinfo answer; anything else is ignored. */
+const PictureClaim = z.object({ picture: z.string().max(2048).optional() });
+
+/**
+ * The `picture` claim of the id token Better Auth stored on the Google account. Unverified on purpose: Better Auth
+ * saved it from Google's own token endpoint, and the picture still has to pass `servedPicture`'s host and path check.
+ */
+export function idTokenPicture(idToken: string | null | undefined): string | undefined {
+  const payload = idToken?.split('.')[1];
+  if (payload === undefined || payload === '') return undefined;
+  try {
+    const claims = PictureClaim.safeParse(JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')));
+    return claims.success ? claims.data.picture : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Google's current picture from its userinfo endpoint, or undefined when Google doesn't answer with one in time. */
+export async function userinfoPicture(accessToken: string): Promise<string | undefined> {
+  try {
+    const response = await globalThis.fetch(GOOGLE_USERINFO, {
+      headers: { authorization: `Bearer ${accessToken}` },
+      redirect: 'error',
+      signal: AbortSignal.timeout(USERINFO_TIMEOUT_MS),
+    });
+    if (!response.ok) return undefined;
+    const body = await response.text();
+    if (body.length > USERINFO_MAX_BYTES) return undefined;
+    const claims = PictureClaim.safeParse(JSON.parse(body));
+    return claims.success ? claims.data.picture : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Profile's address with how the sync went. */
 export function profileWithResult(profile: string, result: GooglePhotoResult): string {
   const url = new URL(profile);
