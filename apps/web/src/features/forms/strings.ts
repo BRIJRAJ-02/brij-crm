@@ -163,7 +163,7 @@ export const strings = {
   keptOnlyHint: 'Submissions stay in the form’s Submissions tab. You can add them to the CRM later, from Settings.',
   buildObject: 'Build one out of this form',
   buildObjectButton: (name: string, attributes: number) =>
-    `Make a “${name}” object with ${count(attributes, 'attribute', 'attributes')}`,
+    `Make an object named “${name}” with ${count(attributes, 'attribute', 'attributes')}`,
   building: 'Making the object…',
   liveText: 'Share the link, or put it on your site.',
   ownFormLater: 'To use your own design, take the form HTML from Install.',

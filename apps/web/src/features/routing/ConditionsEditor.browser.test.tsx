@@ -32,12 +32,21 @@ afterEach(() => {
 });
 
 /** The editor holding its conditions as a form's draft would, each change also told to `onChange`. */
-function Editor({ start, onChange }: { readonly start: ShowWhen; readonly onChange: (next: ShowWhen) => void }) {
+function Editor({
+  start,
+  onChange,
+  isReadOnly = false,
+}: {
+  readonly start: ShowWhen;
+  readonly onChange: (next: ShowWhen) => void;
+  readonly isReadOnly?: boolean;
+}) {
   const [value, setValue] = useState(start);
   return (
     <ConditionsEditor
       value={value}
       facts={[budget, company]}
+      isReadOnly={isReadOnly}
       onChange={(next) => {
         setValue(next);
         onChange(next);
@@ -46,7 +55,7 @@ function Editor({ start, onChange }: { readonly start: ShowWhen; readonly onChan
   );
 }
 
-async function draw(start: ShowWhen) {
+async function draw(start: ShowWhen, isReadOnly = false) {
   const onChange = vi.fn<(next: ShowWhen) => void>();
   const host = document.createElement('div');
   document.body.append(host);
@@ -55,7 +64,7 @@ async function draw(start: ShowWhen) {
   await act(async () => {
     root.render(
       <UiProvider locale="en-US" timeZone="UTC" toasts={createToasts()} navigate={() => undefined}>
-        <Editor start={start} onChange={onChange} />
+        <Editor start={start} onChange={onChange} isReadOnly={isReadOnly} />
       </UiProvider>,
     );
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -109,6 +118,12 @@ describe('ConditionsEditor', () => {
   it('says what a typed value wants, since its box has no label over it (Q65)', async () => {
     await draw({ join: 'all', rules: [{ key: 'company', op: 'is', value: '' }] });
     const box = page.getByRole('textbox', { name: 'Value' }).element();
-    expect(box.getAttribute('placeholder')).toBe('Type a value');
+    expect(box.getAttribute('placeholder')).toBe('Set value…');
+  });
+
+  it('shows no placeholder read only, so an empty value isn’t read as an ask to type', async () => {
+    await draw({ join: 'all', rules: [{ key: 'company', op: 'is', value: '' }] }, true);
+    const box = page.getByRole('textbox', { name: 'Value' }).element();
+    expect(box.getAttribute('placeholder')).toBeNull();
   });
 });

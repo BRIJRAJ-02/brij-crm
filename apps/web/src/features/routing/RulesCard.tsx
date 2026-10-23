@@ -301,7 +301,7 @@ function RulesCardBody({
         }
       >
         {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-        {strings.removeText}
+        {strings.removeText(surface.kind)}
       </Modal>
     </Card>
   );
