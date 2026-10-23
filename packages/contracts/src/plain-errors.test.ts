@@ -132,6 +132,16 @@ describe('plainIssueMessage', () => {
     expect(plainIssueMessage({ code: 'custom', input: 'x', path: [] })).toBe('This isn’t valid.');
   });
 
+  it('installs into the one config Zod reads, without loading Zod, and keeps the rest of it', () => {
+    // installPlainErrors writes Zod's global config object itself; this fails if a Zod upgrade moves it.
+    const config = z.config();
+    expect(config.customError).toBe(plainIssueMessage);
+    expect(config.localeError).toBeDefined();
+    installPlainErrors();
+    expect(z.config()).toBe(config);
+    expect(z.config().customError).toBe(plainIssueMessage);
+  });
+
   it('knows its own sentences, so a toast never shows one alone', () => {
     const own = [
       ...Object.values(PLAIN_ERRORS),

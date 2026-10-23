@@ -5,7 +5,8 @@
 // the session fresh for 10 minutes; the screens ask for it inline, in the
 // change's own dialog, and then carry on.
 import type { AccountSecurity, SessionFreshness, StepUpMethod } from '@crm/contracts';
-import { refusalSummary, toDataError, type DataError } from '../errors.ts';
+import { toDataError, type DataError } from '../errors.ts';
+import { refusalSummary } from '../refusals.ts';
 
 /** The calls the store makes. */
 export interface AccountSecurityApi {

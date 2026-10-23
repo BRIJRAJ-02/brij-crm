@@ -34,7 +34,8 @@ import {
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { describe, expect, it, vi } from 'vitest';
-import { dataError, isUnseenFault, parseRetryAfter, refusalFor, refusalSummary } from './errors.ts';
+import { dataError, isUnseenFault, parseRetryAfter } from './errors.ts';
+import { refusalFor, refusalSummary } from './refusals.ts';
 import {
   createDataLayer,
   createIdMinter,

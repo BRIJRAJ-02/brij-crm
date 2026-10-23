@@ -6,6 +6,7 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { PLAIN_ERRORS } from '@crm/contracts/plain-words';
 import { build } from 'vite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { firstLoad, type Manifest } from './first-load.ts';
@@ -196,5 +197,26 @@ describe('the first load', () => {
       expect(everything.some((text) => text.includes(marker))).toBe(true);
       expect(upFront.filter((text) => text.includes(marker))).toEqual([]);
     }
+  });
+
+  // The plain words' safety net (`installPlainErrors` in main.tsx) writes Zod's global config itself, so Zod stays
+  // with the screens that validate: importing Zod's own `config` put its core in the entry, 3.6 kB gzipped (23
+  // October 2026). `_zod` is the property Zod's core keeps every schema's internals on.
+  it('never loads Zod up front', () => {
+    const ZOD_CORE = /["'`]_zod["'`]/;
+    const read = (file: string) => readFileSync(path.join(outDir, file), 'utf8');
+    const everything = assets.filter((file) => file.endsWith('.js')).map((file) => read(path.join('assets', file)));
+    expect(everything.some((text) => ZOD_CORE.test(text))).toBe(true);
+    expect(firstLoad(manifest).js.filter((file) => ZOD_CORE.test(read(file)))).toEqual([]);
+  });
+
+  // The public pages check nothing with Zod in the browser, so they never carry the safety net's words: they rode
+  // in a chunk the booking page shares with the app, 1 kB gzipped, while `refusalSummary` sat in the data layer's
+  // errors.ts (23 October 2026). The app loads them up front, for main.tsx's install and `refusalSummary`.
+  it('keeps the plain words in the app, out of the booking page and the hosted form', () => {
+    const carries = (file: string) => readFileSync(path.join(outDir, file), 'utf8').includes(PLAIN_ERRORS.extra);
+    expect(firstLoad(manifest).js.some(carries)).toBe(true);
+    expect(firstLoad(manifest, 'book.html').js.filter(carries)).toEqual([]);
+    expect(firstLoad(manifest, 'form.html').js.filter(carries)).toEqual([]);
   });
 });

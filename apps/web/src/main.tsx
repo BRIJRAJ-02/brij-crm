@@ -39,7 +39,7 @@ const monitor = startMonitoring({
 });
 
 // Zod's own messages in plain words, before any screen checks what someone typed with a shared schema (a cell's
-// editor): a schema's own message still wins.
+// editor): a schema's own message still wins. It loads no Zod: Zod reads the map when a lazy chunk brings it.
 installPlainErrors();
 
 // One toast queue for the app, shared by the screens and the data layer.

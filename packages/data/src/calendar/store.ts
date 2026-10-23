@@ -22,7 +22,8 @@ import type {
   CalendarSharing,
   RemovedCalendarConnection,
 } from '@crm/contracts';
-import { refusalSummary, toDataError } from '../errors.ts';
+import { toDataError } from '../errors.ts';
+import { refusalSummary } from '../refusals.ts';
 import type { Notice } from '../notice.ts';
 
 /** The calls the store makes. */

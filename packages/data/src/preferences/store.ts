@@ -7,7 +7,8 @@
 // live event carries them: another device's change shows when a screen next
 // holds them.
 import type { MemberPreferences, UpdatePreferencesInput } from '@crm/contracts';
-import { refusalSummary, toDataError } from '../errors.ts';
+import { toDataError } from '../errors.ts';
+import { refusalSummary } from '../refusals.ts';
 import type { Notice } from '../notice.ts';
 
 export type { DateFormat, HomeHidden, HomeSectionKey, LandingPage, MemberPreferences, WeekStart } from '@crm/contracts';
