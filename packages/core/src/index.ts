@@ -614,3 +614,9 @@ export { recordsImport } from './imports/kind.ts';
 export { recordsImportUndo } from './imports/undo.ts';
 /** Records exports (spec 0040): a view's records as CSV, on the submissions export's rows, chunks and download. */
 export { getRecordsExport, recordsExport, startRecordsExport, type RecordsExportRecord } from './exports/records.ts';
+/**
+ * Settings › History › Workspace changes (spec 0046): `listAuditEvents` pages the audit log for `audit.read`, and
+ * `toEntryView` is its pure row mapping (only known keys, never a linked record, AC-4610).
+ */
+export { listAuditEvents, AUDIT_CURSOR_MESSAGE } from './audit/audit.ts';
+export { toEntryView, type AuditNames, type AuditRow } from './audit/view.ts';

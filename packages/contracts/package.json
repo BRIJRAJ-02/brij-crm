@@ -8,6 +8,7 @@
     "./values": "./src/values/index.ts",
     "./codes": "./src/codes.ts",
     "./roles": "./src/roles.ts",
+    "./audit-kinds": "./src/audit-kinds.ts",
     "./jump": "./src/values/jump.ts",
     "./validation": "./src/validation/index.ts",
     "./slugs": "./src/values/slugs.ts",
