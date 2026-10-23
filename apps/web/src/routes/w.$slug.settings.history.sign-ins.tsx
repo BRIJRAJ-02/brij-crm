@@ -1,5 +1,5 @@
 import { LoadingNow } from '@crm/ui';
-import { createFileRoute, getRouteApi, useRouter } from '@tanstack/react-router';
+import { createFileRoute, useMatch, useRouter } from '@tanstack/react-router';
 import { HistoryPending, HistoryScreen } from '../features/settings/HistoryScreen.tsx';
 import { SignInsPending, SignInsTab } from '../features/settings/SignInsTab.tsx';
 
@@ -16,15 +16,16 @@ export const Route = createFileRoute('/w/$slug/settings/history/sign-ins')({
   component: SignInsRoute,
 });
 
-const workspace = getRouteApi('/w/$slug');
-
 /**
  * Your sign ins while its loader waits: the workspace frame read the access before this page could draw, so the
  * pending page has the tab bar exactly when the loaded one will.
  */
 function SignInsLoading() {
-  const canReadChanges = workspace.useLoaderData({
-    select: (loaded) => loaded.access?.permissions.includes('audit.read') === true,
+  // Read straight from the frame's match: a `getRouteApi` here put the router's route module in a chunk of its own
+  // on the first load (land/r13, 23 October 2026).
+  const canReadChanges = useMatch({
+    from: '/w/$slug',
+    select: (match) => match.loaderData?.access?.permissions.includes('audit.read') === true,
   });
   return (
     <LoadingNow>

@@ -76,6 +76,7 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
       'Settings › Members',
       'Settings › Objects',
       'Settings › Background jobs',
+      'Settings › History',
     ]);
   });
 });
@@ -104,6 +105,7 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
       'Settings › Members',
       'Settings › Objects',
       'Settings › Background jobs',
+      'Settings › History',
     ]);
   });
 
