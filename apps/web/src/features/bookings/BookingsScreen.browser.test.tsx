@@ -403,6 +403,18 @@ describe('rescheduling a booking', () => {
   });
 });
 
+describe('going to a date', () => {
+  it('opens the month with focus on the chosen day, so the arrows move at once (Q70)', async () => {
+    await renderWeek([], [bookingOf()]);
+    await userEvent.click(page.getByRole('button', { name: 'Go to date' }));
+    await expect.poll(() => document.activeElement?.closest('[role="grid"]')).not.toBeNull();
+    const before = document.activeElement?.getAttribute('aria-label') ?? '';
+    await userEvent.keyboard('{ArrowRight}');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label') ?? '').not.toBe(before);
+    expect(document.activeElement?.closest('[role="grid"]')).not.toBeNull();
+  });
+});
+
 const REASSIGN = 'Reassign Quick chat with Ada Lovelace';
 /** A dialog's title, or its name when it has no heading (the week's card). */
 const heading = (dialog: Element) =>

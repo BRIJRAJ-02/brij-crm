@@ -1044,6 +1044,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
           >
             <MonthCalendar
               label={strings.goToDate}
+              // Opened from its button, focus is on the chosen day, so the arrows move at once (Q70).
+              // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the month opens only when its button is pressed
+              autoFocus
               value={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
               onChange={(day) => {
                 setJumpOpen(false);
