@@ -84,6 +84,26 @@ describe('the bookings store', () => {
     expect(view.getSnapshot()).toEqual({ status: 'ready', bookings: [] });
   });
 
+  it('reads a failed range again when asked to be ready, and only once while that read is out', async () => {
+    const calendar = vi
+      .fn<() => Promise<{ bookings: []; events: []; busy: []; blocks: [] }>>()
+      .mockRejectedValueOnce(new Error('down'))
+      .mockResolvedValue({ bookings: [], events: [], busy: [], blocks: [] });
+    const store = createBookingsStore({
+      api: { listAll: () => Promise.resolve([]), calendar },
+      onReturn: () => () => undefined,
+    });
+    const range = store.calendar('acme', '2026-11-09T00:00:00.000Z', '2026-11-16T00:00:00.000Z');
+    await range.ready();
+    expect(range.getSnapshot().status).toBe('error');
+    await Promise.all([range.ready(), range.ready()]);
+    expect(range.getSnapshot()).toMatchObject({ status: 'ready', bookings: [] });
+    expect(calendar).toHaveBeenCalledTimes(2);
+    // Read and ready: asking again reads nothing.
+    await range.ready();
+    expect(calendar).toHaveBeenCalledTimes(2);
+  });
+
   it('holds a range with its bookings and events, and reloadAll reads every held one of the workspace again', async () => {
     const calendar = vi.fn(() => Promise.resolve({ bookings: [booking('a')], events: [], busy: [], blocks: [] }));
     const listAll = vi.fn(() => Promise.resolve([booking('a')]));
