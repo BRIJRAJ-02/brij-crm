@@ -139,6 +139,11 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    */
   factors: Pick<IdentityStore, 'secondFactorUsers' | 'sessionVerification' | 'markSessionVerified'>;
   /**
+   * Whether a person has Google linked (23 Oct 2026), for Settings › Profile's Sync Google photo: a member handler
+   * asks it for the caller's own user id only. Reads no token.
+   */
+  googleLinked: (userId: string) => Promise<boolean>;
+  /**
    * The names of the workspaces a person is in that require two factor (spec
    * 0033, AC-885): Account › Sign in and devices says so, and keeps their last second
    * factor on. A system read per workspace, in packages/core.

@@ -1,5 +1,5 @@
 {
-  "id": "7e2ab398-81f1-4a8f-b114-067c4ad0815d",
+  "id": "6cabf1ce-2685-4631-a80a-ddfe941e450f",
   "prevId": "601725e6-c5c3-4741-950d-e95163b3bb81",
   "version": "7",
   "dialect": "postgresql",
@@ -18005,7 +18005,7 @@
       "checkConstraints": {
         "security_event_kind": {
           "name": "security_event_kind",
-          "value": "kind in ('sign_in', 'sign_out', 'session_revoked', 'sessions_revoked', 'two_factor_on', 'two_factor_off', 'backup_codes_made', 'backup_code_used', 'passkey_added', 'passkey_removed', 'alert_sent')"
+          "value": "kind in ('sign_in', 'sign_out', 'session_revoked', 'sessions_revoked', 'two_factor_on', 'two_factor_off', 'backup_codes_made', 'backup_code_used', 'passkey_added', 'passkey_removed', 'alert_sent', 'google_linked')"
         }
       },
       "isRLSEnabled": false
@@ -18347,13 +18347,6 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
-        },
-        "picture_hidden": {
-          "name": "picture_hidden",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
         },
         "updated_at": {
           "name": "updated_at",

@@ -42,6 +42,12 @@ export interface Auth {
    * `?redirect=` set to `returnTo`, so a refused sign in keeps the deep link.
    */
   signInWithGoogle(returnTo: string): Promise<void>;
+  /**
+   * Profile's Sync Google photo (23 Oct 2026): sends the browser to Google for the signed in person's own Google
+   * account (linking it first when it isn't), which comes back to `profilePath` (the Profile page's path) with
+   * `?google-photo=` saying how it went.
+   */
+  syncGooglePhoto(profilePath: string): Promise<void>;
   /** Ends the session on this device and forgets what was cached for it. */
   signOut(): Promise<void>;
   /** The signed in person, or undefined when nobody is. */
@@ -96,6 +102,9 @@ export function createAuth({ origin, fetch, reset, report }: AuthOptions): Auth 
       const back = new URL('/sign-in', origin);
       if (returnTo !== '/') back.searchParams.set('redirect', returnTo);
       await (await load()).signInWithGoogle(new URL(returnTo, origin).href, back.href);
+    },
+    async syncGooglePhoto(profilePath) {
+      await (await load()).linkGoogle(new URL(profilePath, origin).href);
     },
     async signOut() {
       try {

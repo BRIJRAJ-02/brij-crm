@@ -25,6 +25,8 @@ const { members, workspaces } = schema;
 export interface ProfileExtras {
   /** The account's Google picture as our own origin serves it (`/api/me/picture?v=`), when it has one. */
   readonly image?: string | undefined;
+  /** Whether the account has Google linked, for Sync Google photo; undefined where Google sign in is off. */
+  readonly google?: 'linked' | 'unlinked' | undefined;
 }
 
 /** The caller's member id, or a refusal: only a member has a profile. */
@@ -87,6 +89,7 @@ async function readProfile(
     workspaceTimeZone: row.workspaceTimeZone,
     ...(row.timeZone === null ? {} : { timeZone: row.timeZone }),
     ...(image === undefined ? {} : { image }),
+    ...(extras.google === undefined ? {} : { google: extras.google }),
     ...(held === undefined ? {} : { handle: held.handle }),
     ...(suggested === undefined ? {} : { suggestedHandle: suggested }),
     bio: held?.bio ?? '',

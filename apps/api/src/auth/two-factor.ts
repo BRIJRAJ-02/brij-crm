@@ -49,6 +49,32 @@ export function trustToken(secret: string, userId: string, trustId: string): str
 /** Where a sign in held back for its second step goes in the app. */
 export const SECOND_STEP_PATH = '/two-factor';
 
+/**
+ * The verification row that keeps Google's picture beside a sign in held back for its second step (23 Oct 2026),
+ * named by the pending sign in's own identifier (`2fa-…`, which only its signed cookie carries), with the same expiry.
+ */
+export function pendingPictureId(pendingId: string): string {
+  return `2fa-picture-${pendingId}`;
+}
+
+/** A held sign in's picture as its row keeps it: whose it is, and Google's address. */
+export function pendingPictureValue(userId: string, picture: string): string {
+  return JSON.stringify({ userId, picture });
+}
+
+/** The picture a held sign in's row keeps, only when it is `userId`'s: undefined for anything else. */
+export function pendingPicture(value: string, userId: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined;
+  const kept = parsed as { readonly userId?: unknown; readonly picture?: unknown };
+  return kept.userId === userId && typeof kept.picture === 'string' ? kept.picture : undefined;
+}
+
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
 

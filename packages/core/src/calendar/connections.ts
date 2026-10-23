@@ -36,6 +36,9 @@ export const CONNECTIONS_ARE_MEMBERS = 'Calendar connections belong to members.'
 /** What a seventh account answers (AC-1000). */
 export const CONNECTIONS_FULL = `Connect at most ${String(MAX_CALENDAR_CONNECTIONS)} calendar accounts.`;
 
+/** What a connect into a workspace deleted meanwhile answers: the door's words for a workspace that isn't there. */
+export const WORKSPACE_GONE = "That workspace doesn't exist, or you're not a member of it.";
+
 /** A newly consented account (`connectCalendar`): its provider, and the tokens and account the code exchanged for. */
 export interface ConnectCalendarInput {
   readonly provider: ProviderName;
@@ -124,8 +127,12 @@ export async function listCalendarConnections(scope: EngineScope): Promise<Calen
  * Connects an account the member consented to (AC-597, AC-599): the tokens
  * sealed, the connection `syncing`, its first full sync queued. The same
  * account again reconnects it (fresh tokens, a fresh full sync, its sharing
- * and default kept); a fourth account is `LIMIT_REACHED`. The member's first
- * connection becomes their default.
+ * and default kept); a seventh account is `LIMIT_REACHED`. The member's first
+ * connection becomes their default. A workspace deleted since the door let
+ * the member in (the consent screen takes seconds or minutes) is `NOT_FOUND`
+ * (spec 0031, AC-823): its row is held until this commits, so a deletion
+ * either lands first and refuses the connect, or waits for it and then
+ * finds the new connection to stop.
  */
 export async function connectCalendar(
   scope: EngineScope,
@@ -145,6 +152,11 @@ export async function connectCalendar(
     scope,
     async (context) => {
       const { tx } = context;
+      // The workspace still live, and held so until this commits: a deletion's update of its row waits for us.
+      const live = await tx.execute(sql`
+        select 1 from workspaces where id = ${scope.workspaceId}::uuid and deleted_at is null for share
+      `);
+      if (live.rows.length === 0) throw refuse('NOT_FOUND', WORKSPACE_GONE);
       // The member's other tabs list the new connection (the `calendars` live kind).
       context.record({ calendars: [memberId] });
       // The member's connections, locked, so two consents at once can't both take the third place.

@@ -1,12 +1,23 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
-import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { ProfilePending, ProfileScreen } from '../features/settings/ProfileScreen.tsx';
 import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
-import { strings } from '../features/settings/workspace-strings.ts';
+import { isGooglePhotoResult, strings, type GooglePhotoResult } from '../features/settings/workspace-strings.ts';
+
+/** The page's address: how a Google photo sync just went, if one did (`?google-photo=`, from the API's callback). */
+interface ProfileSearch {
+  readonly 'google-photo'?: GooglePhotoResult;
+}
 
 // Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and time zone in this workspace.
 export const Route = createFileRoute('/w/$slug/settings/account/profile')({
+  // A result this build doesn't know (one the API added since) says the sync didn't work, rather than nothing.
+  validateSearch: (search: Record<string, unknown>): ProfileSearch => {
+    const result = search['google-photo'];
+    if (typeof result !== 'string') return {};
+    return { 'google-photo': isGooglePhotoResult(result) ? result : 'failed' };
+  },
   loader: async ({ context, params }) => {
     try {
       return { profile: await context.data.profile.get(params.slug) };
@@ -28,7 +39,9 @@ function ProfileRoute() {
   const { profile } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
+  const { 'google-photo': photoResult } = Route.useSearch();
   const router = useRouter();
+  const navigate = useNavigate();
   if (profile === undefined) return <SettingsMissing backTo="home" />;
   return (
     <ProfileScreen
@@ -37,6 +50,10 @@ function ProfileRoute() {
       slug={slug}
       profile={profile}
       onChanged={() => router.invalidate()}
+      {...(photoResult === undefined ? {} : { photoResult })}
+      onPhotoResultSeen={() =>
+        void navigate({ to: '/w/$slug/settings/account/profile', params: { slug }, search: {}, replace: true })
+      }
     />
   );
 }
