@@ -1,14 +1,26 @@
 // Brief
-// Purpose: Settings › Super admin › Users (spec 0047, AC-1630): every account, newest first, with its usage.
-// Main task: find a person by name or email and see who signs up, comes back and uses the product; open one.
-// Leaves out: changing an account (support access, plans and suspension are later slices), and anything a person wrote.
-import type { OperatorPeriod, OperatorUserPage, OperatorUserRow } from '@crm/data';
-import { Badge, Button, EmptyState, Field, RelativeTime, Table, useFormatSettings, type TableColumn } from '@crm/ui';
+// Purpose: Settings › Super admin › Users (spec 0047, AC-1630): every user, newest first, with their usage.
+// Main task: find a user by name or email and see who signs up, comes back and uses the product; open one.
+// Leaves out: changing an account (support access, plans and suspension are later slices), and anything a user wrote.
+import type { DataLayer, OperatorPeriod, OperatorUserRow } from '@crm/data';
+import { useOperator } from '@crm/data/react';
+import {
+  Badge,
+  Button,
+  Callout,
+  EmptyState,
+  Field,
+  focusLater,
+  RelativeTime,
+  Table,
+  useFormatSettings,
+  type TableColumn,
+} from '@crm/ui';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
-import { PeriodSwitch } from './AdminParts.tsx';
-import { formatters, USERS_MAX, USERS_STEP } from './figures.ts';
+import { AdminFailed, PeriodSwitch } from './AdminParts.tsx';
+import { formatters } from './figures.ts';
 import { strings } from './strings.ts';
 
 /** How long typing rests before the search reads. */
@@ -26,22 +38,26 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'pages', label: strings.columns.pages, align: 'end' },
 ];
 
-/** Where one person's page is. */
+/** Where one user's page is. */
 export const adminUserHref = (slug: string, userId: string) => `/w/${slug}/settings/admin/users/${userId}`;
 
-/** Props for the users list. */
-export interface UsersScreenProps {
-  readonly page: OperatorUserPage;
+/** Users for a period and a search (`q`, from the address): the list held in the data layer, a page at a time. */
+export function UsersScreen({
+  data,
+  period,
+  q,
+}: {
+  readonly data: DataLayer;
+  readonly period: OperatorPeriod;
   readonly q: string;
-  readonly shown: number;
-}
-
-/** Users, loaded: the search over the table, and Show more while there are more. */
-export function UsersScreen({ page, q, shown }: UsersScreenProps) {
+}) {
   const { locale } = useFormatSettings();
   const format = formatters(locale);
   const navigate = useNavigate();
   const { slug = '' } = useParams({ strict: false });
+  const [attempt, setAttempt] = useState(0);
+  const list = useMemo(() => data.operator.users(period, q), [data, period, q, attempt]);
+  const state = useOperator(list);
   const [typed, setTyped] = useState(q);
   // The search this field last sent, and the address's last one: when the address changes to something the field
   // didn't send (Back, a link), the field follows it; its own search coming back never overwrites what was typed since.
@@ -52,7 +68,17 @@ export function UsersScreen({ page, q, shown }: UsersScreenProps) {
     if (q !== sent) setTyped(q);
   }
   const rest = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const searchRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   useEffect(() => () => clearTimeout(rest.current), []);
+  // Show more goes once the last page is in: focus then moves to the search, never to the page's top.
+  const askedMore = useRef(false);
+  const hasMore = state.status === 'ready' && state.hasMore;
+  useEffect(() => {
+    if (!hasMore && askedMore.current) {
+      askedMore.current = false;
+      focusLater(() => searchRef.current);
+    }
+  }, [hasMore]);
   const search = (value: string) => {
     setTyped(value);
     clearTimeout(rest.current);
@@ -61,13 +87,19 @@ export function UsersScreen({ page, q, shown }: UsersScreenProps) {
       void navigate({
         to: '.',
         replace: true,
+        resetScroll: false,
         search: (previous: Record<string, unknown>) => {
-          const { q: _q, shown: _shown, ...kept } = previous;
+          const { q: _q, ...kept } = previous;
           return value.trim() === '' ? kept : { ...kept, q: value.trim() };
         },
       });
     }, SEARCH_REST_MS);
   };
+  if (state.status === 'error') {
+    return (
+      <AdminFailed title={strings.users} error={state.error} data={data} onRetry={() => setAttempt((n) => n + 1)} />
+    );
+  }
   const cell = (user: OperatorUserRow, column: string) => {
     switch (column) {
       case 'name':
@@ -92,12 +124,24 @@ export function UsersScreen({ page, q, shown }: UsersScreenProps) {
         return null;
     }
   };
-  const canShowMore = page.next !== undefined && shown < USERS_MAX;
+  const isLoading = state.status === 'loading';
   return (
     <SettingsPage
       title={strings.users}
-      meta={<Badge text={strings.peopleCount(format.count(page.total))} />}
-      actions={<PeriodSwitch period={page.period} />}
+      {...(isLoading
+        ? {}
+        : {
+            meta: (
+              <Badge
+                text={
+                  state.users.length < state.total
+                    ? strings.showing(format.count(state.users.length), format.count(state.total))
+                    : strings.usersCount(format.count(state.total))
+                }
+              />
+            ),
+          })}
+      actions={<PeriodSwitch period={period} />}
     >
       <Field
         label={strings.searchLabel}
@@ -107,14 +151,16 @@ export function UsersScreen({ page, q, shown }: UsersScreenProps) {
         placeholder={strings.searchPlaceholder}
         value={typed}
         onChange={search}
+        ref={searchRef}
         autoComplete="off"
       />
       <Table
         label={strings.usersTable}
         columns={COLUMNS}
-        rows={page.users}
+        rows={state.users}
         getRowId={(user) => user.id}
         renderCell={cell}
+        isLoading={isLoading}
         isScrollable
         onRowAction={(id) => void navigate({ href: adminUserHref(slug, id) })}
         emptyState={
@@ -129,43 +175,22 @@ export function UsersScreen({ page, q, shown }: UsersScreenProps) {
           )
         }
       />
-      {canShowMore && (
+      {state.error !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {strings.moreFailed}
+        </Callout>
+      )}
+      {state.hasMore && (
         <Button
-          onPress={() =>
-            void navigate({
-              to: '.',
-              replace: true,
-              resetScroll: false,
-              search: (previous: Record<string, unknown>) => ({ ...previous, shown: shown + USERS_STEP }),
-            })
-          }
+          isPending={state.isLoadingMore}
+          onPress={() => {
+            askedMore.current = true;
+            list.more();
+          }}
         >
           {strings.showMore}
         </Button>
       )}
-    </SettingsPage>
-  );
-}
-
-/** Users while it loads: the search and the table's skeleton rows. */
-export function UsersPending({ period }: { readonly period: OperatorPeriod }) {
-  return (
-    <SettingsPage title={strings.users} actions={<PeriodSwitch period={period} />}>
-      <Field
-        label={strings.searchLabel}
-        isLabelHidden
-        variant="search"
-        placeholder={strings.searchPlaceholder}
-        isDisabled
-      />
-      <Table
-        label={strings.usersTable}
-        columns={COLUMNS}
-        rows={[]}
-        getRowId={() => ''}
-        renderCell={() => null}
-        isLoading
-      />
     </SettingsPage>
   );
 }

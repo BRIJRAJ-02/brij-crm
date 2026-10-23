@@ -164,6 +164,7 @@ export type {
 } from './preferences/store.ts';
 import type { SchedulesView } from './schedules/store.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
+import { createOperatorStore } from './operator/store.ts';
 import {
   createCalendarsStore,
   type CalendarChange,
@@ -238,6 +239,13 @@ import type {
 export type { GlobalSearch, GlobalSearchState } from './search/global.ts';
 export type { RecentItem, RecordHit, SearchMatch, ViewHit } from '@crm/contracts';
 // The operator console (spec 0047): the super admin's read only analytics.
+export type {
+  OperatorHeld,
+  OperatorState,
+  OperatorStore,
+  OperatorUsersHeld,
+  OperatorUsersState,
+} from './operator/store.ts';
 export type {
   OperatorFigure,
   OperatorOverview,
@@ -978,6 +986,25 @@ export function createDataLayer({
   let comments: Promise<CommentsStore> | undefined;
   // The inbox's lists and settings (spec 0038), loaded with the inbox or the notification settings.
   let inbox: Promise<InboxStore> | undefined;
+  // The operator console's reads (spec 0047), held per question for the app load.
+  const operatorStore = createOperatorStore({
+    overview: (period) => call((options) => api.operator.overview({ period }, options)),
+    users: (input) =>
+      call((options) =>
+        api.operator.users(
+          {
+            period: input.period,
+            ...(input.q === undefined || input.q.trim() === '' ? {} : { q: input.q.trim() }),
+            ...(input.after === undefined ? {} : { after: input.after }),
+          },
+          options,
+        ),
+      ),
+    user: (userId, period) => call((options) => api.operator.user({ userId, period }, options)),
+    pages: (period) => call((options) => api.operator.pages({ period }, options)),
+    page: (pageId, period) => call((options) => api.operator.page({ pageId, period }, options)),
+    site: (period) => call((options) => api.operator.site({ period }, options)),
+  });
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
@@ -4555,32 +4582,14 @@ export function createDataLayer({
     },
     /**
      * The operator console (spec 0047): the super admin's read only analytics
-     * across every workspace, read fresh on each call (no cache, no live
-     * event: the numbers are a snapshot of a period). Anyone the api doesn't
-     * count a super admin is refused NOT_FOUND; a super admin without two
-     * factor TWO_FACTOR_REQUIRED, or with an old sign in SIGN_IN_AGAIN.
-     * Refusals throw a DataError.
+     * across every workspace, held per question (`operator/store.ts`): a
+     * screen holds one through `useOperator`, so a new period or search loads
+     * in place. Anyone the api doesn't count a super admin is refused
+     * NOT_FOUND; a super admin without two factor TWO_FACTOR_REQUIRED, or
+     * whose session wasn't proven with the app in 12 hours SIGN_IN_AGAIN, in
+     * the held state, never thrown.
      */
-    operator: {
-      overview: (period: OperatorPeriod) => call((options) => api.operator.overview({ period }, options)),
-      users: (input: { readonly period: OperatorPeriod; readonly q?: string; readonly after?: string }) =>
-        call((options) =>
-          api.operator.users(
-            {
-              period: input.period,
-              ...(input.q === undefined || input.q.trim() === '' ? {} : { q: input.q.trim() }),
-              ...(input.after === undefined ? {} : { after: input.after }),
-            },
-            options,
-          ),
-        ),
-      user: (userId: string, period: OperatorPeriod) =>
-        call((options) => api.operator.user({ userId, period }, options)),
-      pages: (period: OperatorPeriod) => call((options) => api.operator.pages({ period }, options)),
-      page: (pageId: string, period: OperatorPeriod) =>
-        call((options) => api.operator.page({ pageId, period }, options)),
-      site: (period: OperatorPeriod) => call((options) => api.operator.site({ period }, options)),
-    },
+    operator: operatorStore,
     account: {
       /**
        * The signed in person's own sessions (spec 0033), newest activity

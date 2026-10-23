@@ -20,29 +20,19 @@ export function periodSearch(search: Record<string, unknown>): PeriodSearch {
   return period === undefined || period === DEFAULT_PERIOD ? {} : { period };
 }
 
-/** The users list's address: the period, the search, and how many rows are shown. */
+/** The users list's address: the period and the search. */
 export interface UsersSearch extends PeriodSearch {
   readonly q?: string;
-  readonly shown?: number;
 }
 
-/** The page size the users list grows by. */
-export const USERS_STEP = 50;
-
-/** The most rows the users list shows. */
-export const USERS_MAX = 1000;
-
-/** The users list's address, read safely: a search of at most 100 characters, and a row count in steps of 50. */
+/** The users list's address, read safely: a search of at most 100 characters. */
 export function usersSearch(search: Record<string, unknown>): UsersSearch {
   const q = typeof search['q'] === 'string' ? search['q'].trim().slice(0, 100) : '';
-  const shown = typeof search['shown'] === 'number' ? search['shown'] : Number(search['shown']);
-  const rows = Number.isInteger(shown) && shown > USERS_STEP ? Math.min(shown, USERS_MAX) : undefined;
-  return {
-    ...periodSearch(search),
-    ...(q === '' ? {} : { q }),
-    ...(rows === undefined ? {} : { shown: Math.ceil(rows / USERS_STEP) * USERS_STEP }),
-  };
+  return { ...periodSearch(search), ...(q === '' ? {} : { q }) };
 }
+
+/** How many days a period covers. */
+export const PERIOD_LENGTH: Readonly<Record<OperatorPeriod, number>> = { '7d': 7, '30d': 30, '90d': 90 };
 
 /** Formats counts, shares and days in the reader's language. */
 export function formatters(locale: string) {
@@ -55,9 +45,11 @@ export function formatters(locale: string) {
     typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(locale, { type: 'region' }) : undefined;
   return {
     count: (value: number) => count.format(value),
-    /** Bookings per visitor, as a share; a dash with no visitors. */
-    share: (part: number, whole: number) => (whole === 0 ? '–' : share.format(part / whole)),
-    ratio: (part: number, whole: number) => (whole === 0 ? '–' : ratio.format(part / whole)),
+    /** Bookings per visitor, as a share; None with no visitors. */
+    share: (part: number, whole: number) => (whole === 0 ? strings.none : share.format(part / whole)),
+    ratio: (part: number, whole: number) => (whole === 0 ? strings.none : ratio.format(part / whole)),
+    /** A count, or "100,000+" past a cap it was counted to. */
+    capped: (value: number, cap: number) => (value > cap ? strings.recordsCapped(count.format(cap)) : count.format(value)),
     /** A UTC day, `YYYY-MM-DD`, as "23 Oct". */
     day: (value: string) => day.format(new Date(`${value}T00:00:00Z`)),
     /** An instant's UTC date, as "23 Oct 2026". */
@@ -94,6 +86,26 @@ export function figureStat(
     value: format.count(figure.value),
     comparison: strings.period.before(format.count(figure.before), period),
     trend: trendOf(figure),
+  } as const;
+}
+
+/** A rate (one figure over another) as Stats draws it, against the same rate the period before. */
+export function rateStat(
+  id: string,
+  label: string,
+  part: OperatorFigure,
+  whole: OperatorFigure,
+  period: OperatorPeriod,
+  format: (part: number, whole: number) => string,
+) {
+  const now = whole.value === 0 ? 0 : part.value / whole.value;
+  const then = whole.before === 0 ? 0 : part.before / whole.before;
+  return {
+    id,
+    label,
+    value: format(part.value, whole.value),
+    comparison: strings.period.before(format(part.before, whole.before), period),
+    trend: now > then ? 'up' : now < then ? 'down' : 'same',
   } as const;
 }
 
