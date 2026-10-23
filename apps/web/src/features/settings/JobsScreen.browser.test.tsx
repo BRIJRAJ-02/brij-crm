@@ -221,6 +221,32 @@ describe('Cancel on a job', () => {
   });
 });
 
+describe('the result cell', () => {
+  it('says why records were refused in words, and never shows a raw code (SW33)', async () => {
+    await renderJobs(
+      [
+        jobOf({
+          status: 'succeeded',
+          total: 300,
+          done: 300,
+          refused: 150,
+          skipped: 2,
+          result: {
+            refusals: [
+              { code: 'FORBIDDEN', count: 50, itemIds: [] },
+              { code: 'SIMULATED_REFUSAL', count: 100, itemIds: [] },
+            ],
+          },
+        }),
+      ],
+      { confirm: vi.fn(), cancel: vi.fn() },
+    );
+    await expect.element(page.getByText('50 you can’t change, 100 couldn’t be changed, 2 skipped')).toBeVisible();
+    expect(document.body.textContent).not.toContain('SIMULATED_REFUSAL');
+    expect(document.body.textContent).not.toContain('FORBIDDEN');
+  });
+});
+
 describe('the status and progress cells', () => {
   it('marks each state with its dot and leaves a finished empty job’s progress blank', async () => {
     await renderJobs(

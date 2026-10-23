@@ -7,18 +7,21 @@ const days = (count: number) => (count === 1 ? '1 day' : `${String(count)} days`
 export const strings = {
   /** The entry in the settings navigation, under Workspace. */
   navLabel: 'Security',
-  title: 'Workspace security',
+  /** The nav's own name: the trail already says Workspace (Settings › Workspace › Security). */
+  title: 'Security',
   twoFactor: 'Two factor sign in',
-  twoFactorDescription: 'A second step at sign in, so access to someone’s email alone doesn’t open the workspace.',
   require: 'Require two factor sign in',
-  requireOff: 'When on, everyone signs in with an authenticator app as well as their email.',
+  requireInfo:
+    'A code from an app on their phone, after the email code. Someone who gets into a person’s email still can’t open the workspace.',
+  requireOff: 'Everyone signs in with an authenticator app as well as email.',
   requireOn: (without: number) =>
     without === 0
       ? 'Everyone here has two factor sign in set up.'
       : without === 1
         ? '1 person hasn’t set it up yet. They’re asked to the next time they open the workspace.'
         : `${String(without)} people haven’t set it up yet. They’re asked to the next time they open the workspace.`,
-  youFirst: 'Set up two factor sign in for yourself first, then you can require it here.',
+  /** The row's line while the switch is off limits, the Set up yours link after it. */
+  youFirst: 'Set up two factor for yourself first.',
   setUpYours: 'Set up yours',
   confirmRequireTitle: 'Require two factor sign in?',
   confirmRequireText: (without: number, workspace: string) =>
@@ -27,16 +30,15 @@ export const strings = {
   required: 'Two factor sign in is now required.',
   notRequired: 'Two factor sign in is no longer required.',
   sessions: 'Sessions',
-  sessionsDescription: 'How long a sign in lasts here, and ending everyone’s at once.',
   sessionLength: 'Session length',
-  sessionLengthDescription:
-    'How long after signing in people can use the workspace before they sign in again. Confirming it’s them counts as signing in.',
+  sessionLengthDescription: 'How long people stay signed in before they sign in again.',
+  sessionLengthInfo: 'Confirming it’s you before a risky change, like signing everyone out, also counts as signing in.',
   noLimit: 'No limit',
   days,
   lengthSaved: (count: number | undefined) =>
     count === undefined ? 'Sessions no longer end on a schedule.' : `Sessions now last ${days(count)}.`,
   signOutEveryone: 'Sign out everyone',
-  signOutEveryoneDescription: 'Everyone has to sign in again to open the workspace. You stay signed in here.',
+  signOutEveryoneDescription: 'Everyone signs in again. You stay signed in here.',
   lastSignedOut: (when: string) => `Last done ${when}.`,
   signOutEveryoneTitle: 'Sign out everyone?',
   signOutEveryoneText: (workspace: string) =>
