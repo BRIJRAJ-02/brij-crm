@@ -67,6 +67,21 @@ describe('checkAnswers (spec 0023, AC-553, AC-556, AC-660)', () => {
     });
   });
 
+  it('refuses a short phone number rather than dropping it as empty, and takes the code alone as empty (QA Q82)', () => {
+    const answers = { name: 'Ada', email: 'ada@example.com', terms: true };
+    const short = checkAnswers(form, { ...answers, phone: { number: '+112', country: 'US' } });
+    expect(short.ok).toBe(false);
+    if (!short.ok) expect(Object.keys(short.fields)).toEqual(['phone']);
+    const codeOnly = checkAnswers(form, { ...answers, phone: { number: '+1', country: 'US' } });
+    expect(codeOnly.ok && !('phone' in codeOnly.answers)).toBe(true);
+    const required = checkAnswers(
+      { language: 'en', questions: [{ key: 'phone', answerType: 'phone', required: true }] },
+      { phone: { number: '+9112', country: 'IN' } },
+    );
+    expect(required.ok).toBe(false);
+    if (!required.ok) expect(required.fields.phone).not.toBe('Answer this question.');
+  });
+
   it('reads web addresses as a visitor types them', () => {
     expect(websiteOf('https://acme.com/about')).toBe('https://acme.com/about');
     expect(websiteOf('acme')).toBeUndefined();
