@@ -12,15 +12,11 @@ export function changed(saved: BookingPageSettings, draft: BookingPageSettings):
 }
 
 /**
- * The draft once `patch` saved as `next`: the saved settings, with only the person's own unsaved changes kept on
- * top. What the patch sent counts as saved, so a change that saved at once outside the draft (Pause or Resume, which
- * sends `status` alone) never reads as an unsaved change of the old value (Q61: the bar stayed up after Pause, and
- * Save sent the page live again).
+ * The draft once a save landed as `next`: the saved settings, with only the person's own unsaved changes kept on
+ * top, typing done while the save was out included. `status` always follows the server, since the person never
+ * edits it in the draft: Pause and Resume save it at once from the ⋯ menu, so the old value never reads as an
+ * unsaved change (Q61: the bar stayed up after Pause, and Save sent the page live again).
  */
-export function draftAfterSave(
-  next: BookingPageSettings,
-  current: BookingPageSettings,
-  patch: Partial<BookingPageSettings>,
-): BookingPageSettings {
-  return { ...next, ...changed(next, { ...current, ...patch }) };
+export function draftAfterSave(next: BookingPageSettings, current: BookingPageSettings): BookingPageSettings {
+  return { ...next, ...changed(next, current), status: next.status };
 }

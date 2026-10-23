@@ -236,7 +236,11 @@ export function PageEditor({
     setLastLoaded(loaded);
     if (isNotOlder(loaded, page)) {
       setPage(loaded);
-      setDraft((current) => ({ ...settingsOf(loaded), ...changed(saved, current) }));
+      setDraft((current) => ({
+        ...settingsOf(loaded),
+        ...changed(saved, current),
+        status: settingsOf(loaded).status,
+      }));
     }
   }
   const dirty = changed(saved, draft);
@@ -330,8 +334,8 @@ export function PageEditor({
       (next) => {
         setSaving(false);
         setPage(next);
-        // What the patch sent is saved now, Pause and Resume's status included; the rest stays the person's.
-        setDraft((current) => draftAfterSave(settingsOf(next), current, patch));
+        // The server's settings, with the person's own unsaved changes on top; Pause and Resume's status is saved.
+        setDraft((current) => draftAfterSave(settingsOf(next), current));
         setChipsError(undefined);
         // Saved is said for the groups' save; Pause and Resume say theirs in a toast with Undo.
         const { status } = patch;

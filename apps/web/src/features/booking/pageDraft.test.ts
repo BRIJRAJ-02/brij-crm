@@ -13,26 +13,32 @@ describe('the draft once a save lands', () => {
   it('takes a pause as saved, so nothing reads as unsaved', () => {
     const before = settings();
     const next = settings({ status: 'paused' });
-    const draft = draftAfterSave(next, before, { status: 'paused' });
+    const draft = draftAfterSave(next, before);
     expect(draft.status).toBe('paused');
     expect(changed(next, draft)).toEqual({});
   });
 
   it('takes a resume as saved too', () => {
     const next = settings({ status: 'live' });
-    expect(changed(next, draftAfterSave(next, settings({ status: 'paused' }), { status: 'live' }))).toEqual({});
+    expect(changed(next, draftAfterSave(next, settings({ status: 'paused' })))).toEqual({});
   });
 
   it('keeps the person’s other unsaved changes through a pause', () => {
     const before = settings({ title: 'Demo, edited' });
     const next = settings({ status: 'paused' });
-    expect(changed(next, draftAfterSave(next, before, { status: 'paused' }))).toEqual({ title: 'Demo, edited' });
+    expect(changed(next, draftAfterSave(next, before))).toEqual({ title: 'Demo, edited' });
   });
 
   it('clears what a group save sent, and keeps what changed while it was out', () => {
     const sent = { title: 'Demo, edited' };
     const next = settings(sent);
     const current = settings({ ...sent, windowDays: 30 });
-    expect(changed(next, draftAfterSave(next, current, sent))).toEqual({ windowDays: 30 });
+    expect(changed(next, draftAfterSave(next, current))).toEqual({ windowDays: 30 });
+  });
+
+  it('keeps typing done while the save was out, as an unsaved change', () => {
+    const next = settings({ title: 'A' });
+    const current = settings({ title: 'AB' });
+    expect(changed(next, draftAfterSave(next, current))).toEqual({ title: 'AB' });
   });
 });
