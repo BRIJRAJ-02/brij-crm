@@ -4,6 +4,8 @@
 // typed. A schema's own words always win. The most used typed fields say
 // something specific, and a walk over every contract input proves no failure
 // anywhere falls through to Zod's text.
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as z from 'zod';
 import { PublicBookInput, PublicGuestsInput } from './booking/public.ts';
@@ -140,6 +142,26 @@ describe('plainIssueMessage', () => {
     installPlainErrors();
     expect(z.config()).toBe(config);
     expect(z.config().customError).toBe(plainIssueMessage);
+  });
+
+  it('takes effect when installed before Zod ever loads, as the browser does it', () => {
+    // A fresh process that loads only plain-errors.ts first, then Zod: this test's own Zod loaded before the install.
+    const script = [
+      "const before = '__zod_globalConfig' in globalThis;",
+      "const { installPlainErrors } = await import('./src/plain-errors.ts');",
+      'installPlainErrors();',
+      "const z = await import('zod');",
+      "const failed = z.string().min(1).safeParse('');",
+      'console.log(JSON.stringify({ before, message: failed.error?.issues[0]?.message }));',
+    ].join('\n');
+    const out = execFileSync(process.execPath, ['--input-type=module', '--eval', script], {
+      cwd: fileURLToPath(new URL('..', import.meta.url)),
+      encoding: 'utf8',
+    });
+    const answer = z.object({ before: z.boolean(), message: z.string() }).parse(JSON.parse(out));
+    expect(answer.before).toBe(false);
+    expect(answer.message).toBe(z.string().min(1).safeParse('').error?.issues[0]?.message);
+    expect(answer.message).not.toMatch(/Too small|expected/);
   });
 
   it('knows its own sentences, so a toast never shows one alone', () => {
