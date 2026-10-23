@@ -106,7 +106,8 @@ export function rateStat(
     label,
     value: format(part.value, whole.value),
     comparison: strings.period.before(format(part.before, whole.before), period),
-    trend: now > then ? 'up' : now < then ? 'down' : 'same',
+    // Nothing to compare with when the period before had none: no arrow.
+    trend: whole.before === 0 ? 'same' : now > then ? 'up' : now < then ? 'down' : 'same',
   } as const;
 }
 

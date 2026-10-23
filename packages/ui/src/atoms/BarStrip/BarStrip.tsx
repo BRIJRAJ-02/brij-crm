@@ -42,7 +42,7 @@ export function BarStrip({ label, bars, max, size = 'row', axis }: BarStripProps
   const top = Math.max(max ?? 0, ...bars.map((bar) => bar.value), 0);
   return (
     <span className={styles.root} data-size={size}>
-      <span className={styles.plot} aria-hidden="true">
+      <span className={styles.plot} data-size={size} aria-hidden="true">
         {bars.map((bar) => {
           const share = top === 0 ? 0 : Math.max(0, bar.value) / top;
           return (

@@ -53,10 +53,14 @@
     block-size: calc(var(--size-row) * 4);
   }
 
-  .root[data-size='chart'] .slot {
+  /* Each bar's tooltip trigger is the plot's flex item: the bars share the width through it. */
+  .plot[data-size='chart'] > * {
     flex: 1 1 0;
     min-inline-size: 0;
-    inline-size: auto;
+  }
+
+  .root[data-size='chart'] .slot {
+    inline-size: 100%;
   }
 
   /* A narrow chart (a phone's card) with many bars drops the gaps, so 90 days keep bars wider than a hairline. */

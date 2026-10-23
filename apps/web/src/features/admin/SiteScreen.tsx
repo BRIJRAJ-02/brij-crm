@@ -29,11 +29,14 @@ const columns = (name: string): readonly TableColumn[] => [
 /** One ranking in a Card: its rows, "None in this period", or skeleton rows while `rows` is undefined. */
 function Ranking({
   title,
+  column,
   rows,
   name = (row) => row.name,
   format,
 }: {
   readonly title: string;
+  /** What one row names ("Page"): the name column's header, apart from the Card's title. */
+  readonly column: string;
   readonly rows: readonly OperatorRank[] | undefined;
   readonly name?: (row: OperatorRank) => string;
   readonly format: Formatters;
@@ -42,7 +45,7 @@ function Ranking({
     <Card title={title}>
       <Table
         label={title}
-        columns={columns(title)}
+        columns={columns(column)}
         rows={rows ?? []}
         getRowId={(row) => row.name}
         isLoading={rows === undefined}
@@ -118,17 +121,24 @@ export function SiteBody({
       </SettingsSection>
       <SettingsSection title={strings.breakdown}>
         <SettingsGrid>
-          <Ranking title={strings.topPages} rows={site?.pages} format={format} />
-          <Ranking title={strings.referrers} rows={site?.referrers} format={format} />
-          <Ranking title={strings.sources} rows={site?.sources} format={format} />
+          <Ranking title={strings.topPages} column={strings.rankNames.pages} rows={site?.pages} format={format} />
+          <Ranking
+            title={strings.referrers}
+            column={strings.rankNames.referrers}
+            rows={site?.referrers}
+            format={format}
+          />
+          <Ranking title={strings.sources} column={strings.rankNames.sources} rows={site?.sources} format={format} />
           <Ranking
             title={strings.countries}
+            column={strings.rankNames.countries}
             rows={site?.countries}
             name={(row) => format.country(row.name)}
             format={format}
           />
           <Ranking
             title={strings.devices}
+            column={strings.rankNames.devices}
             rows={site?.devices}
             name={(row) => strings.deviceNames[row.name] ?? row.name}
             format={format}
