@@ -1,6 +1,6 @@
 // Whether a person's account picture shows on their public pages (owner ask A124, 23 Oct 2026): their booking pages
 // and their `/<handle>` profile show initials while they keep it off. The person's own choice, the same in every
-// workspace, kept in schema auth (`auth.user_prefs`, migration 0091) and reached only through crm_handle's two
+// workspace, kept in schema auth (`auth.user_prefs`, migration 0092) and reached only through crm_handle's two
 // definer functions, inside the caller's workspace transaction. The profile's own reader, `crm_handle_owner`,
 // already answers no picture for a person who keeps it off.
 import type { WorkspaceTx } from '@crm/db';

@@ -1780,7 +1780,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     // The handles read a person's name and picture for their profile, and change only the handle and bio; and
-    // (migration 0091) read and set whether the picture stays off their public pages, never where `/` takes them.
+    // (migration 0092) read and set whether the picture stays off their public pages, never where `/` takes them.
     expect(handles.rows.map((row) => row.grant)).toEqual([
       'auth."user".id SELECT',
       'auth."user".image SELECT',
