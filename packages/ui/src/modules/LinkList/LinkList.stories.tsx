@@ -685,11 +685,15 @@ export const ReorderSearched: Story = {
   },
 };
 
-/** Rows that move, in a narrow Card: the grip stays beside both lines of a row that takes a second one. */
+/**
+ * Rows that move, in a narrow Card: the grip stays beside both lines of a row that takes a second one. The Card is
+ * stretched to the sidebar's width (`narrow-fill`): the list is a container query root, so it has no width of its own
+ * to give a Card that would otherwise shrink around it, down to its title's.
+ */
 export const ReorderNarrow: Story = {
   args: { density: 'compact', placement: 'card', isToolbarHidden: true, label: 'Your pages', searchLabel: 'Pages' },
   render: (args) => (
-    <Stage width="narrow">
+    <Stage width="narrow-fill">
       <Card title="Sales">
         <MovingRows {...args} onMove={fn()} />
       </Card>
@@ -697,8 +701,13 @@ export const ReorderNarrow: Story = {
   ),
   play: async ({ canvas }) => {
     const grip = await canvas.findByRole('button', { name: 'Move Product demo' });
-    const title = canvas.getByText('Product demo').getBoundingClientRect();
+    const titleText = canvas.getByText('Product demo');
+    const title = titleText.getBoundingClientRect();
     await expect(grip.getBoundingClientRect().right).toBeLessThanOrEqual(title.left);
-    await expect(canvas.getByText('45 min · 60 min')).toBeVisible();
+    // The title shows whole, and the facts take the row's second line, under it.
+    await expect(titleText.scrollWidth).toBeLessThanOrEqual(titleText.clientWidth);
+    const facts = canvas.getByText('45 min · 60 min');
+    await expect(facts).toBeVisible();
+    await expect(facts.getBoundingClientRect().top).toBeGreaterThanOrEqual(title.bottom);
   },
 };
