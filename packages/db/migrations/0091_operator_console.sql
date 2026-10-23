@@ -296,13 +296,13 @@ begin atomic
 end;
 --> statement-breakpoint
 
--- Booking pages not deleted (one page when `page` is set; at most 500, most viewed first): the workspace, title,
+-- Booking pages not deleted (one page when `page` is set; at most 500, most viewed first): the workspace and its name, title,
 -- kind, state, owner's identity and when it was made, with its views, visitors (daily ids, summed over days),
 -- bookings made and those since cancelled, in [from, to).
 create function crm_operator_pages(from_day date, to_day date, page uuid)
   returns table (
-    workspace_id uuid, page_id uuid, title text, kind text, status text, owner_user_id uuid, created_at timestamptz,
-    views integer, visitors integer, bookings integer, cancelled integer
+    workspace_id uuid, workspace_name text, page_id uuid, title text, kind text, status text, owner_user_id uuid,
+    created_at timestamptz, views integer, visitors integer, bookings integer, cancelled integer
   )
   language sql
   stable
@@ -310,7 +310,7 @@ create function crm_operator_pages(from_day date, to_day date, page uuid)
   set search_path = pg_catalog, pg_temp
   rows 100
 begin atomic
-  select p.workspace_id, p.id, p.title, p.kind, p.status, p.owner_user_id, p.created_at,
+  select p.workspace_id, w.name, p.id, p.title, p.kind, p.status, p.owner_user_id, p.created_at,
     coalesce(v.views, 0), coalesce(v.visitors, 0), coalesce(b.bookings, 0), coalesce(b.cancelled, 0)
   from public.workspaces w
   join public.booking_pages p on p.workspace_id = w.id and p.deleted_at is null

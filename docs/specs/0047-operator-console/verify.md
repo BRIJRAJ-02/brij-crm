@@ -4,7 +4,7 @@ Run after `OPERATOR_EMAILS` (the owner's address) and `SITE_ORIGINS` (`https://t
 
 | AC | How to check | Result |
 |---|---|---|
-| AC-1617, AC-1619 | Signed in as the owner, the account menu shows "Super admin"; signed in as anyone else it doesn't | |
+| AC-1617, AC-1619 | Signed in as the owner, Settings shows the Super admin group; signed in as anyone else it doesn't | |
 | AC-1618 | As a person not on the list, `POST /api/rpc/operator/overview` answers 404 `NOT_FOUND`; the owner without two factor sees the plain "turn on two factor" state | |
 | AC-1620 | After opening each page, `auth.operator_event` holds one row per read with the procedure and request id | |
 | AC-1621, AC-1622 | `pnpm --filter @crm/db test guards operator`: the definer list, hardening and the refused column read pass | |

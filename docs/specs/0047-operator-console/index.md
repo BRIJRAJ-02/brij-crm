@@ -26,7 +26,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 *Who is a super admin*
 - **AC-1617**: `OPERATOR_EMAILS` (the api's environment, a comma separated list of emails, optional) names the super admins. Unset or empty, nobody is one. Only a signed in session whose user's email is on the list and verified counts; workspace roles never do.
 - **AC-1618**: Every `operator.*` procedure answers `NOT_FOUND` to anyone else, signed in or not (signed out answers `UNAUTHENTICATED` first, like every session procedure). A listed person without two factor on is refused `TWO_FACTOR_REQUIRED`; a listed person whose session last proved itself more than 12 hours ago is refused `SIGN_IN_AGAIN`.
-- **AC-1619**: `me.get` answers `isOperator: true` for a listed, verified person (false otherwise). It decides only whether the account menu shows "Super admin"; access is decided again by every `operator.*` call.
+- **AC-1619**: `me.get` answers `isOperator: true` for a listed, verified person (false otherwise). It decides only whether Settings shows the Super admin group; access is decided again by every `operator.*` call.
 - **AC-1620**: Every `operator.*` call writes one row to `auth.operator_event` (the operator's user id, the procedure, its target id when it has one, the period, the request id, the time) before it reads anything. If the row can't be written, the call fails and reads nothing.
 
 *What leaves the database*
