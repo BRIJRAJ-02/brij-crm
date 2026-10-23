@@ -6,7 +6,7 @@ import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkList, type LinkListProps, type LinkRow } from './LinkList.tsx';
-import { RowOrder } from './RowOrder.tsx';
+import { LinkListRowOrder } from './RowOrder.tsx';
 
 function icons(title: string, isOff = false) {
   return (
@@ -587,7 +587,7 @@ function MovingRows(
     <LinkList
       {...props}
       rows={rows}
-      rowOrder={RowOrder}
+      rowOrder={LinkListRowOrder}
       onMove={(id, to) => {
         props.onMove(id, to);
         setRows((was) => {

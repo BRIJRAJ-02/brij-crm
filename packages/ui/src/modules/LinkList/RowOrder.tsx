@@ -11,7 +11,7 @@ import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 /** Draws one row's grip, named for screen readers ("Move Intro call"); a row that can't move gets none. */
 export type RowGrip = (id: string, label: string, isDisabled: boolean) => ReactNode;
 
-/** Props for RowOrder. */
+/** Props for LinkListRowOrder. */
 export interface RowOrderProps {
   /** The rows' ids, in their order. */
   readonly ids: readonly string[];
@@ -26,8 +26,11 @@ export interface RowOrderProps {
 /** The grip of one row, inside the row React Aria renders (see `SortableRowGrip`). */
 const grip: RowGrip = (id, label, isDisabled) => <SortableRowGrip id={id} label={label} isDisabled={isDisabled} />;
 
-/** The sorting list around a LinkList's rows, handed to LinkList as its `rowOrder` by a screen whose rows move. */
-export function RowOrder({ ids, nameOf, onMove, children }: RowOrderProps) {
+/**
+ * The sorting list around a LinkList's rows, handed to LinkList as its `rowOrder` by a screen whose rows move. Named
+ * as `@crm/ui` exports it, so a story imports it by that name (the artifact's previews take only exported names).
+ */
+export function LinkListRowOrder({ ids, nameOf, onMove, children }: RowOrderProps) {
   return (
     <SortableList
       ids={ids}

@@ -6,7 +6,7 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkList, type LinkRow } from '../LinkList/LinkList.tsx';
-import { RowOrder } from '../LinkList/RowOrder.tsx';
+import { LinkListRowOrder } from '../LinkList/RowOrder.tsx';
 import { SectionList, type SectionListSection } from './SectionList.tsx';
 
 /** One section of a profile, as the story holds it. */
@@ -121,7 +121,7 @@ function Profile({
         isToolbarHidden
         rows={group.rows}
         onOpen={() => undefined}
-        {...(isReadOnly ? {} : { onMove: moveRow(group.id), rowOrder: RowOrder })}
+        {...(isReadOnly ? {} : { onMove: moveRow(group.id), rowOrder: LinkListRowOrder })}
       />
     ),
   }));
