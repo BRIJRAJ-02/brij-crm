@@ -130,7 +130,10 @@ async function axeBothThemes(): Promise<readonly string[]> {
   const found: string[] = [];
   for (const theme of ['light', 'dark'] as const) {
     document.documentElement.dataset.theme = theme;
-    for (const animation of document.getAnimations()) animation.finish();
+    // Only the theme's colour transitions: a loading row's shimmer runs forever, and finishing it throws.
+    for (const animation of document.getAnimations()) {
+      if (animation instanceof CSSTransition) animation.finish();
+    }
     const results = await axe.run(document.body, { resultTypes: ['violations'] });
     found.push(...results.violations.map((violation) => `${theme} ${violation.id}: ${violation.help}`));
   }
