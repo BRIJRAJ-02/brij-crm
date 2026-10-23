@@ -68,6 +68,66 @@ export const strings = {
   copyLink: 'Copy link',
   /** Under their name beside the picture, when the picture is the one their Google account gave. */
   fromGoogle: 'From Google',
+  /** Sync Google photo (23 Oct 2026): fetches their Google account's current photo, linking Google first if need be. */
+  syncGooglePhoto: 'Sync Google photo',
+  /** Its fuller name while Google isn't linked, saying what else it does (it starts with the visible label). */
+  syncGooglePhotoAndSignIn: 'Sync Google photo and add Google sign in',
+  /** The button while the browser leaves for Google. */
+  openingGoogle: 'Opening Google',
+  /** Under their name when Google isn't linked yet: which account to choose, and that it becomes a way in. */
+  googleUnlinked: (email: string) => `Choose the Google account for ${email}. It also becomes a way to sign in.`,
+  /** Under their name when Google is linked but no photo came from it yet. */
+  googleNoPhoto: 'Sync to use the photo on your Google account.',
+  /** Under their name while the page has changes: leaving for Google would lose them. */
+  saveBeforeSync: 'Save or discard your changes first.',
+  /** Closes the note about how a sync went. */
+  dismiss: 'Dismiss',
+  /**
+   * How a sync went, as `?google-photo=` names it on the way back from Google: `synced` is a toast (the owner's
+   * words), every other one the page's note until dismissed.
+   */
+  googlePhoto: {
+    synced: {
+      tone: 'success',
+      title: 'Google photo synced',
+      text: () => 'Your Google photo is on your profile and booking pages.',
+    },
+    none: {
+      tone: 'info',
+      title: 'No photo at Google',
+      text: () => 'Your Google account has no photo, so nothing changed.',
+    },
+    kept: {
+      tone: 'info',
+      title: 'Your photo stays',
+      text: () => 'Your current photo isn’t from Google, so a Google photo doesn’t replace it.',
+    },
+    cancelled: {
+      tone: 'info',
+      title: 'Google photo not synced',
+      text: () => 'You didn’t give Timefix access, so nothing changed.',
+    },
+    'other-email': {
+      tone: 'danger',
+      title: 'Google photo not synced',
+      text: (email: string) => `That Google account uses a different email. Choose the one for ${email}.`,
+    },
+    'other-account': {
+      tone: 'danger',
+      title: 'Google photo not synced',
+      text: () => 'That Google account signs in to another Timefix account, so it can’t be used here.',
+    },
+    unverified: {
+      tone: 'danger',
+      title: 'Google photo not synced',
+      text: () => 'Google couldn’t be added to your account. Try again, or choose another Google account.',
+    },
+    failed: {
+      tone: 'danger',
+      title: 'Google photo not synced',
+      text: () => 'Your Google photo couldn’t be synced. Try again.',
+    },
+  },
   yourName: 'Your name',
   email: 'Email',
   emailUse: 'Used to sign in',
@@ -75,3 +135,11 @@ export const strings = {
   sameAsWorkspace: (zone: string) => `Same as the workspace (${zone})`,
   zoneFollows: 'Your time zone now follows the workspace.',
 } as const;
+
+/** How a Google photo sync went, as the API's way back from Google names it (`?google-photo=`). */
+export type GooglePhotoResult = keyof typeof strings.googlePhoto;
+
+/** True when `value` is one of the results the API sends Profile back with. */
+export function isGooglePhotoResult(value: unknown): value is GooglePhotoResult {
+  return typeof value === 'string' && Object.hasOwn(strings.googlePhoto, value);
+}

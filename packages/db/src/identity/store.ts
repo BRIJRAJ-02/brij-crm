@@ -35,6 +35,19 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const USER_IMAGE_MAX = 2048;
 /** A picture on Google's picture hosts, which a newer one from Google may replace (a POSIX pattern for Postgres). */
 const GOOGLE_PICTURE = '^https://lh[3-6]\\.googleusercontent\\.com/';
+/** Google's picture hosts, as a hostname. */
+const GOOGLE_PICTURE_HOST = /^lh[3-6]\.googleusercontent\.com$/;
+
+/** Whether `url` is on Google's picture hosts: https, no port, no credentials (core's `isPictureHost`, here too). */
+function isGooglePicture(url: URL): boolean {
+  return (
+    url.protocol === 'https:' &&
+    url.port === '' &&
+    url.username === '' &&
+    url.password === '' &&
+    GOOGLE_PICTURE_HOST.test(url.hostname)
+  );
+}
 
 /** How a session last proved who it is: a second factor, or an email code or Google alone. */
 export type VerifiedWith = 'email' | 'second_factor';
@@ -297,12 +310,15 @@ export interface IdentityStore {
    */
   userImage(id: string): Promise<string | undefined>;
   /**
-   * Saves Google's picture from a sign in that stands, only an https URL of at most 2048 characters, when the user
-   * has none or an older one of Google's picture hosts (`lh3` to `lh6.googleusercontent.com`): an account made with
-   * an email code and linked to Google later starts with none, and Better Auth fills it only at sign up. A picture
-   * from anywhere else is never replaced. True when it saved.
+   * Saves Google's picture from a sign in that stands (or its second step, or Profile's Sync Google photo), only an
+   * https URL of at most 2048 characters on Google's picture hosts (`lh3` to `lh6.googleusercontent.com`, no port,
+   * no credentials), when the user has none or an older one of Google's: an account made with an email code and
+   * linked to Google later starts with none, and Better Auth fills it only at sign up. A picture from anywhere else
+   * is never saved, and never replaced. True when it saved.
    */
   setUserImageFromGoogle(id: string, image: string): Promise<boolean>;
+  /** Whether the user has a Google account linked (it signs in with Google). Reads no token. */
+  hasGoogleAccount(id: string): Promise<boolean>;
   /**
    * Counts one use of `key` against `rule` in Better Auth's `auth.rate_limit`
    * table, in one atomic statement, so the limit holds across instances. For
@@ -549,6 +565,8 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
               or ${verification.identifier} in (select 'step-up-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
               or ${verification.identifier} in (select 'step-up-passkey-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
               or strpos(${verification.value}, '"userData":{"id":"' || ${userId} || '"') > 0
+              or (starts_with(${verification.identifier}, '2fa-picture-')
+                  and strpos(${verification.value}, '"userId":"' || ${userId} || '"') > 0)
               or ${verification.identifier} in (${sql.join(
                 OTP_TYPES.map((type) => sql`${`${type}-otp-${email}`}`),
                 sql`, `,
@@ -758,7 +776,9 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
     async setUserImageFromGoogle(id, image) {
       const trimmed = image.trim();
       if (!UUID.test(id) || trimmed.length > USER_IMAGE_MAX || !URL.canParse(trimmed)) return false;
-      if (new URL(trimmed).protocol !== 'https:') return false;
+      const url = new URL(trimmed);
+      // As written, too: the database's own check of Google's hosts reads the text, which a parsed URL lowercases.
+      if (!isGooglePicture(url) || !trimmed.startsWith(`https://${url.hostname}/`)) return false;
       const saved = await db
         .update(user)
         .set({ image: trimmed, updatedAt: sql`now()` })
@@ -770,6 +790,16 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         )
         .returning({ id: user.id });
       return saved.length > 0;
+    },
+
+    async hasGoogleAccount(id) {
+      if (!UUID.test(id)) return false;
+      const [row] = await db
+        .select({ id: account.id })
+        .from(account)
+        .where(and(eq(account.userId, id), eq(account.providerId, 'google')))
+        .limit(1);
+      return row !== undefined;
     },
 
     async consumeRateLimit(key, rule, cost = 1) {
