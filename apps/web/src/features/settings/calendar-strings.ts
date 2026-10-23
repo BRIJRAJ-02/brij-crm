@@ -16,22 +16,22 @@ export const strings = {
   outlook: 'Outlook',
   /** The page's sections. */
   connectionsSection: 'Connected calendars',
-  workspaceSection: 'Workspace',
+  workspaceSection: 'For everyone in the workspace',
   /** Calendar sync isn't set up on this deployment. */
-  offTitle: 'Calendar sync isn’t set up for this workspace',
-  offText: 'Ask whoever runs Timefix for you to switch it on.',
+  offTitle: 'Calendar sync is off',
+  offText: 'Connecting calendars isn’t available here yet. Your booking pages still use your hours.',
   emptyTitle: 'No calendar connected',
-  emptyText: 'Your meetings then show on the people and companies you meet.',
+  emptyText: 'Connect your calendar so bookings avoid your busy times and your meetings show on the people you meet.',
   failedTitle: 'Couldn’t load your calendars',
   failedText: 'Try again in a moment.',
   /** How many accounts may be connected, when the limit is reached. */
-  limitReached: (max: string) => `You’ve connected ${max} calendars, the most you can. Disconnect one to add another.`,
+  limitReached: (max: string) => `You’ve connected ${max} accounts, the most you can. Disconnect one to add another.`,
   /** The one word of help on the page: how the default works across accounts. */
-  defaultHelpLabel: 'How your default calendar works',
+  defaultHelpLabel: 'Where bookings go',
   defaultHelp:
-    'New bookings from your booking pages are added to your default calendar, whichever account it is in. A booking page can pick another calendar in its editor.',
+    'New bookings from your booking pages go on this calendar. A booking page can pick another one in its editor.',
   defaultHelpExample:
-    'With Google and Outlook connected, bookings go on the one default. Every calendar with Check for conflicts on, in either account, keeps its busy times from being booked.',
+    'With Google and Outlook connected, bookings go on this one calendar. Busy times from every calendar with Check for conflicts on are kept free.',
   calendarsGroup: 'Calendars',
   /** Where new bookings go (the member's destination), one Select across every account. */
   addBookingsTo: 'Add bookings to',
@@ -85,9 +85,9 @@ export const strings = {
   status: {
     syncing: 'Syncing',
     connected: 'Connected',
-    expired: 'Expired',
-    revoked: 'Revoked',
-    failed: 'Failed',
+    expired: 'Needs reconnecting',
+    revoked: 'Access removed',
+    failed: 'Stopped syncing',
   } satisfies Record<CalendarStatus, string>,
   synced: 'Synced',
   notSyncedYet: 'Not synced yet',
@@ -114,7 +114,7 @@ export const strings = {
   disconnectFailed: 'That didn’t disconnect. Try again in a moment.',
   /** The workspace setting, for owners and admins (AC-609). */
   createPeople: 'Add people from meetings',
-  createPeopleHelp: 'For every member’s synced meetings.',
+  createPeopleHelp: 'Applies to every member’s synced meetings.',
   createPeopleInfo:
     'A guest who isn’t in Timefix yet becomes a person, linked to the company with their email’s domain.',
   createPeopleExample: 'A meeting with ana@acme.com adds Ana to People, linked to Acme if a company has acme.com.',
@@ -137,11 +137,11 @@ export const strings = {
       title: 'Calendar not connected',
       text: 'Timefix needs to see your events and when you’re busy. Connect again and leave both boxes ticked.',
     },
-    limit: { tone: 'warning', title: 'Calendar not connected', text: 'You’ve connected the most calendars you can.' },
+    limit: { tone: 'warning', title: 'Calendar not connected', text: 'You’ve connected the most accounts you can.' },
     off: {
       tone: 'info',
-      title: 'Calendar sync isn’t set up',
-      text: 'Ask whoever runs Timefix for you to switch it on.',
+      title: 'Calendar sync is off',
+      text: 'Connecting calendars isn’t available here yet. Your booking pages still use your hours.',
     },
     failed: {
       tone: 'danger',

@@ -123,7 +123,9 @@ function CalendarTable({
   readonly isHeaderHidden?: boolean;
 }) {
   const columns: readonly TableColumn[] = [
-    { id: 'name', label: strings.calendarColumn, isRowHeader: true, isInline: true, size: 'fill' },
+    // The name at its own width, never cut: the table scrolls instead (Q54). The Table's `fill` would squeeze it to
+    // nothing in a table that scrolls. On a wide screen the name still takes the room the fitted columns leave.
+    { id: 'name', label: strings.calendarColumn, isRowHeader: true, isInline: true },
     { id: 'checkConflicts', label: strings.conflictsColumn, size: 'fit' },
     { id: 'showInWeek', label: strings.weekColumn, size: 'fit' },
     { id: 'more', label: strings.optionsColumn, isLabelHidden: true, size: 'fit', align: 'end', showsOnHover: true },
@@ -135,6 +137,9 @@ function CalendarTable({
       columns={columns}
       rows={calendars}
       getRowId={(calendar) => calendar.id}
+      // Each column keeps its width, and a phone scrolls the table sideways in its own frame (Q54, 23 October 2026):
+      // at 390 "Calendar" drew over "Check for conflicts", and a name ran into its "Logs to CRM" badge.
+      isScrollable
       renderCell={(calendar, column) => {
         if (column === 'name') {
           return (
