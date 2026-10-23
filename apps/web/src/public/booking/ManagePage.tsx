@@ -25,7 +25,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { saveHour12, savedHour12 } from './prefs.ts';
 import { changeStrings } from './change-strings.ts';
-import { strings } from './strings.ts';
+import { strings, tabTitle } from './strings.ts';
 import {
   dayKey,
   dayLabels,
@@ -91,6 +91,8 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
   const client = useMemo(() => createBookingClient({ origin: globalThis.location.origin }), []);
   const changes = useMemo(() => createManageClient({ origin: globalThis.location.origin }), []);
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
+  // Try again after a failed load reads it once more.
+  const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState<'moved' | 'cancelled' | undefined>(undefined);
   // The page the Timefix link names in its tags: the guest's page just after booking, or when they come back to it.
   const brandPage = isWelcome ? 'booking_confirmation' : 'booking_manage';
@@ -99,27 +101,38 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
       (booking) => setLoaded({ state: 'ready', booking }),
       (error: unknown) => setLoaded({ state: isDataError(error) && error.code === 'NOT_FOUND' ? 'gone' : 'failed' }),
     );
-  }, [client, token]);
-  const title =
-    loaded.state !== 'ready'
-      ? undefined
-      : loaded.booking.state === 'cancelled'
-        ? strings.titles.cancelled
-        : loaded.booking.state === 'past'
-          ? strings.titles.past
-          : isWelcome && notice === undefined
-            ? strings.titles.welcome
-            : strings.titles.confirmed;
+  }, [client, token, attempt]);
+  const titleOf = (now: Loaded): string | undefined => {
+    if (now.state !== 'ready') {
+      if (now.state === 'loading') return undefined;
+      return now.state === 'gone' ? strings.linkGone : strings.failedTitle;
+    }
+    if (now.booking.state === 'cancelled') return strings.titles.cancelled;
+    if (now.booking.state === 'past') return strings.titles.past;
+    return isWelcome && notice === undefined ? strings.titles.welcome : strings.titles.confirmed;
+  };
+  const title = titleOf(loaded);
   // The tab says what the heading says.
   useEffect(() => {
-    if (title !== undefined) document.title = `${title} · ${strings.product}`;
+    if (title !== undefined) document.title = tabTitle(title);
   }, [title]);
 
   if (loaded.state === 'loading') return <BookingMessage title={strings.loading} page={brandPage} isLoading />;
   if (loaded.state !== 'ready') {
     return (
-      <BookingMessage title={loaded.state === 'gone' ? strings.linkGone : strings.failedTitle} page={brandPage}>
-        {loaded.state === 'failed' ? strings.failedText : undefined}
+      <BookingMessage
+        title={loaded.state === 'gone' ? strings.linkGone : strings.failedTitle}
+        page={brandPage}
+        {...(loaded.state === 'failed'
+          ? {
+              onRetry: () => {
+                setLoaded({ state: 'loading' });
+                setAttempt((count) => count + 1);
+              },
+            }
+          : {})}
+      >
+        {loaded.state === 'failed' ? strings.failedText : strings.linkGoneText}
       </BookingMessage>
     );
   }
