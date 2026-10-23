@@ -66,6 +66,7 @@ import { zoneDisplay } from '../../public/booking/time.ts';
 import { DaysOff } from './DaysOff.tsx';
 import { WeekCard, WeekCardPending } from './ScheduleEditor.tsx';
 import { useScheduleDraft } from './scheduleDraft.ts';
+import { changed, draftAfterSave } from './pageDraft.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { bookingsTabHref } from '../bookings/tabs.ts';
 import { strings as capturesStrings } from '../captures/strings.ts';
@@ -189,15 +190,6 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
 function slugProblem(value: string): string | undefined {
   if (value === '') return strings.slugRequired;
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) && value.length <= 60 ? undefined : strings.slugInvalid;
-}
-
-/** The settings that differ between two drafts. */
-function changed(saved: BookingPageSettings, draft: BookingPageSettings): Partial<BookingPageSettings> {
-  const keys = Object.keys(draft) as (keyof BookingPageSettings)[];
-  const entries = keys
-    .filter((key) => JSON.stringify(draft[key]) !== JSON.stringify(saved[key]))
-    .map((key) => [key, draft[key]]);
-  return Object.fromEntries(entries) as Partial<BookingPageSettings>;
 }
 
 /** Whether a draft is fine to send: the server would refuse it otherwise. */
@@ -338,7 +330,8 @@ export function PageEditor({
       (next) => {
         setSaving(false);
         setPage(next);
-        setDraft((current) => ({ ...settingsOf(next), ...changed(settingsOf(next), current) }));
+        // What the patch sent is saved now, Pause and Resume's status included; the rest stays the person's.
+        setDraft((current) => draftAfterSave(settingsOf(next), current, patch));
         setChipsError(undefined);
         // Saved is said for the groups' save; Pause and Resume say theirs in a toast with Undo.
         const { status } = patch;
