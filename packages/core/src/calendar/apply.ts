@@ -227,10 +227,48 @@ export async function dropSources(
       where meeting_id = any(${uuidList(gone.rows.map((row) => row.id))})
     `);
   }
+  if (options.cancelBookings !== false) await releaseCancelled(tx, meetingIds);
   await recomputePrivacy(tx, meetingIds);
   // Those another calendar still holds show on records only while a syncing calendar (or the CRM) holds them.
   await unlinkUnsynced(tx, meetingIds);
   return meetingIds.map((meetingId) => ({ meetingId, recordIds: before.get(meetingId) ?? [] }));
+}
+
+/**
+ * Lets go of the meetings among `meetingIds` that a calendar still holds but
+ * whose every booking is cancelled (the owner's report of 23 October 2026):
+ * the meeting is no longer the booking's or the CRM's, and the booking no
+ * longer points at it, so the calendar reads show it as the event it still
+ * is. It runs in the drop's transaction, the meeting recorded as the
+ * calendar and the booking as the system (bookings admit no `calendar`
+ * actor). Only a booking the calendar cancelled (no `cancelled_by`, or
+ * `calendar`) lets go: one a host or guest cancelled from Timefix keeps its
+ * link, so its event's cancel (`cancelEvent`, which needs the CRM's meeting
+ * and drops without this) can still be retried, and its guest email reads it.
+ */
+async function releaseCancelled(tx: WorkspaceTx, meetingIds: readonly string[]): Promise<void> {
+  await tx.execute(sql`
+    with freed as (
+      update meetings m set booking_id = null, created_by_crm = false, updated_at = now(),
+        updated_by_type = 'calendar', updated_by_id = null, updated_by_member_id = null
+      where m.id = any(${uuidList(meetingIds)})
+        and exists (select 1 from meeting_sources s where s.workspace_id = m.workspace_id and s.meeting_id = m.id)
+        and exists (
+          select 1 from bookings b
+          where b.workspace_id = m.workspace_id and (b.id = m.booking_id or b.meeting_id = m.id)
+            and b.status = 'cancelled' and (b.cancelled_by is null or b.cancelled_by = 'calendar')
+        )
+        and not exists (
+          select 1 from bookings b
+          where b.workspace_id = m.workspace_id and (b.id = m.booking_id or b.meeting_id = m.id)
+            and b.status <> 'cancelled'
+        )
+      returning m.workspace_id, m.id
+    )
+    update bookings b set meeting_id = null,
+      updated_at = now(), updated_by_type = 'system', updated_by_id = null, updated_by_member_id = null
+    from freed where b.workspace_id = freed.workspace_id and b.meeting_id = freed.id and b.status = 'cancelled'
+  `);
 }
 
 /** Among `meetingIds`, the meetings that show on records: a syncing calendar holds them, or the CRM made them. */
@@ -280,9 +318,12 @@ export const REMOVED_FROM_CALENDAR = 'Removed from the host calendar';
  * Cancels the upcoming confirmed bookings whose event just left the host's
  * calendar (spec 0025, the owner's report of 20 October 2026): the dropped
  * copy was the one the CRM made (`origins`, in the calendar the booking went
- * to, AC-998), or no calendar holds the meeting any more. Another copy going
- * while that one stays changes nothing (a co host's, or another calendar of
- * the host's), and a booking that already began stays as it was. The slot frees with the status (the
+ * to, AC-998) and no calendar of the host's that is pulled (syncs or shows on
+ * their week) still holds the meeting, or no calendar holds it any more.
+ * Another copy going while that one stays changes nothing (a co host's, or
+ * another calendar of the host's), nor does the booking's copy going while
+ * another of the host's calendars keeps the meeting (the owner's report of
+ * 23 October 2026), and a booking that already began stays as it was. The slot frees with the status (the
  * exclusion constraint holds confirmed bookings only). It runs in the
  * sync's own transaction, recorded as the system: the bookings table admits
  * no `calendar` actor. The host is told by email, queued in the same
@@ -305,7 +346,14 @@ async function cancelRemovedBookings(tx: WorkspaceTx, origins: readonly string[]
       and (b.meeting_id = m.id or m.booking_id = b.id)
       and b.status = 'confirmed' and b.starts_at > now()
       and (
-        m.id = any(${uuidList(origins)})
+        -- The booking's own copy went, and none of the host's pulled calendars holds the meeting now.
+        (m.id = any(${uuidList(origins)}) and not exists (
+          select 1 from meeting_sources s
+          join calendar_calendars k on k.workspace_id = s.workspace_id and k.connection_id = s.connection_id
+            and k.provider_calendar_id = s.calendar_id
+          where s.workspace_id = m.workspace_id and s.meeting_id = m.id
+            and k.member_id = b.host_member_id and (k.sync or k.show_in_week)
+        ))
         or not exists (select 1 from meeting_sources s where s.workspace_id = m.workspace_id and s.meeting_id = m.id)
       )
     returning b.id::text as id

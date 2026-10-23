@@ -47,6 +47,16 @@ export interface GeneralScreenProps {
   readonly onDeleted: (name: string) => void;
 }
 
+/** What a saved toast's Undo puts back, and how to tell the workspace still holds the change it undoes. */
+interface SavedUndo {
+  readonly what: 'name' | 'time zone';
+  readonly run: () => void;
+  /** Whether the workspace, as read, still holds this change. */
+  readonly isStill: (now: WorkspaceSettings) => boolean;
+  /** Whether a newer save of the same setting is on its way. */
+  readonly isBusy: () => boolean;
+}
+
 /**
  * A Card of rows, each saving on its own (the owner's save rule, 21 October 2026): the name, saved when the field is
  * left, on Enter or when the page goes with it still typed, with "Name changed." and Undo (an empty name is refused on
@@ -89,30 +99,85 @@ export function GeneralScreen({
   const fail = (error: unknown) => {
     toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
   };
+  // The settings as shown now, a quick first check for an Undo pressed later; and the last saved toast, which a newer
+  // save closes as it starts, so several changes leave one toast and no older Undo is left to press (Q99), as
+  // Preferences and the invite link keep it.
+  const shown = useRef(settings);
+  useEffect(() => {
+    shown.current = settings;
+  });
+  // The time zone on its way, read by an Undo pressed meanwhile (a ref, as the toast outlives the render it came from).
+  const zoneSending = useRef<string | undefined>(undefined);
+  const lastSaved = useRef<string | undefined>(undefined);
+  /** Closes the open Undo, if any: a newer change is on its way. */
+  const closeSaved = () => {
+    if (lastSaved.current !== undefined) toasts.dismiss(lastSaved.current);
+    lastSaved.current = undefined;
+  };
+  // Leaving General closes its Undo too, since this page is what guards it.
+  useEffect(
+    () => () => {
+      if (lastSaved.current !== undefined) toasts.dismiss(lastSaved.current);
+    },
+    [toasts],
+  );
+  const saved = (message: string, undo: SavedUndo | undefined) => {
+    closeSaved();
+    lastSaved.current = toasts.toast({
+      tone: 'success',
+      message,
+      ...(undo === undefined
+        ? {}
+        : {
+            action: {
+              label: strings.undo,
+              // Only while the workspace still holds this change, read from the server as General isn't live: never
+              // over a newer one, another admin's or one made before leaving and coming back. A newer save still on its
+              // way counts as newer.
+              onAction: () => {
+                const stale = () => {
+                  toasts.toast({ tone: 'info', message: strings.undoStale(undo.what) });
+                };
+                if (undo.isBusy() || !undo.isStill(shown.current)) {
+                  stale();
+                  return;
+                }
+                data.workspace
+                  .get(slug)
+                  .then((now) => {
+                    if (undo.isBusy() || !undo.isStill(now)) stale();
+                    else undo.run();
+                  })
+                  .catch(fail);
+              },
+            },
+          }),
+    });
+  };
 
   // Renames it, then reads the settings back; Undo is the same rename the other way, with no Undo of its own.
   const rename = (to: string, from: string, withUndo: boolean) => {
     sending.current = to;
+    closeSaved();
     data.workspace
       .update(slug, { name: to })
       .then(async () => {
         await onChanged();
         // The field shows the saved name again, unless more was typed meanwhile.
         setNameDraft((typed) => (typed === undefined || typed.trim() === to ? undefined : typed));
-        toasts.toast({
-          tone: 'success',
-          message: strings.nameChanged,
-          ...(withUndo
+        saved(
+          strings.nameChanged,
+          withUndo
             ? {
-                action: {
-                  label: strings.undo,
-                  onAction: () => {
-                    rename(from, to, false);
-                  },
+                what: 'name',
+                run: () => {
+                  rename(from, to, false);
                 },
+                isStill: (now) => now.name === to,
+                isBusy: () => sending.current !== undefined,
               }
-            : {}),
-        });
+            : undefined,
+        );
       })
       .catch((error: unknown) => {
         // Refused or lost: the typed name stays in the field for Enter to try again. A refusal of the name says why on
@@ -128,7 +193,7 @@ export function GeneralScreen({
         fail(error);
       })
       .finally(() => {
-        sending.current = undefined;
+        if (sending.current === to) sending.current = undefined;
       });
   };
   const commitName = () => {
@@ -161,27 +226,29 @@ export function GeneralScreen({
 
   const setZone = (zone: string, previous: string, withUndo: boolean) => {
     setZoneBusy(true);
+    zoneSending.current = zone;
+    closeSaved();
     data.workspace
       .update(slug, { timeZone: zone })
       .then(async () => {
         await onChanged();
-        toasts.toast({
-          tone: 'success',
-          message: strings.zoneChanged(zoneLabel(zone)),
-          ...(withUndo
+        saved(
+          strings.zoneChanged(zoneLabel(zone)),
+          withUndo
             ? {
-                action: {
-                  label: strings.undo,
-                  onAction: () => {
-                    setZone(previous, zone, false);
-                  },
+                what: 'time zone',
+                run: () => {
+                  setZone(previous, zone, false);
                 },
+                isStill: (now) => now.timeZone === zone,
+                isBusy: () => zoneSending.current !== undefined,
               }
-            : {}),
-        });
+            : undefined,
+        );
       })
       .catch(fail)
       .finally(() => {
+        if (zoneSending.current === zone) zoneSending.current = undefined;
         setZoneBusy(false);
       });
   };

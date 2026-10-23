@@ -21,7 +21,8 @@ const UNKNOWN_PAGE = 'That booking page doesn’t exist, or isn’t yours.';
 
 /**
  * Refuses a surface the reader may not edit, as NOT_FOUND; answers its id, and a team page's rules. A form's
- * rules read no person's or company's field (its publish refuses them), so none is kept from the reader.
+ * decisions come from its live rules, which read no person's or company's field (publish refuses them, as a draft
+ * save does), so none is kept from the reader.
  */
 async function checkSurface(
   tx: WorkspaceTx,

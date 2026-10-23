@@ -1,6 +1,7 @@
 // Lead routing end to end in core (spec 0043), against the real Postgres:
 // deciding a route, Show when dropping hidden answers, a form's rules sending
-// visitors on with a decision row, a team page's rules narrowing hosts by a
+// visitors on with a decision row, a form's draft refusing a condition over a
+// person's or a company's field, a team page's rules narrowing hosts by a
 // record field, a hand off's hosts narrowing the slots, the fallback when the
 // routed hosts are busy, the report's counts, and the no show mark's door.
 // Then the leftovers: one decision per submission, is any of, a company read
@@ -324,6 +325,102 @@ describe('a form’s routing', () => {
       ]),
     );
     expect(refusal.message).toContain('isn’t in the page’s rotation');
+  });
+
+  it('refuses a draft whose Show when or rule reads a person’s or a company’s field, in publish’s words, storing nothing', async () => {
+    const w = await world();
+    const jobTitle = w.attribute('people.job_title');
+    const created = await createForm(w.owner, { id: newId(), name: 'Demo request' });
+    const budget = question({
+      id: 'budget',
+      key: 'budget',
+      label: 'Budget',
+      answerType: 'choice',
+      choices: ['Small', 'Large'],
+    });
+    const size = question({ id: 'size', key: 'size', label: 'Team size', answerType: 'number' });
+    const large = { key: 'budget', op: 'is' as const, value: 'Large' };
+    /** The new form's draft asking the budget, then the team size (shown when `sizeShown`), routed by `rules`. */
+    const draft = (
+      sizeShown: FormDocument['questions'][number]['showWhen'],
+      rules: RoutingRule[] = [],
+    ): FormDocument => ({
+      ...created.draft,
+      questions: [
+        ...created.draft.questions,
+        budget,
+        { ...size, ...(sizeShown === undefined ? {} : { showWhen: sizeShown }) },
+      ],
+      routing: { rules },
+    });
+    const save = (scope: typeof w.owner, document: FormDocument, expectedRevision: number) =>
+      saveFormDraft(scope, { formId: created.id, document, expectedRevision });
+
+    // Ada sees Job title and sends a Show when over it, as only the API would: refused on the question.
+    const shown = await refusalOf(
+      save(
+        w.owner,
+        draft({ join: 'all', rules: [{ key: `person.${jobTitle}`, op: 'is', value: 'zebra cto' }] }),
+        created.revision,
+      ),
+    );
+    expect(shown).toEqual({
+      code: 'CONFIG_INVALID',
+      message: '“Team size” reads a record field, which only a team page’s rules can read. Change its Show when.',
+      field: 'size',
+    });
+    // A rule over a company's field: refused on Routing, by the rule's number and name.
+    const enterprise = rule('enterprise', {
+      name: 'Enterprise',
+      when: {
+        join: 'any',
+        rules: [large, { key: `company.${w.attribute('companies.employee_range')}`, op: 'is_answered' }],
+      },
+      then: { kind: 'message', message: 'Hello' },
+    });
+    const routed = await refusalOf(save(w.owner, draft(undefined, [enterprise]), created.revision));
+    expect(routed).toEqual({
+      code: 'CONFIG_INVALID',
+      message:
+        'Rule 1, “Enterprise”, reads a record field, which only a team page’s rules can read. Change it in Routing.',
+      field: 'routing',
+    });
+
+    // Nothing was stored: Bea, an admin (forms.manage) who can't see Job title, opens the draft as it was made.
+    const blind = rescope(w.owner, {
+      actor: { type: 'member', id: w.bea.id },
+      role: 'admin',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'admin' },
+            target: { type: 'attribute', objectId: w.people, attributeId: jobTitle },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    const opened = await getForm(blind, { formId: created.id });
+    expect({ revision: opened.revision, draft: opened.draft }).toEqual({
+      revision: created.revision,
+      draft: created.draft,
+    });
+    for (const kept of [jobTitle, 'zebra', 'enterprise']) expect(JSON.stringify(opened)).not.toContain(kept);
+
+    // The editor's saves go on: a Show when over an earlier answer, rules over an answer and a hidden field, by
+    // Ada and then by Bea, and the form publishes.
+    const ads = rule('ads', {
+      when: { join: 'all', rules: [{ key: 'hidden.utm_source', op: 'is', value: 'google' }] },
+      then: { kind: 'message', message: 'Ads' },
+    });
+    const big = rule('large', { when: { join: 'all', rules: [large] }, then: { kind: 'message', message: 'Big' } });
+    const saved = await save(w.owner, draft({ join: 'all', rules: [large] }, [big, ads]), created.revision);
+    expect(saved.draft.routing.rules.map((each) => each.id)).toEqual(['large', 'ads']);
+    const edited = await save(blind, { ...saved.draft, headline: 'Tell us about your team' }, saved.revision);
+    expect(edited.draft.headline).toBe('Tell us about your team');
+    const published = await publishForm(w.owner, { formId: created.id, expectedRevision: edited.revision });
+    expect(published.live?.routing.rules.map((each) => each.id)).toEqual(['large', 'ads']);
   });
 });
 

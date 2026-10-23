@@ -154,6 +154,8 @@ interface Behaviour {
   trashed: (recordId: string) => TrashedRecord;
   /** A page of the audit log (spec 0046). */
   auditList: (input: AuditListInput) => AuditPage;
+  /** A workspace's sign in rules (spec 0033). */
+  workspaceSecurityGet: () => never;
   /** What every option write answers (spec 0012, milestone 3). */
   optionWrite: () => AttributeOption;
   /** What both relationship writes answer (spec 0014). */
@@ -224,6 +226,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     activity: notServed,
     trashed: notServed,
     auditList: notServed,
+    workspaceSecurityGet: notServed,
     optionWrite: notServed,
     relationshipWrite: notServed,
     viewsList: notServed,
@@ -444,7 +447,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       transferOwnership: os.members.transferOwnership.handler(notServed),
     },
     workspaceSecurity: {
-      get: os.workspaceSecurity.get.handler(notServed),
+      get: os.workspaceSecurity.get.handler(() => behaviour.workspaceSecurityGet()),
       set: os.workspaceSecurity.set.handler(notServed),
       signOutEveryone: os.workspaceSecurity.signOutEveryone.handler(notServed),
     },
@@ -2271,6 +2274,23 @@ describe('audit (spec 0046)', () => {
     expect(log.getSnapshot().message).toBe('Only workspace owners and admins can see workspace changes.');
     log.dispose();
     // Their held access was stale: it is read again, so History's next visit opens the sign ins (AC-4618).
+    const asked = () => api.calls.filter((each) => each.endsWith('/access/mine')).length;
+    expect(asked()).toBe(1);
+    await data.access.mine('acme');
+    expect(asked()).toBe(2);
+  });
+});
+
+describe('workspace security', () => {
+  it('drops held access when the read is refused, so the next visit asks again', async () => {
+    const api = fakeApi({
+      workspaceSecurityGet: () => {
+        throw new ORPCError('FORBIDDEN', { status: 403, message: 'Only workspace owners and admins can do this.' });
+      },
+    });
+    const { data } = layer(api);
+    await data.access.mine('acme');
+    await expect(data.workspaceSecurity.get('acme')).rejects.toMatchObject({ code: 'FORBIDDEN' });
     const asked = () => api.calls.filter((each) => each.endsWith('/access/mine')).length;
     expect(asked()).toBe(1);
     await data.access.mine('acme');

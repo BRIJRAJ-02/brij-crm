@@ -20,6 +20,7 @@ import {
   FORMS_LIST_MAX,
   generatedSlug,
   publishProblem,
+  recordFactProblem,
   type FormDocument,
   type FormQuestion,
   type FormStatus,
@@ -617,6 +618,13 @@ export async function saveFormDraft(
       if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
       checkRevision(form, input.expectedRevision);
       checkDraft(form, input.document);
+      // A form's conditions never read a person's or a company's field (its editor offers none), refused in publish's
+      // words: every member who sees the form reads its draft, so a stored one would show them a field's id and the
+      // value looked for, even a field hidden from them (security review, 23 October 2026).
+      const readsField = recordFactProblem(input.document);
+      if (readsField !== undefined) {
+        throw refuseOn('CONFIG_INVALID', readsField.message, readsField.questionId ?? 'routing');
+      }
       // A newly chosen booking page goes through the access door; one already chosen stays, so others can still edit.
       const chosen = bookingPageOf(input.document);
       if (chosen !== undefined && form.draftVersionId !== null) {

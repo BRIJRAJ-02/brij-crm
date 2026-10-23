@@ -156,6 +156,15 @@ describe('New group, once', () => {
 });
 
 describe('the group dialog', () => {
+  it('focuses a new group’s name as it opens, not an existing group’s (Q102)', async () => {
+    await renderDialog(layerWith([]));
+    await expect.element(page.getByRole('textbox', { name: strings.name })).toHaveFocus();
+    shown?.unmount();
+    await renderDialog(layerWith([SALES]), SALES);
+    await expect.element(page.getByRole('textbox', { name: strings.name })).toBeVisible();
+    await expect.element(page.getByRole('textbox', { name: strings.name })).not.toHaveFocus();
+  });
+
   it('clears the name error as soon as a name is typed', async () => {
     await renderDialog(layerWith([]));
     await userEvent.click(page.getByRole('button', { name: strings.create }));

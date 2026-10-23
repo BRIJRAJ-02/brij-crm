@@ -141,7 +141,7 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   // The owner's Members page shows the newcomer, and their invitation is gone.
   if (!isLive) await page.reload();
   await page.getByRole('tab', { name: /Members/ }).click();
-  await expect(page.getByRole('rowheader', { name: /grace/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('rowheader', { name: /grace/i })).toBeVisible({ timeout: 15_000 });
   await checkScreen(page, 'members-list');
   await page.getByRole('tab', { name: /Joining/ }).click();
   await expect(page.getByRole('rowheader', { name: invitee })).toHaveCount(0);
@@ -168,19 +168,19 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   // Slice 3: the owner finds the newcomer by search, makes them an admin at once, then removes them, which asks first.
   await page.getByRole('tab', { name: /Members/ }).click();
   await page.getByRole('textbox', { name: 'Search members' }).fill('grace');
-  await expect(page).toHaveURL(/[?&]q=grace/);
+  await expect(page).toHaveURL(/[?&]q=grace/i);
   await expect(page.getByRole('rowheader', { name: /Ada Lovelace/ })).toHaveCount(0);
-  const grace = page.getByRole('rowheader', { name: /grace/ });
+  const grace = page.getByRole('rowheader', { name: /grace/i });
   await expect(grace).toBeVisible();
-  await page.getByRole('button', { name: /Role for grace/ }).click();
+  await page.getByRole('button', { name: /Role for grace/i }).click();
   await page.getByRole('option', { name: 'Admin' }).click();
   await expect(page.getByText(/is now an Admin\./)).toBeVisible();
-  await page.getByRole('button', { name: /^Actions for grace/ }).click();
+  await page.getByRole('button', { name: /^Actions for grace/i }).click();
   await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();
-  const remove = page.getByRole('alertdialog', { name: /^Remove grace.* from / });
+  const remove = page.getByRole('alertdialog', { name: /^Remove grace.* from /i });
   await remove.getByRole('button', { name: 'Cancel' }).click();
   await expect(grace).toBeVisible();
-  await page.getByRole('button', { name: /^Actions for grace/ }).click();
+  await page.getByRole('button', { name: /^Actions for grace/i }).click();
   await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();
   // Slice 5: it reads what the removal does first; nothing names them, so there is nobody to hand work to.
   await expect(remove.getByRole('button', { name: 'Remove member' })).toBeEnabled();
