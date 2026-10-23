@@ -170,6 +170,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
       { name: 'crm_join_requests_of', owner: 'crm_domain_lookup' },
       { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
+      { name: 'crm_operator_daily', owner: 'crm_operator' },
+      { name: 'crm_operator_members', owner: 'crm_operator' },
+      { name: 'crm_operator_page_days', owner: 'crm_operator' },
+      { name: 'crm_operator_pages', owner: 'crm_operator' },
+      { name: 'crm_operator_totals', owner: 'crm_operator' },
+      { name: 'crm_operator_workspaces', owner: 'crm_operator' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
@@ -210,6 +216,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_join_requests_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_operator_daily', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_operator_members', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_operator_page_days', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_operator_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_operator_totals', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_operator_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -230,7 +242,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ]);
   });
 
-  it('lets no role but crm_booking_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_booking_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_operator, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
@@ -242,6 +254,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       'crm_domain_lookup',
       'crm_form_lookup',
       'crm_invitation_lookup',
+      'crm_operator',
       'crm_purge',
       'crm_relay',
       'crm_search',
@@ -330,6 +343,26 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     ['crm_address', ['crm_claim_workspace_address'], ['crm_claim_workspace_address(text)'], ['app']],
     [
+      'crm_operator',
+      [
+        'crm_operator_workspaces',
+        'crm_operator_members',
+        'crm_operator_totals',
+        'crm_operator_daily',
+        'crm_operator_pages',
+        'crm_operator_page_days',
+      ],
+      [
+        'crm_operator_workspaces(uuid[], date, date)',
+        'crm_operator_members(uuid[], date, date)',
+        'crm_operator_totals(date, date)',
+        'crm_operator_daily(date, date)',
+        'crm_operator_pages(date, date, uuid)',
+        'crm_operator_page_days(date, date, uuid, uuid)',
+      ],
+      ['app', 'app', 'app', 'app', 'app', 'app'],
+    ],
+    [
       'crm_handle',
       ['crm_save_public_profile', 'crm_public_profiles_of', 'crm_handle_owner'],
       ['crm_save_public_profile(uuid, text, text)', 'crm_public_profiles_of(uuid[])', 'crm_handle_owner(text)'],
@@ -401,6 +434,67 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       where a.grantee = 'crm_relay'::regrole order by 1, 2
     `);
     expect(schemas.rows).toEqual([{ schema: 'public', privilege: 'USAGE' }]);
+  });
+
+  it('gives crm_operator column reads of what it counts, and no content column (spec 0047, AC-1621)', async () => {
+    // From the catalog, by every route: no table privilege at all, and only these columns.
+    const tables = await owner.query<{ table: string }>(`
+      select n.nspname || '.' || c.relname as table
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      cross join unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
+      where c.relkind in ('r', 'p', 'v', 'm', 'f') and n.nspname not in ('pg_catalog', 'information_schema')
+        and n.nspname not like 'pg\\_toast%' and has_table_privilege('crm_operator', c.oid, p.privilege)
+    `);
+    expect(tables.rows).toEqual([]);
+    const columns = await owner.query<{ column: string; privilege: string }>(`
+      select att.attrelid::regclass || '.' || att.attname as column, a.privilege_type as privilege
+      from pg_attribute att cross join lateral aclexplode(att.attacl) a
+      where a.grantee = 'crm_operator'::regrole
+      order by 1, 2
+    `);
+    const granted = {
+      booking_page_views: ['day', 'page_id', 'views', 'workspace_id'],
+      booking_pages: [
+        'created_at',
+        'deleted_at',
+        'id',
+        'kind',
+        'owner_member_id',
+        'owner_user_id',
+        'status',
+        'title',
+        'workspace_id',
+      ],
+      bookings: ['cancelled_at', 'created_at', 'host_member_id', 'page_id', 'workspace_id'],
+      form_submissions: ['form_id', 'received_at', 'workspace_id'],
+      forms: ['id', 'workspace_id'],
+      members: ['id', 'role', 'status', 'user_id', 'workspace_id'],
+      notes: ['created_at', 'created_by_member_id', 'workspace_id'],
+      records: ['created_at', 'created_by_member_id', 'deleted_at', 'object_id', 'workspace_id'],
+      tasks: ['created_at', 'created_by_member_id', 'workspace_id'],
+      workspaces: ['created_at', 'deleted_at', 'id', 'name', 'slug'],
+    };
+    expect(columns.rows).toEqual(
+      Object.entries(granted)
+        .flatMap(([table, names]) => names.map((name) => ({ column: `${table}.${name}`, privilege: 'SELECT' })))
+        .sort((a, b) => (a.column < b.column ? -1 : a.column > b.column ? 1 : 0)),
+    );
+    // Not a value, a note's body, a task's text, an answer or a visitor: Postgres refuses the column itself.
+    for (const [table, column] of [
+      ['values', 'workspace_id'],
+      ['notes', 'title'],
+      ['tasks', 'title'],
+      ['form_submissions', 'answers'],
+      ['bookings', 'visitor_email'],
+      ['booking_page_views', 'visitor'],
+    ] as const) {
+      const allowed = await owner.query<{ ok: boolean }>(
+        `select has_column_privilege('crm_operator', $1, $2, 'SELECT') as ok`,
+        [`public.${table}`, column],
+      );
+      expect(allowed.rows, `${table}.${column}`).toEqual([{ ok: false }]);
+    }
   });
 
   it('lets the app insert and read outbox rows and stamp published_at, and nothing more', async () => {
@@ -1572,13 +1666,16 @@ describe('booking pages (spec 0025, milestone 1)', () => {
 describe('the auth schema: global identity, outside row level security (spec 0005)', () => {
   const AUTH_TABLES = [
     'account',
+    'activity_day',
     'known_device',
+    'operator_event',
     'passkey',
     'public_handles',
     'public_profiles',
     'rate_limit',
     'security_event',
     'session',
+    'site_visit',
     'two_factor',
     'user',
     'user_prefs',

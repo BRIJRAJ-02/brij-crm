@@ -14,6 +14,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { DatabaseOptions } from '../client.ts';
+import { createOperatorIdentity, type OperatorIdentity } from './operator.ts';
 import { timePool } from '../timing.ts';
 import {
   account,
@@ -144,7 +145,7 @@ export interface SessionFacts {
 }
 
 /** Global identity: the directory, users, and Better Auth's storage. Reads no tenant data. */
-export interface IdentityStore {
+export interface IdentityStore extends OperatorIdentity {
   /**
    * The workspace at this address, or the one that held it before it changed
    * address (its `slug` is then the current one, so the caller can send
@@ -285,8 +286,9 @@ export interface IdentityStore {
   /** Notes that this user signed in from `deviceKey` now (AC-897). */
   noteDevice(userId: string, deviceKey: string): Promise<void>;
   /**
-   * Deletes security events and known devices last seen before `before`, at
-   * most `limit` of each (AC-898's year). Answers how many went.
+   * Deletes security events and known devices last seen before `before`, and
+   * the operator console's activity days, site visits and log rows (spec 0047,
+   * AC-1628), at most `limit` of each (AC-898's year). Answers how many went.
    */
   sweepAuthHistory(before: Date, limit: number): Promise<number>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
@@ -357,6 +359,8 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
   };
 
   return {
+    ...createOperatorIdentity(db),
+
     async findWorkspace(slug) {
       const [row] = await db
         .select(directoryColumns)
@@ -735,7 +739,17 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
       const devices = await db.execute<{ user_id: string }>(
         sql`delete from ${knownDevice} where (user_id, device_key) in (select user_id, device_key from ${knownDevice} where ${knownDevice.lastSeen} < ${before.toISOString()}::timestamptz limit ${cap}) returning user_id`,
       );
-      return events.rows.length + devices.rows.length;
+      // The operator console's global rows (spec 0047, AC-1628): a year of use, visits and the console's own log.
+      const days = await db.execute<{ user_id: string }>(
+        sql`delete from auth.activity_day where (user_id, day) in (select user_id, day from auth.activity_day where day < (${before.toISOString()}::timestamptz at time zone 'UTC')::date order by day limit ${cap}) returning user_id`,
+      );
+      const visits = await db.execute<{ id: string }>(
+        sql`delete from auth.site_visit where id in (select id from auth.site_visit where at < ${before.toISOString()}::timestamptz order by at limit ${cap}) returning id`,
+      );
+      const reads = await db.execute<{ id: string }>(
+        sql`delete from auth.operator_event where id in (select id from auth.operator_event where at < ${before.toISOString()}::timestamptz order by at limit ${cap}) returning id`,
+      );
+      return events.rows.length + devices.rows.length + days.rows.length + visits.rows.length + reads.rows.length;
     },
 
     async setUserNameIfEmpty(id, name) {

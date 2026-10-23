@@ -394,6 +394,8 @@ export const bookings = pgTable(
     uniqueIndex('bookings_attempt').on(t.workspaceId, t.pageId, t.idempotencyKey),
     // The guest page finds its booking by the hashed token before the workspace is known, so it is unique everywhere.
     uniqueIndex('bookings_manage_token').on(t.manageTokenHash),
+    // The bookings made in a range, per workspace (spec 0047's counts).
+    index('bookings_created').on(t.workspaceId, t.createdAt),
     // The page's bookings list, newest first.
     index('bookings_by_page').on(t.workspaceId, t.pageId, t.startsAt.desc(), t.id),
     // A host's confirmed bookings in a range (the slots read; the exclusion constraint's index serves overlap).
@@ -555,5 +557,38 @@ export const bookingHosts = pgTable(
       .on(t.workspaceId, t.memberId, t.startsAt)
       .where(sql`${t.status} = 'confirmed'`),
     check('booking_hosts_status', sql`${t.status} in ('confirmed', 'cancelled')`),
+  ],
+);
+
+/**
+ * A booking page's views (spec 0047, AC-1625): one row per page, UTC day and
+ * visitor (a daily HMAC of the address and the user agent, neither kept), with
+ * how many times that visitor loaded it. Counted on the page's viewer read when
+ * the viewer isn't one of its hosts. Gone with the page (cascade), and after a
+ * year by the daily cleanup. Read across workspaces only through crm_operator's
+ * counts.
+ */
+export const bookingPageViews = pgTable(
+  'booking_page_views',
+  {
+    workspaceId: workspaceId(),
+    pageId: uuid('page_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    visitor: text('visitor').notNull(),
+    views: integer('views').notNull().default(1),
+    firstAt: timestamptz('first_at').notNull().defaultNow(),
+    lastAt: timestamptz('last_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'booking_page_views_pkey', columns: [t.workspaceId, t.pageId, t.day, t.visitor] }),
+    foreignKey({
+      name: 'booking_page_views_page',
+      columns: [t.workspaceId, t.pageId],
+      foreignColumns: [bookingPages.workspaceId, bookingPages.id],
+    }).onDelete('cascade'),
+    // The daily cleanup's pick: the oldest days first.
+    index('booking_page_views_day').on(t.workspaceId, t.day),
+    check('booking_page_views_visitor', sql`${t.visitor} ~ '^[0-9a-f]{32}$'`),
+    check('booking_page_views_count', sql`${t.views} >= 1`),
   ],
 );
