@@ -87,6 +87,12 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
       title={strings.title}
       description={kind === 'totp' ? strings.appHint : strings.backupHint}
       isBusy={isChecking}
+      // The way back /verify has too: the wrong address, or neither the app nor a code to hand.
+      footer={
+        <ButtonLink variant="link" icon="arrow-left" href={signInAgainHref}>
+          {strings.useAnotherEmail}
+        </ButtonLink>
+      }
       {...signInFrame()}
     >
       <Form
@@ -143,6 +149,8 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
             name="backupCode"
             isDisabled={isChecking}
             autoComplete="off"
+            // Codes check their case: a phone's keyboard must not capitalise the first letter.
+            isVerbatim
             {...(error === undefined ? {} : { error })}
           />
         )}
