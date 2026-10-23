@@ -39,7 +39,7 @@ function GeneralRoute() {
   const { permissions } = screen.access;
   return (
     <GeneralScreen
-      // A new address remounts the page, so its drafts and leave check start from what is saved there.
+      // A new address remounts the page, so its name and address dialog start from what is saved there.
       key={`${screen.settings.id}:${screen.settings.slug}`}
       data={data}
       toasts={toasts}

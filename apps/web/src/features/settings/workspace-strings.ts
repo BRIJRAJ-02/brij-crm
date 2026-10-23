@@ -2,35 +2,42 @@
 export const strings = {
   // Workspace › General.
   generalTitle: 'General',
-  workspaceSection: 'Workspace',
+  workspaceSection: 'Details',
   name: 'Workspace name',
   timeZone: 'Time zone',
   timeZoneInfo: 'New booking pages and members start in this time zone. Each person can pick their own.',
   copyAddress: 'Copy address',
-  /** The address row: the part after /w/, edited by owners and admins. */
+  /** The address row: the whole link, read only; owners and admins change the part after /w/ in its dialog. */
   webAddress: 'Web address',
   addressPrefix: '/w/',
-  addressRule: 'Lowercase letters, digits and dashes.',
+  addressRule: '3 to 40 lowercase letters and digits, with single dashes.',
   addressChecking: 'Checking',
   addressFree: 'Free',
   addressTaken: 'Taken',
   addressSuggestions: 'Free addresses',
-  addressUnknown: 'Not checked. Save will check it.',
+  addressUnknown: 'Not checked. Change address will check it.',
   addressFreeSaid: (slug: string) => `${slug} is free.`,
   addressTakenSaid: (slug: string) => `${slug} is taken.`,
   addressOthers: (slugs: readonly string[]) => `Also free: ${slugs.join(', ')}.`,
-  addressInvalid: 'Use 3 to 40 lowercase letters and digits, with single dashes between them.',
-  // Changing the address asks first.
-  moveTitle: 'Change the web address?',
+  addressInvalid: 'Use 3 to 40 lowercase letters and digits, with single dashes.',
+  // Changing the address: its own dialog, opened from the row's Change, with the address checked as typed.
+  changeAddress: 'Change',
+  changeAddressLabel: 'Change web address',
+  moveTitle: 'Change the web address',
   moveText: (from: string, to: string) =>
     `The workspace moves from /w/${from} to /w/${to}. Links and bookmarks with /w/${from} keep working and open the new address, and no other workspace can take /w/${from}.`,
+  /** Before a new address is typed: what happens to the old one. */
+  moveTextAny: (from: string) =>
+    `Links and bookmarks with /w/${from} keep working and open the new address, and no other workspace can take /w/${from}.`,
   moveAction: 'Change address',
   moved: (to: string) => `The workspace is now at /w/${to}.`,
   nameMissing: 'Name the workspace.',
+  nameChanged: 'Name changed.',
   yourNameMissing: 'Enter your name.',
   zoneChanged: (zone: string) => `Time zone is now ${zone}.`,
   undo: 'Undo',
-  readOnly: 'Only workspace owners and admins can change this.',
+  /** Said once, at the top of the page, to readers without `workspace.manage`; the fields keep their locks. */
+  readOnly: 'Only owners and admins can change this.',
   failed: 'Couldn’t load the settings',
   failedText: 'Check your connection, then try again.',
   somethingWrong: 'Something went wrong. Try again in a moment.',
@@ -39,13 +46,13 @@ export const strings = {
   /** Profile's first section: the picture, name and sign in email. */
   detailsSection: 'Your details',
   deleteRow: 'Delete workspace',
-  deleteRowText: 'Nobody can open it, and after 30 days it’s gone for good.',
+  deleteRowText: 'Everyone loses access. Any owner can restore it for 30 days.',
   deleteAction: 'Delete workspace',
   deleteTitle: (name: string) => `Delete ${name}?`,
-  deleteText: 'Nobody can open it from now on, and everything in it is removed for good after 30 days.',
-  deleteInfo:
-    'For 30 days any owner can open its address and restore it. Members lose access at once and get an email. Export anything you want to keep first.',
-  deleteInfoLabel: 'What deleting does',
+  deleteText:
+    'Everyone loses access now and gets an email. Any owner can restore it for 30 days, then it’s gone for good.',
+  /** A quiet line under the delete confirm's sentence (a link to export comes with export). */
+  exportFirst: 'Export anything you want to keep first.',
   typeName: (name: string) => `Type “${name}” to confirm`,
   cancel: 'Cancel',
   deleted: (name: string) => `${name} was deleted.`,
