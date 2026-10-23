@@ -33,6 +33,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'peekInvite',
   'acceptInvite',
   'isInvitedEmail',
+  // The name typed on the invite card, cleaned and cut to 80 characters: pure, it reads nothing.
+  'typedMemberName',
   // Domain join (spec 0031, slice 6): the signed in person's own workspaces to ask, through the door's domain
   // lookup and a system scope in each.
   'listJoinable',
