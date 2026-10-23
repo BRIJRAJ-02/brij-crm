@@ -43,7 +43,6 @@ export const strings = {
   logsBadge: 'Logs to CRM',
   /** Each account's calendars, a compact table: the column headers once, above the rows. */
   calendarsIn: (account: string) => `Calendars in ${account}`,
-  otherCalendarsIn: (account: string) => `Other calendars in ${account}`,
   calendarColumn: 'Calendar',
   conflictsColumn: 'Check for conflicts',
   weekColumn: 'Show on my week',
@@ -52,15 +51,14 @@ export const strings = {
   showOn: (name: string) => `Show ${name} on my week`,
   calendarOptions: (name: string) => `${name} options`,
   logMeetings: 'Log meetings to CRM',
-  otherCalendars: 'Other calendars in this account',
-  searchCalendars: 'Search calendars',
-  noCalendarMatches: 'No calendars match',
   /** A calendar that couldn't be read, said once under the account's list. */
   warningLine: (name: string, message: string) => `${name}: ${message}`,
   calendarsLoading: 'Loading this account’s calendars',
   calendarsFailed: 'Couldn’t load this account’s calendars.',
   tryAgain: 'Try again',
   noCalendars: 'No calendars found in this account yet.',
+  /** An account listed with calendars but none in use (no main calendar among them). */
+  noneInUse: 'None of this account’s calendars are in use.',
   /** A calendar's row. */
   colour: (name: string) => `${name} colour`,
   /** The quiet toasts a switch raises once saved, each with Undo. */
@@ -73,6 +71,8 @@ export const strings = {
   },
   colourSaved: (name: string) => `${name}’s colour changed`,
   defaultSaved: (name: string) => `New bookings now go to ${name}`,
+  /** After a change leaves a calendar not in use: it stays on its row until the person leaves, then never shows. */
+  noLongerListed: (saved: string, name: string) => `${saved}. ${name} won’t be listed once you leave this page.`,
   sharingSaved: (account: string) => `What teammates see of ${account}’s meetings changed`,
   undo: 'Undo',
   /** New bookings moved off a calendar the provider removed (AC-1005). */

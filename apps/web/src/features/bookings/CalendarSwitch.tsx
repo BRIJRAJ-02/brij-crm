@@ -8,6 +8,7 @@
 import type { CalendarAccountView } from '@crm/data';
 import { Button, Menu, MenuItem, MenuTrigger, SegmentedControl, type Hue, type Segment } from '@crm/ui';
 import { useState } from 'react';
+import { isCalendarInUse } from '../calendars/in-use.ts';
 import { strings } from './strings.ts';
 
 /** All calendars: the week shows bookings and every calendar's events. */
@@ -49,10 +50,10 @@ export interface SwitchCalendar {
   readonly account: string;
 }
 
-/** The calendars the week may show, in the order the switch lists them. */
+/** The calendars the week may show, in the order the switch lists them: only ones in use, as everywhere. */
 export function switchCalendars(accounts: readonly CalendarAccountView[]): readonly SwitchCalendar[] {
   return accounts.flatMap((account) =>
-    account.calendars.map((calendar) => ({
+    account.calendars.filter(isCalendarInUse).map((calendar) => ({
       id: calendar.id,
       name: calendar.name,
       hue: calendar.hue,
