@@ -20,7 +20,8 @@ import { createRecord } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { readTeamToday } from '../home/team-today.ts';
 import { rescope, testScope } from '../testing.ts';
-import { deleteWorkspace, restoreWorkspace } from '../workspace/settings.ts';
+import { removeMember } from '../members/members.ts';
+import { CALENDAR_SPREAD_SECONDS, deleteWorkspace, restoreWorkspace } from '../workspace/settings.ts';
 import { updateMemberCalendar } from './calendars.ts';
 import { connectCalendar, listCalendarConnections, syncCalendarNow, updateCalendarConnection } from './connections.ts';
 import { createCalendarEvents } from './events.ts';
@@ -28,7 +29,7 @@ import { createFakeCalendarProvider } from './fake.ts';
 import { listMeetingsForRecord } from './meetings.ts';
 import { addMeetingAttendee, readCalendarSettings, updateCalendarSettings } from './people.ts';
 import type { ProviderAttendee, ProviderEvent } from './provider.ts';
-import { openChannel, takeCalendarNotice } from './push.ts';
+import { NO_PUSH_MS, openChannel, takeCalendarNotice } from './push.ts';
 import { syncConnection, type CalendarSyncDeps } from './sync.ts';
 import { decodeTokenKey, sealTokens } from './tokens.ts';
 
@@ -510,22 +511,13 @@ describe('push channels (AC-602, AC-622)', () => {
     expect((await w.sync(conn.id)).channels).toEqual([
       { calendarId: main, outcome: 'opened', expiresAt: w.fake.watched()[1]?.channel.expiresAt, renewed: true },
     ]);
-    // The provider refuses a calendar it can't watch: the code, its status and its reason, never its words.
+    // The provider doesn't answer for a watch: the code, its status and its reason, never its words.
     await updateMemberCalendar(w.owner, { calendarId: team, showInWeek: true });
-    w.fake.failNext('watch', 'CALENDAR_UNAVAILABLE', 1, {
-      status: 400,
-      reason: 'pushNotSupportedForRequestedResource',
-    });
+    w.fake.failNext('watch', 'CALENDAR_UNAVAILABLE', 1, { status: 503, reason: 'backendError' });
     const refused = await w.sync(conn.id);
     expect(refused).toMatchObject({ kind: 'synced' });
     expect(refused.channels).toEqual([
-      {
-        calendarId: team,
-        outcome: 'failed',
-        code: 'CALENDAR_UNAVAILABLE',
-        status: 400,
-        reason: 'pushNotSupportedForRequestedResource',
-      },
+      { calendarId: team, outcome: 'failed', code: 'CALENDAR_UNAVAILABLE', status: 503, reason: 'backendError' },
     ]);
     // The next run tries again, and opens it.
     expect((await w.sync(conn.id)).channels).toMatchObject([{ calendarId: team, outcome: 'opened' }]);
@@ -550,6 +542,62 @@ describe('push channels (AC-602, AC-622)', () => {
       sql`select channel from calendar_calendars where id = ${team}::uuid`,
     );
     expect(teamRow?.channel).toBeNull();
+  });
+});
+
+describe('a calendar the provider can’t watch (owner ask A115)', () => {
+  it('asks once, says so once, and asks again only a day on, while the poll keeps the calendar current', async () => {
+    const w = await world({ push: true });
+    w.fake.addCalendar('ada@acme.dev', { id: 'holidays@acme.dev', name: 'Holidays', accessRole: 'reader' });
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    await w.sync(conn.id);
+    const [holidays] = await w.query<{ id: string }>(
+      sql`select id::text as id from calendar_calendars where provider_calendar_id = 'holidays@acme.dev'`,
+    );
+    const id = holidays?.id ?? '';
+    await updateMemberCalendar(w.owner, { calendarId: id, showInWeek: true });
+    const watches = w.fake.calls('watch');
+    // Google answers 400 pushNotSupportedForRequestedResource for holidays and birthdays, every time it is asked.
+    const unwatchable = { status: 400, reason: 'pushNotSupportedForRequestedResource' };
+    w.fake.failNext('watch', 'CALENDAR_UNAVAILABLE', 10, unwatchable);
+    const refused = await w.sync(conn.id);
+    expect(refused).toMatchObject({ kind: 'synced' });
+    const until = refused.channels?.[0]?.outcome === 'failed' ? refused.channels[0].noPushUntil : undefined;
+    expect(refused.channels).toEqual([
+      { calendarId: id, outcome: 'failed', code: 'CALENDAR_UNAVAILABLE', ...unwatchable, noPushUntil: until },
+    ]);
+    expect(Date.parse(until ?? '') - Date.now()).toBeGreaterThan(NO_PUSH_MS - 60_000);
+    const [marked] = await w.query<{ channel: unknown }>(
+      sql`select channel from calendar_calendars where id = ${id}::uuid`,
+    );
+    expect(marked?.channel).toEqual({ noPushUntil: until });
+    // The runs after it sync the calendar by the poll, ask for no watch and say nothing.
+    w.fake.put('ada@acme.dev', event('day-off', day(4), [self('ada@acme.dev')]), 'holidays@acme.dev');
+    const quiet = await w.sync(conn.id);
+    expect(quiet).toMatchObject({ kind: 'synced', events: 1 });
+    expect(quiet.channels).toBeUndefined();
+    expect((await w.sync(conn.id)).channels).toBeUndefined();
+    expect(w.fake.calls('watch')).toBe(watches + 1);
+    // A day on, it is asked again (and refused again: one more line, and another day).
+    await w.query(
+      sql`update calendar_calendars set channel = jsonb_build_object('noPushUntil',
+        to_char((now() - interval '1 minute') at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) where id = ${id}::uuid`,
+    );
+    expect((await w.sync(conn.id)).channels).toMatchObject([{ calendarId: id, outcome: 'failed', status: 400 }]);
+    expect(w.fake.calls('watch')).toBe(watches + 2);
+  });
+
+  it('keeps asking after a refusal that is the grant’s or the moment’s: 401, 403, 429 and 5xx', async () => {
+    const w = await world({ push: true });
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    for (const status of [401, 403, 429, 500]) {
+      w.fake.failNext('watch', status === 500 ? 'CALENDAR_UNAVAILABLE' : 'CALENDAR_AUTH', 1, { status });
+      const [report] = (await w.sync(conn.id)).channels ?? [];
+      expect(report, String(status)).toMatchObject({ outcome: 'failed', status });
+      expect(report !== undefined && 'noPushUntil' in report, String(status)).toBe(false);
+    }
+    expect(await w.query(sql`select channel from calendar_calendars where channel is not null`)).toEqual([]);
+    expect((await w.sync(conn.id)).channels).toMatchObject([{ outcome: 'opened' }]);
   });
 });
 
@@ -688,6 +736,45 @@ describe('a deleted workspace’s calendars (spec 0031, AC-823)', () => {
     expect(await channelOf(other)).toBeNull();
   });
 
+  it('spreads a deletion’s and a restore’s runs a second apart, and starts a failed account again on a restore', async () => {
+    const w = await world({ push: true });
+    const ada = await w.connect(w.ownerId, 'ada@acme.dev');
+    const bea = await w.connect(w.bea, 'bea@acme.dev');
+    await w.sync(ada.id);
+    await w.sync(bea.id);
+    const runs = () =>
+      testQuery<{ id: string; run_at: Date; priority: number }>(
+        ownerUrl,
+        `select payload->>'connectionId' as id, run_at, priority from graphile_worker._private_jobs
+         where payload->>'workspaceId' = $1 order by run_at, id`,
+        [w.workspaceId],
+      );
+    const spread = CALENDAR_SPREAD_SECONDS * 1_000;
+    await deleteWorkspace(w.owner, { confirmName: 'Calendar two' });
+    const deleting = await runs();
+    expect(deleting.map((each) => each.id)).toEqual([ada.id, bea.id]);
+    expect((deleting[1]?.run_at.getTime() ?? 0) - (deleting[0]?.run_at.getTime() ?? 0)).toBe(spread);
+    // Bea's account failed meanwhile: its own retries end with the deletion's run, so only a restore starts it again.
+    await w.query(sql`update calendar_connections set status = 'failed' where id = ${bea.id}::uuid`);
+    await testQuery(ownerUrl, `delete from graphile_worker._private_jobs where payload->>'workspaceId' = $1`, [
+      w.workspaceId,
+    ]);
+    await restoreWorkspace(w.owner);
+    const restoring = await runs();
+    expect(restoring.map((each) => each.id)).toEqual([ada.id, bea.id]);
+    expect((restoring[1]?.run_at.getTime() ?? 0) - (restoring[0]?.run_at.getTime() ?? 0)).toBe(spread);
+    // Queued at once (priority 0, what a person asked for), and still failed until a sync heals it.
+    expect(restoring.map((each) => each.priority)).toEqual([0, 0]);
+    expect(await w.query(sql`select status::text as status from calendar_connections order by id`)).toEqual([
+      { status: 'connected' },
+      { status: 'failed' },
+    ]);
+    expect(await w.sync(bea.id)).toMatchObject({ kind: 'synced' });
+    expect(
+      await w.query(sql`select status::text as status from calendar_connections where id = ${bea.id}::uuid`),
+    ).toEqual([{ status: 'connected' }]);
+  });
+
   it('refuses a connect into a workspace deleted while its member was at the consent screen', async () => {
     const w = await world();
     // The door let the member in before the deletion: the connect itself finds the workspace gone.
@@ -702,6 +789,38 @@ describe('a deleted workspace’s calendars (spec 0031, AC-823)', () => {
       [w.workspaceId],
     );
     expect(queued).toEqual([]);
+  });
+});
+
+describe('revoking an account another workspace still holds (spec 0031, AC-815)', () => {
+  it('keeps the grant, ending only this connection’s channels and tokens, and ends it once nothing else holds it', async () => {
+    // An account no other test connects: whether it is held elsewhere looks across every workspace.
+    const account = `kim-${newId().slice(-12)}@acme.dev`;
+    const here = await world({ push: true });
+    const elsewhere = await world();
+    const mine = await here.connect(here.bea, account);
+    await here.sync(mine.id);
+    const [opened] = here.fake.watched();
+    const [main] = await here.query<{ id: string }>(sql`select id::text as id from calendar_calendars`);
+    const theirs = await elsewhere.connect(elsewhere.bea, account);
+    await elsewhere.sync(theirs.id);
+    // Bea leaves this workspace: Google would end her whole grant, and with it her connection elsewhere.
+    await removeMember(here.owner, { memberId: here.bea }, [outboxHook()]);
+    expect(await here.sync(mine.id)).toEqual({
+      kind: 'stopped',
+      reason: 'revoked',
+      grantKept: true,
+      channels: [{ calendarId: main?.id, outcome: 'stopped', why: 'revoked' }],
+    });
+    expect(here.fake.calls('revoke')).toBe(0);
+    expect(here.fake.stopped()).toEqual([opened?.channel.id]);
+    expect(await here.query(sql`select 1 from calendar_connections where member_id = ${here.bea}::uuid`)).toEqual([]);
+    // Her connection elsewhere still syncs.
+    expect(await elsewhere.sync(theirs.id)).toMatchObject({ kind: 'synced' });
+    // Then she leaves there too: nothing else holds the account, so its grant ends.
+    await removeMember(elsewhere.owner, { memberId: elsewhere.bea }, [outboxHook()]);
+    expect(await elsewhere.sync(theirs.id)).toEqual({ kind: 'stopped', reason: 'revoked' });
+    expect(elsewhere.fake.calls('revoke')).toBe(1);
   });
 });
 

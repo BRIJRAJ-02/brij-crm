@@ -538,18 +538,23 @@ describe('privacy (AC-611, AC-612) and reads (AC-608)', () => {
   });
 });
 
+/** A calendar account no other test connects: whether a grant is shared looks across every workspace (AC-815). */
+const soleAccount = (name: string) => `${name}-${newId().slice(-12)}@acme.dev`;
+
 describe('disconnecting (AC-599) and removing a member (AC-614)', () => {
   it('removes the tokens with the connection and the meetings only it held, keeping shared ones', async () => {
     const w = await world();
     const bea = await w.person('Bea', ['bea@globex.com']);
     const ada = await w.connect(w.ownerId, 'ada@acme.dev');
     const other = await w.connect(w.ownerId, 'ada@gmail.com');
-    const cal = await w.connect(w.bea, 'bea@acme.dev');
+    // An account no other test's workspace holds: its grant is revoked only when nothing else holds it.
+    const beas = soleAccount('bea');
+    const cal = await w.connect(w.bea, beas);
     w.fake.put('ada@acme.dev', meeting('only-ada', day(2), [self('ada@acme.dev'), guest('bea@globex.com')]));
     w.fake.put('ada@acme.dev', meeting('shared', day(3), [self('ada@acme.dev'), guest('bea@globex.com')]));
     w.fake.put(
-      'bea@acme.dev',
-      meeting('shared-b', day(3), [self('bea@acme.dev'), guest('bea@globex.com')], { icalUid: 'shared@google.com' }),
+      beas,
+      meeting('shared-b', day(3), [self(beas), guest('bea@globex.com')], { icalUid: 'shared@google.com' }),
     );
     await w.sync(ada.id);
     await w.sync(cal.id);
@@ -587,8 +592,8 @@ describe('disconnecting (AC-599) and removing a member (AC-614)', () => {
 
   it('removes an expired connection at once and revokes a failed one', async () => {
     const w = await world();
-    const cal = await w.connect(w.bea, 'bea@acme.dev');
-    const failed = await w.connect(w.bea, 'bea@gmail.com');
+    const cal = await w.connect(w.bea, soleAccount('bea'));
+    const failed = await w.connect(w.bea, soleAccount('bea'));
     await w.query(sql`update calendar_connections set status = 'expired' where id = ${cal.id}::uuid`);
     await w.query(sql`update calendar_connections set status = 'failed' where id = ${failed.id}::uuid`);
     await removeMember(w.owner, { memberId: w.bea }, [outboxHook()]);

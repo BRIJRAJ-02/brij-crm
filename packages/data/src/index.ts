@@ -1805,7 +1805,21 @@ export function createDataLayer({
     },
   });
 
-  // Bookings (spec 0025): the workspace's upcoming and past lists, read again when the person comes back.
+  // Bookings' held reads (owner ask A115): read again when the person comes back and, while live updates are paused
+  // or off (no event says a meeting or booking arrived), every minute while the page shows (`bookings/fresh.ts`).
+  const bookingsFresh = {
+    live: {
+      status: () => liveStatus,
+      subscribe: (listener: () => void) => {
+        liveListeners.add(listener);
+        return () => {
+          liveListeners.delete(listener);
+        };
+      },
+    },
+    random,
+  };
+  // Bookings (spec 0025): the workspace's upcoming and past lists and its weeks, kept current while held.
   const bookingsLists = createBookingsStore({
     api: {
       listAll: (input) =>
@@ -1813,6 +1827,7 @@ export function createDataLayer({
       calendar: (input) =>
         beforeRead(input.workspace).then(() => call((options) => api.bookings.calendar(input, options))),
     },
+    ...bookingsFresh,
   });
 
   // Home (spec 0041): Team today and the metrics row, read again when the person comes back.
@@ -1865,11 +1880,12 @@ export function createDataLayer({
       schedules.changed(workspace);
       return answer;
     };
-  // Bookings' list of every meeting, a page at a time (the owner's ask of 21 October 2026).
+  // Bookings' list of every meeting, a page at a time (the owner's ask of 21 October 2026), kept current while held.
   const meetings = createMeetingsStore({
     api: {
       page: (input) => beforeRead(input.workspace).then(() => call((options) => api.bookings.meetings(input, options))),
     },
+    ...bookingsFresh,
   });
   /** A booking or a calendar changed: every held Bookings read of the workspace reads again. */
   const reloadBookings = (workspace: string) => {
@@ -1935,6 +1951,11 @@ export function createDataLayer({
     },
     mintId,
     notify,
+    // Sync now ran (owner ask A115): what Bookings shows now is read again at once, keeping the pages More opened.
+    onSynced: (workspace) => {
+      bookingsLists.refreshHeld(workspace);
+      meetings.refreshHeld(workspace);
+    },
   });
 
   // Each calendar of the member's accounts (spec 0024 milestone 5): their switches, colours and destination, and a
@@ -3351,19 +3372,23 @@ export function createDataLayer({
       /**
        * Bookings, the workspace's list: every booking the reader may see,
        * upcoming or past, held while a screen shows it (`useBookings`) and
-       * read again whenever the person comes back to the page.
+       * read again whenever the person comes back to the page, and every
+       * minute while the page shows and live updates are paused or off.
        */
       view: (workspace: string, when: BookingsTab): BookingsView => bookingsLists.view(workspace, when),
       /**
        * Bookings' week: a range's bookings (cancelled too) and the reader's own
        * calendar events, held while a screen shows it (`useBookingsCalendar`)
-       * and read again whenever the person comes back to the page.
+       * and read again whenever the person comes back to the page, and every
+       * minute while the page shows and live updates are paused or off.
        */
       calendar: (workspace: string, from: string, to: string): BookingsCalendarHeld =>
         bookingsLists.calendar(workspace, from, to),
       /**
        * Bookings' list: every meeting on a tab (bookings and the member's own calendar events), narrowed to a source
-       * and the calendars panel's pick, a page at a time (`useMeetings`; More reads the next).
+       * and the calendars panel's pick, a page at a time (`useMeetings`; More reads the next). While held, what it
+       * shows is read again on the person's return, and every minute while the page shows and live updates are
+       * paused or off, keeping the pages More opened.
        */
       meetings: (workspace: string, query: MeetingsQuery): MeetingsHeld => meetings.list(workspace, query),
       /** Reads every bookings list and range a screen holds again. */

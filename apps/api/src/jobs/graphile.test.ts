@@ -27,7 +27,7 @@ import { testQuery } from '@crm/db/testing';
 import * as z from 'zod';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { backgroundHooks } from '../hooks.ts';
-import { DailyPayload, dailyDay, startJobRunners, type JobsLog } from './graphile.ts';
+import { CALENDAR_POLL_PRIORITY, DailyPayload, dailyDay, startJobRunners, type JobsLog } from './graphile.ts';
 
 const { appUrl, ownerUrl, workerUrl } = inject('testDatabase');
 let db: Database;
@@ -299,13 +299,14 @@ describe('calendar sync on the light runner (spec 0024)', () => {
     // Connecting queues the first sync through crm_enqueue_calendar_sync, in the connect's transaction.
     const connection = await connectCalendar(scope, { provider: 'google', exchanged, tokenKey });
     const syncRows = () =>
-      testQuery<{ run_at: Date; key: string | null; locked: boolean }>(
+      testQuery<{ run_at: Date; key: string | null; locked: boolean; priority: number }>(
         ownerUrl,
-        `select run_at, key, locked_at is not null as locked from graphile_worker._private_jobs
+        `select run_at, key, locked_at is not null as locked, priority from graphile_worker._private_jobs
          where payload->>'connectionId' = $1 order by id`,
         [connection.id],
       );
-    expect(await syncRows()).toHaveLength(1);
+    // What a person asked for now runs at priority 0.
+    expect(await syncRows()).toMatchObject([{ priority: 0 }]);
     const runners = await startJobRunners({
       queue,
       runner: coreRunner(20_000),
@@ -334,6 +335,8 @@ describe('calendar sync on the light runner (spec 0024)', () => {
       const [next] = await syncRows();
       expect(next?.key).toBe(`crm-calendar:${scope.workspaceId}:${connection.id}`);
       expect((next?.run_at.getTime() ?? 0) - Date.now()).toBeGreaterThan(POLL_INTERVAL_MS - 60_000);
+      // The poll waits behind notices, Sync now and connects (priority 0), however overdue it gets.
+      expect(next?.priority).toBe(CALENDAR_POLL_PRIORITY);
       expect(fake.calls('listChanges')).toBe(1);
       // Disconnected: a run brought forward finds it gone and queues nothing more.
       await removeCalendarConnection(scope, { connectionId: connection.id });

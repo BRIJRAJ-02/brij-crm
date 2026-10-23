@@ -652,6 +652,13 @@
       "when": 1792755606050,
       "tag": "0092_operator_console",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1792762718796,
+      "tag": "0093_calendar_account_shared",
+      "breakpoints": true
     }
   ]
 }

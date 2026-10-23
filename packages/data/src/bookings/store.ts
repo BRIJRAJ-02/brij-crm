@@ -3,13 +3,17 @@
 // range (the week view: its bookings and the reader's own calendar events),
 // read while a screen retains them. Bookings are settings, not CRM data, so
 // no change event says one arrived yet (a `bookings` event kind is the
-// follow-up): while held, each is read again whenever the window comes back
-// into focus or the tab becomes visible, so a booking made on a public page
-// shows without a refresh. Nothing polls. A failed read keeps what is shown;
-// only a first read shows the failure. A change the member makes reads every
-// held one again (`reloadAll`).
+// follow-up): while held, each is kept current by `fresh.ts`, read again
+// whenever the window comes back into focus or the tab becomes visible, and
+// every minute while the page shows and live updates are paused or off, so a
+// booking made on a public page, or a meeting a calendar sync brought, shows
+// without a refresh (owner ask A115). A failed read keeps what is shown; only
+// a first read shows the failure. A change the member makes reads every held
+// one again (`reloadAll`); Sync now reads the held ones once it has run
+// (`refreshHeld`).
 import type { BookingListItem, BookingsCalendarView, BookingsTab } from '@crm/contracts';
 import { toDataError } from '../errors.ts';
+import { keepFresh, type FreshDeps, type Freshness } from './fresh.ts';
 
 /** The calls the store makes. */
 export interface BookingsApi {
@@ -24,11 +28,9 @@ export interface BookingsApi {
   }) => Promise<BookingsCalendarView>;
 }
 
-/** What the store needs: the calls, and (for tests) the return signal. */
-export interface BookingsDeps {
+/** What the store needs: the calls, and what keeps a held read current (`fresh.ts`: the return signal, live's status). */
+export interface BookingsDeps extends FreshDeps {
   readonly api: BookingsApi;
-  /** Calls `refresh` whenever the person comes back to the page (focus, visible again); answers how to stop. */
-  readonly onReturn?: (refresh: () => void) => () => void;
 }
 
 /** One held read's state: loading, failed, or what the server last said. */
@@ -47,7 +49,10 @@ export type BookingsCalendarState = HeldState<BookingsCalendarView>;
 export interface HeldView<State> {
   readonly subscribe: (listener: () => void) => () => void;
   readonly getSnapshot: () => State;
-  /** Held while a screen shows it: read when first held, and again whenever the person comes back to the page. */
+  /**
+   * Held while a screen shows it: read when first held, again whenever the person comes back to the page, and every
+   * minute while the page shows and live updates are paused or off (`fresh.ts`).
+   */
   readonly retain: () => () => void;
   /** Settles once the first read did; after a failed read, reads again. */
   readonly ready: () => Promise<void>;
@@ -61,29 +66,15 @@ export type BookingsView = HeldView<BookingsState>;
 /** One workspace's range. */
 export type BookingsCalendarHeld = HeldView<BookingsCalendarState>;
 
-/** The browser's return signal: the window's focus and the document becoming visible. */
-export function browserReturn(refresh: () => void): () => void {
-  if (typeof window === 'undefined' || typeof document === 'undefined') return () => undefined;
-  const onVisible = () => {
-    if (document.visibilityState === 'visible') refresh();
-  };
-  window.addEventListener('focus', refresh);
-  document.addEventListener('visibilitychange', onVisible);
-  return () => {
-    window.removeEventListener('focus', refresh);
-    document.removeEventListener('visibilitychange', onVisible);
-  };
-}
-
 /** At most this many ranges are kept that no screen holds (the weeks paged past), the oldest dropped first. */
 const UNHELD_RANGES_MAX = 12;
 
 /** The bookings store: every workspace's lists and ranges. */
 export function createBookingsStore(deps: BookingsDeps) {
-  const onReturn = deps.onReturn ?? browserReturn;
   const lists = new Map<
     string,
     BookingsView & {
+      readonly refresh: () => void;
       readonly patch: (
         edit: (shown: { readonly bookings: readonly BookingListItem[] }) => {
           readonly bookings: readonly BookingListItem[];
@@ -94,6 +85,7 @@ export function createBookingsStore(deps: BookingsDeps) {
   const ranges = new Map<
     string,
     BookingsCalendarHeld & {
+      readonly refresh: () => void;
       readonly isHeld: () => boolean;
       readonly patch: (edit: (shown: BookingsCalendarView) => BookingsCalendarView) => () => void;
     }
@@ -102,20 +94,25 @@ export function createBookingsStore(deps: BookingsDeps) {
   function makeView<T extends object>(load: () => Promise<T>) {
     let state: HeldState<T> = { status: 'loading' };
     let held = 0;
-    let reading: Promise<void> | undefined;
+    // The read that is out, answering whether it landed: one at a time, whoever asks.
+    let reading: Promise<boolean> | undefined;
     let settled: Promise<void> | undefined;
-    let release: (() => void) | undefined;
+    let fresh: Freshness | undefined;
     const listeners = new Set<() => void>();
     const set = (next: HeldState<T>) => {
       state = next;
       for (const listener of listeners) listener();
     };
-    const read = (): Promise<void> => {
+    const read = (): Promise<boolean> => {
       reading ??= load()
         .then(
-          (answer) => set({ status: 'ready', ...answer }),
+          (answer) => {
+            set({ status: 'ready', ...answer });
+            return true;
+          },
           (error: unknown) => {
             if (state.status !== 'ready') set({ status: 'error', message: toDataError(error).message });
+            return false;
           },
         )
         .finally(() => {
@@ -131,26 +128,27 @@ export function createBookingsStore(deps: BookingsDeps) {
       getSnapshot: () => state,
       retain() {
         held += 1;
-        if (held === 1) {
-          void read();
-          release = onReturn(() => void read());
-        }
+        if (held === 1) fresh = keepFresh(read, deps);
         return () => {
           held -= 1;
           if (held === 0) {
-            release?.();
-            release = undefined;
+            fresh?.stop();
+            fresh = undefined;
           }
         };
       },
       ready() {
         // A failed read is tried again when asked, so a passing outage doesn't stick to a range no screen holds.
-        if (state.status === 'error' && reading === undefined) settled = read();
-        settled ??= read();
+        if (state.status === 'error' && reading === undefined) settled = read().then(() => undefined);
+        settled ??= read().then(() => undefined);
         return settled;
       },
       reload() {
         void read();
+      },
+      /** Reads it now when a screen holds it, starting its minute again (Sync now ran); nothing when none does. */
+      refresh() {
+        fresh?.now();
       },
       /** Shows `edit` of what is shown at once (a ready state only); answers how to put it back. */
       patch(edit: (shown: T) => T): () => void {
@@ -229,6 +227,15 @@ export function createBookingsStore(deps: BookingsDeps) {
     reloadAll(workspace: string): void {
       for (const [key, view] of [...lists.entries(), ...ranges.entries()]) {
         if (key.startsWith(`${workspace}:`)) view.reload();
+      }
+    },
+    /**
+     * Reads the lists and ranges a screen holds now, each unless a read of it is out, and starts their minute again
+     * (Sync now ran); one nobody holds reads when held again.
+     */
+    refreshHeld(workspace: string): void {
+      for (const [key, view] of [...lists.entries(), ...ranges.entries()]) {
+        if (key.startsWith(`${workspace}:`)) view.refresh();
       }
     },
   };

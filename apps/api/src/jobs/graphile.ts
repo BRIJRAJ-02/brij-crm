@@ -86,6 +86,12 @@ export function runnerTasks(running: { readonly calendar: boolean; readonly emai
 export const CalendarPayload = z.strictObject({ workspaceId: z.uuid(), connectionId: z.uuid() });
 export type CalendarPayload = z.infer<typeof CalendarPayload>;
 
+/**
+ * The priority a connection's next poll or retry waits at: after the runs `crm_enqueue_calendar_sync` queues at 0 (a
+ * provider's notice, Sync now, a connect), which Graphile takes first however overdue the polls are.
+ */
+export const CALENDAR_POLL_PRIORITY = 1;
+
 /** A connection's queue key and queue name: the same `crm_enqueue_calendar_sync` builds. */
 export function calendarQueue(payload: CalendarPayload): { readonly jobKey: string; readonly queueName: string } {
   return {
@@ -355,6 +361,8 @@ function calendarTask(options: JobRunnersOptions, sync: NonNullable<JobRunnersOp
       ...(outcome.kind === 'synced' ? { events: outcome.events, full: outcome.full } : {}),
       ...(outcome.kind === 'retry' ? { code: outcome.code } : {}),
       ...(outcome.kind === 'stopped' ? { reason: outcome.reason } : {}),
+      // A revoked connection whose account another connection still holds: its grant was kept.
+      ...(outcome.kind === 'stopped' && outcome.grantKept === true ? { grantKept: true } : {}),
       // Calendars the run couldn't read while the account synced: ids and the provider's code, status and reason.
       ...(outcome.failedCalendars === undefined ? {} : { failedCalendars: outcome.failedCalendars }),
     };
@@ -368,11 +376,14 @@ function calendarTask(options: JobRunnersOptions, sync: NonNullable<JobRunnersOp
       else options.log.info('calendar.channel', fields);
     }
     if (outcome.kind === 'stopped') return;
+    // The next poll (or retry) waits at priority 1, behind what a person or a provider asked for now (a notice, Sync
+    // now, a connect: `crm_enqueue_calendar_sync`, priority 0), so a notice never queues behind every overdue poll.
     await helpers.addJob(CALENDAR_TASK, parsed.data, {
       ...calendarQueue(parsed.data),
       jobKeyMode: 'preserve_run_at',
       runAt: new Date(Date.now() + outcome.nextInMs),
       maxAttempts: 25,
+      priority: CALENDAR_POLL_PRIORITY,
     });
   };
 }

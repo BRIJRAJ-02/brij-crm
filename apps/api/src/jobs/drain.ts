@@ -343,7 +343,10 @@ export function createDrainWake(options: DrainWakeOptions): (trigger?: DrainTrig
         log.error('jobs.drain.failed', errorFields(error));
         options.onFault?.(error);
       } finally {
+        // A wake that asked for a turn this one had no time left for is dropped whole: the next turn, asked for by
+        // a request, isn't logged as by use.
         again = false;
+        fromUse = false;
         pending = undefined;
       }
     })();

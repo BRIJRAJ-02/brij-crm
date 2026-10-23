@@ -6,6 +6,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
+import { MEETINGS_PAGE_MAX } from '../meeting-limits.ts';
 import {
   BookAsHostInput,
   CreateTimeBlockInput,
@@ -355,8 +356,8 @@ export const BookingGuestLinkInput = WorkspaceScoped.extend({ bookingId: Uuid })
 export type BookingGuestLinkInput = z.infer<typeof BookingGuestLinkInput>;
 
 /** Member procedures for bookings. */
-/** The most meetings one page of Bookings' list answers. */
-export const MEETINGS_PAGE_MAX = 100;
+/** The most meetings one page of Bookings' list answers (`meeting-limits.ts`, with no Zod, for the browser). */
+export { MEETINGS_PAGE_MAX };
 
 /** Where a meeting in Bookings' list came from: a booking link, the member's synced calendars, or either. */
 export const MeetingSource = z.enum(['all', 'bookings', 'calendar']);

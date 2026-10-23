@@ -29,6 +29,7 @@ import { checkScope } from '../access/mint.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import { touched } from '../engine/definitions.ts';
+import { uuidList } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
@@ -36,6 +37,12 @@ import { writeAudit, type AuditSource } from '../members/audit.ts';
 const { members, workspaces } = schema;
 
 const NOT_A_MEMBER = "That workspace doesn't exist, or you're not a member of it.";
+
+/**
+ * How far apart a deletion's or a restore's calendar runs are queued, in seconds: one tenant's bulk never queues ahead
+ * of every other tenant's notices, which run at the same priority (`crm_enqueue_calendar_sync`'s).
+ */
+export const CALENDAR_SPREAD_SECONDS = 1;
 
 /** A workspace address (spec 0005): the rule a new workspace's address follows, which the database checks too. */
 const WORKSPACE_SLUG = /^(?=.{3,40}$)[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -252,12 +259,16 @@ export async function deleteWorkspace(
         throw refuse('NOT_FOUND', NOT_A_MEMBER);
       // Calendar sync stops with the workspace: each account holding a push channel has its next run brought forward,
       // and that run ends the channels at the provider and syncs nothing, so no notice wakes a deleted workspace. A
-      // failing account's own retry does the same; a restore queues each account again.
+      // failing account's own retry does the same; a restore queues each account again. The runs are spread a
+      // second apart (`CALENDAR_SPREAD_SECONDS`), so one big workspace's deletion never queues ahead of every other
+      // tenant's notices; a notice that arrives for one meanwhile brings that one forward.
       await tx.execute(sql`
-        select crm_enqueue_calendar_sync(c.id) from calendar_connections c
+        select crm_enqueue_calendar_sync(c.id,
+          now() + (row_number() over (order by c.id) - 1) * make_interval(secs => ${CALENDAR_SPREAD_SECONDS}))
+        from calendar_connections c
         where c.workspace_id = ${scope.workspaceId}::uuid and c.status in ('syncing', 'connected')
           and exists (select 1 from calendar_calendars k
-            where k.workspace_id = c.workspace_id and k.connection_id = c.id and k.channel is not null)
+            where k.workspace_id = c.workspace_id and k.connection_id = c.id and k.channel ->> 'id' is not null)
       `);
       await writeAudit(
         tx,
@@ -333,11 +344,26 @@ export async function restoreWorkspace(
         )
         .returning(SETTINGS);
       if (row === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
-      // Calendar sync stopped while it was deleted: each connection that syncs starts again.
-      await tx.execute(sql`
-        select crm_enqueue_calendar_sync(c.id) from calendar_connections c
-        where c.workspace_id = ${scope.workspaceId}::uuid and c.status in ('syncing', 'connected', 'failed')
+      // Calendar sync stopped while it was deleted: each connection that syncs starts again, spread a second apart as
+      // a deletion's runs are. The queue function only takes a connection that may sync now, so a failed one (which
+      // keeps trying at the poll's pace, and heals by itself) is marked syncing for the moment it is queued, then
+      // failed again; all of this is one transaction, so nobody sees it.
+      const failing = await tx.execute<{ id: string }>(sql`
+        update calendar_connections set status = 'syncing'
+        where workspace_id = ${scope.workspaceId}::uuid and status = 'failed'
+        returning id::text as id
       `);
+      await tx.execute(sql`
+        select crm_enqueue_calendar_sync(c.id,
+          now() + (row_number() over (order by c.id) - 1) * make_interval(secs => ${CALENDAR_SPREAD_SECONDS}))
+        from calendar_connections c
+        where c.workspace_id = ${scope.workspaceId}::uuid and c.status in ('syncing', 'connected')
+      `);
+      if (failing.rows.length > 0) {
+        await tx.execute(sql`
+          update calendar_connections set status = 'failed' where id = any(${uuidList(failing.rows.map((each) => each.id))})
+        `);
+      }
       await writeAudit(
         tx,
         scope.workspaceId,

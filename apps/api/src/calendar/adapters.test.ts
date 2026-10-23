@@ -539,6 +539,38 @@ describe('Outlook’s own (AC-1007 to AC-1011)', () => {
     expect(asked()).toBe(2);
   });
 
+  it('says what Graph refused with: its status and its own code, never its message (calendar.channel)', async () => {
+    const refusal = async (body: () => Response) => {
+      const { provider } = make([{ method: 'POST', url: new RegExp(`${GRAPH}/subscriptions$`), answer: body }]);
+      try {
+        await provider.watch(TOKENS, 'cal-2', 'https://hooks.test/api/calendar/microsoft/notify', 'token');
+      } catch (error) {
+        if (isProviderError(error)) return { code: error.code, status: error.status, reason: error.reason };
+        throw error;
+      }
+      throw new Error('It succeeded.');
+    };
+    // The message can quote an address: only the code is kept.
+    expect(
+      await refusal(() =>
+        json(
+          { error: { code: 'InvalidRequest', message: 'Subscription validation failed for ada@example.com.' } },
+          400,
+        ),
+      ),
+    ).toEqual({ code: 'CALENDAR_UNAVAILABLE', status: 400, reason: 'InvalidRequest' });
+    // A body that isn't JSON, or a code that isn't a machine word: the status alone.
+    expect(await refusal(() => new Response('<html>busy</html>', { status: 503 }))).toEqual({
+      code: 'CALENDAR_UNAVAILABLE',
+      status: 503,
+      reason: undefined,
+    });
+    expect(await refusal(() => json({ error: { code: 'Not a word: ada@example.com' } }, 400))).toMatchObject({
+      status: 400,
+      reason: undefined,
+    });
+  });
+
   it('refuses a grant without Calendars.ReadWrite, and blames our app, not the member, for a refused client', async () => {
     const declined = make([
       {

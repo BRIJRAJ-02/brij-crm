@@ -2,8 +2,10 @@
 // AC-823), run by the worker's daily cleanup as crm_worker. Three steps, each
 // safe to run again, so a call that runs out of time picks up where the last
 // one stopped:
-//   1. Its calendar connections are marked revoked and their syncs queued, so
-//      each grant ends with the provider. It waits up to a day for those.
+//   1. Its calendar connections' runs are queued, then the connections marked
+//      revoked, so each run ends its grant with the provider (unless another
+//      workspace's connection still holds the account) and deletes the row.
+//      It waits up to a day for those.
 //   2. `crm_purge_workspace_begin` removes what the worker can't and what
 //      points at its members; then every tenant table's rows go inside
 //      withWorkspace, children before the rows they point at, in batches.
@@ -13,6 +15,7 @@
 // only.
 import { sql } from 'drizzle-orm';
 import type { Database, WorkspaceTx } from '@crm/db';
+import { CALENDAR_SPREAD_SECONDS } from './settings.ts';
 
 /** Rows one delete statement removes at most. */
 export const PURGE_BATCH = 5000;
@@ -109,17 +112,35 @@ export function deleteOrder(tables: readonly TableEdge[]): readonly (readonly st
   return steps;
 }
 
-/** Ends the workspace's calendar grants: true while some are still ending (within the grace). */
+/**
+ * Ends the workspace's calendar grants: true while some are still ending (within the grace). The queue function only
+ * takes a connection that may sync now, so each live one is queued first (a failed one marked syncing for the
+ * moment it is queued), spread a second apart as a deletion's runs are, and only then marked revoked, all in one
+ * transaction, so nobody sees the moment between. Each run then ends its connection's channels and grant (the grant
+ * only when no other workspace's connection holds the account) and deletes the row. An expired one goes now with its
+ * tokens: its grant is already dead.
+ */
 async function endCalendarGrants(db: Database, workspaceId: string): Promise<boolean> {
   return db.withWorkspace(workspaceId, async (tx) => {
-    const marked = await tx.execute<{ id: string }>(sql`
+    await tx.execute(sql`
+      update calendar_connections set status = 'syncing'
+      where workspace_id = ${workspaceId}::uuid and status = 'failed'
+    `);
+    await tx.execute(sql`
+      select crm_enqueue_calendar_sync(c.id,
+        now() + (row_number() over (order by c.id) - 1) * make_interval(secs => ${CALENDAR_SPREAD_SECONDS}))
+      from calendar_connections c
+      where c.workspace_id = ${workspaceId}::uuid and c.status in ('syncing', 'connected')
+    `);
+    await tx.execute(sql`
       update calendar_connections
       set status = 'revoked', updated_at = now(), updated_by_type = 'system', updated_by_id = null,
         updated_by_member_id = null
-      where workspace_id = ${workspaceId}::uuid and status <> 'revoked'
-      returning id::text as id
+      where workspace_id = ${workspaceId}::uuid and status in ('syncing', 'connected')
     `);
-    for (const row of marked.rows) await tx.execute(sql`select crm_enqueue_calendar_sync(${row.id}::uuid)`);
+    await tx.execute(sql`
+      delete from calendar_connections where workspace_id = ${workspaceId}::uuid and status = 'expired'
+    `);
     const waiting = await tx.execute<{ waiting: boolean }>(sql`
       select exists (
         select 1 from calendar_connections
