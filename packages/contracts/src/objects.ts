@@ -57,7 +57,7 @@ export const CreateObjectInput = WorkspaceScoped.extend({
   id: uuidV7('The object id must be a UUID v7.'),
   singularName: ObjectName,
   pluralName: ObjectName,
-  apiSlug: z.string().max(100).optional(),
+  apiSlug: z.string().max(100, { error: 'Keep the API name to 100 characters.' }).optional(),
   icon: ObjectIcon,
   hue: Hue,
   mutationId: Uuid,

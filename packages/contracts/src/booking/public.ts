@@ -133,7 +133,7 @@ export const PublicProfileQuery = z.object({
     .string()
     .regex(/^\d{1,3}\.[0-9a-f-]{36}$/, { error: 'That page of links isn’t right.' })
     .optional(),
-  q: z.string().trim().max(120).optional(),
+  q: z.string().trim().max(120, { error: 'Keep the search to 120 characters.' }).optional(),
 });
 /** A profile read's query. */
 export type PublicProfileQuery = z.infer<typeof PublicProfileQuery>;
@@ -243,7 +243,7 @@ export const PublicBookInput = z.object({
   email: z.email({ error: 'Give an email address such as name@example.com.' }).trim().toLowerCase().max(254),
   timeZone: TimeZoneName,
   /** The visitor's number, for a phone location. */
-  phone: z.string().trim().max(40).optional(),
+  phone: z.string().trim().max(40, { error: 'Keep the phone number to 40 characters.' }).optional(),
   /** More people to invite, at most 10. */
   guests: z
     .array(z.email({ error: 'Give each guest’s email address.' }).trim().toLowerCase().max(254))

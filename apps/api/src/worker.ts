@@ -7,7 +7,7 @@
 // milestone 3, `jobs/lifecycle.ts`): awake while there is work, asleep with no
 // connection at all once idle for `WORKER_IDLE_SLEEP_SECONDS`, so Neon's
 // compute can suspend; the poke and a timer for scheduled work wake it.
-import { workspaceChannel } from '@crm/contracts';
+import { installPlainErrors, workspaceChannel } from '@crm/contracts';
 import type { QueueRows } from '@crm/core';
 import { audiences, meetingFacts, removedUserIds, systemScope, taskFacts, viewFacts } from '@crm/core/system';
 import {
@@ -32,6 +32,8 @@ import { onShutdown } from './shutdown.ts';
 import { createWorkerServer } from './worker-http.ts';
 
 const env = loadEnv(WorkerEnv);
+// Jobs check what people typed too (an import's cells): any schema without a message answers in plain words.
+installPlainErrors();
 
 const db = createDatabase({
   url: env.DATABASE_URL,

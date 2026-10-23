@@ -50,7 +50,11 @@ export { MEMBER_SEARCH_MAX, MEMBERS_PAGE, MEMBERS_PAGE_MAX } from './team-limits
  * whose name or email holds `search` (any case).
  */
 export const MembersInput = WorkspaceScoped.extend({
-  search: z.string().trim().max(MEMBER_SEARCH_MAX).optional(),
+  search: z
+    .string()
+    .trim()
+    .max(MEMBER_SEARCH_MAX, { error: `Keep the search to ${String(MEMBER_SEARCH_MAX)} characters.` })
+    .optional(),
   cursor: z.string().min(1).max(512).optional(),
   limit: z.number().int().min(1).max(MEMBERS_PAGE_MAX).optional(),
 });

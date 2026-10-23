@@ -105,6 +105,7 @@ import {
   withRetryAfter,
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
+import { refusalFor, refusalSummary } from './refusals.ts';
 import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
@@ -489,8 +490,6 @@ export {
   dataError,
   isDataError,
   isFetchFailure,
-  refusalFor,
-  refusalSummary,
   SIGN_IN_CODES,
   type DataError,
   type DataErrorCode,
@@ -498,6 +497,7 @@ export {
   type DataFault,
   type SignInCode,
 } from './errors.ts';
+export { refusalFor, refusalSummary };
 export type { FetchLike } from './fetch.ts';
 export type { NavFavourite, NavState } from '@crm/contracts';
 export type { NavChangeOptions, NavSnapshot, NavSource } from './navigation/store.ts';
@@ -2587,6 +2587,7 @@ export function createDataLayer({
   const tasksStore = (): Promise<TasksStore> => {
     tasks ??= import('./tasks/store.ts').then(({ createTasksStore }) =>
       createTasksStore({
+        refusals: { refusalFor, refusalSummary },
         api: {
           list: (input) =>
             beforeRead(input.workspace).then(() =>
@@ -2756,6 +2757,7 @@ export function createDataLayer({
         api: recordsApi,
         notify,
         mintId,
+        refusals: { refusalFor, refusalSummary },
         watch,
         mutations,
         beforeRead,

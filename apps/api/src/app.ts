@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto';
-import { type ErrorCode, errorStatus } from '@crm/contracts';
+import { type ErrorCode, errorStatus, installPlainErrors } from '@crm/contracts';
 import {
   connectedCalendar,
   createCalendarEvents,
@@ -220,6 +220,8 @@ export function createApp({
   env: ApiEnv;
   router?: AnyRouter;
 }) {
+  // Every schema without a message of its own answers in plain words (the RPC contract, the public routes, sign in).
+  installPlainErrors();
   const { db, identity, auth, wakeRelay, rules, timing, analytics = NO_ANALYTICS } = services;
   const mailer = services.mailer ?? NO_MAILER;
   // Who may start a workspace of their own (spec 0031, owner decision 3): the addresses sign up lets in by the list.

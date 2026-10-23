@@ -1,7 +1,9 @@
 // Brief
 // Purpose: make or change a rotation (spec 0029, AC-728, AC-729; spec 0037): its name, how it picks, the window it counts over, where returning guests go, and its 2 to 20 members.
 // Main task: add the people who share the meetings, set each one's weight, priority, daily and weekly caps and on or off, then Create or Save.
-// Leaves out: shares and history (the Rotations screen), and teams (#23 brings rotations that follow a team).
+// Leaves out: shares and history (the Rotations screen), teams (#23 brings rotations that follow a team), and marking who
+// can't join in the picker (that needs the server to say who can host; until then its hint says who can, and the
+// server's refusal of one member offers to remove them or open their hours in a new tab).
 import {
   isDataError,
   type DataLayer,
@@ -11,8 +13,11 @@ import {
 } from '@crm/data';
 import {
   Button,
+  ButtonLink,
   Callout,
   Field,
+  focusLater,
+  InfoTip,
   Modal,
   Radio,
   RadioGroup,
@@ -24,7 +29,8 @@ import {
   type TableColumn,
   RecordChip,
 } from '@crm/ui';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { availabilityHref } from './links.ts';
 import { strings } from './rotation-strings.ts';
 
 /** Props for the dialog. */
@@ -97,9 +103,15 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
   const [id] = useState(() => data.rotations.newId());
   const [isBusy, setBusy] = useState(false);
   const [isConfirming, setConfirming] = useState(false);
-  const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
+  // What went wrong, and the member a refusal was about, taken from the list that was sent, not the draft since.
+  const [failure, setFailure] = useState<{ readonly message: string; readonly memberId?: string } | undefined>(
+    undefined,
+  );
   const [nameError, setNameError] = useState<string | undefined>(undefined);
-  const nameOf = (memberId: string) => people.find((person) => person.id === memberId)?.name ?? memberId;
+  const nameOf = (memberId: string) =>
+    people.find((person) => person.id === memberId)?.name ??
+    rotation?.members.find((member) => member.memberId === memberId)?.name ??
+    memberId;
   const removed = (rotation?.members ?? []).filter(
     (member) => !members.some((each) => each.memberId === member.memberId),
   );
@@ -110,6 +122,22 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     .filter((person) => !members.some((member) => member.memberId === person.id))
     .map((person) => ({ id: person.id, label: person.name, description: person.email }));
   const countError = members.length < 2 ? strings.needTwo : members.length > 20 ? strings.tooMany : undefined;
+  // A refusal about one member ("Maya Patel needs to set hours or connect a calendar first.") offers to remove them,
+  // and, while they are an active member (so hours are what they lack), their hours in a new tab, so the group stays.
+  const refused = failure?.memberId;
+  const isRefusedActive = refused !== undefined && people.some((person) => person.id === refused);
+  // Where focus goes once a member's row or the refusal's Remove from group leaves with them: Create or Save, or the
+  // next row's remove button. Left to itself it would fall to the title bar's Close, where Enter loses the draft.
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const removeRefs = useRef(new Map<string, HTMLButtonElement>());
+  const removeMember = (memberId: string, focusNext: 'row' | 'save') => {
+    const index = members.findIndex((each) => each.memberId === memberId);
+    const next = focusNext === 'row' ? members[index + 1]?.memberId : undefined;
+    setMembers((current) => current.filter((each) => each.memberId !== memberId));
+    // The refusal was about them, so it goes with them.
+    if (failure?.memberId === memberId) setFailure(undefined);
+    focusLater(() => (next === undefined ? undefined : removeRefs.current.get(next)) ?? saveRef.current);
+  };
 
   const submit = () => {
     if (isBusy) return;
@@ -146,9 +174,11 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
         setBusy(false);
         setConfirming(false);
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+        const index = field?.startsWith('members.') === true ? Number(field.slice('members.'.length)) : undefined;
+        const memberId = index === undefined ? undefined : list[index]?.memberId;
         setFailure({
           message: isDataError(error) ? error.message : strings.somethingWrong,
-          ...(field === undefined ? {} : { field }),
+          ...(memberId === undefined ? {} : { memberId }),
         });
       },
     );
@@ -226,7 +256,13 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
             variant="ghost"
             icon="x"
             label={strings.remove(who)}
-            onPress={() => setMembers((current) => current.filter((each) => each.memberId !== member.memberId))}
+            ref={(element: HTMLButtonElement | null) => {
+              if (element === null) removeRefs.current.delete(member.memberId);
+              else removeRefs.current.set(member.memberId, element);
+            }}
+            onPress={() => {
+              removeMember(member.memberId, 'row');
+            }}
           />
         );
     }
@@ -248,7 +284,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
             <Button slot="close" isDisabled={isBusy} kbd="ESC">
               {strings.cancel}
             </Button>
-            <Button variant="primary" isPending={isBusy} onPress={submit}>
+            <Button variant="primary" ref={saveRef} isPending={isBusy} onPress={submit}>
               {rotation === undefined
                 ? isBusy
                   ? strings.creating
@@ -261,13 +297,48 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
         }
       >
         <SettingsStack>
-          {failure !== undefined && failure.field === undefined && <Callout tone="danger">{failure.message}</Callout>}
-          {failure?.field?.startsWith('members.') === true && <Callout tone="danger">{failure.message}</Callout>}
+          {failure !== undefined && (
+            <Callout
+              tone="danger"
+              {...(refused === undefined
+                ? {}
+                : {
+                    actions: (
+                      <>
+                        <Button
+                          label={strings.removeRefused(nameOf(refused))}
+                          onPress={() => {
+                            removeMember(refused, 'save');
+                          }}
+                        >
+                          {strings.removeFromGroup}
+                        </Button>
+                        {isRefusedActive && (
+                          <ButtonLink
+                            href={availabilityHref(slug, refused)}
+                            isExternal
+                            icon="external-link"
+                            label={strings.setHoursFor(nameOf(refused))}
+                          >
+                            {strings.setHours}
+                          </ButtonLink>
+                        )}
+                      </>
+                    ),
+                  })}
+            >
+              {failure.message}
+            </Callout>
+          )}
           <Field
             label={strings.name}
             placeholder={strings.namePlaceholder}
             value={name}
-            onChange={setName}
+            onChange={(next) => {
+              setName(next);
+              // Typing is the fix: the error goes as soon as there is a name again (SS-R3).
+              setNameError(undefined);
+            }}
             maxLength={80}
             isRequired
             {...(nameError === undefined ? {} : { error: nameError })}
@@ -293,6 +364,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           )}
           <Select
             label={strings.window}
+            info={<InfoTip label={strings.window}>{strings.windowInfo}</InfoTip>}
             items={WINDOWS}
             value={String(windowDays)}
             onChange={(value) => setWindowDays(value === '7' ? 7 : value === '90' ? 90 : 30)}
@@ -313,7 +385,8 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
             isSearchable
             isDisabled={left.length === 0 || members.length >= 20}
             value={null}
-            hint={strings.membersCount(members.length)}
+            // Who can join, in plain words (SS-R1): a link here would open the reader's own hours, not a teammate's.
+            hint={strings.membersHint(members.length)}
             {...(hasTried && countError !== undefined ? { error: countError } : {})}
             onChange={(memberId) => {
               if (memberId === null) return;

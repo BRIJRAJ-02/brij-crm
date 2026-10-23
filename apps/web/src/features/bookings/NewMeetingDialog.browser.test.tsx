@@ -68,13 +68,21 @@ function peopleSearch(people: readonly SearchResult[]): RecordSearch {
 const WORK = '0190f0f0-0000-7000-8000-0000000000c1';
 const TEAM = '0190f0f0-0000-7000-8000-0000000000c2';
 const HOLIDAYS = '0190f0f0-0000-7000-8000-0000000000c3';
+const SHARED = '0190f0f0-0000-7000-8000-0000000000c4';
 
-/** One Google account: Work (the default), Team (shared, writable) and Holidays (read only). */
-function calendarsOf(names: readonly ('Work' | 'Team' | 'Holidays')[]): CalendarListState {
+type Name = 'Work' | 'Team' | 'Holidays' | 'Shared';
+
+/**
+ * One Google account: Work (the main one and the default), Team (writable, checked for conflicts), Holidays (read
+ * only) and Shared (writable, but nothing switched on: not in use, so the app never shows it).
+ */
+function calendarsOf(names: readonly Name[]): CalendarListState {
+  const off = { isPrimary: false, checkConflicts: false, showInWeek: false, sync: false, isDestination: false };
   const all = [
-    { id: WORK, name: 'Work', canBeDestination: true, isDestination: true, hue: 'blue' },
-    { id: TEAM, name: 'Team', canBeDestination: true, isDestination: false, hue: 'green' },
-    { id: HOLIDAYS, name: 'Holidays', canBeDestination: false, isDestination: false, hue: 'orange' },
+    { ...off, id: WORK, name: 'Work', canBeDestination: true, isPrimary: true, isDestination: true, hue: 'blue' },
+    { ...off, id: TEAM, name: 'Team', canBeDestination: true, checkConflicts: true, hue: 'green' },
+    { ...off, id: HOLIDAYS, name: 'Holidays', canBeDestination: false, showInWeek: true, hue: 'orange' },
+    { ...off, id: SHARED, name: 'Shared', canBeDestination: true, hue: 'purple' },
   ];
   return {
     status: 'ready',
@@ -87,7 +95,7 @@ function calendarsOf(names: readonly ('Work' | 'Team' | 'Holidays')[]): Calendar
         id: '0190f0f0-0000-7000-8000-0000000000b1',
         provider: 'google',
         accountEmail: 'ada@acme.dev',
-        calendars: all.filter((calendar) => names.includes(calendar.name as 'Work' | 'Team' | 'Holidays')),
+        calendars: all.filter((calendar) => names.includes(calendar.name as Name)),
       },
     ],
   } as unknown as CalendarListState;
@@ -296,10 +304,10 @@ describe('New meeting', () => {
     });
   });
 
-  it('offers Calendar with two calendars that take events, starts on the page’s own, and sends only a pick', async () => {
+  it('offers Calendar with two calendars in use that take events, starts on the page’s own, and sends only a pick', async () => {
     const teamPage = pageCalendar(TEAM);
     const { onBook } = await open({
-      calendars: calendarsOf(['Work', 'Team', 'Holidays']),
+      calendars: calendarsOf(['Work', 'Team', 'Holidays', 'Shared']),
       pageDestination: () => teamPage,
     });
     const calendar = page.getByRole('button', { name: /Calendar$/ });
@@ -307,7 +315,7 @@ describe('New meeting', () => {
     await userEvent.fill(page.getByRole('textbox', { name: 'With' }), 'Grace Hopper');
     await userEvent.fill(page.getByRole('textbox', { name: 'Email' }), 'grace@navy.example');
     await userEvent.click(calendar);
-    // Only calendars that take events: Holidays is read only.
+    // Only calendars in use that take events: Holidays is read only, and Shared isn't in use.
     const options = page.getByRole('option');
     expect(options.elements().map((option) => option.textContent)).toEqual(['Work', 'Team']);
     await userEvent.click(page.getByRole('option', { name: 'Work' }));
@@ -315,9 +323,21 @@ describe('New meeting', () => {
     expect(onBook).toHaveBeenCalledWith(expect.objectContaining({ calendarId: WORK }));
   });
 
-  it('leaves Calendar out with one calendar that takes events', async () => {
+  it('counts and lists the page’s own calendar even when it isn’t in use, and starts on it', async () => {
+    const sharedPage = pageCalendar(SHARED);
+    // One calendar in use, and the page's own that isn't: two to choose between.
+    await open({ calendars: calendarsOf(['Work', 'Shared']), pageDestination: () => sharedPage });
+    const calendar = page.getByRole('button', { name: /Calendar$/ });
+    await expect.element(calendar).toHaveTextContent('Shared');
+    await userEvent.click(calendar);
+    const options = page.getByRole('option');
+    expect(options.elements().map((option) => option.textContent)).toEqual(['Work', 'Shared']);
+  });
+
+  it('leaves Calendar out with one calendar in use that takes events', async () => {
     const ownless = pageCalendar(undefined);
-    await open({ calendars: calendarsOf(['Work', 'Holidays']), pageDestination: () => ownless });
+    // Shared could take events, but isn't in use, so it isn't a choice.
+    await open({ calendars: calendarsOf(['Work', 'Holidays', 'Shared']), pageDestination: () => ownless });
     await expect.element(page.getByRole('textbox', { name: 'With' })).toHaveFocus();
     expect(page.getByRole('button', { name: /Calendar$/ }).elements()).toEqual([]);
   });

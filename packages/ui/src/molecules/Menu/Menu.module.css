@@ -113,6 +113,11 @@
     margin-block-start: var(--space-4);
   }
 
+  /* More of the group above (a choice inside it), so no gap between them. */
+  .section[data-joined] {
+    margin-block-start: 0;
+  }
+
   .separator {
     block-size: var(--border-width-hairline);
     margin-block: var(--space-4);

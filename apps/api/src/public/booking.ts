@@ -94,7 +94,7 @@ import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { toApiError } from '../errors.ts';
+import { inputProblems, toApiError, type SchemaIssue } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
 import type { TicketBook } from '../forms/ticket.ts';
@@ -433,10 +433,10 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   };
 
-  /** The refusal for a body its schema didn't take: the first issue, and up to ten with their paths. */
-  const invalid = (issues: readonly { readonly path: readonly PropertyKey[]; readonly message: string }[]) => {
-    const listed = issues.slice(0, 10).map((issue) => ({ path: issue.path.map(String), message: issue.message }));
-    return answer('INPUT_INVALID', listed[0]?.message ?? 'Some of the input is invalid.', { data: { issues: listed } });
+  /** The refusal for a body its schema didn't take: up to ten issues on their fields, the first one's sentence leading. */
+  const invalid = (issues: readonly SchemaIssue[]) => {
+    const { message, issues: listed } = inputProblems(issues, { limit: 10, leadWithField: true });
+    return answer('INPUT_INVALID', message, { data: { issues: listed } });
   };
 
   app.get('/public/booking/manage/:token/slots', async (c) => {
@@ -834,12 +834,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       return answer('INPUT_INVALID', 'The request could not be read.');
     }
     const input = PublicBookInput.safeParse(body);
-    if (!input.success) {
-      const issues = input.error.issues
-        .slice(0, 10)
-        .map((issue) => ({ path: issue.path.map(String), message: issue.message }));
-      return answer('INPUT_INVALID', issues[0]?.message ?? 'Some of the input is invalid.', { data: { issues } });
-    }
+    if (!input.success) return invalid(input.error.issues);
     const ticket = services.tickets?.check(`booking:${key}`, input.data.ticket);
     const elapsed = ticket?.kind === 'valid' ? ticket.elapsedMs : undefined;
     if (looksLikeBot(input.data, (services.now?.() ?? new Date()).getTime(), elapsed)) {
