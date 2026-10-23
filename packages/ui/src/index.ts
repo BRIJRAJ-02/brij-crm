@@ -423,6 +423,13 @@ export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/Rec
 export { RecordLayout, type RecordLayoutProps } from './modules/RecordLayout/RecordLayout.tsx';
 export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';
 export {
+  RelatedRecords,
+  type RelatedRecord,
+  type RelatedRecordsHandle,
+  type RelatedRecordsPicker,
+  type RelatedRecordsProps,
+} from './modules/RelatedRecords/RelatedRecords.tsx';
+export {
   relationshipStep,
   RelationshipSettings,
   type DialogStep,

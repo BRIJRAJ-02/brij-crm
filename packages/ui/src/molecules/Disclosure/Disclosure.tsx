@@ -23,6 +23,12 @@ export interface DisclosureProps {
   readonly id?: string;
   /** A count after the title (Attributes 14). */
   readonly count?: number;
+  /**
+   * What the count counts, read after the number by screen readers ("people"),
+   * and shown whole however large: a record's related section says "Team
+   * 150,000" rather than "99+" (spec 0017). Without it the count caps at 99+.
+   */
+  readonly countLabel?: string;
   readonly isExpanded?: boolean;
   readonly defaultExpanded?: boolean;
   readonly onExpandedChange?: (isExpanded: boolean) => void;
@@ -59,6 +65,7 @@ export function Disclosure({
   children,
   id,
   count,
+  countLabel,
   isExpanded,
   defaultExpanded,
   onExpandedChange,
@@ -83,7 +90,12 @@ export function Disclosure({
         </span>
         {leading}
         <span className={styles.title}>{title}</span>
-        {count !== undefined && <Badge count={count} />}
+        {count !== undefined &&
+          (countLabel === undefined ? (
+            <Badge count={count} />
+          ) : (
+            <Badge count={count} max={Number.MAX_SAFE_INTEGER} label={countLabel} />
+          ))}
       </AriaButton>
     </Heading>
   );

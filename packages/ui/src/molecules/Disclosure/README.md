@@ -16,7 +16,7 @@ New. Attribute groups on the record panel (#18), advanced settings and import op
 </DisclosureGroup>
 ```
 
-- `count` shows a Badge after the title.
+- `count` shows a Badge after the title, capped at 99+. With `countLabel` (what it counts, read after the number: "people") it shows whole however large, for a record's related section ("Team 150,000", spec 0017). Why a prop: a sidebar's counts are small and a cap keeps them quiet, while a related side's total is the point of its heading.
 - `leading` goes before the title, inside the toggle: an account's ProviderMark in the calendars list. Why a slot: the account's heading is its fold, and the mark names the provider at a glance.
 - In a `DisclosureGroup`, opening one closes the others unless `allowsMultipleExpanded`.
 - `variant="fields"` stacks the panel's content `space-16` apart, as a `Form` stacks its fields: more fields folded inside a form ("Add more fields" in a create dialog, spec 0012). Why a variant: a Disclosure's panel lays out nothing, so fields inside it sat flush, unlike the form's own.

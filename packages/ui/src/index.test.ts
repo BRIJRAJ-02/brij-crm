@@ -139,6 +139,7 @@ describe('@crm/ui', () => {
       'RecordLayout',
       'RecordPanel',
       'RecordStats',
+      'RelatedRecords',
       'RelationshipSettings',
       'RelativeTime',
       'RemoteCursor',
