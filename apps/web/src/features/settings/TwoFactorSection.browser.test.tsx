@@ -3,7 +3,7 @@
 // code at a desktop width and under it on a phone, the key in a box that keeps its groups whole with Copy inside, and
 // the code's large boxes under it all at the dialog's full width; six digits reach the codes step, ten whole codes in two columns of five;
 // Done waits for "I’ve saved these", with focus on Download, never Close (Q103); Turn off and Make new codes open
-// in the app code’s boxes (Q86); each change tells the page (Recent activity reads again); Turn off is quiet in
+// in the app code’s boxes (Q86), and a backup code there is taken as typed (Q84); each change tells the page (Recent activity reads again); Turn off is quiet in
 // its row. axe passes in light and dark.
 import '@crm/ui/styles.css';
 import type { AccountSecurityState, DataLayer } from '@crm/data';
@@ -291,5 +291,17 @@ describe('two factor, on', () => {
     const saved = page.getByRole('dialog', { name: 'Save your backup codes' });
     await expect.element(saved).toBeVisible();
     await expect.element(saved.getByRole('button', { name: 'Download' })).toHaveFocus();
+  });
+
+  it('takes a backup code as typed: no capitals, corrections or spell check on a phone (Q84)', async () => {
+    const { data } = layer();
+    await render(ON, data, () => undefined);
+    await page.getByRole('button', { name: 'Turn off' }).click();
+    const off = page.getByRole('alertdialog', { name: 'Turn off two factor sign in?' });
+    await off.getByRole('button', { name: 'Use a backup code' }).click();
+    const field = off.getByRole('textbox', { name: 'Backup code' });
+    await expect.element(field).toHaveAttribute('autocapitalize', 'off');
+    await expect.element(field).toHaveAttribute('autocorrect', 'off');
+    await expect.element(field).toHaveAttribute('spellcheck', 'false');
   });
 });

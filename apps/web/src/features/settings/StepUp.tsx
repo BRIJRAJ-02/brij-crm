@@ -142,6 +142,8 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
             value={code}
             onChange={setCode}
             autoComplete="off"
+            // Backup codes are mixed case and checked exactly: a phone's capitals or corrections would spoil one (Q84).
+            isVerbatim
             onSubmit={() => need.onComplete?.()}
             {...errorProps}
           />
