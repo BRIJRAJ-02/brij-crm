@@ -144,7 +144,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly twenty three security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly thirty security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -158,6 +158,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_page_by_address', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_profile_pages', owner: 'crm_booking_lookup' },
+      { name: 'crm_calendar_account_shared', owner: 'crm_calendar_lookup' },
       { name: 'crm_claim_workspace_address', owner: 'crm_address' },
       { name: 'crm_enqueue_booking_mail', owner: 'crm_queue' },
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
@@ -197,6 +198,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_page_by_address', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_page_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_profile_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_calendar_account_shared', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises the unique violation a taken address is refused with.
       { name: 'crm_claim_workspace_address', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_booking_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -230,7 +232,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ]);
   });
 
-  it('lets no role but crm_booking_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_booking_lookup, crm_calendar_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
@@ -239,6 +241,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     `);
     expect(bypass.rows.map((row) => row.role)).toEqual([
       'crm_booking_lookup',
+      'crm_calendar_lookup',
       'crm_domain_lookup',
       'crm_form_lookup',
       'crm_invitation_lookup',
@@ -329,6 +332,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['app', 'app', 'app', 'app', 'app'],
     ],
     ['crm_address', ['crm_claim_workspace_address'], ['crm_claim_workspace_address(text)'], ['app']],
+    ['crm_calendar_lookup', ['crm_calendar_account_shared'], ['crm_calendar_account_shared(uuid)'], ['app']],
     [
       'crm_handle',
       ['crm_save_public_profile', 'crm_public_profiles_of', 'crm_handle_owner'],
@@ -1159,6 +1163,45 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503' } });
+  });
+
+  it('answers crm_calendar_account_shared for the caller’s own connection only, true while another workspace holds its account live (spec 0031, AC-815)', async () => {
+    // An account no other test holds: the answer reaches across every workspace in the database.
+    const account = `shared-${randomUUID().slice(0, 8)}@example.com`;
+    const a = await workspaceWithMember('shared-a');
+    const b = await workspaceWithMember('shared-b');
+    const connect = async (workspaceId: string, memberId: string, status: string) => {
+      const connectionId = randomUUID();
+      await db.withWorkspace(workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into calendar_connections (workspace_id, id, member_id, provider, account_email, status, tokens, created_by_type, created_by_id, created_by_member_id, updated_by_type)
+            values (${workspaceId}, ${connectionId}, ${memberId}, 'google', ${account}, ${status}, '\\x00'::bytea, 'member', ${memberId}, ${memberId}, 'calendar')`,
+        ),
+      );
+      return connectionId;
+    };
+    const shared = (workspaceId: string, connectionId: string) =>
+      db.withWorkspace(
+        workspaceId,
+        async (tx) =>
+          (
+            await tx.execute<{ shared: boolean }>(
+              sql`select crm_calendar_account_shared(${connectionId}::uuid) as shared`,
+            )
+          ).rows[0]?.shared,
+      );
+    const inA = await connect(a.workspaceId, a.memberId, 'revoked');
+    const inB = await connect(b.workspaceId, b.memberId, 'connected');
+    expect(await shared(a.workspaceId, inA)).toBe(true);
+    // B's connection isn't the caller's: nothing is said of it, from A.
+    expect(await shared(a.workspaceId, inB)).toBe(false);
+    // A revoked connection holds nothing: B's own account is held nowhere else.
+    expect(await shared(b.workspaceId, inB)).toBe(false);
+    // Once B's account has stopped (expired), nothing holds A's either.
+    await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute(sql`update calendar_connections set status = 'expired' where id = ${inB}`),
+    );
+    expect(await shared(a.workspaceId, inA)).toBe(false);
   });
 
   it("reads none of another workspace's calendar rows, and refuses a link to its record (spec 0024)", async () => {

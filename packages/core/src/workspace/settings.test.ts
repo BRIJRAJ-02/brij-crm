@@ -450,6 +450,55 @@ describe('the purge (AC-823)', () => {
     expect((await left(t.workspaceId))?.workspaces).toBe(0);
   });
 
+  it('queues each live calendar connection’s revoke before marking it revoked, and drops an expired one at once (AC-815)', async () => {
+    const t = await team(['member']);
+    const member = t.ids[0] ?? '';
+    const connection = async (status: string) => {
+      const id = newId();
+      await db.withWorkspace(t.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into calendar_connections (workspace_id, id, member_id, provider, account_email, status, tokens, created_by_type, created_by_id, created_by_member_id, updated_by_type)
+            values (${t.workspaceId}, ${id}, ${member}, 'google', ${`m-${tag()}@example.com`}, ${status}, '\\x00'::bytea, 'member', ${member}, ${member}, 'calendar')`,
+        ),
+      );
+      return id;
+    };
+    const connected = await connection('connected');
+    const failed = await connection('failed');
+    await connection('expired');
+    await deleteWorkspace(t.as(t.owner, 'owner'), { confirmName: 'Acme' });
+    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '2 hours' where id = $1`, [
+      t.workspaceId,
+    ]);
+    // The queue function only takes a connection that may sync: queued first, then marked, each run can end its grant.
+    expect(await purgeWorkspace({ db: worker, log }, t.workspaceId, Date.now() + 60_000)).toBe('waiting');
+    expect(
+      await testQuery<{ id: string; status: string }>(
+        ownerUrl,
+        `select id::text as id, status::text as status from calendar_connections where workspace_id = $1 order by id`,
+        [t.workspaceId],
+      ),
+    ).toEqual([
+      { id: connected, status: 'revoked' },
+      { id: failed, status: 'revoked' },
+    ]);
+    const queued = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select payload->>'connectionId' as id from graphile_worker._private_jobs where payload->>'workspaceId' = $1
+       order by run_at`,
+      [t.workspaceId],
+    );
+    expect(queued.map((row) => row.id)).toEqual([connected, failed]);
+    // A call again queues nothing more, and waits while the runs are out.
+    expect(await purgeWorkspace({ db: worker, log }, t.workspaceId, Date.now() + 60_000)).toBe('waiting');
+    // Each run ends its grant and deletes its row; then the purge goes on.
+    await testQuery(ownerUrl, `delete from calendar_connections where workspace_id = $1`, [t.workspaceId]);
+    await testQuery(ownerUrl, `delete from graphile_worker._private_jobs where payload->>'workspaceId' = $1`, [
+      t.workspaceId,
+    ]);
+    expect(await purgeWorkspace({ db: worker, log }, t.workspaceId, Date.now() + 60_000)).toBe('done');
+  });
+
   it('is the worker’s alone', async () => {
     for (const call of ['select * from crm_workspaces_to_purge(5)', `select crm_purge_workspace_end('${newId()}')`]) {
       await expect(testQuery(appUrl, call)).rejects.toMatchObject({ code: '42501' });

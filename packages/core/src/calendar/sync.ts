@@ -28,8 +28,12 @@
 //
 // A run in a deleted workspace (spec 0031, AC-823) syncs nothing: it ends
 // each calendar's push channel at the provider, so the provider stops posting
-// notices for a workspace nobody can open, and stops. What became of every
-// channel it touched is in its outcome (`channels`), for the log.
+// notices for a workspace nobody can open, and stops. A revoked connection's
+// run (its member removed, its workspace purged; AC-815) ends its channels
+// too, then its grant, unless another connection in any workspace still
+// holds the account (Google ends a user's whole grant to the app), and goes.
+// What became of every channel it touched is in its outcome (`channels`), for
+// the log.
 import { sql } from 'drizzle-orm';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -51,9 +55,11 @@ import {
 import {
   needsChannel,
   openChannel,
+  pushPaused,
   stopChannel,
   storedChannel,
   type ChannelReport,
+  type ChannelStopReason,
   type StoredChannel,
 } from './push.ts';
 import { openTokens, sealTokens, type TokenBinding, type TokenKey } from './tokens.ts';
@@ -134,6 +140,11 @@ export type CalendarSyncOutcome = (
   | {
       readonly kind: 'stopped';
       readonly reason: 'gone' | 'not-syncing' | 'expired' | 'no-provider' | 'revoked' | 'workspace-deleted';
+      /**
+       * A revoked connection whose grant was kept: another connection, in any workspace, still holds the account,
+       * so only this one's tokens and channels went (Google ends the whole grant of a user to the app).
+       */
+      readonly grantKept?: true;
     }
 ) & { readonly channels?: readonly ChannelReport[]; readonly failedCalendars?: readonly CalendarFailure[] };
 
@@ -326,49 +337,20 @@ type CalendarRun =
   | { readonly kind: 'failed'; readonly code: CalendarErrorCode; readonly failure: ProviderFailure };
 
 /**
- * Ends a revoked connection (spec 0031, AC-815): the provider ends its grant,
- * then the row goes with its sealed tokens; the meetings it held stay,
- * flagged when the member was removed. A provider failure throws, so the
- * task tries again later, and never blocked the removal, which committed
- * long before. A grant already gone still lets the row go; a provider the
- * worker doesn't run keeps the row for one that does.
+ * Ends each push channel a connection's calendars hold at the provider, and answers what became of each. A channel
+ * the provider couldn't end for now (it didn't answer) stays stored, so a notice it still sends queues the account's
+ * run again; one it ended, or refused for good (the grant is gone), is forgotten, since nothing more can end it, and
+ * it runs out within days. None is asked for without the provider.
  */
-async function revokeConnection(
+async function endChannels(
   deps: Pick<CalendarSyncDeps, 'tokenKey'>,
   scope: EngineScope,
-  provider: CalendarProvider | undefined,
-  row: Pick<ConnectionRow, 'id' | 'tokens'>,
-  binding: TokenBinding,
-): Promise<CalendarSyncOutcome> {
-  // A worker without this provider leaves the row for one that has it, so the grant is still ended.
-  if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
-  try {
-    await provider.revoke(openTokens(deps.tokenKey, row.tokens, binding));
-  } catch (error) {
-    if (!isProviderError(error, 'CALENDAR_AUTH_REVOKED') && !isProviderError(error, 'CALENDAR_AUTH')) throw error;
-  }
-  await inWorkspace(scope, (tx) =>
-    tx.execute(sql`delete from calendar_connections where id = ${row.id}::uuid and status = 'revoked'`),
-  );
-  return { kind: 'stopped', reason: 'revoked' };
-}
-
-/**
- * A deleted workspace's account (spec 0031, AC-823): nothing syncs, and each of its calendars' push channels ends at
- * the provider, so the provider stops posting notices for a workspace nobody can open. A channel the provider
- * couldn't end for now (it didn't answer) stays stored, so a notice it still sends queues this again; one it
- * refused for good (the grant is gone) is forgotten, since nothing can end it, and it runs out within days. The
- * grant itself is kept: the member's other workspaces may hold the same account, and a restore syncs it again.
- */
-async function endDeletedChannels(
-  deps: Pick<CalendarSyncDeps, 'tokenKey'>,
-  scope: EngineScope,
-  provider: CalendarProvider | undefined,
+  provider: CalendarProvider,
   row: Pick<ConnectionRow, 'id' | 'tokens'>,
   binding: TokenBinding,
   now: Date,
-): Promise<CalendarSyncOutcome> {
-  const stopped: CalendarSyncOutcome = { kind: 'stopped', reason: 'workspace-deleted' };
+  why: ChannelStopReason,
+): Promise<readonly ChannelReport[]> {
   const held = (
     await inWorkspace(scope, (tx) =>
       tx.execute<{ id: string; channel: unknown }>(sql`
@@ -381,8 +363,7 @@ async function endDeletedChannels(
     const channel = storedChannel(each.channel);
     return channel === undefined ? [] : [{ id: each.id, channel }];
   });
-  // A worker without this provider can't reach it: the channels wait for one that can.
-  if (held.length === 0 || provider === undefined) return stopped;
+  if (held.length === 0) return [];
   let tokens: CalendarTokens | undefined;
   let refused: ProviderFailure | undefined;
   try {
@@ -394,7 +375,6 @@ async function endDeletedChannels(
   const channels: ChannelReport[] = [];
   for (const each of held) {
     const failure = tokens === undefined ? refused : await stopChannel(provider, tokens, each.channel);
-    // Ended, or refused for good: forgotten. A provider that didn't answer is asked again by the next notice.
     if (failure?.code !== 'CALENDAR_UNAVAILABLE') {
       await inWorkspace(scope, (tx) =>
         tx.execute(sql`
@@ -405,11 +385,71 @@ async function endDeletedChannels(
     }
     channels.push(
       failure === undefined
-        ? { calendarId: each.id, outcome: 'stopped', why: 'workspace-deleted' }
-        : { calendarId: each.id, outcome: 'unstopped', why: 'workspace-deleted', ...failure },
+        ? { calendarId: each.id, outcome: 'stopped', why }
+        : { calendarId: each.id, outcome: 'unstopped', why, ...failure },
     );
   }
-  return withReports(stopped, channels);
+  return channels;
+}
+
+/**
+ * Ends a revoked connection (spec 0031, AC-815): its push channels end at the
+ * provider, the provider ends its grant, then the row goes with its sealed
+ * tokens; the meetings it held stay, flagged when the member was removed.
+ * Google ends the whole grant of a user to the app, which would break the same
+ * account's connection in the person's other workspaces: so when another
+ * connection, in any workspace, still holds the account and may sync
+ * (`crm_calendar_account_shared`), the grant is kept and only this
+ * connection's channels and tokens go. A provider failure on the revoke
+ * throws, so the task tries again later, and never blocked the removal, which
+ * committed long before. A grant already gone still lets the row go; a
+ * provider the worker doesn't run keeps the row for one that does.
+ */
+async function revokeConnection(
+  deps: Pick<CalendarSyncDeps, 'tokenKey'>,
+  scope: EngineScope,
+  provider: CalendarProvider | undefined,
+  row: Pick<ConnectionRow, 'id' | 'tokens'>,
+  binding: TokenBinding,
+  now: Date,
+): Promise<CalendarSyncOutcome> {
+  // A worker without this provider leaves the row for one that has it, so the grant is still ended.
+  if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
+  const shared = await inWorkspace(scope, (tx) =>
+    tx.execute<{ shared: boolean }>(sql`select crm_calendar_account_shared(${row.id}::uuid) as shared`),
+  );
+  const grantKept = shared.rows[0]?.shared === true;
+  const channels = await endChannels(deps, scope, provider, row, binding, now, 'revoked');
+  if (!grantKept) {
+    try {
+      await provider.revoke(openTokens(deps.tokenKey, row.tokens, binding));
+    } catch (error) {
+      if (!isProviderError(error, 'CALENDAR_AUTH_REVOKED') && !isProviderError(error, 'CALENDAR_AUTH')) throw error;
+    }
+  }
+  await inWorkspace(scope, (tx) =>
+    tx.execute(sql`delete from calendar_connections where id = ${row.id}::uuid and status = 'revoked'`),
+  );
+  return withReports({ kind: 'stopped', reason: 'revoked', ...(grantKept ? { grantKept } : {}) }, channels);
+}
+
+/**
+ * A deleted workspace's account (spec 0031, AC-823): nothing syncs, and each of its calendars' push channels ends at
+ * the provider (`endChannels`), so the provider stops posting notices for a workspace nobody can open. The grant
+ * itself is kept: the member's other workspaces may hold the same account, and a restore syncs it again.
+ */
+async function endDeletedChannels(
+  deps: Pick<CalendarSyncDeps, 'tokenKey'>,
+  scope: EngineScope,
+  provider: CalendarProvider | undefined,
+  row: Pick<ConnectionRow, 'id' | 'tokens'>,
+  binding: TokenBinding,
+  now: Date,
+): Promise<CalendarSyncOutcome> {
+  const stopped: CalendarSyncOutcome = { kind: 'stopped', reason: 'workspace-deleted' };
+  // A worker without this provider can't reach it: the channels wait for one that can.
+  if (provider === undefined) return stopped;
+  return withReports(stopped, await endChannels(deps, scope, provider, row, binding, now, 'workspace-deleted'));
 }
 
 /**
@@ -516,8 +556,9 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
     provider: row.provider,
     accountEmail: row.account_email,
   };
-  // A removed member's connection (spec 0031, AC-815): its grant ends with the provider, then its stored tokens go.
-  if (row.status === 'revoked') return revokeConnection(deps, scope, provider, row, binding);
+  // A removed member's connection (spec 0031, AC-815): its channels and grant end with the provider (the grant only
+  // when no other connection holds the account), then its stored tokens go.
+  if (row.status === 'revoked') return revokeConnection(deps, scope, provider, row, binding, now);
   // A deleted workspace (spec 0031, AC-823) syncs nothing in its window and ends its push channels; a restore queues
   // each connection again, which opens new ones.
   if (row.workspace_deleted) return endDeletedChannels(deps, scope, provider, row, binding, now);
@@ -597,9 +638,10 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
     if (run.kind === 'synced') {
       events += run.events;
       full ||= run.full;
-      // Push (AC-602, AC-622, AC-1003): a channel opened once the calendar is current, and renewed before it runs out.
+      // Push (AC-602, AC-622, AC-1003): a channel opened once the calendar is current, and renewed before it runs out;
+      // none asked for, and nothing said, while a refusal for good waits out its day (`noPushUntil`).
       const channel = storedChannel(calendar.channel);
-      if (pushAddress !== undefined && needsChannel(channel, now)) {
+      if (pushAddress !== undefined && needsChannel(channel, now) && !pushPaused(calendar.channel, now)) {
         channels.push(
           await openChannel(scope, {
             provider,
@@ -608,6 +650,7 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
             calendarId: calendar.provider_calendar_id,
             address: pushAddress,
             previous: channel,
+            now,
           }),
         );
       }
