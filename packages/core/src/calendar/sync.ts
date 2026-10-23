@@ -650,6 +650,7 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
             calendarId: calendar.provider_calendar_id,
             address: pushAddress,
             previous: channel,
+            stored: calendar.channel,
             now,
           }),
         );

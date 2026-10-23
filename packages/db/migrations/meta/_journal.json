@@ -659,6 +659,13 @@
       "when": 1792762718796,
       "tag": "0093_calendar_account_shared",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1792771813066,
+      "tag": "0095_google_full_resync",
+      "breakpoints": true
     }
   ]
 }

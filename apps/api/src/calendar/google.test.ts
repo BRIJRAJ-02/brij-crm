@@ -287,6 +287,45 @@ describe('events in core’s shape', () => {
     });
     expect(listed?.attendees.map((each) => each.email)).toEqual(['anish@globex.com', 'brij@acme.dev']);
   });
+
+  it('keeps a secondary calendar that organised an invite, so it still reads as a meeting', () => {
+    // A scheduler that writes its bookings to a secondary calendar: Google names that calendar the organiser.
+    const booked = eventOf({
+      id: 'bookings',
+      organizer: { email: 'c0ffee@group.calendar.google.com', displayName: 'Anish bookings' },
+      attendees: [{ email: 'brij@acme.dev', self: true, responseStatus: 'needsAction' }],
+    });
+    expect(booked?.attendees[0]).toEqual({
+      email: 'c0ffee@group.calendar.google.com',
+      name: 'Anish bookings',
+      response: 'accepted',
+      isOrganizer: true,
+      isSelf: false,
+    });
+  });
+
+  it('lists this calendar as organiser of its own event that names guests without it, as Outlook does', () => {
+    // Made through the API: Google lists the guests and leaves the organiser out.
+    const made = eventOf({
+      id: 'made',
+      organizer: { email: 'Brij@acme.dev', self: true },
+      attendees: [{ email: 'ada@globex.com', responseStatus: 'accepted' }],
+    });
+    expect(made?.attendees).toEqual([
+      { email: 'brij@acme.dev', response: 'accepted', isOrganizer: true, isSelf: true },
+      { email: 'ada@globex.com', response: 'accepted', isOrganizer: false, isSelf: false },
+    ]);
+    // Already listed as itself: once.
+    const listed = eventOf({
+      id: 'listed-self',
+      organizer: { email: 'brij@acme.dev', self: true },
+      attendees: [
+        { email: 'brij@acme.dev', self: true, organizer: true, responseStatus: 'accepted' },
+        { email: 'ada@globex.com', responseStatus: 'accepted' },
+      ],
+    });
+    expect(listed?.attendees.map((each) => each.email)).toEqual(['brij@acme.dev', 'ada@globex.com']);
+  });
 });
 
 describe('writing a booking’s event', () => {
