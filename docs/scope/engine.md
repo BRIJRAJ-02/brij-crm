@@ -54,7 +54,7 @@ Connect records across objects (a person works at a company, a deal has many peo
 - [ ] Build it: `/develop relations`
    - [x] Create a relationship
    - [x] Link from the table
-   - [ ] The record panel for hubs (with #17's side panel)
+   - [ ] The record panel for hubs (paged links, `links.page`, are in with #17's related sections; the panel waits on #17's side panel)
    - [ ] Through relations (filters through a relation work; sorting by a related record is left)
 - [ ] Verify it: `/check verify relations`
 - [x] Test it: `/test relations`

@@ -11,7 +11,7 @@ One place to see everything about a record: its attributes, its related records,
 - [ ] Build it: `/develop record page`
    - [x] The page, thin all the way through
    - [x] The timeline
-   - [ ] Related records and the Overview
+   - [x] Related records and the Overview (landed on `land/r13` at b3f2098e)
    - [ ] The side panel, with Previous and Next
 - [ ] Verify it: `/check verify record page` (`verify.md` covers milestones 1 and 2)
 - [x] Test it: `/test record page`
