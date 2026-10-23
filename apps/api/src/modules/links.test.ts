@@ -1,4 +1,4 @@
-// links.add, links.remove and records.search (spec 0014, milestone 2): a
+// links.add, links.remove, links.page and records.search (spec 0014, milestones 2 and 3): a
 // side that holds many changes by delta only, a taken record answers 409
 // until it is moved, the answer names the far records to read again, and
 // the picker's search answers linked and takenBy. Real session, real Postgres.
@@ -137,6 +137,41 @@ describe('links.add and links.remove (AC-290 to AC-294)', () => {
       mutationId: newId(),
     });
     expect(await refusal(() => addTo(m, acme, team, gone))).toMatchObject({ code: 'RECORD_DELETED', status: 409 });
+  });
+});
+
+describe('links.page (AC-299, AC-304)', () => {
+  it('pages a side in its order with the total, reads on by cursor, and refuses a foreign cursor', async () => {
+    const { m, team, person, newCompany } = await setUp();
+    const acme = await newCompany('Acme');
+    for (const name of ['Ada', 'Ben', 'Cy']) await addTo(m, acme, team, await person(name));
+    const first = await m.client.links.page({ workspace: m.slug, recordId: acme, attributeId: team, limit: 2 });
+    expect(first.items.map((item) => item.name)).toEqual(['Ada', 'Ben']);
+    expect(first.total).toBe(3);
+    const cursor = first.nextCursor ?? '';
+    const rest = await m.client.links.page({ workspace: m.slug, recordId: acme, attributeId: team, cursor });
+    expect(rest).toMatchObject({ total: 3, items: [{ name: 'Cy' }] });
+    expect(rest.nextCursor).toBeUndefined();
+    const other = await newCompany('Other');
+    const foreign = await failure(() =>
+      m.client.links.page({ workspace: m.slug, recordId: other, attributeId: team, cursor }),
+    );
+    expect(foreign.code).toBe('INPUT_INVALID');
+    expect(
+      await refusal(() => m.client.links.page({ workspace: m.slug, recordId: acme, attributeId: team, limit: 51 })),
+    ).toMatchObject({ code: 'INPUT_INVALID', status: 400 });
+  });
+
+  it('answers 404 for a record that doesn’t exist, and for one of another workspace', async () => {
+    const { m, team } = await setUp();
+    expect(
+      await refusal(() => m.client.links.page({ workspace: m.slug, recordId: newId(), attributeId: team })),
+    ).toMatchObject({ code: 'NOT_FOUND', status: 404 });
+    const theirs = await setUp();
+    const acme = await theirs.newCompany('Acme');
+    expect(
+      await refusal(() => m.client.links.page({ workspace: m.slug, recordId: acme, attributeId: theirs.team })),
+    ).toMatchObject({ code: 'NOT_FOUND', status: 404 });
   });
 });
 

@@ -8,6 +8,7 @@ import { AttributeDefinition } from './attributes.ts';
 import { RecordView } from './records.ts';
 import { Cardinality } from './relationship-block.ts';
 import { ActorReferenceValue } from './values/attribute-values.ts';
+import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
 
@@ -152,6 +153,40 @@ export const LinksWritten = z.object({
 /** What a link write answers. */
 export type LinksWritten = z.infer<typeof LinksWritten>;
 
+/** The most related records one `links.page` answers (spec 0014). */
+export const LINK_PAGE_MAX = 50;
+/** How many related records a record page's section shows at first, and adds with each "Show more" (spec 0014). */
+export const LINK_PREVIEW = 20;
+
+/**
+ * A page of the records linked on one side of one record (spec 0014,
+ * milestone 3; spec 0017's related sections): `limit` 1 to 50 (20 when left
+ * out), after `cursor` (the last page's `nextCursor`, bound to this record and
+ * side).
+ */
+export const PageLinksInput = WorkspaceScoped.extend({
+  recordId: Uuid,
+  attributeId: Uuid,
+  cursor: z.string().min(1).max(512).optional(),
+  limit: z.number().int().min(1).max(LINK_PAGE_MAX).optional(),
+});
+/** A page of one side's linked records to read. */
+export type PageLinksInput = z.infer<typeof PageLinksInput>;
+
+/**
+ * One page of a side's linked records, in that side's order (position, then
+ * when each link began), as display shapes only (never record bodies): the
+ * live far records the reader may see, the cursor for the next page when
+ * there are more, and `total`, the exact count of them all.
+ */
+export const LinkPage = z.object({
+  items: z.array(RecordRefDisplay),
+  nextCursor: z.string().optional(),
+  total: z.number().int().min(0),
+});
+/** A page of one side's linked records. */
+export type LinkPage = z.infer<typeof LinkPage>;
+
 /**
  * Links (spec 0014, milestone 2): a side that holds many changes only through
  * these, one delta at a time; nothing else on the side is rewritten. Both
@@ -162,9 +197,13 @@ export type LinksWritten = z.infer<typeof LinksWritten>;
  * archived object; a side spec 0012 counts as archived), 409
  * `RELATIONSHIP_TAKEN` (naming the record picked) and `RECORD_DELETED`, 422
  * `ATTRIBUTE_VALUE_INVALID` (another object, the record itself, two on a side
- * of one, more than 100), `ATTRIBUTE_READ_ONLY` and `VALUE_REQUIRED`.
+ * of one, more than 100), `ATTRIBUTE_READ_ONLY` and `VALUE_REQUIRED`. `page`
+ * (milestone 3) reads one side's linked records a page at a time: 404
+ * `NOT_FOUND` for a record or side unknown, hidden, in the trash or archived,
+ * and 400 `INPUT_INVALID` on `cursor` for a cursor that isn't this side's.
  */
 export const linksContract = {
   add: oc.input(AddLinksInput).output(LinksWritten),
   remove: oc.input(RemoveLinksInput).output(LinksWritten),
+  page: oc.input(PageLinksInput).output(LinkPage),
 };

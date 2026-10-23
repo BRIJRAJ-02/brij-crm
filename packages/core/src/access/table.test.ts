@@ -794,6 +794,10 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   searchRecords: refused('NOT_FOUND', (scope, world) =>
     core.searchRecords(scope, { objectId: world.people, query: '' }),
   ),
+  // A record's related section (spec 0014): a record on an object the reader can't see is absent.
+  pageLinks: refused('NOT_FOUND', (scope, world) =>
+    core.pageLinks(scope, { recordId: world.recordId, attributeId: world.associatedDeals }),
+  ),
   // The command menu (spec 0039): a record or view on an object the principal can't see is never found, listed as
   // recent (even one they opened while they could), or kept by a visit.
   searchWorkspace: empty(
