@@ -12,6 +12,7 @@ import {
   restoreToast,
   TRASH_COLUMNS,
 } from './trash.ts';
+import { strings } from './strings.ts';
 
 const PEOPLE = { id: 'people', pluralName: 'People', isArchived: false, access: 'write' } as ObjectSummary;
 const DEALS = { id: 'deals', pluralName: 'Deals', isArchived: true, access: 'read' } as ObjectSummary;
@@ -105,5 +106,13 @@ describe('the trash', () => {
     expect(
       restoreToast({ kind: 'failed', error: dataError('API_UNAVAILABLE', 'Can’t reach the CRM.') }, undefined),
     ).toEqual({ tone: 'danger', message: 'Can’t reach the CRM.' });
+  });
+});
+
+describe('the count beside the title', () => {
+  it('says record for one and records for any other count (Q98)', () => {
+    expect(strings.countLabel(1)).toBe('record');
+    expect(strings.countLabel(2)).toBe('records');
+    expect(strings.countLabel(1234)).toBe('records');
   });
 });
