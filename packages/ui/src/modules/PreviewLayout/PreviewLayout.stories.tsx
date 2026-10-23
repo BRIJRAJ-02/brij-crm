@@ -369,7 +369,9 @@ export const LongPage: Story = {
     await expect(region).toHaveAttribute('tabindex', '0');
     const frame = canvas.getByTitle('Preview of Intro call');
     if (!(frame instanceof HTMLIFrameElement)) throw new Error('no frame');
-    const { view, footBelow } = pageOf(frame);
+    // The lines arrive a moment after the frame loads, as a booking page's data does; Firefox loads the frame's
+    // own page later than Chromium, so the play waits for them rather than reading the page at once.
+    const { view, footBelow } = await waitFor(() => pageOf(frame));
     await expect(footBelow()).toBeGreaterThan(0);
 
     await step('a wheel over the phone scrolls the page, not the editor', async () => {
@@ -392,7 +394,8 @@ export const LongPage: Story = {
     await step('the keys scroll it, down to its foot', async () => {
       region.focus();
       await userEvent.keyboard('{ArrowDown}');
-      await expect(view.scrollY).toBe(40);
+      // One step, 40px: Firefox scrolls the scaled phone's page in fractions of a pixel (39.97), so to the pixel.
+      await expect(view.scrollY).toBeCloseTo(40, 0);
       await userEvent.keyboard('{PageDown}');
       await waitFor(() => expect(view.scrollY).toBeGreaterThan(40));
       await userEvent.keyboard('{End}');
