@@ -10,14 +10,8 @@
 // opened stay open, and none starts while another read of the list is out. A
 // failed first read shows the failure; a failed next page keeps what is shown
 // and says so in `moreFailed`; a failed read of what is shown keeps it.
-import {
-  MEETINGS_PAGE_MAX,
-  type BookingListItem,
-  type BookingsTab,
-  type MeetingListItem,
-  type MeetingListPage,
-  type MeetingSource,
-} from '@crm/contracts';
+import type { BookingListItem, BookingsTab, MeetingListItem, MeetingListPage, MeetingSource } from '@crm/contracts';
+import { MEETINGS_PAGE_MAX } from '@crm/contracts/meeting-limits';
 import { toDataError } from '../errors.ts';
 import { keepFresh, type FreshDeps, type Freshness } from './fresh.ts';
 

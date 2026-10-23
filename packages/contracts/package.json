@@ -19,6 +19,7 @@
     "./note-limits": "./src/note-limits.ts",
     "./mentions": "./src/mentions.ts",
     "./team-limits": "./src/team-limits.ts",
+    "./meeting-limits": "./src/meeting-limits.ts",
     "./monitoring": "./src/monitoring/index.ts",
     "./events": "./src/monitoring/events.ts",
     "./views": "./src/view-model.ts",

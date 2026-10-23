@@ -2,7 +2,8 @@
 // one held list per question, a failed next page kept with what is shown, and a reload starting again. Kept current
 // (owner ask A115): every minute while live updates are off, what is shown is read again from the top, keeping the
 // pages More opened (at most `SHOWN_READ_MAX` rows), never beside another read of the list.
-import { MEETINGS_PAGE_MAX, type MeetingListItem, type MeetingListPage } from '@crm/contracts';
+import type { MeetingListItem, MeetingListPage } from '@crm/contracts';
+import { MEETINGS_PAGE_MAX } from '@crm/contracts/meeting-limits';
 import { describe, expect, it } from 'vitest';
 import { createMeetingsStore, SHOWN_READ_MAX, type MeetingsApi } from './meetings.ts';
 
