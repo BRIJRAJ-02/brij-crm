@@ -111,6 +111,19 @@ describe('the invite link (AC-818)', () => {
     expect(await getInviteLink(w.owner)).toMatchObject({ enabled: true, uses: 2 });
   });
 
+  it('names a link joiner with what they typed on the invite card, made plain (QA N14)', async () => {
+    const w = await workspace();
+    const token = (await setInviteLink(w.admin, { enabled: true })).token ?? '';
+    const bea = await person('Bea');
+    await acceptInvite({ db }, { ...bea, typedName: ' Beatrice\u2028Webb ' }, token);
+    const rows = await testQuery<{ name: string }>(
+      ownerUrl,
+      `select name from members where workspace_id = $1 and user_id = $2`,
+      [w.workspaceId, bea.id],
+    );
+    expect(rows).toEqual([{ name: 'Beatrice Webb' }]);
+  });
+
   it('stops at its most uses and at its expiry, and a change in place keeps its token', async () => {
     const w = await workspace();
     const on = await setInviteLink(w.admin, { enabled: true, maxUses: 1, expiresInDays: 7 });

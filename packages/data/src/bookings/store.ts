@@ -49,7 +49,7 @@ export interface HeldView<State> {
   readonly getSnapshot: () => State;
   /** Held while a screen shows it: read when first held, and again whenever the person comes back to the page. */
   readonly retain: () => () => void;
-  /** Settles once the first read did. */
+  /** Settles once the first read did; after a failed read, reads again. */
   readonly ready: () => Promise<void>;
   /** Reads it again (Try again). */
   readonly reload: () => void;
@@ -144,6 +144,8 @@ export function createBookingsStore(deps: BookingsDeps) {
         };
       },
       ready() {
+        // A failed read is tried again when asked, so a passing outage doesn't stick to a range no screen holds.
+        if (state.status === 'error' && reading === undefined) settled = read();
         settled ??= read();
         return settled;
       },

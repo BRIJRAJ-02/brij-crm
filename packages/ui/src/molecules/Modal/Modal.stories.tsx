@@ -279,6 +279,55 @@ export const Busy: Story = {
   },
 };
 
+/**
+ * A step that must be answered (two factor's backup codes): no Close in the title bar, and Esc and a click outside do
+ * nothing until the tick lets Done end it. Left out of the screenshots: its face is Form Dialog's less the close
+ * button, and the play checks that.
+ */
+export const MustAnswer: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { onOpenChange: fn() },
+  render: (args) => (
+    <MustAnswerDialog {...(args.onOpenChange === undefined ? {} : { onOpenChange: args.onOpenChange })} />
+  ),
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await expect(dialog.querySelector('button[aria-label="Close"]')).toBeNull();
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    await userEvent.keyboard('{Escape}');
+    await expect(args.onOpenChange).not.toHaveBeenCalled();
+    const done = within(dialog as HTMLElement).getByRole('button', { name: 'Done' });
+    await expect(done).toBeDisabled();
+    await userEvent.click(within(dialog as HTMLElement).getByRole('checkbox', { name: 'I’ve saved these' }));
+    await expect(done).toBeEnabled();
+    await userEvent.click(done);
+    await expect(args.onOpenChange).toHaveBeenCalledWith(false);
+  },
+};
+
+function MustAnswerDialog({ onOpenChange }: { readonly onOpenChange?: (isOpen: boolean) => void }) {
+  const [saved, setSaved] = useState(false);
+  return (
+    <Stage>
+      <Modal
+        title="Save your backup codes"
+        isOpen
+        isDismissable={false}
+        isClosable={saved}
+        {...(onOpenChange === undefined ? {} : { onOpenChange })}
+        actions={
+          <Button variant="primary" slot="close" isDisabled={!saved}>
+            Done
+          </Button>
+        }
+      >
+        Each code signs you in once. They won’t be shown again.
+        <Checkbox label="I’ve saved these" isSelected={saved} onChange={setSaved} />
+      </Modal>
+    </Stage>
+  );
+}
+
 /** An action about what the dialog shows (a task's Copy link) sits in the title bar before Close, with its tooltip. */
 export const HeaderActions: Story = {
   render: () => (

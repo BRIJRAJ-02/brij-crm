@@ -204,6 +204,18 @@ export const SetInviteLinkInput = WorkspaceScoped.extend({
 /** A change to the invite link. */
 export type SetInviteLinkInput = z.infer<typeof SetInviteLinkInput>;
 
+/**
+ * Accepting an invitation (AC-805, QA N14): the link's token, and the name the person typed on the invite card, which
+ * may be empty. The server makes it plain as every join does (`plainName`); empty, the account's name or one made
+ * from the address stands in, as before.
+ */
+export const AcceptInviteInput = z.object({
+  token: InviteToken,
+  memberName: z.string().trim().max(80, 'Use at most 80 characters.').optional(),
+});
+/** Accepting an invitation. */
+export type AcceptInviteInput = z.infer<typeof AcceptInviteInput>;
+
 /** The workspace an accepted invitation opened (AC-806). */
 export const InviteAccepted = z.object({ slug: z.string() });
 /** The workspace an accepted invitation opened. */
@@ -485,7 +497,7 @@ export const invitationsContract = {
   resend: oc.input(InvitationInput).output(z.object({ invitation: InvitationView, sent: z.boolean() })),
   revoke: oc.input(InvitationInput).output(z.void()),
   peek: oc.input(z.object({ token: InviteToken })).output(InvitePeek),
-  accept: oc.input(z.object({ token: InviteToken })).output(InviteAccepted),
+  accept: oc.input(AcceptInviteInput).output(InviteAccepted),
   /** The invite link (slice 6, AC-818): `members.invite`. */
   link: oc.input(WorkspaceScoped).output(InviteLinkView),
   setLink: oc.input(SetInviteLinkInput).output(InviteLinkView),

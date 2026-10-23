@@ -3739,11 +3739,13 @@ export function createDataLayer({
       /** What an invitation link shows before accepting, with no session needed; `INVITE_INVALID` for any bad link. */
       peek: (token: string): Promise<InvitePeek> => attempt((options) => api.invitations.peek({ token }, options)),
       /**
-       * Accepts an invitation as the signed in person: answers the workspace's
-       * address. The person's workspaces are read again after.
+       * Accepts an invitation as the signed in person, with the name they typed on the invite card (may be empty):
+       * answers the workspace's address. The person's workspaces are read again after.
        */
-      async accept(token: string): Promise<{ slug: string }> {
-        const accepted = await call((options) => api.invitations.accept({ token }, options));
+      async accept(token: string, memberName?: string): Promise<{ slug: string }> {
+        const accepted = await call((options) =>
+          api.invitations.accept({ token, ...(memberName === undefined ? {} : { memberName }) }, options),
+        );
         me = undefined;
         return accepted;
       },
