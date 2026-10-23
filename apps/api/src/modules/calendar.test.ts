@@ -4,7 +4,10 @@
 // result Settings › Calendar is told), the first sync queued, and the
 // `calendar.*` procedures behind the member door, with calendar sync off too.
 // Milestone 2: Google's change notice (no Origin, the channel's token its only
-// key), Add as person and the workspace's calendar settings.
+// key), Add as person and the workspace's calendar settings. A deleted
+// workspace refuses a connect at the callback and inside the connect's own
+// transaction, its deletion brings each account's run forward to end its
+// channels, and every notice leaves one `calendar.notice` line with our ids.
 import { createHash } from 'node:crypto';
 import { newId } from '@crm/core';
 import { createFakeCalendarProvider } from '@crm/core/testing';
@@ -16,7 +19,7 @@ import { failure, memberWithWorkspace } from '../../test/workspace.ts';
 import { STATE_COOKIE } from '../calendar/routes.ts';
 import { createCalendarServices, GOOGLE_CALLBACK_PATH, MICROSOFT_CALLBACK_PATH } from '../calendar/services.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
-import { APP_URL, TEST_EDGE_SECRET } from '../testing.ts';
+import { APP_URL, captureLogs, TEST_EDGE_SECRET } from '../testing.ts';
 import { decodeTokenKey } from '@crm/core';
 
 const { ownerUrl } = inject('testDatabase');
@@ -544,5 +547,190 @@ describe('Outlook, calendars and health (spec 0024 milestones 4 and 5, spec 0037
     const health = await m.client.calendar.health({ workspace: m.slug, memberIds: [self?.id ?? '', newId()] });
     expect(health).toEqual({ members: [{ memberId: self?.id, status: 'connected' }] });
     expect(JSON.stringify(health)).not.toContain('acme.dev');
+  });
+});
+
+describe('a deleted workspace, and what each notice did (spec 0031, AC-823; spec 0024, AC-602)', () => {
+  /** Google's notice for `channel` with `token` and `state`. */
+  const notify = (channel: string, token: string, state = 'exists') =>
+    Promise.resolve(
+      app.fetch(
+        new Request(`${APP_URL}/api/calendar/google/notify`, {
+          method: 'POST',
+          headers: {
+            [EDGE_HEADER]: TEST_EDGE_SECRET,
+            'x-goog-channel-id': channel,
+            'x-goog-channel-token': token,
+            'x-goog-resource-state': state,
+          },
+        }),
+      ),
+    );
+
+  /** A member's workspace with a connected Google account whose main calendar holds a channel with `secret`. */
+  async function connectedWithChannel(account: string, secret: string) {
+    const m = await memberWithWorkspace(app);
+    const { state, browser } = await start(m.slug, m.cookie);
+    await navigate(
+      app,
+      `${GOOGLE_CALLBACK_PATH}?code=${encodeURIComponent(`code:${account}`)}&state=${encodeURIComponent(state)}`,
+      `${m.cookie}; ${browser}`,
+    );
+    const [connection] = (await m.client.calendar.calendars.list({ workspace: m.slug })).accounts;
+    const main = connection?.calendars[0]?.id ?? '';
+    await testQuery(ownerUrl, `update calendar_connections set status = 'connected' where id = $1`, [connection?.id]);
+    await testQuery(
+      ownerUrl,
+      `update calendar_calendars set channel = jsonb_build_object('id', 'channel-' || $1::text, 'resourceId', 'r',
+        'expiresAt', (now() + interval '7 days')::text, 'tokenHash', $2::text) where id = $1`,
+      [main, createHash('sha256').update(secret).digest('hex')],
+    );
+    const key = `crm-calendar:${m.workspace.id}:${connection?.id ?? ''}`;
+    return { m, connectionId: connection?.id ?? '', main, key, token: `${m.workspace.id}.${main}.${secret}` };
+  }
+
+  const jobOf = async (key: string) =>
+    (
+      await testQuery<{ run_at: Date }>(ownerUrl, `select run_at from graphile_worker._private_jobs where key = $1`, [
+        key,
+      ])
+    )[0];
+
+  it('refuses the callback and the start once the workspace is deleted, and stores nothing', async () => {
+    const m = await memberWithWorkspace(app);
+    const { state, browser } = await start(m.slug, m.cookie);
+    await m.client.workspace.delete({ workspace: m.slug, confirmName: 'Acme', mutationId: newId() });
+    const exchanges = fake.calls('exchangeCode');
+    const back = await navigate(
+      app,
+      `${GOOGLE_CALLBACK_PATH}?code=${encodeURIComponent('code:ada@acme.dev')}&state=${encodeURIComponent(state)}`,
+      `${m.cookie}; ${browser}`,
+    );
+    expect(resultOf(back)).toBe('failed');
+    // Refused at the door: the code was never exchanged, and no connection or sync exists.
+    expect(fake.calls('exchangeCode')).toBe(exchanges);
+    const stored = await testQuery(ownerUrl, `select 1 from calendar_connections where workspace_id = $1`, [
+      m.workspace.id,
+    ]);
+    expect(stored).toEqual([]);
+    // A start there sends nobody to consent, and sets no state.
+    const again = await navigate(app, `/api/calendar/google/start?workspace=${m.slug}`, m.cookie);
+    expect(again.status).toBe(302);
+    expect(new URL(again.headers.get('location') ?? '').origin).toBe(APP_URL);
+    expect(stateCookie(again)).toBe('');
+  });
+
+  it('refuses a connect whose workspace was deleted while the code was exchanged, and stores nothing', async () => {
+    const m = await memberWithWorkspace(app);
+    // Google takes a moment over the code; the owner deletes the workspace in another tab meanwhile.
+    const slow = createCalendarServices(
+      {
+        clientId: 'test-client',
+        clientSecret: 'test-secret',
+        tokenKey: decodeTokenKey(Buffer.alloc(32, 5).toString('base64')),
+        webhookOrigin: undefined,
+        microsoft: undefined,
+      },
+      APP_URL,
+      {
+        ...fake.provider,
+        exchangeCode: async (code, redirectUri) => {
+          await testQuery(
+            ownerUrl,
+            `update workspaces set deleted_at = now(), purge_after = now() + interval '30 days' where id = $1`,
+            [m.workspace.id],
+          );
+          return fake.provider.exchangeCode(code, redirectUri);
+        },
+      },
+    );
+    const { app: racing } = signInApp({ db, identity }, {}, { calendar: slow, wakeRelay: () => (pokes += 1) });
+    const started = await navigate(racing, `/api/calendar/google/start?workspace=${m.slug}`, m.cookie);
+    const state = new URL(started.headers.get('location') ?? '').searchParams.get('state') ?? '';
+    const logs = captureLogs();
+    let back: Response;
+    try {
+      back = await navigate(
+        racing,
+        `${GOOGLE_CALLBACK_PATH}?code=${encodeURIComponent('code:ada@acme.dev')}&state=${encodeURIComponent(state)}`,
+        `${m.cookie}; ${stateCookie(started)}`,
+      );
+    } finally {
+      logs.restore();
+    }
+    expect(resultOf(back)).toBe('failed');
+    expect(logs.lines()).toContainEqual(
+      expect.objectContaining({ level: 'warn', message: 'calendar.connect.refused', reason: 'workspace' }),
+    );
+    const stored = await testQuery(ownerUrl, `select 1 from calendar_connections where workspace_id = $1`, [
+      m.workspace.id,
+    ]);
+    expect(stored).toEqual([]);
+    const queued = await testQuery(
+      ownerUrl,
+      `select 1 from graphile_worker._private_jobs where payload->>'workspaceId' = $1`,
+      [m.workspace.id],
+    );
+    expect(queued).toEqual([]);
+  });
+
+  it('logs what each notice matched and did, with our ids and never its token', async () => {
+    const secret = 'logged-notice-secret';
+    const { m, connectionId, main, key, token } = await connectedWithChannel('dee@acme.dev', secret);
+    await testQuery(ownerUrl, `select graphile_worker.remove_job($1)`, [key]);
+    const logs = captureLogs();
+    try {
+      await notify(`channel-${main}`, token, 'sync');
+      await notify(`channel-${main}`, token);
+      await notify(`channel-${main}`, `${m.workspace.id}.${main}.wrong`);
+      await notify('channel-unknown', 'not-a-token');
+    } finally {
+      logs.restore();
+    }
+    const lines = logs.lines().filter((line) => line.message === 'calendar.notice');
+    const matched = { workspaceId: m.workspace.id, calendarId: main, connectionId, provider: 'google' };
+    expect(lines).toEqual([
+      expect.objectContaining({ ...matched, level: 'info', outcome: 'ignored', reason: 'handshake', state: 'sync' }),
+      expect.objectContaining({ ...matched, level: 'info', outcome: 'queued', reason: 'change', state: 'exists' }),
+      expect.objectContaining({ level: 'warn', outcome: 'refused', reason: 'mismatch', provider: 'google' }),
+      expect.objectContaining({ level: 'warn', outcome: 'refused', reason: 'malformed', provider: 'google' }),
+    ]);
+    const written = JSON.stringify(lines);
+    for (const hidden of [secret, token, `channel-${main}`, 'not-a-token']) expect(written).not.toContain(hidden);
+    expect(await jobOf(key)).toBeDefined();
+  });
+
+  it('brings each account’s run forward when the workspace is deleted, and a later notice queues the stop', async () => {
+    const secret = 'deleted-notice-secret';
+    const { m, connectionId, main, key, token } = await connectedWithChannel('eve@acme.dev', secret);
+    // The poll waits 15 minutes on.
+    await testQuery(
+      ownerUrl,
+      `update graphile_worker._private_jobs set run_at = now() + interval '15 minutes' where key = $1`,
+      [key],
+    );
+    const before = pokes;
+    await m.client.workspace.delete({ workspace: m.slug, confirmName: 'Acme', mutationId: newId() });
+    // The deletion's own transaction moved it to now, and woke the jobs.
+    expect((await jobOf(key))?.run_at.getTime()).toBeLessThanOrEqual(Date.now() + 1_000);
+    expect(pokes).toBeGreaterThan(before);
+    // A notice the provider still sends queues the run that ends its channel, and says so.
+    await testQuery(ownerUrl, `select graphile_worker.remove_job($1)`, [key]);
+    const logs = captureLogs();
+    try {
+      expect((await notify(`channel-${main}`, token)).status).toBe(200);
+    } finally {
+      logs.restore();
+    }
+    expect(logs.lines()).toContainEqual(
+      expect.objectContaining({
+        message: 'calendar.notice',
+        outcome: 'queued',
+        reason: 'stop',
+        connectionId,
+        calendarId: main,
+      }),
+    );
+    expect(await jobOf(key)).toBeDefined();
   });
 });

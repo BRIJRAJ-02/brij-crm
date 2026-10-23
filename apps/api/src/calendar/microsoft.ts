@@ -279,9 +279,17 @@ export function createMicrosoftCalendar(options: MicrosoftCalendarOptions): Cale
       },
     });
     if (!response.ok) {
+      // Graph's own code (`error.code`) for the log, never its message.
+      let reason: unknown;
+      try {
+        reason = ((await response.json()) as { readonly error?: { readonly code?: unknown } } | null)?.error?.code;
+      } catch {
+        // Not JSON: the status alone.
+      }
       throw providerError(
         graphCodeForStatus(response.status),
         `Microsoft refused the calendar call (${String(response.status)}).`,
+        { status: response.status, ...(typeof reason === 'string' ? { reason } : {}) },
       );
     }
     return response.status === 202 || response.status === 204 ? (undefined as T) : json<T>(response);

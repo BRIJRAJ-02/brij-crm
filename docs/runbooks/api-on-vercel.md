@@ -87,6 +87,20 @@ The first shows `"status":"ok"` and the deployed commit as `release`; the second
 
 If `/api/health` answers `API_UNAVAILABLE`, open the deployment's Logs in Vercel: the line "Refusing to start, the environment is invalid" names each variable that is missing or wrong, never its value.
 
+## Timefix: the 15 minute timer (23 Oct)
+
+Timefix's project (`timefix-app`, team `stealthprojects`) is on Vercel Pro, so Vercel Cron runs its job queue every 15 minutes: each calendar's poll then runs on time when nobody uses the app, under Google's push ([spec 0045](../specs/0045-api-on-vercel/index.md), On Vercel Cron). brij-crm, on Hobby, keeps the hourly Jobs workflow.
+
+1. Once, set the cron's secret, which nobody needs to see. From a folder linked to `timefix-app` (`vercel link --project timefix-app --scope stealthprojects`):
+
+   ```bash
+   openssl rand -hex 32 | vercel --global-config ~/.vercel-timefix --scope stealthprojects env add CRON_SECRET production
+   ```
+
+   Production variables are Sensitive by default, which is right here: no deploy step reads it back.
+2. The deploy adds `"crons": [{ "path": "/api/internal/jobs/run", "schedule": "*/15 * * * *" }]` to Timefix's copy of `apps/web/vercel.json`, as it sets Timefix's region; the repository's copy never has it.
+3. Check: Vercel, `timefix-app`, Settings, Cron Jobs lists it; its logs show `jobs.drain` with `"by":"cron"` every 15 minutes. Without `CRON_SECRET` the call answers 404 and runs nothing.
+
 ## Going back to Railway (or Render)
 
 1. Bring the api, worker and Centrifugo up there, with `EDGE_SECRET` equal to Vercel's Production one (and the other new secrets, so sign ins and booking links carry over).

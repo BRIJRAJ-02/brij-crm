@@ -2,12 +2,14 @@
 // answers liveness with Vercel's release, without the database; an invalid
 // environment answers 503 and logs the variables at fault, never a value; the
 // jobs endpoint refuses a missing or wrong secret, a request the middleware
-// didn't vouch for, and any method but POST, before it touches the database.
+// didn't vouch for, and any method but POST and (Vercel Cron's, with
+// `CRON_SECRET` set) GET, before it touches the database.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EDGE_HEADER } from '../edge.ts';
 import { ApiEnv, FunctionEnv } from '../env.ts';
 import { captureLogs, TEST_EDGE_SECRET } from '../testing.ts';
 import {
+  bearerOf,
   createFunctionApi,
   DRAIN_BUDGET_MS,
   JOBS_RUN_PATH,
@@ -21,6 +23,7 @@ import {
 const NOWHERE = 'postgres://nobody:nothing@127.0.0.1:1/none';
 const SHA = '5332cb46565e22105f3ebdc1e249337ba0ab4a7d';
 const JOBS_SECRET = 'a-jobs-run-secret-of-at-least-32-characters';
+const CRON_SECRET = 'a-vercel-cron-secret-of-at-least-32-characters';
 const BETTER_AUTH_SECRET = 'a-preview-better-auth-secret-of-32-characters';
 
 /** A preview deployment's variables on Vercel: every check outside local applies. */
@@ -120,6 +123,18 @@ describe('the environment on Vercel', () => {
     ]);
     expect(issues({ APP_ENV: 'local' })).toEqual([]);
   });
+
+  it('takes CRON_SECRET as optional everywhere, with the jobs secret’s rules', () => {
+    const issues = (input: Record<string, string>) =>
+      FunctionEnv.safeParse(input).error?.issues.map((issue) => issue.path.join('.')) ?? [];
+    expect(issues(preview)).toEqual([]);
+    expect(issues({ ...preview, CRON_SECRET })).toEqual([]);
+    // Empty in a file counts as unset.
+    expect(issues({ ...preview, CRON_SECRET: '' })).toEqual([]);
+    expect(issues({ ...preview, CRON_SECRET: 'short' })).toEqual(['CRON_SECRET']);
+    expect(issues({ ...preview, CRON_SECRET: 'a cron secret with spaces in it, 32 chars' })).toEqual(['CRON_SECRET']);
+    expect(issues({ ...preview, CRON_SECRET: 'local-only-cron-secret-000000000000000000' })).toEqual(['CRON_SECRET']);
+  });
 });
 
 describe('the jobs endpoint', () => {
@@ -142,6 +157,11 @@ describe('the jobs endpoint', () => {
   it('answers 404 to any method but POST, and where the jobs secret is unset', async () => {
     const get = await call(api(), JOBS_RUN_PATH, { headers: { ...vouched, [JOBS_SECRET_HEADER]: JOBS_SECRET } });
     expect(get.status).toBe(404);
+    const put = await call(api({ ...preview, CRON_SECRET }), JOBS_RUN_PATH, {
+      method: 'PUT',
+      headers: { ...vouched, [JOBS_SECRET_HEADER]: JOBS_SECRET, authorization: `Bearer ${CRON_SECRET}` },
+    });
+    expect(put.status).toBe(404);
     const { JOBS_RUN_SECRET: _secret, ...unset } = preview;
     const off = await call(api({ ...unset, APP_ENV: 'local', NODE_ENV: 'test' }), JOBS_RUN_PATH, {
       method: 'POST',
@@ -163,6 +183,61 @@ describe('the jobs endpoint', () => {
     expect(secretMatches(JOBS_SECRET, JOBS_SECRET)).toBe(true);
     expect(secretMatches(JOBS_SECRET, 'short')).toBe(false);
     expect(secretMatches(JOBS_SECRET, null)).toBe(false);
+  });
+});
+
+describe('Vercel Cron’s run of the jobs (GET, CRON_SECRET)', () => {
+  const cron = (env: Record<string, string>, headers: Record<string, string>) =>
+    call(api(env), JOBS_RUN_PATH, { headers });
+  const withCron = { ...preview, CRON_SECRET };
+
+  it('answers 404 where CRON_SECRET is unset, whatever the request carries', async () => {
+    const response = await cron(preview, { ...vouched, authorization: `Bearer ${CRON_SECRET}` });
+    expect(response.status).toBe(404);
+    expect(((await response.json()) as { code: string }).code).toBe('NOT_FOUND');
+  });
+
+  it('refuses no bearer, a wrong one, another scheme, and the jobs secret in its place', async () => {
+    for (const headers of [
+      vouched,
+      { ...vouched, authorization: `Bearer ${CRON_SECRET}x` },
+      { ...vouched, authorization: `Basic ${CRON_SECRET}` },
+      { ...vouched, authorization: CRON_SECRET },
+      { ...vouched, authorization: `Bearer ${JOBS_SECRET}` },
+      { ...vouched, [JOBS_SECRET_HEADER]: JOBS_SECRET },
+    ]) {
+      const response = await cron(withCron, headers);
+      expect(response.status, JSON.stringify(Object.keys(headers))).toBe(401);
+      expect(((await response.json()) as { code: string }).code).toBe('UNAUTHENTICATED');
+    }
+  });
+
+  it('refuses a request the middleware did not vouch for, even with the right bearer', async () => {
+    const response = await cron(withCron, { authorization: `Bearer ${CRON_SECRET}` });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { code: string }).code).toBe('EDGE_REQUIRED');
+  });
+
+  it('takes the right bearer through the edge on to the database, and keeps POST on the jobs secret alone', async () => {
+    const response = await cron(withCron, { ...vouched, authorization: `Bearer ${CRON_SECRET}` });
+    expect(response.status).toBe(503);
+    expect(((await response.json()) as { code: string }).code).toBe('API_UNAVAILABLE');
+    const posted = await call(api(withCron), JOBS_RUN_PATH, {
+      method: 'POST',
+      headers: { ...vouched, authorization: `Bearer ${CRON_SECRET}` },
+    });
+    expect(posted.status).toBe(401);
+    const written = JSON.stringify(logs.lines());
+    expect(written).not.toContain(CRON_SECRET);
+  });
+
+  it('reads a bearer token only in the Bearer scheme, whose name is any case', () => {
+    expect(bearerOf(`Bearer ${CRON_SECRET}`)).toBe(CRON_SECRET);
+    expect(bearerOf(`bearer ${CRON_SECRET}`)).toBe(CRON_SECRET);
+    expect(bearerOf(null)).toBeNull();
+    expect(bearerOf('Bearer ')).toBeNull();
+    expect(bearerOf(`Basic ${CRON_SECRET}`)).toBeNull();
+    expect(bearerOf(`Bearer ${CRON_SECRET} extra`)).toBeNull();
   });
 });
 
