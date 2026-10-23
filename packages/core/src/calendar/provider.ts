@@ -82,6 +82,11 @@ export interface ProviderEvent {
   readonly location?: string;
   readonly videoUrl?: string;
   readonly organizerEmail?: string;
+  /**
+   * Everyone invited, the organiser among them (marked `isOrganizer`) on an event the account is invited to, even
+   * when the provider lists only the guests: an event someone else organised with the account its one guest is a
+   * meeting with that organiser (the owner's case of 23 October 2026), never the account alone.
+   */
   readonly attendees: readonly ProviderAttendee[];
   /** Marked private in the calendar itself (AC-612). */
   readonly isPrivate: boolean;

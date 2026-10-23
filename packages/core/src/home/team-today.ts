@@ -24,6 +24,7 @@ import type { EngineScope } from '../access/mint.ts';
 import { requirePermission } from '../access/check.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
+import { shownAsEvent } from '../booking/owned.ts';
 import { inputInvalid } from '../engine/refusals.ts';
 
 /** How far before the day a meeting may start and still reach into it (all day and multi day events). */
@@ -127,7 +128,7 @@ export async function readTeamToday(
         join calendar_connections c on c.workspace_id = s.workspace_id and c.id = s.connection_id
         where m.starts_at >= ${iso(new Date(from.getTime() - LOOKBACK_MS))}::timestamptz
           and m.starts_at < ${to.toISOString()}::timestamptz and m.ends_at > ${from.toISOString()}::timestamptz
-          and m.status <> 'cancelled' and m.booking_id is null and not m.created_by_crm
+          and m.status <> 'cancelled' and ${shownAsEvent()}
           and c.member_id = any(${ids})
         group by m.workspace_id, m.id, c.member_id
         order by m.starts_at, m.id

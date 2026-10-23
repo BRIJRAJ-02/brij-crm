@@ -332,6 +332,8 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           )}
           <Field
             label={strings.name}
+            // A new group starts with its name, so the field takes focus as the dialog opens (Q102).
+            autoFocus={rotation === undefined}
             placeholder={strings.namePlaceholder}
             value={name}
             onChange={(next) => {

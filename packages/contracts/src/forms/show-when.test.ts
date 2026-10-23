@@ -3,8 +3,8 @@
 // dropping what a hidden question was given.
 import { describe, expect, it } from 'vitest';
 import { checkAnswers } from './check.ts';
-import { publishProblem } from './publish.ts';
-import { RoutingRules } from './routing.ts';
+import { publishProblem, recordFactProblem } from './publish.ts';
+import { RoutingRules, type RoutingRule } from './routing.ts';
 import {
   hiddenFacts,
   isHiddenFact,
@@ -119,6 +119,82 @@ describe('record facts (AC-1603)', () => {
         }),
       ]);
     }
+  });
+
+  it('is read only by a team page’s rules: a form’s Show when or rule over one is refused in one sentence, on save as on publish', () => {
+    const budget = {
+      id: 'budget',
+      key: 'budget',
+      label: 'Budget',
+      answerType: 'choice' as const,
+      choices: ['Small', 'Large'],
+      required: false,
+      update: 'fill' as const,
+    };
+    const size = {
+      id: 'size',
+      key: 'size',
+      label: 'Team size',
+      answerType: 'number' as const,
+      required: false,
+      update: 'fill' as const,
+    };
+    const large = { key: 'budget', op: 'is' as const, value: 'Large' };
+    const field = { key: `person.${id}`, op: 'is' as const, value: 'cto' };
+    const routed = (ruleId: string, when: RoutingRule['when'], name?: string): RoutingRule => ({
+      id: ruleId,
+      ...(name === undefined ? {} : { name }),
+      when,
+      then: { kind: 'message', message: '' },
+    });
+    /** What the draft save's check and the publish check each answer for a form asking the budget, then the team size. */
+    const both = (showWhen: RoutingRule['when'] | undefined, rules: readonly RoutingRule[]) => {
+      const document = {
+        targets: {},
+        questions: [budget, { ...size, ...(showWhen === undefined ? {} : { showWhen }) }],
+        routing: { rules: [...rules] },
+      };
+      return {
+        save: recordFactProblem(document),
+        publish: publishProblem({ name: 'Demo', slug: 'demo', attributes: new Map(), document }),
+      };
+    };
+
+    // Answers and the visit's hidden fields are what a form reads: nothing to refuse.
+    const hidden = { key: 'hidden.utm_source', op: 'is' as const, value: 'google' };
+    expect(both({ join: 'all', rules: [large] }, [routed('ads', { join: 'any', rules: [large, hidden] })])).toEqual({
+      save: undefined,
+      publish: undefined,
+    });
+    // A question's Show when, refused on the question.
+    const shown = {
+      code: 'SHOW_WHEN_INVALID',
+      message: '“Team size” reads a record field, which only a team page’s rules can read. Change its Show when.',
+      questionId: 'size',
+    };
+    expect(both({ join: 'any', rules: [large, field] }, [])).toEqual({ save: shown, publish: shown });
+    // The first rule reading one, by its number and name, refused on Routing.
+    const ruled = {
+      code: 'ROUTING_INVALID',
+      message:
+        'Rule 2, “Enterprise”, reads a record field, which only a team page’s rules can read. Change it in Routing.',
+      ruleId: 'enterprise',
+    };
+    const company = { key: `company.${id}`, op: 'is_answered' as const };
+    expect(
+      both(undefined, [
+        routed('first', { join: 'all', rules: [large] }),
+        routed('enterprise', { join: 'all', rules: [large, company] }, 'Enterprise'),
+        routed('later', { join: 'all', rules: [field] }),
+      ]),
+    ).toEqual({ save: ruled, publish: ruled });
+    expect(
+      recordFactProblem({ questions: [], routing: { rules: [routed('only', { join: 'all', rules: [field] })] } }),
+    ).toEqual({
+      code: 'ROUTING_INVALID',
+      message: 'Rule 1 reads a record field, which only a team page’s rules can read. Change it in Routing.',
+      ruleId: 'only',
+    });
   });
 });
 

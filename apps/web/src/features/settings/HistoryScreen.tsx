@@ -2,7 +2,7 @@
 // Purpose: Settings › Workspace › History (spec 0046): one place to look back. Owners and admins read the workspace's changes; everyone reads their own sign ins.
 // Main task: find who changed what in this workspace, and when, newest first; or check this account's recent sign ins.
 // Leaves out: Background jobs and Trash (their own pages), filters and a row's details (milestone 2), and IP addresses or request ids anywhere.
-import { Skeleton, TabPanel, Tabs } from '@crm/ui';
+import { SettingsStack, Skeleton, TabPanel, Tabs } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -42,7 +42,9 @@ export function HistoryScreen({ slug, tab, canReadChanges, children }: HistorySc
         ]}
       >
         <TabPanel id="changes">{tab === 'changes' && children}</TabPanel>
-        <TabPanel id="sign-ins">{tab === 'sign-ins' && children}</TabPanel>
+        {/* Its section sits a breath under the tabs, as Members' Joining and an object's tabs do (Q96); the changes'
+            table runs from the tabs' hairline, as every settings table does. */}
+        <TabPanel id="sign-ins">{tab === 'sign-ins' && <SettingsStack>{children}</SettingsStack>}</TabPanel>
       </Tabs>
     </SettingsPage>
   );
@@ -81,7 +83,9 @@ export function HistoryPending({ tab, canReadChanges, body }: HistoryPendingProp
         ]}
       >
         <TabPanel id="changes">{tab === 'changes' ? body : <Skeleton width="medium" />}</TabPanel>
-        <TabPanel id="sign-ins">{tab === 'sign-ins' ? body : <Skeleton width="medium" />}</TabPanel>
+        <TabPanel id="sign-ins">
+          {tab === 'sign-ins' ? <SettingsStack>{body}</SettingsStack> : <Skeleton width="medium" />}
+        </TabPanel>
       </Tabs>
     </SettingsPage>
   );

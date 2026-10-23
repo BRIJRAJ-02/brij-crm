@@ -243,6 +243,50 @@ describe('events in core’s shape', () => {
     expect(eventOf({ id: 'free', transparency: 'transparent' })).toMatchObject({ isFree: true });
     expect(eventOf({ id: 'busy', transparency: 'opaque' })).not.toHaveProperty('isFree');
   });
+
+  it('lists the organiser among the attendees when someone else’s calendar invited only this one (owner report, 23 October 2026)', () => {
+    // Booked on another scheduler's page: Google lists the account as the one guest and leaves the organiser out.
+    const booked = eventOf({
+      id: 'anish',
+      iCalUID: 'anish@google.com',
+      summary: 'meeting with Anish',
+      start: { dateTime: '2026-10-23T11:00:00+05:30' },
+      end: { dateTime: '2026-10-23T11:30:00+05:30' },
+      hangoutLink: 'https://meet.google.com/abc-defg-hij',
+      organizer: { email: 'Anish@Globex.com', displayName: 'Anish Tripathi' },
+      attendees: [{ email: 'brij@acme.dev', self: true, responseStatus: 'needsAction' }],
+    });
+    expect(booked?.attendees).toEqual([
+      { email: 'anish@globex.com', name: 'Anish Tripathi', response: 'accepted', isOrganizer: true, isSelf: false },
+      { email: 'brij@acme.dev', response: 'needs_action', isOrganizer: false, isSelf: true },
+    ]);
+    // The account's own time stays its own: organised by itself, or with no attendees at all (a holiday or
+    // birthday calendar's event, a shared calendar's own time), it never gains anyone.
+    const own = eventOf({
+      id: 'own',
+      start: { dateTime: '2026-10-23T11:00:00Z' },
+      end: { dateTime: '2026-10-23T11:30:00Z' },
+      organizer: { email: 'brij@acme.dev', self: true },
+    });
+    expect(own?.attendees).toEqual([]);
+    const holiday = eventOf({
+      id: 'holiday',
+      start: { date: '2026-10-23' },
+      end: { date: '2026-10-24' },
+      organizer: { email: 'en.indian#holiday@group.v.calendar.google.com', displayName: 'Holidays in India' },
+    });
+    expect(holiday?.attendees).toEqual([]);
+    // An organiser Google already lists is never listed twice.
+    const listed = eventOf({
+      id: 'listed',
+      organizer: { email: 'anish@globex.com' },
+      attendees: [
+        { email: 'Anish@globex.com', organizer: true, responseStatus: 'accepted' },
+        { email: 'brij@acme.dev', self: true, responseStatus: 'accepted' },
+      ],
+    });
+    expect(listed?.attendees.map((each) => each.email)).toEqual(['anish@globex.com', 'brij@acme.dev']);
+  });
 });
 
 describe('writing a booking’s event', () => {
