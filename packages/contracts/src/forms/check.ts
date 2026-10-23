@@ -7,7 +7,7 @@
 // most types, `true` or `false` for the yes or no types, and a phone as its
 // number in E.164 with the country it was dialled from.
 import { choiceKeysOf, LONG_ANSWER_MAX, SHORT_ANSWER_MAX, type AnswerType } from './answer-types.ts';
-import { countryOfE164 } from './dial-codes.ts';
+import { countryOfE164, DIAL_CODES } from './dial-codes.ts';
 import type { FormLanguage, PublicQuestion } from './public.ts';
 import { matchesShowWhen } from './show-when.ts';
 import { formStrings, type FormStrings } from './strings.ts';
@@ -53,13 +53,23 @@ export function websiteOf(text: string): string | undefined {
   }
 }
 
-/** True for an answer that says nothing: absent, null, blank text. */
+/**
+ * True for an answer that says nothing: absent, null, blank text, or a phone holding nothing, a lone "+" or only its
+ * country's dial code.
+ * A phone's digits after the code are an answer, however few, so a short number is refused as a number rather than
+ * dropped as empty (QA Q82: "+112" with US was read as blank).
+ */
 export function isBlank(value: unknown): boolean {
   if (value === undefined || value === null) return true;
   if (typeof value === 'string') return value.trim() === '';
   if (typeof value === 'object') {
-    const number = (value as { readonly number?: unknown }).number;
-    return typeof number !== 'string' || number.replace(/^\+\d{1,4}/, '').trim() === '';
+    const { number, country } = value as { readonly number?: unknown; readonly country?: unknown };
+    if (typeof number !== 'string') return true;
+    const code = typeof country === 'string' ? DIAL_CODES.get(country) : undefined;
+    if (code === undefined) return number.replace(/^\+\d{1,4}/, '').trim() === '';
+    // Only nothing, a lone "+" or the code itself says nothing: letters such as "abc" are an answer, refused as a number.
+    const typed = number.trim();
+    return typed === '' || typed === '+' || number.replace(/\D/g, '') === code;
   }
   return false;
 }
