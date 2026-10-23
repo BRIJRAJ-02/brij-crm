@@ -73,7 +73,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-4618**: A 403 (the member lost `audit.read` while on the page) shows EmptyState "Only workspace owners and admins can see workspace changes." (the permission's own message) in place of the table, and the next visit to History opens Your sign ins.
 
 *Your sign ins*
-- **AC-4619**: The tab shows the member's own last 90 days of security events through `account.activity.list`, drawn by the existing `RecentActivitySection` (same rows, same states, same Show more), under the heading "Your sign ins" and one line: "In every workspace, for the last 90 days." (RecentActivitySection's optional `title` and `description`, from the account lane; until they land the section keeps its own heading, "Recent activity", and so does the tab's loading view, so the heading never changes as the list arrives; then both move to "Your sign ins" together, and the loading view becomes the account lane's `RecentActivityPending`). Workspace changes has no section line: the tab names it.
+- **AC-4619**: The tab shows the member's own last 90 days of security events through `account.activity.list`, drawn by the existing `RecentActivitySection` (same rows, same states, same Show more), under the heading "Your sign ins" and one line: "In every workspace, for the last 90 days." (RecentActivitySection's optional `title` and `description`, from the account lane). The tab's loading view is the account lane's `RecentActivityPending` under the same heading and line, so the heading never changes as the list arrives (landed together, 23 October 2026). Workspace changes has no section line: the tab names it.
 - **AC-4620**: Nobody ever sees another person's sign ins here, owners included (that stays with spec 0033's follow-up for an owner view).
 
 *The API*
@@ -199,7 +199,7 @@ Contracts (`packages/contracts/src/audit.ts`, new; joined into `contract` as `au
 - `WorkspaceChangesTab.tsx`: no section line (the tab names it): a Table labelled "Workspace changes" (Who, Change, When; Change the row header, `fill`, read as the whole sentence; When `fit`), one Show more button that turns into Try again after a failed page, and EmptyState for every state. Milestone 2 adds the Toolbar with the three Selects (and DateRangePicker for a custom range) and the details Panel with DescriptionList.
 - `history-lines.ts` (pure, unit tested): `entrySentence(entry, format)` (the full sentence and the Change column's), `whoOf(person)`, `kindOf(action)`; milestone 2 adds `changeLines(entry)` and the date presets resolved in the member's zone.
 - `history-strings.ts`: every template and label.
-- `SignInsTab`: `RecentActivitySection` with the tab's own heading ("Your sign ins") and line ("In every workspace, for the last 90 days.") once its `title` and `description` land; `SignInsPending` heads the loading rows as the section does meanwhile.
+- `SignInsTab`: `RecentActivitySection` with the tab's own heading ("Your sign ins") and line ("In every workspace, for the last 90 days.") through its `title` and `description`; `SignInsPending` is `RecentActivityPending` with the same two, so loading and loaded match.
 
 Library: no new component and no new variant. If the guardian finds the Table can't take a row menu in the Who cell (AC-4611), the action moves into the details Panel ("Show only <name>'s changes") rather than adding a variant.
 

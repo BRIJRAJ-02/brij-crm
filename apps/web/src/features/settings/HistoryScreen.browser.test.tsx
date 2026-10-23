@@ -353,18 +353,22 @@ describe('while the route loads', () => {
 
   it('draws no tab bar for a member', async () => {
     await pending('sign-ins', false, <SignInsPending />);
-    await expect.poll(() => document.body.textContent).toContain('Recent activity');
+    await expect.element(page.getByRole('heading', { name: 'Your sign ins' })).toBeVisible();
     expect(page.getByRole('tablist').elements()).toHaveLength(0);
   });
 
   it('heads Your sign ins as the loaded section does, so nothing changes when it arrives', async () => {
     await pending('sign-ins', false, <SignInsPending />);
-    await expect.poll(() => document.body.textContent).toContain('Recent activity');
+    await expect.element(page.getByRole('heading', { name: 'Your sign ins' })).toBeVisible();
+    expect(document.body.textContent).toContain('In every workspace, for the last 90 days.');
+    expect(document.body.textContent).not.toContain('Recent activity');
     shown?.unmount();
     shown = undefined;
     await renderHistory('sign-ins', false, signIns());
     await expect.poll(() => document.body.textContent).toContain('Signed in');
-    expect(document.body.textContent).toContain('Recent activity');
+    expect(page.getByRole('heading', { name: 'Your sign ins' }).elements()).toHaveLength(1);
+    expect(document.body.textContent).toContain('In every workspace, for the last 90 days.');
+    expect(document.body.textContent).not.toContain('Recent activity');
   });
 
   it('draws Workspace changes as the loaded table, its columns in place', async () => {
