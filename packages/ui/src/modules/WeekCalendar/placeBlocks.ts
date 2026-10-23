@@ -188,3 +188,38 @@ export function placeBlocks<B extends Timed>(blocks: readonly B[]): DayLayout<B>
   }
   return { blocks: placed, more };
 }
+
+/**
+ * Which closed blocks (busy, blocked and held time) leave the full width layer under the rest and take a lane:
+ * those whose title something drawn over them would cover. A block covers a closed one when it overlaps it and
+ * starts before a quarter hour (`NEST_AFTER`) into it: a booking at the same time as Busy, cancelled or not, or an
+ * event running into it. Closed time that starts clearly earlier keeps its full width under the rest, its title
+ * showing above what sits over it, so a long day of blocked time stays whole (AC-705). Closed blocks under one
+ * another paint by start, the later over the earlier, so two that start together both take a lane. Ends are as
+ * drawn (the caller passes each block at least a line tall).
+ */
+export function liftClosed(closed: readonly Timed[], timed: readonly Timed[]): ReadonlySet<string> {
+  const lifted = new Set<string>();
+  const covers = (over: Timed, under: Timed) =>
+    over.id !== under.id &&
+    over.startMinute < under.endMinute &&
+    under.startMinute < over.endMinute &&
+    over.startMinute < under.startMinute + NEST_AFTER;
+  // A closed block that takes a lane draws over the layer, so it may cover another: settle until nothing moves.
+  let moved = true;
+  while (moved) {
+    moved = false;
+    for (const block of closed) {
+      if (lifted.has(block.id)) continue;
+      const above = [...timed, ...closed.filter((other) => lifted.has(other.id))];
+      const layer = closed.filter(
+        (other) => !lifted.has(other.id) && other.startMinute > block.startMinute - NEST_AFTER,
+      );
+      if (above.some((over) => covers(over, block)) || layer.some((over) => covers(over, block))) {
+        lifted.add(block.id);
+        moved = true;
+      }
+    }
+  }
+  return lifted;
+}
