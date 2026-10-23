@@ -75,15 +75,18 @@ export interface LinkSectionsOptions {
 }
 
 /**
- * Which section: a record (of `objectId`) and its side, and the objects the
+ * Which section: a record (of `objectId`) and its side, the objects the
  * side's records come from (the relationship's targets), so a trash, restore
- * or coarse change there reads it again.
+ * or coarse change there reads it again, and those objects' name attributes,
+ * so a held record reads again only when its name changes (the rows show
+ * nothing else).
  */
 export interface SectionKey {
   readonly recordId: string;
   readonly objectId: string;
   readonly attributeId: string;
   readonly farObjectIds: readonly string[];
+  readonly farNameAttributeIds?: readonly string[];
 }
 
 /** A records event as the sections read it. */
@@ -102,6 +105,10 @@ const timeout = (run: () => void, ms: number) => {
     clearTimeout(id);
   };
 };
+
+/** Whether two rows show the same: the record, its name and its colour. */
+const sameDisplay = (a: RecordRefDisplay, b: RecordRefDisplay | undefined) =>
+  b !== undefined && a.recordId === b.recordId && a.name === b.name && a.hue === b.hue && a.kind === b.kind;
 
 const keyOf = (workspace: string, recordId: string, attributeId: string) =>
   `${workspace}\u0000${recordId}\u0000${attributeId}`;
@@ -123,6 +130,7 @@ export function createLinkSections({
     readonly workspace: string;
     readonly recordId: string;
     readonly attributeId: string;
+    readonly objectId: string;
     readonly objectIds: ReadonlySet<string>;
     readonly handle: LinkSection;
     /** Whether a change names this section: its record and side, a far record it holds, or its far object's trash. */
@@ -136,7 +144,10 @@ export function createLinkSections({
   }
   const sources = new Map<string, Source>();
 
-  function open(workspace: string, { recordId, objectId, attributeId, farObjectIds }: SectionKey): Source {
+  function open(
+    workspace: string,
+    { recordId, objectId, attributeId, farObjectIds, farNameAttributeIds = [] }: SectionKey,
+  ): Source {
     const key = keyOf(workspace, recordId, attributeId);
     const listeners = new Set<() => void>();
     let status: LinkSectionStatus = 'loading';
@@ -211,13 +222,14 @@ export function createLinkSections({
     /**
      * Reads the rows held again from the top, in pages of up to 50, as many
      * as were held (at least the first page, at most `SECTION_REREAD_MAX`);
-     * rows held past them stay, behind what was read.
+     * what it reads replaces what was held.
      */
-    const readHeld = async (): Promise<{ items: RecordRefDisplay[]; total: number; cursor?: string }> => {
+    const readHeld = async (): Promise<{ items: RecordRefDisplay[]; total?: number; cursor?: string }> => {
       const want = Math.min(Math.max(held.length, LINK_PREVIEW), SECTION_REREAD_MAX);
       const items: RecordRefDisplay[] = [];
       let next: string | undefined;
-      let counted: number;
+      // The first page answers the side's total; the later ones leave it out.
+      let counted: number | undefined;
       do {
         const answer = await page(workspace, {
           recordId,
@@ -226,10 +238,14 @@ export function createLinkSections({
           limit: Math.min(LINK_PAGE_MAX, Math.max(want - items.length, 1)),
         });
         items.push(...answer.items);
-        counted = answer.total;
+        if (answer.total !== undefined) counted = answer.total;
         next = answer.nextCursor;
       } while (next !== undefined && items.length < want);
-      return { items, total: counted, ...(next === undefined ? {} : { cursor: next }) };
+      return {
+        items,
+        ...(counted === undefined ? {} : { total: counted }),
+        ...(next === undefined ? {} : { cursor: next }),
+      };
     };
 
     /** The first page, with nothing kept (the first load, and Try again). */
@@ -247,7 +263,7 @@ export function createLinkSections({
           applied = mine;
           epoch += 1;
           held = answer.items;
-          total = answer.total;
+          total = answer.total ?? answer.items.length;
           cursor = answer.nextCursor;
           status = 'ready';
           error = undefined;
@@ -283,7 +299,8 @@ export function createLinkSections({
           if (cursor === after) {
             const ids = new Set(held.map((each) => each.recordId));
             held = [...held, ...answer.items.filter((each) => !ids.has(each.recordId))];
-            total = answer.total;
+            // A later page carries no total: the first page's stands.
+            if (answer.total !== undefined) total = answer.total;
             cursor = answer.nextCursor;
           }
           announce();
@@ -321,24 +338,34 @@ export function createLinkSections({
           readAgain();
         }
       };
-      const kept = held;
       readHeld().then(
         (answer) => {
           if (isCurrent() && mine >= applied) {
             applied = mine;
-            epoch += 1;
+            // A Show more out meanwhile answered from before this read: it is asked again once it lands.
+            const wantedMore = loadingMore;
             loadingMore = false;
-            const ids = new Set(answer.items.map((each) => each.recordId));
-            // Rows held past the ones read again stay behind them, with the cursor that reads on from them.
-            const tail = kept.length > answer.items.length ? kept.slice(answer.items.length) : [];
-            const rest = tail.filter((each) => !ids.has(each.recordId));
-            held = [...answer.items, ...rest];
-            total = answer.total;
-            cursor = rest.length > 0 ? cursor : answer.cursor;
+            // What was read replaces what was held: past SECTION_REREAD_MAX rows the rest goes (Show more reads it
+            // again), so a row trashed, renamed or removed down there never stays as it was.
+            const same =
+              answer.items.length === held.length &&
+              answer.items.every((each, index) => sameDisplay(each, held[index])) &&
+              answer.cursor === cursor &&
+              (answer.total === undefined || answer.total === total);
+            if (!same) {
+              epoch += 1;
+              held = answer.items;
+              if (answer.total !== undefined) total = answer.total;
+              cursor = answer.cursor;
+            }
+            const settled = pending.size;
+            settlePending(mine);
+            const changed = !same || pending.size !== settled || status !== 'ready' || error !== undefined;
             status = 'ready';
             error = undefined;
-            settlePending(mine);
-            announce();
+            // Nothing new: no new snapshot, so the rows don't draw again.
+            if (changed) announce();
+            if (wantedMore) showMore();
           }
           finish();
         },
@@ -440,6 +467,7 @@ export function createLinkSections({
       workspace,
       recordId,
       attributeId,
+      objectId,
       objectIds,
       handle: {
         subscribe: (listener) => {
@@ -461,11 +489,17 @@ export function createLinkSections({
             ? true
             : event.attributeIds.includes(attributeId);
         }
+        if (!objectIds.has(event.objectId)) return false;
+        // A far record trashed or restored moves the total whether it is held or not, and a restore brings it back.
+        if ((event.deletedIds?.length ?? 0) + (event.restoredIds?.length ?? 0) > 0) return true;
+        // A held record's name: the rows show nothing else, so any other change to it reads nothing.
+        const named =
+          event.attributeIds === undefined ||
+          event.attributeIds.length === 0 ||
+          event.attributeIds.some((id) => farNameAttributeIds.includes(id));
+        if (!named) return false;
         const heldIds = new Set(held.map((each) => each.recordId));
-        if (event.recordIds.some((id) => heldIds.has(id))) return true;
-        // A far record trashed or restored that isn't held still moves the total, and a restore brings it back.
-        const moved = (event.deletedIds?.length ?? 0) + (event.restoredIds?.length ?? 0) > 0;
-        return moved && objectIds.has(event.objectId);
+        return event.recordIds.some((id) => heldIds.has(id));
       },
       refresh,
       wake,
@@ -518,9 +552,15 @@ export function createLinkSections({
     ownWrite: (workspace: string): void => {
       for (const each of inWorkspace(workspace)) each.refresh();
     },
-    /** An object's definitions changed (a side archived or hidden): its sections read again, or go. */
-    definitionsChanged: (workspace: string): void => {
-      for (const each of inWorkspace(workspace)) each.reset();
+    /**
+     * An object's definitions changed (a side archived or hidden, a name
+     * attribute changed): the sections on it or showing its records read
+     * again, or go; every section when no object is named.
+     */
+    definitionsChanged: (workspace: string, objectId?: string): void => {
+      for (const each of inWorkspace(workspace)) {
+        if (objectId === undefined || each.objectId === objectId || each.objectIds.has(objectId)) each.reset();
+      }
     },
     /** A full catch up (spec 0006, 0007): every section of the workspace reads again. */
     resync: (workspace: string): void => {

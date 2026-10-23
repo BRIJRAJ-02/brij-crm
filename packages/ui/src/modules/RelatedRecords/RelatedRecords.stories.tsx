@@ -1,10 +1,12 @@
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { useRef, useState } from 'react';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { arraySource } from '../../lib/list-source.ts';
 import { Card } from '../../molecules/Card/Card.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { RelatedRecords } from './RelatedRecords.tsx';
+import { RelatedRecords, type RelatedRecordsHandle } from './RelatedRecords.tsx';
 
 const NAMES = ['Ada Lovelace', 'Grace Hopper', 'Alan Turing', 'Katherine Johnson', 'Edsger Dijkstra', 'Barbara Liskov'];
 const HUES = ['orange', 'purple', 'blue', 'green', 'red', 'sky'] as const;
@@ -140,7 +142,8 @@ export const Empty: Story = {
   args: { records: [], total: 0, hasMore: false },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No people yet')).toBeInTheDocument();
-    await expect(canvas.getAllByRole('button', { name: 'Add to Team' }).length).toBeGreaterThan(0);
+    // One Add, in the empty row: the heading leaves its own out while the side is empty.
+    await expect(canvas.getAllByRole('button', { name: 'Add to Team' })).toHaveLength(1);
   },
 };
 
@@ -174,30 +177,118 @@ export const LargeTotal: Story = {
   },
 };
 
-/** The short form, on Overview: the first five in a Card, and View all with the total. */
+/** A side the member may only read, with why: a lock after the heading. */
+export const ReadOnlyWithReason: Story = {
+  args: { picker: undefined, onRemove: undefined, readOnlyReason: 'You can view People but not change them.' },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('button', { name: /Remove/ })).toBeNull();
+  },
+};
+
+/** Removing a row (the screen's confirm done): focus moves to the row now in its place, not the page. */
+export const RemoveMovesFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render(args) {
+    const [held, setHeld] = useState(records(3));
+    return (
+      <Stage width="narrow-fill">
+        <RelatedRecords
+          {...args}
+          records={held}
+          total={held.length}
+          hasMore={false}
+          onRemove={(record) => {
+            // As a confirm closing over it: focus falls to the page, then the row leaves.
+            (document.activeElement as HTMLElement | null)?.blur();
+            setHeld((rows) => rows.filter((row) => row.display.recordId !== record.display.recordId));
+          }}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove Grace Hopper from Team' }));
+    await waitFor(() => expect(canvas.getByRole('link', { name: /Alan Turing/ })).toHaveFocus());
+  },
+};
+
+/** Folded by the person: the screen's View all (`focus`) opens it and focuses its heading. */
+export const FocusOpensFolded: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render(args) {
+    const handle = useRef<RelatedRecordsHandle>(null);
+    return (
+      <Stage width="narrow-fill" direction="column">
+        <Button
+          onPress={() => {
+            handle.current?.focus();
+          }}
+        >
+          View all
+        </Button>
+        <RelatedRecords {...args} ref={handle} />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const heading = canvas.getByRole('button', { name: /^Team/, expanded: true });
+    await userEvent.click(heading);
+    await expect(heading).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(canvas.getByRole('button', { name: 'View all' }));
+    await waitFor(() => expect(heading).toHaveFocus());
+    await expect(heading).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
+/** The short form, on Overview: the first five in a Card, which holds View all with the total. */
 export const ShortForm: Story = {
-  args: { records: records(6), total: 12, limit: 5, onViewAll: fn() },
+  args: { records: records(6), total: 12, limit: 5 },
   render: (args) => (
     <Stage width="fill">
-      <Card title="Team">
+      <Card
+        title="Team"
+        isBusy={args.status === 'loading'}
+        actions={
+          <Button variant="ghost" label="View all 12 people in Team">
+            View all 12
+          </Button>
+        }
+      >
         <RelatedRecords {...args} />
       </Card>
     </Stage>
   ),
-  play: async ({ canvas, args }) => {
+  play: async ({ canvas }) => {
     await expect(canvas.getByRole('list', { name: 'Team' }).querySelectorAll('li')).toHaveLength(5);
     await expect(canvas.queryByRole('button', { name: /Remove/ })).toBeNull();
-    await userEvent.click(canvas.getByRole('button', { name: 'View all 12 people in Team' }));
-    await expect(args.onViewAll).toHaveBeenCalledOnce();
+    await expect(canvas.queryByRole('button', { name: 'Add to Team' })).toBeNull();
   },
 };
 
 /** The short form with nothing linked yet. */
 export const ShortFormEmpty: Story = {
-  args: { records: [], total: 0, limit: 5, onViewAll: fn() },
+  args: { records: [], total: 0, limit: 5 },
   render: ShortForm.render,
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No people yet')).toBeInTheDocument();
-    await expect(canvas.queryByRole('button', { name: /View all/ })).toBeNull();
+  },
+};
+
+/** The short form loading: its own skeleton rows, the Card marked busy. */
+export const ShortFormLoading: Story = {
+  args: { records: [], total: undefined, limit: 5, status: 'loading' },
+  render: ShortForm.render,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Loading related records')).toBeInTheDocument();
+  },
+};
+
+/** The short form failed: Try again, in the card. */
+export const ShortFormError: Story = {
+  args: { records: [], total: undefined, limit: 5, status: 'error' },
+  render: ShortForm.render,
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /try again/i }));
+    await expect(args.onRetry).toHaveBeenCalled();
   },
 };

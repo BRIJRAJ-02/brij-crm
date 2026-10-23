@@ -1524,9 +1524,19 @@ export function createDataLayer({
     }
     // Open related sections (spec 0017) read again for a change naming their record and side, a far record they
     // hold, or the far object's trash; each coalesces a burst to two reads a second.
-    void sections?.then((held) => {
-      held.changed(workspace, event);
-    });
+    if (sections !== undefined) {
+      const open = sections;
+      const tellSections = () => {
+        void open.then((held) => {
+          held.changed(workspace, event);
+        });
+      };
+      // A coarse change, or records trashed or restored, may concern every section of the object in every tab: a
+      // random moment first, once per object, so a whole team doesn't read in step.
+      const moved = (event.deletedIds?.length ?? 0) + (event.restoredIds?.length ?? 0) > 0;
+      if (event.coarse === true || moved) spread(`sections ${workspace} ${event.objectId}`, tellSections);
+      else tellSections();
+    }
     // Open timelines (spec 0017) read their first page again for a change naming their record; a coarse one,
     // for every record of the object, waits a random moment first so a whole team doesn't read in step.
     if (activity === undefined) return;
@@ -1542,10 +1552,16 @@ export function createDataLayer({
   router.on('definitions', (workspace, event) => {
     // A list's own definitions: no screen holds lists yet.
     if (event.listId !== undefined) return;
-    // A side archived, hidden or renamed: open related sections read again (or go, when nobody shows them).
-    void sections?.then((held) => {
-      held.definitionsChanged(workspace);
-    });
+    // A side archived, hidden or renamed: the object's open related sections read again (or go, when nobody shows
+    // them), spread a random moment so a whole team doesn't read in step.
+    if (sections !== undefined) {
+      const open = sections;
+      spread(`sections definitions ${workspace} ${event.objectId ?? ''}`, () => {
+        void open.then((held) => {
+          held.definitionsChanged(workspace, event.objectId);
+        });
+      });
+    }
     // An attribute archived, hidden or renamed: the object's open timelines start again (spec 0017), spread a
     // random moment so a whole team doesn't read in step (each feed also coalesces a burst).
     if (activity !== undefined) {
@@ -2185,7 +2201,16 @@ export function createDataLayer({
       void activity?.then((feeds) => {
         feeds.ownWrite(workspace);
       });
-      // A link written here from either side, or a far record renamed or deleted here, changes open sections too.
+      return value;
+    });
+
+  /**
+   * A link written here landed, from a cell, a section or an undo (its echo
+   * never comes back): the workspace's open related sections read again, since
+   * it may change either side of any of them.
+   */
+  const linksLanded = <T>(workspace: string, answer: Promise<T>): Promise<T> =>
+    answer.then((value) => {
       void sections?.then((held) => {
         held.ownWrite(workspace);
       });
@@ -2252,14 +2277,20 @@ export function createDataLayer({
         call((options) => api.records.updateMany({ ...input, recordIds: [...input.recordIds] }, options)),
       ),
     linksAdd: (input) =>
-      landed(
+      linksLanded(
         input.workspace,
-        call((options) => api.links.add({ ...input, targets: [...input.targets] }, options)),
+        landed(
+          input.workspace,
+          call((options) => api.links.add({ ...input, targets: [...input.targets] }, options)),
+        ),
       ),
     linksRemove: (input) =>
-      landed(
+      linksLanded(
         input.workspace,
-        call((options) => api.links.remove({ ...input, targetRecordIds: [...input.targetRecordIds] }, options)),
+        landed(
+          input.workspace,
+          call((options) => api.links.remove({ ...input, targetRecordIds: [...input.targetRecordIds] }, options)),
+        ),
       ),
   };
 
@@ -2616,9 +2647,15 @@ export function createDataLayer({
         : change.display === undefined
           ? undefined
           : held.show(workspace, change.recordId, change.attributeId, change.display);
-    const outcome = await (await recordsLayer()).changeLink(workspace, change);
-    shown?.settle(outcome.kind === 'done');
-    return outcome;
+    try {
+      const outcome = await (await recordsLayer()).changeLink(workspace, change);
+      shown?.settle(outcome.kind === 'done');
+      return outcome;
+    } catch (error) {
+      // The records layer failed to load (offline): the row comes back as it was.
+      shown?.settle(false);
+      throw error;
+    }
   };
 
   const trashStore = (): Promise<Trash> => {

@@ -156,12 +156,16 @@ export function useLinkEditing(slug: string) {
    * that holds many, as one link delta, moved from its holder when the search
    * marked it "At …" (the marker is the warning, as in a cell).
    */
-  const addFor = (definition: AttributeDefinition, recordId: string, display: RecordRefDisplay): LinkChange => {
+  const addFor = (
+    definition: AttributeDefinition,
+    recordId: string,
+    display: RecordRefDisplay,
+  ): { readonly change: LinkChange; readonly movedFromName?: string } => {
     const key = keyFor(definition, recordId);
     const result = key === undefined ? undefined : peek(key)?.resultOf(display.recordId);
     const holder = result === undefined || result.linked ? undefined : result.takenBy;
     const paired = definition.relationship?.pairedAttributeId;
-    return {
+    const change: LinkChange = {
       kind: 'add',
       recordId,
       attributeId: definition.id,
@@ -174,6 +178,8 @@ export function useLinkEditing(slug: string) {
         ? {}
         : { movedFrom: { objectId: holder.objectId, recordId: holder.recordId } }),
     };
+    // The holder by name for the toast ("Moved … from Acme"); one the person can't see is never named.
+    return holder === undefined || 'hidden' in holder ? { change } : { change, movedFromName: holder.name };
   };
   return { pickerFor, commit, addFor };
 }

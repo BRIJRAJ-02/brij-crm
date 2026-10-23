@@ -150,7 +150,8 @@ describe('links.page (AC-299, AC-304)', () => {
     expect(first.total).toBe(3);
     const cursor = first.nextCursor ?? '';
     const rest = await m.client.links.page({ workspace: m.slug, recordId: acme, attributeId: team, cursor });
-    expect(rest).toMatchObject({ total: 3, items: [{ name: 'Cy' }] });
+    expect(rest).toMatchObject({ items: [{ name: 'Cy' }] });
+    expect(rest.total).toBeUndefined();
     expect(rest.nextCursor).toBeUndefined();
     const other = await newCompany('Other');
     const foreign = await failure(() =>

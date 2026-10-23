@@ -1,18 +1,17 @@
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { ResultState } from '../../fields/ReferencePicker.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
-import { memoIntl } from '../../lib/intl-memo.ts';
-import type { ListSource } from '../../lib/list-source.ts';
+import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Menu, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
-import { useFormatSettings } from '../../provider/context.ts';
 import styles from './RelatedRecords.module.css';
 import { strings } from './strings.ts';
 
@@ -32,7 +31,7 @@ export interface RelatedRecordsPicker {
 
 /** What a screen can do with a section: move focus to it ("View all" on Overview). */
 export interface RelatedRecordsHandle {
-  /** Focuses the section's heading (its fold toggle), or the short form's first row. */
+  /** Opens the section if it was folded and focuses its heading (its fold toggle), or the short form's first row. */
   readonly focus: () => void;
 }
 
@@ -59,19 +58,28 @@ export interface RelatedRecordsProps {
   readonly onRemove?: (record: RelatedRecord) => void;
   /**
    * The short form (Overview's Related cards): the first `limit` rows with
-   * no heading (the Card around it names the side), no Add or Remove, and a
-   * "View all <N>" footer.
+   * no heading, no Add or Remove; the Card around it names the side and holds
+   * its "View all <N>".
    */
   readonly limit?: number;
-  /** The short form's "View all <N>": the screen moves to the full section. */
-  readonly onViewAll?: () => void;
+  /** Why the side can't change, when it can't (spec 0009): a lock after the heading says so. */
+  readonly readOnlyReason?: string;
   /** The section's id. */
   readonly id?: string;
   /** Lets a screen move focus to the section ("View all" on Overview). */
   readonly ref?: Ref<RelatedRecordsHandle>;
 }
 
+/** What a closed Add offers: nothing, and nothing is asked. */
+const NO_RESULTS: ListSource<RecordRefDisplay> = arraySource<RecordRefDisplay>([], (display) => display.recordId);
+
 const keyOf = (record: RelatedRecord) => `${record.display.objectId}:${record.display.recordId}`;
+
+/** The section heading's fold toggle. */
+const headingOf = (root: HTMLElement | null) => root?.querySelector<HTMLElement>('button') ?? undefined;
+
+/** The first row's chip, for the short form. */
+const rowOrNull = (list: HTMLUListElement | null) => list?.querySelector<HTMLElement>('a, button') ?? undefined;
 
 /** A related record's name for its Remove, or a word for one with none. */
 const nameOf = (record: RelatedRecord) => (record.display.name === '' ? strings.unnamed : record.display.name);
@@ -89,9 +97,18 @@ function AddPicker({
   readonly isLabelled: boolean;
 }) {
   const [query, setQuery] = useState('');
-  const results = picker.onSearch(query);
+  const [isOpen, setOpen] = useState(false);
+  // Searched only while the menu is open: a screen's pickers keep one search at a time, so a closed Add on each
+  // side asking on every draw would take the search from the others, and each answer would draw them all again.
+  const results = isOpen ? picker.onSearch(query) : NO_RESULTS;
   return (
-    <MenuTrigger>
+    <MenuTrigger
+      isOpen={isOpen}
+      onOpenChange={(open) => {
+        setOpen(open);
+        if (!open) setQuery('');
+      }}
+    >
       {isLabelled ? (
         <Button variant="ghost" icon="plus" label={strings.addTo(title)}>
           {strings.add}
@@ -146,27 +163,59 @@ export function RelatedRecords({
   picker,
   onRemove,
   limit,
-  onViewAll,
+  readOnlyReason,
   id,
   ref,
 }: RelatedRecordsProps) {
-  const { locale } = useFormatSettings();
-  const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale));
   const listRef = useRef<HTMLUListElement>(null);
   const sectionRef = useRef<HTMLDivElement>(null);
+  // The section's fold, so "View all" (through `focus`) can open one the person folded.
+  const [isExpanded, setExpanded] = useState(true);
   // The row whose Remove was pressed: when it leaves, focus moves to the row now in its place.
   const leaving = useRef<{ readonly key: string; readonly index: number } | undefined>(undefined);
+  // Show more pressed with this many rows: when more arrive, focus moves to the first of them.
+  const moreFrom = useRef<number | undefined>(undefined);
+  // A pick from the empty row's Add: when the first row arrives, it takes focus from the Add that left with the row.
+  const pickedWhenEmpty = useRef(false);
   useEffect(() => {
-    const gone = leaving.current;
-    if (gone === undefined || records.some((record) => keyOf(record) === gone.key)) return;
-    leaving.current = undefined;
-    focusLater(() => {
-      // Only when focus fell to the page with the row (a confirm closing over it), never away from elsewhere.
-      if (document.activeElement !== document.body && document.activeElement !== null) return undefined;
+    const rowControl = (index: number) => {
       const rows = listRef.current?.querySelectorAll<HTMLElement>(':scope > li');
-      const row = rows === undefined ? undefined : (rows[Math.min(gone.index, rows.length - 1)] ?? undefined);
-      return row?.querySelector<HTMLElement>('a, button') ?? sectionRef.current?.querySelector<HTMLElement>('button');
-    });
+      const row = rows === undefined ? undefined : rows[Math.min(index, rows.length - 1)];
+      return row?.querySelector<HTMLElement>('a, button') ?? undefined;
+    };
+    // Only when focus fell to the page with the control it was on, never away from something else.
+    const isLost = () => document.activeElement === document.body || document.activeElement === null;
+    const gone = leaving.current;
+    // The screen's confirm may hold focus: while it is open the row may still leave, and once it closes over a
+    // row that left, focus moves on from it.
+    const inConfirm = () =>
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest('[role="alertdialog"], [role="dialog"]') !== null;
+    if (gone !== undefined) {
+      if (!records.some((record) => keyOf(record) === gone.key)) {
+        leaving.current = undefined;
+        focusLater(() =>
+          isLost() || inConfirm() ? (rowControl(gone.index) ?? headingOf(sectionRef.current)) : undefined,
+        );
+      } else if (!isLost() && !inConfirm()) {
+        // Focus came back to the page (the confirm was cancelled): nothing is leaving.
+        leaving.current = undefined;
+      }
+    }
+    const from = moreFrom.current;
+    if (from !== undefined && records.length > from) {
+      moreFrom.current = undefined;
+      focusLater(() => {
+        const active = document.activeElement;
+        const onMore = active instanceof HTMLElement && active.closest('[data-more]') !== null;
+        return isLost() || onMore ? rowControl(from) : undefined;
+      });
+    }
+    // The first record added to an empty side: its Add went with the empty row.
+    if (pickedWhenEmpty.current && records.length > 0) {
+      pickedWhenEmpty.current = false;
+      focusLater(() => (isLost() ? rowControl(0) : undefined));
+    }
   }, [records]);
   const isShort = limit !== undefined;
   const shown = isShort ? records.slice(0, limit) : records;
@@ -174,10 +223,11 @@ export function RelatedRecords({
     ref,
     () => ({
       focus: () => {
-        sectionRef.current?.querySelector<HTMLElement>('button, a')?.focus();
+        setExpanded(true);
+        focusLater(() => (isShort ? rowOrNull(listRef.current) : headingOf(sectionRef.current)));
       },
     }),
-    [],
+    [isShort],
   );
 
   let body;
@@ -207,7 +257,22 @@ export function RelatedRecords({
         layout="row"
         {...(picker === undefined || isShort
           ? {}
-          : { actions: <AddPicker title={title} noun={noun} picker={picker} isLabelled /> })}
+          : {
+              actions: (
+                <AddPicker
+                  title={title}
+                  noun={noun}
+                  picker={{
+                    ...picker,
+                    onPick: (display) => {
+                      pickedWhenEmpty.current = true;
+                      picker.onPick(display);
+                    },
+                  }}
+                  isLabelled
+                />
+              ),
+            })}
       />
     );
   } else {
@@ -237,53 +302,64 @@ export function RelatedRecords({
           ))}
         </ul>
         {!isShort && hasMore && onShowMore !== undefined && (
-          <span className={styles.more}>
-            <Button variant="ghost" icon="chevron-down" isPending={isLoadingMore} onPress={onShowMore}>
+          <span className={styles.more} data-more="">
+            <Button
+              variant="ghost"
+              icon="chevron-down"
+              isPending={isLoadingMore}
+              onPress={() => {
+                moreFrom.current = records.length;
+                onShowMore();
+              }}
+            >
               {strings.showMore}
             </Button>
-            {isMoreFailed && (
-              <span className={styles.moreFailed} role="status">
-                {strings.moreFailed}
-              </span>
-            )}
           </span>
         )}
       </>
     );
   }
+  // Kept in place, so "More didn't load" is announced as it arrives.
+  const moreStatus = isShort ? null : (
+    <span className={styles.moreFailed} role="status">
+      {isMoreFailed && status === 'ready' ? strings.moreFailed : ''}
+    </span>
+  );
 
   if (isShort) {
-    const count = number.format(total ?? records.length);
     return (
       <div ref={sectionRef} id={id} className={styles.root}>
         {body}
-        {status === 'ready' && shown.length > 0 && onViewAll !== undefined && (
-          <span className={styles.more}>
-            <Button
-              variant="ghost"
-              iconRight="arrow-right"
-              label={strings.viewAllLabel(count, noun, title)}
-              onPress={onViewAll}
-            >
-              {strings.viewAll(count)}
-            </Button>
-          </span>
-        )}
       </div>
     );
   }
+  const lock = readOnlyReason === undefined ? undefined : <LockReason reason={readOnlyReason} size="sm" />;
+  // Add sits after the heading once the side holds records; an empty side offers it in its empty row instead.
+  const add =
+    picker === undefined || status !== 'ready' || records.length === 0 ? undefined : (
+      <AddPicker title={title} noun={noun} picker={picker} isLabelled={false} />
+    );
   return (
     <div ref={sectionRef} id={id} className={styles.root}>
       <Disclosure
         title={title}
         variant="label"
-        defaultExpanded
+        isExpanded={isExpanded}
+        onExpandedChange={setExpanded}
         {...(total === undefined || status !== 'ready' ? {} : { count: total, countLabel: noun })}
-        {...(picker === undefined || status !== 'ready'
+        {...(add === undefined && lock === undefined
           ? {}
-          : { actions: <AddPicker title={title} noun={noun} picker={picker} isLabelled={false} /> })}
+          : {
+              actions: (
+                <>
+                  {lock}
+                  {add}
+                </>
+              ),
+            })}
       >
         {body}
+        {moreStatus}
       </Disclosure>
     </div>
   );

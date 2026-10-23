@@ -13,6 +13,7 @@ const COMPANIES = '0199a6f2-0000-7000-8000-0000000000bb';
 const PEOPLE = '0199a6f2-0000-7000-8000-0000000000cc';
 const TEAM = '0199a6f2-0000-7000-8000-0000000000c1';
 const OTHER = '0199a6f2-0000-7000-8000-0000000000c2';
+const NAME = '0199a6f2-0000-7000-8000-0000000000c3';
 
 const person = (n: number): RecordRefDisplay => ({
   objectId: PEOPLE,
@@ -21,7 +22,13 @@ const person = (n: number): RecordRefDisplay => ({
   kind: 'person',
 });
 
-const SIDE: SectionKey = { recordId: COMPANY, objectId: COMPANIES, attributeId: TEAM, farObjectIds: [PEOPLE] };
+const SIDE: SectionKey = {
+  recordId: COMPANY,
+  objectId: COMPANIES,
+  attributeId: TEAM,
+  farObjectIds: [PEOPLE],
+  farNameAttributeIds: [NAME],
+};
 
 /** Lets the promises answered so far settle. */
 const flush = async () => {
@@ -42,7 +49,7 @@ function setUp(count: number) {
     const end = start + items.length;
     return Promise.resolve({
       items,
-      total: rows.length,
+      ...(input.cursor === undefined ? { total: rows.length } : {}),
       ...(end < rows.length ? { nextCursor: String(end) } : {}),
     });
   };
@@ -163,8 +170,11 @@ describe('a related section', () => {
     // A coarse change to an object it doesn't show.
     t.sections.changed(WS, { objectId: OTHER, recordIds: [], coarse: true });
     expect(reads()).toBe(before);
-    t.setRows([person(1), { ...person(2), name: 'Renamed' }]);
+    // A held person's phone: the rows show only names, so nothing is read.
     t.sections.changed(WS, { objectId: PEOPLE, recordIds: [person(2).recordId], attributeIds: [OTHER] });
+    expect(reads()).toBe(before);
+    t.setRows([person(1), { ...person(2), name: 'Renamed' }]);
+    t.sections.changed(WS, { objectId: PEOPLE, recordIds: [person(2).recordId], attributeIds: [NAME] });
     await flush();
     expect(names(section.getSnapshot().items)).toEqual(['Person 1', 'Renamed']);
     expect(reads()).toBe(before + 1);
@@ -213,5 +223,35 @@ describe('a related section', () => {
     other.retry();
     await flush();
     expect(other.getSnapshot()).toMatchObject({ status: 'ready', total: 1 });
+  });
+});
+
+describe('a long section read again', () => {
+  it('keeps the first page’s total through Show more, and past 200 rows reads again only the first 200', async () => {
+    const t = setUp(260);
+    const section = t.sections.section(WS, SIDE);
+    section.retain();
+    await flush();
+    for (let more = 0; more < 12; more += 1) {
+      section.showMore();
+      await flush();
+    }
+    expect(section.getSnapshot().items).toHaveLength(260);
+    expect(section.getSnapshot().total).toBe(260);
+    t.sections.ownWrite(WS);
+    await flush();
+    expect(section.getSnapshot().items).toHaveLength(200);
+    expect(section.getSnapshot()).toMatchObject({ hasMore: true, total: 260 });
+  });
+
+  it('draws nothing again when a read again finds the same rows', async () => {
+    const t = setUp(3);
+    const section = t.sections.section(WS, SIDE);
+    section.retain();
+    await flush();
+    const before = section.getSnapshot();
+    t.sections.ownWrite(WS);
+    await flush();
+    expect(section.getSnapshot()).toBe(before);
   });
 });

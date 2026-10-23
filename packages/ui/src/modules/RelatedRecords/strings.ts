@@ -14,9 +14,5 @@ export const strings = {
   search: (noun: string) => `Search ${noun}`,
   /** A row's Remove by its record and side: "Remove Ada Lovelace from Team". */
   remove: (name: string, title: string) => `Remove ${name} from ${title}`,
-  /** The short form's footer: "View all 12". */
-  viewAll: (count: string) => `View all ${count}`,
-  /** The same, said in full: "View all 12 people in Team". */
-  viewAllLabel: (count: string, noun: string, title: string) => `View all ${count} ${noun} in ${title}`,
   unnamed: 'Unnamed',
 } as const;

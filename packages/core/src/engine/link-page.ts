@@ -39,11 +39,16 @@ export interface LinkPageInput {
   readonly limit?: number;
 }
 
-/** A page of one side's linked records, in its order, the cursor to the next when there are more, and the total. */
+/**
+ * A page of one side's linked records, in its order, the cursor to the next
+ * when there are more, and on the first page the total (a later page leaves
+ * it out: counting a hub's 150,000 links again for each Show more would
+ * spend the read budget on a number the browser already holds).
+ */
 export interface LinkPageAnswer {
   readonly items: readonly RecordRefDisplay[];
   readonly nextCursor?: string;
-  readonly total: number;
+  readonly total?: number;
 }
 
 /**
@@ -54,8 +59,9 @@ export interface LinkPageAnswer {
 const LinkCursor = z.object({
   r: z.uuid(),
   a: z.uuid(),
-  p: z.number().int(),
-  f: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/),
+  // A link's position is a Postgres integer, and its start a real instant: anything else never reaches SQL.
+  p: z.number().int().min(-2_147_483_648).max(2_147_483_647),
+  f: z.iso.datetime({ precision: 6 }),
   k: z.uuid(),
 });
 type LinkCursor = z.infer<typeof LinkCursor>;
@@ -93,7 +99,7 @@ async function liveObjectOf(tx: WorkspaceTx, recordId: string): Promise<string |
 /**
  * A page of the records linked on one side of one record (spec 0014, AC-299,
  * AC-304, AC-308): live far records the reader may see, in the side's order,
- * at most `limit`, with the exact total. A record that is missing, hidden,
+ * at most `limit`, with the exact total on the first page. A record that is missing, hidden,
  * in the trash (its links come back with a restore) or on an archived object
  * is `NOT_FOUND` with the unknown record's words; a side that isn't a record
  * reference of its object, is hidden from the reader or is archived (its own
@@ -148,9 +154,14 @@ export async function pageLinks(scope: EngineScope, input: LinkPageInput): Promi
       order by ${position}, k.active_from, k.id
       limit ${limit + 1}
     `);
-    const counted = await tx.execute<{ n: number }>(sql`select count(*)::int as n ${links}`);
-    const total = counted.rows[0]?.n ?? 0;
     const page = rows.rows.slice(0, limit);
+    // The first page only, and only when the side holds more than it: otherwise its rows are the whole side.
+    const total =
+      after !== undefined
+        ? undefined
+        : rows.rows.length <= limit
+          ? page.length
+          : ((await tx.execute<{ n: number }>(sql`select count(*)::int as n ${links}`)).rows[0]?.n ?? 0);
     // Every far record came from a statement that kept only records the reader may see.
     const views = await readRecords(
       tx,
@@ -164,10 +175,11 @@ export async function pageLinks(scope: EngineScope, input: LinkPageInput): Promi
       return shown === undefined ? [] : [shown];
     });
     const last = page.at(-1);
-    if (rows.rows.length <= limit || last === undefined) return { items, total };
+    const counted = total === undefined ? {} : { total };
+    if (rows.rows.length <= limit || last === undefined) return { items, ...counted };
     return {
       items,
-      total,
+      ...counted,
       nextCursor: encodeLinkCursor({ r: recordId, a: attributeId, p: last.p, f: last.f, k: last.kid }),
     };
   });

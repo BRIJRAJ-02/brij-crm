@@ -382,20 +382,23 @@ function RecordScreen({
   // The narrow page's Details fold, opened by a Related card's "View all" before focus moves into it.
   const [isSidebarExpanded, setSidebarExpanded] = useState(false);
   const relatedHandles = useRef(new Map<string, RelatedRecordsHandle>());
-  const handleRef = useCallback(
-    (attributeId: string) => (handle: RelatedRecordsHandle | null) => {
+  // One ref callback per side for the page's life, so a section's handle isn't let go and taken again each render.
+  const handleRefs = useRef(new Map<string, (handle: RelatedRecordsHandle | null) => void>());
+  const handleRef = useCallback((attributeId: string) => {
+    const known = handleRefs.current.get(attributeId);
+    if (known !== undefined) return known;
+    const made = (handle: RelatedRecordsHandle | null) => {
       if (handle === null) relatedHandles.current.delete(attributeId);
       else relatedHandles.current.set(attributeId, handle);
-    },
-    [],
-  );
+    };
+    handleRefs.current.set(attributeId, made);
+    return made;
+  }, []);
   const viewAllRelated = (attributeId: string) => {
     setSidebarExpanded(true);
-    // A frame for the fold to open (its content stops being inert), another for it to draw.
+    // A frame for the narrow page's Details fold to open; the section then opens itself if folded and takes focus.
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        relatedHandles.current.get(attributeId)?.focus();
-      });
+      relatedHandles.current.get(attributeId)?.focus();
     });
   };
   const openTotal = useTaskTotal(open);

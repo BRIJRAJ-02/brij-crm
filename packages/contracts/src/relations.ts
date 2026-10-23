@@ -175,12 +175,13 @@ export type PageLinksInput = z.infer<typeof PageLinksInput>;
  * One page of a side's linked records, in that side's order (position, then
  * when each link began), as display shapes only (never record bodies): the
  * live far records the reader may see, the cursor for the next page when
- * there are more, and `total`, the exact count of them all.
+ * there are more, and on the first page (no `cursor`) `total`, the exact
+ * count of them all; a later page leaves it out.
  */
 export const LinkPage = z.object({
   items: z.array(RecordRefDisplay),
   nextCursor: z.string().optional(),
-  total: z.number().int().min(0),
+  total: z.number().int().min(0).optional(),
 });
 /** A page of one side's linked records. */
 export type LinkPage = z.infer<typeof LinkPage>;

@@ -104,6 +104,8 @@ describe('pageLinks (spec 0014, AC-299, AC-304, AC-308)', () => {
       cursor: must(first.nextCursor),
     });
     expect(second.items.map((item) => item.name)).toEqual(['Cy', 'Dee']);
+    // A later page leaves the total out: the first page's is the side's.
+    expect(second.total).toBeUndefined();
     const last = await pageLinks(w.scope, {
       recordId: acme,
       attributeId: w.company('team'),
@@ -206,6 +208,41 @@ describe('pageLinks (spec 0014, AC-299, AC-304, AC-308)', () => {
     });
   });
 
+  it('follows record rules: hidden far records are absent from the rows and the total, a hidden record is absent', async () => {
+    const w = await world();
+    const { acme, members } = await team(w, ['Ada', 'Ben']);
+    const role = { type: 'role' as const, role: 'member' };
+    // A rule on a system column matches no value row: every company is outside it.
+    const own = rescope(w.scope, {
+      role: 'member',
+      rules: {
+        levels: [],
+        records: [{ subject: role, objectId: w.companies, attributeId: w.company('created_by'), kind: 'own' }],
+      },
+    });
+    expect(await pageLinks(own, { recordId: must(members[0]), attributeId: w.person('company') })).toEqual({
+      items: [],
+      total: 0,
+    });
+    expect((await failure(pageLinks(own, { recordId: acme, attributeId: w.company('team') })))?.code).toBe('NOT_FOUND');
+    // A far object whose name the reader can't see shows its records unnamed, never by name.
+    const nameHidden = rescope(w.scope, {
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: role,
+            target: { type: 'attribute', objectId: w.people, attributeId: w.person('name') },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    const page = await pageLinks(nameHidden, { recordId: acme, attributeId: w.company('team') });
+    expect(page.items.map((item) => item.name)).toEqual(['Unnamed person', 'Unnamed person']);
+  });
+
   it('refuses a side whose far object is archived (AC-308)', async () => {
     const w = await world();
     const { acme } = await team(w, ['Ada']);
@@ -230,6 +267,22 @@ describe('pageLinks (spec 0014, AC-299, AC-304, AC-308)', () => {
     expect(
       await failure(pageLinks(w.scope, { recordId: acme, attributeId: w.company('team'), cursor: 'eyJub3QiOiJpdCJ9' })),
     ).toMatchObject({ code: 'INPUT_INVALID', field: 'cursor' });
+    // A cursor of this side whose place can't be a link's (outside an integer, or no real instant) never reaches SQL.
+    const bound = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as Record<string, unknown>;
+    for (const forged of [
+      { ...bound, p: 9_999_999_999 },
+      { ...bound, f: '2026-13-45T25:61:61.000000Z' },
+    ]) {
+      expect(
+        await failure(
+          pageLinks(w.scope, {
+            recordId: acme,
+            attributeId: w.company('team'),
+            cursor: Buffer.from(JSON.stringify(forged)).toString('base64url'),
+          }),
+        ),
+      ).toMatchObject({ code: 'INPUT_INVALID', field: 'cursor' });
+    }
     expect(
       await failure(pageLinks(w.scope, { recordId: acme, attributeId: w.company('team'), limit: 51 })),
     ).toMatchObject({ code: 'INPUT_INVALID', field: 'limit' });

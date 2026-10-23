@@ -40,14 +40,18 @@ export const strings = {
   /** Remove's confirm (owner rule, 21 Oct: an ending action asks first; its Undo stays one click). */
   removeTitle: (name: string, side: string) => `Remove ${name} from ${side}?`,
   removeText: (name: string, recordName: string) =>
-    `${name} stays, only its link to ${recordName} goes. You can undo this.`,
-  removeAction: 'Remove',
+    `${name} stays. Only the link to ${recordName} is removed. You can undo this.`,
+  removeAction: (side: string) => `Remove from ${side}`,
   cancel: 'Cancel',
-  /** The toast once a Remove lands, with Undo. */
+  /** The toasts once a Remove or an Add lands, each with Undo. */
   removed: (name: string, side: string) => `Removed ${name} from ${side}.`,
+  added: (name: string, side: string) => `Added ${name} to ${side}.`,
+  /** An Add that took the record from the one holding it on a side of one ("At Acme"). */
+  moved: (name: string, side: string, from: string) => `Moved ${name} to ${side} from ${from}.`,
   undo: 'Undo',
-  /** A related record with no name. */
-  unnamedRelated: 'Unnamed record',
+  /** A Related card's "View all" with the side's total, and said in full. */
+  viewAllRelated: (count: string) => `View all ${count}`,
+  viewAllRelatedLabel: (count: string, noun: string, side: string) => `View all ${count} ${noun} in ${side}`,
   /** A linked record this person can't see, or that was deleted. */
   unavailableRecord: 'Unavailable',
   /** Why a reference or member value can't be edited here yet (#15 brings the record picker). */
