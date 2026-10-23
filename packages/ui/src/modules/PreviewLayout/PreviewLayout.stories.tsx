@@ -394,7 +394,8 @@ export const LongPage: Story = {
     await step('the keys scroll it, down to its foot', async () => {
       region.focus();
       await userEvent.keyboard('{ArrowDown}');
-      await expect(view.scrollY).toBe(40);
+      // One step, 40px: Firefox scrolls the scaled phone's page in fractions of a pixel (39.97), so to the pixel.
+      await expect(view.scrollY).toBeCloseTo(40, 0);
       await userEvent.keyboard('{PageDown}');
       await waitFor(() => expect(view.scrollY).toBeGreaterThan(40));
       await userEvent.keyboard('{End}');
