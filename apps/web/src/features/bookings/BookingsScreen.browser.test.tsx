@@ -627,6 +627,50 @@ describe('the list rows', () => {
       false,
     );
   });
+
+  it('with no calendar connected, reads a source left in the address as All, so the list can’t empty unseen', async () => {
+    const none = { status: 'ready', accounts: [] } as unknown as CalendarListState;
+    const noneConnected: CalendarsHeld<CalendarListState> = {
+      subscribe: () => () => undefined,
+      getSnapshot: () => none,
+      retain: () => () => undefined,
+      reload: () => undefined,
+    };
+    const state: MeetingsState = { ...ready, items: [] };
+    const held: MeetingsHeld = {
+      subscribe: () => () => undefined,
+      getSnapshot: () => state,
+      retain: () => () => undefined,
+      ready: () => Promise.resolve(),
+      loadMore: () => undefined,
+      reload: () => undefined,
+    };
+    const asked: string[] = [];
+    shown = await renderInApp(
+      () => (
+        <BookingsListScreen
+          slug="acme"
+          // An old link, or one from before the calendar was disconnected.
+          search={{ week, day: wednesday, tab: 'upcoming', source: 'calendar' }}
+          meetings={(query) => {
+            asked.push(query.source);
+            return held;
+          }}
+          calendars={noneConnected}
+          onDismissNotice={() => undefined}
+          objects={[]}
+          pages={[]}
+          locale="en-GB"
+          onSearch={() => undefined}
+        />
+      ),
+      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list?src=calendar' },
+    );
+    // The list's own empty state, not "Nothing matches these filters" with no filter on screen to clear.
+    await expect.element(page.getByText('Nothing coming up')).toBeVisible();
+    expect(page.getByText('Nothing matches these filters').elements()).toHaveLength(0);
+    expect(asked.at(-1)).toBe('all');
+  });
 });
 
 describe('the member zone', () => {

@@ -1236,7 +1236,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
   // follows it rather than falling to the day it left (Q56). Set while rendering, once, as `lastAsked` is.
   const asked = focusDay?.blockId;
   if (asked !== undefined && !pieces.some(({ piece }) => piece.id === asked)) {
-    const sourceId = asked.slice(0, asked.lastIndexOf(':'));
+    const cut = asked.lastIndexOf(':');
+    const sourceId = cut === -1 ? asked : asked.slice(0, cut);
     const moved = pieces.find(({ piece }) => piece.sourceId === sourceId);
     if (moved !== undefined) setFocusDay({ dayKey: moved.piece.dayKey, blockId: moved.piece.id });
   }
@@ -1729,7 +1730,7 @@ function useFocusAfterMore(label: string, isReady: boolean, isShown: boolean, co
  */
 export function BookingsListScreen({
   slug,
-  search,
+  search: asked,
   meetings,
   calendars,
   onDismissNotice,
@@ -1750,6 +1751,10 @@ export function BookingsListScreen({
     ),
   );
   const hasCalendar = calendarList.status === 'ready' && calendarList.accounts.length > 0;
+  const hasNoCalendar = calendarList.status === 'ready' && !hasCalendar;
+  // With no calendar there are only bookings, and Show is hidden: a source left in the address (an old link, or one
+  // from before a disconnect) reads as All, so it can't empty the list with nothing on screen to undo it.
+  const search = hasNoCalendar && asked.source !== 'all' ? { ...asked, source: 'all' as const } : asked;
   const panel = useCalendarsPanel(calendarList.status === 'ready' ? hasCalendar : undefined);
   // The open meeting by row id, read from the list as it is now: a change shows in the panel.
   // A colleague's booking (an admin's view, a team page) names its host rather than "You".
@@ -1797,7 +1802,7 @@ export function BookingsListScreen({
       search={search}
       pages={pages}
       panel={panel}
-      hasNoCalendar={calendarList.status === 'ready' && !hasCalendar}
+      hasNoCalendar={hasNoCalendar}
       onSearch={onSearch}
     />
   );

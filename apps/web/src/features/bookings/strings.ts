@@ -209,7 +209,7 @@ export const strings = {
   /** New meeting without a calendar: the guest is still emailed, with the invitation attached (Q57). What's missing
    * is the event on the member's own calendar, and a video call's link. */
   noCalendar:
-    'No calendar is connected, so this won’t go on your calendar and a video call gets no link. They’re still emailed. Connect one under Calendar.',
+    'They’re still emailed an invitation. With no calendar connected, it won’t go on your calendar and a video call gets no link.',
   holdThisTime: 'Reserve for link only pages',
   holdFor: 'For',
   anyPrivatePage: 'Any link only page',

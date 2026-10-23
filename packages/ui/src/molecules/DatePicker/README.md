@@ -32,6 +32,8 @@ Enter in the date submits the form around it, as in any text field (Availability
 
 Type into each segment, or use Up and Down to change it and Left and Right to move. Alt Down (or the calendar button) opens the calendar; arrows move by day, Page Up and Page Down by month; Enter chooses; Esc closes it and returns focus.
 
+MonthCalendar with `autoFocus` (as a popover opens it, like Bookings' Go to date) starts with focus on the chosen day, so the arrows move from it at once.
+
 ## Differences from the artifact
 
 - `value` and `onChange` keep `YYYY-MM-DD` strings; `today` comes from the provider's time zone, not a prop; `clearable` is on unless `isRequired`.
