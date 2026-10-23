@@ -1,7 +1,7 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { detailAttributes, isRecordId, isRecordTab } from '../features/records/details.ts';
+import { detailAttributes, isRecordId, isRecordTab, relatedSides } from '../features/records/details.ts';
 import { isThreadParam } from '../features/comments/entries.ts';
 import { isNoteParam } from '../features/notes/entries.ts';
 import { isTaskParam } from '../features/tasks/entries.ts';
@@ -19,7 +19,9 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 // with this route's component, outside the first load. Spec 0019 adds the
 // Tasks tab and `?task=<id>` (or `new`), the task dialog over any tab; the
 // loader starts the record's open tasks (the tab's count and Overview's block)
-// and reads the person's member id (a new task is theirs).
+// and reads the person's member id (a new task is theirs). Spec 0017
+// milestone 3 starts each side that holds many as a section source (the
+// sidebar's section and Overview's card share it), never waiting for them.
 /** `?task=<id>` or `?task=new`: the task dialog; `?note=<id>` or `?note=new`: the note window. Anything else is dropped. */
 interface RecordSearch {
   readonly task?: string;
@@ -65,6 +67,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
     ]);
     const meId = access?.memberId;
     const shown = detailAttributes(attributes);
+    const sides = relatedSides(attributes, objects);
     // An address that can't be a record's id names no record: the page says so, as for a missing one.
     if (!isRecordId(params.recordId)) {
       return {
@@ -72,6 +75,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
           object,
           objects,
           attributes: shown,
+          related: undefined,
           members,
           meId,
           record: undefined,
@@ -83,7 +87,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
         },
       };
     }
-    const [record, feed, recent, open, notes, comments] = await Promise.all([
+    const [record, feed, recent, open, notes, comments, sections] = await Promise.all([
       context.data.records.one(
         params.slug,
         params.recordId,
@@ -96,7 +100,22 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
       context.data.notes.forRecord(params.slug, params.recordId, object.id),
       // Comments (spec 0038): the store loads in its own chunk, and the tab's count arrives with the page.
       context.data.comments.forRecord(params.slug, params.recordId),
+      // The related sections (spec 0017, milestone 3): one source per side, its first page read now.
+      Promise.all(
+        sides.map((side) =>
+          context.data.links.section(params.slug, {
+            recordId: params.recordId,
+            objectId: object.id,
+            attributeId: side.attribute.id,
+            farObjectIds: side.attribute.relationship?.targetObjectIds ?? [side.farObject.id],
+          }),
+        ),
+      ),
     ]);
+    const related = sides.flatMap((side, index) => {
+      const section = sections[index];
+      return section === undefined ? [] : [{ ...side, section }];
+    });
     // The open tasks start loading now; the page draws them (and the tab's count) as they arrive.
     void open.ready();
     // The notes too (spec 0019): the Notes tab's count arrives with the page.
@@ -111,7 +130,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
     ]);
     clearTimeout(timer);
     return {
-      page: { object, objects, attributes: shown, members, meId, record, feed, recent, open, notes, comments },
+      page: { object, objects, attributes: shown, related, members, meId, record, feed, recent, open, notes, comments },
     };
   },
   pendingComponent: () => (

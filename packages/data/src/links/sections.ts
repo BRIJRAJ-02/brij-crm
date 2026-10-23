@@ -10,7 +10,7 @@
 // and Remove at once (`hide`, `show`), until a read after the write lands.
 // Loaded with the first record page, so it stays out of the first load.
 import type { LinkPage, RecordRefDisplay } from '@crm/contracts';
-import { LINK_PAGE_MAX, LINK_PREVIEW } from '@crm/contracts';
+import { LINK_PAGE_MAX, LINK_PREVIEW } from '@crm/contracts/link-limits';
 import { toDataError, type DataError } from '../errors.ts';
 
 /** The least time between two reads of a section again, in ms: at most two a second, as the timeline. */

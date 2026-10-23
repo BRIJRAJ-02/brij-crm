@@ -35,6 +35,19 @@ export const strings = {
   unnamed: (singularName: string) => `Unnamed ${singularName.toLowerCase()}`,
   /** A meeting's attendee added as a person (spec 0024, AC-609). */
   addedPerson: (name: string) => `${name} added as a person`,
+  /** Related sections and cards (spec 0017, milestone 3): the far object's plural as their noun ("people"). */
+  relatedNoun: (pluralName: string) => pluralName.toLowerCase(),
+  /** Remove's confirm (owner rule, 21 Oct: an ending action asks first; its Undo stays one click). */
+  removeTitle: (name: string, side: string) => `Remove ${name} from ${side}?`,
+  removeText: (name: string, recordName: string) =>
+    `${name} stays, only its link to ${recordName} goes. You can undo this.`,
+  removeAction: 'Remove',
+  cancel: 'Cancel',
+  /** The toast once a Remove lands, with Undo. */
+  removed: (name: string, side: string) => `Removed ${name} from ${side}.`,
+  undo: 'Undo',
+  /** A related record with no name. */
+  unnamedRelated: 'Unnamed record',
   /** A linked record this person can't see, or that was deleted. */
   unavailableRecord: 'Unavailable',
   /** Why a reference or member value can't be edited here yet (#15 brings the record picker). */

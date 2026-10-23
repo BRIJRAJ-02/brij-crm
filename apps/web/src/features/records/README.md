@@ -1,12 +1,12 @@
 # Records
 
-Spec 0017, milestones 1 and 2: a record's own page, and its timeline. It sits in `WorkspaceFrame` through `WorkspacePage`, laid out by the library's `RecordLayout`.
+Spec 0017, milestones 1 to 3: a record's own page, its timeline, and its related records. It sits in `WorkspaceFrame` through `WorkspacePage`, laid out by the library's `RecordLayout`.
 
 ## The record page (`/w/$slug/objects/$object/$recordId/$tab`, RecordPage)
 
 - **Purpose**: everything about one record in one place: its details, and what happened to it.
 - **Main task**: read and edit its details in place, and see who changed what and when, live.
-- **Leaves out**: deleting and restoring it (#22), presence (#26), related records (milestone 3), notes (#19 milestone 3), comments (#29). Tasks (#19 milestone 1) have their own tab and Overview block, `features/tasks`.
+- **Leaves out**: deleting and restoring it (#22), presence (#26), editing related records' own values. Tasks (#19 milestone 1) have their own tab and Overview block, `features/tasks`.
 
 - **Stat strip** (13 Oct reference batch 4; owner's call 22 Oct: the tabs keep their counts, so the strip says only what they don't): the record's value (an attribute `value` of type currency, through its field display), `Entered <stage>` with how long ago (the first live status attribute; `records.stageSince`, read afresh when the stage changes), the next meeting (`calendar.meetings.forRecord`, the first one not yet over), and the last activity (`useLatestActivityAt`, opening Activity). `data.records.facts` holds the meeting and the stage age; `useRecordFacts` reads them.
 
@@ -14,13 +14,25 @@ Spec 0017, milestones 1 and 2: a record's own page, and its timeline. It sits in
 
 - **Purpose**: a record's details, in the page's sidebar (and, from milestone 4, the side panel's Details tab).
 - **Main task**: read every attribute and edit it in place, saved through the data layer, a refusal said under the value.
-- **Leaves out**: relationship sections that hold many records (milestone 3) and attribute groups (#18).
+- **Leaves out**: relationship sides that hold many records (each gets a related section after Details) and attribute groups (#18).
 
 ## Overview (OverviewTab) and Activity (ActivityTab)
 
 - **Purpose**: a record at a glance, and what happened to it, newest first.
 - **Main task**: see the newest entries (Overview draws five in place, the library's `inline` layout), and go on to the whole timeline ("View all"), which pages as it scrolls and shows changes made anywhere within a second.
-- **Leaves out**: Related cards (milestone 3), Highlights (#18), notes and comments in the feed (#19, #29), the record's own delete and restore (#36). Overview shows Open tasks above Recent activity, and the feed shows tasks (spec 0019).
+- **Leaves out**: Highlights (#18), notes and comments in the feed (#19, #29), the record's own delete and restore (#36). Overview shows Open tasks above Recent activity, and the feed shows tasks (spec 0019).
+
+## Related sections and cards (RelatedSections, spec 0017 milestone 3)
+
+- **Purpose**: who and what is linked to this record on each side that holds many (a company's Team and Associated deals, a person's deals).
+- **Main task**: scan a side's records and open one, add one, or remove one, from the record itself.
+- **Leaves out**: editing the related records' own values, sorting or filtering a side, removing several at once.
+
+- Which sides: `relatedSides` in `details.ts`, every live, visible record reference that holds many, by position, whose far object the person can see. The loader starts one `data.links.section` per side (never waiting on it); the sidebar's section and Overview's card share it, so the first page is read once.
+- The sidebar, after Details: the library's `RelatedRecords`, the side's title with its total in full, its first 20 records (each a link to its page), Show more for 20 more, Add (the record search, "At …" moving a record from its holder, as a cell does) and a Remove per row. Remove asks first in a Modal ("Remove Ada Lovelace from Team?", owner rule of 21 Oct); once it lands, a toast "Removed Ada Lovelace from Team." offers Undo (one click, or Cmd+Z, the same undo entry). Add and Remove show only where the person may change the record and the side has no read only reason.
+- Overview, after Recent activity: a Card per side, its first five records and "View all <N>", which moves focus to the side's section (opening the narrow page's Details fold first).
+- A record in the trash or no longer available shows no sections or cards (its links come back with a restore). A side that goes out of reach (archived or hidden while open) drops out.
+- Every change shows within a second: a link added or removed from either side, a related record renamed or deleted elsewhere (the section source reads again, at most twice a second).
 
 ## Notes
 

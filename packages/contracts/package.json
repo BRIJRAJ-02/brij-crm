@@ -18,6 +18,7 @@
     "./safe-link": "./src/values/safe-link.ts",
     "./picker": "./src/values/picker.ts",
     "./activity-keys": "./src/activity-keys.ts",
+    "./link-limits": "./src/link-limits.ts",
     "./task-limits": "./src/task-limits.ts",
     "./account-limits": "./src/account-limits.ts",
     "./note-limits": "./src/note-limits.ts",

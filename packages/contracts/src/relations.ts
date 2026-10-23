@@ -10,6 +10,7 @@ import { Cardinality } from './relationship-block.ts';
 import { ActorReferenceValue } from './values/attribute-values.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { LINK_PAGE_MAX } from './link-limits.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
 
 export { AttributeRelationship, Cardinality } from './relationship-block.ts';
@@ -153,10 +154,7 @@ export const LinksWritten = z.object({
 /** What a link write answers. */
 export type LinksWritten = z.infer<typeof LinksWritten>;
 
-/** The most related records one `links.page` answers (spec 0014). */
-export const LINK_PAGE_MAX = 50;
-/** How many related records a record page's section shows at first, and adds with each "Show more" (spec 0014). */
-export const LINK_PREVIEW = 20;
+export { LINK_PAGE_MAX, LINK_PREVIEW } from './link-limits.ts';
 
 /**
  * A page of the records linked on one side of one record (spec 0014,

@@ -426,6 +426,8 @@ export type {
   MeetingAttendeeShape,
 } from './activity/feed.ts';
 export type { LinkSection, LinkSectionState, LinkSectionStatus, SectionKey } from './links/sections.ts';
+/** How many related records an Overview card shows per side (spec 0017, AC-383). */
+export { RELATED_PREVIEW } from '@crm/contracts/activity-keys';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 export type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 export type {

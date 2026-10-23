@@ -7,7 +7,7 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { RelatedRecords } from './RelatedRecords.tsx';
 
 const NAMES = ['Ada Lovelace', 'Grace Hopper', 'Alan Turing', 'Katherine Johnson', 'Edsger Dijkstra', 'Barbara Liskov'];
-const HUES = ['orange', 'purple', 'blue', 'green', 'red', 'teal'] as const;
+const HUES = ['orange', 'purple', 'blue', 'green', 'red', 'sky'] as const;
 
 const person = (index: number): RecordRefDisplay => ({
   objectId: 'people',
