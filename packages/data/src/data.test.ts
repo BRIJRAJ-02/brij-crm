@@ -8,6 +8,8 @@ import {
   type AttributeDefinition,
   type BookingPageView,
   type AttributeOption,
+  type AuditListInput,
+  type AuditPage,
   type ChangeEvent,
   type DeleteManyResults,
   type GlobalSearchResults,
@@ -146,6 +148,8 @@ interface Behaviour {
   activity: (recordId: string, cursor?: string) => RecordActivity;
   /** A record in the trash (spec 0017). */
   trashed: (recordId: string) => TrashedRecord;
+  /** A page of the audit log (spec 0046). */
+  auditList: (input: AuditListInput) => AuditPage;
   /** What every option write answers (spec 0012, milestone 3). */
   optionWrite: () => AttributeOption;
   /** What both relationship writes answer (spec 0014). */
@@ -215,6 +219,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     usage: () => ({ attributes: { [PEOPLE.id]: { used: 20, limit: 250 } }, optionsPerAttribute: 500 }),
     activity: notServed,
     trashed: notServed,
+    auditList: notServed,
     optionWrite: notServed,
     relationshipWrite: notServed,
     viewsList: notServed,
@@ -700,6 +705,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     },
     routing: {
       report: os.routing.report.handler(notServed),
+    },
+    audit: {
+      list: os.audit.list.handler(({ input }) => {
+        calls.push(`audit.list ${input.cursor ?? 'first'}`);
+        return behaviour.auditList(input);
+      }),
     },
   });
   const handler = new RPCHandler(router);
@@ -2130,6 +2141,52 @@ describe('the layer has no state at module level', () => {
     await layer(two).data.me.get();
     expect(count(one.calls, '/api/rpc/me/get')).toBe(1);
     expect(count(two.calls, '/api/rpc/me/get')).toBe(1);
+  });
+});
+
+describe('audit (spec 0046)', () => {
+  const entry = (n: number) => ({
+    id: `0199f0a0-0000-7000-8000-${String(n).padStart(12, '0')}`,
+    at: '2026-10-23T06:52:11.123456Z',
+    actor: { kind: 'system' as const },
+    action: 'workspace.restored' as const,
+    target: { type: 'workspace' as const },
+    params: {},
+    changes: [],
+  });
+
+  it('opens a workspace’s log through audit.list, then reads on with the cursor', async () => {
+    const api = fakeApi({
+      auditList: (input) =>
+        input.cursor === undefined ? { entries: [entry(1)], nextCursor: 'next-1' } : { entries: [entry(2)] },
+    });
+    const { data } = layer(api);
+    const log = await data.audit.openLog('acme');
+    await expect.poll(() => log.getSnapshot().status).toBe('ready');
+    expect(log.getSnapshot()).toMatchObject({ entries: [entry(1)], hasMore: true });
+    log.more();
+    await expect.poll(() => log.getSnapshot().entries).toEqual([entry(1), entry(2)]);
+    expect(log.getSnapshot().hasMore).toBe(false);
+    expect(api.calls.filter((each) => each.startsWith('audit.list'))).toEqual([
+      'audit.list first',
+      'audit.list next-1',
+    ]);
+  });
+
+  it('answers a refused read as forbidden, with the server’s words', async () => {
+    const api = fakeApi({
+      auditList: () => {
+        throw new ORPCError('FORBIDDEN', {
+          status: 403,
+          message: 'Only workspace owners and admins can read the audit log.',
+        });
+      },
+    });
+    const { data } = layer(api);
+    const log = await data.audit.openLog('acme');
+    await expect.poll(() => log.getSnapshot().status).toBe('forbidden');
+    expect(log.getSnapshot().message).toBe('Only workspace owners and admins can read the audit log.');
+    log.dispose();
   });
 });
 

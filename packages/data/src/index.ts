@@ -93,6 +93,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
+import type { AuditLog } from './audit/log.ts';
 import { createAuth } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
 import { createRecordFactsStore, type RecordFacts } from './records/facts.ts';
@@ -344,6 +345,12 @@ export type {
   WorkspaceSecurity,
   ActivityPage,
   SecurityActivity,
+  AuditChange,
+  AuditEntryView,
+  AuditKind,
+  AuditPerson,
+  AuditTarget,
+  AuditValue,
   Role,
   RemovalPreview,
   RoleOption,
@@ -398,6 +405,7 @@ export type {
   RoutingReportState,
   RoutingReportSurface,
 } from './routing/reports.ts';
+export type { AuditLog, AuditLogState, AuditLogStatus } from './audit/log.ts';
 export type { PageRulesHeld } from './routing/page-rules.ts';
 export type {
   EmailPreference,
@@ -438,6 +446,15 @@ export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
+/** History's kinds of change (spec 0046), with no Zod: which kind each listed action is, for Workspace changes. */
+export {
+  AUDIT_KIND_NAMES,
+  AUDIT_KINDS,
+  AUDIT_NOT_LISTED,
+  auditKindOf,
+  type AuditKindName,
+  type ListedAuditAction,
+} from '@crm/contracts/audit-kinds';
 // A schedule's week as words (spec 0035): plain, no Zod, the one summary the screens and the server's notices share.
 export { clockLabel, weekSummary } from '@crm/contracts/hours';
 export {
@@ -3141,6 +3158,18 @@ export function createDataLayer({
           send: () => call((options) => api.rotations.delete({ workspace, rotationId, mutationId: mintId() }, options)),
           ...shownDrop(rotationLists.items(workspace), rotationId),
         }),
+    },
+    audit: {
+      /**
+       * Settings › History › Workspace changes (spec 0046): one paged read of the workspace's audit log, its first
+       * page started at once (the route's loader opens it). Loaded with `import()`, never live, never in the record
+       * store: each visit opens it afresh, and the screen retains it while shown (let go, it aborts and stops).
+       */
+      openLog: async (workspace: string): Promise<AuditLog> =>
+        (await import('./audit/log.ts')).openAuditLog(
+          { list: (input, signal) => call((options) => api.audit.list(input, options), signal) },
+          workspace,
+        ),
     },
     routing: {
       /**

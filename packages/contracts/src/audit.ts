@@ -155,7 +155,7 @@ export type AuditChange = z.infer<typeof AuditChange>;
 const NoParams = z.strictObject({});
 
 /** What every entry carries beside its action, target and params. */
-const entry = <A extends readonly [string, ...string[]], T extends z.ZodType, P extends z.ZodType>(
+const entry = <const A extends readonly [string, ...string[]], T extends z.ZodType, P extends z.ZodType>(
   actions: A,
   target: T,
   params: P,
