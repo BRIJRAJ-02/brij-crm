@@ -54,7 +54,8 @@ export function websiteOf(text: string): string | undefined {
 }
 
 /**
- * True for an answer that says nothing: absent, null, blank text, or a phone holding only its country's dial code.
+ * True for an answer that says nothing: absent, null, blank text, or a phone holding nothing, a lone "+" or only its
+ * country's dial code.
  * A phone's digits after the code are an answer, however few, so a short number is refused as a number rather than
  * dropped as empty (QA Q82: "+112" with US was read as blank).
  */
@@ -66,8 +67,9 @@ export function isBlank(value: unknown): boolean {
     if (typeof number !== 'string') return true;
     const code = typeof country === 'string' ? DIAL_CODES.get(country) : undefined;
     if (code === undefined) return number.replace(/^\+\d{1,4}/, '').trim() === '';
-    const digits = number.replace(/\D/g, '');
-    return digits === '' || digits === code;
+    // Only nothing, a lone "+" or the code itself says nothing: letters such as "abc" are an answer, refused as a number.
+    const typed = number.trim();
+    return typed === '' || typed === '+' || number.replace(/\D/g, '') === code;
   }
   return false;
 }

@@ -74,6 +74,12 @@ describe('checkAnswers (spec 0023, AC-553, AC-556, AC-660)', () => {
     if (!short.ok) expect(Object.keys(short.fields)).toEqual(['phone']);
     const codeOnly = checkAnswers(form, { ...answers, phone: { number: '+1', country: 'US' } });
     expect(codeOnly.ok && !('phone' in codeOnly.answers)).toBe(true);
+    const plus = checkAnswers(form, { ...answers, phone: { number: ' + ', country: 'US' } });
+    expect(plus.ok && !('phone' in plus.answers)).toBe(true);
+    // Letters with no digits are an answer, and not a number: refused, never dropped as empty.
+    const letters = checkAnswers(form, { ...answers, phone: { number: 'abc', country: 'US' } });
+    expect(letters.ok).toBe(false);
+    if (!letters.ok) expect(Object.keys(letters.fields)).toEqual(['phone']);
     const required = checkAnswers(
       { language: 'en', questions: [{ key: 'phone', answerType: 'phone', required: true }] },
       { phone: { number: '+9112', country: 'IN' } },
