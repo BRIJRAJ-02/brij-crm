@@ -428,7 +428,8 @@ function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; r
         {/* The check of what is in effect is said after the label, as the item's description ("Current"). */}
         {(description !== undefined || isCurrent) && (
           <Text slot="description" className={description === undefined ? undefined : styles.description}>
-            {description}
+            {/* Its own element, so the shown words stay findable as they are ("Owner"), apart from "Current". */}
+            {description !== undefined && <span>{description}</span>}
             {isCurrent && (
               <VisuallyHidden>{description === undefined ? strings.current : ` ${strings.current}`}</VisuallyHidden>
             )}
