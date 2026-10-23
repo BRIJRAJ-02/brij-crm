@@ -4,7 +4,7 @@
 // answers named at the foot. Rows come as one flat list (`items`, long and
 // async, virtualised) or in sections under headings (`sections`, the command
 // menu's Recent, Records, Views, Pages, Settings and Actions).
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -27,7 +27,14 @@ export interface PaletteItem {
   readonly leading?: ReactNode;
   /** An action's shortcut, written with Mac symbols. */
   readonly kbd?: string;
-  /** What is in effect now (the current theme): a check at the end, read as "Current". */
+  /**
+   * The choice this row is one option of ("Theme"): a choice's rows are drawn
+   * together, as a group of their own joined to their section's rows (named
+   * after the choice, or after the section when they come first in it), and
+   * each reads as a radio item, checked or not (`isChecked`).
+   */
+  readonly choice?: string;
+  /** The option in effect now (the theme in use): a check at the end. With `choice`, screen readers hear it checked. */
   readonly isChecked?: boolean;
 }
 
@@ -103,14 +110,32 @@ export function CommandPalette(props: CommandPaletteProps) {
     onSearch(next);
   };
   const searchProps = { label: searchLabel, onSearch: search, ...(placeholder === undefined ? {} : { placeholder }) };
+  // Enter pressed before any row came in, while a section's search was still out: it chooses the first row once
+  // that search is in, for the same text (AC-1097, the top row when none is highlighted). New text, or any other
+  // key, drops it, and so does an answer with no rows.
+  const heldEnter = useRef<string | undefined>(undefined);
   const close = (item: PaletteItem) => {
+    heldEnter.current = undefined;
     onAction(item);
     onOpenChange(false);
   };
+  const { sections: given } = props;
+  useEffect(() => {
+    const held = heldEnter.current;
+    if (held === undefined || given === undefined) return;
+    if (held !== query) {
+      heldEnter.current = undefined;
+      return;
+    }
+    if (given.some((section) => section.status === 'searching')) return;
+    heldEnter.current = undefined;
+    const first = given.flatMap((section) => section.items)[0];
+    if (first !== undefined) close(first);
+  });
 
   let list: ReactNode;
   let announcer: ReactNode = null;
-  let chooseFirst: ((event: KeyboardEvent<HTMLDivElement>) => void) | undefined;
+  let chooseOnEnter: ((event: KeyboardEvent<HTMLDivElement>) => void) | undefined;
   if (props.sections !== undefined) {
     const { sections, onRetry } = props;
     const shown = sections.filter((section) => section.items.length > 0 || section.status !== undefined);
@@ -127,15 +152,23 @@ export function CommandPalette(props: CommandPaletteProps) {
         }
       }
     };
-    // Enter with no row highlighted (the rows came in after the typing, past a "Searching…" row) chooses the first one.
+    // Enter in the field chooses the highlighted row, read from the rows themselves: React Aria names it to the
+    // field (aria-activedescendant) only half a second after a key, so the field can still name no row, or one
+    // from the text before. With no row highlighted (the rows came in after the typing, past a "Searching…"
+    // row), Enter chooses the first row; with none yet, it waits for the search still out (`heldEnter`).
     const first = shown.flatMap((section) => section.items)[0];
-    chooseFirst = (event) => {
-      const target = event.target;
-      if (event.key !== 'Enter' || first === undefined || !(target instanceof HTMLInputElement)) return;
-      if ((target.getAttribute('aria-activedescendant') ?? '') !== '') return;
+    chooseOnEnter = (event) => {
+      if (event.key !== 'Enter') {
+        heldEnter.current = undefined;
+        return;
+      }
+      if (event.nativeEvent.isComposing || !(event.target instanceof HTMLInputElement)) return;
       event.preventDefault();
       event.stopPropagation();
-      close(first);
+      const highlighted = event.currentTarget.querySelector('[data-focused][data-key]')?.getAttribute('data-key');
+      if (highlighted !== undefined && highlighted !== null) choose(highlighted);
+      else if (first !== undefined) close(first);
+      else if (shown.some((section) => section.status === 'searching')) heldEnter.current = query;
     };
     list = (
       <Menu
@@ -145,25 +178,38 @@ export function CommandPalette(props: CommandPaletteProps) {
         emptyLabel={query.trim() === '' ? strings.noResults : strings.nothingMatches(query.trim())}
         onAction={choose}
       >
-        {shown.map((section) => (
-          <MenuSection key={section.id} label={section.label}>
-            {section.items.map((item) => (
-              <MenuItem key={item.id} id={item.id} {...rowLook(item)}>
-                {item.name}
-              </MenuItem>
-            ))}
-            {section.status === 'searching' && (
-              <MenuItem key={STATUS_KEY + section.id} id={STATUS_KEY + section.id} isPending>
-                {strings.searching}
-              </MenuItem>
-            )}
-            {section.status === 'failed' && (
-              <MenuItem key={STATUS_KEY + section.id} id={STATUS_KEY + section.id} icon="refresh-cw">
-                {strings.failed}
-              </MenuItem>
-            )}
-          </MenuSection>
-        ))}
+        {shown.flatMap((section) =>
+          groupsOf(section.items, section.status !== undefined).map((group, index, groups) => (
+            // The section's first group carries its heading; each group after it is joined to it, named for screen readers.
+            <MenuSection
+              key={`${section.id}:${String(index)}`}
+              label={index === 0 ? section.label : (group.choice ?? section.label)}
+              {...(index === 0 ? {} : { isJoined: true })}
+              {...(group.choice === undefined
+                ? {}
+                : {
+                    selectionMode: 'single',
+                    selectedKeys: group.items.flatMap((item) => (item.isChecked === true ? [item.id] : [])),
+                  })}
+            >
+              {group.items.map((item) => (
+                <MenuItem key={item.id} id={item.id} {...rowLook(item)}>
+                  {item.name}
+                </MenuItem>
+              ))}
+              {index === groups.length - 1 && section.status === 'searching' && (
+                <MenuItem key={STATUS_KEY + section.id} id={STATUS_KEY + section.id} isPending>
+                  {strings.searching}
+                </MenuItem>
+              )}
+              {index === groups.length - 1 && section.status === 'failed' && (
+                <MenuItem key={STATUS_KEY + section.id} id={STATUS_KEY + section.id} icon="refresh-cw">
+                  {strings.failed}
+                </MenuItem>
+              )}
+            </MenuSection>
+          )),
+        )}
       </Menu>
     );
     announcer = (
@@ -219,7 +265,7 @@ export function CommandPalette(props: CommandPaletteProps) {
       }
     >
       {/* Only the field's own Enter reaches here; the rows' keys stay with the menu. */}
-      <div className={styles.list} {...(chooseFirst === undefined ? {} : { onKeyDownCapture: chooseFirst })}>
+      <div className={styles.list} onKeyDownCapture={chooseOnEnter}>
         {list}
         {announcer}
       </div>
@@ -227,7 +273,10 @@ export function CommandPalette(props: CommandPaletteProps) {
   );
 }
 
-/** A row's look as a MenuItem takes it: its leading piece, second line, kind, shortcut and check. */
+/**
+ * A row's look as a MenuItem takes it: its leading piece, second line, kind, shortcut and check. A choice's row
+ * draws its check at the end, from the choice's selection, so screen readers hear it.
+ */
 function rowLook(item: PaletteItem) {
   return {
     ...(item.icon === undefined ? {} : { icon: item.icon }),
@@ -235,8 +284,33 @@ function rowLook(item: PaletteItem) {
     ...(item.description === undefined ? {} : { description: item.description }),
     ...(item.kind === undefined ? {} : { meta: item.kind }),
     ...(item.kbd === undefined ? {} : { kbd: item.kbd }),
-    ...(item.isChecked === true ? { isChecked: true } : {}),
+    ...(item.choice !== undefined ? { isCheckAtEnd: true } : item.isChecked === true ? { isChecked: true } : {}),
   };
+}
+
+/** One run of a section's rows: plain rows, or the options of one choice. */
+interface RowGroup {
+  readonly choice: string | undefined;
+  readonly items: readonly PaletteItem[];
+}
+
+/**
+ * A section's rows in groups, in the order each group first shows: its plain rows together, and each choice's
+ * options together wherever the matching sorted them (Create rows, then the themes), so one choice is always one
+ * group. The status row ("Searching…", Try again) ends the section and is never an option, so a section with no
+ * rows, or whose rows end in a choice, gets an empty plain group to hold it.
+ */
+function groupsOf(items: readonly PaletteItem[], hasStatus: boolean): readonly RowGroup[] {
+  const groups = items.reduce<readonly RowGroup[]>((found, item) => {
+    const at = found.findIndex((group) => group.choice === item.choice);
+    return at === -1
+      ? [...found, { choice: item.choice, items: [item] }]
+      : found.map((group, index) => (index === at ? { choice: group.choice, items: [...group.items, item] } : group));
+  }, []);
+  const last = groups.at(-1);
+  return last === undefined || (hasStatus && last.choice !== undefined)
+    ? [...groups, { choice: undefined, items: [] }]
+    : groups;
 }
 
 /**

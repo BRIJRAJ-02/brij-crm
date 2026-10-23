@@ -98,8 +98,12 @@ export const Open: Story = {
     const menu = await openMenu();
     await expect(menu).toHaveAccessibleName('Column options');
     await expect(menu.querySelector('[data-danger]')).toHaveTextContent('Delete attribute');
-    // The sort in effect carries a check, named for screen readers.
-    await expect(menu.querySelector('[aria-label="Current"]')).not.toBeNull();
+    // The sort in effect carries a check, which screen readers hear after its label.
+    const sorted = [...menu.querySelectorAll('[role="menuitem"]')].find((item) =>
+      item.textContent.includes('ascending'),
+    );
+    await expect(sorted).toHaveAccessibleName('Sort ascending');
+    await expect(sorted).toHaveAccessibleDescription('Current');
   },
 };
 
@@ -128,6 +132,57 @@ export const PendingRow: Story = {
     if (!(ada instanceof HTMLElement)) throw new Error('no Ada row');
     await userEvent.click(ada);
     await waitFor(() => expect(args.onAction).toHaveBeenCalledWith('ada'));
+  },
+};
+
+/**
+ * A choice among plain actions (the command palette's themes under Actions): a
+ * group of its own joined to the one above, with no gap or heading of its own,
+ * whose items are radio items with the check at the end. Their icons line up
+ * with the actions' icons, and screen readers hear which one is checked.
+ */
+export const ChoiceAmongActions: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <MenuTrigger defaultOpen>
+        <Button icon="ellipsis" label="Actions" />
+        <Menu label="Actions" {...(args.onAction === undefined ? {} : { onAction: args.onAction })}>
+          <MenuSection label="Actions">
+            <MenuItem id="create" icon="plus">
+              Create a company
+            </MenuItem>
+          </MenuSection>
+          <MenuSection label="Theme" isJoined selectionMode="single" selectedKeys={['dark']}>
+            <MenuItem id="light" icon="sun" isCheckAtEnd>
+              Use light theme
+            </MenuItem>
+            <MenuItem id="dark" icon="moon" isCheckAtEnd>
+              Use dark theme
+            </MenuItem>
+          </MenuSection>
+        </Menu>
+      </MenuTrigger>
+    </Stage>
+  ),
+  play: async ({ args, userEvent }) => {
+    const menu = await openMenu();
+    const row = (name: string) => {
+      const found = [...menu.querySelectorAll('[role^="menuitem"]')].find((item) => item.textContent.includes(name));
+      if (!(found instanceof HTMLElement)) throw new Error(`no ${name} row`);
+      return found;
+    };
+    await expect(row('Use dark theme')).toHaveAttribute('role', 'menuitemradio');
+    await expect(row('Use dark theme')).toHaveAttribute('aria-checked', 'true');
+    await expect(row('Use light theme')).toHaveAttribute('aria-checked', 'false');
+    await expect(row('Create a company')).toHaveAttribute('role', 'menuitem');
+    await expect(menu.querySelectorAll('[role="group"]')[1]).toHaveAccessibleName('Theme');
+    // No check column before the choice's items: their icons line up with the action's.
+    const iconLeft = (name: string) => row(name).querySelector('svg')?.getBoundingClientRect().left;
+    await expect(iconLeft('Use light theme')).toBe(iconLeft('Create a company'));
+    // Choosing one is still an action.
+    await userEvent.click(row('Use light theme'));
+    await waitFor(() => expect(args.onAction).toHaveBeenCalledWith('light'));
   },
 };
 
