@@ -35,6 +35,7 @@
     "./booking": "./src/booking/index.ts",
     "./handles": "./src/booking/handles.ts",
     "./hours": "./src/booking/summary.ts",
+    "./zones": "./src/booking/zones.ts",
     "./emails": "./src/emails.ts",
     "./brand": "./src/brand.ts"
   },

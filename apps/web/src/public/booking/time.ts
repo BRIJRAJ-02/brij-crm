@@ -131,50 +131,8 @@ export function weekdayNames(locale: string): readonly { readonly short: string;
   });
 }
 
-/** The zone's offset as GMT says it: "GMT+4", "GMT+5:30". */
-export function offsetLabel(zone: string, at: number): string {
-  try {
-    return (
-      new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'shortOffset' })
-        .formatToParts(new Date(at))
-        .find((part) => part.type === 'timeZoneName')?.value ?? ''
-    );
-  } catch {
-    return '';
-  }
-}
-
-/** Zones Chrome still names by their old spelling (Asia/Calcutta), by their current name. */
-const RENAMED: Readonly<Record<string, string>> = Object.freeze({
-  'Asia/Calcutta': 'Asia/Kolkata',
-  'Asia/Katmandu': 'Asia/Kathmandu',
-  'Asia/Rangoon': 'Asia/Yangon',
-  'Asia/Saigon': 'Asia/Ho_Chi_Minh',
-  'Europe/Kiev': 'Europe/Kyiv',
-  'America/Godthab': 'America/Nuuk',
-  'Atlantic/Faeroe': 'Atlantic/Faroe',
-});
-
-/** A zone by its current name, for an old spelling some browsers still answer ("Asia/Calcutta" is "Asia/Kolkata"). */
-export const currentZone = (zone: string): string => RENAMED[zone] ?? zone;
-
-/** Whether a zone names a place: "Asia/Dubai" does, "UTC" and "Etc/GMT+4" don't. */
-const hasCity = (zone: string): boolean => zone.includes('/') && !zone.startsWith('Etc/');
-
-/** "Asia/Dubai" as a person names it, without its offset: "Dubai time"; a zone with no city keeps its name ("UTC"). */
-export function zoneName(zone: string): string {
-  if (!hasCity(zone)) return zone.replaceAll('_', ' ');
-  const city = currentZone(zone).split('/').pop()?.replaceAll('_', ' ') ?? zone;
-  return `${city} time`;
-}
-
-/** "Asia/Dubai" as a person says it: "Dubai time (GMT+4)"; a zone with no city keeps its name. */
-export function zoneDisplay(zone: string, at: number): string {
-  const name = zoneName(zone);
-  if (!hasCity(zone)) return name;
-  const offset = offsetLabel(zone, at);
-  return offset === '' ? name : `${name} (${offset})`;
-}
+// The zone's words live in contracts, so the server's emails say a zone as these pages do (QA Q78).
+export { currentZone, offsetLabel, zoneDisplay, zoneName } from '@crm/contracts/zones';
 
 /** Whether the locale writes times in 12 hours. */
 export function localeUses12h(locale: string): boolean {
