@@ -63,12 +63,15 @@ export interface OperatorApi {
   }) => Promise<OperatorUserPage>;
   readonly user: (userId: string, period: OperatorPeriod) => Promise<OperatorUserDetail>;
   readonly pages: (period: OperatorPeriod) => Promise<OperatorPages>;
-  readonly page: (pageId: string, period: OperatorPeriod) => Promise<OperatorPageDetail>;
+  readonly page: (workspaceId: string, pageId: string, period: OperatorPeriod) => Promise<OperatorPageDetail>;
   readonly site: (period: OperatorPeriod) => Promise<OperatorSite>;
 }
 
 /** How long an answer is shown before it is read again behind it, when asked for again. */
 export const OPERATOR_FRESH_MS = 60_000;
+
+/** The users list's page size (the contract's `OPERATOR_USERS_PAGE`). */
+const OPERATOR_USERS_PAGE_SIZE = 50;
 
 /** How many questions the store keeps; the least recently asked go first. */
 const KEPT = 40;
@@ -88,6 +91,8 @@ interface Entry<T> {
 /** The store, one per data layer. `now` is passed in for tests. */
 export function createOperatorStore(api: OperatorApi, now: () => number = Date.now) {
   const entries = new Map<string, Entry<unknown>>();
+  /** Each users list's cursor to its next page, by its entry's key: dropped with the entry. */
+  const cursors = new Map<string, string | undefined>();
 
   /** The entry for `key`, made and read the first time: kept for the app load, the newest `KEPT` of them. */
   const entryOf = <T>(
@@ -155,7 +160,10 @@ export function createOperatorStore(api: OperatorApi, now: () => number = Date.n
     // Never past `KEPT`: the least recently asked go first, unless a screen still holds them.
     for (const [old, kept] of entries) {
       if (entries.size <= KEPT) break;
-      if (kept.listeners.size === 0) entries.delete(old);
+      if (kept.listeners.size === 0) {
+        entries.delete(old);
+        cursors.delete(old);
+      }
     }
     refresh(false);
     return entry;
@@ -180,9 +188,6 @@ export function createOperatorStore(api: OperatorApi, now: () => number = Date.n
     return entry.held;
   }
 
-  /** Each users list's cursor to its next page, by key. */
-  const cursors = new Map<string, string | undefined>();
-
   /** The users list for a period and search, its pages kept together. */
   function usersList(period: OperatorPeriod, q: string): OperatorUsersHeld {
     const key = `users:${period}:${q}`;
@@ -206,7 +211,8 @@ export function createOperatorStore(api: OperatorApi, now: () => number = Date.n
       isShown,
       (state, error) => ({ ...state, status: 'error', error }),
     );
-    freshen(entry, isShown);
+    // A list grown past its first page isn't read again behind itself: that would cut it back to one page.
+    if (entry.state.users.length <= OPERATOR_USERS_PAGE_SIZE) freshen(entry, isShown);
     const set = (next: OperatorUsersState) => {
       entry.state = next;
       for (const listener of [...entry.listeners]) listener();
@@ -216,9 +222,12 @@ export function createOperatorStore(api: OperatorApi, now: () => number = Date.n
       const state = entry.state;
       if (state.status !== 'ready' || state.isLoadingMore || entry.busy || after === undefined) return;
       const { error: _dropped, ...shown } = state;
+      // Busy while it reads, so no refresh starts under it and lands its first page on the grown list.
+      entry.busy = true;
       set({ ...shown, isLoadingMore: true });
       api.users({ period, after, ...search }).then(
         (page) => {
+          entry.busy = false;
           cursors.set(key, page.next);
           set({
             ...entry.state,
@@ -227,7 +236,10 @@ export function createOperatorStore(api: OperatorApi, now: () => number = Date.n
             isLoadingMore: false,
           });
         },
-        (error: unknown) => set({ ...entry.state, isLoadingMore: false, error: toDataError(error) }),
+        (error: unknown) => {
+          entry.busy = false;
+          set({ ...entry.state, isLoadingMore: false, error: toDataError(error) });
+        },
       );
     };
     return { ...entry.held, more };
@@ -238,7 +250,8 @@ export function createOperatorStore(api: OperatorApi, now: () => number = Date.n
     users: usersList,
     user: (userId: string, period: OperatorPeriod) => read(`user:${userId}:${period}`, () => api.user(userId, period)),
     pages: (period: OperatorPeriod) => read(`pages:${period}`, () => api.pages(period)),
-    page: (pageId: string, period: OperatorPeriod) => read(`page:${pageId}:${period}`, () => api.page(pageId, period)),
+    page: (workspaceId: string, pageId: string, period: OperatorPeriod) =>
+      read(`page:${workspaceId}:${pageId}:${period}`, () => api.page(workspaceId, pageId, period)),
     site: (period: OperatorPeriod) => read(`site:${period}`, () => api.site(period)),
   };
 }

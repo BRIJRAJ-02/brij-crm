@@ -396,6 +396,8 @@ export const bookings = pgTable(
     uniqueIndex('bookings_manage_token').on(t.manageTokenHash),
     // The bookings made in a range, per workspace (spec 0047's counts).
     index('bookings_created').on(t.workspaceId, t.createdAt),
+    // The bookings each host was given in a range (spec 0047): an index only count per host.
+    index('bookings_host_created').on(t.workspaceId, t.hostMemberId, t.createdAt),
     // The page's bookings list, newest first.
     index('bookings_by_page').on(t.workspaceId, t.pageId, t.startsAt.desc(), t.id),
     // A host's confirmed bookings in a range (the slots read; the exclusion constraint's index serves overlap).

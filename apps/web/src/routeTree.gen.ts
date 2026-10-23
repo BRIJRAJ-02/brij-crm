@@ -71,11 +71,11 @@ import { Route as WSlugObjectsObjectRecordIdTabRouteImport } from './routes/w.$s
 import { Route as WSlugObjectsObjectImportsImportIdRouteImport } from './routes/w.$slug.objects.$object_.imports.$importId.tsx'
 import { Route as WSlugObjectsObjectViewsViewIdRouteImport } from './routes/w.$slug.objects.$object_.views.$viewId.tsx'
 import { Route as WSlugSettingsAdminBookingPagesIndexRouteImport } from './routes/w.$slug.settings.admin.booking-pages.index.tsx'
-import { Route as WSlugSettingsAdminBookingPagesPageIdRouteImport } from './routes/w.$slug.settings.admin.booking-pages.$pageId.tsx'
 import { Route as WSlugSettingsAdminUsersIndexRouteImport } from './routes/w.$slug.settings.admin.users.index.tsx'
 import { Route as WSlugSettingsAdminUsersUserIdRouteImport } from './routes/w.$slug.settings.admin.users.$userId.tsx'
 import { Route as WSlugSettingsObjectsObjectIndexRouteImport } from './routes/w.$slug.settings.objects.$object.index.tsx'
 import { Route as WSlugSettingsObjectsObjectTabRouteImport } from './routes/w.$slug.settings.objects.$object.$tab.tsx'
+import { Route as WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRouteImport } from './routes/w.$slug.settings.admin.booking-pages.$workspaceId.$pageId.tsx'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -413,12 +413,6 @@ const WSlugSettingsAdminBookingPagesIndexRoute =
     path: '/admin/booking-pages/',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
-const WSlugSettingsAdminBookingPagesPageIdRoute =
-  WSlugSettingsAdminBookingPagesPageIdRouteImport.update({
-    id: '/admin/booking-pages/$pageId',
-    path: '/admin/booking-pages/$pageId',
-    getParentRoute: () => WSlugSettingsRoute,
-  } as any)
 const WSlugSettingsAdminUsersIndexRoute =
   WSlugSettingsAdminUsersIndexRouteImport.update({
     id: '/admin/users/',
@@ -441,6 +435,12 @@ const WSlugSettingsObjectsObjectTabRoute =
   WSlugSettingsObjectsObjectTabRouteImport.update({
     id: '/objects/$object/$tab',
     path: '/objects/$object/$tab',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
+const WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRoute =
+  WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRouteImport.update({
+    id: '/admin/booking-pages/$workspaceId/$pageId',
+    path: '/admin/booking-pages/$workspaceId/$pageId',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
 
@@ -505,13 +505,13 @@ export interface FileRoutesByFullPath {
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object/imports/$importId': typeof WSlugObjectsObjectImportsImportIdRoute
   '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
-  '/w/$slug/settings/admin/booking-pages/$pageId': typeof WSlugSettingsAdminBookingPagesPageIdRoute
   '/w/$slug/settings/admin/users/$userId': typeof WSlugSettingsAdminUsersUserIdRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
   '/w/$slug/objects/$object/$recordId/': typeof WSlugObjectsObjectRecordIdIndexRoute
   '/w/$slug/settings/admin/booking-pages/': typeof WSlugSettingsAdminBookingPagesIndexRoute
   '/w/$slug/settings/admin/users/': typeof WSlugSettingsAdminUsersIndexRoute
   '/w/$slug/settings/objects/$object/': typeof WSlugSettingsObjectsObjectIndexRoute
+  '/w/$slug/settings/admin/booking-pages/$workspaceId/$pageId': typeof WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -570,13 +570,13 @@ export interface FileRoutesByTo {
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object/imports/$importId': typeof WSlugObjectsObjectImportsImportIdRoute
   '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
-  '/w/$slug/settings/admin/booking-pages/$pageId': typeof WSlugSettingsAdminBookingPagesPageIdRoute
   '/w/$slug/settings/admin/users/$userId': typeof WSlugSettingsAdminUsersUserIdRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
   '/w/$slug/objects/$object/$recordId': typeof WSlugObjectsObjectRecordIdIndexRoute
   '/w/$slug/settings/admin/booking-pages': typeof WSlugSettingsAdminBookingPagesIndexRoute
   '/w/$slug/settings/admin/users': typeof WSlugSettingsAdminUsersIndexRoute
   '/w/$slug/settings/objects/$object': typeof WSlugSettingsObjectsObjectIndexRoute
+  '/w/$slug/settings/admin/booking-pages/$workspaceId/$pageId': typeof WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -640,13 +640,13 @@ export interface FileRoutesById {
   '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object_/imports/$importId': typeof WSlugObjectsObjectImportsImportIdRoute
   '/w/$slug/objects/$object_/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
-  '/w/$slug/settings/admin/booking-pages/$pageId': typeof WSlugSettingsAdminBookingPagesPageIdRoute
   '/w/$slug/settings/admin/users/$userId': typeof WSlugSettingsAdminUsersUserIdRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
   '/w/$slug/objects/$object_/$recordId/': typeof WSlugObjectsObjectRecordIdIndexRoute
   '/w/$slug/settings/admin/booking-pages/': typeof WSlugSettingsAdminBookingPagesIndexRoute
   '/w/$slug/settings/admin/users/': typeof WSlugSettingsAdminUsersIndexRoute
   '/w/$slug/settings/objects/$object/': typeof WSlugSettingsObjectsObjectIndexRoute
+  '/w/$slug/settings/admin/booking-pages/$workspaceId/$pageId': typeof WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -711,13 +711,13 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/objects/$object/imports/$importId'
     | '/w/$slug/objects/$object/views/$viewId'
-    | '/w/$slug/settings/admin/booking-pages/$pageId'
     | '/w/$slug/settings/admin/users/$userId'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object/$recordId/'
     | '/w/$slug/settings/admin/booking-pages/'
     | '/w/$slug/settings/admin/users/'
     | '/w/$slug/settings/objects/$object/'
+    | '/w/$slug/settings/admin/booking-pages/$workspaceId/$pageId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -776,13 +776,13 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/objects/$object/imports/$importId'
     | '/w/$slug/objects/$object/views/$viewId'
-    | '/w/$slug/settings/admin/booking-pages/$pageId'
     | '/w/$slug/settings/admin/users/$userId'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object/$recordId'
     | '/w/$slug/settings/admin/booking-pages'
     | '/w/$slug/settings/admin/users'
     | '/w/$slug/settings/objects/$object'
+    | '/w/$slug/settings/admin/booking-pages/$workspaceId/$pageId'
   id:
     | '__root__'
     | '/'
@@ -845,13 +845,13 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object_/$recordId/$tab'
     | '/w/$slug/objects/$object_/imports/$importId'
     | '/w/$slug/objects/$object_/views/$viewId'
-    | '/w/$slug/settings/admin/booking-pages/$pageId'
     | '/w/$slug/settings/admin/users/$userId'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object_/$recordId/'
     | '/w/$slug/settings/admin/booking-pages/'
     | '/w/$slug/settings/admin/users/'
     | '/w/$slug/settings/objects/$object/'
+    | '/w/$slug/settings/admin/booking-pages/$workspaceId/$pageId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1303,13 +1303,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsAdminBookingPagesIndexRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
-    '/w/$slug/settings/admin/booking-pages/$pageId': {
-      id: '/w/$slug/settings/admin/booking-pages/$pageId'
-      path: '/admin/booking-pages/$pageId'
-      fullPath: '/w/$slug/settings/admin/booking-pages/$pageId'
-      preLoaderRoute: typeof WSlugSettingsAdminBookingPagesPageIdRouteImport
-      parentRoute: typeof WSlugSettingsRoute
-    }
     '/w/$slug/settings/admin/users/': {
       id: '/w/$slug/settings/admin/users/'
       path: '/admin/users'
@@ -1336,6 +1329,13 @@ declare module '@tanstack/react-router' {
       path: '/objects/$object/$tab'
       fullPath: '/w/$slug/settings/objects/$object/$tab'
       preLoaderRoute: typeof WSlugSettingsObjectsObjectTabRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/admin/booking-pages/$workspaceId/$pageId': {
+      id: '/w/$slug/settings/admin/booking-pages/$workspaceId/$pageId'
+      path: '/admin/booking-pages/$workspaceId/$pageId'
+      fullPath: '/w/$slug/settings/admin/booking-pages/$workspaceId/$pageId'
+      preLoaderRoute: typeof WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
   }
@@ -1399,12 +1399,12 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsBookingPagesIndexRoute: typeof WSlugSettingsBookingPagesIndexRoute
   WSlugSettingsFormsIndexRoute: typeof WSlugSettingsFormsIndexRoute
   WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
-  WSlugSettingsAdminBookingPagesPageIdRoute: typeof WSlugSettingsAdminBookingPagesPageIdRoute
   WSlugSettingsAdminUsersUserIdRoute: typeof WSlugSettingsAdminUsersUserIdRoute
   WSlugSettingsObjectsObjectTabRoute: typeof WSlugSettingsObjectsObjectTabRoute
   WSlugSettingsAdminBookingPagesIndexRoute: typeof WSlugSettingsAdminBookingPagesIndexRoute
   WSlugSettingsAdminUsersIndexRoute: typeof WSlugSettingsAdminUsersIndexRoute
   WSlugSettingsObjectsObjectIndexRoute: typeof WSlugSettingsObjectsObjectIndexRoute
+  WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRoute: typeof WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRoute
 }
 
 const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
@@ -1433,14 +1433,14 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsBookingPagesIndexRoute: WSlugSettingsBookingPagesIndexRoute,
   WSlugSettingsFormsIndexRoute: WSlugSettingsFormsIndexRoute,
   WSlugSettingsObjectsIndexRoute: WSlugSettingsObjectsIndexRoute,
-  WSlugSettingsAdminBookingPagesPageIdRoute:
-    WSlugSettingsAdminBookingPagesPageIdRoute,
   WSlugSettingsAdminUsersUserIdRoute: WSlugSettingsAdminUsersUserIdRoute,
   WSlugSettingsObjectsObjectTabRoute: WSlugSettingsObjectsObjectTabRoute,
   WSlugSettingsAdminBookingPagesIndexRoute:
     WSlugSettingsAdminBookingPagesIndexRoute,
   WSlugSettingsAdminUsersIndexRoute: WSlugSettingsAdminUsersIndexRoute,
   WSlugSettingsObjectsObjectIndexRoute: WSlugSettingsObjectsObjectIndexRoute,
+  WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRoute:
+    WSlugSettingsAdminBookingPagesWorkspaceIdPageIdRoute,
 }
 
 const WSlugSettingsRouteWithChildren = WSlugSettingsRoute._addFileChildren(

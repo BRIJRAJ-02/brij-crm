@@ -41,7 +41,7 @@ function ConsoleError() {
     <SettingsFailed
       title={strings.website}
       heading={strings.failedTitle}
-      text={strings.failedTitle}
+      text={strings.failedText}
       onRetry={() => void router.invalidate()}
     />
   );

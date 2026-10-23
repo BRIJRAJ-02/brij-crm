@@ -26,7 +26,7 @@ Spec 0047, slice 1 of the operator console (scope #39). Read only analytics acro
 - **Main task**: see which pages people look at and which convert; open one for its days.
 - **Leaves out**: who visited or booked, and changing a page.
 
-## One booking page (`/w/$slug/settings/admin/booking-pages/$pageId`, PageScreen)
+## One booking page (`/w/$slug/settings/admin/booking-pages/$workspaceId/$pageId`, PageScreen)
 
 - **Purpose**: one page's facts and its figures against the period before, by day.
 - **Main task**: judge how one page is doing.

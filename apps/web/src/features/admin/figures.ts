@@ -99,15 +99,17 @@ export function rateStat(
   period: OperatorPeriod,
   format: (part: number, whole: number) => string,
 ) {
+  const value = format(part.value, whole.value);
+  const before = format(part.before, whole.before);
   const now = whole.value === 0 ? 0 : part.value / whole.value;
   const then = whole.before === 0 ? 0 : part.before / whole.before;
   return {
     id,
     label,
-    value: format(part.value, whole.value),
-    comparison: strings.period.before(format(part.before, whole.before), period),
-    // Nothing to compare with when the period before had none: no arrow.
-    trend: whole.before === 0 ? 'same' : now > then ? 'up' : now < then ? 'down' : 'same',
+    value,
+    comparison: strings.period.before(before, period),
+    // No arrow with nothing to compare against, nor between two figures that read the same.
+    trend: whole.before === 0 || value === before ? 'same' : now > then ? 'up' : now < then ? 'down' : 'same',
   } as const;
 }
 

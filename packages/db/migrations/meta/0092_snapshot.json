@@ -1,5 +1,5 @@
 {
-  "id": "856ee3c7-df97-49ca-a4a3-52209e11da8c",
+  "id": "00589557-174e-4d41-af03-d60e6fef9dcd",
   "prevId": "6cabf1ce-2685-4631-a80a-ddfe941e450f",
   "version": "7",
   "dialect": "postgresql",
@@ -3016,6 +3016,33 @@
           "columns": [
             {
               "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bookings_host_created": {
+          "name": "bookings_host_created",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "host_member_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -12640,6 +12667,34 @@
             },
             {
               "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"records\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "records_created_by": {
+          "name": "records_created_by",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_by_member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

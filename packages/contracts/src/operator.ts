@@ -252,7 +252,7 @@ export const OperatorUserInput = z.object({ userId: Uuid, period: OperatorPeriod
 export type OperatorUserInput = z.infer<typeof OperatorUserInput>;
 
 /** One booking page, in a period. */
-export const OperatorPageInput = z.object({ pageId: Uuid, period: OperatorPeriod });
+export const OperatorPageInput = z.object({ workspaceId: Uuid, pageId: Uuid, period: OperatorPeriod });
 /** One booking page, in a period. */
 export type OperatorPageInput = z.infer<typeof OperatorPageInput>;
 

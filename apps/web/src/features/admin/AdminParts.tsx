@@ -6,12 +6,12 @@
 import { isDataError, type DataLayer, type Me, type OperatorPeriod } from '@crm/data';
 import { useAccountSecurity } from '@crm/data/react';
 import { BarStrip, Button, Callout, Card, EmptyState, Link, Modal, SegmentedControl, useFormatSettings } from '@crm/ui';
-import { useMatch, useNavigate, useParams, useRouter } from '@tanstack/react-router';
+import { useMatch, useNavigate, useParams } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { useStepUp } from '../settings/StepUp.tsx';
 import { securitySettingsHref } from '../settings/nav.ts';
 import { SettingsFailed, SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
-import { DEFAULT_PERIOD, formatters, PERIOD_LENGTH, PERIODS } from './figures.ts';
+import { DEFAULT_PERIOD, formatters, PERIOD_LENGTH, PERIODS, type Formatters } from './figures.ts';
 import { strings } from './strings.ts';
 
 /** Whether the signed in person is a super admin, as `me.get` said (the server checks every read again). */
@@ -77,35 +77,24 @@ export function DayChart({
   /** A bar's words in place of "<day>: <count> <unit>". */
   readonly barLabel?: (day: string, value: number) => string;
   /** The line over the chart in place of its total and busiest day. */
-  readonly summary?: (days: readonly ChartDay[]) => string;
+  readonly summary?: (days: readonly ChartDay[], format: Formatters) => string;
 }) {
   const { locale } = useFormatSettings();
   const format = formatters(locale);
   const shown = days ?? Array.from({ length: PERIOD_LENGTH[period] }, (_, index) => ({ day: String(index), value: 0 }));
   const first = days?.[0];
-  const busiest = days?.reduce<ChartDay | undefined>(
-    (best, each) => (best === undefined || each.value > best.value ? each : best),
-    undefined,
-  );
-  const total = days?.reduce((sum, each) => sum + each.value, 0) ?? 0;
-  const description =
-    days === undefined
-      ? undefined
-      : summary !== undefined
-        ? summary(days)
-        : busiest === undefined || total === 0
-          ? strings.chartQuiet
-          : strings.chartSummary(format.count(total), format.day(busiest.day), format.count(busiest.value));
+  const description = days === undefined ? undefined : (summary ?? defaultSummary)(days, format);
   return (
     <Card title={title} isBusy={days === undefined} {...(description === undefined ? {} : { description })}>
       <BarStrip
         size="chart"
         label={title}
+        isLoading={days === undefined}
         bars={shown.map((each) => ({
           id: each.day,
           label:
             days === undefined
-              ? title
+              ? ''
               : barLabel !== undefined
                 ? barLabel(format.day(each.day), each.value)
                 : strings.dayBar(format.day(each.day), format.count(each.value), unit),
@@ -115,6 +104,19 @@ export function DayChart({
       />
     </Card>
   );
+}
+
+/** A chart's line in words: its total, and its busiest day when one day stands out (not when every busy day ties). */
+function defaultSummary(days: readonly ChartDay[], format: Formatters): string {
+  const busy = days.filter((each) => each.value > 0);
+  const total = busy.reduce((sum, each) => sum + each.value, 0);
+  if (total === 0) return strings.chartQuiet;
+  const top = Math.max(...busy.map((each) => each.value));
+  const peaks = busy.filter((each) => each.value === top);
+  const peak = peaks[0];
+  return peaks.length > 1 || peak === undefined || busy.length === 1
+    ? strings.chartTotal(format.count(total))
+    : strings.chartSummary(format.count(total), format.day(peak.day), format.count(top));
 }
 
 /**
@@ -131,7 +133,8 @@ export function AdminFailed({
   readonly title: string;
   readonly error: unknown;
   readonly data: DataLayer;
-  readonly onRetry: () => void;
+  /** The screen's Retry, from `useAdminRetry`: it remembers a confirm that didn't open the pages. */
+  readonly onRetry: AdminRetry;
 }) {
   const { slug = '' } = useParams({ strict: false });
   if (isDataError(error) && error.code === 'NOT_FOUND') return <SettingsMissing backTo="home" />;
@@ -151,7 +154,7 @@ export function AdminFailed({
   if (isDataError(error) && error.code === 'SIGN_IN_AGAIN') {
     return (
       <SettingsPage title={title}>
-        <ConfirmItsYou data={data} onConfirmed={onRetry} />
+        <ConfirmItsYou data={data} retry={onRetry} />
       </SettingsPage>
     );
   }
@@ -160,18 +163,35 @@ export function AdminFailed({
       title={title}
       heading={strings.failedTitle}
       text={isDataError(error) ? error.message : strings.failedTitle}
-      onRetry={onRetry}
+      onRetry={() => onRetry.run(false)}
     />
   );
 }
 
+/** A screen's Retry: reads again, and remembers whether it followed a confirm, so a refusal after it says so. */
+export interface AdminRetry {
+  readonly run: (afterConfirm: boolean) => void;
+  /** The last Retry followed a confirm that, read again, still didn't open the pages. */
+  readonly afterConfirm: boolean;
+}
+
+/** The Retry a screen hands AdminFailed, over its held read's `retry`. */
+export function useAdminRetry(retry: () => void): AdminRetry {
+  const [afterConfirm, setAfterConfirm] = useState(false);
+  return {
+    afterConfirm,
+    run: (confirmed) => {
+      setAfterConfirm(confirmed);
+      retry();
+    },
+  };
+}
+
 /** A session not proven with the app lately: a code from the app, in a dialog, then the page reads again. */
-function ConfirmItsYou({ data, onConfirmed }: { readonly data: DataLayer; readonly onConfirmed: () => void }) {
-  const router = useRouter();
+function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly retry: AdminRetry }) {
   const security = useAccountSecurity(data.account.security());
   const [isOpen, setOpen] = useState(false);
   const [isChecking, setChecking] = useState(false);
-  const [stillHeld, setStillHeld] = useState(false);
   const commit = useRef<() => void>(() => undefined);
   const stepUp = useStepUp(data, security, { secondFactor: true, onComplete: () => commit.current() });
   const live = useRef(true);
@@ -184,22 +204,20 @@ function ConfirmItsYou({ data, onConfirmed }: { readonly data: DataLayer; readon
   const isMounted = () => live.current;
   const confirm = async () => {
     setChecking(true);
-    setStillHeld(false);
     const proven = await stepUp.prove();
     if (!isMounted()) return;
     setChecking(false);
     if (!proven) return;
     setOpen(false);
-    onConfirmed();
-    await router.invalidate();
-    // Still here once the page read again: the code didn't count for these pages.
-    if (isMounted()) setStillHeld(true);
+    // The page reads again; if the read still refuses, this prompt comes back saying so.
+    retry.run(true);
   };
   useEffect(() => {
     commit.current = () => {
       if (!isChecking) void confirm();
     };
   });
+  const stillHeld = retry.afterConfirm;
   return (
     <EmptyState
       icon="shield-check"

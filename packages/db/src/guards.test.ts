@@ -357,7 +357,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_operator_members(uuid[], uuid[], date, date)',
         'crm_operator_totals(date, date)',
         'crm_operator_daily(date, date)',
-        'crm_operator_pages(date, date, uuid)',
+        'crm_operator_pages(date, date, uuid, uuid)',
         'crm_operator_page_days(date, date, uuid, uuid)',
       ],
       ['app', 'app', 'app', 'app', 'app', 'app'],

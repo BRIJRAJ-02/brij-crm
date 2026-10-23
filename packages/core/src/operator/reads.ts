@@ -173,6 +173,12 @@ const pageDays = (db: Database, from: string, to: string, page?: { workspaceId: 
       from crm_operator_page_days(${from}::date, ${to}::date, ${page?.workspaceId ?? null}::uuid, ${page?.pageId ?? null}::uuid)`,
   );
 
+/** One read over the period before and the period, split at `from`: the period's days, and the days before. */
+const splitDays = (days: readonly OperatorPageDay[], from: string) => ({
+  current: days.filter((day) => day.day >= from),
+  before: days.filter((day) => day.day < from),
+});
+
 const pageTotals = (days: readonly OperatorPageDay[], before: readonly OperatorPageDay[]): OperatorPageTotals => {
   const sum = (list: readonly OperatorPageDay[], key: 'views' | 'visitors' | 'bookings' | 'cancelled') =>
     list.reduce((total, day) => total + day[key], 0);
@@ -380,14 +386,14 @@ const PAGE_COLUMNS = sql`workspace_id, workspace_name, page_id, title, kind, sta
 /** Booking pages (AC-1631): every page together, by day, and each page, most viewed first. */
 export async function operatorPages(deps: OperatorDeps, period: OperatorPeriod): Promise<OperatorPages> {
   const days = periodDays(period, deps.now?.() ?? new Date());
-  const [rows, current, before] = await Promise.all([
+  const [rows, both] = await Promise.all([
     definer<PageRow>(
       deps.db,
-      sql`select ${PAGE_COLUMNS} from crm_operator_pages(${days.from}::date, ${days.to}::date, null)`,
+      sql`select ${PAGE_COLUMNS} from crm_operator_pages(${days.from}::date, ${days.to}::date, null, null)`,
     ),
-    pageDays(deps.db, days.from, days.to),
-    pageDays(deps.db, days.before, days.from),
+    pageDays(deps.db, days.before, days.to),
   ]);
+  const { current, before } = splitDays(both, days.from);
   return {
     ...rangeOf(days),
     totals: pageTotals(current, before),
@@ -399,21 +405,21 @@ export async function operatorPages(deps: OperatorDeps, period: OperatorPeriod):
 /** One booking page (AC-1631): its figures against the period before, and its days. */
 export async function operatorPage(
   deps: OperatorDeps,
-  input: { readonly pageId: string; readonly period: OperatorPeriod },
+  input: { readonly workspaceId: string; readonly pageId: string; readonly period: OperatorPeriod },
 ): Promise<OperatorPageDetail> {
   const days = periodDays(input.period, deps.now?.() ?? new Date());
-  const [row] = await definer<PageRow>(
-    deps.db,
-    sql`select ${PAGE_COLUMNS} from crm_operator_pages(${days.from}::date, ${days.to}::date, ${input.pageId}::uuid)`,
-  );
-  if (row === undefined) throw refuse('NOT_FOUND', 'There is no booking page with that id.');
-  const page = { workspaceId: row.workspace_id, pageId: row.page_id };
-  const [current, before, [described]] = await Promise.all([
-    pageDays(deps.db, days.from, days.to, page),
-    pageDays(deps.db, days.before, days.from, page),
-    pageRows(deps, [row]),
+  const page = { workspaceId: input.workspaceId, pageId: input.pageId };
+  const [[row], both] = await Promise.all([
+    definer<PageRow>(
+      deps.db,
+      sql`select ${PAGE_COLUMNS} from crm_operator_pages(${days.from}::date, ${days.to}::date, ${page.workspaceId}::uuid, ${page.pageId}::uuid)`,
+    ),
+    pageDays(deps.db, days.before, days.to, page),
   ]);
+  if (row === undefined) throw refuse('NOT_FOUND', 'There is no booking page with that id.');
+  const [described] = await pageRows(deps, [row]);
   if (described === undefined) throw refuse('NOT_FOUND', 'There is no booking page with that id.');
+  const { current, before } = splitDays(both, days.from);
   return { ...rangeOf(days), page: described, totals: pageTotals(current, before), days: current };
 }
 

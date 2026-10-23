@@ -1001,7 +1001,8 @@ export function createDataLayer({
       ),
     user: (userId, period) => call((options) => api.operator.user({ userId, period }, options)),
     pages: (period) => call((options) => api.operator.pages({ period }, options)),
-    page: (pageId, period) => call((options) => api.operator.page({ pageId, period }, options)),
+    page: (workspaceId, pageId, period) =>
+      call((options) => api.operator.page({ workspaceId, pageId, period }, options)),
     site: (period) => call((options) => api.operator.site({ period }, options)),
   });
   // Records looked up in the trash (spec 0017): a missing record's page.

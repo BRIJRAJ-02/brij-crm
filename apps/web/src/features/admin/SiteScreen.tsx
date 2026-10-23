@@ -16,7 +16,7 @@ import {
 } from '@crm/ui';
 import { useMemo } from 'react';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
-import { AdminFailed, DayChart, PeriodSwitch } from './AdminParts.tsx';
+import { AdminFailed, useAdminRetry, DayChart, PeriodSwitch } from './AdminParts.tsx';
 import { figureStat, formatters, rateStat, type Formatters } from './figures.ts';
 import { strings } from './strings.ts';
 
@@ -62,8 +62,9 @@ function Ranking({
 export function SiteScreen({ data, period }: { readonly data: DataLayer; readonly period: OperatorPeriod }) {
   const held = useMemo(() => data.operator.site(period), [data, period]);
   const state = useOperator(held);
+  const retry = useAdminRetry(held.retry);
   if (state.status === 'error') {
-    return <AdminFailed title={strings.website} error={state.error} data={data} onRetry={held.retry} />;
+    return <AdminFailed title={strings.website} error={state.error} data={data} onRetry={retry} />;
   }
   return <SiteBody period={period} site={state.status === 'ready' ? state.value : undefined} />;
 }

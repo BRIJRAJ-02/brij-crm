@@ -69,6 +69,10 @@ export const records = pgTable(
     index('records_created')
       .on(t.workspaceId, t.objectId, t.createdAt, t.id)
       .where(sql`${t.deletedAt} is null`),
+    // The records each member made in a range (the operator console, spec 0047): an index only count per member.
+    index('records_created_by')
+      .on(t.workspaceId, t.createdByMemberId, t.createdAt)
+      .where(sql`${t.deletedAt} is null`),
     index('records_updated')
       .on(t.workspaceId, t.objectId, t.updatedAt, t.id)
       .where(sql`${t.deletedAt} is null`),

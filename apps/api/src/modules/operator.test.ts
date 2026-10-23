@@ -64,7 +64,7 @@ describe('the operator gate (AC-1617 to AC-1620)', () => {
       () => client.operator.users({ period: '30d' }),
       () => client.operator.user({ userId: id, period: '30d' }),
       () => client.operator.pages({ period: '30d' }),
-      () => client.operator.page({ pageId: id, period: '30d' }),
+      () => client.operator.page({ workspaceId: id, pageId: id, period: '30d' }),
       () => client.operator.site({ period: '30d' }),
     ]) {
       expect((await failure(call)).code).toBe('NOT_FOUND');
@@ -158,7 +158,10 @@ describe('the reads (AC-1629 to AC-1632)', () => {
     const pages = await client.operator.pages({ period: '30d' });
     expect(pages.days).toHaveLength(30);
     expect(pages.totals.views.value).toBeGreaterThanOrEqual(0);
-    expect((await failure(() => client.operator.page({ pageId: randomUUID(), period: '7d' }))).code).toBe('NOT_FOUND');
+    expect(
+      (await failure(() => client.operator.page({ workspaceId: randomUUID(), pageId: randomUUID(), period: '7d' })))
+        .code,
+    ).toBe('NOT_FOUND');
     const site = await client.operator.site({ period: '90d' });
     expect(site.days).toHaveLength(90);
   });

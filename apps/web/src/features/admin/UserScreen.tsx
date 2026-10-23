@@ -27,7 +27,7 @@ import {
 import { useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
-import { AdminFailed, DayChart, PeriodSwitch, useIsOperator } from './AdminParts.tsx';
+import { AdminFailed, useAdminRetry, DayChart, PeriodSwitch, useIsOperator } from './AdminParts.tsx';
 import { formatters, plainStat, roleLabel } from './figures.ts';
 import { strings } from './strings.ts';
 
@@ -59,13 +59,14 @@ export function UserScreen({
 }) {
   const held = useMemo(() => data.operator.user(userId, period), [data, userId, period]);
   const state = useOperator(held);
+  const retry = useAdminRetry(held.retry);
   const isOperator = useIsOperator();
   if (state.status === 'error') {
     // No such account: its own page for a super admin, and Settings' "nothing here" for anyone else.
     if (isDataError(state.error) && (state.error.code === 'NOT_FOUND' || state.error.code === 'INPUT_INVALID')) {
       return isOperator ? <UserMissing /> : <SettingsMissing backTo="home" />;
     }
-    return <AdminFailed title={strings.users} error={state.error} data={data} onRetry={held.retry} />;
+    return <AdminFailed title={strings.users} error={state.error} data={data} onRetry={retry} />;
   }
   return <UserBody period={period} detail={state.status === 'ready' ? state.value : undefined} />;
 }
@@ -177,7 +178,12 @@ export function UserBody({
           period={period}
           unit=""
           barLabel={(day, value) => (value > 0 ? strings.dayActive(day) : strings.dayIdle(day))}
-          summary={(days) => strings.activeDaysSummary(format.count(days.filter((day) => day.value > 0).length))}
+          summary={(days) =>
+            strings.activeDaysSummary(
+              format.count(days.filter((day) => day.value > 0).length),
+              format.count(days.length),
+            )
+          }
         />
       </SettingsSection>
       <SettingsSection title={strings.workspacesSection}>

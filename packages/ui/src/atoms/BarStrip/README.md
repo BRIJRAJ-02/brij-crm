@@ -23,7 +23,7 @@ New. A round robin rotation's Distribution tab showed each member's last 12 week
 
 ## States
 
-Row and chart sizes (a chart under 480px wide drops its gaps). Bars, empty periods (a hairline stub on the baseline), all empty (only stubs).
+Row and chart sizes (a chart under 480px wide drops its gaps). Loading (`isLoading`: stubs, no tooltips, busy, and only the label read out). Bars, empty periods (a hairline stub on the baseline), all empty (only stubs).
 
 ## Keyboard
 

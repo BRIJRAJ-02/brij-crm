@@ -82,6 +82,8 @@ CREATE INDEX "activity_day_day" ON "auth"."activity_day" USING btree ("day","use
 CREATE INDEX "operator_event_at" ON "auth"."operator_event" USING btree ("at");--> statement-breakpoint
 CREATE INDEX "site_visit_at" ON "auth"."site_visit" USING btree ("at");--> statement-breakpoint
 CREATE INDEX "bookings_created" ON "bookings" USING btree ("workspace_id","created_at");--> statement-breakpoint
+CREATE INDEX "bookings_host_created" ON "bookings" USING btree ("workspace_id","host_member_id","created_at");--> statement-breakpoint
+CREATE INDEX "records_created_by" ON "records" USING btree ("workspace_id","created_by_member_id","created_at") WHERE "records"."deleted_at" is null;--> statement-breakpoint
 CREATE INDEX "user_created" ON "auth"."user" USING btree ("created_at","id");
 --> statement-breakpoint
 alter table booking_page_views enable row level security;
@@ -149,8 +151,8 @@ end;
 
 -- Per member row of these people, named by (workspace, person) pairs from the directory (at most 400; the
 -- members_user index finds each): the workspace, the role and state, the live records they made and the bookings
--- they hosted that were made in [from, to), and the live booking pages they own. Each workspace is read once,
--- grouped by member, however many of its members the page asks about.
+-- they were given that were made in [from, to), each an index only count (records_created_by,
+-- bookings_host_created) stopped at 100,001, and the live booking pages they own.
 create function crm_operator_members(workspaces uuid[], users uuid[], from_day date, to_day date)
   returns table (
     user_id uuid, workspace_id uuid, member_id uuid, role text, status text,
@@ -162,55 +164,26 @@ create function crm_operator_members(workspaces uuid[], users uuid[], from_day d
   set search_path = pg_catalog, pg_temp
   rows 200
 begin atomic
-  with pairs as (
-    select p.workspace_id, p.user_id
-    from unnest(crm_operator_members.workspaces[1:400], crm_operator_members.users[1:400]) as p(workspace_id, user_id)
-    where crm_operator_members.to_day - crm_operator_members.from_day between 1 and 400
-  ),
-  m as (
-    select mm.workspace_id, mm.id, mm.user_id, mm.role::text as role, mm.status::text as status
-    from pairs p
-    join public.members mm on mm.workspace_id = p.workspace_id and mm.user_id = p.user_id
-  ),
-  w as (
-    select distinct m.workspace_id from m
-  ),
-  made as (
-    select x.workspace_id, x.member_id, count(*)::integer as n
-    from w
-    cross join lateral (
-      select r.workspace_id, r.created_by_member_id as member_id
-      from public.records r
-      where r.workspace_id = w.workspace_id and r.deleted_at is null
+  select mm.user_id, mm.workspace_id, mm.id, mm.role::text, mm.status::text,
+    (select count(*)::integer from (
+      select 1 from public.records r
+      where r.workspace_id = mm.workspace_id and r.created_by_member_id = mm.id and r.deleted_at is null
         and r.created_at >= crm_operator_members.from_day::timestamp at time zone 'UTC'
         and r.created_at < crm_operator_members.to_day::timestamp at time zone 'UTC'
-    ) x
-    group by x.workspace_id, x.member_id
-  ),
-  hosted as (
-    select x.workspace_id, x.member_id, count(*)::integer as n
-    from w
-    cross join lateral (
-      select k.workspace_id, k.host_member_id as member_id
-      from public.bookings k
-      where k.workspace_id = w.workspace_id
+      limit 100001
+    ) made),
+    (select count(*)::integer from (
+      select 1 from public.bookings k
+      where k.workspace_id = mm.workspace_id and k.host_member_id = mm.id
         and k.created_at >= crm_operator_members.from_day::timestamp at time zone 'UTC'
         and k.created_at < crm_operator_members.to_day::timestamp at time zone 'UTC'
-    ) x
-    group by x.workspace_id, x.member_id
-  ),
-  owned as (
-    select p.workspace_id, p.owner_member_id as member_id, count(*)::integer as n
-    from w
-    join public.booking_pages p on p.workspace_id = w.workspace_id and p.deleted_at is null
-    group by p.workspace_id, p.owner_member_id
-  )
-  select m.user_id, m.workspace_id, m.id, m.role, m.status,
-    coalesce(made.n, 0), coalesce(hosted.n, 0), coalesce(owned.n, 0)
-  from m
-  left join made on made.workspace_id = m.workspace_id and made.member_id = m.id
-  left join hosted on hosted.workspace_id = m.workspace_id and hosted.member_id = m.id
-  left join owned on owned.workspace_id = m.workspace_id and owned.member_id = m.id;
+      limit 100001
+    ) hosted),
+    (select count(*)::integer from public.booking_pages p
+      where p.workspace_id = mm.workspace_id and p.owner_member_id = mm.id and p.deleted_at is null)
+  from unnest(crm_operator_members.workspaces[1:400], crm_operator_members.users[1:400]) as pair(workspace_id, user_id)
+  join public.members mm on mm.workspace_id = pair.workspace_id and mm.user_id = pair.user_id
+  where crm_operator_members.to_day - crm_operator_members.from_day between 1 and 400;
 end;
 --> statement-breakpoint
 
@@ -293,10 +266,11 @@ begin atomic
 end;
 --> statement-breakpoint
 
--- Booking pages not deleted (one page when `page` is set; at most 500, most viewed first): the workspace and its name, title,
--- kind, state, owner's identity and when it was made, with its views, visitors (daily ids, summed over days),
--- bookings made and those since cancelled, in [from, to).
-create function crm_operator_pages(from_day date, to_day date, page uuid)
+-- Booking pages not deleted (one page when `workspace` and `page` are both set, found by its key; at most 500,
+-- most viewed first): the workspace and its name, title, kind, state, owner's identity and when it was made, with
+-- its views, visitors (daily ids, summed over days), and the bookings made in [from, to) and those since
+-- cancelled. Each workspace's bookings are read once over bookings_created and grouped by page.
+create function crm_operator_pages(from_day date, to_day date, workspace uuid, page uuid)
   returns table (
     workspace_id uuid, workspace_name text, page_id uuid, title text, kind text, status text, owner_user_id uuid,
     created_at timestamptz, views integer, visitors integer, bookings integer, cancelled integer
@@ -307,26 +281,38 @@ create function crm_operator_pages(from_day date, to_day date, page uuid)
   set search_path = pg_catalog, pg_temp
   rows 100
 begin atomic
-  select p.workspace_id, w.name, p.id, p.title, p.kind, p.status, p.owner_user_id, p.created_at,
-    coalesce(v.views, 0), coalesce(v.visitors, 0), coalesce(b.bookings, 0), coalesce(b.cancelled, 0)
-  from public.workspaces w
-  join public.booking_pages p on p.workspace_id = w.id and p.deleted_at is null
+  with ws as (
+    select w.id, w.name from public.workspaces w
+    where (crm_operator_pages.workspace is null or w.id = crm_operator_pages.workspace)
+      and (crm_operator_pages.workspace is null) = (crm_operator_pages.page is null)
+      and crm_operator_pages.to_day - crm_operator_pages.from_day between 1 and 400
+  ),
+  made as (
+    select x.workspace_id, x.page_id, count(*)::integer as bookings,
+      (count(*) filter (where x.cancelled_at is not null))::integer as cancelled
+    from ws
+    cross join lateral (
+      select k.workspace_id, k.page_id, k.cancelled_at from public.bookings k
+      where k.workspace_id = ws.id
+        and (crm_operator_pages.page is null or k.page_id = crm_operator_pages.page)
+        and k.created_at >= crm_operator_pages.from_day::timestamp at time zone 'UTC'
+        and k.created_at < crm_operator_pages.to_day::timestamp at time zone 'UTC'
+    ) x
+    group by x.workspace_id, x.page_id
+  )
+  select p.workspace_id, ws.name, p.id, p.title, p.kind, p.status, p.owner_user_id, p.created_at,
+    coalesce(v.views, 0), coalesce(v.visitors, 0), coalesce(made.bookings, 0), coalesce(made.cancelled, 0)
+  from ws
+  join public.booking_pages p on p.workspace_id = ws.id and p.deleted_at is null
+    and (crm_operator_pages.page is null or p.id = crm_operator_pages.page)
   left join lateral (
     select sum(x.views)::integer as views, count(*)::integer as visitors
     from public.booking_page_views x
     where x.workspace_id = p.workspace_id and x.page_id = p.id
       and x.day >= crm_operator_pages.from_day and x.day < crm_operator_pages.to_day
   ) v on true
-  left join lateral (
-    select count(*)::integer as bookings, (count(*) filter (where k.cancelled_at is not null))::integer as cancelled
-    from public.bookings k
-    where k.workspace_id = p.workspace_id and k.page_id = p.id
-      and k.created_at >= crm_operator_pages.from_day::timestamp at time zone 'UTC'
-      and k.created_at < crm_operator_pages.to_day::timestamp at time zone 'UTC'
-  ) b on true
-  where (crm_operator_pages.page is null or p.id = crm_operator_pages.page)
-    and crm_operator_pages.to_day - crm_operator_pages.from_day between 1 and 400
-  order by coalesce(v.views, 0) desc, coalesce(b.bookings, 0) desc, p.id
+  left join made on made.workspace_id = p.workspace_id and made.page_id = p.id
+  order by coalesce(v.views, 0) desc, coalesce(made.bookings, 0) desc, p.id
   limit 500;
 end;
 --> statement-breakpoint
@@ -389,7 +375,7 @@ revoke all on function crm_operator_totals(date, date) from public;
 --> statement-breakpoint
 revoke all on function crm_operator_daily(date, date) from public;
 --> statement-breakpoint
-revoke all on function crm_operator_pages(date, date, uuid) from public;
+revoke all on function crm_operator_pages(date, date, uuid, uuid) from public;
 --> statement-breakpoint
 revoke all on function crm_operator_page_days(date, date, uuid, uuid) from public;
 --> statement-breakpoint
@@ -401,7 +387,7 @@ grant execute on function crm_operator_totals(date, date) to crm_app;
 --> statement-breakpoint
 grant execute on function crm_operator_daily(date, date) to crm_app;
 --> statement-breakpoint
-grant execute on function crm_operator_pages(date, date, uuid) to crm_app;
+grant execute on function crm_operator_pages(date, date, uuid, uuid) to crm_app;
 --> statement-breakpoint
 grant execute on function crm_operator_page_days(date, date, uuid, uuid) to crm_app;
 --> statement-breakpoint
@@ -420,7 +406,7 @@ alter function crm_operator_totals(date, date) owner to crm_operator;
 --> statement-breakpoint
 alter function crm_operator_daily(date, date) owner to crm_operator;
 --> statement-breakpoint
-alter function crm_operator_pages(date, date, uuid) owner to crm_operator;
+alter function crm_operator_pages(date, date, uuid, uuid) owner to crm_operator;
 --> statement-breakpoint
 alter function crm_operator_page_days(date, date, uuid, uuid) owner to crm_operator;
 --> statement-breakpoint

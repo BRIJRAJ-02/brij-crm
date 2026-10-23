@@ -103,3 +103,21 @@ export const ChartEmpty: Story = {
     await expect(canvas.getByText('Day 30: 0')).toBeInTheDocument();
   },
 };
+
+/** Loading: the chart's days as stubs, no tooltips, busy for screen readers. */
+export const ChartLoading: Story = {
+  args: {
+    size: 'chart',
+    label: 'Visitors per day',
+    isLoading: true,
+    bars: Array.from({ length: 30 }, (_, index) => ({ id: `d${String(index)}`, label: '', value: 0 })),
+  },
+  render: (args) => (
+    <Stage>
+      <BarStrip {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Visitors per day')).toBeInTheDocument();
+  },
+};

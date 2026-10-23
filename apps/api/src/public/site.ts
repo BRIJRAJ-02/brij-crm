@@ -3,6 +3,7 @@
 // the path, the referring site's host, `utm_source`, the edge's country, a
 // device class and a daily visitor id; the address and the user agent only go
 // into that id. No cookie, no session, and nothing answered but 204.
+import { isIP } from 'node:net';
 import { SiteHit } from '@crm/contracts';
 import type { Hono } from 'hono';
 import type { SiteVisitInput } from '@crm/db';
@@ -26,12 +27,16 @@ export const SITE_HIT_SITE_LIMIT = { max: 3_000, windowMs: 60_000 } as const;
 /** The address a limit counts: an IPv4 address as is, an IPv6 one by its /64, which one subscriber holds. */
 export function limitAddress(ip: string | undefined): string {
   if (ip === undefined) return 'unknown';
-  if (!ip.includes(':')) return ip;
-  const [head = '', tail = ''] = ip.toLowerCase().split('::');
+  // An IPv4 address written as IPv6 (`::ffff:10.0.0.1`) is its IPv4 address.
+  const plain = ip.toLowerCase().replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/, '');
+  const kind = isIP(plain);
+  if (kind === 4) return plain;
+  if (kind !== 6) return 'unknown';
+  const [head = '', tail = ''] = plain.split('::');
   const left = head === '' ? [] : head.split(':');
   const right = tail === '' ? [] : tail.split(':');
-  const groups = ip.includes('::')
-    ? [...left, ...Array<string>(8 - left.length - right.length).fill('0'), ...right]
+  const groups = plain.includes('::')
+    ? [...left, ...Array<string>(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right]
     : left;
   return `${groups
     .slice(0, 4)
@@ -100,8 +105,9 @@ export function mountSiteHits(app: Hono<{ Variables: SiteVariables }>, deps: Sit
     if (isMachine(userAgent) || userAgent === undefined) return done();
     const ip = c.get('clientIp');
     const site = new URL(origin).hostname;
-    if (!deps.limiter(`site:all:${site}`, SITE_HIT_SITE_LIMIT).allowed) return done();
+    // The address first: one sender past its 60 never uses up the site's share.
     if (!deps.limiter(`site:${limitAddress(ip)}`, SITE_HIT_LIMIT).allowed) return done();
+    if (!deps.limiter(`site:all:${site}`, SITE_HIT_SITE_LIMIT).allowed) return done();
     const text = await c.req.text();
     if (text.length > BODY_MAX) return done();
     let body: unknown;

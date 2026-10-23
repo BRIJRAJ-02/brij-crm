@@ -76,10 +76,10 @@ Reasoning and options: see [rationale.md](rationale.md).
 | Function | Answers |
 |---|---|
 | `crm_operator_workspaces(ids uuid[])` | Per workspace (at most 200): name, slug, created and deleted times, active members, and live records counted to 100,001 at most. |
-| `crm_operator_members(workspaces uuid[], users uuid[], from date, to date)` | Per member row of the (workspace, user) pairs the directory names (at most 400): role, state, live records made and bookings hosted in the range, live booking pages owned. Each workspace is read once, grouped by member. |
+| `crm_operator_members(workspaces uuid[], users uuid[], from date, to date)` | Per member row of the (workspace, user) pairs the directory names (at most 400): role, state, live records made and bookings given in the range (index only counts on `records_created_by` and `bookings_host_created`, stopped at 100,001), live booking pages owned. |
 | `crm_operator_totals(from date, to date)` | Workspaces live now, and those made in the range. |
 | `crm_operator_daily(from date, to date)` | Per UTC day: workspaces made, live records made (an index only count), bookings made and submissions received. Overview reads it once over the period and the one before. |
-| `crm_operator_pages(from date, to date, page uuid)` | Per booking page not deleted (one page when `page` is set; the 500 most viewed): workspace and its name, title, kind, state, owner's user id, views, visitors, bookings, cancelled. |
+| `crm_operator_pages(from date, to date, workspace uuid, page uuid)` | Per booking page not deleted (one page when `workspace` and `page` are set, found by its key; the 500 most viewed; each workspace's bookings read once, grouped by page): workspace and its name, title, kind, state, owner's user id, views, visitors, bookings, cancelled. |
 | `crm_operator_page_days(from date, to date, workspace uuid, page uuid)` | Per UTC day, for one page or (both null) all: views, visitors, bookings, cancelled. |
 
 **API surface**:
@@ -90,14 +90,14 @@ Reasoning and options: see [rationale.md](rationale.md).
 | `operator.users` | `period`, `q?`, `after?` | `OperatorUserPage` | operator |
 | `operator.user` | `userId`, `period` | `OperatorUserDetail` | operator |
 | `operator.pages` | `period` | `OperatorPages` | operator |
-| `operator.page` | `pageId`, `period` | `OperatorPageDetail` | operator |
+| `operator.page` | `workspaceId`, `pageId`, `period` | `OperatorPageDetail` | operator |
 | `operator.site` | `period` | `OperatorSite` | operator |
 | `me.get` (exists) | | adds `isOperator` | session |
 | `POST /api/public/site/hit` | `{ path, referrer?, source? }` as text | 204 | public, `SITE_ORIGINS`, 60 a minute per address |
 
 **Environment**: `OPERATOR_EMAILS` and `SITE_ORIGINS` (api, optional), `VITE_SITE_HIT_URL` (marketing site build, optional, an override).
 
-**Screens**: under `/w/$slug/settings/admin`: Overview, `users`, `users/$userId`, `booking-pages`, `booking-pages/$pageId` and `website`, each `?period=7d|30d|90d` (30d by default). The workspace in the address only places the pages in the app's frame; access never depends on it.
+**Screens**: under `/w/$slug/settings/admin`: Overview, `users`, `users/$userId`, `booking-pages`, `booking-pages/$workspaceId/$pageId` and `website`, each `?period=7d|30d|90d` (30d by default). The workspace in the address only places the pages in the app's frame; access never depends on it.
 
 **Implementation skills**: house skills `crm-api-backend`, `crm-data-model-access`, `crm-frontend-state`, `crm-design-system`; `drizzle`, `zod`, `vitest`, `security-and-hardening`, `dataviz`.
 

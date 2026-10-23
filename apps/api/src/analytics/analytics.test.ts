@@ -46,6 +46,9 @@ describe("the beacon's cleaning (AC-1627)", () => {
     expect(limitAddress('2001:db8:85a3:42::1')).toBe('2001:db8:85a3:42::/64');
     expect(limitAddress('2001:db8::1')).toBe('2001:db8:0:0::/64');
     expect(limitAddress('10.0.0.1')).toBe('10.0.0.1');
+    expect(limitAddress('::ffff:10.0.0.1')).toBe('10.0.0.1');
+    expect(limitAddress('1:2:3:4:5:6:7:8:9:10')).toBe('unknown');
+    expect(limitAddress('not an address')).toBe('unknown');
     expect(limitAddress(undefined)).toBe('unknown');
   });
 

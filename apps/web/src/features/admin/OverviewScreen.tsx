@@ -7,7 +7,7 @@ import { useOperator } from '@crm/data/react';
 import { SettingsGrid, SettingsSection, Stats, useFormatSettings } from '@crm/ui';
 import { useMemo } from 'react';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
-import { AdminFailed, DayChart, PeriodSwitch } from './AdminParts.tsx';
+import { AdminFailed, useAdminRetry, DayChart, PeriodSwitch } from './AdminParts.tsx';
 import { figureStat, formatters, plainStat } from './figures.ts';
 import { strings } from './strings.ts';
 
@@ -16,8 +16,9 @@ export function OverviewScreen({ data, period }: { readonly data: DataLayer; rea
   // A new period (or Retry) asks again; the data layer keeps each answer for the app load.
   const held = useMemo(() => data.operator.overview(period), [data, period]);
   const state = useOperator(held);
+  const retry = useAdminRetry(held.retry);
   if (state.status === 'error') {
-    return <AdminFailed title={strings.overview} error={state.error} data={data} onRetry={held.retry} />;
+    return <AdminFailed title={strings.overview} error={state.error} data={data} onRetry={retry} />;
   }
   return <OverviewBody period={period} overview={state.status === 'ready' ? state.value : undefined} />;
 }
@@ -63,7 +64,6 @@ export function OverviewBody({
               : [
                   plainStat('today', strings.activeToday, format.count(overview.active.today)),
                   plainStat('week', strings.activeWeek, format.count(overview.active.week)),
-                  plainStat('month', strings.activeMonth, format.count(overview.active.month)),
                 ]
           }
         />
@@ -96,6 +96,16 @@ export function OverviewBody({
             days={series((day) => day.active)}
             period={period}
             unit={strings.units.active}
+            // Daily active people don't add up across days: the line names the busiest day alone.
+            summary={(days, chartFormat) => {
+              const peak = days.reduce<(typeof days)[number] | undefined>(
+                (best, each) => (best === undefined || each.value > best.value ? each : best),
+                undefined,
+              );
+              return peak === undefined || peak.value === 0
+                ? strings.chartQuiet
+                : strings.activeBusiest(chartFormat.day(peak.day), chartFormat.count(peak.value));
+            }}
           />
           <DayChart
             title={strings.recordsChart}

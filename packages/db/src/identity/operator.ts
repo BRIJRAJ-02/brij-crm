@@ -153,17 +153,26 @@ const checkRange = (range: DayRange) => DAY.test(range.from) && DAY.test(range.t
 export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown>>): OperatorIdentity {
   /** Every ranking in one pass over the range's visits (grouping sets), each cut to its top `RANK_MAX`. */
   const ranks = async (range: DayRange) => {
+    // Ranked in SQL, the top `RANK_MAX` of each list only: the beacon decides the values, so their count is unbounded.
     const result = await db.execute<{ kind: string; name: string | null; visitors: number; views: number }>(sql`
-      select
-        case grouping(v.path, v.referrer, v.source, v.country, v.device)
-          when 15 then 'pages' when 23 then 'referrers' when 27 then 'sources' when 29 then 'countries'
-          else 'devices' end as kind,
-        coalesce(v.path, v.referrer, v.source, v.country, v.device) as name,
-        count(distinct (v.at at time zone 'UTC')::date || v.visitor)::int as visitors,
-        count(*)::int as views
-      from auth.site_visit v
-      where v.at >= ${startOf(range.from)} and v.at < ${startOf(range.to)}
-      group by grouping sets ((v.path), (v.referrer), (v.source), (v.country), (v.device))
+      select kind, name, visitors, views from (
+        select g.kind, g.name, g.visitors, g.views,
+          row_number() over (partition by g.kind order by g.visitors desc, g.views desc, g.name) as place
+        from (
+          select
+            case grouping(v.path, v.referrer, v.source, v.country, v.device)
+              when 15 then 'pages' when 23 then 'referrers' when 27 then 'sources' when 29 then 'countries'
+              else 'devices' end as kind,
+            coalesce(v.path, v.referrer, v.source, v.country, v.device) as name,
+            count(distinct (v.at at time zone 'UTC')::date || v.visitor)::int as visitors,
+            count(*)::int as views
+          from auth.site_visit v
+          where v.at >= ${startOf(range.from)} and v.at < ${startOf(range.to)}
+          group by grouping sets ((v.path), (v.referrer), (v.source), (v.country), (v.device))
+        ) g
+        where g.name is not null
+      ) ranked
+      where ranked.place <= ${RANK_MAX}
     `);
     const of = (kind: string): SiteRank[] =>
       result.rows
@@ -307,9 +316,11 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
         order by u.created_at desc, u.id desc
         limit ${Math.max(1, Math.min(max, 200))}
       `);
-      const counted = await db.execute<{ total: number }>(
-        sql`select count(*)::int as total from auth.user u where ${matches}`,
-      );
+      // Counted on the first page only: a later page's total is the first page's (a search reads every user).
+      const counted =
+        after === undefined
+          ? await db.execute<{ total: number }>(sql`select count(*)::int as total from auth.user u where ${matches}`)
+          : undefined;
       return {
         people: page.rows.map((row) => ({
           id: row.id,
@@ -323,7 +334,7 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
           workspaces: row.workspaces,
           cursor: `${row.created_us}.${row.id}`,
         })),
-        total: counted.rows[0]?.total ?? 0,
+        total: counted?.rows[0]?.total ?? 0,
       };
     },
 

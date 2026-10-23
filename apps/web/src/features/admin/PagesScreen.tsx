@@ -27,7 +27,7 @@ import {
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
-import { AdminFailed, DayChart, PeriodSwitch, useIsOperator } from './AdminParts.tsx';
+import { AdminFailed, useAdminRetry, DayChart, PeriodSwitch, useIsOperator } from './AdminParts.tsx';
 import { figureStat, formatters, kindLabel, rateStat, stateLabel, type Formatters } from './figures.ts';
 import { strings } from './strings.ts';
 
@@ -35,7 +35,8 @@ import { strings } from './strings.ts';
 export const adminPagesHref = (slug: string) => `/w/${slug}/settings/admin/booking-pages`;
 
 /** Where one booking page's numbers are. */
-export const adminPageHref = (slug: string, pageId: string) => `/w/${slug}/settings/admin/booking-pages/${pageId}`;
+export const adminPageHref = (slug: string, workspaceId: string, pageId: string) =>
+  `/w/${slug}/settings/admin/booking-pages/${workspaceId}/${pageId}`;
 
 const COLUMNS: readonly TableColumn[] = [
   { id: 'title', label: strings.columns.page, isRowHeader: true },
@@ -125,8 +126,9 @@ function ownerOf(page: OperatorPageRow): string {
 export function PagesScreen({ data, period }: { readonly data: DataLayer; readonly period: OperatorPeriod }) {
   const held = useMemo(() => data.operator.pages(period), [data, period]);
   const state = useOperator(held);
+  const retry = useAdminRetry(held.retry);
   if (state.status === 'error') {
-    return <AdminFailed title={strings.pages} error={state.error} data={data} onRetry={held.retry} />;
+    return <AdminFailed title={strings.pages} error={state.error} data={data} onRetry={retry} />;
   }
   return <PagesBody period={period} pages={state.status === 'ready' ? state.value : undefined} />;
 }
@@ -184,7 +186,10 @@ export function PagesBody({
           renderCell={cell}
           isLoading={pages === undefined}
           isScrollable
-          onRowAction={(id) => void navigate({ href: adminPageHref(slug, id) })}
+          onRowAction={(id) => {
+            const page = pages?.pages.find((each) => each.pageId === id);
+            if (page !== undefined) void navigate({ href: adminPageHref(slug, page.workspaceId, page.pageId) });
+          }}
           emptyState={
             <EmptyState icon="calendar-days" title={strings.noPages}>
               {strings.noPagesText}
@@ -199,22 +204,25 @@ export function PagesBody({
 /** One booking page for a period, its read held in the data layer. */
 export function PageScreen({
   data,
+  workspaceId,
   pageId,
   period,
 }: {
   readonly data: DataLayer;
+  readonly workspaceId: string;
   readonly pageId: string;
   readonly period: OperatorPeriod;
 }) {
-  const held = useMemo(() => data.operator.page(pageId, period), [data, pageId, period]);
+  const held = useMemo(() => data.operator.page(workspaceId, pageId, period), [data, workspaceId, pageId, period]);
   const state = useOperator(held);
+  const retry = useAdminRetry(held.retry);
   const isOperator = useIsOperator();
   if (state.status === 'error') {
     // No such page: its own page for a super admin, and Settings' "nothing here" for anyone else.
     if (isDataError(state.error) && (state.error.code === 'NOT_FOUND' || state.error.code === 'INPUT_INVALID')) {
       return isOperator ? <PageMissing /> : <SettingsMissing backTo="home" />;
     }
-    return <AdminFailed title={strings.pages} error={state.error} data={data} onRetry={held.retry} />;
+    return <AdminFailed title={strings.pages} error={state.error} data={data} onRetry={retry} />;
   }
   return <PageBody period={period} detail={state.status === 'ready' ? state.value : undefined} />;
 }

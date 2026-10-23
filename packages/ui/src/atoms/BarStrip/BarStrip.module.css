@@ -53,13 +53,17 @@
     block-size: calc(var(--size-row) * 4);
   }
 
-  /* Each bar's tooltip trigger is the plot's flex item: the bars share the width through it. */
-  .plot[data-size='chart'] > * {
+  /* While loading, each stub stands where its tooltip trigger will: a share of a chart's row. */
+  .stub {
+    display: inline-flex;
+  }
+
+  .stub[data-shared] {
     flex: 1 1 0;
     min-inline-size: 0;
   }
 
-  .root[data-size='chart'] .slot {
+  .slot[data-shared] {
     inline-size: 100%;
   }
 

@@ -122,6 +122,12 @@ describe('crm_operator (spec 0047, AC-1621)', () => {
     const members = await call<Record<string, unknown>>(
       sql`select * from crm_operator_members(${`{${a.workspaceId},${b.workspaceId}}`}::uuid[], ${`{${userId},${userId}}`}::uuid[], ${RANGE.from}::date, ${RANGE.to}::date) order by records_made desc`,
     );
+    // A pair that isn't a membership (another person in workspace b) answers nothing at all.
+    const stranger = await createTestUser(identityUrl, { email: `${unique()}@example.com` });
+    const none = await call(
+      sql`select * from crm_operator_members(${`{${b.workspaceId}}`}::uuid[], ${`{${stranger}}`}::uuid[], ${RANGE.from}::date, ${RANGE.to}::date)`,
+    );
+    expect(none).toEqual([]);
     expect(members).toMatchObject([
       {
         workspace_id: a.workspaceId,
@@ -168,7 +174,7 @@ describe('crm_operator (spec 0047, AC-1621)', () => {
     await activity(a);
 
     const [page] = await call<Record<string, unknown>>(
-      sql`select * from crm_operator_pages(${RANGE.from}::date, ${RANGE.to}::date, ${a.pageId}::uuid)`,
+      sql`select * from crm_operator_pages(${RANGE.from}::date, ${RANGE.to}::date, ${a.workspaceId}::uuid, ${a.pageId}::uuid)`,
     );
     expect(page).toMatchObject({
       workspace_id: a.workspaceId,
@@ -300,8 +306,25 @@ describe('the console in schema auth (spec 0047)', () => {
       `insert into auth.site_visit (at, site, path, device, visitor) values ('1999-01-01T00:00:00Z', 'timefix.ai', '/', 'desktop', $1)`,
       ['f'.repeat(32)],
     );
+    // The console's own log is kept a year longer: one from 1999 stays at a 2000 cut, one from 1998 goes.
+    const kept = randomUUID();
+    const gone = randomUUID();
+    for (const [at, request] of [
+      ['1999-06-01T00:00:00Z', kept],
+      ['1998-06-01T00:00:00Z', gone],
+    ] as const) {
+      await identitySql.query(
+        `insert into auth.operator_event (at, user_id, action, request_id) values ($1, $2, 'operator.overview', $3)`,
+        [at, userId, request],
+      );
+    }
     await identity.sweepAuthHistory(new Date('2000-01-01T00:00:00Z'), 1000);
     const left = await identitySql.query(`select 1 from auth.site_visit where at < '2000-01-01'`);
     expect(left.rowCount).toBe(0);
+    const log = await identitySql.query<{ request_id: string }>(
+      `select request_id from auth.operator_event where request_id = any($1)`,
+      [[kept, gone]],
+    );
+    expect(log.rows.map((row) => row.request_id)).toEqual([kept]);
   });
 });
