@@ -140,6 +140,8 @@ describe('the builder’s draft changes', () => {
     expect(statusOf(form, true).tone).toBe('changed');
     expect(statusOf({ ...form, status: 'paused' }, false).text).toBe('Paused');
     expect(statusOf({ status: 'draft', hasUnpublished: true }, true).text).toBe('Draft');
+    // A saved draft the editor's copy matches still waits to be published, as the header's Publish changes says.
+    expect(statusOf({ ...form, hasUnpublished: true }, false).tone).toBe('changed');
   });
 
   it('compares documents whatever their key order', () => {

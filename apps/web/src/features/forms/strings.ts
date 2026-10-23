@@ -49,7 +49,7 @@ export const strings = {
   delete: 'Delete',
   deleteForm: 'Delete form',
   /** A destructive confirm names the thing in its question (the owner's rule, 21 October 2026). */
-  deleteTitle: (name: string) => `Delete the ${name} form?`,
+  deleteTitle: (name: string) => `Delete “${name}”?`,
   deleteText: (submissions: number) =>
     submissions === 0
       ? 'The form and its link are gone for good; nothing was sent to it yet.'
@@ -163,7 +163,7 @@ export const strings = {
   keptOnlyHint: 'Submissions stay in the form’s Submissions tab. You can add them to the CRM later, from Settings.',
   buildObject: 'Build one out of this form',
   buildObjectButton: (name: string, attributes: number) =>
-    `Create ${name} with ${count(attributes, 'attribute', 'attributes')}`,
+    `Make an object named “${name}” with ${count(attributes, 'attribute', 'attributes')}`,
   building: 'Making the object…',
   liveText: 'Share the link, or put it on your site.',
   ownFormLater: 'To use your own design, take the form HTML from Install.',
