@@ -11,9 +11,10 @@ export const changeStrings = {
   noTimes: (host: string) =>
     `${host} has no free times in the next three weeks. Cancelling and booking again later may be easier.`,
   moved: 'Moved.',
-  movedText: 'Both calendars are updated and a confirmation is on its way.',
+  // Said of what we do, never of calendars we may not hold (QA Q79).
+  movedText: (host: string) => `${host} has been told, and a confirmation with the new time is on its way.`,
   cancelled: 'Cancelled.',
-  cancelledText: (host: string) => `${host} has been told, and it comes off both calendars.`,
+  cancelledText: (host: string) => `${host} has been told.`,
   taken: 'That time has just gone. Pick another.',
   reason: 'Reason',
 } as const;

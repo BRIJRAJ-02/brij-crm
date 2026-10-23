@@ -9,6 +9,8 @@ import {
   type BookingPageView,
   type BookingsCalendarView,
   type AttributeOption,
+  type AuditListInput,
+  type AuditPage,
   type ChangeEvent,
   type DeleteManyResults,
   type GlobalSearchResults,
@@ -35,7 +37,8 @@ import {
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { describe, expect, it, vi } from 'vitest';
-import { dataError, isUnseenFault, parseRetryAfter, refusalFor, refusalSummary } from './errors.ts';
+import { dataError, isUnseenFault, parseRetryAfter } from './errors.ts';
+import { refusalFor, refusalSummary } from './refusals.ts';
 import {
   createDataLayer,
   createIdMinter,
@@ -55,6 +58,7 @@ const ORIGIN = 'https://crm.test';
 const ME: Me = {
   user: { id: '0199a6f2-0000-7000-8000-000000000001', name: 'Ada Lovelace', email: 'ada@example.com' },
   workspaces: [{ id: '0199a6f2-0000-7000-8000-000000000002', slug: 'acme', name: 'Acme' }],
+  isOperator: false,
 };
 
 const PEOPLE: ObjectSummary = {
@@ -147,6 +151,10 @@ interface Behaviour {
   activity: (recordId: string, cursor?: string) => RecordActivity;
   /** A record in the trash (spec 0017). */
   trashed: (recordId: string) => TrashedRecord;
+  /** A page of the audit log (spec 0046). */
+  auditList: (input: AuditListInput) => AuditPage;
+  /** A workspace's sign in rules (spec 0033). */
+  workspaceSecurityGet: () => never;
   /** What every option write answers (spec 0012, milestone 3). */
   optionWrite: () => AttributeOption;
   /** What both relationship writes answer (spec 0014). */
@@ -218,6 +226,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     usage: () => ({ attributes: { [PEOPLE.id]: { used: 20, limit: 250 } }, optionsPerAttribute: 500 }),
     activity: notServed,
     trashed: notServed,
+    auditList: notServed,
+    workspaceSecurityGet: notServed,
     optionWrite: notServed,
     relationshipWrite: notServed,
     viewsList: notServed,
@@ -439,7 +449,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       transferOwnership: os.members.transferOwnership.handler(notServed),
     },
     workspaceSecurity: {
-      get: os.workspaceSecurity.get.handler(notServed),
+      get: os.workspaceSecurity.get.handler(() => behaviour.workspaceSecurityGet()),
       set: os.workspaceSecurity.set.handler(notServed),
       signOutEveryone: os.workspaceSecurity.signOutEveryone.handler(notServed),
     },
@@ -546,6 +556,15 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       markAllRead: os.notifications.markAllRead.handler(notServed),
       settings: os.notifications.settings.handler(notServed),
       setSettings: os.notifications.setSettings.handler(notServed),
+    },
+    // The operator console (spec 0047) is read through to the api as is; its gate and reads are the api's tests.
+    operator: {
+      overview: os.operator.overview.handler(notServed),
+      users: os.operator.users.handler(notServed),
+      user: os.operator.user.handler(notServed),
+      pages: os.operator.pages.handler(notServed),
+      page: os.operator.page.handler(notServed),
+      site: os.operator.site.handler(notServed),
     },
     // Account sessions (spec 0033) are driven against their own fake in `account/sessions.test.ts`.
     account: {
@@ -704,6 +723,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     },
     routing: {
       report: os.routing.report.handler(notServed),
+    },
+    audit: {
+      list: os.audit.list.handler(({ input }) => {
+        calls.push(`audit.list ${input.cursor ?? 'first'}`);
+        return behaviour.auditList(input);
+      }),
     },
   });
   const handler = new RPCHandler(router);
@@ -2111,6 +2136,23 @@ describe('refusal wording', () => {
     expect(refusalFor(whole, 'a2')).toBe('This object is full.');
     expect(refusalSummary(whole)).toBe('This object is full.');
   });
+
+  it('shows the safety net’s words on their field only: a toast says the answer’s sentence', () => {
+    const missing = dataError('INPUT_INVALID', 'Some of what you entered isn’t valid.', {
+      issues: [{ path: ['values', 'a1'], message: 'Add this.' }],
+    });
+    expect(refusalFor(missing, 'a1')).toBe('Add this.');
+    expect(refusalSummary(missing)).toBe('Some of what you entered isn’t valid.');
+    const tooLong = dataError('INPUT_INVALID', 'Some of what you entered isn’t valid.', {
+      issues: [{ path: ['values', 'a1'], message: 'Use 2,000 characters or fewer.' }],
+    });
+    expect(refusalSummary(tooLong)).toBe('Some of what you entered isn’t valid.');
+    // A schema's own words name their field, so they still lead.
+    const named = dataError('INPUT_INVALID', 'Some of what you entered isn’t valid.', {
+      issues: [{ path: ['title'], message: 'Give the task a title.' }],
+    });
+    expect(refusalSummary(named)).toBe('Give the task a title.');
+  });
 });
 
 describe('parseRetryAfter', () => {
@@ -2134,6 +2176,103 @@ describe('the layer has no state at module level', () => {
     await layer(two).data.me.get();
     expect(count(one.calls, '/api/rpc/me/get')).toBe(1);
     expect(count(two.calls, '/api/rpc/me/get')).toBe(1);
+  });
+});
+
+describe('audit (spec 0046)', () => {
+  const entry = (n: number) => ({
+    id: `0199f0a0-0000-7000-8000-${String(n).padStart(12, '0')}`,
+    at: '2026-10-23T06:52:11.123456Z',
+    actor: { kind: 'system' as const },
+    action: 'workspace.restored' as const,
+    target: { type: 'workspace' as const },
+    params: {},
+    changes: [],
+  });
+
+  it('opens a workspace’s log through audit.list, then reads on with the cursor', async () => {
+    const api = fakeApi({
+      auditList: (input) =>
+        input.cursor === undefined ? { entries: [entry(1)], nextCursor: 'next-1' } : { entries: [entry(2)] },
+    });
+    const { data } = layer(api);
+    const log = await data.audit.openLog('acme');
+    await expect.poll(() => log.getSnapshot().status).toBe('ready');
+    expect(log.getSnapshot()).toMatchObject({ entries: [entry(1)], hasMore: true });
+    log.more();
+    await expect.poll(() => log.getSnapshot().entries).toEqual([entry(1), entry(2)]);
+    expect(log.getSnapshot().hasMore).toBe(false);
+    expect(api.calls.filter((each) => each.startsWith('audit.list'))).toEqual([
+      'audit.list first',
+      'audit.list next-1',
+    ]);
+  });
+
+  it('hands back the log a screen holds, so a reload of the page keeps its rows, and opens afresh once let go', async () => {
+    const api = fakeApi({
+      auditList: (input) =>
+        input.cursor === undefined ? { entries: [entry(1)], nextCursor: 'next-1' } : { entries: [entry(2)] },
+    });
+    const { data } = layer(api);
+    const reads = () => api.calls.filter((each) => each.startsWith('audit.list')).length;
+    const log = await data.audit.openLog('acme');
+    const release = log.retain();
+    await expect.poll(() => log.getSnapshot().status).toBe('ready');
+    log.more();
+    await expect.poll(() => log.getSnapshot().entries).toHaveLength(2);
+    // The router reloads the route (a live attribute change): the same log, the same rows, nothing read again.
+    expect(await data.audit.openLog('acme')).toBe(log);
+    expect(reads()).toBe(2);
+    // Another workspace's log is its own.
+    const other = await data.audit.openLog('globex');
+    expect(other).not.toBe(log);
+    other.dispose();
+    release();
+    log.dispose();
+    const fresh = await data.audit.openLog('acme');
+    expect(fresh).not.toBe(log);
+    await expect.poll(() => fresh.getSnapshot().status).toBe('ready');
+    expect(fresh.getSnapshot().entries).toEqual([entry(1)]);
+    fresh.dispose();
+  });
+
+  it('answers a refused read as forbidden, with the server’s words', async () => {
+    const api = fakeApi({
+      auditList: () => {
+        throw new ORPCError('FORBIDDEN', {
+          status: 403,
+          message: 'Only workspace owners and admins can see workspace changes.',
+        });
+      },
+    });
+    const { data } = layer(api);
+    await data.access.mine('acme');
+    const log = await data.audit.openLog('acme');
+    await expect.poll(() => log.getSnapshot().status).toBe('forbidden');
+    expect(log.getSnapshot().message).toBe('Only workspace owners and admins can see workspace changes.');
+    log.dispose();
+    // Their held access was stale: it is read again, so History's next visit opens the sign ins (AC-4618).
+    const asked = () => api.calls.filter((each) => each.endsWith('/access/mine')).length;
+    expect(asked()).toBe(1);
+    await data.access.mine('acme');
+    expect(asked()).toBe(2);
+  });
+});
+
+describe('workspace security', () => {
+  it('drops held access when the read is refused, so the next visit asks again', async () => {
+    const api = fakeApi({
+      workspaceSecurityGet: () => {
+        throw new ORPCError('FORBIDDEN', { status: 403, message: 'Only workspace owners and admins can do this.' });
+      },
+    });
+    const { data } = layer(api);
+    await data.access.mine('acme');
+    await expect(data.workspaceSecurity.get('acme')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const asked = () => api.calls.filter((each) => each.endsWith('/access/mine')).length;
+    expect(asked()).toBe(1);
+    await data.access.mine('acme');
+    expect(asked()).toBe(2);
   });
 });
 

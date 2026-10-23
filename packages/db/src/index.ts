@@ -59,5 +59,16 @@ export {
   STEP_UP_CODE_TRIES,
   type VerifiedWith,
 } from './identity/store.ts';
+export type {
+  DayRange,
+  OperatorEventInput,
+  OperatorIdentity,
+  OperatorPeopleFacts,
+  OperatorPerson,
+  OperatorPersonDetail,
+  SiteFacts,
+  SiteRank,
+  SiteVisitInput,
+} from './identity/operator.ts';
 export * as schema from './schema/index.ts';
 export { type PoolTiming, type PoolTimingSink } from './timing.ts';

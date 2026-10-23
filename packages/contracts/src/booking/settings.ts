@@ -139,8 +139,14 @@ export function defaultAvailability(timeZone: string): BookingAvailability {
 export const BookingLocation = z.discriminatedUnion('type', [
   z.object({ type: z.literal('video') }),
   z.object({ type: z.literal('phone') }),
-  z.object({ type: z.literal('address'), value: z.string().trim().min(1, 'Give the address.').max(500) }),
-  z.object({ type: z.literal('custom'), value: z.string().trim().min(1, 'Say where it happens.').max(500) }),
+  z.object({
+    type: z.literal('address'),
+    value: z.string().trim().min(1, 'Give the address.').max(500, 'Keep the address to 500 characters.'),
+  }),
+  z.object({
+    type: z.literal('custom'),
+    value: z.string().trim().min(1, 'Say where it happens.').max(500, 'Keep this to 500 characters.'),
+  }),
 ]);
 /** Where the meeting happens. */
 export type BookingLocation = z.infer<typeof BookingLocation>;
@@ -183,12 +189,16 @@ export const BookingPageSettings = z.object({
     .max(BOOKING_DURATIONS_MAX, { error: 'A page offers at most 4 lengths.' })
     .refine((durations) => new Set(durations).size === durations.length, { error: 'Offer each length once.' }),
   location: BookingLocation,
-  bufferBefore: z.number().int().min(0).max(60, 'Buffers are 0 to 60 minutes.'),
-  bufferAfter: z.number().int().min(0).max(60, 'Buffers are 0 to 60 minutes.'),
-  minNoticeMinutes: z.number().int().min(0).max(BOOKING_NOTICE_MAX, 'Notice is at most 14 days.'),
+  bufferBefore: z.number().int().min(0, 'Buffers are 0 to 60 minutes.').max(60, 'Buffers are 0 to 60 minutes.'),
+  bufferAfter: z.number().int().min(0, 'Buffers are 0 to 60 minutes.').max(60, 'Buffers are 0 to 60 minutes.'),
+  minNoticeMinutes: z
+    .number()
+    .int()
+    .min(0, 'Notice is 0 minutes to 14 days.')
+    .max(BOOKING_NOTICE_MAX, 'Notice is at most 14 days.'),
   windowDays: z.number().int().min(1, 'Allow at least 1 day ahead.').max(365, 'Allow at most 365 days ahead.'),
   /** At most this many bookings a day; null for no limit. */
-  dailyLimit: z.number().int().min(1).max(50, 'A daily limit is 1 to 50.').nullable(),
+  dailyLimit: z.number().int().min(1, 'A daily limit is 1 to 50.').max(50, 'A daily limit is 1 to 50.').nullable(),
   /** How often a slot starts; null for the meeting length. */
   slotStep: z
     .union(

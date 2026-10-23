@@ -1,6 +1,7 @@
 // Sign out everyone's step up in Chromium (spec 0033, AC-896; the owner's bug, 22 Oct): when the code email
 // can't go, or too many were sent, the confirm says so in plain words inside the dialog, which stays open with
 // "Email me a code" ready to try again, never "Something went wrong"; the next send that works asks for the code.
+// Someone without security.manage who opens the address finds no page, and nothing is asked of the server (Q101).
 import type { AccountSecurityState, AccountSecurityView, DataLayer, StepUpResult } from '@crm/data';
 import { isSessionFresh } from '@crm/data';
 import { createToasts, UiProvider, type Toasts } from '@crm/ui';
@@ -13,8 +14,10 @@ import {
 } from '@tanstack/react-router';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { Route as SecurityRoute } from '../../routes/w.$slug.settings.security.tsx';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
+import { SettingsTopBarSlot } from './topBarSlot.ts';
 import { WorkspaceSecurityScreen } from './WorkspaceSecurityScreen.tsx';
 
 /** The api's words for a code email that didn't send (CODE_NOT_SENT_MESSAGE in apps/api's account router). */
@@ -86,18 +89,22 @@ function layerWith(answers: readonly StepUpResult[], checked: StepUpResult = { o
 
 async function renderScreen(layer: DataLayer): Promise<Toasts> {
   const toasts = createToasts();
+  const bar = document.createElement('div');
   const rootRoute = createRootRouteWithContext<{ data: DataLayer; toasts: Toasts }>()();
   const security = createRoute({
     getParentRoute: () => rootRoute,
     path: '/w/$slug/settings/workspace/security',
+    // The settings frame's bar slot, so the page's TopBar (its h1) draws as it does in the app.
     component: () => (
-      <WorkspaceSecurityScreen
-        data={layer}
-        toasts={toasts}
-        slug="acme"
-        workspaceName="Acme"
-        initial={{ requireTwoFactor: false, membersWithout: 0, youHaveTwoFactor: false }}
-      />
+      <SettingsTopBarSlot value={bar}>
+        <WorkspaceSecurityScreen
+          data={layer}
+          toasts={toasts}
+          slug="acme"
+          workspaceName="Acme"
+          initial={{ requireTwoFactor: false, membersWithout: 0, youHaveTwoFactor: false }}
+        />
+      </SettingsTopBarSlot>
     ),
   });
   const router = createRouter({
@@ -105,10 +112,13 @@ async function renderScreen(layer: DataLayer): Promise<Toasts> {
     history: createMemoryHistory({ initialEntries: ['/w/acme/settings/workspace/security'] }),
     context: { data: layer, toasts },
   });
+  // The bar sits beside the root's container, as the frame's slot does, never inside it (a root clears its own).
+  const frame = document.createElement('div');
   const host = document.createElement('div');
-  document.body.append(host);
+  frame.append(bar, host);
+  document.body.append(frame);
   const root = createRoot(host);
-  mounted = { root, host };
+  mounted = { root, host: frame };
   await act(async () => {
     root.render(
       <UiProvider
@@ -127,6 +137,28 @@ async function renderScreen(layer: DataLayer): Promise<Toasts> {
   });
   return toasts;
 }
+
+describe('the page’s words (SW10, SW11, SW13)', () => {
+  it('is titled Security, with headings only, and no box above the switch while it is off limits', async () => {
+    const { layer } = layerWith([]);
+    await renderScreen(layer);
+    // The trail already says Workspace, so the title is the nav's own word.
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Security' })).toBeInTheDocument();
+    // Headings only: no line under Two factor sign in or Sessions.
+    const text = document.body.textContent;
+    expect(text).not.toContain('A second step at sign in');
+    expect(text).not.toContain('How long a sign in lasts here');
+    // Off limits until the owner has two factor: the row says why, its link inline, and no Callout above the card.
+    expect(page.getByRole('note').elements()).toHaveLength(0);
+    expect(text).toContain('You need two factor sign in yourself first. Set up yours');
+    await expect
+      .element(page.getByRole('link', { name: 'Set up yours' }))
+      .toHaveAttribute('href', '/w/acme/settings/account/sign-in');
+    await expect.element(page.getByRole('switch', { name: 'Require two factor sign in' })).toBeDisabled();
+    expect(text).toContain('How long people stay signed in before they sign in again.');
+    expect(text).toContain('Everyone signs in again. You stay signed in here.');
+  });
+});
 
 /** Opens Sign out everyone's confirm. */
 async function openConfirm() {
@@ -187,5 +219,56 @@ describe('sign out everyone’s step up, when the code can’t be sent', () => {
     await expect.element(dialog.getByText(expired)).toBeVisible();
     expect(dialog.element().querySelector('[aria-invalid="true"]')).not.toBeNull();
     await expect.element(dialog.getByRole('button', { name: 'Send a new code' })).toBeVisible();
+  });
+});
+
+describe('without security.manage', () => {
+  it('finds no Security page, and asks the server nothing for it (Q101)', async () => {
+    const rulesGet = vi.fn(() => Promise.reject(new Error('not asked')));
+    const data = {
+      calendar: { view: () => stillLoading },
+      nav: { source: () => stillLoading, change: () => undefined },
+      tasks: { due: () => stillLoading },
+      access: {
+        mine: () =>
+          Promise.resolve({ memberId: 'm1', role: 'admin', roleLabel: 'Admin', permissions: ['workspace.manage'] }),
+      },
+      workspaceSecurity: { get: rulesGet },
+    } as unknown as DataLayer;
+    const toasts: Toasts = createToasts();
+    const rootRoute = createRootRouteWithContext<{ data: DataLayer; toasts: Toasts; me: unknown }>()();
+    // The real route, under a bare root as the route tree would put it under the settings frame.
+    const route = SecurityRoute.update({
+      id: '/w/$slug/settings/security',
+      path: '/w/$slug/settings/security',
+      getParentRoute: () => rootRoute,
+    } as Parameters<typeof SecurityRoute.update>[0]);
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([route]),
+      history: createMemoryHistory({ initialEntries: ['/w/acme/settings/security'] }),
+      context: { data, toasts, me: { workspaces: [{ slug: 'acme', name: 'Acme' }] } },
+    });
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mounted = { root, host };
+    await act(async () => {
+      root.render(
+        <UiProvider
+          locale="en-GB"
+          timeZone="UTC"
+          toasts={toasts}
+          navigate={(href) => {
+            router.history.push(href);
+          }}
+          useHref={(href) => router.history.createHref(href)}
+        >
+          <RouterProvider router={router} />
+        </UiProvider>,
+      );
+      await router.load();
+    });
+    await expect.element(page.getByText('There’s nothing at this address.')).toBeVisible();
+    expect(rulesGet).not.toHaveBeenCalled();
   });
 });

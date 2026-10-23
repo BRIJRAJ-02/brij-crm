@@ -221,6 +221,7 @@ describe('keyAccess (AC-148)', () => {
       'billing.manage',
       'workspace.delete',
       'support.grant',
+      'audit.read',
     ]) {
       expect(can(keyAccess('k', [...PERMISSION_NAMES, 'data.write']), forbidden)).toBe(false);
     }

@@ -28,6 +28,8 @@ export const SECURITY_EVENT_KINDS = [
   'passkey_added',
   'passkey_removed',
   'alert_sent',
+  // Settings › Profile's Sync Google photo linked Google as a way to sign in (23 October 2026).
+  'google_linked',
 ] as const;
 /** One kind of security event. */
 export const SecurityEventKind = z.enum(SECURITY_EVENT_KINDS);
@@ -160,7 +162,13 @@ export const AccountDeletionCheck = z.object({ blockers: z.array(DeletionBlocker
 export type AccountDeletionCheck = z.infer<typeof AccountDeletionCheck>;
 
 /** Deleting the account: its email typed in full, to confirm (AC-903). */
-export const DeleteAccountInput = z.object({ email: z.string().trim().min(1).max(320) });
+export const DeleteAccountInput = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, { error: 'Type your email address to confirm.' })
+    .max(320, { error: 'Type your email address to confirm.' }),
+});
 /** Deleting the account. */
 export type DeleteAccountInput = z.infer<typeof DeleteAccountInput>;
 

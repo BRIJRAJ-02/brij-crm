@@ -19,12 +19,13 @@ import { recordHref } from '../records/details.ts';
 import {
   actionCommands,
   matchCommands,
-  namesACommand,
+  orderSections,
   pageCommands,
   settingsCommands,
   viewHref,
   type Command,
   type CommandMode,
+  type SectionId,
 } from './commands.ts';
 import { strings } from './strings.ts';
 
@@ -59,7 +60,7 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
     () => theme.get(),
   );
 
-  const byId = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
+  const byObject = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
   const pages = useMemo(() => pageCommands(slug, objects), [slug, objects]);
   const settings = useMemo(() => settingsCommands(slug, permissions), [slug, permissions]);
   const actions = useMemo(() => (mode === 'commands' ? actionCommands(slug, objects) : []), [mode, slug, objects]);
@@ -72,44 +73,45 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
   const text = query.trim();
   const sections = useMemo((): readonly PaletteSection[] => {
     const row = (command: Command) => commandRow(command, themeChoice);
-    if (text === '') {
-      return [
-        {
-          id: 'recent',
-          label: strings.recent,
-          items: recents.slice(0, RECENT_SHOWN).map((item) => recentRow(item, byId)),
-        },
-        { id: 'actions', label: strings.actions, items: actions.map(row) },
-        { id: 'pages', label: strings.goTo, items: pages.map(row) },
-      ];
-    }
-    // The server's answer counts only for what is typed now; until it is in, the records row says so (AC-1083).
+    // The server's answer counts only once it is in for what is typed now. Until then Records holds only its
+    // "Searching…" row (AC-1083), so no row found for the text before can take the highlight or an Enter.
     const isCurrent = found !== undefined && found.query === text;
-    const status = hasFailed
-      ? 'failed'
-      : !isCurrent || found.status === 'loading'
-        ? 'searching'
-        : found.status === 'error'
+    const isIn = isCurrent && found.status === 'ready';
+    const status =
+      text === ''
+        ? undefined
+        : hasFailed || (isCurrent && found.status === 'error')
           ? 'failed'
-          : undefined;
-    const records: PaletteSection = {
-      id: 'records',
-      label: strings.records,
-      items: isCurrent ? found.records.map((hit) => recordRow(hit, byId)) : [],
-      ...(status === undefined ? {} : { status }),
+          : isIn
+            ? undefined
+            : 'searching';
+    // A failed search has none, so its Try again row waits behind every command that matches.
+    const matched = {
+      records: isIn ? found.records : status === 'failed' ? [] : undefined,
+      views: isIn ? found.views : status === 'failed' ? [] : undefined,
+      pages: matchCommands(pages, text),
+      settings: matchCommands(settings, text),
+      actions: matchCommands(actions, text),
     };
-    const browserSide: readonly PaletteSection[] = [
-      { id: 'views', label: strings.views, items: isCurrent ? found.views.map((view) => viewRow(view, byId)) : [] },
-      { id: 'pages', label: strings.pages, items: matchCommands(pages, text).map(row) },
-      { id: 'settings', label: strings.settingsSection, items: matchCommands(settings, text).map(row) },
-      { id: 'actions', label: strings.actions, items: matchCommands(actions, text).map(row) },
-    ];
-    // Records only guessed at (close matches) wait behind a page, Settings page or action the text names.
-    const onlyGuesses = isCurrent && found.records.length > 0 && found.records.every((hit) => hit.match === 'similar');
-    return onlyGuesses && namesACommand([...pages, ...settings, ...actions], text)
-      ? [...browserSide, records]
-      : [records, ...browserSide];
-  }, [text, found, hasFailed, recents, actions, pages, settings, byId, themeChoice]);
+    const byId: Readonly<Record<SectionId, PaletteSection>> = {
+      recent: {
+        id: 'recent',
+        label: strings.recent,
+        items: recents.slice(0, RECENT_SHOWN).map((item) => recentRow(item, byObject)),
+      },
+      records: {
+        id: 'records',
+        label: strings.records,
+        items: (matched.records ?? []).map((hit) => recordRow(hit, byObject)),
+        ...(status === undefined ? {} : { status }),
+      },
+      views: { id: 'views', label: strings.views, items: (matched.views ?? []).map((view) => viewRow(view, byObject)) },
+      pages: { id: 'pages', label: text === '' ? strings.goTo : strings.pages, items: matched.pages.map(row) },
+      settings: { id: 'settings', label: strings.settingsSection, items: matched.settings.map(row) },
+      actions: { id: 'actions', label: strings.actions, items: matched.actions.map(row) },
+    };
+    return orderSections(matched, text).map((id) => byId[id]);
+  }, [text, found, hasFailed, recents, actions, pages, settings, byObject, themeChoice]);
 
   const choose = (item: PaletteItem) => {
     const close = () => {
@@ -125,7 +127,7 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
       void navigate({ href: command.run.href });
       return;
     }
-    const href = hrefOf(item.id, slug, byId, found?.records ?? [], found?.views ?? [], recents);
+    const href = hrefOf(item.id, slug, byObject, found?.records ?? [], found?.views ?? [], recents);
     close();
     if (href !== undefined) void navigate({ href });
   };
@@ -230,14 +232,14 @@ function useRecents(data: DataLayer, slug: string): readonly RecentItem[] {
   return items;
 }
 
-/** A command as a row, its check on the theme in use. */
+/** A command as a row; the themes are one choice, read as radio items, the one in use checked (AC-1087, Q47). */
 function commandRow(command: Command, themeChoice: ThemeChoice): PaletteItem {
   return {
     id: command.id,
     name: command.name,
     icon: command.icon,
     ...(command.kbd === undefined ? {} : { kbd: command.kbd }),
-    ...(command.run.kind === 'theme' && command.run.choice === themeChoice ? { isChecked: true } : {}),
+    ...(command.run.kind === 'theme' ? { choice: strings.theme, isChecked: command.run.choice === themeChoice } : {}),
   };
 }
 

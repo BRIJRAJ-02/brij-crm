@@ -1,10 +1,8 @@
 /** The Trash screen's copy (spec 0022). */
 export const strings = {
   title: 'Trash',
-  /** The sidebar's way in, at the foot of Records. */
-  navLabel: 'Trash',
-  /** The count beside the title ("1,234 records"). */
-  countLabel: 'records',
+  /** The count beside the title, as a screen reader hears it: "1 record", "1,234 records" (Q98). */
+  countLabel: (count: number) => (count === 1 ? 'record' : 'records'),
   objectFilter: 'Object',
   allObjects: 'All objects',
   archived: (pluralName: string) => `${pluralName} (archived)`,
@@ -14,7 +12,8 @@ export const strings = {
     object: 'Object',
     deletedBy: 'Deleted by',
     deletedAt: 'Deleted',
-    expiresAt: 'Removed after',
+    /** The day the record is deleted for good, 30 days after it was deleted. */
+    expiresAt: 'Deleted forever on',
   },
   /** Why a trashed record's cells don't edit. */
   readOnly: 'Restore it to change it.',
@@ -30,7 +29,9 @@ export const strings = {
   cannotRestore: 'You can view these records but not restore them.',
   /** The same for an owner or admin, whose Delete forever fails closed too (AC-538 as amended). */
   cannotChange: 'You can view these records but not restore or delete them.',
-  tooMany: 'Change at most 500 records in one request; more run as a background change.',
+  /** Over the 500 a restore or Delete forever sends at once; Select all runs more as a background change. */
+  tooMany: 'Pick up to 500 at a time, or use Select all to restore more.',
+  tooManyDelete: 'Pick up to 500 at a time, or use Select all to delete more.',
   oneRecord: '1 record',
   records: (count: string) => `${count} records`,
   restoredOne: (name: string) => `Restored ${name}.`,

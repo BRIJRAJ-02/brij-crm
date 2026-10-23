@@ -22,6 +22,7 @@ import {
 } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import { dataError, type DataError } from '../errors.ts';
+import { refusalFor, refusalSummary } from '../refusals.ts';
 import { COARSE_JOB_MS } from '../live/pace.ts';
 import type { Notice } from '../notice.ts';
 import type { GroupsAnswer, GroupsRequest } from './board.ts';
@@ -229,6 +230,7 @@ function setup(
     api: server.api,
     notify: (notice) => notices.push(notice),
     mintId: () => idAt(5000 + (minted += 1)),
+    refusals: { refusalFor, refusalSummary },
     schedule: (flush) => frames.push(flush),
     wait: (ms) => {
       waits.push(ms);
@@ -432,6 +434,7 @@ describe('a records view', () => {
       api: server.api,
       notify: () => undefined,
       mintId: () => idAt(1),
+      refusals: { refusalFor, refusalSummary },
       schedule: (flush) => {
         flush();
       },

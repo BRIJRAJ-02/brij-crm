@@ -10,6 +10,11 @@
     outline: none;
   }
 
+  /* A shared trigger takes an equal part of its row: each bar of a BarStrip chart. */
+  .trigger[data-shared] {
+    flex: 1 1 0;
+  }
+
   .trigger[data-focus-visible] {
     border-radius: var(--radius-xs);
     box-shadow: var(--shadow-focus);

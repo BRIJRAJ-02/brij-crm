@@ -22,7 +22,7 @@ export {
 export { CopyButton, type CopyButtonProps } from './atoms/Button/CopyButton.tsx';
 export { SplitButton, type SplitButtonProps } from './atoms/Button/SplitButton.tsx';
 export { Checkbox, type CheckboxProps } from './atoms/Checkbox/Checkbox.tsx';
-export { Code, type CodeProps } from './atoms/Code/Code.tsx';
+export { Code, type CodeProps, type CodeVariant } from './atoms/Code/Code.tsx';
 export { Currency, type CurrencyProps } from './atoms/Currency/Currency.tsx';
 export { DragHandle, type DragHandleManual, type DragHandleProps } from './atoms/DragHandle/DragHandle.tsx';
 export { FileIcon, fileIconName, type FileIconProps } from './atoms/FileIcon/FileIcon.tsx';

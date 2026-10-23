@@ -671,8 +671,10 @@ export async function addGuests(
 }
 
 /**
- * Takes a guest off the booking (timefix's Remove on the guest page).
- * Answers everyone still invited. Removing someone who isn't on it changes nothing.
+ * Takes a guest off the booking (timefix's Remove on the guest page), and
+ * queues the email telling them, with a cancelled calendar file (the guests
+ * kind tells everyone invited but no longer on it). Answers everyone still
+ * invited. Removing someone who isn't on it changes nothing.
  */
 export async function removeGuest(
   target: ChangeTarget,
@@ -694,6 +696,8 @@ export async function removeGuest(
       .where(eq(bookings.id, row.id))
       .returning();
     if (updated === undefined) throw new Error('The guest was not removed.');
+    // They hear that they are off it, with a cancelled calendar file, once their invitation had gone (QA Q81).
+    await enqueueBookingMail(tx, updated.id, ['guests']);
     return { row: updated, removed: true, guests };
   });
   return { guests: changed.guests };

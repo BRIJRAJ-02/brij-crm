@@ -15,7 +15,16 @@ import { type AnyRouter, isProcedure, os, type RouterClient } from '@orpc/server
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import * as z from 'zod';
 import { rpcClient, signIn, signInApp, testConnections } from '../test/sign-in.ts';
-import { authed, member, pub, type RequestContext, requireMember, requireSession } from './orpc.ts';
+import {
+  authed,
+  member,
+  operator,
+  pub,
+  type RequestContext,
+  requireMember,
+  requireOperator,
+  requireSession,
+} from './orpc.ts';
 import { router } from './router.ts';
 import { APP_URL } from './testing.ts';
 
@@ -65,6 +74,8 @@ function isBootstrap(path: string): boolean {
  * workspace by the token's hash. No other module file may.
  */
 const RAW_DATABASE_FILES: ReadonlySet<string> = new Set([
+  // The operator console (spec 0047): crm_operator's definers, behind the operator gate, never a member scope.
+  'operator/router.ts',
   'system/router.ts',
   'workspaces/router.ts',
   'me/router.ts',
@@ -79,6 +90,8 @@ const RAW_DATABASE_FILES: ReadonlySet<string> = new Set([
  * procedures (spec 0033). No other module file may.
  */
 const RAW_IDENTITY_FILES: ReadonlySet<string> = new Set([
+  // The operator console (spec 0047): people and the website's visits, behind the operator gate.
+  'operator/router.ts',
   'me/router.ts',
   'workspaces/router.ts',
   'invitations/public.ts',
@@ -138,10 +151,19 @@ function middlewaresOf(procedure: unknown): readonly unknown[] {
   return isProcedure(procedure) ? procedure['~orpc'].middlewares : [];
 }
 
-/** The procedures outside the bootstrap list that skip the member door. */
+/**
+ * The procedures outside the bootstrap list that skip the member door. The
+ * operator console's (spec 0047) pass the operator gate instead, and only
+ * they may: a procedure under `operator` without it is off the door too.
+ */
 function offTheDoor(tree: AnyRouter): string[] {
   return procedures(tree)
-    .filter(([path, procedure]) => !isBootstrap(path) && !middlewaresOf(procedure).includes(requireMember))
+    .filter(([path, procedure]) => {
+      if (isBootstrap(path)) return false;
+      const middlewares = middlewaresOf(procedure);
+      if (path.startsWith('operator.')) return !middlewares.includes(requireOperator);
+      return !middlewares.includes(requireMember);
+    })
     .map(([path]) => path);
 }
 
@@ -166,8 +188,15 @@ describe('the contract walk', () => {
           .handler(() => 'members only'),
       },
       system: { status: t.handler(() => 'bootstrap') },
+      operator: {
+        overview: t
+          .use(requireSession)
+          .use(requireOperator)
+          .handler(() => 'super admins only'),
+        users: t.use(requireSession).handler(() => 'any signed in person'),
+      },
     };
-    expect(offTheDoor(sneaky).sort()).toEqual(['records.count', 'records.list']);
+    expect(offTheDoor(sneaky).sort()).toEqual(['operator.users', 'records.count', 'records.list']);
   });
 
   it('builds the three bases on the expected middlewares', () => {
@@ -175,10 +204,12 @@ describe('the contract walk', () => {
       base.me.get.handler(() => ({
         user: { id: '', name: '', email: '' },
         workspaces: [],
+        isOperator: false,
       }));
     expect(middlewaresOf(procedure(pub))).toEqual([]);
     expect(middlewaresOf(procedure(authed))).toEqual([requireSession]);
     expect(middlewaresOf(procedure(member))).toEqual([requireSession, requireMember]);
+    expect(middlewaresOf(procedure(operator))).toEqual([requireSession, requireOperator]);
   });
 });
 

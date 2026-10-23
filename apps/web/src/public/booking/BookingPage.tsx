@@ -40,6 +40,7 @@ import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
 import { saveHour12, savedHour12, savedView, saveView, type SlotView } from './prefs.ts';
 import { needsRead, pageEnded } from './reads.ts';
+import { refusalLine } from './refusal.ts';
 import { strings } from './strings.ts';
 import {
   addDays,
@@ -504,7 +505,7 @@ function Booking({
           onBooked(booked.manageToken);
           return { kind: 'done' };
         },
-        (error: unknown): BookingDetailsOutcome => {
+        (error: unknown): BookingDetailsOutcome | Promise<BookingDetailsOutcome> => {
           if (!isDataError(error)) return { kind: 'failed', message: strings.errors.failed };
           if (error.code === 'SLOT_TAKEN') {
             // Back to fresh times, with the reason over them.
@@ -524,7 +525,13 @@ function Booking({
             if (refusal.field !== undefined && fields[refusal.field] === undefined)
               fields[refusal.field] = refusal.message;
           }
-          if (Object.keys(fields).length > 0) return { kind: 'invalid', fields };
+          // The answer's sentence goes too, when a visitor can read it: the form says it when none of these is a field it shows.
+          if (Object.keys(fields).length > 0)
+            return refusalLine(error.message, fields).then((message): BookingDetailsOutcome => ({
+              kind: 'invalid',
+              fields,
+              ...(message === undefined ? {} : { message }),
+            }));
           return {
             kind: 'failed',
             message:

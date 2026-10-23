@@ -7,6 +7,8 @@
 import type { ObjectSummary, Permission } from '@crm/data';
 import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
 import { strings as calendar } from './calendar-strings.ts';
+import { historyHref } from './history-href.ts';
+import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as rotations } from '../booking/rotation-strings.ts';
 import { strings as members } from './members-strings.ts';
@@ -15,9 +17,11 @@ import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
+import { navStrings as admin } from '../admin/nav-strings.ts';
 import type { ObjectTab } from './object-tabs.ts';
 
 export { OBJECT_TABS, isObjectTab, type ObjectTab } from './object-tabs.ts';
+export { HISTORY_TABS, historyHref, isHistoryTab, type HistoryTab } from './history-href.ts';
 
 /** Settings, Objects. */
 export const objectsSettingsHref = (slug: string) => `/w/${slug}/settings/objects`;
@@ -38,7 +42,7 @@ export const preferencesHref = settingsHomeHref;
  */
 export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/calendars`;
 
-/** Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and time zone here. */
+/** Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and public profile. */
 export const profileHref = (slug: string) => `/w/${slug}/settings/account/profile`;
 
 /** Settings › Workspace › General (spec 0031, AC-822): the workspace's name, time zone and address, and its delete. */
@@ -68,8 +72,13 @@ export type SettingsPageId =
   | 'workspace-security'
   | 'objects'
   | 'jobs'
+  | 'history'
   | 'trash'
-  | 'rotations';
+  | 'rotations'
+  | 'admin-overview'
+  | 'admin-users'
+  | 'admin-pages'
+  | 'admin-website';
 
 /** Settings › Workspace › Security (spec 0033, milestone 4): the workspace's sign in rules, owners only. */
 export const workspaceSecurityHref = (slug: string) => `/w/${slug}/settings/security`;
@@ -79,7 +88,7 @@ export const workspaceSecurityHref = (slug: string) => `/w/${slug}/settings/secu
  * holds workspace wide scheduling settings (spam protection, defaults) once
  * there are some; one booking page's or one form's settings stay in its editor.
  */
-export type SettingsGroupId = 'account' | 'workspace' | 'scheduling';
+export type SettingsGroupId = 'account' | 'workspace' | 'scheduling' | 'admin';
 
 /** One entry in the settings navigation. */
 export interface SettingsNavEntry {
@@ -97,12 +106,21 @@ export interface SettingsNavEntry {
     | 'lock'
     | 'box'
     | 'list-checks'
+    | 'clock'
     | 'users-round'
-    | 'trash';
-  /** A quiet word after the name. Every entry but Trash opens a page in Settings (20 and 22 Oct 2026). */
+    | 'trash'
+    | 'chart-line'
+    | 'calendar-days'
+    | 'globe';
+  /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
   readonly requires?: Permission;
+  /**
+   * Only for a super admin (spec 0047): the api's `OPERATOR_EMAILS`, which `me.get` reports as `isOperator`. Never
+   * a workspace permission; the server checks every read on its own.
+   */
+  readonly operatorOnly?: true;
 }
 
 /** One group of the settings navigation, under its label. */
@@ -115,12 +133,12 @@ export interface SettingsNavGroup {
 /**
  * The settings navigation (spec 0026, AC-682): Account (Profile, spec 0031;
  * Preferences, Notifications, spec 0038), Scheduling (Calendars, 21 Oct 2026)
- * and Workspace (General and Members, spec 0031; Objects, Background jobs).
- * Every entry is a page in Settings: the Booking pages and Forms links into
+ * and Workspace (General and Members, spec 0031; Objects, Background jobs,
+ * Trash). Every entry is a page in Settings: the Booking pages and Forms links into
  * Captures went on 20 Oct 2026, as neither has workspace wide settings yet
  * (each page's and each form's own settings live in its editor). Every
- * member may open each page today: everyone reads Members and Objects and
- * sees their own jobs.
+ * member may open each page but Round robin and Security: everyone reads
+ * Members and Objects, sees their own jobs and the trash they may see.
  */
 export function settingsNav(slug: string): readonly SettingsNavGroup[] {
   return [
@@ -168,28 +186,61 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
-        // The trash left the sidebar for here (the owner, 22 October 2026). The one entry outside Settings: it opens
-        // the trash's own page, at its own address, which deletes' Undo toasts and ⌘K's Open trash also reach.
+        // History (spec 0046): every member opens it; Workspace changes inside it is for `audit.read` alone.
+        { id: 'history', label: history.title, href: historyHref(slug), icon: 'clock' },
+        // The trash left the sidebar for here (the owner, 22 October 2026), and opens inside Settings, its sidebar
+        // and trail kept (A120, 23 October 2026). ⌘K's Open trash reaches the same address; the old one redirects.
         { id: 'trash', label: strings.trash, href: trashHref(slug), icon: 'trash' },
+      ],
+    },
+    {
+      // The operator console (spec 0047): super admins only, so nobody else sees the group at all.
+      id: 'admin',
+      label: admin.group,
+      entries: [
+        { id: 'admin-overview', label: admin.overview, href: adminHref(slug), icon: 'chart-line', operatorOnly: true },
+        { id: 'admin-users', label: admin.users, href: adminHref(slug, 'users'), icon: 'users', operatorOnly: true },
+        {
+          id: 'admin-pages',
+          label: admin.pages,
+          href: adminHref(slug, 'booking-pages'),
+          icon: 'calendar-days',
+          operatorOnly: true,
+        },
+        {
+          id: 'admin-website',
+          label: admin.website,
+          href: adminHref(slug, 'website'),
+          icon: 'globe',
+          operatorOnly: true,
+        },
       ],
     },
   ];
 }
 
+/** Settings › Super admin (spec 0047): Overview, or one of its pages. */
+export const adminHref = (slug: string, page?: 'users' | 'booking-pages' | 'website') =>
+  `/w/${slug}/settings/admin${page === undefined ? '' : `/${page}`}`;
+
 /**
  * The groups as this member sees them: entries they may not open are left
  * out, and so is a group left with none, never shown locked (AC-682).
- * `permissions` undefined (still loading) keeps only entries that need none.
+ * `permissions` undefined (still loading) keeps only entries that need none;
+ * Super admin's entries show only when `isOperator` (spec 0047).
  */
 export function visibleSettingsNav(
   groups: readonly SettingsNavGroup[],
   permissions: readonly Permission[] | undefined,
+  isOperator = false,
 ): readonly SettingsNavGroup[] {
   return groups
     .map((group) => ({
       ...group,
       entries: group.entries.filter(
-        (entry) => entry.requires === undefined || (permissions?.includes(entry.requires) ?? false),
+        (entry) =>
+          (entry.operatorOnly !== true || isOperator) &&
+          (entry.requires === undefined || (permissions?.includes(entry.requires) ?? false)),
       ),
     }))
     .filter((group) => group.entries.length > 0);
@@ -207,9 +258,15 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
+  if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';
   if (rest === 'scheduling/round-robin' || rest === 'scheduling/rotations') return 'rotations';
   if (rest === 'security') return 'workspace-security';
+  if (rest === 'trash') return 'trash';
+  if (rest === 'admin') return 'admin-overview';
+  if (rest === 'admin/users' || rest.startsWith('admin/users/')) return 'admin-users';
+  if (rest === 'admin/booking-pages' || rest.startsWith('admin/booking-pages/')) return 'admin-pages';
+  if (rest === 'admin/website') return 'admin-website';
   return undefined;
 }
 

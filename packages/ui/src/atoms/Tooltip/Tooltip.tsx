@@ -31,6 +31,8 @@ export interface TooltipProps {
   readonly placement?: TooltipPlacement;
   /** The trigger is plain text, not a control: it shows on hover, and on focus when something focuses it on purpose (a grid cell). */
   readonly isTextTrigger?: boolean;
+  /** With `isTextTrigger`: the trigger takes an equal share of its flex row, as each bar of a chart does (BarStrip). */
+  readonly isTriggerShared?: boolean;
   readonly isDisabled?: boolean;
   /** Opens it from outside, as a grid does for the focused cell; pair it with `onOpenChange` so hover still works. */
   readonly isOpen?: boolean;
@@ -43,11 +45,11 @@ export interface TooltipProps {
  * `Focusable` would warn that text has no interactive role, which is the point
  * here, so this calls the hook it is built on.
  */
-function TextTrigger({ children }: { readonly children: ReactElement }) {
+function TextTrigger({ children, isShared }: { readonly children: ReactElement; readonly isShared: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const { focusableProps } = useFocusable({ excludeFromTabOrder: true }, ref);
   return (
-    <span ref={ref} className={styles.trigger} {...focusableProps}>
+    <span ref={ref} className={styles.trigger} data-shared={isShared || undefined} {...focusableProps}>
       {children}
     </span>
   );
@@ -63,6 +65,7 @@ export function Tooltip({
   children,
   placement = 'top',
   isTextTrigger = false,
+  isTriggerShared = false,
   isDisabled,
   isOpen,
   onOpenChange,
@@ -75,7 +78,7 @@ export function Tooltip({
       {...(isOpen === undefined ? {} : { isOpen })}
       {...(onOpenChange === undefined ? {} : { onOpenChange })}
     >
-      {isTextTrigger ? <TextTrigger>{children}</TextTrigger> : children}
+      {isTextTrigger ? <TextTrigger isShared={isTriggerShared}>{children}</TextTrigger> : children}
       <AriaTooltip
         className={styles.root}
         placement={placement}

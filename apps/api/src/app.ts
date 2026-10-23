@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto';
-import { type ErrorCode, errorStatus } from '@crm/contracts';
+import { type ErrorCode, errorStatus, installPlainErrors } from '@crm/contracts';
 import {
   connectedCalendar,
   createCalendarEvents,
@@ -18,6 +18,8 @@ import type { Database, IdentityStore } from '@crm/db';
 import type { AnyRouter } from '@orpc/server';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { createActivityNoter } from './analytics/activity.ts';
+import { visitorKey } from './analytics/visitor.ts';
 import { createAllowlist } from './auth/allowlist.ts';
 import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
 import { doorSession } from './auth/door-session.ts';
@@ -44,6 +46,7 @@ import type { Mailer } from './mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
+import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
 import {
   createPictureFetch,
   pictureResponse,
@@ -57,6 +60,7 @@ import { createMemoryLimiter, type PublicLimiter } from './limits.ts';
 import { NO_SIGNED_OUT, type SignedOutNotice } from './realtime/signed-out.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
 import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realtime/wake.ts';
+import { operatorList } from './orpc.ts';
 import { router as appRouter } from './router.ts';
 import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
@@ -216,6 +220,8 @@ export function createApp({
   env: ApiEnv;
   router?: AnyRouter;
 }) {
+  // Every schema without a message of its own answers in plain words (the RPC contract, the public routes, sign in).
+  installPlainErrors();
   const { db, identity, auth, wakeRelay, rules, timing, analytics = NO_ANALYTICS } = services;
   const mailer = services.mailer ?? NO_MAILER;
   // Who may start a workspace of their own (spec 0031, owner decision 3): the addresses sign up lets in by the list.
@@ -233,6 +239,13 @@ export function createApp({
   const wakeOnUse = services.wakeOnUse ?? (wakesOnUse(env) ? throttleWake(wakeRelay) : NO_WAKE);
   const wakeOverdue = services.wakeOverdue ?? throttleWake(wakeRelay, OVERDUE_WAKE_MS);
   const keepAlive = services.keepAlive ?? RUNS_ON;
+  // The operator console (spec 0047): its super admins, the days people use the app, and the visitor id key.
+  const operators = operatorList(env.OPERATOR_EMAILS);
+  const noteActivity = createActivityNoter({
+    note: (userId) => identity.noteActivity(userId),
+    keepAlive,
+    onError: (error) => log.warn('activity.note.failed', errorFields(error)),
+  });
   // Centrifugo's tokens, where live updates are on (spec 0005).
   const realtime =
     env.CENTRIFUGO_TOKEN_SECRET === undefined
@@ -336,6 +349,8 @@ export function createApp({
     if (SAFE_METHODS.has(c.req.method)) return next();
     // The forms' public writes check the hosted page's own origin; booking's stay on the app's (spec 0025).
     if (c.req.path.startsWith('/api/public/forms/')) return next();
+    // The marketing site's beacon checks its own origins, SITE_ORIGINS (spec 0047, AC-1627).
+    if (c.req.path === SITE_HIT_PATH && c.req.method === 'POST') return next();
     // Google's change notices carry no Origin: the channel's own token is their key (spec 0024, milestone 2).
     if (c.req.path === GOOGLE_NOTIFY_PATH && c.req.method === 'POST') return next();
     // A mail service's one click unsubscribe (RFC 8058) carries no Origin: the link's signed token is its only key.
@@ -405,6 +420,8 @@ export function createApp({
         },
         signedOut,
         requiredBy: (userId) => twoFactorRequiredBy({ db, identity }, userId),
+        operators,
+        noteActivity,
         // Only these three calls, by ids, for the workspace security settings and the Members column (spec 0033).
         factors: {
           secondFactorUsers: (userIds) => identity.secondFactorUsers(userIds),
@@ -412,6 +429,8 @@ export function createApp({
           markSessionVerified: (userId, sessionId, verifiedWith) =>
             identity.markSessionVerified(userId, sessionId, verifiedWith),
         },
+        // Only whether a person has Google linked, by their own user id, for Profile's Sync Google photo.
+        googleLinked: (userId) => identity.hasGoogleAccount(userId),
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
@@ -433,6 +452,8 @@ export function createApp({
   // windows; ticket uses (a day long) count apart from everything. The fill tickets forms and booking share.
   const formLimiter = services.formLimits ?? createMemoryLimiter();
   const ipSalt = env.FORMS_IP_SALT ?? LOCAL_FORMS_IP_SALT;
+  // Daily visitor ids for the console's counts (spec 0047, AC-1626), keyed from the same secret under their own label.
+  const visitors = visitorKey(ipSalt);
   const tickets = createTicketBook({ salt: ipSalt, limiter: createMemoryLimiter() });
   mountTickets(app, {
     tickets,
@@ -540,6 +561,18 @@ export function createApp({
       appUrl: env.APP_URL,
       secure: env.APP_ENV !== 'local',
     },
+    // Page views for the console (spec 0047, AC-1625), counted after the answer.
+    views: { visitorKey: visitors, keepAlive },
+  });
+
+  // The marketing site's beacon (spec 0047, AC-1627): only from SITE_ORIGINS, 60 a minute per address.
+  mountSiteHits(app, {
+    record: (visit) => identity.recordSiteVisit(visit),
+    origins: new Set((env.SITE_ORIGINS ?? []).map((origin) => new URL(origin).origin)),
+    limiter: createMemoryLimiter(),
+    visitorKey: visitors,
+    keepAlive,
+    ...(services.now === undefined ? {} : { now: services.now }),
   });
 
   // The signed in person's own picture (23 Oct 2026), for Settings › Profile: Google's, from our own origin (the

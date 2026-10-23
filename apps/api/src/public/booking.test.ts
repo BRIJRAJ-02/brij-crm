@@ -5,7 +5,8 @@
 // check, the rate limits and an unknown key.
 import { newId, type BookingCalendar, type BookingEvent } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { testQuery } from '@crm/db/testing';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createApp } from '../app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
 import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts';
@@ -50,11 +51,21 @@ afterAll(async () => {
 });
 
 /** A request as the public page sends it through the edge, from one client address. */
-function visit(path: string, init: { method?: string; body?: unknown; ip?: string; origin?: string | null } = {}) {
+function visit(
+  path: string,
+  init: {
+    method?: string;
+    body?: unknown;
+    ip?: string;
+    origin?: string | null;
+    headers?: Record<string, string>;
+  } = {},
+) {
   const headers: Record<string, string> = {
     [EDGE_HEADER]: TEST_EDGE_SECRET,
     'x-forwarded-for': init.ip ?? newIp(),
     'content-type': 'application/json',
+    ...init.headers,
   };
   if (init.origin !== null) {
     // The edge forwards it as its own header; locally (no edge) the browser's Origin is read.
@@ -362,5 +373,32 @@ describe('the guest page’s changes and the host’s (milestone 2: AC-638 to AC
     ).toEqual({ cancelled: true });
     const seen = await visit(`manage/${token}`);
     expect(await seen.json()).toMatchObject({ state: 'cancelled', cancelReason: 'Ill.' });
+  });
+});
+
+describe('page views for the operator console (spec 0047, AC-1625)', () => {
+  const CHROME =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+  const { ownerUrl } = inject('testDatabase');
+  const viewsOf = (pageId: string) =>
+    testQuery<{ views: number }>(ownerUrl, 'select views from booking_page_views where page_id = $1 order by views', [
+      pageId,
+    ]);
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 200));
+
+  it('counts each load of a visitor once a day, by visitor, and never a host, a bot or no browser at all', async () => {
+    const m = await memberWithWorkspace(app);
+    const page = await pageOf(m);
+    const ip = newIp();
+    for (let load = 0; load < 2; load += 1) {
+      expect((await visit(`${page.publicKey}/viewer`, { ip, headers: { 'user-agent': CHROME } })).status).toBe(200);
+    }
+    await visit(`${page.publicKey}/viewer`, { headers: { 'user-agent': CHROME } });
+    // The host on their own page, a crawler, and a request with no user agent: none counted.
+    await visit(`${page.publicKey}/viewer`, { headers: { 'user-agent': CHROME, cookie: m.cookie } });
+    await visit(`${page.publicKey}/viewer`, { headers: { 'user-agent': 'Googlebot/2.1' } });
+    await visit(`${page.publicKey}/viewer`);
+    await settle();
+    expect((await viewsOf(page.id)).map((row) => row.views)).toEqual([1, 2]);
   });
 });

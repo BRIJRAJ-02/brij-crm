@@ -110,7 +110,7 @@ export const RuleCondition = FilterGroup;
 export type RuleCondition = FilterGroup;
 
 /** A rule's message as sent: plain text, checked to 1 to 200 characters by `checkRuleSettings`. */
-const RuleMessage = z.string().max(2000);
+const RuleMessage = z.string().max(2000, { error: 'Keep the message to 2,000 characters.' });
 
 /**
  * One rule in an attribute's `rules` input (spec 0013, AC-252): its id (a

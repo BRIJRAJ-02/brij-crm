@@ -1,6 +1,10 @@
 // Round robin's copy (spec 0029): Settings › Scheduling › Round robin, the group dialog, and a round robin page's
 // Team card. Plain words, no dashes as punctuation. In code these are rotations; on screen, round robin groups (the
 // owner, 22 October 2026: "if this is round robin, call it that").
+
+/** Who can be in a group (SS-R1), said in the member picker's hint until the picker can mark who can't. */
+const CAN_JOIN = 'Only people with hours or a calendar can join.';
+
 export const strings = {
   title: 'Round robin',
   group: 'Scheduling',
@@ -18,10 +22,9 @@ export const strings = {
   /** The help beside the title. */
   helpLabel: 'How round robin works',
   helpSteps: [
-    'Make a group of 2 to 20 teammates, and choose how it picks: Fair, Priority or Even.',
-    'Create a booking page, set Who it books to a round robin group, and pick this group.',
-    'A guest sees a time when someone in the group is free. The booking goes to one of the free teammates: with Fair, whoever has had the fewest meetings for their weight, so meetings are shared fairly.',
-    'See who got what in each group’s Distribution tab.',
+    'Make a group of teammates.',
+    'On a booking page, set Who it books to this group.',
+    'Each booking goes to a free teammate, shared fairly.',
   ],
   createPage: 'Create a booking page',
   failedTitle: 'Round robin didn’t load',
@@ -29,8 +32,8 @@ export const strings = {
   summary: (strategy: 'fair' | 'priority' | 'even', days: number, pages: number) =>
     [
       strategy === 'fair' ? 'Fair' : strategy === 'priority' ? 'Priority' : 'Even',
-      `counts the last ${String(days)} days`,
-      pages === 0 ? 'no pages yet' : pages === 1 ? 'used by 1 page' : `used by ${String(pages)} pages`,
+      `last ${String(days)} days`,
+      pages === 0 ? 'not on a booking page yet' : pages === 1 ? '1 booking page' : `${String(pages)} booking pages`,
     ].join(' · '),
   members: (name: string) => `Members of ${name}`,
   columns: {
@@ -44,7 +47,7 @@ export const strings = {
     remove: 'Remove',
   },
   shareOf: (count: number) => (count === 1 ? '1 meeting' : `${String(Math.round(count))} meetings`),
-  hidden: 'Hidden',
+  hidden: 'Only admins see this',
   noCalendar: 'No calendar',
   noCalendarHint: 'Booked from their hours and bookings only, until they connect a calendar.',
   priorities: ['Lowest', 'Low', 'Medium', 'High', 'Highest'] as const,
@@ -67,12 +70,22 @@ export const strings = {
   returning: 'Returning guests go to',
   returningChoices: { owner: 'Their owner', last_host: 'The host they met last', none: 'The group' } as const,
   returningHint: 'When that person is in this group and free.',
-  window: 'Counts over',
+  window: 'Count meetings from the last',
+  windowInfo: 'Fair and Even compare meetings from this period.',
   days: (count: number) => `${String(count)} days`,
   addMember: 'Add a member',
   addMemberPlaceholder: 'Search people',
+  /** On the server's refusal of someone who can't take meetings yet: their hours, in a new tab, so the group stays. */
+  setHours: 'Set hours',
+  /** Set hours' name: whose hours, and that they open in a new tab, as booking's "Open X in a new tab" says. */
+  setHoursFor: (name: string) => `Set hours for ${name}, in a new tab`,
+  /** On the server's refusal of one member: save the group without them. Short, so a long name never widens it. */
+  removeFromGroup: 'Remove from group',
+  /** Remove from group's name: its visible words first (WCAG 2.5.3), then the member it removes. */
+  removeRefused: (name: string) => `Remove from group: ${name}`,
   noMembersLeft: 'Everyone is in it already.',
-  membersCount: (count: number) => `${String(count)} of 20 members`,
+  /** The member picker's hint: how many, and who can join. */
+  membersHint: (count: number) => `${String(count)} of 20 members. ${CAN_JOIN}`,
   needTwo: 'Add at least 2 members.',
   tooMany: 'A group holds at most 20 members.',
   weightFor: (name: string, rotation: string) => `Weight for ${name} in ${rotation}`,
@@ -168,8 +181,9 @@ export const strings = {
   membersTab: 'Members',
   distributionTab: 'Distribution',
   distribution: {
-    intro: (days: number) =>
-      `Meetings in the last ${String(days)} days, against each member’s fair share by weight. A member sees only their own row.`,
+    intro: (days: number) => `Meetings in the last ${String(days)} days, against each person’s fair share.`,
+    /** A member's line: they see only their own row, with no fair share column. */
+    ownIntro: (days: number) => `Your meetings in the last ${String(days)} days.`,
     failed: 'Couldn’t load the distribution',
     count: 'Meetings',
     fair: 'Fair share',
@@ -197,7 +211,8 @@ export const strings = {
       );
       return parts.join(', ');
     },
-    shareTitle: (days: number) => `Share of meetings, last ${String(days)} days`,
+    /** The window is said once, in the section's line under it. */
+    shareTitle: 'Share of meetings',
     weeksTitle: 'Each week',
     weeksShow: 'Show the weeks as',
     weeksChart: 'Chart',
@@ -221,7 +236,7 @@ export const strings = {
     adjust: 'Adjust count',
     adjustTitle: (rotation: string) => `Adjust a count in ${rotation}`,
     by20: 'Adjust by',
-    by20Hint: 'A whole number from -20 to 20. Above zero counts as meetings they had; below as meetings they didn’t.',
+    by20Hint: 'Add meetings they had elsewhere (for example 2), or take some away (for example -2).',
     unitsInvalid: 'Use a whole number from -20 to 20, not 0.',
     noteRequired: 'Say why, in a few words.',
     adjustedNotice: (name: string) => `${name}’s count adjusted.`,

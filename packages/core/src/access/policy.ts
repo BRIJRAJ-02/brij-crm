@@ -273,7 +273,7 @@ export function roleAccess(principal: MemberPrincipal, rules: AccessRules = NO_R
 
 /**
  * An API key's access (spec 0009, AC-148; #34 stores keys): the permissions
- * among its scopes, never one of the seven that stay with people, and a data
+ * among its scopes, never one that stays with people (`KEY_FORBIDDEN_PERMISSIONS`), and a data
  * level on every object, `write` with `data.write`, `read` with `data.read`,
  * else none. A scope the catalog doesn't list grants nothing.
  */

@@ -17,10 +17,17 @@ import {
 import { renderSignInAlert, renderSignInCode, SIGN_IN_CODE_MINUTES } from '@crm/emails';
 import type { SignUpMethod } from '@crm/contracts/events';
 import type { IdentityStore, SecurityEventInput } from '@crm/db';
-import { betterAuth, type DBAdapter } from 'better-auth';
-import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
+import { type AuthContext, betterAuth, type DBAdapter } from 'better-auth';
+import {
+  addOAuthServerContext,
+  APIError,
+  createAuthMiddleware,
+  getOAuthState,
+  getSessionFromCtx,
+} from 'better-auth/api';
 import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
 import { generateRandomString, symmetricDecrypt, symmetricEncrypt } from 'better-auth/crypto';
+import { decryptOAuthToken } from 'better-auth/oauth2';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 import * as z from 'zod';
@@ -29,6 +36,7 @@ import {
   deviceLabel,
   FRESH_MESSAGE,
   SECOND_FACTOR_MESSAGE,
+  servedPicture,
   sessionFreshness,
   sweepAccountHistory,
 } from '@crm/core';
@@ -42,6 +50,17 @@ import { scrubText } from '@crm/contracts/monitoring';
 import { createAllowlist } from './allowlist.ts';
 import { authErrorResponse } from './errors.ts';
 import {
+  type GooglePhotoResult,
+  idTokenPicture,
+  isProfileReturn,
+  LINK_SOCIAL_PATH,
+  LinkGoogleBody,
+  linkFailure,
+  PHOTO_PURPOSE,
+  profileWithResult,
+  userinfoPicture,
+} from './google-photo.ts';
+import {
   BACKUP_CODE_COUNT,
   SECOND_STEP_FAILURES,
   SECOND_STEP_LOCK_SECONDS,
@@ -50,6 +69,9 @@ import {
   stripTokens,
   totpMatches,
   PENDING_COOKIE,
+  pendingPicture,
+  pendingPictureId,
+  pendingPictureValue,
   TRUST_DEVICE_COOKIE,
   TRUST_DEVICE_SECONDS,
   trustToken,
@@ -89,6 +111,12 @@ export const CODE_CHECKS_PER_EMAIL_DAY = { window: 24 * 60 * 60, max: 40 } as co
  */
 export const OTHER_AUTH_ROUTES_PER_IP = { window: 600, max: 600 } as const;
 
+/** A person's linked Google account as Sync Google photo reads it: the stored id token and the access token. */
+interface LinkedGoogle {
+  readonly idToken?: string;
+  readonly accessToken?: string;
+}
+
 /** A fixed window limit, as Better Auth's limiter takes it. */
 interface Rule {
   readonly window: number;
@@ -118,9 +146,11 @@ const DAY_SECONDS = 24 * 60 * 60;
  * session read, and two factor's setup, turning off, new backup codes and the
  * second step (spec 0033, AC-900). Sign out deletes its own session, so the
  * revoke routes stay shut. Passkeys were taken out on 22 October 2026, so the
- * passkey plugin's routes are gone with it. Everything else Better Auth offers (changing the
- * user, listing or revoking sessions, linking accounts, the email second
- * factor) answers 404, so a route we never reviewed can't be reached.
+ * passkey plugin's routes are gone with it. Linking Google (23 October 2026)
+ * serves Profile's Sync Google photo only: Google, back to Profile, nothing
+ * else it takes. Everything else Better Auth offers (changing the user,
+ * listing or revoking sessions, listing or unlinking accounts, the email
+ * second factor) answers 404, so a route we never reviewed can't be reached.
  */
 export const AUTH_ROUTES: ReadonlySet<string> = new Set([
   SEND_CODE_PATH,
@@ -129,6 +159,7 @@ export const AUTH_ROUTES: ReadonlySet<string> = new Set([
   '/callback/google',
   '/sign-out',
   '/get-session',
+  LINK_SOCIAL_PATH,
   ...TWO_FACTOR_ROUTES,
 ]);
 
@@ -175,6 +206,11 @@ export interface AuthSession {
    * milestone 4). A session older than the field reads as its creation.
    */
   readonly verifiedAt: Date;
+  /**
+   * How it last proved itself: with a second factor (an app or backup code), or an email code or Google alone (a
+   * remembered device skips the app). Absent reads as `email`. The operator console asks for `second_factor`.
+   */
+  readonly verifiedWith?: 'email' | 'second_factor';
   /** Whether the person has the authenticator app on, their one second factor. */
   readonly twoFactorEnabled: boolean;
 }
@@ -272,6 +308,8 @@ export function forwardedHeaders(headers: Headers, clientIp: string | undefined,
 
 /** The body of a route that names an email: the shared email schema (trimmed, lowercased, 254 at most). */
 const EmailBody = z.looseObject({ email: EmailValue });
+/** What a sign in body without a usable email answers with. */
+const EMAIL_NEEDED = 'Enter an email address, such as ada@example.com.';
 const SendCodeBody = z.object({ email: EmailValue, type: z.string() });
 const SignInCodeBody = z.object({ email: EmailValue });
 
@@ -301,9 +339,7 @@ async function checkEmail(request: Request): Promise<Request | Response> {
   const parsed = EmailBody.safeParse(body);
   if (!parsed.success) {
     const issue = parsed.error.issues.find((found) => found.path[0] === 'email');
-    return emailInvalid(
-      issue === undefined || issue.code === 'invalid_type' ? 'Send an email address.' : issue.message,
-    );
+    return emailInvalid(issue === undefined || issue.code === 'invalid_type' ? EMAIL_NEEDED : issue.message);
   }
   const headers = new Headers(request.headers);
   headers.delete('content-length');
@@ -326,8 +362,9 @@ function hasIdToken(body: unknown): boolean {
   return typeof body === 'object' && body !== null && 'idToken' in body && body.idToken !== undefined;
 }
 
-function inputInvalid(): APIError {
-  return new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message: 'Send an email address.' });
+/** A body this route can't take, refused in the words that say what to send (an email, unless told otherwise). */
+function inputInvalid(message: string = EMAIL_NEEDED): APIError {
+  return new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message });
 }
 
 /**
@@ -337,10 +374,15 @@ function inputInvalid(): APIError {
  * row, turning an expired code's OTP_EXPIRED into INVALID_OTP.
  */
 async function hasLiveCode(adapter: Pick<DBAdapter, 'count'>, email: string): Promise<boolean> {
+  return isLiveVerification(adapter, `sign-in-otp-${email}`);
+}
+
+/** Whether a verification row named `identifier` is there and hasn't expired, without deleting anything. */
+async function isLiveVerification(adapter: Pick<DBAdapter, 'count'>, identifier: string): Promise<boolean> {
   const live = await adapter.count({
     model: 'verification',
     where: [
-      { field: 'identifier', value: `sign-in-otp-${email}` },
+      { field: 'identifier', value: identifier },
       { field: 'expiresAt', value: new Date(), operator: 'gt' },
     ],
   });
@@ -393,8 +435,16 @@ function presentText<K extends string>(key: K, value: unknown): { [P in K]?: str
 /** What enabling two factor may send: the app only (the email second factor is off), and never our issuer. */
 const EnableBody = z.strictObject({ method: z.literal('totp').optional() });
 
+/** The second step's routes: an app code or a backup code. */
+const SECOND_STEP_ROUTES: ReadonlySet<string> = new Set(['/two-factor/verify-totp', '/two-factor/verify-backup-code']);
+
 /** What a second step's backup code may send: the code, and whether to remember the device. */
 const SecondStepBody = z.strictObject({ code: z.string().max(40), trustDevice: z.boolean().optional() });
+
+/** How a session last proved itself, as the adapter hands it: `second_factor` only when it says so. */
+function verifiedWithOf(session: object): 'email' | 'second_factor' {
+  return 'verifiedWith' in session && session.verifiedWith === 'second_factor' ? 'second_factor' : 'email';
+}
 
 /** A session's `verifiedAt` as the adapter hands it (a Date, or its text), else when the session was made. */
 function verifiedAtOf(value: unknown, createdAt: Date): Date {
@@ -477,19 +527,89 @@ export function createAuth({
       }
     }
   }
-  /**
-   * Saves the picture Google named in this request as the account's, when it has none or an older one of Google's
-   * (https only): only for a sign in that stands, never one held back for its second step. A failure is logged,
-   * never thrown.
-   */
-  async function savePicture(userId: string): Promise<void> {
+  /** The picture Google's profile named in this request, when it is an account picture of Google's (allowlisted). */
+  function notedPicture(userId: string): string | undefined {
     const picture = googlePictures.getStore()?.at(-1);
-    if (picture === undefined) return;
+    return picture !== undefined && servedPicture(userId, picture) !== undefined ? picture : undefined;
+  }
+  /**
+   * Saves a picture of Google's as the account's, when it has none or an older one of Google's (Google's picture
+   * hosts, https only: `setUserImageFromGoogle`). Answers whether the account's picture is now that one: undefined
+   * when saving failed, which is logged, never thrown.
+   */
+  async function applyPicture(userId: string, picture: string): Promise<boolean | undefined> {
     try {
-      if (await identity.setUserImageFromGoogle(userId, picture)) log.info('Account picture set from Google', {});
+      if (await identity.setUserImageFromGoogle(userId, picture)) {
+        log.info('Account picture set from Google', {});
+        return true;
+      }
+      return (await identity.userImage(userId)) === picture.trim();
     } catch (error) {
       log.warn('Account picture not set', { error: error instanceof Error ? error.name : typeof error });
+      return undefined;
     }
+  }
+  /** Saves the picture Google named in this request: only for a sign in that stands, never one held back. */
+  async function savePicture(userId: string): Promise<void> {
+    const picture = notedPicture(userId);
+    if (picture !== undefined) await applyPicture(userId, picture);
+  }
+  /**
+   * Profile's Sync Google photo, once Google is linked: how saving Google's current picture went. The picture is
+   * the one this request noted, else the claim in the id token the link stored, else Google's userinfo for the
+   * link's access token (production's first syncs noted none, 23 Oct 2026). Logs which source answered, never the URL.
+   */
+  async function syncPicture(
+    userId: string,
+    linkedAccount: () => Promise<LinkedGoogle | undefined>,
+  ): Promise<GooglePhotoResult> {
+    const noted = googlePictures.getStore()?.length ?? -1;
+    // The hosts of pictures turned away (never their paths), so a log says why none was found.
+    const refused = new Set<string>();
+    const take = (candidate: string | undefined): string | undefined => {
+      const kept = served(userId, candidate);
+      if (candidate !== undefined && kept === undefined) {
+        refused.add(URL.canParse(candidate) ? new URL(candidate).hostname : 'unreadable');
+      }
+      return kept;
+    };
+    let source = 'request';
+    let picture = take(googlePictures.getStore()?.at(-1));
+    if (picture === undefined) {
+      const account = await linkedAccount();
+      source = 'id-token';
+      picture = take(idTokenPicture(account?.idToken));
+      if (picture === undefined && account?.accessToken !== undefined) {
+        source = 'userinfo';
+        picture = take(await userinfoPicture(account.accessToken));
+      }
+    }
+    if (picture === undefined) {
+      log.info('Google photo not found', { noted, source, refused: [...refused] });
+      return 'none';
+    }
+    const current = await applyPicture(userId, picture);
+    log.info('Google photo found', { noted, source, saved: current ?? 'failed' });
+    return current === undefined ? 'failed' : current ? 'synced' : 'kept';
+  }
+  /** The person's Google account as the link just stored it: its id token, and its access token decrypted. */
+  async function linkedGoogle(context: AuthContext, userId: string): Promise<LinkedGoogle | undefined> {
+    try {
+      // The one the link just wrote is the newest Google row, should a person ever have two.
+      const account = (await context.internalAdapter.findAccounts(userId))
+        .filter((each) => each.providerId === 'google')
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+      if (account === undefined) return undefined;
+      const accessToken = account.accessToken ? await decryptOAuthToken(account.accessToken, context) : undefined;
+      return { idToken: account.idToken ?? undefined, accessToken: accessToken || undefined };
+    } catch (error) {
+      log.warn('Google account not read', { error: error instanceof Error ? error.name : typeof error });
+      return undefined;
+    }
+  }
+  /** `picture` when it is an account picture of Google's (allowlisted), else undefined. */
+  function served(userId: string, picture: string | undefined): string | undefined {
+    return picture !== undefined && servedPicture(userId, picture) !== undefined ? picture : undefined;
   }
   // The year old security history goes at most once a day per process, after a sign in (AC-898): no timer keeps
   // the database awake.
@@ -632,6 +752,7 @@ export function createAuth({
         [SEND_CODE_PATH]: perTrustedIp(CODE_SENDS_PER_IP),
         '/sign-in/*': perTrustedIp(SIGN_INS_PER_IP),
         '/two-factor/*': perTrustedIp(TWO_FACTOR_PER_IP),
+        [LINK_SOCIAL_PATH]: perTrustedIp(SIGN_INS_PER_IP),
         '/**': perTrustedIp(),
       },
     },
@@ -755,6 +876,30 @@ export function createAuth({
             message: 'Sign in with Google from its own page.',
           });
         }
+        // Profile's Sync Google photo (23 Oct 2026): Google only, back to that Profile page either way, and none of
+        // the rest linking takes. Its callback knows it by the mark in its state, which no caller can set.
+        if (ctx.path === LINK_SOCIAL_PATH) {
+          const body = LinkGoogleBody.safeParse(ctx.body ?? {});
+          if (
+            !body.success ||
+            !isProfileReturn(body.data.callbackURL, appOrigin) ||
+            body.data.errorCallbackURL !== body.data.callbackURL
+          ) {
+            throw new APIError('BAD_REQUEST', {
+              code: 'INPUT_INVALID',
+              message: 'Sync your Google photo from Settings › Profile.',
+            });
+          }
+          // Whether Google was linked before, so a link this makes is kept in the security history. Signed out,
+          // Better Auth's own session check refuses the route next.
+          const current = await getSessionFromCtx(ctx);
+          const wasLinked = current === null ? true : await identity.hasGoogleAccount(current.user.id);
+          await addOAuthServerContext({
+            [PHOTO_PURPOSE.key]: PHOTO_PURPOSE.value,
+            [PHOTO_PURPOSE.wasLinked]: wasLinked,
+          });
+          return;
+        }
         // Two factor's routes from a browser (spec 0033): setup and new codes need a recent check, turning off a
         // second factor's (AC-885, AC-896); the second step's routes are only for a sign in held back for one. A call
         // from our own code is held to the same rules.
@@ -770,7 +915,8 @@ export function createAuth({
           if (ctx.path === '/two-factor/enable') {
             const { userId, sessionId } = signedIn();
             // Only the app: the email second factor is off, and the issuer is ours.
-            if (!EnableBody.safeParse(ctx.body ?? {}).success) throw inputInvalid();
+            if (!EnableBody.safeParse(ctx.body ?? {}).success)
+              throw inputInvalid('Set up two factor sign in with an authenticator app.');
             await requireFreshSession(userId, sessionId);
           } else if (ctx.path === '/two-factor/generate-backup-codes') {
             const { userId, sessionId } = signedIn();
@@ -794,7 +940,8 @@ export function createAuth({
             if (owner !== undefined) {
               throw new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message: 'Backup codes are for signing in.' });
             }
-            if (!SecondStepBody.safeParse(ctx.body ?? {}).success) throw inputInvalid();
+            if (!SecondStepBody.safeParse(ctx.body ?? {}).success)
+              throw inputInvalid('Enter one of your backup codes.');
           } else if (ctx.path === '/two-factor/verify-totp' && owner !== undefined) {
             // Signed in, this route only finishes setting the app up.
             const state = await identity.twoFactorState(owner.userId);
@@ -950,6 +1097,15 @@ export function createAuth({
                   identifier: `2fa-attempts-${identifier}`,
                   expiresAt,
                 });
+                // Google's picture waits beside the pending sign in, as long as it does, for its second step.
+                const picture = ctx.path === CALLBACK_ROUTE ? notedPicture(userId) : undefined;
+                if (picture !== undefined) {
+                  await ctx.context.internalAdapter.createVerificationValue({
+                    value: pendingPictureValue(userId, picture),
+                    identifier: pendingPictureId(identifier),
+                    expiresAt,
+                  });
+                }
                 await ctx.setSignedCookie(pending.name, identifier, ctx.context.secret, pending.attributes);
                 // The session never came to be, so neither did its sign in.
                 await identity.forgetSignInEvent(userId, made.session.id).catch((error: unknown) => {
@@ -960,6 +1116,57 @@ export function createAuth({
                 // Google's callback lands in the browser: send it to the second step.
                 if (ctx.path === CALLBACK_ROUTE) throw ctx.redirect(new URL(SECOND_STEP_PATH, appOrigin).toString());
                 return ctx.json({ twoFactorRedirect: true, twoFactorMethods: ['totp'] });
+              }),
+            },
+            {
+              // The second step of a held Google sign in (23 Oct 2026): once it stands, the picture kept beside it is
+              // saved; a step that ended without a session (too many wrong codes, or gone) drops it. A wrong code
+              // leaves both waiting, and an expired one is never read.
+              matcher: (context: { readonly path?: string }) =>
+                context.path !== undefined && SECOND_STEP_ROUTES.has(context.path),
+              handler: createAuthMiddleware(async (ctx) => {
+                // Signed in already, `verify-totp` finishes setting the app up: no sign in to finish.
+                if (ctx.context.session !== null) return;
+                const pending = ctx.context.createAuthCookie(PENDING_COOKIE);
+                const pendingId = await ctx.getSignedCookie(pending.name, ctx.context.secret);
+                if (typeof pendingId !== 'string' || pendingId === '') return;
+                const made = ctx.context.newSession;
+                if (ctx.context.returned instanceof Error || made === null) {
+                  if (!(await isLiveVerification(ctx.context.adapter, pendingId))) {
+                    await ctx.context.internalAdapter.deleteVerificationByIdentifier(pendingPictureId(pendingId));
+                  }
+                  return;
+                }
+                const kept = await ctx.context.internalAdapter.consumeVerificationValue(pendingPictureId(pendingId));
+                const picture = kept === null ? undefined : pendingPicture(kept.value, made.user.id);
+                if (picture !== undefined && servedPicture(made.user.id, picture) !== undefined) {
+                  await applyPicture(made.user.id, picture);
+                }
+              }),
+            },
+            {
+              // Profile's Sync Google photo (23 Oct 2026): the link's callback, known by its state's mark. Linked (or
+              // already linked to this person), Google's picture is saved; either way the browser goes back to
+              // Profile with how it went.
+              matcher: (context: { readonly path?: string }) => context.path === CALLBACK_ROUTE,
+              handler: createAuthMiddleware(async (ctx) => {
+                const state = await getOAuthState();
+                const link = state?.link;
+                if (link === undefined || state?.serverContext?.[PHOTO_PURPOSE.key] !== PHOTO_PURPOSE.value) return;
+                const profile = state.callbackURL;
+                // Checked when the link started; held to it again, so this never sends anyone anywhere else.
+                if (typeof profile !== 'string' || !isProfileReturn(profile, appOrigin)) return;
+                const location = ctx.context.responseHeaders?.get('location') ?? undefined;
+                const linked = location === profile;
+                // A new way to sign in: Account › Sign in and devices lists it (AC-898).
+                if (linked && state.serverContext[PHOTO_PURPOSE.wasLinked] === false) {
+                  await keepEvent({ userId: link.userId, kind: 'google_linked' });
+                }
+                const result = linked
+                  ? await syncPicture(link.userId, () => linkedGoogle(ctx.context, link.userId))
+                  : linkFailure(location);
+                if (result !== 'synced') log.info('Google photo not synced', { result });
+                throw ctx.redirect(profileWithResult(profile, result));
               }),
             },
           ],
@@ -998,6 +1205,7 @@ export function createAuth({
         user: { id, name, email, emailVerified, ...(typeof image === 'string' ? { image } : {}) },
         setCookies: answered.getSetCookie(),
         verifiedAt: verifiedAtOf(verified, response.session.createdAt),
+        verifiedWith: verifiedWithOf(response.session),
         twoFactorEnabled: isTwoFactorUser(response.user),
       };
     },

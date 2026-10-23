@@ -23,6 +23,11 @@ export const Me = z.object({
   user: SignedInUser,
   workspaces: z.array(WorkspaceSummary),
   lastWorkspaceId: Uuid.optional(),
+  /**
+   * Whether the person is on `OPERATOR_EMAILS` with a verified email (spec 0047, AC-1619): the account menu shows
+   * "Super admin" for them. Never access: every `operator.*` call decides again.
+   */
+  isOperator: z.boolean(),
 });
 /** Who is signed in, and their workspaces. */
 export type Me = z.infer<typeof Me>;

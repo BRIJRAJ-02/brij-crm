@@ -86,7 +86,7 @@ test.describe('sidebar', () => {
     await expect(nav(page).getByRole('link', { name: 'Trash', exact: true })).toHaveCount(0);
     await nav(page).getByRole('link', { name: 'Settings', exact: true }).click();
     await page.getByRole('navigation').getByRole('link', { name: 'Trash', exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/trash$`));
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash$`));
     await page.goto(`/w/${slug}/objects/people`);
     await expect(page).toHaveURL(objectUrl(slug, 'people'));
 
@@ -276,10 +276,14 @@ test.describe('sidebar', () => {
     await expect(page.getByText('Deleted Ada Byron.')).toBeVisible();
     await expect(ada).toHaveCount(0);
     await expect(favourites).toBeVisible();
+    // The trash's old address opens it in Settings (A120), where the settings sidebar stands in for this one.
     await page.goto(`/w/${slug}/trash`);
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash$`));
     const trash = page.getByRole('grid', { name: 'Trash' });
     await trash.getByRole('gridcell', { name: /^Select Ada Byron/ }).click();
     await bar.getByRole('button', { name: 'Restore' }).click();
+    await expect(page.getByText('Restored Ada Byron.')).toBeVisible();
+    await page.getByRole('navigation', { name: 'Settings' }).getByRole('link', { name: 'Leave settings' }).click();
     await expect(ada).toBeVisible();
 
     // Remove from favourites, from the item's menu, unstars it; a reload keeps that (AC-934, AC-936).

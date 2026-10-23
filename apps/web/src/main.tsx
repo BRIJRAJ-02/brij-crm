@@ -3,6 +3,7 @@
 // stylesheet, since Vite links a shared chunk's CSS before this entry's
 // (build.test.ts checks).
 import '@crm/ui/styles.css';
+import { installPlainErrors } from '@crm/contracts/plain-errors';
 import { createDataLayer, createIdMinter } from '@crm/data';
 import { createToasts, LOADING_TIMING, UiProvider, type ToastContent } from '@crm/ui';
 import { createThemeController, safeLocalStorage } from '@crm/ui/theme';
@@ -36,6 +37,10 @@ const monitor = startMonitoring({
   target: window,
   load: () => import('./monitoring/sentry.ts'),
 });
+
+// Zod's own messages in plain words, before any screen checks what someone typed with a shared schema (a cell's
+// editor): a schema's own message still wins. It loads no Zod: Zod reads the map when a lazy chunk brings it.
+installPlainErrors();
 
 // One toast queue for the app, shared by the screens and the data layer.
 const toasts = createToasts();

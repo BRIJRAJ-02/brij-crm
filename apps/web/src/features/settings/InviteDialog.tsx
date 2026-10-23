@@ -2,7 +2,7 @@
 // Purpose: invite people to the workspace by email, each with a role (spec 0031, AC-803).
 // Main task: type an address per row (+ Add another, or Enter, makes the next; a pasted list splits into rows), pick
 // each row's role where it differs, then Invite; the dialog then says who was invited.
-// Leaves out: the invite link (the Invitations tab's card), email domains, and a seat line (until #38 sets limits).
+// Leaves out: the invite link (the Joining tab's Other ways to join), email domains, and a seat line (until #38 sets limits).
 import type { DataLayer, RoleOption } from '@crm/data';
 import { Button, Callout, InviteRows, Modal, Skeleton, useDelayedLoading } from '@crm/ui';
 import { strings } from './members-strings.ts';

@@ -6,6 +6,7 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { PLAIN_ERRORS } from '@crm/contracts/plain-words';
 import { build } from 'vite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { firstLoad, type Manifest } from './first-load.ts';
@@ -169,8 +170,12 @@ describe('the first load', () => {
   // Rolldown merges shared chunks into the entries that need them, unless any module in the build uses top level
   // await: then every route's file becomes its own chunk, and the first load went from 30 files to 65, 42 kB
   // more gzipped (21 October 2026). Keep top level await out of every entry (src/public/main.ts runs a function).
+  // 41 since the plain words became a file of their own (23 October 2026): the app loads them up front and the
+  // booking page only after a refusal, so the build can't merge them into the app's entry. Same bytes, one file.
+  // 42 since Settings › Super admin's address reader (spec 0047, features/admin/search.ts, 0.3 kB): its routes read
+  // the period up front, and the build keeps it apart from the entry as it does the bookings routes' search.
   it('stays merged into a few dozen files, as it is with no top level await in the build', () => {
-    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(40);
+    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(42);
   });
 
   it('never loads the grid, editor, charts or schema map chunk up front', () => {
@@ -196,5 +201,51 @@ describe('the first load', () => {
       expect(everything.some((text) => text.includes(marker))).toBe(true);
       expect(upFront.filter((text) => text.includes(marker))).toEqual([]);
     }
+  });
+
+  // The plain words' safety net (`installPlainErrors` in main.tsx) writes Zod's global config itself, so Zod stays
+  // with the screens that validate: importing Zod's own `config` put its core in the entry, 3.6 kB gzipped (23
+  // October 2026). `_zod` is the property Zod's core keeps every schema's internals on.
+  it('never loads Zod up front', () => {
+    const ZOD_CORE = /["'`]_zod["'`]/;
+    const read = (file: string) => readFileSync(path.join(outDir, file), 'utf8');
+    const everything = assets.filter((file) => file.endsWith('.js')).map((file) => read(path.join('assets', file)));
+    expect(everything.some((text) => ZOD_CORE.test(text))).toBe(true);
+    expect(firstLoad(manifest).js.filter((file) => ZOD_CORE.test(read(file)))).toEqual([]);
+  });
+
+  // The public pages install no safety net (main.tsx is the app's), which holds only while nothing they can load,
+  // even later, is Zod: a hosted form that validated with a contract schema would show Zod's own English.
+  it('loads no Zod from the booking page or the hosted form, now or later', () => {
+    const ZOD_CORE = /["'`]_zod["'`]/;
+    const reachable = (entry: string): string[] => {
+      const seen = new Set<string>();
+      const visit = (key: string) => {
+        const chunk = manifest[key];
+        if (chunk === undefined || seen.has(key)) return;
+        seen.add(key);
+        for (const next of [...(chunk.imports ?? []), ...(chunk.dynamicImports ?? [])]) visit(next);
+      };
+      visit(entry);
+      return [...seen].flatMap((key) => {
+        const file = manifest[key]?.file;
+        return file?.endsWith('.js') === true ? [file] : [];
+      });
+    };
+    for (const entry of ['book.html', 'form.html']) {
+      const withZod = reachable(entry).filter((file) => ZOD_CORE.test(readFileSync(path.join(outDir, file), 'utf8')));
+      // A public entry that needs Zod must call installPlainErrors() before it validates anything, then move here.
+      expect(withZod, `${entry} reaches Zod`).toEqual([]);
+    }
+  });
+
+  // The public pages check nothing with Zod in the browser, so they never carry the safety net's words: they rode
+  // in a chunk the booking page shares with the app, 1 kB gzipped, while `refusalSummary` sat in the data layer's
+  // errors.ts (23 October 2026). The app loads them up front, for main.tsx's install and `refusalSummary`.
+  it('keeps the plain words in the app, out of the booking page and the hosted form', () => {
+    const carries = (file: string) => readFileSync(path.join(outDir, file), 'utf8').includes(PLAIN_ERRORS.extra);
+    expect(firstLoad(manifest).js.some(carries)).toBe(true);
+    expect(firstLoad(manifest, 'book.html').js.filter(carries)).toEqual([]);
+    expect(firstLoad(manifest, 'form.html').js.filter(carries)).toEqual([]);
   });
 });

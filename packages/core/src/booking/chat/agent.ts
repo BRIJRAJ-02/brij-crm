@@ -342,11 +342,14 @@ function moreSuggestions(offers: readonly string[], now: DateTime): readonly str
   return [SAY.later, furthest - now.toMillis() <= 2 * 86_400_000 ? SAY.nextWeek : SAY.earliest];
 }
 
-/** Where the meeting happens, before there is a booking to say it about. */
+/**
+ * Where the meeting happens, before there is a booking to say it about. A video call never promises a link: before
+ * the booking nothing says one will be made (the guest page decides by the link itself), so its host sends it (QA Q77).
+ */
 function whereSentence(page: ChatPage): string {
   switch (page.location.type) {
     case 'video':
-      return 'It’s a video call. The link comes with the confirmation.';
+      return `It’s a video call. ${page.hostName} will send you the link.`;
     case 'phone':
       return `It’s a phone call. ${page.hostName} will call the number you give.`;
     case 'address':

@@ -236,7 +236,11 @@ export const UrlValue = z
   .transform(canonicalUrl);
 export type UrlValue = z.infer<typeof UrlValue>;
 
-const part = z.string().trim().min(1).max(200, { error: 'Keep each part of the address to 200 characters.' });
+const part = z
+  .string()
+  .trim()
+  .min(1, { error: 'Fill in this part of the address, or clear it.' })
+  .max(200, { error: 'Keep each part of the address to 200 characters.' });
 
 function inRange(limit: number) {
   return (value: string) => Math.abs(Number(value)) <= limit;
@@ -277,7 +281,11 @@ export function fullNameOf(firstName: string | undefined, lastName: string | und
     .join(' ');
 }
 
-const namePart = z.string().trim().min(1).max(200, { error: 'Keep each name to 200 characters.' });
+const namePart = z
+  .string()
+  .trim()
+  .min(1, { error: 'Fill in the name, or clear it.' })
+  .max(200, { error: 'Keep each name to 200 characters.' });
 
 /** A person's name. `fullName` is required, and is made from the first and last name when not given. */
 export const PersonalNameValue = z
@@ -319,7 +327,11 @@ export type RecordReferenceValue = z.infer<typeof RecordReferenceValue>;
 /** An uploaded file: its id, name, size in bytes and MIME type. */
 export const FileValue = z.object({
   fileId: z.string().trim().min(1, { error: 'Give the file.' }),
-  name: z.string().trim().min(1).max(255, { error: 'A file name has at most 255 characters.' }),
+  name: z
+    .string()
+    .trim()
+    .min(1, { error: 'Give the file a name.' })
+    .max(255, { error: 'A file name has at most 255 characters.' }),
   size: z.number().int().nonnegative({ error: 'Give the size in bytes.' }),
   contentType: z
     .string()

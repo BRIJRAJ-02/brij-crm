@@ -10,6 +10,8 @@ import { page, userEvent } from 'vitest/browser';
 import { ConditionsEditor } from './ConditionsEditor.tsx';
 import type { Fact } from './facts.ts';
 
+const company: Fact = { key: 'company', label: 'Company', kind: 'text' };
+
 const budget: Fact = {
   key: 'budget',
   label: 'Budget',
@@ -30,12 +32,21 @@ afterEach(() => {
 });
 
 /** The editor holding its conditions as a form's draft would, each change also told to `onChange`. */
-function Editor({ start, onChange }: { readonly start: ShowWhen; readonly onChange: (next: ShowWhen) => void }) {
+function Editor({
+  start,
+  onChange,
+  isReadOnly = false,
+}: {
+  readonly start: ShowWhen;
+  readonly onChange: (next: ShowWhen) => void;
+  readonly isReadOnly?: boolean;
+}) {
   const [value, setValue] = useState(start);
   return (
     <ConditionsEditor
       value={value}
-      facts={[budget]}
+      facts={[budget, company]}
+      isReadOnly={isReadOnly}
       onChange={(next) => {
         setValue(next);
         onChange(next);
@@ -44,7 +55,7 @@ function Editor({ start, onChange }: { readonly start: ShowWhen; readonly onChan
   );
 }
 
-async function draw(start: ShowWhen) {
+async function draw(start: ShowWhen, isReadOnly = false) {
   const onChange = vi.fn<(next: ShowWhen) => void>();
   const host = document.createElement('div');
   document.body.append(host);
@@ -53,7 +64,7 @@ async function draw(start: ShowWhen) {
   await act(async () => {
     root.render(
       <UiProvider locale="en-US" timeZone="UTC" toasts={createToasts()} navigate={() => undefined}>
-        <Editor start={start} onChange={onChange} />
+        <Editor start={start} onChange={onChange} isReadOnly={isReadOnly} />
       </UiProvider>,
     );
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -102,5 +113,17 @@ describe('ConditionsEditor', () => {
     await userEvent.click(trigger('Comparison'));
     await pick('is');
     expect(onChange).toHaveBeenLastCalledWith({ join: 'all', rules: [{ key: 'budget', op: 'is', value: 'Large' }] });
+  });
+
+  it('says what a typed value wants, since its box has no label over it (Q65)', async () => {
+    await draw({ join: 'all', rules: [{ key: 'company', op: 'is', value: '' }] });
+    const box = page.getByRole('textbox', { name: 'Value' }).element();
+    expect(box.getAttribute('placeholder')).toBe('Set value…');
+  });
+
+  it('shows no placeholder read only, so an empty value isn’t read as an ask to type', async () => {
+    await draw({ join: 'all', rules: [{ key: 'company', op: 'is', value: '' }] }, true);
+    const box = page.getByRole('textbox', { name: 'Value' }).element();
+    expect(box.getAttribute('placeholder')).toBeNull();
   });
 });

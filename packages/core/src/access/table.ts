@@ -102,6 +102,8 @@ export const ACCESS_TABLE = {
   getWorkspaceSecurity: { permission: 'security.manage' },
   setWorkspaceSecurity: { permission: 'security.manage' },
   signOutEveryone: { permission: 'security.manage' },
+  // Settings › History › Workspace changes (spec 0046, AC-4622): owners and admins read the audit log.
+  listAuditEvents: { permission: 'audit.read' },
   // Invitations (spec 0031, slice 2).
   inviteMembers: { permission: 'members.invite' },
   listInvitations: { permission: 'members.invite' },

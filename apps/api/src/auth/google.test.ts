@@ -21,7 +21,10 @@ import {
   signInApp,
   testConnections,
   turnOnTwoFactor,
+  withCookies,
 } from '../../test/sign-in.ts';
+import { GOOGLE_USERINFO, idTokenPicture } from './google-photo.ts';
+import { pendingPicture, pendingPictureValue, totpCode } from './two-factor.ts';
 
 const { identityUrl } = inject('testDatabase');
 const GOOGLE = { GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com', GOOGLE_CLIENT_SECRET: 'test-secret' };
@@ -48,8 +51,10 @@ interface GooglePerson {
   readonly email: string;
   readonly emailVerified: boolean;
   readonly name?: string;
-  /** Their profile picture, as Google's id token names it. */
+  /** Their profile picture, as Google's id token and userinfo name it. */
   readonly picture?: string;
+  /** False when the id token leaves the picture out, as Google may; userinfo still names it. */
+  readonly pictureInIdToken?: boolean;
 }
 
 /** A JWT shaped like Google's id token; unsigned, as Better Auth only decodes one from the token endpoint. */
@@ -65,7 +70,7 @@ function idToken(person: GooglePerson): string {
       email: person.email,
       email_verified: person.emailVerified,
       name: person.name ?? 'Grace Hopper',
-      ...(person.picture === undefined ? {} : { picture: person.picture }),
+      ...(person.picture === undefined || person.pictureInIdToken === false ? {} : { picture: person.picture }),
       iat: now,
       exp: now + 3600,
     }),
@@ -80,27 +85,43 @@ type TokenRequest = URLSearchParams;
 function fakeGoogle(person: GooglePerson): {
   readonly tokenCalls: () => number;
   readonly lastTokenRequest: () => TokenRequest | undefined;
+  readonly userinfoCalls: () => number;
 } {
   const real = globalThis.fetch;
   const requests: TokenRequest[] = [];
+  const tokens = new Set<string>();
+  let userinfo = 0;
   vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     // Google's picture hosts answer every picture as a small PNG.
     if (url.startsWith('https://lh3.googleusercontent.com/')) {
       return new Response(PNG, { headers: { 'content-type': 'image/png' } });
     }
+    // Userinfo answers only an access token this fake handed out, as Google answers only its own.
+    if (url === GOOGLE_USERINFO) {
+      userinfo += 1;
+      const bearer = new Headers(init?.headers).get('authorization')?.replace(/^Bearer /, '') ?? '';
+      if (!tokens.has(bearer)) return Response.json({ error: 'invalid_token' }, { status: 401 });
+      return Response.json({
+        sub: person.sub,
+        email: person.email,
+        ...(person.picture === undefined ? {} : { picture: person.picture }),
+      });
+    }
     if (!url.startsWith(TOKEN_ENDPOINT)) return real(input, init);
     const body = input instanceof Request ? await input.clone().text() : bodyText(init?.body);
     requests.push(new URLSearchParams(body));
+    const accessToken = `access-${randomUUID()}`;
+    tokens.add(accessToken);
     return Response.json({
-      access_token: `access-${randomUUID()}`,
+      access_token: accessToken,
       id_token: idToken(person),
       expires_in: 3599,
       token_type: 'Bearer',
       scope: 'openid email profile',
     });
   });
-  return { tokenCalls: () => requests.length, lastTokenRequest: () => requests.at(-1) };
+  return { tokenCalls: () => requests.length, lastTokenRequest: () => requests.at(-1), userinfoCalls: () => userinfo };
 }
 
 /** A request body as text: the form Better Auth sends, as a string or as URLSearchParams. */
@@ -411,5 +432,353 @@ describe('Google sign in, against a fake Google (AC-28)', () => {
     fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture: 'http://lh3.googleusercontent.com/a/x' });
     await googleRoundTrip(app, newIp());
     expect(await identity.userImage(userId)).toBeUndefined();
+  });
+});
+
+/** The picture rows kept beside held sign ins for `userId` (`2fa-picture-<pending>`), any expiry. */
+async function pendingPictures(userId: string): Promise<readonly { identifier: string }[]> {
+  return testQuery<{ identifier: string }>(
+    identityUrl,
+    `select identifier from auth.verification where identifier like '2fa-picture-%' and value like $1`,
+    [`%"userId":"${userId}"%`],
+  );
+}
+
+/** How many times Google was linked for `userId`, as the security history keeps it. */
+async function linkedEvents(userId: string): Promise<number> {
+  const rows = await testQuery<{ kind: string }>(
+    identityUrl,
+    `select kind from auth.security_event where user_id = $1 and kind = 'google_linked'`,
+    [userId],
+  );
+  return rows.length;
+}
+
+/** Signs a new person in by email code with two factor on; answers their id, email and second factors. */
+async function twoFactorPerson(app: App) {
+  const { email, cookie } = await signIn(app);
+  const { secret, backupCodes } = await turnOnTwoFactor(app, cookie);
+  const userId = (await stored(email)).users[0]?.id ?? '';
+  return { email, userId, secret, backupCodes };
+}
+
+describe('Google’s picture from a sign in held back for its second step (23 Oct 2026)', () => {
+  it('reads a kept picture back only for the person it was kept for', () => {
+    const ada = randomUUID();
+    const kept = pendingPictureValue(ada, 'https://lh3.googleusercontent.com/a/p');
+    expect(pendingPicture(kept, ada)).toBe('https://lh3.googleusercontent.com/a/p');
+    expect(pendingPicture(kept, randomUUID())).toBeUndefined();
+    for (const junk of ['', 'not json', 'null', '"x"', JSON.stringify({ userId: ada, picture: 7 })]) {
+      expect(pendingPicture(junk, ada), junk).toBeUndefined();
+    }
+  });
+
+  it('saves it once the second step stands, by an app code or a backup code', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    for (const method of ['totp', 'backup'] as const) {
+      const { email, userId, secret, backupCodes } = await twoFactorPerson(app);
+      const picture = `https://lh3.googleusercontent.com/a/held-${method}=s96-c`;
+      fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture });
+      const held = await googleRoundTrip(app, newIp());
+      expect(held.location).toBe(`${APP_URL}/two-factor`);
+      // Held back: nothing saved yet, the picture waits beside the pending sign in.
+      expect(await identity.userImage(userId)).toBeUndefined();
+      expect(await pendingPictures(userId)).toHaveLength(1);
+      const passed =
+        method === 'totp'
+          ? await authPost(app, '/two-factor/verify-totp', { code: totpCode(secret) }, { cookie: held.cookie })
+          : await authPost(app, '/two-factor/verify-backup-code', { code: backupCodes[0] }, { cookie: held.cookie });
+      expect(passed.status).toBe(200);
+      expect(await identity.userImage(userId)).toBe(picture);
+      expect(await pendingPictures(userId)).toEqual([]);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('saves nothing from a second step that failed (too many wrong codes), and drops what it kept', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, userId, secret } = await twoFactorPerson(app);
+    fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture: 'https://lh3.googleusercontent.com/a/x' });
+    const held = await googleRoundTrip(app, newIp());
+    expect(held.location).toBe(`${APP_URL}/two-factor`);
+    // A wrong code leaves the step open, and its picture with it.
+    const wrong = await authPost(app, '/two-factor/verify-totp', { code: '000000' }, { cookie: held.cookie });
+    expect(wrong.status).not.toBe(200);
+    expect(await pendingPictures(userId)).toHaveLength(1);
+    for (let tries = 1; tries < 5; tries += 1) {
+      await authPost(app, '/two-factor/verify-totp', { code: '000000' }, { cookie: held.cookie });
+    }
+    // Out of tries: the step is over, so even the right code saves nothing.
+    const late = await authPost(app, '/two-factor/verify-totp', { code: totpCode(secret) }, { cookie: held.cookie });
+    expect(late.status).not.toBe(200);
+    expect(await identity.userImage(userId)).toBeUndefined();
+    expect(await pendingPictures(userId)).toEqual([]);
+  });
+
+  it('saves nothing from a second step that expired, and drops what it kept', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, userId, secret } = await twoFactorPerson(app);
+    fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture: 'https://lh3.googleusercontent.com/a/y' });
+    const held = await googleRoundTrip(app, newIp());
+    const [kept] = await pendingPictures(userId);
+    const pendingId = kept?.identifier.slice('2fa-picture-'.length) ?? '';
+    // The 5 minutes pass: the pending sign in, its tries and its picture all expire together.
+    await testQuery(
+      identityUrl,
+      `update auth.verification set expires_at = now() - interval '1 minute' where identifier = any($1)`,
+      [[pendingId, `2fa-attempts-${pendingId}`, `2fa-picture-${pendingId}`]],
+    );
+    const late = await authPost(app, '/two-factor/verify-totp', { code: totpCode(secret) }, { cookie: held.cookie });
+    expect(late.status).not.toBe(200);
+    expect(await identity.userImage(userId)).toBeUndefined();
+    expect(await pendingPictures(userId)).toEqual([]);
+  });
+});
+
+describe('Sync Google photo, Settings › Profile (23 Oct 2026)', () => {
+  /** A Profile page's address on the app's origin. */
+  const profileOf = (slug: string) => new URL(`/w/${slug}/settings/account/profile`, APP_URL).href;
+
+  /** A signed in person with a workspace (Profile is per workspace); answers their client and Profile's address. */
+  async function profilePerson(app: App) {
+    const { email, cookie } = await signIn(app);
+    const client = rpcClient(app, cookie);
+    const slug = `photo-${randomUUID().slice(0, 8)}`;
+    await client.workspaces.create({ id: newId(), name: 'Acme', slug, memberName: 'Grace' });
+    const userId = (await stored(email)).users[0]?.id ?? '';
+    return { email, cookie, client, slug, userId, profile: profileOf(slug) };
+  }
+
+  /** The button's round trip: `/link-social` from Profile, then Google back to the callback. Answers where it went. */
+  async function syncRoundTrip(app: App, cookie: string, profile: string, google: string = 'code=fake-code') {
+    const ip = newIp();
+    const started = await authPost(
+      app,
+      '/link-social',
+      { provider: 'google', callbackURL: profile, errorCallbackURL: profile },
+      { cookie, 'x-forwarded-for': ip },
+    );
+    expect(started.status).toBe(200);
+    const { url } = (await started.json()) as { url: string };
+    const state = new URL(url).searchParams.get('state') ?? '';
+    const callback = await app.fetch(
+      new Request(`${APP_URL}/api/auth/callback/google?${google}&state=${state}`, {
+        headers: {
+          cookie: withCookies(cookie, cookieFrom(started)),
+          'x-forwarded-for': ip,
+          [EDGE_HEADER]: TEST_EDGE_SECRET,
+          [ORIGIN_HEADER]: APP_URL,
+        },
+      }),
+    );
+    expect(callback.status).toBe(302);
+    return callback.headers.get('location') ?? '';
+  }
+
+  it('links Google to an email code account and saves its photo, then takes a newer one with a new version', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, cookie, client, slug, userId, profile } = await profilePerson(app);
+    expect(await client.profile.get({ workspace: slug })).toMatchObject({ google: 'unlinked' });
+    expect((await client.profile.get({ workspace: slug })).image).toBeUndefined();
+    const sub = randomUUID();
+    const picture = 'https://lh3.googleusercontent.com/a/synced=s96-c';
+    fakeGoogle({ sub, email, emailVerified: true, picture });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=synced`);
+    expect(await identity.userImage(userId)).toBe(picture);
+    expect((await stored(email)).accounts).toEqual([{ user_id: userId, account_id: sub }]);
+    // A new way to sign in, kept in the security history once.
+    expect(await linkedEvents(userId)).toBe(1);
+    const first = await client.profile.get({ workspace: slug });
+    expect(first).toMatchObject({ google: 'linked' });
+    expect(first.image).toMatch(/^\/api\/me\/picture\?v=[0-9a-f]{12}$/);
+    // Changed at Google: synced again, the account takes it, and its path's version changes past any cache.
+    vi.unstubAllGlobals();
+    const newer = 'https://lh3.googleusercontent.com/a/newer-synced=s96-c';
+    fakeGoogle({ sub, email, emailVerified: true, picture: newer });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=synced`);
+    expect(await identity.userImage(userId)).toBe(newer);
+    const second = await client.profile.get({ workspace: slug });
+    expect(second.image).toMatch(/^\/api\/me\/picture\?v=[0-9a-f]{12}$/);
+    expect(second.image).not.toBe(first.image);
+    // The same photo again is still synced: it is the one on the profile.
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=synced`);
+    expect((await stored(email)).accounts).toHaveLength(1);
+    // Refreshing a link that was there is no new way to sign in.
+    expect(await linkedEvents(userId)).toBe(1);
+  });
+
+  it('says so when Google sends no photo, the person closes Google, or the account isn’t theirs, changing nothing', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, cookie, userId, profile } = await profilePerson(app);
+    fakeGoogle({ sub: randomUUID(), email, emailVerified: true });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=none`);
+    vi.unstubAllGlobals();
+    fakeGoogle({
+      sub: randomUUID(),
+      email: newEmail(),
+      emailVerified: true,
+      picture: 'https://lh3.googleusercontent.com/a/z',
+    });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=other-email`);
+    expect(await syncRoundTrip(app, cookie, profile, 'error=access_denied')).toBe(`${profile}?google-photo=cancelled`);
+    expect(await identity.userImage(userId)).toBeUndefined();
+    // A picture from anywhere but Google's picture hosts is never saved.
+    vi.unstubAllGlobals();
+    fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture: 'https://pictures.example/me.png' });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=none`);
+    expect(await identity.userImage(userId)).toBeUndefined();
+  });
+
+  it('finds the photo when the id token leaves it out: Google’s userinfo for the link’s own token', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, cookie, userId, profile } = await profilePerson(app);
+    const picture = 'https://lh3.googleusercontent.com/a/userinfo-only=s96-c';
+    const google = fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture, pictureInIdToken: false });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=synced`);
+    expect(await identity.userImage(userId)).toBe(picture);
+    // The token Better Auth stored (encrypted) was read back and sent as Google handed it out.
+    expect(google.userinfoCalls()).toBe(1);
+  });
+
+  it('saves nothing when userinfo names a picture that isn’t Google’s', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, cookie, userId, profile } = await profilePerson(app);
+    const google = fakeGoogle({
+      sub: randomUUID(),
+      email,
+      emailVerified: true,
+      picture: 'https://pictures.example/me.png',
+      pictureInIdToken: false,
+    });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=none`);
+    expect(google.userinfoCalls()).toBe(1);
+    expect(await identity.userImage(userId)).toBeUndefined();
+  });
+
+  it('asks userinfo nothing when the request already names the photo', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, cookie, profile } = await profilePerson(app);
+    const google = fakeGoogle({
+      sub: randomUUID(),
+      email,
+      emailVerified: true,
+      picture: 'https://lh3.googleusercontent.com/a/in-token=s96-c',
+    });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=synced`);
+    expect(google.userinfoCalls()).toBe(0);
+  });
+
+  it('reads a stored id token’s picture claim, and nothing from a token that isn’t one', () => {
+    const picture = 'https://lh3.googleusercontent.com/a/claim=s96-c';
+    expect(idTokenPicture(idToken({ sub: 's', email: 'a@b.test', emailVerified: true, picture }))).toBe(picture);
+    expect(idTokenPicture(idToken({ sub: 's', email: 'a@b.test', emailVerified: true }))).toBeUndefined();
+    expect(idTokenPicture(undefined)).toBeUndefined();
+    expect(idTokenPicture('not-a-token')).toBeUndefined();
+    expect(idTokenPicture('a.%%%.c')).toBeUndefined();
+  });
+
+  it('refuses a Google account another person signs in with, changing neither picture', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const sub = randomUUID();
+    const theirs = 'https://lh3.googleusercontent.com/a/theirs=s96-c';
+    const other = newEmail();
+    fakeGoogle({ sub, email: other, emailVerified: true, picture: theirs });
+    await googleRoundTrip(app, newIp());
+    const otherId = (await stored(other)).users[0]?.id ?? '';
+    vi.unstubAllGlobals();
+    const { email, cookie, userId, profile } = await profilePerson(app);
+    const google = fakeGoogle({
+      sub,
+      email,
+      emailVerified: true,
+      picture: 'https://lh3.googleusercontent.com/a/mine=s96-c',
+    });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=other-account`);
+    expect(await identity.userImage(userId)).toBeUndefined();
+    expect(await identity.userImage(otherId)).toBe(theirs);
+    expect(await linkedEvents(userId)).toBe(0);
+    // A refused link reads no one's stored token.
+    expect(google.userinfoCalls()).toBe(0);
+  });
+
+  it('never takes a sign in’s own data for the photo link: only the server marks one', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const victim = await profilePerson(app);
+    const email = newEmail();
+    fakeGoogle({
+      sub: randomUUID(),
+      email,
+      emailVerified: true,
+      picture: 'https://lh3.googleusercontent.com/a/forged',
+    });
+    const ip = newIp();
+    const started = await authPost(
+      app,
+      '/sign-in/social',
+      {
+        provider: 'google',
+        callbackURL: victim.profile,
+        additionalData: {
+          link: { userId: victim.userId, email: victim.email },
+          serverContext: { crmPurpose: 'google-photo', crmWasLinked: false },
+        },
+      },
+      { 'x-forwarded-for': ip },
+    );
+    expect(started.status).toBe(200);
+    const { url } = (await started.json()) as { url: string };
+    const state = new URL(url).searchParams.get('state') ?? '';
+    const callback = await app.fetch(
+      new Request(`${APP_URL}/api/auth/callback/google?code=fake-code&state=${state}`, {
+        headers: {
+          cookie: cookieFrom(started),
+          'x-forwarded-for': ip,
+          [EDGE_HEADER]: TEST_EDGE_SECRET,
+          [ORIGIN_HEADER]: APP_URL,
+        },
+      }),
+    );
+    // A plain sign in of the Google account's own person, back where it asked, with no result and nothing linked.
+    expect(callback.headers.get('location')).toBe(victim.profile);
+    expect(await identity.userImage(victim.userId)).toBeUndefined();
+    expect((await stored(victim.email)).accounts).toEqual([]);
+    expect(await linkedEvents(victim.userId)).toBe(0);
+  });
+
+  it('keeps a picture that isn’t Google’s', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, cookie, userId, profile } = await profilePerson(app);
+    const own = 'https://pictures.example/own.png';
+    await testQuery(identityUrl, `update auth."user" set image = $2 where id = $1`, [userId, own]);
+    fakeGoogle({ sub: randomUUID(), email, emailVerified: true, picture: 'https://lh3.googleusercontent.com/a/k' });
+    expect(await syncRoundTrip(app, cookie, profile)).toBe(`${profile}?google-photo=kept`);
+    expect(await identity.userImage(userId)).toBe(own);
+  });
+
+  it('starts only from Profile, for Google, signed in, with nothing else linking takes', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { cookie, profile } = await profilePerson(app);
+    const start = (body: unknown, withCookie = true) =>
+      authPost(app, '/link-social', body, { ...(withCookie ? { cookie } : {}), 'x-forwarded-for': newIp() });
+    const base = { provider: 'google', callbackURL: profile, errorCallbackURL: profile };
+    for (const body of [
+      { ...base, callbackURL: 'https://elsewhere.test/w/acme/settings/account/profile' },
+      { ...base, callbackURL: `${APP_URL}/w/acme/settings/account/sessions` },
+      { ...base, callbackURL: `${profile}?next=/x` },
+      { ...base, errorCallbackURL: `${APP_URL}/sign-in` },
+      { ...base, scopes: ['https://www.googleapis.com/auth/drive'] },
+      { ...base, idToken: { token: 'x' } },
+      { ...base, requestSignUp: true },
+      { ...base, additionalData: { purpose: 'x' } },
+      { ...base, provider: 'github' },
+      { ...base, loginHint: 'someone@example.com' },
+      { ...base, additionalParams: { prompt: 'none' } },
+      { ...base, newUserCallbackURL: `${APP_URL}/welcome` },
+    ]) {
+      const refused = await start(body);
+      expect(refused.status, JSON.stringify(body)).toBe(400);
+      expect(await refused.json()).toMatchObject({ code: 'INPUT_INVALID' });
+    }
+    expect((await start(base, false)).status).toBe(401);
   });
 });

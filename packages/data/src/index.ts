@@ -93,6 +93,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
+import type { AuditLog } from './audit/log.ts';
 import { createAuth } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
 import { createRecordFactsStore, type RecordFacts } from './records/facts.ts';
@@ -105,6 +106,7 @@ import {
   withRetryAfter,
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
+import { refusalFor, refusalSummary } from './refusals.ts';
 import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
@@ -163,6 +165,7 @@ export type {
 } from './preferences/store.ts';
 import type { SchedulesView } from './schedules/store.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
+import { createOperatorStore } from './operator/store.ts';
 import {
   createCalendarsStore,
   type CalendarChange,
@@ -236,6 +239,31 @@ import type {
 
 export type { GlobalSearch, GlobalSearchState } from './search/global.ts';
 export type { RecentItem, RecordHit, SearchMatch, ViewHit } from '@crm/contracts';
+// The operator console (spec 0047): the super admin's read only analytics.
+export type {
+  OperatorHeld,
+  OperatorState,
+  OperatorStore,
+  OperatorUsersHeld,
+  OperatorUsersState,
+} from './operator/store.ts';
+export type {
+  OperatorFigure,
+  OperatorOverview,
+  OperatorOverviewDay,
+  OperatorPageDay,
+  OperatorPageDetail,
+  OperatorPageRow,
+  OperatorPages,
+  OperatorPageTotals,
+  OperatorPeriod,
+  OperatorRank,
+  OperatorSite,
+  OperatorUserDetail,
+  OperatorUserPage,
+  OperatorUserRow,
+  OperatorUserWorkspace,
+} from '@crm/contracts';
 export type {
   CreateTimeBlockInput,
   TimeBlockKind,
@@ -344,6 +372,12 @@ export type {
   WorkspaceSecurity,
   ActivityPage,
   SecurityActivity,
+  AuditChange,
+  AuditEntryView,
+  AuditKind,
+  AuditPerson,
+  AuditTarget,
+  AuditValue,
   Role,
   RemovalPreview,
   RoleOption,
@@ -398,6 +432,7 @@ export type {
   RoutingReportState,
   RoutingReportSurface,
 } from './routing/reports.ts';
+export type { AuditLog, AuditLogState, AuditLogStatus } from './audit/log.ts';
 export type { PageRulesHeld } from './routing/page-rules.ts';
 export type {
   EmailPreference,
@@ -438,6 +473,15 @@ export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
+/** History's kinds of change (spec 0046), with no Zod: which kind each listed action is, for Workspace changes. */
+export {
+  AUDIT_KIND_NAMES,
+  AUDIT_KINDS,
+  AUDIT_NOT_LISTED,
+  auditKindOf,
+  type AuditKindName,
+  type ListedAuditAction,
+} from '@crm/contracts/audit-kinds';
 // A schedule's week as words (spec 0035): plain, no Zod, the one summary the screens and the server's notices share.
 export { clockLabel, weekSummary } from '@crm/contracts/hours';
 export {
@@ -463,8 +507,6 @@ export {
   dataError,
   isDataError,
   isFetchFailure,
-  refusalFor,
-  refusalSummary,
   SIGN_IN_CODES,
   type DataError,
   type DataErrorCode,
@@ -472,6 +514,7 @@ export {
   type DataFault,
   type SignInCode,
 } from './errors.ts';
+export { refusalFor, refusalSummary };
 export type { FetchLike } from './fetch.ts';
 export type { NavFavourite, NavState } from '@crm/contracts';
 export type { NavChangeOptions, NavSnapshot, NavSource } from './navigation/store.ts';
@@ -938,6 +981,8 @@ export function createDataLayer({
   let usage = new Map<string, Promise<Usage>>();
   let members = new Map<string, Promise<MemberView[]>>();
   let access = new Map<string, Promise<MyAccess>>();
+  // The audit log a History screen holds, per workspace (spec 0046): opening it again while held answers this one.
+  const auditLogs = new Map<string, AuditLog>();
   // The roles every role picker offers (spec 0037, AC-1439), per workspace, for the app load.
   let roles = new Map<string, Promise<RolesList>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
@@ -959,6 +1004,26 @@ export function createDataLayer({
   let comments: Promise<CommentsStore> | undefined;
   // The inbox's lists and settings (spec 0038), loaded with the inbox or the notification settings.
   let inbox: Promise<InboxStore> | undefined;
+  // The operator console's reads (spec 0047), held per question for the app load.
+  const operatorStore = createOperatorStore({
+    overview: (period) => call((options) => api.operator.overview({ period }, options)),
+    users: (input) =>
+      call((options) =>
+        api.operator.users(
+          {
+            period: input.period,
+            ...(input.q === undefined || input.q.trim() === '' ? {} : { q: input.q.trim() }),
+            ...(input.after === undefined ? {} : { after: input.after }),
+          },
+          options,
+        ),
+      ),
+    user: (userId, period) => call((options) => api.operator.user({ userId, period }, options)),
+    pages: (period) => call((options) => api.operator.pages({ period }, options)),
+    page: (workspaceId, pageId, period) =>
+      call((options) => api.operator.page({ workspaceId, pageId, period }, options)),
+    site: (period) => call((options) => api.operator.site({ period }, options)),
+  });
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
@@ -1006,6 +1071,7 @@ export function createDataLayer({
     usage = new Map();
     members = new Map();
     access = new Map();
+    auditLogs.clear();
     roles = new Map();
     attributes = new Map();
     allAttributes = new Map();
@@ -2563,6 +2629,7 @@ export function createDataLayer({
   const tasksStore = (): Promise<TasksStore> => {
     tasks ??= import('./tasks/store.ts').then(({ createTasksStore }) =>
       createTasksStore({
+        refusals: { refusalFor, refusalSummary },
         api: {
           list: (input) =>
             beforeRead(input.workspace).then(() =>
@@ -2732,6 +2799,7 @@ export function createDataLayer({
         api: recordsApi,
         notify,
         mintId,
+        refusals: { refusalFor, refusalSummary },
         watch,
         mutations,
         beforeRead,
@@ -3162,6 +3230,38 @@ export function createDataLayer({
           send: () => call((options) => api.rotations.delete({ workspace, rotationId, mutationId: mintId() }, options)),
           ...shownDrop(rotationLists.items(workspace), rotationId),
         }),
+    },
+    audit: {
+      /**
+       * Settings › History › Workspace changes (spec 0046): one paged read of the workspace's audit log, its first
+       * page started at once (the route's loader opens it). Loaded with `import()`, never live, never in the record
+       * store: each visit opens it afresh, and the screen retains it while shown (let go, it aborts and stops).
+       * While a screen holds a workspace's log, opening it again answers that same log.
+       */
+      openLog: async (workspace: string): Promise<AuditLog> => {
+        // A log a screen holds is handed back as it is, so the page reloading its data while it shows (a live
+        // attribute change invalidates the router) keeps the rows read so far and Show more's place.
+        const held = auditLogs.get(workspace);
+        if (held !== undefined) return held;
+        const { openAuditLog } = await import('./audit/log.ts');
+        const log: AuditLog = openAuditLog(
+          {
+            list: (input, signal) =>
+              call((options) => api.audit.list(input, options), signal).catch((error: unknown) => {
+                // The reader lost `audit.read`: their held access is stale, so History's next visit opens their
+                // sign ins (AC-4618).
+                if (toDataError(error).code === 'FORBIDDEN') access.delete(workspace);
+                throw error;
+              }),
+            onHeld: () => auditLogs.set(workspace, log),
+            onDisposed: () => {
+              if (auditLogs.get(workspace) === log) auditLogs.delete(workspace);
+            },
+          },
+          workspace,
+        );
+        return log;
+      },
     },
     routing: {
       /**
@@ -3608,7 +3708,12 @@ export function createDataLayer({
      */
     workspaceSecurity: {
       get: (workspace: string): Promise<WorkspaceSecurity> =>
-        call((options) => api.workspaceSecurity.get({ workspace }, options)),
+        call((options) => api.workspaceSecurity.get({ workspace }, options)).catch((error: unknown) => {
+          // The reader lost `security.manage`: their held access is stale, so the nav and Security's next visit match
+          // the server.
+          if (toDataError(error).code === 'FORBIDDEN') access.delete(workspace);
+          throw error;
+        }),
       set: (
         workspace: string,
         change: { readonly requireTwoFactor?: boolean; readonly sessionLengthDays?: SessionLengthDays | null },
@@ -4559,6 +4664,16 @@ export function createDataLayer({
       load: (workspace: string): Promise<MemberPreferences> => preferences.load(workspace),
       change: (workspace: string, change: PreferencesChange): Promise<boolean> => preferences.change(workspace, change),
     },
+    /**
+     * The operator console (spec 0047): the super admin's read only analytics
+     * across every workspace, held per question (`operator/store.ts`): a
+     * screen holds one through `useOperator`, so a new period or search loads
+     * in place. Anyone the api doesn't count a super admin is refused
+     * NOT_FOUND; a super admin without two factor TWO_FACTOR_REQUIRED, or
+     * whose session wasn't proven with the app in 12 hours SIGN_IN_AGAIN, in
+     * the held state, never thrown.
+     */
+    operator: operatorStore,
     account: {
       /**
        * The signed in person's own sessions (spec 0033), newest activity

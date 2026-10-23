@@ -35,7 +35,8 @@ import { canJump, type JumpAttribute } from '@crm/contracts/jump';
 import type { FilterGroup, Hue, RecordRefDisplay, SortRules } from '@crm/contracts/values';
 import type { PatternCompiler, RuleFailure } from '@crm/contracts/validation';
 import { delivered as sendDelivered } from '../delivered.ts';
-import { dataError, refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
+import { dataError, toDataError, type DataError } from '../errors.ts';
+import type { RefusalWords } from '../refusals.ts';
 import { COARSE_JOB_MS } from '../live/pace.ts';
 import type { Notice } from '../notice.ts';
 import {
@@ -527,6 +528,12 @@ export interface RecordsLayerOptions {
   readonly api: RecordsApi;
   readonly notify: (notice: Notice) => void;
   readonly mintId: () => string;
+  /**
+   * A refused write's words, `refusalFor` and `refusalSummary` from `refusals.ts`, handed over by the data layer.
+   * A store loaded with `import()` never imports that module, so it and the safety net's sentences stay in the
+   * first load's data chunk rather than a chunk of their own (`apps/web/build.test.ts` counts the files).
+   */
+  readonly refusals: RefusalWords;
   /** When views announce changes: once a frame in the browser. */
   readonly schedule?: Scheduler;
   /** Waits `ms`, or rejects when `signal` aborts first. A timer by default; tests pass their own. */
@@ -764,6 +771,7 @@ export function createRecordsLayer({
   api,
   notify,
   mintId,
+  refusals: { refusalFor, refusalSummary },
   schedule = nextFrame,
   wait = timer,
   now = () => Date.now(),

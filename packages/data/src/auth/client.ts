@@ -60,6 +60,8 @@ export interface AuthClient {
   /** Makes 10 new backup codes in place of the old ones (after a step up with a second factor). */
   newBackupCodes(): Promise<readonly string[]>;
   signInWithGoogle(callbackUrl: string, errorUrl: string): Promise<void>;
+  /** Links (or refreshes) the signed in person's Google account; the browser comes back to `returnUrl` either way. */
+  linkGoogle(returnUrl: string): Promise<void>;
   signOut(): Promise<void>;
   session(): Promise<SessionUser | undefined>;
 }
@@ -182,6 +184,19 @@ export function createBetterAuthClient({ origin, fetch, report }: AuthClientOpti
             fetchOptions,
           }),
         step('auth.signInWithGoogle'),
+      );
+    },
+    async linkGoogle(returnUrl) {
+      // On success the client sends the browser to Google; the API sends it back to `returnUrl` with the result.
+      await unwrap(
+        (fetchOptions) =>
+          client.linkSocial({
+            provider: 'google',
+            callbackURL: returnUrl,
+            errorCallbackURL: returnUrl,
+            fetchOptions,
+          }),
+        step('auth.linkGoogle'),
       );
     },
     async signOut() {

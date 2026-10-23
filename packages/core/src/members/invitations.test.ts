@@ -407,6 +407,40 @@ describe('accepting (AC-805, AC-806, AC-807)', () => {
     expect(accepted[0]).toMatchObject({ target_type: 'member', actor_type: 'member' });
   });
 
+  it('names someone with no account name from their address, as first run does (QA Q83)', async () => {
+    const w = await workspace();
+    const email = `jo.smith+${tag()}@example.com`;
+    const invitee = {
+      id: await createTestUser(identityUrl, { email, name: '' }),
+      name: '',
+      email,
+      emailVerified: true,
+    };
+    const made = await inviteMembers(w.owner, { emails: [email], role: 'member' });
+    await acceptInvite({ db }, invitee, made.sent[0]?.token ?? '');
+    const rows = await testQuery<{ name: string }>(
+      ownerUrl,
+      `select name from members where workspace_id = $1 and user_id = $2`,
+      [w.workspaceId, invitee.id],
+    );
+    expect(rows).toEqual([{ name: 'Jo Smith' }]);
+  });
+
+  it('makes an account name with line breaks and control characters plain before it names the member', async () => {
+    const w = await workspace();
+    const email = `ada+${tag()}@example.com`;
+    const name = 'Ada\n\u0007Lovelace\u2028 ';
+    const invitee = { id: await createTestUser(identityUrl, { email, name }), name, email, emailVerified: true };
+    const made = await inviteMembers(w.owner, { emails: [email], role: 'member' });
+    await acceptInvite({ db }, invitee, made.sent[0]?.token ?? '');
+    const rows = await testQuery<{ name: string }>(
+      ownerUrl,
+      `select name from members where workspace_id = $1 and user_id = $2`,
+      [w.workspaceId, invitee.id],
+    );
+    expect(rows).toEqual([{ name: 'Ada Lovelace' }]);
+  });
+
   it('refuses anyone but the invited verified address, and joins nothing', async () => {
     const w = await workspace();
     const invitee = await person();

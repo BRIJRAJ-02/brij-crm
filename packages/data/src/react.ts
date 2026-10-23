@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
+import type { OperatorHeld } from './operator/store.ts';
 import type { RecordFacts, RecordFactsState } from './records/facts.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { AccountSecurityState, AccountSecurityView } from './account/security.ts';
@@ -521,4 +522,9 @@ export function useNotificationSettings(settings: InboxSettings): InboxSettingsS
  */
 export function useRecordFacts(facts: RecordFacts): RecordFactsState {
   return useRetained(facts);
+}
+
+/** One held operator console read (spec 0047): its state, kept current while the screen shows it. */
+export function useOperator<T>(held: OperatorHeld<T>): T {
+  return useSyncExternalStore(held.subscribe, held.getSnapshot, held.getSnapshot);
 }

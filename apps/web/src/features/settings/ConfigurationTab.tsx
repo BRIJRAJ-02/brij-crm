@@ -222,7 +222,6 @@ export function ConfigurationTab({ slug, object, configuration }: ConfigurationT
               value={singular}
               onChange={setSingular}
               isReadOnly={!canManage}
-              {...(canManage ? {} : { readOnlyReason: strings.readOnlyNote })}
             />
             <Field
               label={strings.pluralName}
@@ -232,7 +231,6 @@ export function ConfigurationTab({ slug, object, configuration }: ConfigurationT
               value={plural}
               onChange={setPlural}
               isReadOnly={!canManage}
-              {...(canManage ? {} : { readOnlyReason: strings.readOnlyNote })}
             />
             <ObjectHueField hue={hue} onChange={setHue} isReadOnly={!canManage} />
           </Form>

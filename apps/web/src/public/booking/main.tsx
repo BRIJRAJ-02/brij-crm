@@ -21,7 +21,7 @@ import { createRoot } from 'react-dom/client';
 import { BookingPage } from './BookingPage.tsx';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
 import { forgetHandoff, takeHandoff, type HandoffStorage } from './prefill.ts';
-import { strings } from './strings.ts';
+import { strings, tabTitle } from './strings.ts';
 
 // The guest page loads on its own: a visitor booking never downloads its changes (move, guests, cancel).
 const ManagePage = lazy(() => import('./ManagePage.tsx').then((module) => ({ default: module.ManagePage })));
@@ -135,8 +135,9 @@ function renderBooking(publicKey: string) {
   );
 }
 
-/** A whole page message, in the provider. */
+/** A whole page message, in the provider, with the tab saying the same (QA Q76). */
 function renderMessage(title: string, text: string) {
+  document.title = tabTitle(title);
   view.render(
     <StrictMode>
       <BookingProvider locale={locale} timeZone={timeZone}>
@@ -181,6 +182,7 @@ if (path !== null) {
             renderMessage(strings.notFoundTitle, strings.notFoundText);
             return;
           }
+          document.title = tabTitle(strings.failedTitle);
           view.render(
             <StrictMode>
               <BookingProvider locale={locale} timeZone={timeZone}>

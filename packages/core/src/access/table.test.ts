@@ -68,8 +68,19 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'deletedEmail',
   'createWorkspace',
   'createUserWorkspace',
+  // The operator console (spec 0047): before any workspace, behind the api's operator gate; it reads across
+  // workspaces only through the crm_operator definers, which answer counts. periodDays is pure.
+  'operatorOverview',
+  'operatorUsers',
+  'operatorUser',
+  'operatorPages',
+  'operatorPage',
+  'operatorSite',
+  'periodDays',
   // Pure access functions.
   'can',
+  // History's row mapping (spec 0046): a stored audit row and its names to an entry view, after the read's door.
+  'toEntryView',
   // Calendar health's reach (spec 0037, AC-1307), read off a scope readCalendarHealth checks, and a colour mapping.
   'healthReach',
   'nearestHue',
@@ -161,7 +172,7 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'moveBooking',
   'readMoveSlots',
   'prepareBookingMail',
-  'markInvited',
+  'markGuestsTold',
   'whenLine',
   // Round robin (spec 0029, AC-749): the booking mail job's needs_host step hands a leaving member's booking on, as
   // the system in its workspace.
@@ -288,6 +299,16 @@ describe('the walk: a principal without the access is refused', () => {
     expect(await refusalOf(service(name)(scope, {}))).toEqual({
       code: 'FORBIDDEN',
       message: PERMISSIONS[entry.permission].message,
+    });
+  });
+
+  // History's Workspace changes (spec 0046, AC-4622): the audit log is in the walk above, owners and admins only.
+  it('walks listAuditEvents as audit.read, refused to a member', async () => {
+    expect(byPermission).toContainEqual(['listAuditEvents', { permission: 'audit.read' }]);
+    const { scope } = await memberOf('member');
+    expect(await refusalOf(core.listAuditEvents(scope))).toEqual({
+      code: 'FORBIDDEN',
+      message: 'Only workspace owners and admins can see workspace changes.',
     });
   });
 

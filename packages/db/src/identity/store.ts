@@ -14,6 +14,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { DatabaseOptions } from '../client.ts';
+import { createOperatorIdentity, type OperatorIdentity } from './operator.ts';
 import { timePool } from '../timing.ts';
 import {
   account,
@@ -35,6 +36,19 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const USER_IMAGE_MAX = 2048;
 /** A picture on Google's picture hosts, which a newer one from Google may replace (a POSIX pattern for Postgres). */
 const GOOGLE_PICTURE = '^https://lh[3-6]\\.googleusercontent\\.com/';
+/** Google's picture hosts, as a hostname. */
+const GOOGLE_PICTURE_HOST = /^lh[3-6]\.googleusercontent\.com$/;
+
+/** Whether `url` is on Google's picture hosts: https, no port, no credentials (core's `isPictureHost`, here too). */
+function isGooglePicture(url: URL): boolean {
+  return (
+    url.protocol === 'https:' &&
+    url.port === '' &&
+    url.username === '' &&
+    url.password === '' &&
+    GOOGLE_PICTURE_HOST.test(url.hostname)
+  );
+}
 
 /** How a session last proved who it is: a second factor, or an email code or Google alone. */
 export type VerifiedWith = 'email' | 'second_factor';
@@ -144,7 +158,7 @@ export interface SessionFacts {
 }
 
 /** Global identity: the directory, users, and Better Auth's storage. Reads no tenant data. */
-export interface IdentityStore {
+export interface IdentityStore extends OperatorIdentity {
   /**
    * The workspace at this address, or the one that held it before it changed
    * address (its `slug` is then the current one, so the caller can send
@@ -285,8 +299,10 @@ export interface IdentityStore {
   /** Notes that this user signed in from `deviceKey` now (AC-897). */
   noteDevice(userId: string, deviceKey: string): Promise<void>;
   /**
-   * Deletes security events and known devices last seen before `before`, at
-   * most `limit` of each (AC-898's year). Answers how many went.
+   * Deletes security events and known devices last seen before `before`, and
+   * the operator console's activity days and site visits (spec 0047,
+   * AC-1628), at most `limit` of each (AC-898's year), and the console's own
+   * log a year later. Answers how many went.
    */
   sweepAuthHistory(before: Date, limit: number): Promise<number>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
@@ -297,12 +313,15 @@ export interface IdentityStore {
    */
   userImage(id: string): Promise<string | undefined>;
   /**
-   * Saves Google's picture from a sign in that stands, only an https URL of at most 2048 characters, when the user
-   * has none or an older one of Google's picture hosts (`lh3` to `lh6.googleusercontent.com`): an account made with
-   * an email code and linked to Google later starts with none, and Better Auth fills it only at sign up. A picture
-   * from anywhere else is never replaced. True when it saved.
+   * Saves Google's picture from a sign in that stands (or its second step, or Profile's Sync Google photo), only an
+   * https URL of at most 2048 characters on Google's picture hosts (`lh3` to `lh6.googleusercontent.com`, no port,
+   * no credentials), when the user has none or an older one of Google's: an account made with an email code and
+   * linked to Google later starts with none, and Better Auth fills it only at sign up. A picture from anywhere else
+   * is never saved, and never replaced. True when it saved.
    */
   setUserImageFromGoogle(id: string, image: string): Promise<boolean>;
+  /** Whether the user has a Google account linked (it signs in with Google). Reads no token. */
+  hasGoogleAccount(id: string): Promise<boolean>;
   /**
    * Counts one use of `key` against `rule` in Better Auth's `auth.rate_limit`
    * table, in one atomic statement, so the limit holds across instances. For
@@ -357,6 +376,8 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
   };
 
   return {
+    ...createOperatorIdentity(db),
+
     async findWorkspace(slug) {
       const [row] = await db
         .select(directoryColumns)
@@ -549,6 +570,8 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
               or ${verification.identifier} in (select 'step-up-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
               or ${verification.identifier} in (select 'step-up-passkey-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
               or strpos(${verification.value}, '"userData":{"id":"' || ${userId} || '"') > 0
+              or (starts_with(${verification.identifier}, '2fa-picture-')
+                  and strpos(${verification.value}, '"userId":"' || ${userId} || '"') > 0)
               or ${verification.identifier} in (${sql.join(
                 OTP_TYPES.map((type) => sql`${`${type}-otp-${email}`}`),
                 sql`, `,
@@ -735,7 +758,19 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
       const devices = await db.execute<{ user_id: string }>(
         sql`delete from ${knownDevice} where (user_id, device_key) in (select user_id, device_key from ${knownDevice} where ${knownDevice.lastSeen} < ${before.toISOString()}::timestamptz limit ${cap}) returning user_id`,
       );
-      return events.rows.length + devices.rows.length;
+      // The operator console's global rows (spec 0047, AC-1628): a year of use, visits and the console's own log.
+      const days = await db.execute<{ user_id: string }>(
+        sql`delete from auth.activity_day where (user_id, day) in (select user_id, day from auth.activity_day where day < (${before.toISOString()}::timestamptz at time zone 'UTC')::date order by day limit ${cap}) returning user_id`,
+      );
+      const visits = await db.execute<{ id: string }>(
+        sql`delete from auth.site_visit where id in (select id from auth.site_visit where at < ${before.toISOString()}::timestamptz order by at limit ${cap}) returning id`,
+      );
+      // The console's own log is kept a year longer than what it reads (spec 0047): two years in all.
+      const logBefore = new Date(before.getTime() - 365 * 86_400_000).toISOString();
+      const reads = await db.execute<{ id: string }>(
+        sql`delete from auth.operator_event where id in (select id from auth.operator_event where at < ${logBefore}::timestamptz order by at limit ${cap}) returning id`,
+      );
+      return events.rows.length + devices.rows.length + days.rows.length + visits.rows.length + reads.rows.length;
     },
 
     async setUserNameIfEmpty(id, name) {
@@ -758,7 +793,9 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
     async setUserImageFromGoogle(id, image) {
       const trimmed = image.trim();
       if (!UUID.test(id) || trimmed.length > USER_IMAGE_MAX || !URL.canParse(trimmed)) return false;
-      if (new URL(trimmed).protocol !== 'https:') return false;
+      const url = new URL(trimmed);
+      // As written, too: the database's own check of Google's hosts reads the text, which a parsed URL lowercases.
+      if (!isGooglePicture(url) || !trimmed.startsWith(`https://${url.hostname}/`)) return false;
       const saved = await db
         .update(user)
         .set({ image: trimmed, updatedAt: sql`now()` })
@@ -770,6 +807,16 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         )
         .returning({ id: user.id });
       return saved.length > 0;
+    },
+
+    async hasGoogleAccount(id) {
+      if (!UUID.test(id)) return false;
+      const [row] = await db
+        .select({ id: account.id })
+        .from(account)
+        .where(and(eq(account.userId, id), eq(account.providerId, 'google')))
+        .limit(1);
+      return row !== undefined;
     },
 
     async consumeRateLimit(key, rule, cost = 1) {

@@ -5,6 +5,7 @@
 import type { RecordRefDisplay, TaskPage, TaskView } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import { createMutationLog } from '../live/mutations.ts';
+import { refusalFor, refusalSummary } from '../refusals.ts';
 import { createTasksStore, TASK_SETTLE_MS, type TaskListKey, type TasksApi } from './store.ts';
 
 const WS = 'acme';
@@ -167,6 +168,7 @@ function setup(
     mutations: createMutationLog(),
     notify: (notice) =>
       notices.push({ message: notice.message, ...(notice.action ? { retry: notice.action.onAction } : {}) }),
+    refusals: { refusalFor, refusalSummary },
     watch: () => () => undefined,
     spread: (_key, work) => spreads.push(work),
     timelines: (_workspace, ids) => timelines.push(ids),

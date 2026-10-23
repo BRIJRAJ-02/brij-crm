@@ -20,8 +20,12 @@ export interface BookingDetailsValues {
 /** What sending the details answered, as the page's client words it. */
 export type BookingDetailsOutcome =
   | { readonly kind: 'done' }
-  /** Errors by field: `name`, `email`, `phone`, `guest-<n>`. */
-  | { readonly kind: 'invalid'; readonly fields: Readonly<Record<string, string>> }
+  /**
+   * Errors by field: `name`, `email`, `phone`, `guest-<n>` (the n-th guest
+   * sent, blanks left out). `message` is the answer's own sentence, said in
+   * the line above the buttons when none of `fields` is one the form draws.
+   */
+  | { readonly kind: 'invalid'; readonly fields: Readonly<Record<string, string>>; readonly message?: string }
   /** One line above the buttons ("Too many attempts just now."). */
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -39,6 +43,27 @@ export interface BookingDetailsProps {
 
 /** A rough email shape; the server checks it properly. */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * The answer's errors the form can show under a field. A guest's `guest-<n>`
+ * counts only the filled rows that went, so it moves to its row in the form.
+ * Anything the form doesn't draw an error on (a time zone, a phone the page
+ * never asked for, the note, the guest list as a whole) is left out.
+ */
+function drawnErrors(
+  fields: Readonly<Record<string, string>>,
+  needsPhone: boolean,
+  sentRows: readonly number[],
+): Record<string, string> {
+  const drawn: Record<string, string> = {};
+  for (const [field, message] of Object.entries(fields)) {
+    const guest = /^guest-(\d+)$/.exec(field);
+    const row = guest === null ? undefined : sentRows[Number(guest[1])];
+    if (row !== undefined) drawn[`guest-${String(row)}`] ??= message;
+    else if (field === 'name' || field === 'email' || (field === 'phone' && needsPhone)) drawn[field] = message;
+  }
+  return drawn;
+}
 
 /**
  * A booking page's second step (spec 0025, AC-670 to AC-672): your name and
@@ -102,19 +127,28 @@ export function BookingDetails({ needsPhone = false, prefill, maxGuests = 10, on
     }
     setErrors({});
     setBusy(true);
+    const typed = guests.map((guest) => guest.trim());
+    // The row each guest that goes sits on: blank rows stay behind.
+    const sentRows = typed.flatMap((guest, row) => (guest === '' ? [] : [row]));
     onSubmit({
       name: name.trim(),
       email: email.trim(),
       phone: phone.trim(),
-      guests: guests.map((guest) => guest.trim()).filter((guest) => guest !== ''),
+      guests: typed.filter((guest) => guest !== ''),
       note: note.trim(),
       trap,
     }).then(
       (outcome) => {
         if (outcome.kind === 'done') return;
         setBusy(false);
-        if (outcome.kind === 'invalid') showErrors(outcome.fields);
-        else setLine(outcome.message);
+        if (outcome.kind === 'failed') {
+          setLine(outcome.message);
+          return;
+        }
+        const drawn = drawnErrors(outcome.fields, needsPhone, sentRows);
+        // A refusal on nothing the form draws still says why, in the line, so the visitor isn't left guessing.
+        if (Object.keys(drawn).length > 0) showErrors(drawn);
+        else setLine(outcome.message === undefined || outcome.message === '' ? strings.failed : outcome.message);
       },
       () => {
         setBusy(false);
