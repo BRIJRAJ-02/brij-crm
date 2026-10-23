@@ -15,7 +15,10 @@
 // `CALENDAR_AUTH`; a 429, a 5xx, the network, a body that won't parse, or our
 // own client being refused (`invalid_client`, a deploy's missing or wrong
 // secret) is `CALENDAR_UNAVAILABLE`, which is tried again and never marks a
-// connection broken. No message quotes a token, and no token is logged.
+// connection broken. No message quotes a token, and no token is logged. A
+// refused calendar call also carries Google's status and its own reason
+// (`errors[0].reason`, such as `pushNotSupportedForRequestedResource`), which
+// the log keeps (`calendar.channel`); never Google's message.
 import {
   normaliseEmail,
   providerError,
@@ -28,6 +31,7 @@ import {
   type CalendarTokens,
   type ExchangedTokens,
   type NewEvent,
+  type ProviderAnswer,
   type ProviderAttendee,
   type ProviderCalendar,
   type ProviderEvent,
@@ -91,6 +95,23 @@ export interface GoogleCalendarOptions {
 export function codeForStatus(status: number): CalendarErrorCode {
   if (status === 404) return 'CALENDAR_GONE';
   return status === 401 || status === 403 ? 'CALENDAR_AUTH' : 'CALENDAR_UNAVAILABLE';
+}
+
+/**
+ * What Google said about a refused call: its status, and its own reason when its error body names one
+ * (`error.errors[0].reason`, else `error.status`). Never its message, which can quote an address.
+ */
+export async function answerOf(response: Response): Promise<ProviderAnswer> {
+  let reason: unknown;
+  try {
+    const body = (await response.json()) as {
+      readonly error?: { readonly errors?: readonly { readonly reason?: unknown }[]; readonly status?: unknown };
+    } | null;
+    reason = body?.error?.errors?.[0]?.reason ?? body?.error?.status;
+  } catch {
+    // Not JSON: the status alone.
+  }
+  return { status: response.status, ...(typeof reason === 'string' ? { reason } : {}) };
 }
 
 /** A freebusy calendar's errors, as core's code: a calendar not found is gone, any other reason a passing failure. */
@@ -238,6 +259,7 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
       throw providerError(
         codeForStatus(response.status),
         `Google refused the calendar call (${String(response.status)}).`,
+        await answerOf(response),
       );
     }
     return response.status === 204 ? (undefined as T) : json<T>(response);
@@ -353,6 +375,7 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
           throw providerError(
             codeForStatus(response.status),
             `Google refused the change list (${String(response.status)}).`,
+            await answerOf(response),
           );
         }
         const body = await json<{
@@ -549,6 +572,7 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
       throw providerError(
         codeForStatus(response.status),
         `Google refused to stop the channel (${String(response.status)}).`,
+        await answerOf(response),
       );
     },
     async revoke(tokens) {

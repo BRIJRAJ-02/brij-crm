@@ -506,7 +506,10 @@ export type ApiEnv = z.infer<typeof ApiEnv>;
 /**
  * The api's own variables as a Vercel Function (spec 0045), beside `ApiEnv`:
  * the job drain's direct login (the worker's `crm_worker_user`, never Neon's
- * pooler) and the jobs endpoint's shared secret. Both required outside local.
+ * pooler) and the jobs endpoint's shared secret, both required outside
+ * local; and `CRON_SECRET`, optional everywhere: set, Vercel Cron's `GET` of
+ * the jobs endpoint runs a turn (it sends `Authorization: Bearer
+ * <CRON_SECRET>`); unset, that `GET` answers 404.
  */
 export const FunctionEnv = z
   .object({
@@ -519,6 +522,14 @@ export const FunctionEnv = z
         .string()
         .min(32, 'JOBS_RUN_SECRET must be at least 32 characters.')
         .regex(/^[\x21-\x7e]+$/, 'JOBS_RUN_SECRET may hold only printable ASCII characters, with no spaces.'),
+    ),
+    // Vercel Cron sends it as `Authorization: Bearer <CRON_SECRET>` on its `GET /api/internal/jobs/run`; the same
+    // rules as JOBS_RUN_SECRET. Only a project with a frequent cron sets it (Timefix's; brij-crm, on Hobby, can't).
+    CRON_SECRET: optional(
+      z
+        .string()
+        .min(32, 'CRON_SECRET must be at least 32 characters.')
+        .regex(/^[\x21-\x7e]+$/, 'CRON_SECRET may hold only printable ASCII characters, with no spaces.'),
     ),
   })
   .superRefine((env, issues) => {
@@ -534,6 +545,9 @@ export const FunctionEnv = z
       missing('JOBS_RUN_SECRET', `JOBS_RUN_SECRET is required in ${env.APP_ENV}: the scheduled job run sends it.`);
     } else if (env.JOBS_RUN_SECRET.includes(LOCAL_SECRET_MARKER)) {
       missing('JOBS_RUN_SECRET', 'That is a local placeholder. Generate one: `openssl rand -hex 32`.');
+    }
+    if (env.CRON_SECRET?.includes(LOCAL_SECRET_MARKER) === true) {
+      missing('CRON_SECRET', 'That is a local placeholder. Generate one: `openssl rand -hex 32`.');
     }
   });
 export type FunctionEnv = z.infer<typeof FunctionEnv>;

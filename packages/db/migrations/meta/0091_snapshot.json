@@ -1,5 +1,5 @@
 {
-  "id": "62ae22a1-f974-44bd-aa82-b3674f44d565",
+  "id": "6cabf1ce-2685-4631-a80a-ddfe941e450f",
   "prevId": "601725e6-c5c3-4741-950d-e95163b3bb81",
   "version": "7",
   "dialect": "postgresql",
@@ -1767,121 +1767,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.booking_page_views": {
-      "name": "booking_page_views",
-      "schema": "",
-      "columns": {
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "page_id": {
-          "name": "page_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "day": {
-          "name": "day",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "visitor": {
-          "name": "visitor",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "views": {
-          "name": "views",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "first_at": {
-          "name": "first_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_at": {
-          "name": "last_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "booking_page_views_day": {
-          "name": "booking_page_views_day",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "day",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "booking_page_views_page": {
-          "name": "booking_page_views_page",
-          "tableFrom": "booking_page_views",
-          "tableTo": "booking_pages",
-          "columnsFrom": [
-            "workspace_id",
-            "page_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "booking_page_views_pkey": {
-          "name": "booking_page_views_pkey",
-          "columns": [
-            "workspace_id",
-            "page_id",
-            "day",
-            "visitor"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "booking_page_views_visitor": {
-          "name": "booking_page_views_visitor",
-          "value": "\"booking_page_views\".\"visitor\" ~ '^[0-9a-f]{32}$'"
-        },
-        "booking_page_views_count": {
-          "name": "booking_page_views_count",
-          "value": "\"booking_page_views\".\"views\" >= 1"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.booking_pages": {
       "name": "booking_pages",
       "schema": "",
@@ -3007,27 +2892,6 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "bookings_created": {
-          "name": "bookings_created",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -17566,90 +17430,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "auth.activity_day": {
-      "name": "activity_day",
-      "schema": "auth",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "day": {
-          "name": "day",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "first_at": {
-          "name": "first_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_at": {
-          "name": "last_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "activity_day_day": {
-          "name": "activity_day_day",
-          "columns": [
-            {
-              "expression": "day",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "activity_day_user_fk": {
-          "name": "activity_day_user_fk",
-          "tableFrom": "activity_day",
-          "tableTo": "user",
-          "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "activity_day_pkey": {
-          "name": "activity_day_pkey",
-          "columns": [
-            "user_id",
-            "day"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "auth.known_device": {
       "name": "known_device",
       "schema": "auth",
@@ -17729,92 +17509,6 @@
         "known_device_key": {
           "name": "known_device_key",
           "value": "\"auth\".\"known_device\".\"device_key\" ~ '^[0-9a-f]{64}$'"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "auth.operator_event": {
-      "name": "operator_event",
-      "schema": "auth",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "uuidv7()"
-        },
-        "at": {
-          "name": "at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "action": {
-          "name": "action",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "target": {
-          "name": "target",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "period": {
-          "name": "period",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "request_id": {
-          "name": "request_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "operator_event_at": {
-          "name": "operator_event_at",
-          "columns": [
-            {
-              "expression": "at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "operator_event_action": {
-          "name": "operator_event_action",
-          "value": "\"auth\".\"operator_event\".\"action\" ~ '^operator\\.[a-zA-Z]{1,40}$'"
-        },
-        "operator_event_period": {
-          "name": "operator_event_period",
-          "value": "\"auth\".\"operator_event\".\"period\" in ('7d', '30d', '90d')"
-        },
-        "operator_event_request": {
-          "name": "operator_event_request",
-          "value": "char_length(\"auth\".\"operator_event\".\"request_id\") between 1 and 100"
         }
       },
       "isRLSEnabled": false
@@ -18311,7 +18005,7 @@
       "checkConstraints": {
         "security_event_kind": {
           "name": "security_event_kind",
-          "value": "kind in ('sign_in', 'sign_out', 'session_revoked', 'sessions_revoked', 'two_factor_on', 'two_factor_off', 'backup_codes_made', 'backup_code_used', 'passkey_added', 'passkey_removed', 'alert_sent')"
+          "value": "kind in ('sign_in', 'sign_out', 'session_revoked', 'sessions_revoked', 'two_factor_on', 'two_factor_off', 'backup_codes_made', 'backup_code_used', 'passkey_added', 'passkey_removed', 'alert_sent', 'google_linked')"
         }
       },
       "isRLSEnabled": false
@@ -18457,120 +18151,6 @@
         "session_verified_with": {
           "name": "session_verified_with",
           "value": "\"auth\".\"session\".\"verified_with\" in ('email', 'second_factor')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "auth.site_visit": {
-      "name": "site_visit",
-      "schema": "auth",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "uuidv7()"
-        },
-        "at": {
-          "name": "at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "site": {
-          "name": "site",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "path": {
-          "name": "path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "referrer": {
-          "name": "referrer",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "country": {
-          "name": "country",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "device": {
-          "name": "device",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "visitor": {
-          "name": "visitor",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "site_visit_at": {
-          "name": "site_visit_at",
-          "columns": [
-            {
-              "expression": "at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "site_visit_path": {
-          "name": "site_visit_path",
-          "value": "char_length(\"auth\".\"site_visit\".\"path\") between 1 and 200 and left(\"auth\".\"site_visit\".\"path\", 1) = '/'"
-        },
-        "site_visit_site": {
-          "name": "site_visit_site",
-          "value": "char_length(\"auth\".\"site_visit\".\"site\") between 1 and 120"
-        },
-        "site_visit_referrer": {
-          "name": "site_visit_referrer",
-          "value": "char_length(\"auth\".\"site_visit\".\"referrer\") between 1 and 120"
-        },
-        "site_visit_source": {
-          "name": "site_visit_source",
-          "value": "char_length(\"auth\".\"site_visit\".\"source\") between 1 and 60"
-        },
-        "site_visit_country": {
-          "name": "site_visit_country",
-          "value": "\"auth\".\"site_visit\".\"country\" ~ '^[A-Z]{2}$'"
-        },
-        "site_visit_device": {
-          "name": "site_visit_device",
-          "value": "\"auth\".\"site_visit\".\"device\" in ('mobile', 'tablet', 'desktop')"
-        },
-        "site_visit_visitor": {
-          "name": "site_visit_visitor",
-          "value": "\"auth\".\"site_visit\".\"visitor\" ~ '^[0-9a-f]{32}$'"
         }
       },
       "isRLSEnabled": false

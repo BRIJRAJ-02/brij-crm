@@ -427,6 +427,8 @@ export function createApp({
           markSessionVerified: (userId, sessionId, verifiedWith) =>
             identity.markSessionVerified(userId, sessionId, verifiedWith),
         },
+        // Only whether a person has Google linked, by their own user id, for Profile's Sync Google photo.
+        googleLinked: (userId) => identity.hasGoogleAccount(userId),
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();

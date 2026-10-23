@@ -1,0 +1,2 @@
+ALTER TABLE "auth"."security_event" DROP CONSTRAINT "security_event_kind";--> statement-breakpoint
+ALTER TABLE "auth"."security_event" ADD CONSTRAINT "security_event_kind" CHECK (kind in ('sign_in', 'sign_out', 'session_revoked', 'sessions_revoked', 'two_factor_on', 'two_factor_off', 'backup_codes_made', 'backup_code_used', 'passkey_added', 'passkey_removed', 'alert_sent', 'google_linked'));

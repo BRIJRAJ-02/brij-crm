@@ -277,3 +277,52 @@ describe('writing a booking’s event', () => {
     expect(g.calls[1]?.init?.method).toBeUndefined();
   });
 });
+
+describe('push channels', () => {
+  it('carries Google’s status and its own reason on a refused watch, and never its message', async () => {
+    const g = google([
+      json(
+        {
+          error: {
+            code: 400,
+            message: 'Push notifications are not supported by this resource: holidays@group.v.calendar.google.com',
+            errors: [{ domain: 'push', reason: 'pushNotSupportedForRequestedResource', message: 'quoted text' }],
+          },
+        },
+        400,
+      ),
+    ]);
+    let refused: unknown;
+    try {
+      await g.provider.watch(TOKENS, 'holidays@group.v.calendar.google.com', 'https://hooks.test/notify', 'w.c.s');
+    } catch (error) {
+      refused = error;
+    }
+    expect(isProviderError(refused)).toBe(true);
+    expect(refused).toMatchObject({
+      code: 'CALENDAR_UNAVAILABLE',
+      status: 400,
+      reason: 'pushNotSupportedForRequestedResource',
+    });
+    expect(JSON.stringify({ ...(refused as object), message: (refused as Error).message })).not.toContain('holidays');
+  });
+
+  it('keeps only a short machine word as the reason, and the status alone for a body that isn’t JSON', async () => {
+    const refusalOf = async (call: Promise<unknown>) => {
+      try {
+        await call;
+      } catch (error) {
+        return error;
+      }
+      throw new Error('It succeeded.');
+    };
+    const odd = google([json({ error: { errors: [{ reason: 'two words <and> more' }] } }, 403)]);
+    const stopped = await refusalOf(odd.provider.stopWatch(TOKENS, { id: 'c', resourceId: 'r', expiresAt: '' }));
+    expect(stopped).toMatchObject({ code: 'CALENDAR_AUTH', status: 403 });
+    expect(stopped).not.toHaveProperty('reason');
+    const page = google([new Response('<html>busy</html>', { status: 503 })]);
+    const listed = await refusalOf(page.provider.listCalendars(TOKENS));
+    expect(listed).toMatchObject({ code: 'CALENDAR_UNAVAILABLE', status: 503 });
+    expect(listed).not.toHaveProperty('reason');
+  });
+});

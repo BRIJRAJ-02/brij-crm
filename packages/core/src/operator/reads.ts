@@ -1,6 +1,6 @@
 // The operator console's reads (spec 0047): the super admin's analytics across
 // every workspace. Tenant numbers come only from crm_operator's six definers
-// (counts, ids, names; migration 0091), called on the app login outside any
+// (counts, ids, names; migration 0092), called on the app login outside any
 // workspace; people and website numbers from the identity login's global rows.
 // Who may call these is the api's operator gate, never this module.
 import {

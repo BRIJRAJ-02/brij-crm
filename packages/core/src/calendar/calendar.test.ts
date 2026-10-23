@@ -389,7 +389,14 @@ describe('syncing (AC-601, AC-603 to AC-607, AC-610)', () => {
     const w = await world();
     const connection = await w.connect(w.ownerId, 'ada@acme.dev');
     w.fake.failNext('listChanges', 'CALENDAR_UNAVAILABLE');
-    expect(await w.sync(connection.id)).toEqual({ kind: 'retry', code: 'CALENDAR_UNAVAILABLE', nextInMs: 60_000 });
+    const [main] = await w.query<{ id: string }>(sql`select id::text as id from calendar_calendars where is_primary`);
+    // Its one calendar failed, so the account did: the calendar is named for the log too.
+    expect(await w.sync(connection.id)).toEqual({
+      kind: 'retry',
+      code: 'CALENDAR_UNAVAILABLE',
+      nextInMs: 60_000,
+      failedCalendars: [{ calendarId: main?.id, code: 'CALENDAR_UNAVAILABLE' }],
+    });
     const [failing] = await listCalendarConnections(w.owner);
     expect(failing).toMatchObject({ status: 'syncing', lastError: { code: 'CALENDAR_UNAVAILABLE' } });
     expect(await w.sync(connection.id)).toMatchObject({ kind: 'synced' });

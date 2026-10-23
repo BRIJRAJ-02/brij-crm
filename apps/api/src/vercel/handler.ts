@@ -4,9 +4,12 @@
 // after the response (`waitUntil`), a signed in request starts one once a
 // queued row has come due (`createDueWake`), and `POST /api/internal/jobs/run`,
 // which the scheduled workflow calls with `JOBS_RUN_SECRET`, runs one turn of
-// it. Work a request starts after answering (the new device alert, the
-// workspace deleted notice) is kept alive the same way.
-// No relay and no Centrifugo: live updates stay off while the api runs here.
+// it. `GET` on the same address is Vercel Cron's (it sends `Authorization:
+// Bearer <CRON_SECRET>`): the same turn, the timer under Google's push that
+// brings each calendar's 15 minute poll in on time when nobody uses the app;
+// without `CRON_SECRET` it answers 404. Work a request starts after answering
+// (the new device alert, the workspace deleted notice) is kept alive the same
+// way. No relay and no Centrifugo: live updates stay off while the api runs here.
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { type ErrorCode, errorStatus } from '@crm/contracts';
 import { isInvitedEmail, twoFactorRequiredBy } from '@crm/core';
@@ -33,6 +36,13 @@ const LIVENESS_PATH = '/api/health';
 
 /** The header carrying `JOBS_RUN_SECRET`. */
 export const JOBS_SECRET_HEADER = 'x-crm-jobs-secret';
+
+/** The token in an `Authorization: Bearer <token>` header (Vercel Cron sends `CRON_SECRET` so), or null for none. */
+export function bearerOf(header: string | null): string | null {
+  // The scheme's name is case insensitive (RFC 9110); the token is one run of printable characters.
+  const match = header === null ? null : /^Bearer ([\x21-\x7e]+)$/i.exec(header);
+  return match?.[1] ?? null;
+}
 
 /**
  * A turn's time budget: the after request wake's (its turn and the one more
@@ -216,26 +226,36 @@ export function createFunctionApi(source: Record<string, string | undefined>, pl
     return ready;
   };
 
+  /**
+   * The jobs endpoint: `POST` with `x-crm-jobs-secret` (the scheduled workflow), or `GET` with `Authorization:
+   * Bearer <CRON_SECRET>` (Vercel Cron), each secret compared in constant time and each through the app's edge. A
+   * method, or a secret, this deployment doesn't have answers 404; either runs one scheduled turn and logs it.
+   */
   async function runJobs(request: Request): Promise<Response> {
-    if (request.method !== 'POST' || own.JOBS_RUN_SECRET === undefined) {
-      return errorResponse('NOT_FOUND', 'There is nothing at this address.');
-    }
+    const secret =
+      request.method === 'POST' ? own.JOBS_RUN_SECRET : request.method === 'GET' ? own.CRON_SECRET : undefined;
+    if (secret === undefined) return errorResponse('NOT_FOUND', 'There is nothing at this address.');
     if (!edge.admit(request)) return errorResponse('EDGE_REQUIRED', 'This API is reachable only through the app.');
-    if (!secretMatches(own.JOBS_RUN_SECRET, request.headers.get(JOBS_SECRET_HEADER))) {
+    const presented =
+      request.method === 'GET'
+        ? bearerOf(request.headers.get('authorization'))
+        : request.headers.get(JOBS_SECRET_HEADER);
+    if (!secretMatches(secret, presented)) {
       return errorResponse('UNAUTHENTICATED', 'This request needs the jobs secret.');
     }
     if (drain === undefined) return errorResponse('API_UNAVAILABLE', 'The jobs are off on this deployment.');
     const refused = await rolesRefusal();
     if (refused !== undefined) return refused;
+    const by = request.method === 'GET' ? 'cron' : 'schedule';
     let report: DrainReport;
     try {
       report = await drain.run(scheduledTurn());
     } catch (error) {
-      log.error('jobs.drain.failed', errorFields(error));
+      log.error('jobs.drain.failed', { ...errorFields(error), by });
       captureFault(error, { task: 'jobs' });
       return errorResponse('API_UNAVAILABLE', 'The job run failed; the function log has the reason.');
     }
-    log.info('jobs.drain', { ...report, by: 'schedule' });
+    log.info('jobs.drain', { ...report, by });
     return Response.json({ status: 'ok', ...report });
   }
 
