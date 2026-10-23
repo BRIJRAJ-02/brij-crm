@@ -524,7 +524,8 @@ function Booking({
             if (refusal.field !== undefined && fields[refusal.field] === undefined)
               fields[refusal.field] = refusal.message;
           }
-          if (Object.keys(fields).length > 0) return { kind: 'invalid', fields };
+          // The answer's sentence goes too: the form says it when none of these is a field it shows.
+          if (Object.keys(fields).length > 0) return { kind: 'invalid', fields, message: error.message };
           return {
             kind: 'failed',
             message:
