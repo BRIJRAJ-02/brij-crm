@@ -33,6 +33,7 @@ import {
   listMeetings,
   listWorkspaceBookings,
   readBookingsCalendar,
+  reorderProfilePages,
   readDefaultHours,
   removeTimeBlock,
   saveDefaultHours,
@@ -80,6 +81,12 @@ export const bookingPagesRouter = member.bookingPages.router({
   delete: member.bookingPages.delete.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       deleteBookingPage(context.scope, { pageId: input.pageId }),
+    ),
+  ),
+  // The caller's own pages in their profile's new order (owner ask A102), one write: Settings › Profile's drag.
+  reorderProfile: member.bookingPages.reorderProfile.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      reorderProfilePages(context.scope, { pageIds: input.pageIds }),
     ),
   ),
 });

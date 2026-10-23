@@ -1,10 +1,11 @@
 // Booking pages for members (spec 0025, AC-623, AC-624, AC-645, AC-646,
-// AC-648): list, read, make, change and delete pages, and list a page's
-// bookings. `booking.manage` covers the member's own pages; `booking.admin`
+// AC-648): list, read, make, change and delete pages, list a page's
+// bookings, and put the owner's pages in their profile's order (owner ask
+// A102). `booking.manage` covers the member's own pages; `booking.admin`
 // everyone's. A page the reader may not see answers as absent (NOT_FOUND).
 // Pages are settings, not CRM data: their writes store no outbox row.
 import { randomBytes } from 'node:crypto';
-import { and, asc, desc, eq, gte, inArray, isNull, like, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, like, lt, notInArray, sql } from 'drizzle-orm';
 import {
   defaultAvailability,
   PERMISSIONS,
@@ -16,11 +17,14 @@ import {
   type DeleteBookingPageInput,
   type GetBookingPageInput,
   type ListBookingsInput,
+  type ProfileOrder,
+  type ReorderProfileInput,
   type RoutingRule,
   type TeamHosts,
   type UpdateBookingPageInput,
   BOOKINGS_PAGE_MAX,
   BOOKING_DURATIONS_MAX,
+  PROFILE_ORDER_MAX,
   ROUTING_RULES_MAX,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
@@ -38,6 +42,7 @@ import { actorRow } from '../engine/scope.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 import { ownerSlugs, publicProfilesOf } from './handles.ts';
 import { linksOf, seenLinks } from './links.ts';
+import { lockKey } from './locks.ts';
 import { ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 
@@ -385,6 +390,22 @@ async function freeSlug(tx: WorkspaceTx, ownerMemberId: string, wanted: string):
   for (let n = 2; ; n += 1) if (!taken.has(`${base}-${String(n)}`)) return `${base}-${String(n)}`;
 }
 
+/** The last place on a profile (`booking_pages_profile_position`: 0 to 999). */
+const PROFILE_POSITION_MAX = 999;
+
+/**
+ * Where a new page joins its owner's profile: after their last page here, so an order they arranged keeps its top
+ * (a page made before any reorder sat at 0, ahead of everything but the oldest).
+ */
+async function nextProfilePosition(tx: WorkspaceTx, ownerMemberId: string): Promise<number> {
+  const [row] = await tx
+    .select({ last: sql<number | null>`max(${bookingPages.profilePosition})::int` })
+    .from(bookingPages)
+    .where(and(eq(bookingPages.ownerMemberId, ownerMemberId), isNull(bookingPages.deletedAt)));
+  const last = row?.last ?? null;
+  return last === null ? 0 : Math.min(last + 1, PROFILE_POSITION_MAX);
+}
+
 /** The unique indexes a taken slug is refused on: the owner's in this workspace, and the owner's everywhere. */
 const SLUG_CONSTRAINTS: ReadonlySet<string | undefined> = new Set(['booking_pages_slug', 'booking_pages_owner_slug']);
 
@@ -458,7 +479,7 @@ export async function createBookingPage(
       rescheduleHost: given.rescheduleHost ?? 'same',
       isPrivate: given.isPrivate ?? false,
       profileSection: given.profileSection ?? null,
-      profilePosition: given.profilePosition ?? 0,
+      profilePosition: given.profilePosition ?? (await nextProfilePosition(tx, owner)),
     };
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
     const by = actorRow(scope.actor);
@@ -647,6 +668,97 @@ export async function deleteBookingPage(
       })
       .where(eq(bookingPages.id, input.pageId));
     return { pageId: input.pageId };
+  });
+}
+
+/** The lock one person's profile order takes in a workspace, so two moves of it queue rather than cross. */
+const profileLockKey = (workspaceId: string, memberId: string) => `booking:profile:${workspaceId}:${memberId}`;
+
+/** The most page ids an audit entry of a reorder keeps, each way. */
+const AUDIT_ORDER_IDS = 50;
+
+/**
+ * Puts the caller's own pages in their profile's new order (owner ask A102, 22 Oct 2026: drag to reorder, in place
+ * of an Order number), in one transaction. The pages named go first, at 0, 1, 2 …, and the caller's other pages here
+ * (Link only ones, one made since their list was read) after them in the order they had, so positions stay dense
+ * under the 999 cap and a page made Public later joins the end. Placement is the owner's alone, whatever the page's
+ * kind (as `updateBookingPage` says: an admin may change a colleague's page, never where it sits on the colleague's
+ * profile). An id that isn't one of the caller's live pages here, another member's, another workspace's or a deleted
+ * one, refuses the whole move as NOT_FOUND, saying nothing of whose it is. One audit entry when anything moved; no
+ * outbox row (pages are settings). Answers every page it placed, in its new order, with its version.
+ */
+export async function reorderProfilePages(
+  scope: EngineScope,
+  input: Pick<ReorderProfileInput, 'pageIds'>,
+): Promise<ProfileOrder> {
+  requirePermission(scope, 'booking.manage');
+  const owner = memberOf(scope);
+  if (owner === undefined) throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
+  const named = [...new Set(input.pageIds)];
+  // The contract refuses these first; a caller that skipped it is refused here too.
+  if (named.length === 0 || named.length !== input.pageIds.length || named.length > PROFILE_ORDER_MAX) {
+    throw refuseOn('CONFIG_INVALID', 'Name each of your pages once.', 'pageIds');
+  }
+  return inWorkspace(scope, async (tx) => {
+    await lockKey(tx, profileLockKey(scope.workspaceId, owner));
+    const mine = and(eq(bookingPages.ownerMemberId, owner), isNull(bookingPages.deletedAt));
+    const place = { id: bookingPages.id, profilePosition: bookingPages.profilePosition };
+    const found = await tx
+      .select(place)
+      .from(bookingPages)
+      .where(and(mine, inArray(bookingPages.id, named)));
+    if (found.length !== named.length) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+    const rest = await tx
+      .select(place)
+      .from(bookingPages)
+      .where(and(mine, notInArray(bookingPages.id, named)))
+      .orderBy(asc(bookingPages.profilePosition), asc(bookingPages.id))
+      .limit(PROFILE_POSITION_MAX + 1);
+    const order = [...named, ...rest.map((row) => row.id)];
+    const was = new Map([...found, ...rest].map((row) => [row.id, row.profilePosition]));
+    const moved = order.flatMap((id, index) => {
+      const position = Math.min(index, PROFILE_POSITION_MAX);
+      return was.get(id) === position ? [] : [{ id, position }];
+    });
+    if (moved.length > 0) {
+      const by = actorRow(scope.actor);
+      const values = sql.join(
+        moved.map((move) => sql`(${move.id}::uuid, ${move.position}::smallint)`),
+        sql`, `,
+      );
+      await tx.execute(sql`
+        update booking_pages p
+        set profile_position = v.position, updated_at = now(),
+          updated_by_type = ${by.type}, updated_by_id = ${by.id}::uuid, updated_by_member_id = ${by.memberId}::uuid
+        from (values ${values}) as v (id, position)
+        where p.workspace_id = ${scope.workspaceId}::uuid and p.id = v.id
+          and p.owner_member_id = ${owner}::uuid and p.deleted_at is null
+      `);
+      // The named pages' order before and after: what the person changed, and nothing of the pages it left alone.
+      const before = [...found]
+        .sort((left, right) => left.profilePosition - right.profilePosition || (left.id < right.id ? -1 : 1))
+        .map((row) => row.id);
+      await writeAudit(tx, scope.workspaceId, scope.actor, {
+        action: 'booking_page.profile_reordered',
+        targetType: 'member',
+        targetId: owner,
+        before: { pageIds: before.slice(0, AUDIT_ORDER_IDS) },
+        after: { pageIds: named.slice(0, AUDIT_ORDER_IDS), moved: moved.length },
+      });
+    }
+    const placed = await tx
+      .select({ ...place, updatedAt: bookingPages.updatedAt })
+      .from(bookingPages)
+      .where(and(mine, inArray(bookingPages.id, order)));
+    const byId = new Map(placed.map((row) => [row.id, row]));
+    return {
+      pages: order.flatMap((id) => {
+        const row = byId.get(id);
+        return row === undefined
+          ? []
+          : [{ id, profilePosition: row.profilePosition, updatedAt: row.updatedAt.toISOString() }];
+      }),
+    };
   });
 }
 

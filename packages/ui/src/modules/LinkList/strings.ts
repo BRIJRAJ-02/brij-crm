@@ -10,4 +10,6 @@ export const strings = {
   noMatches: (query: string) => `Nothing matches “${query}”`,
   noMatchesBody: 'Search by title, or by the address.',
   clearSearch: 'Clear search',
+  /** A row's grip, when the rows move: "Move Intro call". */
+  move: (title: string) => `Move ${title}`,
 } as const;
