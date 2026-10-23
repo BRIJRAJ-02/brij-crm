@@ -3,7 +3,8 @@
 // change nothing and hand focus back; the commit deletes once and stays busy
 // until the server answers while the card has already left; a refusal shows
 // inside the confirm with the card back; and with its card gone, focus goes to
-// the page's title rather than falling to the page.
+// the page's title rather than falling to the page. Turning a page off with its
+// card's switch says "Paused …" with Undo, as a form's switch does (Q73).
 import {
   dataError,
   type BookingPageView,
@@ -83,9 +84,13 @@ afterEach(() => {
   shown = undefined;
 });
 
-async function renderLinks(pages: readonly BookingPageView[]) {
+async function renderLinks(
+  pages: readonly BookingPageView[],
+  update: (workspace: string, pageId: string, patch: { status?: string }) => Promise<unknown> = () =>
+    Promise.resolve({}),
+) {
   const held = pagesOf(pages);
-  const data = { bookingPages: { view: () => held.view, remove: held.remove } } as unknown as DataLayer;
+  const data = { bookingPages: { view: () => held.view, remove: held.remove, update } } as unknown as DataLayer;
   shown = await renderInApp(
     () => (
       <main>
@@ -157,5 +162,32 @@ describe('deleting a booking page', () => {
     expect(held.remove).toHaveBeenCalledTimes(2);
     held.answers[1]?.resolve({ pageId: 'p1' });
     await expect.poll(alert).toBeNull();
+  });
+});
+
+/** Turns a card's switch off from the keyboard, as a person tabbing to it would. */
+async function turnOff(title: string) {
+  (page.getByRole('switch', { name: `${title} is live` }).element() as HTMLElement).focus();
+  await userEvent.keyboard(' ');
+}
+
+describe('turning a booking page off from its card', () => {
+  it('says Paused with Undo, and Undo turns it back on', async () => {
+    const update = vi.fn(() => Promise.resolve({}));
+    await renderLinks([pageOf('p1', 'Quick chat')], update);
+    await turnOff('Quick chat');
+    expect(update).toHaveBeenCalledWith('acme', 'p1', { status: 'paused' });
+    await expect.element(page.getByText('Paused “Quick chat”.')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Undo' }));
+    expect(update).toHaveBeenLastCalledWith('acme', 'p1', { status: 'live' });
+    await expect.element(page.getByText('“Quick chat” is live again.')).toBeVisible();
+  });
+
+  it('says a refusal, and no Paused', async () => {
+    const update = vi.fn(() => Promise.reject(dataError('FORBIDDEN', 'Only its owner can change it.')));
+    await renderLinks([pageOf('p1', 'Quick chat')], update);
+    await turnOff('Quick chat');
+    await expect.element(page.getByText(/Only its owner can change it\./)).toBeVisible();
+    expect(document.body.textContent).not.toContain('Paused “Quick chat”.');
   });
 });

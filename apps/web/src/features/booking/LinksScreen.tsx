@@ -8,6 +8,7 @@ import { Button, focusLater, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
+import { strings as capturesStrings } from '../captures/strings.ts';
 import { useCapturesCreate } from '../captures/create.tsx';
 import { pageHeading } from '../navigation/focus.ts';
 import { DeletePageDialog } from './DeletePageDialog.tsx';
@@ -45,11 +46,23 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
     toasts.toast({ tone: 'danger', message: `${what} ${isDataError(error) ? error.message : strings.somethingWrong}` });
   };
   const open = (pageId: string, tab?: PageTab) => void navigate({ href: pageEditorHref(slug, pageId, tab) });
-  // Each change shows in the list at once; a refusal puts it back there, and the toast says why.
+  // Each change shows in the list at once; a refusal puts it back there, and the toast says why. Pause and Resume
+  // say theirs with Undo, as a form's switch and both editors do (Q73).
   const setStatus = (page: BookingPageView, status: 'live' | 'paused') => {
-    data.bookingPages
-      .update(slug, page.id, { status })
-      .catch(failed(status === 'paused' ? strings.turnOffFailed(page.title) : strings.turnOnFailed(page.title)));
+    data.bookingPages.update(slug, page.id, { status }).then(
+      () => {
+        toasts.toast({
+          tone: 'success',
+          message:
+            status === 'live' ? capturesStrings.resumedToast(page.title) : capturesStrings.pausedToast(page.title),
+          action: {
+            label: capturesStrings.undo,
+            onAction: () => setStatus(page, status === 'live' ? 'paused' : 'live'),
+          },
+        });
+      },
+      failed(status === 'paused' ? strings.turnOffFailed(page.title) : strings.turnOnFailed(page.title)),
+    );
   };
   const duplicate = (page: BookingPageView) => {
     data.bookingPages.duplicate(slug, page, strings.copyOf(page.title)).then(
