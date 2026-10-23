@@ -20,6 +20,7 @@ import { AttributeDisplay, BulkActionBar, Button, Callout, Modal } from '@crm/ui
 import { allMatching, noRows, selectedCount, type GridSelection } from '@crm/ui/grid';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { MemberPicker } from '../records/members.ts';
 import { BulkEditDialog, type BulkEditChoice } from './BulkEditDialog.tsx';
 import {
   BULK_EXCEPT_MAX,
@@ -130,6 +131,8 @@ export interface BulkActionsOptions {
   readonly object: ObjectSummary;
   /** The object's attributes: what the edit dialog offers (AC-529). */
   readonly attributes: readonly AttributeDefinition[];
+  /** The screen's member picker: an Owner's value in the edit dialog, and the member's name in its confirm. */
+  readonly memberPicker: MemberPicker;
   readonly ticked: TableSelection;
   /** How many records the view holds, and whether that is a floor ("10,000+"). */
   readonly total: number;
@@ -156,6 +159,7 @@ export function useBulkActions({
   slug,
   object,
   attributes,
+  memberPicker,
   ticked,
   total,
   isTotalAtLeast,
@@ -390,6 +394,7 @@ export function useBulkActions({
         }}
         object={object}
         attributes={attributes}
+        memberPicker={memberPicker}
         count={editShown.count}
         records={
           selection.kind === 'all-matching' && isTotalAtLeast
@@ -466,7 +471,9 @@ export function useBulkActions({
       >
         {isEditJob ? (
           <>
-            {jobChange !== undefined && changed !== undefined && <EditChange definition={changed} change={jobChange} />}{' '}
+            {jobChange !== undefined && changed !== undefined && (
+              <EditChange definition={changed} change={jobChange} members={memberPicker.displays} />
+            )}{' '}
             {bulkStrings.confirmEditText}
           </>
         ) : (
@@ -485,9 +492,12 @@ export function useBulkActions({
 function EditChange({
   definition,
   change,
+  members,
 }: {
   readonly definition: AttributeDefinition;
   readonly change: BulkEditChoice;
+  /** The workspace's members, so a member value shows by name ("Set Owner to Ada Lovelace"). */
+  readonly members: MemberPicker['displays'];
 }) {
   if (definition.type === 'checkbox') return <>{bulkStrings.describeCheck(definition.title, change.value === true)}</>;
   const words = bulkStrings.describeChange(definition.title, change.op);
@@ -495,7 +505,12 @@ function EditChange({
   return (
     <>
       {words.before}{' '}
-      <AttributeDisplay attribute={toFieldAttribute(definition)} value={change.value ?? null} surface="panel" />{' '}
+      <AttributeDisplay
+        attribute={toFieldAttribute(definition)}
+        value={change.value ?? null}
+        {...(definition.type === 'actor_reference' ? { display: members } : {})}
+        surface="panel"
+      />{' '}
       {words.after}
     </>
   );

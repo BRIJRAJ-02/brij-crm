@@ -603,7 +603,13 @@ export type {
   NotificationSettingsChange,
 } from './inbox/store.ts';
 export { UNREAD_PAST_CAP, type UnreadSource } from './inbox/unread.ts';
-export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
+export {
+  isEditableHere,
+  searchMembers,
+  toActorDisplays,
+  toFieldAttribute,
+  type FieldAttributeShape,
+} from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
 export type { Notice } from './notice.ts';

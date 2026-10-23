@@ -43,6 +43,8 @@ import {
   createIdMinter,
   isDataError,
   isEditableHere,
+  searchMembers,
+  toActorDisplays,
   toFieldAttribute,
   withPendingOptions,
   type DataError,
@@ -1227,7 +1229,7 @@ describe('members and attributes', () => {
     expect(count(api.calls, '/api/rpc/attributes/list')).toBe(6);
   });
 
-  it('maps an attribute to the field set’s, reading members and unlinkable references as read only', () => {
+  it('maps an attribute to the field set’s, members editable and unlinkable references read only', () => {
     expect(toFieldAttribute(TITLE)).toEqual({
       id: TITLE.id,
       name: 'Job title',
@@ -1240,9 +1242,14 @@ describe('members and attributes', () => {
       isReadOnly: false,
     });
     const owner = { ...TITLE, type: 'actor_reference' as const, title: 'Owner' };
-    expect(toFieldAttribute(owner, 'Set on the record page')).toMatchObject({
+    // A member (Owner) edits through the member picker everywhere, a create form and a bulk edit too.
+    expect(toFieldAttribute(owner, 'Set on the record page')).toMatchObject({ isReadOnly: false });
+    expect(toFieldAttribute(owner, 'Set on the record page')).not.toHaveProperty('readOnlyReason');
+    expect(isEditableHere(owner)).toBe(true);
+    // The server's own reason still makes it read only (spec 0009, AC-142).
+    expect(toFieldAttribute({ ...owner, readOnly: { reason: "Your role can't change Owner." } })).toMatchObject({
       isReadOnly: true,
-      readOnlyReason: 'Set on the record page',
+      readOnlyReason: "Your role can't change Owner.",
     });
     const company = { ...TITLE, type: 'record_reference' as const, isMulti: true };
     // A side with no relationship the person can see (one way, or its far object hidden) can't link from here.
@@ -1262,6 +1269,20 @@ describe('members and attributes', () => {
     const createdAt = { ...TITLE, type: 'timestamp' as const, isSystem: true };
     expect(toFieldAttribute(createdAt, 'unused')).toMatchObject({ isReadOnly: true });
     expect(toFieldAttribute(createdAt, 'unused').readOnlyReason).toBeUndefined();
+  });
+
+  it('offers members by name or email, ignoring case, with Me left out for the picker to pin first', () => {
+    const members = toActorDisplays([
+      { id: '0192a000-0000-7000-8000-000000000001', name: 'Ada Lovelace', email: 'ada@acme.test' },
+      { id: '0192a000-0000-7000-8000-000000000002', name: 'Grace Hopper', email: 'grace@navy.test' },
+      { id: '0192a000-0000-7000-8000-000000000003', name: 'Alan Turing', email: 'alan@acme.test' },
+    ]);
+    const names = (query: string, meId?: string) => searchMembers(members, query, meId).map((each) => each.name);
+    expect(names('')).toEqual(['Ada Lovelace', 'Grace Hopper', 'Alan Turing']);
+    expect(names('  HOPPER ')).toEqual(['Grace Hopper']);
+    expect(names('acme.test')).toEqual(['Ada Lovelace', 'Alan Turing']);
+    expect(names('a', '0192a000-0000-7000-8000-000000000001')).toEqual(['Grace Hopper', 'Alan Turing']);
+    expect(names('zzz')).toEqual([]);
   });
 
   it('makes a field the server says the person may only read read only, with the server’s reason (AC-142)', () => {

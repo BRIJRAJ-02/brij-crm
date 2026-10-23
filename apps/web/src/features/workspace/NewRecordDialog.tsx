@@ -1,7 +1,7 @@
 // Brief
 // Purpose: add one record of any object (a person, a project) without leaving the table.
 // Main task: fill the name and every required field, open "Add more fields" for the rest, then Create; the row shows at once.
-// Leaves out: references and members (edited in the table), duplicate checks and templates.
+// Leaves out: references (linked in the table), duplicate checks and templates.
 import {
   isDataError,
   refusalFor,
@@ -12,6 +12,7 @@ import {
 } from '@crm/data';
 import { AttributeEditor, Button, Disclosure, Form, Modal, type FormRefusal } from '@crm/ui';
 import { useId, useRef, useState } from 'react';
+import type { MemberPicker } from '../records/members.ts';
 import { strings } from './strings.ts';
 
 /** Props for the new record dialog. */
@@ -28,6 +29,8 @@ export interface NewRecordDialogProps {
   readonly singularName: string;
   /** The object's standard key, else its API name: a network's editor tells a company from a person by it. */
   readonly objectKey?: string;
+  /** The screen's member picker: an Owner is chosen with it, "Me" first, and a "current user" default shows as Me. */
+  readonly memberPicker: MemberPicker;
   /** Mints the new record's id, once per opening: a second press after a lost answer sends the same one. */
   readonly newId: () => string;
   /** Makes the record (optimistic: the row is in the table while this waits); rejects with the refusals. */
@@ -65,19 +68,20 @@ function dayFromToday(days: number): string {
 
 /**
  * What an editor shows before anything is typed (AC-240, value sourcing): a
- * static default as it is, a date offset as the day it resolves to, and a
- * default naming an archived option as the first live option when the
- * attribute is required, else nothing, as the engine resolves it. A new
- * record left with these gets the same from the server.
+ * static default as it is, a date offset as the day it resolves to, a
+ * "current user" default as the person creating it (`meId`), and a default
+ * naming an archived option as the first live option when the attribute is
+ * required, else nothing, as the engine resolves it. A new record left with
+ * these gets the same from the server.
  */
-function prefillOf(definition: AttributeDefinition): unknown {
+function prefillOf(definition: AttributeDefinition, meId: string | undefined): unknown {
   const fallback = definition.defaultValue;
   if (fallback === undefined) return null;
+  if (fallback.kind === 'current_user') return meId === undefined ? null : { type: 'member', id: meId };
   if (fallback.kind === 'offset') {
     const days = /^P(\d+)D$/.exec(fallback.duration);
     return definition.type === 'date' && days?.[1] !== undefined ? dayFromToday(Number(days[1])) : null;
   }
-  if (fallback.kind !== 'static') return null;
   const options = definition.options;
   if (options === undefined || typeof fallback.value !== 'string') return fallback.value;
   const named = options.find((option) => option.id === fallback.value);
@@ -123,6 +127,7 @@ export function NewRecordDialog({
   title,
   singularName,
   objectKey,
+  memberPicker,
   first,
   more,
   newId,
@@ -162,6 +167,7 @@ export function NewRecordDialog({
         label={title}
         singularName={singularName}
         {...(objectKey === undefined ? {} : { objectKey })}
+        memberPicker={memberPicker}
         newId={newId}
         first={first}
         more={more}
@@ -177,7 +183,7 @@ export function NewRecordDialog({
 /** Props for the dialog's form. */
 interface NewRecordFormProps extends Pick<
   NewRecordDialogProps,
-  'first' | 'more' | 'onCreate' | 'onCreated' | 'singularName' | 'newId' | 'objectKey'
+  'first' | 'more' | 'onCreate' | 'onCreated' | 'singularName' | 'newId' | 'objectKey' | 'memberPicker'
 > {
   readonly formId: string;
   readonly label: string;
@@ -191,6 +197,7 @@ function NewRecordForm({
   label,
   singularName,
   objectKey,
+  memberPicker,
   newId,
   first,
   more,
@@ -203,8 +210,9 @@ function NewRecordForm({
   // One id per opening (the Modal mounts this afresh), sent again on every press.
   const [id] = useState(newId);
   // What each editor shows: its default until the person commits a value (AC-240).
+  const meId = memberPicker.extras.me?.id ?? undefined;
   const [values, setValues] = useState<Readonly<Record<string, unknown>>>(() =>
-    Object.fromEntries(editors.map((editor) => [editor.id, prefillOf(editor)])),
+    Object.fromEntries(editors.map((editor) => [editor.id, prefillOf(editor, meId)])),
   );
   // What the person committed, in the shape the attribute takes: a ref as well, so a submit that a blur's commit
   // runs just before sees it. Untouched fields are left out, so the server applies their defaults itself.
@@ -216,10 +224,19 @@ function NewRecordForm({
 
   const create = () => {
     if (isBusy) return;
-    const sent = Object.fromEntries(Object.entries(sending.current).filter(([, value]) => value !== null));
+    // A field emptied by hand goes as empty only where a default would fill it otherwise (a deal's Owner, which
+    // starts as Me): left out, the server would apply the default the person just cleared.
+    const sent = Object.fromEntries(
+      Object.entries(sending.current).filter(
+        ([attributeId, value]) =>
+          value !== null || editors.some((editor) => editor.id === attributeId && editor.defaultValue !== undefined),
+      ),
+    );
     // A required attribute with nothing typed and no default is refused here, before a blank row is made.
     const missing = first.filter(
-      (editor) => editor.isRequired && sent[editor.id] === undefined && editor.defaultValue === undefined,
+      (editor) =>
+        editor.isRequired &&
+        (sent[editor.id] === null || (sent[editor.id] === undefined && editor.defaultValue === undefined)),
     );
     if (missing.length > 0) {
       setRefusals([]);
@@ -259,6 +276,7 @@ function NewRecordForm({
         attribute={askedFor(definition, objectKey)}
         value={values[definition.id] ?? null}
         surface="form"
+        {...(definition.type === 'actor_reference' ? { display: memberPicker.displays, ...memberPicker.extras } : {})}
         onCommit={(value) => {
           sending.current = {
             ...sending.current,

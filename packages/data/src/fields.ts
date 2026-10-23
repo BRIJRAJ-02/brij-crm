@@ -4,11 +4,8 @@
 // it sits in the first load with the rest of the layer's surface.
 import type { ActorDisplay, AttributeDefinition, AttributeType, Hue, MemberSummary } from '@crm/contracts';
 
-/** A member (Owner) shows but is never edited in this loop. */
-const READ_ONLY_IN_THIS_LOOP: readonly AttributeType[] = ['actor_reference'];
-
-/** The types a create form leaves out for now: members, and record references (linked from the table). */
-const NOT_IN_FORMS: readonly AttributeType[] = ['record_reference', 'actor_reference'];
+/** The types a create form leaves out for now: record references (linked from the table or the record page). */
+const NOT_IN_FORMS: readonly AttributeType[] = ['record_reference'];
 
 /**
  * Whether a record reference can't be linked from here (spec 0014): one way
@@ -50,9 +47,10 @@ export interface FieldAttributeShape {
 }
 
 /**
- * Whether a create form edits this attribute's values in this loop: not a
- * system attribute, a reference or a member, and not one the server says
- * they may only read (spec 0009, AC-142).
+ * Whether a create form (and a bulk edit) edits this attribute's values: not
+ * a system attribute or a record reference, and not one the server says they
+ * may only read (spec 0009, AC-142). A member (Owner) edits through the
+ * member picker, "Me" first.
  */
 export const isEditableHere = (definition: Pick<AttributeDefinition, 'type' | 'isSystem' | 'readOnly'>): boolean =>
   !definition.isSystem && definition.readOnly === undefined && !NOT_IN_FORMS.includes(definition.type);
@@ -62,9 +60,9 @@ export const isEditableHere = (definition: Pick<AttributeDefinition, 'type' | 'i
  * `isMulti` to `allowMultiple`, a currency's default and a number's percent
  * display from its config, and
  * the options of a select or status attribute (archived ones marked), and
- * read only for members in this loop and for a record reference that can't
- * link (one way, or its far object hidden), with `readOnlyReason` (the
- * screen's words) as the reason. A system attribute is read only with
+ * read only for a record reference that can't link (one way, or its far
+ * object hidden), with `readOnlyReason` (the screen's words) as the reason.
+ * A member (Owner) edits through the member picker like any other value. A system attribute is read only with
  * the field set's own reason ("Set by the system"). An attribute the server
  * says the person may only read (`readOnly`, spec 0009, AC-142) is read only
  * with the server's reason, which wins over the screen's: the cell shows it
@@ -77,8 +75,8 @@ export function toFieldAttribute(
   readOnlyReason?: string,
   objectKey?: string,
 ): FieldAttributeShape {
-  // Members stay read only here; a record reference edits through its picker (spec 0014) unless it can't link.
-  const isReference = READ_ONLY_IN_THIS_LOOP.includes(definition.type) || isUnlinkable(definition);
+  // A record reference edits through its picker (spec 0014) unless it can't link; a member through the member picker.
+  const isReference = isUnlinkable(definition);
   const currency = definition.config.defaultCurrency;
   const ruled = definition.isSystem ? undefined : definition.readOnly?.reason;
   const reason = ruled ?? (isReference && !definition.isSystem ? readOnlyReason : undefined);
@@ -113,4 +111,22 @@ export function toFieldAttribute(
 /** A workspace's members as the actor displays an Owner cell and the member picker draw (`members.list`). */
 export function toActorDisplays(members: readonly MemberSummary[]): readonly ActorDisplay[] {
   return members.map((member) => ({ type: 'member', id: member.id, name: member.name, email: member.email }));
+}
+
+/**
+ * The members a member picker offers for what was typed (spec 0003, Actor
+ * reference: a Menu of members, "Me" first): those whose name or email holds
+ * it, ignoring case and the spaces around it, in the workspace's order. `meId`
+ * is left out, since the picker pins Me above the results already and one
+ * member twice in one menu would share a key.
+ */
+export function searchMembers(members: readonly ActorDisplay[], query: string, meId?: string): readonly ActorDisplay[] {
+  const wanted = query.trim().toLocaleLowerCase();
+  return members.filter(
+    (member) =>
+      member.id !== meId &&
+      (wanted === '' ||
+        member.name.toLocaleLowerCase().includes(wanted) ||
+        (member.email?.toLocaleLowerCase().includes(wanted) ?? false)),
+  );
 }

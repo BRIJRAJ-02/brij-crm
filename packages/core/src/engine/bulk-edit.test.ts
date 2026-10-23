@@ -296,6 +296,42 @@ describe('updateMany', () => {
     expect(outcomes[2]).toMatchObject({ refusals: [{ code: 'NOT_FOUND' }] });
   });
 
+  it('sets Owner to a member of this workspace, and never to another workspace’s member (AC-529, AC-13)', async () => {
+    const w = await world();
+    const elsewhere = await world();
+    const owner = w.company('owner');
+    const acme = await company(w, 'Acme');
+    const globex = await company(w, 'Globex');
+    const me = { type: 'member', id: w.memberId };
+    const set = await updateMany(w.scope, {
+      objectId: w.companies,
+      recordIds: [acme, globex],
+      edit: { attributeId: owner, op: 'set', value: me },
+    });
+    expect(set.outcomes.map((outcome) => outcome.state)).toEqual(['changed', 'changed']);
+    expect(await valuesOf(w, [acme, globex], owner)).toEqual([me, me]);
+    // The version names who set it, as every value write does (value history).
+    const history = await getHistory(w.scope, { recordId: acme, attributeId: owner });
+    expect(history.at(-1)).toMatchObject({ value: me, setBy: { type: 'member', id: w.memberId } });
+    // Another workspace's member, an unknown id and a non member are each refused per record, and nothing changes.
+    for (const stranger of [
+      { type: 'member', id: elsewhere.memberId },
+      { type: 'member', id: newId() },
+      { type: 'system', id: null },
+    ]) {
+      const refused = await updateMany(w.scope, {
+        objectId: w.companies,
+        recordIds: [acme, globex],
+        edit: { attributeId: owner, op: 'set', value: stranger },
+      });
+      expect(refused.outcomes.map((outcome) => outcome.state)).toEqual(['refused', 'refused']);
+      expect(refused.outcomes[0]).toMatchObject({
+        refusals: [{ code: 'ATTRIBUTE_VALUE_INVALID', attributeId: owner }],
+      });
+    }
+    expect(await valuesOf(w, [acme, globex], owner)).toEqual([me, me]);
+  });
+
   it('refuses an object or a field the member may only read, and a hidden record unnamed (AC-538)', async () => {
     const w = await world();
     const jobTitle = w.person('job_title');
