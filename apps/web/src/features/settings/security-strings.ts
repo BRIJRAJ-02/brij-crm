@@ -24,6 +24,7 @@ export const strings = {
       passkey_added: 'Added a passkey',
       passkey_removed: 'Removed a passkey',
       alert_sent: 'Emailed you about a new device',
+      google_linked: 'Added Google as a way to sign in',
     },
     methods: { email_code: 'with an email code', google: 'with Google', passkey: 'with a passkey' },
     empty: 'No activity in the last 90 days',

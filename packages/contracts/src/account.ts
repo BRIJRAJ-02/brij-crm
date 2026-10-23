@@ -28,6 +28,8 @@ export const SECURITY_EVENT_KINDS = [
   'passkey_added',
   'passkey_removed',
   'alert_sent',
+  // Settings › Profile's Sync Google photo linked Google as a way to sign in (23 October 2026).
+  'google_linked',
 ] as const;
 /** One kind of security event. */
 export const SecurityEventKind = z.enum(SECURITY_EVENT_KINDS);

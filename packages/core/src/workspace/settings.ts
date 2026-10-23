@@ -220,8 +220,10 @@ export interface WorkspaceDeletion {
  * the owner types its name to confirm (422 `CONFIRM_MISMATCH` on the
  * `confirmName` field otherwise). `deleted_at` and `purge_after` (30 days on)
  * are set in one transaction with the audit row, and from the next request
- * the door refuses every member as for an unknown address. Answers who to
- * email; the caller sends it once this commits.
+ * the door refuses every member as for an unknown address. The same
+ * transaction brings forward the calendar run of each account with a push
+ * channel, which ends its channels at the provider (calendar sync stops with
+ * the workspace). Answers who to email; the caller sends it once this commits.
  */
 export async function deleteWorkspace(
   scope: EngineScope,
@@ -248,6 +250,15 @@ export async function deleteWorkspace(
         .returning({ deletedAt: workspaces.deletedAt, purgeAfter: workspaces.purgeAfter });
       if (row === undefined || row.purgeAfter === null || row.deletedAt === null)
         throw refuse('NOT_FOUND', NOT_A_MEMBER);
+      // Calendar sync stops with the workspace: each account holding a push channel has its next run brought forward,
+      // and that run ends the channels at the provider and syncs nothing, so no notice wakes a deleted workspace. A
+      // failing account's own retry does the same; a restore queues each account again.
+      await tx.execute(sql`
+        select crm_enqueue_calendar_sync(c.id) from calendar_connections c
+        where c.workspace_id = ${scope.workspaceId}::uuid and c.status in ('syncing', 'connected')
+          and exists (select 1 from calendar_calendars k
+            where k.workspace_id = c.workspace_id and k.connection_id = c.id and k.channel is not null)
+      `);
       await writeAudit(
         tx,
         scope.workspaceId,

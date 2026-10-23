@@ -221,12 +221,53 @@ export const CALENDAR_ERROR_CODES = [
 /** One code a provider fails with. */
 export type CalendarErrorCode = (typeof CALENDAR_ERROR_CODES)[number];
 
-/** A provider's expected failure: a stable code and a plain message that quotes no token. */
-export type CalendarProviderError = Error & { readonly code: CalendarErrorCode };
+/**
+ * What the provider itself said when it refused a call, for the log: its HTTP status, and its own machine reason
+ * (Google's `errors[].reason`, such as `pushNotSupportedForRequestedResource`; Graph's `error.code`), never its
+ * message, which can quote an address or a calendar's name.
+ */
+export interface ProviderAnswer {
+  readonly status?: number;
+  readonly reason?: string;
+}
 
-/** Builds a provider's expected failure. */
-export function providerError(code: CalendarErrorCode, message: string): CalendarProviderError {
-  return Object.assign(new Error(message), { name: 'CalendarProviderError', code });
+/** A provider's expected failure: a stable code and a plain message that quotes no token. */
+export type CalendarProviderError = Error & { readonly code: CalendarErrorCode } & ProviderAnswer;
+
+/** A provider's reason as a log may keep it: a short machine word, anything else dropped. */
+const REASON = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+
+/**
+ * Builds a provider's expected failure, with what the provider answered when it answered (`answer`): its status,
+ * and its reason only when that is a short machine word.
+ */
+export function providerError(
+  code: CalendarErrorCode,
+  message: string,
+  answer: ProviderAnswer = {},
+): CalendarProviderError {
+  const status = Number.isInteger(answer.status) ? answer.status : undefined;
+  const reason = answer.reason !== undefined && REASON.test(answer.reason) ? answer.reason : undefined;
+  return Object.assign(new Error(message), {
+    name: 'CalendarProviderError',
+    code,
+    ...(status === undefined ? {} : { status }),
+    ...(reason === undefined ? {} : { reason }),
+  });
+}
+
+/** A provider failure as a log line holds it (`calendar.channel`): the code, and the provider's status and reason. */
+export interface ProviderFailure extends ProviderAnswer {
+  readonly code: CalendarErrorCode;
+}
+
+/** The loggable part of a provider's failure: never its message. */
+export function failureOf(error: CalendarProviderError): ProviderFailure {
+  return {
+    code: error.code,
+    ...(error.status === undefined ? {} : { status: error.status }),
+    ...(error.reason === undefined ? {} : { reason: error.reason }),
+  };
 }
 
 /** True when `error` is a provider's expected failure (with `code`, when given). */

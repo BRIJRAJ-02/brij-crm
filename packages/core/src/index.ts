@@ -330,7 +330,13 @@ export {
   updateCalendarSettings,
   type AddMeetingAttendeeInput,
 } from './calendar/people.ts';
-export { takeCalendarNotice, type CalendarNotice, type NoticeOutcome } from './calendar/push.ts';
+export {
+  takeCalendarNotice,
+  type CalendarNotice,
+  type ChannelReport,
+  type NoticeOutcome,
+  type NoticeResult,
+} from './calendar/push.ts';
 export {
   calendarEventsScope,
   createCalendarEvents,
@@ -345,10 +351,13 @@ export {
   type SkippedCalendar,
 } from './calendar/events.ts';
 export {
+  failureOf,
   isProviderError,
   normaliseEmail,
   PRIMARY_CALENDAR,
   providerError,
+  type ProviderAnswer,
+  type ProviderFailure,
   type BusyInterval,
   type CalendarAccessRole,
   type CalendarBusy,

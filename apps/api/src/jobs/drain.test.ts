@@ -2,8 +2,9 @@
 // login: a turn with nothing due ends at once without starting the runners; a
 // due booking email runs and the turn ends idle with no queue row left; a
 // second turn in the same instance answers busy; a slow task outlasting the
-// budget ends the turn on its budget, the task finishing first; and the
-// after request trigger runs one turn for a burst of wakes, plus one more.
+// budget ends the turn on its budget, the task finishing first; the after
+// request trigger runs one turn for a burst of wakes, plus one more; and a
+// turn a wake from use asked for is logged whatever it found.
 import type { QueueRows } from '@crm/core';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
@@ -252,6 +253,43 @@ describe('the after request trigger', () => {
     await expect(kept[0]).resolves.toBeUndefined();
     expect(errors).toEqual(['jobs.drain.failed']);
   });
+
+  it('logs every turn a wake from use asked for, nothing found included, and a request’s only when it ran work', async () => {
+    const lines: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+    const outcomes: DrainReport[] = [
+      { outcome: 'nothing', ms: 3 },
+      { outcome: 'nothing', ms: 4 },
+      { outcome: 'idle', ms: 900 },
+      { outcome: 'busy', ms: 0 },
+    ];
+    const drain: JobDrain = {
+      run: () => Promise.resolve(outcomes.shift() ?? { outcome: 'nothing', ms: 1 }),
+      running: () => false,
+      nextDue: () => undefined,
+    };
+    const kept: Promise<unknown>[] = [];
+    const wake = createDrainWake({
+      drain,
+      keepAlive: (work) => kept.push(work),
+      budgetMs: 20_000,
+      cooldownMs: 0,
+      log: { ...quiet, info: (message, fields) => lines.push({ message, fields }) },
+    });
+    // A request that found nothing: no line. A wake from use that found nothing: its line.
+    wake();
+    await kept.at(-1);
+    wake('use');
+    await kept.at(-1);
+    wake();
+    await kept.at(-1);
+    wake('use');
+    await kept.at(-1);
+    expect(lines).toEqual([
+      { message: 'jobs.drain', fields: { outcome: 'nothing', ms: 4, by: 'use' } },
+      { message: 'jobs.drain', fields: { outcome: 'idle', ms: 900, by: 'request' } },
+      { message: 'jobs.drain', fields: { outcome: 'busy', ms: 0, by: 'use' } },
+    ]);
+  });
 });
 
 describe('the wake from use', () => {
@@ -260,7 +298,9 @@ describe('the wake from use', () => {
     let wakes = 0;
     const wake = createDueWake({
       drain: { nextDue: due },
-      wake: () => {
+      wake: (trigger) => {
+        // A wake from use says so, so its turn is logged whatever it finds.
+        expect(trigger).toBe('use');
         wakes += 1;
       },
       now: () => clock,

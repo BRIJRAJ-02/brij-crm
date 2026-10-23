@@ -17,6 +17,7 @@ import {
   type CreatedProviderEvent,
   type ExchangedTokens,
   type NewEvent,
+  type ProviderAnswer,
   type ProviderCalendar,
   type ProviderEvent,
 } from './provider.ts';
@@ -49,8 +50,11 @@ export interface FakeCalendar {
   failFreeBusy(account: string, code: CalendarErrorCode | undefined, calendarId?: string): void;
   /** Every `freeBusy` for `account` takes `ms` before it answers (a calendar that doesn't answer in time). */
   slowFreeBusy(account: string, ms: number | undefined): void;
-  /** The next calls of `method` fail with `code`, `times` times (1 by default). */
-  failNext(method: keyof CalendarProvider, code: CalendarErrorCode, times?: number): void;
+  /**
+   * The next calls of `method` fail with `code`, `times` times (1 by default), carrying what the provider answered
+   * (`answer`: its status and reason), when given.
+   */
+  failNext(method: keyof CalendarProvider, code: CalendarErrorCode, times?: number, answer?: ProviderAnswer): void;
   /** How often each method was called. */
   calls(method: keyof CalendarProvider): number;
   /** The calendar ids each `freeBusy` asked for, in order. */
@@ -91,7 +95,7 @@ export function createFakeCalendarProvider(
   const gone = new Set<string>();
   const revoked = new Set<string>();
   const expiring = new Set<string>();
-  const failures = new Map<string, { code: CalendarErrorCode; times: number }>();
+  const failures = new Map<string, { code: CalendarErrorCode; times: number; answer: ProviderAnswer }>();
   const accountFailures = new Map<string, CalendarErrorCode>();
   const calendarFailures = new Map<string, CalendarErrorCode>();
   const slow = new Map<string, number>();
@@ -135,7 +139,7 @@ export function createFakeCalendarProvider(
     const failure = failures.get(method);
     if (failure === undefined || failure.times <= 0) return;
     failure.times -= 1;
-    throw providerError(failure.code, `The fake failed ${method} with ${failure.code}.`);
+    throw providerError(failure.code, `The fake failed ${method} with ${failure.code}.`, failure.answer);
   };
   const tokensFor = (account: string, expiresAt?: string): CalendarTokens => {
     round += 1;
@@ -381,8 +385,8 @@ export function createFakeCalendarProvider(
       if (ms === undefined) slow.delete(account);
       else slow.set(account, ms);
     },
-    failNext(method, code, times = 1) {
-      failures.set(method, { code, times });
+    failNext(method, code, times = 1, answer = {}) {
+      failures.set(method, { code, times, answer });
     },
     calls: (method) => counts.get(method) ?? 0,
     freeBusyAsked: () => [...asked],
