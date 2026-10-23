@@ -1,29 +1,20 @@
-// Settings › Workspace › General's Save: shown only for a real change, and
-// sending only the fields that changed.
+// Settings › Workspace › General's name, saved when the field is left: only a
+// real change renames, an empty name is refused, and spaces round it don't count.
 import { describe, expect, it } from 'vitest';
-import { generalChange, isChanged } from './general-form.ts';
+import { nameCommit } from './general-form.ts';
 
-const saved = { name: 'Acme', slug: 'acme' };
-
-describe('the General form', () => {
-  it('has nothing to save while the fields match, spaces round the name included', () => {
-    const change = generalChange(saved, '  Acme ', 'acme');
-    expect(change).toEqual({});
-    expect(isChanged(change)).toBe(false);
+describe('the General name rule', () => {
+  it('does nothing while the name matches, spaces round it included', () => {
+    expect(nameCommit('Acme', 'Acme')).toEqual({ kind: 'same' });
+    expect(nameCommit('Acme', '  Acme ')).toEqual({ kind: 'same' });
   });
 
-  it('sends the trimmed name alone when only the name changed', () => {
-    expect(generalChange(saved, ' Acme Labs ', 'acme')).toEqual({ name: 'Acme Labs' });
+  it('renames to the trimmed name when it changed', () => {
+    expect(nameCommit('Acme', ' Acme Labs ')).toEqual({ kind: 'rename', name: 'Acme Labs' });
   });
 
-  it('sends the address alone when only the address changed, and both when both did', () => {
-    expect(generalChange(saved, 'Acme', 'acme-labs')).toEqual({ slug: 'acme-labs' });
-    const both = generalChange(saved, 'Halcyon', 'halcyon');
-    expect(both).toEqual({ name: 'Halcyon', slug: 'halcyon' });
-    expect(isChanged(both)).toBe(true);
-  });
-
-  it('counts an emptied name as a change, so Save can say it is missing', () => {
-    expect(generalChange(saved, '   ', 'acme')).toEqual({ name: '' });
+  it('refuses an emptied name, so nothing is saved and the field says so', () => {
+    expect(nameCommit('Acme', '')).toEqual({ kind: 'missing' });
+    expect(nameCommit('Acme', '   ')).toEqual({ kind: 'missing' });
   });
 });

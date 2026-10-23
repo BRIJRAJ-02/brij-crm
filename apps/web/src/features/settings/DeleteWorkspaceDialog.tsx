@@ -1,9 +1,9 @@
 // Brief
-// Purpose: the owner's last check before deleting the workspace (spec 0031, AC-823): what happens, in one sentence.
+// Purpose: the owner's last check before deleting the workspace (spec 0031, AC-823): what happens, in one sentence, said in the open (SS-G5).
 // Main task: type the workspace's name, then Delete workspace; the server checks the name again.
-// Leaves out: restoring (the workspace's own address does that for 30 days) and exporting (suggested in the help).
+// Leaves out: restoring (the workspace's own address does that for 30 days) and exporting (a quiet line suggests it; its link comes with export).
 import { isDataError, namesMatch, type DataLayer, type DeletedWorkspace } from '@crm/data';
-import { Button, Field, InfoTip, Modal } from '@crm/ui';
+import { Button, Field, Modal } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './workspace-strings.ts';
 
@@ -20,9 +20,11 @@ export interface DeleteWorkspaceDialogProps {
 }
 
 /**
- * A danger Modal a click outside won't close: one sentence, an InfoTip on
- * the restore window, the name field, then Cancel (ESC) and Delete workspace,
- * which stays disabled until the typed name matches.
+ * A danger Modal a click outside won't close: one sentence (everyone loses
+ * access and is emailed, any owner can restore it for 30 days), the name
+ * field with "Export anything you want to keep first." as its quiet line,
+ * then Cancel (ESC) and Delete workspace, which stays disabled until the typed
+ * name matches.
  */
 export function DeleteWorkspaceDialog({ data, slug, name, isOpen, onClose, onDeleted }: DeleteWorkspaceDialogProps) {
   const [typed, setTyped] = useState('');
@@ -70,11 +72,10 @@ export function DeleteWorkspaceDialog({ data, slug, name, isOpen, onClose, onDel
         </>
       }
     >
-      <span>
-        {strings.deleteText} <InfoTip label={strings.deleteInfoLabel}>{strings.deleteInfo}</InfoTip>
-      </span>
+      <span>{strings.deleteText}</span>
       <Field
         label={strings.typeName(name)}
+        hint={strings.exportFirst}
         value={typed}
         onChange={setTyped}
         onSubmit={commit}
