@@ -89,6 +89,32 @@ export function GeneralScreen({
   const fail = (error: unknown) => {
     toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
   };
+  // The settings as shown now, for an Undo pressed later; and the last saved toast, which a newer one replaces, so
+  // several changes leave one toast and no older Undo is left to press (Q99), as Preferences keeps it.
+  const shown = useRef(settings);
+  useEffect(() => {
+    shown.current = settings;
+  });
+  const lastSaved = useRef<string | undefined>(undefined);
+  const saved = (message: string, undo: (() => void) | undefined, stillShows: () => boolean) => {
+    if (lastSaved.current !== undefined) toasts.dismiss(lastSaved.current);
+    lastSaved.current = toasts.toast({
+      tone: 'success',
+      message,
+      ...(undo === undefined
+        ? {}
+        : {
+            action: {
+              label: strings.undo,
+              // Only while the page still shows this change: never over a newer one (another admin's too).
+              onAction: () => {
+                if (stillShows()) undo();
+                else toasts.toast({ tone: 'info', message: strings.undoStale });
+              },
+            },
+          }),
+    });
+  };
 
   // Renames it, then reads the settings back; Undo is the same rename the other way, with no Undo of its own.
   const rename = (to: string, from: string, withUndo: boolean) => {
@@ -99,20 +125,15 @@ export function GeneralScreen({
         await onChanged();
         // The field shows the saved name again, unless more was typed meanwhile.
         setNameDraft((typed) => (typed === undefined || typed.trim() === to ? undefined : typed));
-        toasts.toast({
-          tone: 'success',
-          message: strings.nameChanged,
-          ...(withUndo
-            ? {
-                action: {
-                  label: strings.undo,
-                  onAction: () => {
-                    rename(from, to, false);
-                  },
-                },
+        saved(
+          strings.nameChanged,
+          withUndo
+            ? () => {
+                rename(from, to, false);
               }
-            : {}),
-        });
+            : undefined,
+          () => shown.current.name === to,
+        );
       })
       .catch((error: unknown) => {
         // Refused or lost: the typed name stays in the field for Enter to try again. A refusal of the name says why on
@@ -165,20 +186,15 @@ export function GeneralScreen({
       .update(slug, { timeZone: zone })
       .then(async () => {
         await onChanged();
-        toasts.toast({
-          tone: 'success',
-          message: strings.zoneChanged(zoneLabel(zone)),
-          ...(withUndo
-            ? {
-                action: {
-                  label: strings.undo,
-                  onAction: () => {
-                    setZone(previous, zone, false);
-                  },
-                },
+        saved(
+          strings.zoneChanged(zoneLabel(zone)),
+          withUndo
+            ? () => {
+                setZone(previous, zone, false);
               }
-            : {}),
-        });
+            : undefined,
+          () => shown.current.timeZone === zone,
+        );
       })
       .catch(fail)
       .finally(() => {

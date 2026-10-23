@@ -1,5 +1,6 @@
 // Settings › General in Chromium, saving at once (SS-G1 to SS-G4): a rename saves when the field is left (once, even
-// after Enter, and once while it is on its way) with "Name changed." and Undo; an empty name is refused on the field
+// after Enter, and once while it is on its way) with "Name changed." and Undo, one toast at a time whose Undo puts
+// back only the last rename (Q99); an empty name is refused on the field
 // and nothing is sent; a refused name stays in the field with the reason, said in a toast too, as is one lost for
 // another reason; Change opens the address dialog with its field focused, checked as typed, and Change address waits
 // for a free one, said once the page opened there; once an address is typed a click outside keeps the dialog; a move
@@ -121,6 +122,24 @@ describe('the name', () => {
     await userEvent.click(page.getByRole('button', { name: strings.undo }));
     await expect.element(nameField()).toHaveValue('Acme');
     expect(update).toHaveBeenLastCalledWith('acme', { name: 'Acme' });
+  });
+
+  it('keeps one Name changed. toast, whose Undo puts back only the last rename (Q99)', async () => {
+    const { update } = await renderGeneral();
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme B');
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByText(strings.nameChanged)).toBeVisible();
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme C');
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => update.mock.calls.length).toBe(2);
+    // The first toast went when the second came, so no older Undo is left to press.
+    await expect.poll(() => page.getByText(strings.nameChanged).elements().length).toBe(1);
+    expect(page.getByRole('button', { name: strings.undo }).elements()).toHaveLength(1);
+    await userEvent.click(page.getByRole('button', { name: strings.undo }));
+    await expect.element(nameField()).toHaveValue('Acme B');
+    expect(update).toHaveBeenLastCalledWith('acme', { name: 'Acme B' });
   });
 
   it('sends a rename once while it is on its way, then says so', async () => {
