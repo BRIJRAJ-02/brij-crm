@@ -75,11 +75,11 @@ describe('a refusal on a field the form does not show', () => {
   it('says it for a phone on a page that never asked for one', async () => {
     details({
       kind: 'invalid',
-      fields: { phone: 'Keep the phone number to 40 characters.' },
-      message: 'Keep the phone number to 40 characters.',
+      fields: { phone: 'Give a number to call you on.' },
+      message: 'Give a number to call you on.',
     });
     await fillAndSend();
-    await expect.element(line()).toHaveTextContent('Keep the phone number to 40 characters.');
+    await expect.element(line()).toHaveTextContent('Give a number to call you on.');
   });
 
   it('says it for the note and for the guest list as a whole', async () => {

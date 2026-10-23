@@ -40,6 +40,7 @@ import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
 import { saveHour12, savedHour12, savedView, saveView, type SlotView } from './prefs.ts';
 import { needsRead, pageEnded } from './reads.ts';
+import { refusalLine } from './refusal.ts';
 import { strings } from './strings.ts';
 import {
   addDays,
@@ -524,8 +525,11 @@ function Booking({
             if (refusal.field !== undefined && fields[refusal.field] === undefined)
               fields[refusal.field] = refusal.message;
           }
-          // The answer's sentence goes too: the form says it when none of these is a field it shows.
-          if (Object.keys(fields).length > 0) return { kind: 'invalid', fields, message: error.message };
+          // The answer's sentence goes too, when a visitor can read it: the form says it when none of these is a field it shows.
+          if (Object.keys(fields).length > 0) {
+            const message = refusalLine(error.message, fields);
+            return { kind: 'invalid', fields, ...(message === undefined ? {} : { message }) };
+          }
           return {
             kind: 'failed',
             message:
