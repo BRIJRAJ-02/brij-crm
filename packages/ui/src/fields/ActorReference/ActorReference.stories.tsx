@@ -1,13 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { arraySource } from '../../lib/list-source.ts';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { FIELD_SAMPLES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
+import { FIELD_SAMPLES, SAMPLE_MEMBERS, sampleMemberSearch } from '../../workbench/field-samples.ts';
 import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.actor_reference;
 
@@ -48,11 +47,7 @@ export const Several: Story = {
 export const Editor: Story = {
   args: {
     me: SAMPLE_MEMBERS[0],
-    onSearch: ((query: string) =>
-      arraySource(
-        SAMPLE_MEMBERS.filter((member) => member.name.toLowerCase().includes(query.toLowerCase())),
-        (member) => member.id ?? member.name,
-      )) as never,
+    onSearch: sampleMemberSearch as never,
   },
   render: (args) => (
     <Stage width="narrow">
@@ -94,15 +89,12 @@ export const SearchThenEnter: Story = {
     const other = SAMPLE_MEMBERS[1];
     if (other?.id === undefined || other.id === null) throw new Error('the samples need a second member');
     await userEvent.click(canvas.getByRole('button', { name: /Choose Owner/ }));
-    const search = await waitFor(() => {
-      const found = document.querySelector<HTMLInputElement>('[role="searchbox"]');
-      if (found === null) throw new Error('the search did not open');
-      return found;
-    });
+    const search = await screen.findByRole('searchbox', { name: 'Search Owner' });
     await userEvent.type(search, other.name.slice(0, 4));
-    await waitFor(() => {
-      const [first] = [...document.querySelectorAll('[role="menuitem"]')];
-      if (first?.textContent.includes(other.name) !== true) throw new Error(`${other.name} is not first`);
+    // Me (Ada) isn't pinned once a search is typed: the match is first, and Enter picks it.
+    await waitFor(async () => {
+      const [first] = screen.getAllByRole('menuitem');
+      await expect(first).toHaveTextContent(other.name);
     });
     await userEvent.keyboard('{Enter}');
     await expect(args.onCommit).toHaveBeenCalledWith({ type: 'member', id: other.id });
