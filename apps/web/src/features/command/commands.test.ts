@@ -3,13 +3,13 @@
 // and that every address it lists is a route the app has (AC-1104).
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
-import type { ObjectSummary } from '@crm/data';
+import type { ObjectSummary, RecordHit } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import {
   actionCommands,
   createHref,
   matchCommands,
-  namesACommand,
+  orderSections,
   pageCommands,
   settingsCommands,
   viewHref,
@@ -111,15 +111,73 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
     expect(matchCommands(all, '  ')).toHaveLength(all.length);
     expect(names('qqqq')).toEqual([]);
   });
-  it('knows when the text names a command, so typo guesses wait behind it', () => {
-    expect(namesACommand(all, 'trash')).toBe(true);
-    expect(namesACommand(all, ' Book')).toBe(true);
-    expect(namesACommand(all, 'set')).toBe(true);
-    // Held inside a name, or only another word for it, is too loose to outrank a record.
-    expect(namesACommand(all, 'ash')).toBe(false);
-    expect(namesACommand(all, 'deleted')).toBe(false);
-    expect(namesACommand(all, 'northwind')).toBe(false);
-    expect(namesACommand(all, '   ')).toBe(false);
+});
+
+describe('the order of the sections (AC-1075, AC-1079, decision 6)', () => {
+  const pages = pageCommands('acme', OBJECTS);
+  const settings = settingsCommands('acme', []);
+  const actions = actionCommands('acme', OBJECTS);
+  /** The sections for what is typed, with how the server's records matched and its views' names, or `out` while that search is out. */
+  const order = (text: string, records: readonly RecordHit['match'][] | 'out' = [], views: readonly string[] = []) =>
+    orderSections(
+      {
+        records: records === 'out' ? undefined : records.map((match) => ({ match })),
+        views: records === 'out' ? undefined : views.map((name) => ({ name })),
+        pages: matchCommands(pages, text),
+        settings: matchCommands(settings, text),
+        actions: matchCommands(actions, text),
+      },
+      text,
+    );
+
+  it('shows Recent, Actions and Go to with nothing typed', () => {
+    expect(order('')).toEqual(['recent', 'actions', 'pages']);
+    expect(order('   ', ['prefix'])).toEqual(['recent', 'actions', 'pages']);
+  });
+
+  it('puts the page the text names before a close guess: "trash" opens the trash, not Northwind Traders', () => {
+    expect(order('trash', ['similar'])).toEqual(['pages', 'records', 'views', 'settings', 'actions']);
+  });
+
+  it('puts an action named by the text before a Settings page found by another word: "dark" runs Use dark theme', () => {
+    expect(order('dark')).toEqual(['actions', 'settings', 'records', 'views', 'pages']);
+    expect(order('dark', 'out')).toEqual(['records', 'views', 'actions', 'settings', 'pages']);
+    expect(order('dark', ['similar'])).toEqual(['actions', 'records', 'settings', 'views', 'pages']);
+  });
+
+  it('puts the page the text names before a record holding it mid-word: "deal" opens Deals, not Ideal Standard', () => {
+    expect(order('deal', ['contains'])).toEqual(['pages', 'records', 'views', 'settings', 'actions']);
+    expect(order('deal', ['similar', 'contains'])[0]).toBe('pages');
+  });
+
+  it('keeps a record whose name starts with the text first, ahead of a page it names too', () => {
+    expect(order('deal', ['prefix', 'contains'])[0]).toBe('records');
+    expect(order('home', ['prefix'])[0]).toBe('records');
+    // A word of a record's name starting with it still waits behind a page's name starting with it.
+    expect(order('deal', ['word'])[0]).toBe('pages');
+    expect(order('acme', ['word', 'similar'])[0]).toBe('records');
+  });
+
+  it('keeps Records in its place while its search is out, holding only its "Searching…" row', () => {
+    expect(order('deal', 'out')).toEqual(['records', 'views', 'pages', 'settings', 'actions']);
+    expect(order('acme', 'out')[0]).toBe('records');
+  });
+
+  it('weighs a view by its name the same way', () => {
+    expect(order('deal', ['contains'], ['Deal pipeline'])).toEqual([
+      'views',
+      'pages',
+      'records',
+      'settings',
+      'actions',
+    ]);
+    expect(order('deal', ['contains'], ['Big deals'])[0]).toBe('pages');
+  });
+
+  it('keeps kind order when nothing names a command: a loose match never outranks a record', () => {
+    expect(order('deleted', ['similar'])).toEqual(['records', 'pages', 'views', 'settings', 'actions']);
+    expect(order('ash', ['similar'])[0]).toBe('records');
+    expect(order('northwind', ['prefix'])[0]).toBe('records');
   });
 });
 

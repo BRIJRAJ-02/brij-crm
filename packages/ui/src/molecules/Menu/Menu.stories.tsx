@@ -131,6 +131,57 @@ export const PendingRow: Story = {
   },
 };
 
+/**
+ * A choice among plain actions (the command palette's themes under Actions): a
+ * group of its own joined to the one above, with no gap or heading of its own,
+ * whose items are radio items with the check at the end. Their icons line up
+ * with the actions' icons, and screen readers hear which one is checked.
+ */
+export const ChoiceAmongActions: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <MenuTrigger defaultOpen>
+        <Button icon="ellipsis" label="Actions" />
+        <Menu label="Actions" {...(args.onAction === undefined ? {} : { onAction: args.onAction })}>
+          <MenuSection label="Actions">
+            <MenuItem id="create" icon="plus">
+              Create a company
+            </MenuItem>
+          </MenuSection>
+          <MenuSection label="Theme" isLabelHidden isJoined selectionMode="single" selectedKeys={['dark']}>
+            <MenuItem id="light" icon="sun" isCheckAtEnd>
+              Use light theme
+            </MenuItem>
+            <MenuItem id="dark" icon="moon" isCheckAtEnd>
+              Use dark theme
+            </MenuItem>
+          </MenuSection>
+        </Menu>
+      </MenuTrigger>
+    </Stage>
+  ),
+  play: async ({ args, userEvent }) => {
+    const menu = await openMenu();
+    const row = (name: string) => {
+      const found = [...menu.querySelectorAll('[role^="menuitem"]')].find((item) => item.textContent.includes(name));
+      if (!(found instanceof HTMLElement)) throw new Error(`no ${name} row`);
+      return found;
+    };
+    await expect(row('Use dark theme')).toHaveAttribute('role', 'menuitemradio');
+    await expect(row('Use dark theme')).toHaveAttribute('aria-checked', 'true');
+    await expect(row('Use light theme')).toHaveAttribute('aria-checked', 'false');
+    await expect(row('Create a company')).toHaveAttribute('role', 'menuitem');
+    await expect(menu.querySelectorAll('[role="group"]')[1]).toHaveAccessibleName('Theme');
+    // No check column before the choice's items: their icons line up with the action's.
+    const iconLeft = (name: string) => row(name).querySelector('svg')?.getBoundingClientRect().left;
+    await expect(iconLeft('Use light theme')).toBe(iconLeft('Create a company'));
+    // Choosing one is still an action.
+    await userEvent.click(row('Use light theme'));
+    await waitFor(() => expect(args.onAction).toHaveBeenCalledWith('light'));
+  },
+};
+
 /** The right arrow opens the submenu, the left arrow closes it. */
 export const Submenu: Story = {
   parameters: { crm: { screenshot: false } },

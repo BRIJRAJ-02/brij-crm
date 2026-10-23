@@ -374,6 +374,12 @@ export interface MenuItemProps {
    * `selectionMode` instead.
    */
   readonly isChecked?: boolean;
+  /**
+   * In a section that chooses (`selectionMode`), draws the check at the end when chosen, as `isChecked` does,
+   * instead of in a check column before the items: a choice among plain actions (the command palette's themes under
+   * Actions), whose icons stay in line with the actions' icons. Screen readers hear it as checked or not (aria-checked).
+   */
+  readonly isCheckAtEnd?: boolean;
 }
 
 interface ItemState {
@@ -404,10 +410,11 @@ const HasChecks = createContext(false);
 
 function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; readonly state: ItemState }) {
   const { children, icon, leading, isLabelInLeading = false, description, meta, kbd, isChecked = false } = look;
+  const { isCheckAtEnd = false } = look;
   const hasChecks = useContext(HasChecks);
   return (
     <>
-      {(state.selectionMode !== 'none' || hasChecks) && (
+      {!isCheckAtEnd && (state.selectionMode !== 'none' || hasChecks) && (
         <span className={styles.check}>{state.isSelected && <Icon name="check" size="sm" />}</span>
       )}
       {leading ?? (icon !== undefined && <Icon name={icon} size="sm" />)}
@@ -428,6 +435,8 @@ function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; r
         </span>
       )}
       {isChecked && <Icon name="check" size="sm" label={strings.current} />}
+      {/* Screen readers hear the choice from the item itself (aria-checked), so this check is only drawn. */}
+      {isCheckAtEnd && state.selectionMode !== 'none' && state.isSelected && <Icon name="check" size="sm" />}
       {state.hasSubmenu && <Icon name="chevron-right" size="sm" tone="muted" />}
     </>
   );
@@ -460,6 +469,11 @@ export interface MenuSectionProps {
    */
   readonly selectedKeys?: Iterable<MenuKey>;
   readonly onSelectionChange?: (keys: ReadonlySet<MenuKey>) => void;
+  /**
+   * Follows the section above with no gap, as more of its group: a choice inside it (the command palette's themes
+   * under Actions), named for screen readers only, so it goes with `isLabelHidden`.
+   */
+  readonly isJoined?: boolean;
 }
 
 /** A labelled group of items in a Menu. */
@@ -470,10 +484,12 @@ export function MenuSection({
   selectionMode,
   selectedKeys,
   onSelectionChange,
+  isJoined = false,
 }: MenuSectionProps) {
   return (
     <AriaMenuSection
       className={styles.section}
+      {...(isJoined ? { 'data-joined': '' } : {})}
       {...(isLabelHidden ? { 'aria-label': label } : {})}
       {...(selectionMode === undefined ? {} : { selectionMode })}
       {...(selectedKeys === undefined ? {} : { selectedKeys })}

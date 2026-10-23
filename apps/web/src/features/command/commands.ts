@@ -1,9 +1,10 @@
 // The command menu's browser side (spec 0039): the pages, Settings pages and
 // actions it lists, each with the words it also answers to, how what is typed
-// matches them (AC-1077, AC-1082), and where each goes. Pure, so the node
+// matches them (AC-1077, AC-1082), the order its sections show in, and where
+// each goes. Pure, so the node
 // tests cover it, the address walk of AC-1104 among them. Records and views
 // come from the server through the data layer; nothing here reads data.
-import type { ObjectSummary, Permission } from '@crm/data';
+import type { ObjectSummary, Permission, RecordHit, ViewHit } from '@crm/data';
 import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
@@ -171,29 +172,93 @@ export function matchCommands(commands: readonly Command[], query: string): read
   return ranked.sort((a, b) => a.rank - b.rank || a.index - b.index).map((entry) => entry.command);
 }
 
+/** The menu's sections: Recent with nothing typed, then the results by kind (decision 6). */
+export type SectionId = 'recent' | ResultSectionId;
+
+/** The sections of results, in kind order (decision 6): the order that breaks a tie between equally good matches. */
+const RESULT_SECTIONS = ['records', 'views', 'pages', 'settings', 'actions'] as const;
+type ResultSectionId = (typeof RESULT_SECTIONS)[number];
+
+/** With nothing typed (AC-1075): Recent, Actions, then Go to (every page). */
+const BLANK_ORDER: readonly SectionId[] = ['recent', 'actions', 'pages'];
+
 /**
- * Whether what is typed names one of the commands: a name, or a word of one,
- * starts with it ("trash" names Open trash). The menu then lists records found
- * only as close matches (typo guesses) after the commands, so Enter opens the
- * page that was typed rather than a guess (Northwind Traders).
+ * What the menu found for the text, before it is drawn: the server's records
+ * and views (undefined until its answer for this text is in, or when it
+ * failed), and the pages, Settings pages and actions that match.
  */
-export function namesACommand(commands: readonly Command[], query: string): boolean {
-  const text = query.trim().toLocaleLowerCase();
-  return text !== '' && commands.some((command) => (rankOf(command, text) ?? 2) < 2);
+export interface Found {
+  readonly records: readonly Pick<RecordHit, 'match'>[] | undefined;
+  readonly views: readonly Pick<ViewHit, 'name'>[] | undefined;
+  readonly pages: readonly Command[];
+  readonly settings: readonly Command[];
+  readonly actions: readonly Command[];
 }
 
-/** How well a command matches lower case text: 0 its name starts with it, 1 a word does, 2 its name holds it, 3 another word for it does. */
-function rankOf(command: Command, text: string): number | undefined {
-  const name = command.name.toLocaleLowerCase();
-  return name.startsWith(text)
+/**
+ * The order the sections show in. With nothing typed: Recent, Actions, Go to.
+ * Otherwise each section by its best row, on one scale for every kind: a name
+ * starting with the text, then a word of a name starting with it, then any
+ * looser match (held mid-word, another word for it, or a close guess). Kind
+ * order breaks a tie, so a record whose name starts with the text stays first,
+ * while one found only mid-word ("deal" in Ideal Standard) or as a close guess
+ * (Northwind Traders for "trash") waits behind the page, Settings page or
+ * action the text names, and a command named by the text ("dark" in Use dark
+ * theme) beats one found by another word for it (Settings › Preferences).
+ * Records still being searched keep their kind's place, with only their
+ * "Searching…" row.
+ */
+export function orderSections(found: Found, query: string): readonly SectionId[] {
+  const text = query.trim().toLocaleLowerCase();
+  if (text === '') return BLANK_ORDER;
+  const ofCommands = (commands: readonly Command[]) => best(commands.map((command) => onScale(rankOf(command, text))));
+  const strength: Readonly<Record<ResultSectionId, number>> = {
+    records: found.records === undefined ? 0 : best(found.records.map((hit) => RECORD_RANK[hit.match])),
+    views: found.views === undefined ? 0 : best(found.views.map((view) => onScale(nameRank(view.name, text)))),
+    pages: ofCommands(found.pages),
+    settings: ofCommands(found.settings),
+    actions: ofCommands(found.actions),
+  };
+  return RESULT_SECTIONS.map((id, index) => ({ id, index }))
+    .sort((a, b) => strength[a.id] - strength[b.id] || a.index - b.index)
+    .map((entry) => entry.id);
+}
+
+/** Where looser matches sit on the sections' one scale: below a name, or a word of one, starting with the text. */
+const LOOSE = 2;
+
+/** How the server's match kinds (AC-1079) sit on that scale. */
+const RECORD_RANK: Readonly<Record<RecordHit['match'], number>> = {
+  prefix: 0,
+  word: 1,
+  contains: LOOSE,
+  similar: LOOSE,
+};
+
+/** A name's or a command's rank on that scale: 0 and 1 kept, anything looser (or unmatched) as one. */
+const onScale = (rank: number | undefined) => Math.min(rank ?? LOOSE, LOOSE);
+
+/** The best (lowest) of some ranks; a section with none goes after every other. */
+const best = (ranks: readonly number[]) => Math.min(Number.POSITIVE_INFINITY, ...ranks);
+
+/** How well a name matches lower case text: 0 it starts with it, 1 a word of it does, 2 it holds it. */
+function nameRank(name: string, text: string): number | undefined {
+  const lower = name.toLocaleLowerCase();
+  return lower.startsWith(text)
     ? 0
-    : name.split(/\s+/u).some((word) => word.startsWith(text))
+    : lower.split(/\s+/u).some((word) => word.startsWith(text))
       ? 1
-      : name.includes(text)
+      : lower.includes(text)
         ? 2
-        : command.terms.some((term) => term.toLocaleLowerCase().startsWith(text))
-          ? 3
-          : undefined;
+        : undefined;
+}
+
+/** How well a command matches lower case text: its name's rank, or 3 when another word for it starts with the text. */
+function rankOf(command: Command, text: string): number | undefined {
+  return (
+    nameRank(command.name, text) ??
+    (command.terms.some((term) => term.toLocaleLowerCase().startsWith(text)) ? 3 : undefined)
+  );
 }
 
 const go = (href: string): CommandRun => ({ kind: 'go', href });
