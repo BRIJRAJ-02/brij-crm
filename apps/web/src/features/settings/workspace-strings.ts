@@ -43,7 +43,7 @@ export const strings = {
   zoneChanged: (zone: string) => `Time zone is now ${zone}.`,
   undo: 'Undo',
   /** An Undo pressed after the name or time zone changed again (here or by another admin): the newer one stays. */
-  undoStale: 'It changed again since, so nothing was undone.',
+  undoStale: (what: 'name' | 'time zone') => `The ${what} changed again since, so nothing was undone.`,
   /** Said once, at the top of the page, to readers without `workspace.manage`; the fields keep their locks. */
   readOnly: 'Only owners and admins can change this.',
   failed: 'Couldn’t load the settings',
