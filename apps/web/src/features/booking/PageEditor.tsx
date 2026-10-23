@@ -77,6 +77,7 @@ import {
   PAGE_TABS,
   pageTabOf,
   publicBookingOrigin,
+  isNotOlder,
   publicBookingUrl,
   type PageTab,
 } from './links.ts';
@@ -241,6 +242,18 @@ export function PageEditor({
   const [isSlugLeft, setSlugLeft] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
+  // The route shows its cached read first and reads again behind it (and again on any live change), so a newer
+  // read arrives as a new `loaded`: the handle just claimed in Profile (owner, 23 Oct 2026: Copy link kept giving
+  // /b/<key>), a pause from the Links card, the editor's own last save. The editor takes it unless it is older
+  // than the page it holds, and keeps only the person's own unsaved changes on top, as a save does.
+  const [lastLoaded, setLastLoaded] = useState(loaded);
+  if (loaded !== lastLoaded) {
+    setLastLoaded(loaded);
+    if (isNotOlder(loaded, page)) {
+      setPage(loaded);
+      setDraft((current) => ({ ...settingsOf(loaded), ...changed(saved, current) }));
+    }
+  }
   const dirty = changed(saved, draft);
   const isPageDirty = !isLocked && Object.keys(dirty).length > 0;
   const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember);
@@ -381,6 +394,9 @@ export function PageEditor({
   const bLink = publicBookingUrl({ ...page, isPrivate: true });
   const addressHost = new URL(publicBookingOrigin()).host;
   const isSlugUnsaved = draft.slug !== page.slug;
+  // Copy and Open give the saved address, so they wait while the one shown isn't saved yet (a new slug, or a Link
+  // only page switched to Public).
+  const isAddressUnsaved = isSlugUnsaved || draft.isPrivate !== page.isPrivate;
   // The phone shows the unsaved words and lengths, but its times come from the server: while the hours or limits
   // have unsaved changes it says so.
   const isTimesStale = isWeekDirty || TIME_KEYS.some((key) => key in dirty);
@@ -626,7 +642,7 @@ export function PageEditor({
                                 ? { error: failure.message }
                                 : {})}
                             suffix={
-                              isSlugUnsaved ? (
+                              isAddressUnsaved ? (
                                 <Tooltip content={strings.saveAddressFirst}>
                                   <CopyButton
                                     value={savedLink}
@@ -640,7 +656,7 @@ export function PageEditor({
                                 <CopyButton value={savedLink} label={strings.copyLink} variant="ghost" isIconOnly />
                               )
                             }
-                            after={openButton(savedLink, isSlugUnsaved)}
+                            after={openButton(savedLink, isAddressUnsaved)}
                           />
                         ) : (
                           // No handle yet, or a Link only page: its /b/ link, which only those who have it can use.
@@ -652,7 +668,8 @@ export function PageEditor({
                             after={openButton(bLink, false)}
                           />
                         )}
-                        {page.handle === undefined && !draft.isPrivate && (
+                        {/* The reader's own handle: on a colleague's page their Profile can't change this address. */}
+                        {page.handle === undefined && !draft.isPrivate && ownerMember === undefined && (
                           <Link href={profileHref(slug)}>{strings.setHandle}</Link>
                         )}
                         <FieldGroup
@@ -1043,8 +1060,21 @@ export interface PageEditorPendingProps {
 }
 
 /**
- * The editor while its page loads: the tabs where the editor's will stand, and the chosen one's fields as skeletons.
- * Hosts waits for the page, since only a round robin page has it.
+ * Each tab's sections as its loading state draws them, by title: the ones a page shows there whatever it holds, so the
+ * editor lands where they stood (the owner, 20 Oct 2026). Profile and Reserved time wait for the page, which says
+ * whether it has them; Hours draws a one on one page's, the usual kind.
+ */
+const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
+  page: [strings.details, strings.sharing],
+  meeting: [strings.meeting, strings.location, strings.calendarSection],
+  hosts: [rotationStrings.hosts, routingStrings.routing],
+  hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff],
+  limits: [strings.limitGroups.buffers, strings.limitGroups.window, strings.limitGroups.pace],
+};
+
+/**
+ * The editor while its page loads: the tabs where the editor's will stand, and the chosen one's sections, titled and
+ * busy, with skeleton fields. Hosts waits for the page, since only a round robin page has it.
  */
 export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
   // Hosts only when it is the tab asked for (a round robin page's); the page says whether it has it.
@@ -1072,9 +1102,11 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
           >
             <TabPanel id={shown} variant="fill">
               <PreviewLayout preview={<Skeleton shape="block" />} {...(notices === undefined ? {} : { notices })}>
-                <Card isBusy>
-                  <Skeleton lines={6} />
-                </Card>
+                {PENDING_SECTIONS[shown].map((title) => (
+                  <Card key={title} title={title} isBusy>
+                    <Skeleton lines={3} />
+                  </Card>
+                ))}
               </PreviewLayout>
             </TabPanel>
           </Tabs>

@@ -18,6 +18,7 @@ import { ScheduleHours } from './schedules.ts';
 import { BookingAssignment, BookingAssignmentsInput, ReassignBookingInput, ReassignedBooking } from './rotations.ts';
 import { BookingAvailability, BookingLocation, BookingPageSettings, TimeZoneName } from './settings.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
+import { RecordRefDisplay } from '../values/options.ts';
 import { RoutingRules } from '../forms/routing.ts';
 
 /** The most fixed hosts, rotations, and hosts in all, on one round robin page (spec 0037, AC-1319). */
@@ -53,7 +54,10 @@ export const BookingPageView = BookingPageSettings.extend({
   pausedReason: z.literal('host_removed').optional(),
   /** A round robin page's hosts (spec 0037, AC-1319): its fixed hosts and the rotations it books one host from. */
   hosts: TeamHosts.optional(),
-  /** A round robin page's routing rules (spec 0043, AC-1608): each picks some of its hosts. */
+  /**
+   * A round robin page's routing rules (spec 0043, AC-1608): each picks some of its hosts. Only those the reader may
+   * see: a rule over a person's or company's field hidden from them is absent (spec 0009), and their save keeps it.
+   */
   routing: RoutingRules.optional(),
   /** Confirmed bookings starting this calendar month (UTC). */
   bookingsThisMonth: z.number().int().min(0),
@@ -115,7 +119,10 @@ export const UpdateBookingPageInput = WorkspaceScoped.extend({
   settings: BookingPageSettingsWrite,
   /** A round robin page's hosts, replacing them (`booking.admin`). */
   hosts: TeamHosts.optional(),
-  /** A round robin page's routing rules, replacing them (spec 0043, AC-1608; `booking.admin`). */
+  /**
+   * A round robin page's routing rules, replacing those the writer sees (spec 0043, AC-1608; `booking.admin`). A rule
+   * over a field hidden from them stays as it was, just after the rule it followed.
+   */
   routing: RoutingRules.optional(),
   mutationId: Uuid,
 });
@@ -249,6 +256,11 @@ export const BookingListItem = BookingView.extend({
   needsHost: z.boolean(),
   /** Marked as a no show after it (spec 0043, AC-1613). */
   noShow: z.boolean().optional(),
+  /**
+   * The record it was linked to by hand from its card (polish F2): a deal, or another object's record, as a chip
+   * shows it. Absent when there is none, or the reader may not see it (hidden means absent).
+   */
+  linkedRecord: RecordRefDisplay.optional(),
 });
 /** A booking in Bookings. */
 export type BookingListItem = z.infer<typeof BookingListItem>;
@@ -424,6 +436,23 @@ export const MeetingListPage = z.object({ items: z.array(MeetingListItem), nextC
 /** One page of meetings. */
 export type MeetingListPage = z.infer<typeof MeetingListPage>;
 
+/**
+ * Linking a booking to a record by hand (polish F2): a deal, or a record of another object the caller may change
+ * (never a person or a company: those are its guest's, filed when it was made). `null` takes the link off.
+ */
+export const LinkBookingRecordInput = WorkspaceScoped.extend({
+  bookingId: Uuid,
+  recordId: Uuid.nullable(),
+  mutationId: Uuid,
+});
+/** Linking a booking to a record by hand. */
+export type LinkBookingRecordInput = z.infer<typeof LinkBookingRecordInput>;
+
+/** What a booking is linked to now, as a chip shows it; absent once unlinked. */
+export const LinkedBookingRecord = z.object({ linkedRecord: RecordRefDisplay.optional() });
+/** What a booking is linked to now. */
+export type LinkedBookingRecord = z.infer<typeof LinkedBookingRecord>;
+
 /** Marking a booking as a no show (`noShow: true`) or taking the mark back. */
 export const MarkNoShowInput = WorkspaceScoped.extend({ bookingId: Uuid, noShow: z.boolean(), mutationId: Uuid });
 /** Marking a booking as a no show. */
@@ -453,6 +482,8 @@ export const bookingsContract = {
   reassign: oc.input(ReassignBookingInput).output(ReassignedBooking),
   /** Mark a past booking as a no show, or undo it (spec 0043, AC-1613): its host or `booking.admin`. */
   markNoShow: oc.input(MarkNoShowInput).output(z.object({ noShow: z.boolean() })),
+  /** Link a booking to a record by hand, or take the link off (polish F2): its host, the page's owner or an admin. */
+  link: oc.input(LinkBookingRecordInput).output(LinkedBookingRecord),
   /** Time the caller closed on their own calendar (spec 0027). */
   blocks: {
     create: oc.input(CreateTimeBlockInput).output(TimeBlockView),

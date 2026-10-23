@@ -18,8 +18,9 @@ import { writeAudit, type AuditSource } from './audit.ts';
 
 const { members, workspaces } = schema;
 
-/** What only the session knows about the caller: the account's picture, from Google when it has one. */
+/** What only the session knows about the caller. */
 export interface ProfileExtras {
+  /** The account's Google picture as our own origin serves it (`/api/me/picture?v=`), when it has one. */
   readonly image?: string | undefined;
 }
 
@@ -68,8 +69,8 @@ async function readProfile(
   const [row] = lock ? await query.for('update', { of: members }) : await query;
   // The door let them in a moment ago; removed since, they are no member here.
   if (row === undefined) throw refuse('NOT_FOUND', "That workspace doesn't exist, or you're not a member of it.");
-  // The member's own picture (Google's, saved at sign in), else what the session knows.
-  const image = safeImage(row.avatarUrl ?? undefined) ?? safeImage(extras.image);
+  // The account's picture as our own origin serves it (the api's path), else the member's own https one.
+  const image = extras.image ?? safeImage(row.avatarUrl ?? undefined);
   const userId = selfUserId(scope);
   const held = userId === undefined ? undefined : (await publicProfilesOf(tx, [userId])).get(userId);
   // While they have no handle, the field starts from a free one made from their name.

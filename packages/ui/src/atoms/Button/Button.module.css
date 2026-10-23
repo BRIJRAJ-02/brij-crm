@@ -98,6 +98,16 @@
     content: '';
   }
 
+  /* A page's own call to action outside the app (the marketing site's hero and footer): 36px, the title's label,
+     more room at the sides. Inside the app, nothing is this size: a screen's buttons stay md or lg. */
+  .root[data-size='xl'] {
+    gap: var(--space-8);
+    block-size: calc(var(--size-input) + var(--space-6));
+    padding-inline: var(--space-16);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
   /* A chip's height, for an icon only Remove beside a chip inside a field's box. */
   .root[data-size='sm'] {
     position: relative;

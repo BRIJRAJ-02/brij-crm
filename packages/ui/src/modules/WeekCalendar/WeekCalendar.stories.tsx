@@ -325,7 +325,7 @@ export const OpenCard: Story = {
   play: async ({ canvas, canvasElement }) => {
     // A cancelled block says so in its name, not by its strike alone.
     await expect(
-      canvas.getByRole('button', { name: 'Alan Turing, 10:00 – 11:00 AM, Site visit, canceled' }),
+      canvas.getByRole('button', { name: 'Alan Turing, 10:00 – 11:00 AM, Site visit, cancelled' }),
     ).toBeInTheDocument();
     // Its name says who and when, and what it is about (the block's detail).
     await userEvent.click(canvas.getByRole('button', { name: 'Grace Hopper, 3:30 – 4:00 PM, Quick chat' }));

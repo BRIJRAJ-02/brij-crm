@@ -6,6 +6,8 @@ The rows to pick from under what is being typed: members after `@`, blocks after
 
 New with the note editor (spec 0019), as `editor/SuggestionList`. It moved here when the comment composer (spec 0038) needed the same `@` rows: the main entry may never reach the editor's chunk (`editor/entry.test.ts`), and a second list would be a second look for one element. Menu doesn't fit, since focus stays in the text field while the list is open.
 
+Exported from the library (22 October 2026) for a screen that suggests from a list under one of its own fields: New meeting's With offers people from People as the member types, through Field's `combobox`, with the same rows (an Avatar, the name and the email).
+
 ## Use
 
 ```tsx

@@ -19,6 +19,7 @@ export function ActorReferenceEditor({
   error,
   autoOpen = false,
   startText,
+  isDisabled = false,
 }: EditorProps<'actor_reference'>) {
   const displays = asList<ActorDisplay>(display);
   const [chosen, setChosen] = useState<readonly (typeof displays)[number][]>(() =>
@@ -41,6 +42,7 @@ export function ActorReferenceEditor({
       keyOf={keyOf}
       isCompact={isCompactSurface(surface)}
       isOpenAtStart={autoOpen}
+      isDisabled={isDisabled}
       isInline={surface === 'cell'}
       showLabel={surface === 'form'}
       {...(startText === undefined ? {} : { startQuery: startText })}

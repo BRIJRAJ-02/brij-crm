@@ -19,11 +19,13 @@ import {
   type ListBookingsInput,
   type ProfileOrder,
   type ReorderProfileInput,
+  type RoutingRule,
   type TeamHosts,
   type UpdateBookingPageInput,
   BOOKINGS_PAGE_MAX,
   BOOKING_DURATIONS_MAX,
   PROFILE_ORDER_MAX,
+  ROUTING_RULES_MAX,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
@@ -35,6 +37,7 @@ import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { writeAudit } from '../members/audit.ts';
 import { changedRuleIds, checkPageRoutes, rulesChanged } from '../routing/check.ts';
+import { NONE_UNSEEN, rulesSeen, unseenRules, withUnseenRules, type UnseenRule } from '../routing/seen.ts';
 import { actorRow } from '../engine/scope.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 import { ownerSlugs, publicProfilesOf } from './handles.ts';
@@ -163,13 +166,14 @@ async function pageHosts(
   );
 }
 
-/** A page as the reader sees it. */
+/** A page as the reader sees it: a team page's rules without those `unseen` hides from them (`routing/seen.ts`). */
 function viewOf(
   scope: EngineScope,
   page: PageRecord,
   count: number,
   hosts: TeamHosts | undefined,
   handle: string | undefined,
+  unseen: UnseenRule,
 ): BookingPageView {
   return {
     id: page.id,
@@ -199,7 +203,8 @@ function viewOf(
     profilePosition: page.profilePosition,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
     ...(hosts === undefined ? {} : { hosts }),
-    ...(page.kind === 'round_robin' ? { routing: { rules: [...(page.routingRules ?? [])] } } : {}),
+    // Hidden means absent (spec 0009): a rule over a field the reader can't see isn't sent, not even its id.
+    ...(page.kind === 'round_robin' ? { routing: { rules: [...rulesSeen(page.routingRules ?? [], unseen)] } } : {}),
     bookingsThisMonth: count,
     canChange: mayChange(scope, page),
     createdAt: page.createdAt.toISOString(),
@@ -230,6 +235,12 @@ export async function listBookingPages(
       tx,
       pages.map((page) => page.ownerUserId),
     );
+    // One read of the fields every page's rules name.
+    const unseen = await unseenRules(
+      tx,
+      scope.access,
+      pages.flatMap((page) => page.routingRules ?? []),
+    );
     return pages.map((page) =>
       viewOf(
         scope,
@@ -237,6 +248,7 @@ export async function listBookingPages(
         counts.get(page.id) ?? 0,
         hosts.get(page.id),
         page.ownerUserId === null ? undefined : handles.get(page.ownerUserId)?.handle,
+        unseen,
       ),
     );
   });
@@ -255,11 +267,12 @@ export async function getBookingPage(
   });
 }
 
-/** One page's view with its month's count and rotation. */
+/** One page's view with its month's count, its rotation, and the rules the reader may see. */
 async function viewWithCounts(tx: WorkspaceTx, scope: EngineScope, page: PageRecord, now: Date) {
   const counts = await monthCounts(tx, [page.id], now);
   const hosts = await pageHosts(tx, [page]);
-  return viewOf(scope, page, counts.get(page.id) ?? 0, hosts.get(page.id), await ownerHandle(tx, page));
+  const unseen = await unseenRules(tx, scope.access, page.routingRules ?? []);
+  return viewOf(scope, page, counts.get(page.id) ?? 0, hosts.get(page.id), await ownerHandle(tx, page), unseen);
 }
 
 /** The page owner's handle, when they have one: the page's address is then `/<handle>/<slug>`. */
@@ -520,7 +533,8 @@ export async function createBookingPage(
         .values({ workspaceId: scope.workspaceId, pageId: row.id, memberId: owner, position: 0 });
       const [page] = await pagesOf(tx, [row]);
       if (page === undefined) throw new Error('The booking page was not created.');
-      return viewOf(scope, page, 0, undefined, await ownerHandle(tx, page));
+      // A personal page has no rules.
+      return viewOf(scope, page, 0, undefined, await ownerHandle(tx, page), NONE_UNSEEN);
     } catch (error) {
       throw slugRefusal(error) ?? error;
     }
@@ -561,22 +575,33 @@ export async function updateBookingPage(
       await setPageHosts(tx, scope.workspaceId, page.id, input.hosts);
     }
     // Routing rules (spec 0043, AC-1608): only a round robin page's, each naming members of its rotations; audited.
-    const routing = input.routing;
-    if (routing !== undefined) {
+    // The writer sends the rules they see; those over a field hidden from them are put back as they were, in place.
+    let routing: { readonly rules: readonly RoutingRule[] } | undefined;
+    if (input.routing !== undefined) {
       if (page.kind !== 'round_robin') {
         throw refuseOn('CONFIG_INVALID', 'Only a team page has routing rules.', 'routing');
       }
-      await checkPageRoutes(tx, page.id, routing.rules, { access: scope.access, before: page.routingRules ?? [] });
       const before = page.routingRules ?? [];
-      if (rulesChanged(before, routing.rules)) {
+      // Checked as sent, so a refusal names a rule by its place in the writer's own list.
+      await checkPageRoutes(tx, page.id, input.routing.rules, { access: scope.access, before });
+      const rules = withUnseenRules(before, input.routing.rules, await unseenRules(tx, scope.access, before));
+      if (rules.length > ROUTING_RULES_MAX) {
+        throw refuseOn(
+          'CONFIG_INVALID',
+          `This page holds the most rules it can, ${String(ROUTING_RULES_MAX)}. Remove one to add another.`,
+          'routing',
+        );
+      }
+      if (rulesChanged(before, rules)) {
         await writeAudit(tx, scope.workspaceId, scope.actor, {
           action: 'routing.changed',
           targetType: 'booking_page',
           targetId: page.id,
           before: { rules: before.length },
-          after: { rules: routing.rules.length, changed: changedRuleIds(before, routing.rules) },
+          after: { rules: rules.length, changed: changedRuleIds(before, rules) },
         });
       }
+      routing = { rules };
     }
     const by = actorRow(scope.actor);
     try {

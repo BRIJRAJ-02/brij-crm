@@ -126,7 +126,7 @@ export const Cancelled: Story = {
     <Stage>
       <MeetingCard
         {...args}
-        status={{ label: 'Canceled', hue: 'gray' }}
+        status={{ label: 'Cancelled', hue: 'gray' }}
         people={[{ id: 'grace', name: 'Grace Hopper', detail: 'grace@navy.mil' }]}
         rows={[
           where,
@@ -135,14 +135,14 @@ export const Cancelled: Story = {
             icon: 'circle-x',
             label: 'Reason',
             value: 'Travelling that week',
-            detail: 'Canceled by the guest',
+            detail: 'Cancelled by the guest',
           },
         ]}
       />
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Canceled')).toBeInTheDocument();
+    await expect(canvas.getByText('Cancelled')).toBeInTheDocument();
     // Nothing is left to do: no footer and no buttons but the copy.
     await expect(canvas.queryByRole('button', { name: /Reschedule|Cancel/ })).toBeNull();
   },

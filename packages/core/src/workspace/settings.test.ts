@@ -3,7 +3,7 @@
 // what, the audit row each change writes, the soft delete the door honours,
 // and the owner's restore within the window.
 import { sql } from 'drizzle-orm';
-import { PERMISSIONS, type Role } from '@crm/contracts';
+import { myPicturePath, PERMISSIONS, type Role } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { createTestUser, testQuery } from '@crm/db/testing';
@@ -90,19 +90,29 @@ async function auditOf(workspaceId: string) {
 }
 
 describe('Account › Profile (AC-821)', () => {
-  it('answers the caller’s own profile, with the workspace’s time zone and only an https picture', async () => {
+  it('answers the caller’s own profile, with the workspace’s time zone and only our own or an https picture', async () => {
     const t = await team();
-    const profile = await getMyProfile(t.as(t.owner, 'owner'), { image: 'https://lh3.example.com/a.png' });
+    // The account's picture as our own origin serves it: the api builds the path from the session (23 Oct 2026).
+    const served = myPicturePath('0123456789ab');
+    const profile = await getMyProfile(t.as(t.owner, 'owner'), { image: served });
     expect(profile).toEqual({
       memberId: t.owner,
       name: 'Ada',
       email: 'ada@example.com',
       workspaceTimeZone: 'UTC',
-      image: 'https://lh3.example.com/a.png',
+      image: served,
       // A member with no identity has no handle, and no suggestion for one.
       bio: '',
     });
-    expect((await getMyProfile(t.as(t.owner, 'owner'), { image: 'javascript:alert(1)' })).image).toBeUndefined();
+    // Without one, the member's own stored picture, and only an https one.
+    const store = (url: string) =>
+      db.withWorkspace(t.workspaceId, (tx) =>
+        tx.execute(sql`update members set avatar_url = ${url} where id = ${t.owner}`),
+      );
+    await store('javascript:alert(1)');
+    expect((await getMyProfile(t.as(t.owner, 'owner'), {})).image).toBeUndefined();
+    await store('https://lh3.example.com/a.png');
+    expect((await getMyProfile(t.as(t.owner, 'owner'), {})).image).toBe('https://lh3.example.com/a.png');
   });
 
   it('changes the name and time zone, writes one audit row of the changed fields, and nothing for no change', async () => {

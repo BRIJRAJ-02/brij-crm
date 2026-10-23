@@ -166,10 +166,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // the system in its workspace.
   'handOnBooking',
   'remakeEvent',
-  // Lead routing (spec 0043): a no show is marked through the booking's target (hostTarget, booking.manage), as a
-  // cancel is; the report checks its surface (the form's or page's own access) itself; the route and the record
-  // facts it reads are pure.
-  'markNoShow',
+  // Lead routing (spec 0043): the report checks its surface (the form's or page's own access) itself; the route and
+  // the record facts it reads are pure. (A no show is marked through the booking's target: in the table.)
   'routingReport',
   'decideRoute',
   'recordFactKeys',
@@ -209,6 +207,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'scheduleFor',
   // Home's metrics cache (spec 0041): a factory the api makes once, no scope.
   'createHomeMetricsCache',
+  // A person's own account picture from our origin (23 Oct 2026): which of Google's pictures to serve, and its
+  // version, from the session's user; pure, no scope.
+  'servedPicture',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -404,6 +405,10 @@ describe('the walk: a principal without the access is refused', () => {
           // A member's change target and the guest link name a booking, not a page; the row decides (change.test.ts).
           'hostTarget',
           'bookingGuestPath',
+          // So do a no show (routing.test.ts) and a hand link to a record, then the record's own access
+          // (change.test.ts: the booking another member's, the record hidden, read only or in another workspace).
+          'markNoShow',
+          'linkBookingRecord',
           // Rotations aren't pages: a member lists only the ones they're in (rotations.test.ts); a booking's
           // assignments are its host's (assignments are checked on the row, rotations.test.ts); a reassign is checked
           // on the booking and over both hosts (rotation.test.ts).

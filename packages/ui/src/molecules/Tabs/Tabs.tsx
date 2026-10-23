@@ -12,6 +12,7 @@ import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
+import type { Hue } from '../../hue.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
 import { useScrollEdges } from '../../lib/scroll-edges.ts';
 import styles from './Tabs.module.css';
@@ -39,6 +40,10 @@ export interface TabItem {
    * can load that page while a pointer rests on the tab.
    */
   readonly href?: string;
+  /** The `feature` variant's line under the label: what the area does ("Every meeting in one week"). */
+  readonly description?: string;
+  /** The `feature` variant's icon tile hue; gray when absent. */
+  readonly hue?: Hue;
 }
 
 /**
@@ -81,9 +86,11 @@ export interface TabsProps {
   /**
    * `strip` (the default): 40px tabs on a hairline, inside a page (a record's tabs). `bar`: the tabs as a page's
    * second bar, the row People's ViewBar takes under the TopBar: size-bar tall on the surface, the same padding
-   * and hairline, kept in place while the page under it scrolls (Captures, Bookings).
+   * and hairline, kept in place while the page under it scrolls (Captures, Bookings). `feature`: a product's areas on
+   * its own home page (the marketing site's first fold), equal columns with an icon tile, a label and a
+   * `description` each, the chosen one bright under a line that slides along their top.
    */
-  readonly variant?: 'strip' | 'bar';
+  readonly variant?: 'strip' | 'bar' | 'feature';
   /**
    * `none` drops the strip's 16px inset at both ends, so the first tab's label
    * lines up with a full width Table's first column under it and the tools
@@ -94,6 +101,12 @@ export interface TabsProps {
    * the content edge where the body's headings and table text start.
    */
   readonly inset?: 'default' | 'none';
+  /**
+   * `bottom` puts the tabs under their panels (the marketing site's showcase: the screen first, the areas under it,
+   * 23 October 2026). The markup order stays tabs then panels, so the keyboard and screen readers meet the tabs
+   * first; only the drawing moves.
+   */
+  readonly placement?: 'top' | 'bottom';
   /**
    * One TabPanel per tab, with the same ids. Leave it off for a strip whose
    * chosen tab is drawn by the page under it (a published form's Form,
@@ -117,6 +130,7 @@ export function Tabs({
   end,
   variant = 'strip',
   inset = 'default',
+  placement = 'top',
   children,
 }: TabsProps) {
   const { isFocusVisible } = useFocusVisible();
@@ -128,6 +142,7 @@ export function Tabs({
   return (
     <AriaTabs
       className={styles.root}
+      data-placement={placement === 'bottom' ? 'bottom' : undefined}
       {...(selectedKey === undefined ? {} : { selectedKey })}
       {...(defaultSelectedKey === undefined ? {} : { defaultSelectedKey })}
       {...(onSelectionChange === undefined
@@ -140,7 +155,7 @@ export function Tabs({
     >
       <div
         className={styles.bar}
-        data-variant={variant === 'bar' ? 'bar' : undefined}
+        data-variant={variant === 'strip' ? undefined : variant}
         data-inset={inset === 'none' && !atPageEdge ? 'none' : undefined}
         data-edge={atPageEdge ? 'page' : undefined}
       >
@@ -159,8 +174,24 @@ export function Tabs({
               {...(tab.isDisabled === undefined ? {} : { isDisabled: tab.isDisabled })}
               data-href={tab.href}
             >
-              {tab.icon !== undefined && <Icon name={tab.icon} size="sm" />}
-              <span>{tab.label}</span>
+              {variant === 'feature' ? (
+                <span className={styles.featureBody}>
+                  {tab.icon !== undefined && <Icon name={tab.icon} tile={tab.hue ?? 'gray'} />}
+                  <span className={styles.feature}>
+                    <span className={styles.featureLabel}>{tab.label}</span>
+                    {tab.description !== undefined && (
+                      <span className={styles.featureDescription} aria-hidden="true">
+                        {tab.description}
+                      </span>
+                    )}
+                  </span>
+                </span>
+              ) : (
+                <>
+                  {tab.icon !== undefined && <Icon name={tab.icon} size="sm" />}
+                  <span>{tab.label}</span>
+                </>
+              )}
               {tab.count !== undefined && (
                 <Badge
                   count={tab.count}

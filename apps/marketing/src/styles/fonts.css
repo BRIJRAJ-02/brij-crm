@@ -1,0 +1,14 @@
+/* The site's display face, Host Grotesk (SIL Open Font License, HostGrotesk-OFL.txt beside the file), for headlines
+   only; everything else stays in the app's Inter. Latin only, one variable file (300 to 800). The owner chose the
+   look from a reference (mindcloud.co, 23 October 2026); if it stays, it moves into the design system's tokens. */
+/* An @font-face declares the face itself: its name and weight range are the font's own values, as they are in
+   packages/tokens, which Stylelint skips. */
+/* stylelint-disable scale-unlimited/declaration-strict-value */
+@font-face {
+  font-family: 'Host Grotesk';
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url('../fonts/HostGrotesk-Variable-latin.woff2') format('woff2');
+}
+/* stylelint-enable scale-unlimited/declaration-strict-value */

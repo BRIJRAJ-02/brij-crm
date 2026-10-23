@@ -134,6 +134,24 @@ export const Large: Story = {
   ),
 };
 
+/** `xl` is a page's own call to action outside the app: the marketing site's hero and footer (36px). */
+export const ExtraLarge: Story = {
+  render: () => (
+    <Stage>
+      <ButtonLink size="xl" variant="primary" href="https://app.timefix.ai/sign-in" iconRight="arrow-right">
+        Get started
+      </ButtonLink>
+      <ButtonLink size="xl" href="https://app.timefix.ai/">
+        Open dashboard
+      </ButtonLink>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const link = canvas.getByRole('link', { name: 'Get started' });
+    await expect(Math.round(link.getBoundingClientRect().height)).toBe(36);
+  },
+};
+
 /** `lg` is drawn at 30px and pressed at 32: an invisible pixel past its border all round. */
 export const LargeHitArea: Story = {
   parameters: { crm: { screenshot: false } },

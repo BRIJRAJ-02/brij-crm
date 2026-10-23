@@ -51,6 +51,12 @@ export interface ModalProps {
   /** The footer's buttons, Cancel first and the primary last. A Button with `slot="close"` closes the modal. */
   readonly actions?: ReactNode;
   readonly variant?: ModalVariant;
+  /**
+   * A wider window (`size-dialog-wide` plus a `size-column`, 980px), for a reference laid out as a settings page:
+   * a rail of sections beside their content (the marketing site's All features, 23 October 2026). Only `window`
+   * takes it.
+   */
+  readonly isWide?: boolean;
   /** A window's header icon (a peek draws none). */
   readonly icon?: IconName;
   /** A window's header detail after the title: the record or list it works on. A peek shows it first, as a crumb. */
@@ -99,6 +105,7 @@ export function Modal({
   children,
   actions,
   variant = 'dialog',
+  isWide = false,
   icon,
   context,
   headerActions,
@@ -128,6 +135,7 @@ export function Modal({
       <AriaModal
         className={styles.root}
         data-variant={variant}
+        data-wide={isWide && variant === 'window' ? '' : undefined}
         data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
       >
         <Dialog

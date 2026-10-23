@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { CardTitleLevel } from '../../molecules/Card/Card.tsx';
@@ -11,9 +19,9 @@ import { strings } from './strings.ts';
  * column's width (never above 1). It is as tall as the room under the heading allows, from `minHeight` up to a real
  * phone's `height`: on a laptop's view the phone gets shorter rather than smaller, so the page in it stays readable
  * (the owner, 23 Oct 2026: "increase preview a bit"). With less room than `minHeight`, it scales down to fit.
- * `minHeight` keeps a booking page's first rows of times above the phone's foot, since the frame doesn't scroll.
+ * The page in it scrolls (PreviewFrame), so its foot is never out of reach however short the phone is.
  */
-const PHONE = { width: 375, height: 812, minHeight: 740 } as const;
+const PHONE = { width: 375, height: 812, minHeight: 640 } as const;
 
 /** Props for PreviewLayout. */
 export interface PreviewLayoutProps {
@@ -86,20 +94,242 @@ export interface PreviewFrameProps {
   readonly draft?: unknown;
 }
 
+/** How far an arrow key, or a wheel's line, moves the page, in its own pixels: a browser's step. */
+const LINE_STEP = 40;
+
+/** A page step (Page Up or Down, Space) keeps this share of the screen in view, as a browser's does. */
+const PAGE_STEP = 0.875;
+
+/**
+ * Wheel events closer together than this are one gesture (a trackpad's swipe and its momentum). A gesture the
+ * page took stays with the page at its end, as a browser holds a scroll to the box it started in, so the editor
+ * behind doesn't jump; the next one goes on to the editor.
+ */
+const GESTURE_GAP_MS = 150;
+
+/** The page in a frame: its window, and the element whose scroll is the page's. */
+interface FramePage {
+  readonly view: Window;
+  readonly root: Element;
+}
+
+/** The page in `frame`, or undefined while it loads or when it is another origin's (the browser keeps it closed). */
+function pageIn(frame: HTMLIFrameElement | null): FramePage | undefined {
+  try {
+    const view = frame?.contentWindow ?? undefined;
+    const root = view?.document.scrollingElement ?? undefined;
+    return view === undefined || root === undefined ? undefined : { view, root };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether the page can move any of the way asked; at its end, a new gesture goes on to the editor's page. */
+function canMove(root: Element, left: number, top: number): boolean {
+  const maxTop = root.scrollHeight - root.clientHeight;
+  const maxLeft = root.scrollWidth - root.clientWidth;
+  return (
+    (top > 0 && root.scrollTop < maxTop - 1) ||
+    (top < 0 && root.scrollTop > 0) ||
+    (left > 0 && root.scrollLeft < maxLeft - 1) ||
+    (left < 0 && root.scrollLeft > 0)
+  );
+}
+
+/** Where a key takes the page, as a browser's own keys scroll one, and whether it is a line's step; undefined for any other key. */
+function keyScroll(
+  event: ReactKeyboardEvent,
+  root: Element,
+): { readonly to: { readonly left: number; readonly top: number }; readonly isLine: boolean } | undefined {
+  if (event.altKey || event.ctrlKey || event.metaKey) return undefined;
+  const { scrollLeft: left, scrollTop: top } = root;
+  const page = root.clientHeight * PAGE_STEP;
+  switch (event.key) {
+    case 'ArrowDown':
+      return { to: { left, top: top + LINE_STEP }, isLine: true };
+    case 'ArrowUp':
+      return { to: { left, top: top - LINE_STEP }, isLine: true };
+    case 'ArrowRight':
+      return { to: { left: left + LINE_STEP, top }, isLine: true };
+    case 'ArrowLeft':
+      return { to: { left: left - LINE_STEP, top }, isLine: true };
+    case 'PageDown':
+      return { to: { left, top: top + page }, isLine: false };
+    case 'PageUp':
+      return { to: { left, top: top - page }, isLine: false };
+    case ' ':
+      return { to: { left, top: event.shiftKey ? top - page : top + page }, isLine: false };
+    case 'Home':
+      return { to: { left, top: 0 }, isLine: false };
+    case 'End':
+      return { to: { left, top: root.scrollHeight }, isLine: false };
+    default:
+      return undefined;
+  }
+}
+
+/** How far the phone is scaled: its screen's drawn height over its laid out one (1 before it lays out). */
+function scaleOf(element: HTMLElement): number {
+  return element.offsetHeight === 0 ? 1 : element.getBoundingClientRect().height / element.offsetHeight;
+}
+
+/**
+ * The scroll of a page in an inert frame: a wheel, trackpad or finger over the phone scrolls the page (the frame
+ * takes no events of its own), and while the page runs past the phone's foot, the screen is a focusable region whose
+ * keys scroll it. The page itself is left alone: it scrolls its own document at the phone's size.
+ */
+function useFrameScroll(frame: RefObject<HTMLIFrameElement | null>) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Counts the frame's loads, so the watch below moves to each new page (a save loads the frame again).
+  const [loads, setLoads] = useState(0);
+  const [isLong, setLong] = useState(false);
+  // The stop stays while it holds focus (a save loads the page again, short until its data arrives), so focus
+  // never drops to the document.
+  const [isFocused, setFocused] = useState(false);
+
+  useEffect(() => {
+    const page = pageIn(frame.current);
+    if (page === undefined) return;
+    const check = () => {
+      setLong(page.root.scrollHeight > page.root.clientHeight || page.root.scrollWidth > page.root.clientWidth);
+    };
+    let pending = 0;
+    const checkSoon = () => {
+      page.view.cancelAnimationFrame(pending);
+      pending = page.view.requestAnimationFrame(check);
+    };
+    // The page's own observers, from its window. A booking page's root is the window's height and its content
+    // spills past it, so the document never resizes as the data arrives after load: what changes is its content
+    // (and an image loading in it). A taller phone can end the overflow with no change at all but its own size.
+    const realm = page.view as Window & typeof globalThis;
+    const resizes = new realm.ResizeObserver(checkSoon);
+    resizes.observe(page.view.document.documentElement);
+    const mutations = new realm.MutationObserver(checkSoon);
+    mutations.observe(page.view.document, { childList: true, subtree: true, characterData: true });
+    page.view.addEventListener('resize', checkSoon);
+    page.view.document.addEventListener('load', checkSoon, true);
+    return () => {
+      page.view.cancelAnimationFrame(pending);
+      resizes.disconnect();
+      mutations.disconnect();
+      page.view.removeEventListener('resize', checkSoon);
+      page.view.document.removeEventListener('load', checkSoon, true);
+    };
+  }, [frame, loads]);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null) return;
+    let gestureAt = Number.NEGATIVE_INFINITY;
+    const onWheel = (event: WheelEvent) => {
+      // A pinch (a wheel with Ctrl) zooms the editor, as it would anywhere on it.
+      if (event.ctrlKey) return;
+      const page = pageIn(frame.current);
+      if (page === undefined) return;
+      // Pixels move the page as far as the fingers go on the scaled phone; lines and pages are the page's own.
+      const unit =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? LINE_STEP
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? page.root.clientHeight * PAGE_STEP
+            : 1 / scaleOf(element);
+      const left = event.deltaX * unit;
+      const top = event.deltaY * unit;
+      const isSameGesture = event.timeStamp - gestureAt < GESTURE_GAP_MS;
+      if (!isSameGesture && !canMove(page.root, left, top)) return;
+      event.preventDefault();
+      gestureAt = event.timeStamp;
+      page.view.scrollBy({ left, top, behavior: 'instant' });
+    };
+    // A finger drags the page with it (the screen has `touch-action: none` while the page is long, so the sheet
+    // around it doesn't pan instead). A touch pointer is held by the screen it went down on until it lifts.
+    let touch: { readonly id: number; readonly x: number; readonly y: number } | undefined;
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'touch' && event.isPrimary)
+        touch = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (touch?.id !== event.pointerId) return;
+      const page = pageIn(frame.current);
+      const scale = scaleOf(element);
+      page?.view.scrollBy({
+        left: (touch.x - event.clientX) / scale,
+        top: (touch.y - event.clientY) / scale,
+        behavior: 'instant',
+      });
+      touch = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    };
+    const onPointerEnd = (event: PointerEvent) => {
+      if (touch?.id === event.pointerId) touch = undefined;
+    };
+    // Not passive: a wheel the page takes mustn't also scroll the editor behind it.
+    element.addEventListener('wheel', onWheel, { passive: false });
+    element.addEventListener('pointerdown', onPointerDown);
+    element.addEventListener('pointermove', onPointerMove);
+    element.addEventListener('pointerup', onPointerEnd);
+    element.addEventListener('pointercancel', onPointerEnd);
+    return () => {
+      element.removeEventListener('wheel', onWheel);
+      element.removeEventListener('pointerdown', onPointerDown);
+      element.removeEventListener('pointermove', onPointerMove);
+      element.removeEventListener('pointerup', onPointerEnd);
+      element.removeEventListener('pointercancel', onPointerEnd);
+    };
+  }, [frame]);
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const page = pageIn(frame.current);
+    if (page === undefined) return;
+    const scroll = keyScroll(event, page.root);
+    // At the page's end the key goes on to the editor, as a wheel does.
+    if (
+      scroll === undefined ||
+      !canMove(page.root, scroll.to.left - page.root.scrollLeft, scroll.to.top - page.root.scrollTop)
+    )
+      return;
+    event.preventDefault();
+    // A screen's step glides; a line's, a held key's and every step with reduced motion are at once (a glide that
+    // restarts on each repeat stutters).
+    const isReduced = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const isInstant = scroll.isLine || event.repeat || isReduced;
+    page.view.scrollTo({ ...scroll.to, behavior: isInstant ? 'instant' : 'smooth' });
+  };
+
+  return {
+    ref,
+    onLoad: () => {
+      setLoads((count) => count + 1);
+    },
+    screen: {
+      ...(isLong ? { 'data-long': true } : {}),
+      ...(isLong || isFocused ? { tabIndex: 0, role: 'region', 'aria-label': strings.phone, onKeyDown } : {}),
+      onFocus: () => {
+        setFocused(true);
+      },
+      onBlur: () => {
+        setFocused(false);
+      },
+    },
+  };
+}
+
 /**
  * A page in a frame, filling the phone PreviewLayout draws it in. The page is to look at: the frame is inert and
- * out of the tab order, so pressing in it never books.
+ * out of the tab order, so pressing in it never books. It scrolls all the same: a wheel, trackpad or finger over the
+ * phone scrolls the page, and while the page runs past the phone's foot, the screen takes one tab stop (a region named
+ * "Phone preview") where the arrows, Page Up and Down, Space, Home and End scroll it.
  */
 export function PreviewFrame({ src, title, version, draft }: PreviewFrameProps) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const { ref, onLoad, screen } = useFrameScroll(frame);
   const post = () => {
     if (draft === undefined) return;
     frame.current?.contentWindow?.postMessage({ type: 'crm:preview', draft }, globalThis.location.origin);
   };
   useEffect(post);
   return (
-    // A picture of the page, not a second copy to use: nothing in it takes focus or a press.
-    <div className={styles.viewport} inert>
+    <div ref={ref} className={styles.viewport} {...screen}>
+      {/* A picture of the page, not a second copy to use: nothing in it takes focus or a press. */}
       <iframe
         key={version ?? ''}
         ref={frame}
@@ -108,7 +338,11 @@ export function PreviewFrame({ src, title, version, draft }: PreviewFrameProps) 
         title={strings.previewOf(title)}
         tabIndex={-1}
         loading="lazy"
-        onLoad={post}
+        inert
+        onLoad={() => {
+          post();
+          onLoad();
+        }}
       />
     </div>
   );

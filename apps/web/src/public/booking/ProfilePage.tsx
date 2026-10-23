@@ -180,6 +180,8 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         name: profile.name,
         id: current,
         bio: profile.bio,
+        // Our own origin's copy of their account picture; the initials show if it fails.
+        ...(profile.image === undefined ? {} : { image: profile.image }),
       }}
       claimHref={claimPageHref('booking_profile')}
     >

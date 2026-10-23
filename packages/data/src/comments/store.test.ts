@@ -5,7 +5,7 @@
 // resolve moves a thread and its counts, a live event rereads only the named
 // threads of held records, and a link reveals a resolved thread. The inbox's
 // marks show at once, move the unread count and roll back; the count reads
-// once for a burst of events.
+// once for a burst of events, and never once signed out.
 import type { NotificationView, ThreadPage, ThreadView } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import { dataError } from '../errors.ts';
@@ -365,5 +365,44 @@ describe('the inbox and its count', () => {
     unread.refresh(WS);
     await time.advance(UNREAD_COALESCE_MS);
     expect(source.getSnapshot()).toBe(0);
+  });
+
+  it('asks for nothing once signed out, though the sidebar draws its badge again on its way to sign in', async () => {
+    const time = clock();
+    let reads = 0;
+    let watching = 0;
+    const unread = createUnreadCounts({
+      read: () => {
+        reads += 1;
+        return Promise.resolve({ count: 2, atLeast: false });
+      },
+      watch: () => {
+        watching += 1;
+        return () => {
+          watching -= 1;
+        };
+      },
+      later: time.later,
+    });
+    const source = unread.unread(WS);
+    const release = source.retain();
+    await flush();
+    expect(reads).toBe(1);
+    expect(watching).toBe(1);
+    unread.clear();
+    // The same count comes back to a screen drawing again, so nothing new is held: no read, no listening, no event.
+    expect(unread.unread(WS)).toBe(source);
+    unread.refresh(WS);
+    await time.advance(UNREAD_COALESCE_MS);
+    expect(reads).toBe(1);
+    expect(watching).toBe(0);
+    // Once the screen lets go, the next session's screen gets a count of its own, which reads.
+    release();
+    const next = unread.unread(WS);
+    expect(next).not.toBe(source);
+    next.retain();
+    await flush();
+    expect(reads).toBe(2);
+    expect(next.getSnapshot()).toBe(2);
   });
 });

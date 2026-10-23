@@ -2,7 +2,7 @@ import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { useCallback } from 'react';
-import { isObjectTab } from '../features/settings/nav.ts';
+import { isObjectTab } from '../features/settings/object-tabs.ts';
 import { ObjectSettingsPending, ObjectSettingsScreen } from '../features/settings/ObjectSettingsScreen.tsx';
 import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
 import { strings } from '../features/settings/strings.ts';
