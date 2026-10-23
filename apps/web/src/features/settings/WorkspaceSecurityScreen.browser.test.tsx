@@ -1,6 +1,7 @@
 // Sign out everyone's step up in Chromium (spec 0033, AC-896; the owner's bug, 22 Oct): when the code email
 // can't go, or too many were sent, the confirm says so in plain words inside the dialog, which stays open with
 // "Email me a code" ready to try again, never "Something went wrong"; the next send that works asks for the code.
+// Someone without security.manage who opens the address finds no page, and nothing is asked of the server (Q101).
 import type { AccountSecurityState, AccountSecurityView, DataLayer, StepUpResult } from '@crm/data';
 import { isSessionFresh } from '@crm/data';
 import { createToasts, UiProvider, type Toasts } from '@crm/ui';
@@ -13,7 +14,8 @@ import {
 } from '@tanstack/react-router';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { Route as SecurityRoute } from '../../routes/w.$slug.settings.security.tsx';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { SettingsTopBarSlot } from './topBarSlot.ts';
 import { WorkspaceSecurityScreen } from './WorkspaceSecurityScreen.tsx';
@@ -217,5 +219,56 @@ describe('sign out everyone’s step up, when the code can’t be sent', () => {
     await expect.element(dialog.getByText(expired)).toBeVisible();
     expect(dialog.element().querySelector('[aria-invalid="true"]')).not.toBeNull();
     await expect.element(dialog.getByRole('button', { name: 'Send a new code' })).toBeVisible();
+  });
+});
+
+describe('without security.manage', () => {
+  it('finds no Security page, and asks the server nothing for it (Q101)', async () => {
+    const rulesGet = vi.fn(() => Promise.reject(new Error('not asked')));
+    const data = {
+      calendar: { view: () => stillLoading },
+      nav: { source: () => stillLoading, change: () => undefined },
+      tasks: { due: () => stillLoading },
+      access: {
+        mine: () =>
+          Promise.resolve({ memberId: 'm1', role: 'admin', roleLabel: 'Admin', permissions: ['workspace.manage'] }),
+      },
+      workspaceSecurity: { get: rulesGet },
+    } as unknown as DataLayer;
+    const toasts: Toasts = createToasts();
+    const rootRoute = createRootRouteWithContext<{ data: DataLayer; toasts: Toasts; me: unknown }>()();
+    // The real route, under a bare root as the route tree would put it under the settings frame.
+    const route = SecurityRoute.update({
+      id: '/w/$slug/settings/security',
+      path: '/w/$slug/settings/security',
+      getParentRoute: () => rootRoute,
+    } as Parameters<typeof SecurityRoute.update>[0]);
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([route]),
+      history: createMemoryHistory({ initialEntries: ['/w/acme/settings/security'] }),
+      context: { data, toasts, me: { workspaces: [{ slug: 'acme', name: 'Acme' }] } },
+    });
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mounted = { root, host };
+    await act(async () => {
+      root.render(
+        <UiProvider
+          locale="en-GB"
+          timeZone="UTC"
+          toasts={toasts}
+          navigate={(href) => {
+            router.history.push(href);
+          }}
+          useHref={(href) => router.history.createHref(href)}
+        >
+          <RouterProvider router={router} />
+        </UiProvider>,
+      );
+      await router.load();
+    });
+    await expect.element(page.getByText('There’s nothing at this address.')).toBeVisible();
+    expect(rulesGet).not.toHaveBeenCalled();
   });
 });
