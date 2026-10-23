@@ -24,6 +24,9 @@ export function shownAsEvent(): SQL {
     )
     and (
       not m.created_by_crm or m.booking_id is not null
-      or exists (select 1 from bookings o where o.workspace_id = m.workspace_id and o.meeting_id = m.id)
+      or exists (
+        select 1 from bookings o
+        where o.workspace_id = m.workspace_id and o.meeting_id is not null and o.meeting_id = m.id
+      )
     )`;
 }

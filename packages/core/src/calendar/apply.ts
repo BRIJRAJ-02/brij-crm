@@ -239,9 +239,12 @@ export async function dropSources(
  * whose every booking is cancelled (the owner's report of 23 October 2026):
  * the meeting is no longer the booking's or the CRM's, and the booking no
  * longer points at it, so the calendar reads show it as the event it still
- * is. It runs in the drop's transaction, recorded as the calendar. A booking
- * cancelled from Timefix keeps its link until its event's cancel lands
- * (`cancelEvent` drops without this): its guest email reads the link.
+ * is. It runs in the drop's transaction, the meeting recorded as the
+ * calendar and the booking as the system (bookings admit no `calendar`
+ * actor). Only a booking the calendar cancelled (no `cancelled_by`, or
+ * `calendar`) lets go: one a host or guest cancelled from Timefix keeps its
+ * link, so its event's cancel (`cancelEvent`, which needs the CRM's meeting
+ * and drops without this) can still be retried, and its guest email reads it.
  */
 async function releaseCancelled(tx: WorkspaceTx, meetingIds: readonly string[]): Promise<void> {
   await tx.execute(sql`
@@ -253,7 +256,7 @@ async function releaseCancelled(tx: WorkspaceTx, meetingIds: readonly string[]):
         and exists (
           select 1 from bookings b
           where b.workspace_id = m.workspace_id and (b.id = m.booking_id or b.meeting_id = m.id)
-            and b.status = 'cancelled'
+            and b.status = 'cancelled' and (b.cancelled_by is null or b.cancelled_by = 'calendar')
         )
         and not exists (
           select 1 from bookings b
@@ -262,7 +265,8 @@ async function releaseCancelled(tx: WorkspaceTx, meetingIds: readonly string[]):
         )
       returning m.workspace_id, m.id
     )
-    update bookings b set meeting_id = null
+    update bookings b set meeting_id = null,
+      updated_at = now(), updated_by_type = 'system', updated_by_id = null, updated_by_member_id = null
     from freed where b.workspace_id = freed.workspace_id and b.meeting_id = freed.id and b.status = 'cancelled'
   `);
 }
