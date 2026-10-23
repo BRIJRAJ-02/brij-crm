@@ -95,8 +95,9 @@ function destinationField(
         ...(current === undefined ? {} : { hue: current.hue }),
       },
     ],
-    // Listed but not choosable: the page's pick, while it can't take bookings now.
+    // Listed but not choosable: the page's pick, while it can't take bookings now. It stays listed when not in use.
     include: (calendar) => calendar.canBeDestination || calendar.id === calendarId,
+    chosen: calendarId,
     isDisabled: (calendar) => !calendar.canBeDestination,
   });
   return (
