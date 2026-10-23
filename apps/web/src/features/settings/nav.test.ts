@@ -2,8 +2,10 @@
 // order, groups left out when the member may open none of their pages, and
 // which page an address marks current.
 import { describe, expect, it } from 'vitest';
+import type { Permission } from '@crm/data';
 import {
   calendarSettingsHref,
+  historyHref,
   preferencesHref,
   settingsGroupOf,
   settingsNav,
@@ -19,7 +21,7 @@ describe('settingsNav', () => {
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Sign in and devices', 'Notifications'],
       ['Calendars', 'Round robin'],
-      ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'Trash'],
+      ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'History', 'Trash'],
     ]);
   });
 
@@ -36,6 +38,7 @@ describe('settingsNav', () => {
       'workspace-security': '/w/acme/settings/security',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
+      history: '/w/acme/settings/history',
       rotations: '/w/acme/settings/scheduling/round-robin',
       // The trash opens inside Settings, its sidebar and trail kept (A120, 23 October 2026).
       trash: '/w/acme/settings/trash',
@@ -77,8 +80,24 @@ describe('visibleSettingsNav', () => {
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications'],
       ['calendars'],
-      ['general', 'members', 'objects', 'jobs', 'trash'],
+      ['general', 'members', 'objects', 'jobs', 'history', 'trash'],
     ]);
+  });
+
+  // History (spec 0046, AC-4600): one entry for every member, its Workspace changes tab checked on the page itself.
+  it('puts History between Background jobs and Trash for every role, with the clock icon', () => {
+    const owner: Permission[] = ['booking.manage', 'security.manage', 'audit.read', 'jobs.manage'];
+    for (const permissions of [owner, ['booking.manage', 'audit.read'], ['booking.manage'], []] as Permission[][]) {
+      const workspace = visibleSettingsNav(settingsNav('acme'), permissions).find((group) => group.id === 'workspace');
+      const ids = workspace?.entries.map((entry) => entry.id) ?? [];
+      expect(ids.slice(ids.indexOf('jobs'), ids.indexOf('jobs') + 3)).toEqual(['jobs', 'history', 'trash']);
+    }
+    const entry = settingsNav('acme')
+      .flatMap((group) => group.entries)
+      .find((each) => each.id === 'history');
+    expect(entry).toEqual({ id: 'history', label: 'History', href: '/w/acme/settings/history', icon: 'clock' });
+    expect(historyHref('acme', 'changes')).toBe('/w/acme/settings/history/changes');
+    expect(historyHref('acme', 'sign-ins')).toBe('/w/acme/settings/history/sign-ins');
   });
 
   it('leaves out a page the member may not open, keeping the rest of its group', () => {
@@ -108,6 +127,9 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/objects')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/jobs/')).toBe('jobs');
+    expect(settingsPageOf('/w/acme/settings/history')).toBe('history');
+    expect(settingsPageOf('/w/acme/settings/history/changes')).toBe('history');
+    expect(settingsPageOf('/w/acme/settings/history/sign-ins')).toBe('history');
     expect(settingsPageOf('/w/acme/settings/members')).toBe('members');
     expect(settingsPageOf('/w/acme/settings/scheduling/round-robin')).toBe('rotations');
     expect(settingsPageOf('/w/acme/settings/scheduling/rotations')).toBe('rotations');

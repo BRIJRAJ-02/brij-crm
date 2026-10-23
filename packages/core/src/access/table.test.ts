@@ -70,6 +70,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'createUserWorkspace',
   // Pure access functions.
   'can',
+  // History's row mapping (spec 0046): a stored audit row and its names to an entry view, after the read's door.
+  'toEntryView',
   // Calendar health's reach (spec 0037, AC-1307), read off a scope readCalendarHealth checks, and a colour mapping.
   'healthReach',
   'nearestHue',
@@ -288,6 +290,16 @@ describe('the walk: a principal without the access is refused', () => {
     expect(await refusalOf(service(name)(scope, {}))).toEqual({
       code: 'FORBIDDEN',
       message: PERMISSIONS[entry.permission].message,
+    });
+  });
+
+  // History's Workspace changes (spec 0046, AC-4622): the audit log is in the walk above, owners and admins only.
+  it('walks listAuditEvents as audit.read, refused to a member', async () => {
+    expect(byPermission).toContainEqual(['listAuditEvents', { permission: 'audit.read' }]);
+    const { scope } = await memberOf('member');
+    expect(await refusalOf(core.listAuditEvents(scope))).toEqual({
+      code: 'FORBIDDEN',
+      message: 'Only workspace owners and admins can see workspace changes.',
     });
   });
 

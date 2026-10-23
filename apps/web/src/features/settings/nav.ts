@@ -7,6 +7,8 @@
 import type { ObjectSummary, Permission } from '@crm/data';
 import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
 import { strings as calendar } from './calendar-strings.ts';
+import { historyHref } from './history-href.ts';
+import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as rotations } from '../booking/rotation-strings.ts';
 import { strings as members } from './members-strings.ts';
@@ -18,6 +20,7 @@ import { strings as workspace } from './workspace-strings.ts';
 import type { ObjectTab } from './object-tabs.ts';
 
 export { OBJECT_TABS, isObjectTab, type ObjectTab } from './object-tabs.ts';
+export { HISTORY_TABS, historyHref, isHistoryTab, type HistoryTab } from './history-href.ts';
 
 /** Settings, Objects. */
 export const objectsSettingsHref = (slug: string) => `/w/${slug}/settings/objects`;
@@ -68,6 +71,7 @@ export type SettingsPageId =
   | 'workspace-security'
   | 'objects'
   | 'jobs'
+  | 'history'
   | 'trash'
   | 'rotations';
 
@@ -97,6 +101,7 @@ export interface SettingsNavEntry {
     | 'lock'
     | 'box'
     | 'list-checks'
+    | 'clock'
     | 'users-round'
     | 'trash';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
@@ -168,6 +173,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
+        // History (spec 0046): every member opens it; Workspace changes inside it is for `audit.read` alone.
+        { id: 'history', label: history.title, href: historyHref(slug), icon: 'clock' },
         // The trash left the sidebar for here (the owner, 22 October 2026), and opens inside Settings, its sidebar
         // and trail kept (A120, 23 October 2026). ⌘K's Open trash reaches the same address; the old one redirects.
         { id: 'trash', label: strings.trash, href: trashHref(slug), icon: 'trash' },
@@ -207,6 +214,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
+  if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';
   if (rest === 'scheduling/round-robin' || rest === 'scheduling/rotations') return 'rotations';
   if (rest === 'security') return 'workspace-security';

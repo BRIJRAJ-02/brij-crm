@@ -81,6 +81,8 @@ const ALL_SCREENS: readonly Screen[] = [
     target: tab('Configuration'),
   },
   { name: 'settings jobs', start: at('settings/account/preferences'), target: sidebar('Background jobs') },
+  // History (spec 0046): the owner's Workspace changes, its tabs and the table's skeleton rows where the rows land.
+  { name: 'settings history', start: at('settings/account/preferences'), target: sidebar('History') },
   { name: 'trash', start: at('settings/account/preferences'), target: sidebar('Trash') },
 ];
 

@@ -10,6 +10,7 @@
     "./plain-errors": "./src/plain-errors.ts",
     "./plain-words": "./src/plain-words.ts",
     "./roles": "./src/roles.ts",
+    "./audit-kinds": "./src/audit-kinds.ts",
     "./jump": "./src/values/jump.ts",
     "./validation": "./src/validation/index.ts",
     "./slugs": "./src/values/slugs.ts",
