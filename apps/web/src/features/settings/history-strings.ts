@@ -14,12 +14,12 @@ export interface Sentence {
 
 /** How a sentence names what it mentions, as History shows them now (AC-4606, AC-4607). */
 export interface SentenceWords {
-  /** A person by name: a member as named now, someone asking to join, or "a former member" when unknown. */
+  /** A person by name: a member as named now, someone asking to join, "a deleted user", or "a former member" when unknown. */
   readonly person: (person: AuditPerson) => string;
   /** The same, possessive: "Bea’s". */
   readonly persons: (person: AuditPerson) => string;
   readonly role: (role: Role) => string;
-  /** An invitation by its address, the invite link, or "an invitation" once it's gone. */
+  /** An invitation by its address, the invite link, or "someone" once its address is gone. */
   readonly invitation: (target: Extract<AuditEntryView['target'], { type: 'invitation' }>) => string;
   /** A booking as "Intro call on 24 Oct, 3:30 pm" in the reader's zone, or "a deleted booking". */
   readonly booking: (target: Extract<AuditEntryView['target'], { type: 'booking' }>) => string;
@@ -196,6 +196,8 @@ export const strings = {
   who: 'Who',
   change: 'Change',
   showMore: 'Show more',
+  /** Show more, after the next page failed. */
+  tryAgain: 'Try again',
   /** An action this page has no sentence for yet (a newer server), after the actor's name. */
   someChange: 'made a change',
   /** Who did it, beyond a member's name (AC-4606). */
@@ -204,14 +206,18 @@ export const strings = {
     deleted: 'Deleted user',
     system: 'System',
     apiKey: 'API key',
-    unknown: 'Someone removed from this workspace',
+    /** An actor whose member row can't be read. */
+    unknown: 'Unknown person',
     asker: 'Asked to join',
     /** A member the log can't name, inside a sentence. */
     unknownTarget: 'a former member',
+    /** A deleted account, inside a sentence ("removed a deleted user from the workspace"). */
+    deletedTarget: 'a deleted user',
   },
   /** What the log can't name any more (AC-4607). */
   gone: {
-    invitation: 'an invitation',
+    /** An invitation whose address is gone: purged, or the member it made deleted their account. */
+    invitation: 'someone',
     inviteLink: 'the invite link',
     booking: 'a deleted booking',
     rotation: 'a deleted round robin',
@@ -222,12 +228,12 @@ export const strings = {
   bookingOn: (page: string, when: string) => `${page} on ${when}`,
   /** The states (AC-4615 to AC-4618). */
   emptyTitle: 'No changes yet',
-  emptyText: 'Invitations, role changes, removals and settings changes show here.',
+  emptyText: 'Invitations, role changes, removals and changes to settings and scheduling show here.',
   failedTitle: 'Couldn’t load workspace changes',
   failedMore: 'Couldn’t load more changes.',
   /** When the page itself failed and the data layer had no words for why. */
   failedText: 'Something went wrong. Try again in a moment.',
-  forbidden: 'Only workspace owners and admins can read the audit log.',
+  forbidden: 'Only workspace owners and admins can see workspace changes.',
   /** Your sign ins (AC-4619). */
   signInsTitle: 'Your sign ins',
   signInsText: 'In every workspace, for the last 90 days.',

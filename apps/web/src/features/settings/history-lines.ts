@@ -52,9 +52,11 @@ export function whoOf(person: AuditPerson): Who {
   }
 }
 
-/** A person inside a sentence: as the Who column names them, but an unknown one is "a former member". */
+/** A person inside a sentence: as the Who column names them, but in lower case for a deleted or unknown one. */
 function personName(person: AuditPerson): string {
-  return person.kind === 'unknown' ? people.unknownTarget : whoOf(person).name;
+  if (person.kind === 'unknown') return people.unknownTarget;
+  if (person.kind === 'member' && person.state === 'deleted') return people.deletedTarget;
+  return whoOf(person).name;
 }
 
 /** "name", "name and time zone", "name, time zone and bio". */

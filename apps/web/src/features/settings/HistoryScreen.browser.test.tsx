@@ -12,9 +12,9 @@ import { page, userEvent } from 'vitest/browser';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { Route as ChangesRoute } from '../../routes/w.$slug.settings.history.changes.tsx';
 import { Route as HistoryIndexRoute } from '../../routes/w.$slug.settings.history.index.tsx';
-import { HistoryScreen } from './HistoryScreen.tsx';
-import { SignInsTab } from './SignInsTab.tsx';
-import { WorkspaceChangesTab } from './WorkspaceChangesTab.tsx';
+import { HistoryPending, HistoryScreen } from './HistoryScreen.tsx';
+import { SignInsPending, SignInsTab } from './SignInsTab.tsx';
+import { WorkspaceChangesPending, WorkspaceChangesTab } from './WorkspaceChangesTab.tsx';
 
 const ADA = {
   kind: 'member',
@@ -68,6 +68,30 @@ function logIn(state: AuditLogState) {
     dispose: () => undefined,
   };
   return { log, more, retry };
+}
+
+/** A log whose state the test moves by hand, telling the screen each time, as the data layer's does. */
+function liveLog(initial: AuditLogState) {
+  let state = initial;
+  const listeners = new Set<() => void>();
+  const more = vi.fn();
+  const retry = vi.fn();
+  const log: AuditLog = {
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getSnapshot: () => state,
+    more,
+    retry,
+    retain: () => () => undefined,
+    dispose: () => undefined,
+  };
+  const set = (next: AuditLogState) => {
+    state = next;
+    for (const listener of listeners) listener();
+  };
+  return { log, more, retry, set };
 }
 
 const activity: ActivityPage = {
@@ -197,14 +221,14 @@ describe('Workspace changes', () => {
     [
       'forbidden',
       { status: 'forbidden', entries: [], hasMore: false, message: 'x' },
-      'Only workspace owners and admins can read the audit log.',
+      'Only workspace owners and admins can see workspace changes.',
     ],
   ] as const)('says its %s state', async (_name, state, words) => {
     await renderHistory('changes', true, <WorkspaceChangesTab log={logIn(state).log} />);
     await expect.poll(() => document.body.textContent).toContain(words);
     if (state.status === 'ready') {
       expect(document.body.textContent).toContain(
-        'Invitations, role changes, removals and settings changes show here.',
+        'Invitations, role changes, removals and changes to settings and scheduling show here.',
       );
     }
     if (state.status === 'forbidden') expect(page.getByRole('grid').elements()).toHaveLength(0);
@@ -232,6 +256,126 @@ describe('Workspace changes', () => {
     expect(page.getByRole('button', { name: 'Show more' }).elements()).toHaveLength(0);
     await userEvent.click(page.getByRole('button', { name: 'Try again' }));
     expect(retry).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Workspace changes, focus and layout', () => {
+  it('runs Who, Change, then When', async () => {
+    await renderHistory(
+      'changes',
+      true,
+      <WorkspaceChangesTab log={logIn({ status: 'ready', entries: ROWS, hasMore: false }).log} />,
+    );
+    await expect.element(page.getByRole('grid', { name: 'Workspace changes' })).toBeVisible();
+    expect(
+      page
+        .getByRole('columnheader')
+        .elements()
+        .map((cell) => cell.textContent),
+    ).toEqual(['Who', 'Change', 'When']);
+  });
+
+  it('fits a phone with no sideways scroll, the sentence wrapping', async () => {
+    await page.viewport(390, 800);
+    await renderHistory(
+      'changes',
+      true,
+      <WorkspaceChangesTab log={logIn({ status: 'ready', entries: ROWS, hasMore: false }).log} />,
+    );
+    const grid = page.getByRole('grid', { name: 'Workspace changes' });
+    await expect.element(grid).toBeVisible();
+    const frame = grid.element().parentElement;
+    expect(frame === null ? undefined : frame.scrollWidth <= frame.clientWidth).toBe(true);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
+    const change = page.getByRole('rowheader').elements()[0];
+    expect(change === undefined ? 0 : change.getBoundingClientRect().right).toBeLessThanOrEqual(390);
+    await page.viewport(1280, 800);
+  });
+
+  it('keeps focus on one button from Show more to Try again, and hands it to the table when the last page came', async () => {
+    const { log, more, retry, set } = liveLog({ status: 'ready', entries: ROWS.slice(0, 1), hasMore: true });
+    await renderHistory('changes', true, <WorkspaceChangesTab log={log} />);
+    const button = page.getByRole('button', { name: 'Show more' });
+    await userEvent.click(button);
+    expect(more).toHaveBeenCalledOnce();
+    const pressed = button.element();
+    set({ status: 'more', entries: ROWS.slice(0, 1), hasMore: true });
+    set({ status: 'more-failed', entries: ROWS.slice(0, 1), hasMore: true, message: 'Can’t reach Timefix.' });
+    await expect.element(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+    // The same button, now Try again, still holds focus.
+    expect(page.getByRole('button', { name: 'Try again' }).element()).toBe(pressed);
+    expect(document.activeElement).toBe(pressed);
+    await userEvent.click(page.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledOnce();
+    set({ status: 'more', entries: ROWS.slice(0, 1), hasMore: true });
+    set({ status: 'ready', entries: ROWS, hasMore: false });
+    await expect.poll(() => page.getByRole('button', { name: /Show more|Try again/ }).elements()).toHaveLength(0);
+    const grid = page.getByRole('grid', { name: 'Workspace changes' }).element();
+    await expect.poll(() => grid.contains(document.activeElement)).toBe(true);
+  });
+
+  it('hands focus to the table when Try again on a failed first page gives way to the rows', async () => {
+    const { log, retry, set } = liveLog({
+      status: 'failed',
+      entries: [],
+      hasMore: false,
+      message: 'Can’t reach Timefix.',
+    });
+    await renderHistory('changes', true, <WorkspaceChangesTab log={log} />);
+    await userEvent.click(page.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledOnce();
+    set({ status: 'loading', entries: [], hasMore: false });
+    set({ status: 'ready', entries: ROWS, hasMore: false });
+    const grid = page.getByRole('grid', { name: 'Workspace changes' });
+    await expect.element(grid).toBeVisible();
+    await expect.poll(() => grid.element().contains(document.activeElement)).toBe(true);
+  });
+});
+
+describe('while the route loads', () => {
+  const pending = async (tab: 'changes' | 'sign-ins', canReadChanges: boolean, body: ReactNode) => {
+    shown = await renderInApp(() => <HistoryPending tab={tab} canReadChanges={canReadChanges} body={body} />, {
+      data,
+      pattern: `/w/$slug/settings/history/${tab}`,
+      at: `/w/acme/settings/history/${tab}`,
+    });
+  };
+
+  it('draws the tab bar for an owner, its tabs disabled, with the named tab selected', async () => {
+    await pending('sign-ins', true, <SignInsPending />);
+    const tabs = page.getByRole('tab');
+    await expect
+      .poll(() => tabs.elements().map((tab) => tab.textContent))
+      .toEqual(['Workspace changes', 'Your sign ins']);
+    expect(tabs.elements().map((tab) => tab.getAttribute('aria-disabled'))).toEqual(['true', 'true']);
+    expect(page.getByRole('tab', { name: 'Your sign ins' }).element().getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('draws no tab bar for a member', async () => {
+    await pending('sign-ins', false, <SignInsPending />);
+    await expect.poll(() => document.body.textContent).toContain('Recent activity');
+    expect(page.getByRole('tablist').elements()).toHaveLength(0);
+  });
+
+  it('heads Your sign ins as the loaded section does, so nothing changes when it arrives', async () => {
+    await pending('sign-ins', false, <SignInsPending />);
+    await expect.poll(() => document.body.textContent).toContain('Recent activity');
+    shown?.unmount();
+    shown = undefined;
+    await renderHistory('sign-ins', false, signIns());
+    await expect.poll(() => document.body.textContent).toContain('Signed in');
+    expect(document.body.textContent).toContain('Recent activity');
+  });
+
+  it('draws Workspace changes as the loaded table, its columns in place', async () => {
+    await pending('changes', true, <WorkspaceChangesPending />);
+    await expect.element(page.getByRole('grid', { name: 'Workspace changes' })).toBeInTheDocument();
+    expect(
+      page
+        .getByRole('columnheader')
+        .elements()
+        .map((cell) => cell.textContent),
+    ).toEqual(['Who', 'Change', 'When']);
   });
 });
 

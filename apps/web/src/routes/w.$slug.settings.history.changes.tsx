@@ -18,9 +18,10 @@ export const Route = createFileRoute('/w/$slug/settings/history/changes')({
     }
   },
   loader: async ({ context, params }) => ({ log: await context.data.audit.openLog(params.slug) }),
+  // Only a holder of `audit.read` gets this far, so the pending page has the tab bar.
   pendingComponent: () => (
     <LoadingNow>
-      <HistoryPending tab="changes" body={<WorkspaceChangesPending />} />
+      <HistoryPending tab="changes" canReadChanges body={<WorkspaceChangesPending />} />
     </LoadingNow>
   ),
   errorComponent: HistoryError,

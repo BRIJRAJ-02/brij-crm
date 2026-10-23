@@ -159,12 +159,20 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed Bea Rao’s role from Member to Admin',
   ],
   [
+    { ...base, action: 'member.role_changed', target: member(gone), params: { from: 'admin', to: 'member' } },
+    'Ada Lovelace changed a deleted user’s role from Admin to Member',
+  ],
+  [
     { ...base, action: 'member.removed', target: member(bea), params: {} },
     'Ada Lovelace removed Bea Rao from the workspace',
   ],
   [
     { ...base, action: 'member.removed', target: member({ kind: 'unknown' }), params: {} },
     'Ada Lovelace removed a former member from the workspace',
+  ],
+  [
+    { ...base, action: 'member.removed', target: member(gone), params: {} },
+    'Ada Lovelace removed a deleted user from the workspace',
   ],
   [{ ...base, actor: bea, action: 'member.left', target: member(bea), params: {} }, 'Bea Rao left the workspace'],
   [
@@ -300,7 +308,7 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
   ],
   [
     { ...base, actor: { kind: 'unknown' }, action: 'booking.record_unlinked', target: booking, params: {} },
-    'Someone removed from this workspace unlinked a record from Intro call on dayTime(2026-10-24T09:30)',
+    'Unknown person unlinked a record from Intro call on dayTime(2026-10-24T09:30)',
   ],
 ];
 
@@ -346,7 +354,7 @@ describe('entrySentence', () => {
 });
 
 describe('a row this page doesn’t know yet', () => {
-  it('reads as a plain change rather than failing, and names an unknown actor as someone removed', () => {
+  it('reads as a plain change rather than failing, and names an unknown actor as an unknown person', () => {
     const newer = {
       ...base,
       action: 'booking_page.profile_reordered',
@@ -354,7 +362,7 @@ describe('a row this page doesn’t know yet', () => {
       params: {},
     } as unknown as AuditEntryView;
     expect(entrySentence(newer, format)).toEqual({ full: 'Ada Lovelace made a change', change: 'Made a change' });
-    expect(whoOf({ kind: 'robot' } as unknown as AuditPerson)).toEqual({ name: 'Someone removed from this workspace' });
+    expect(whoOf({ kind: 'robot' } as unknown as AuditPerson)).toEqual({ name: 'Unknown person' });
   });
 });
 
@@ -365,7 +373,7 @@ describe('whoOf', () => {
     expect(whoOf(gone)).toEqual({ name: 'Deleted user' });
     expect(whoOf({ kind: 'system' })).toEqual({ name: 'System' });
     expect(whoOf({ kind: 'api_key' })).toEqual({ name: 'API key' });
-    expect(whoOf({ kind: 'unknown' })).toEqual({ name: 'Someone removed from this workspace' });
+    expect(whoOf({ kind: 'unknown' })).toEqual({ name: 'Unknown person' });
     expect(whoOf({ kind: 'asker', name: 'Cy Young' })).toEqual({ name: 'Cy Young', badge: 'Asked to join' });
   });
 });

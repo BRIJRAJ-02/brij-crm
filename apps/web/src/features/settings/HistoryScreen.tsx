@@ -48,9 +48,22 @@ export function HistoryScreen({ slug, tab, canReadChanges, children }: HistorySc
   );
 }
 
-/** History while its route loads: the page, its tabs when the tab is one only owners and admins reach, and `body`. */
-export function HistoryPending({ tab, body }: { readonly tab: HistoryTab; readonly body: ReactNode }) {
-  if (tab === 'sign-ins') {
+/** Props for History while its route loads. */
+export interface HistoryPendingProps {
+  /** The tab the address names. */
+  readonly tab: HistoryTab;
+  /** Whether the reader holds `audit.read`, by the access the workspace frame already read: the tab bar or none. */
+  readonly canReadChanges: boolean;
+  /** The tab's own loading shape. */
+  readonly body: ReactNode;
+}
+
+/**
+ * History while its route loads, in the loaded layout: the tab bar exactly when the loaded page has one, its tabs
+ * disabled until the page is there (a press while loading would go nowhere), and `body` in the named tab.
+ */
+export function HistoryPending({ tab, canReadChanges, body }: HistoryPendingProps) {
+  if (!canReadChanges) {
     return (
       <SettingsPage title={nav.title} isLoading>
         {body}
@@ -63,14 +76,12 @@ export function HistoryPending({ tab, body }: { readonly tab: HistoryTab; readon
         label={strings.tabs}
         selectedKey={tab}
         tabs={[
-          { id: 'changes', label: strings.changesTab },
-          { id: 'sign-ins', label: strings.signInsTab },
+          { id: 'changes', label: strings.changesTab, isDisabled: true },
+          { id: 'sign-ins', label: strings.signInsTab, isDisabled: true },
         ]}
       >
-        <TabPanel id="changes">{body}</TabPanel>
-        <TabPanel id="sign-ins">
-          <Skeleton width="medium" />
-        </TabPanel>
+        <TabPanel id="changes">{tab === 'changes' ? body : <Skeleton width="medium" />}</TabPanel>
+        <TabPanel id="sign-ins">{tab === 'sign-ins' ? body : <Skeleton width="medium" />}</TabPanel>
       </Tabs>
     </SettingsPage>
   );

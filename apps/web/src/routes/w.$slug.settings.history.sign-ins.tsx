@@ -1,5 +1,5 @@
 import { LoadingNow } from '@crm/ui';
-import { createFileRoute, useRouter } from '@tanstack/react-router';
+import { createFileRoute, getRouteApi, useRouter } from '@tanstack/react-router';
 import { HistoryPending, HistoryScreen } from '../features/settings/HistoryScreen.tsx';
 import { SignInsPending, SignInsTab } from '../features/settings/SignInsTab.tsx';
 
@@ -12,13 +12,26 @@ export const Route = createFileRoute('/w/$slug/settings/history/sign-ins')({
     const access = await context.data.access.mine(params.slug).catch(() => undefined);
     return { activity, canReadChanges: access?.permissions.includes('audit.read') === true };
   },
-  pendingComponent: () => (
-    <LoadingNow>
-      <HistoryPending tab="sign-ins" body={<SignInsPending />} />
-    </LoadingNow>
-  ),
+  pendingComponent: SignInsLoading,
   component: SignInsRoute,
 });
+
+const workspace = getRouteApi('/w/$slug');
+
+/**
+ * Your sign ins while its loader waits: the workspace frame read the access before this page could draw, so the
+ * pending page has the tab bar exactly when the loaded one will.
+ */
+function SignInsLoading() {
+  const canReadChanges = workspace.useLoaderData({
+    select: (loaded) => loaded.access?.permissions.includes('audit.read') === true,
+  });
+  return (
+    <LoadingNow>
+      <HistoryPending tab="sign-ins" canReadChanges={canReadChanges} body={<SignInsPending />} />
+    </LoadingNow>
+  );
+}
 
 function SignInsRoute() {
   const { data } = Route.useRouteContext();

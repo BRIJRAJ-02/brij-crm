@@ -5,7 +5,7 @@
 import type { ActivityPage, DataLayer } from '@crm/data';
 import { Card, SettingsRow, SettingsSection, Skeleton } from '@crm/ui';
 import { RecentActivitySection } from './RecentActivitySection.tsx';
-import { strings } from './history-strings.ts';
+import { strings as security } from './security-strings.ts';
 
 /** Props for Your sign ins. */
 export interface SignInsTabProps {
@@ -24,10 +24,15 @@ export function SignInsTab({ data, first, onRetry }: SignInsTabProps) {
   return <RecentActivitySection data={data} first={first} onRetry={onRetry} />;
 }
 
-/** Your sign ins while its route loads: the section's own loading rows, as Recent activity draws them. */
+/**
+ * Your sign ins while its route loads: the section as Recent activity draws it while its first page loads, under the
+ * same heading and line, so nothing changes when it arrives. Both move to "Your sign ins" together once
+ * RecentActivitySection takes `title` and `description` (the account lane), with `history-strings.ts`'s
+ * `signInsTitle` and `signInsText`.
+ */
 export function SignInsPending() {
   return (
-    <SettingsSection title={strings.signInsTitle} description={strings.signInsText}>
+    <SettingsSection title={security.activity.section} description={security.activity.description}>
       <Card isBusy>
         {[0, 1, 2].map((index) => (
           <SettingsRow key={index} title="" description={<Skeleton width="medium" />} />

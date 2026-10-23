@@ -15,16 +15,24 @@ import {
   VisuallyHidden,
   type TableColumn,
 } from '@crm/ui';
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { entrySentence, whoOf, type HistoryFormat } from './history-lines.ts';
 import { strings } from './history-strings.ts';
 
-/** When, Who, then Change: the row header, so a row is named by its sentence (AC-4604). */
+/**
+ * Who, Change, then When, as Background jobs and Submissions run. Change is the row header, so a row is named by its
+ * sentence (AC-4604), and it takes the room left and wraps, so the table fits a phone without scrolling sideways;
+ * When keeps to its widest time.
+ */
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'when', label: strings.when },
   { id: 'who', label: strings.who, isInline: true },
   { id: 'change', label: strings.change, isRowHeader: true, size: 'fill' },
+  { id: 'when', label: strings.when, size: 'fit' },
 ];
+
+/** The table, to take focus back when the button that held it goes (the last page came, or the first one is read again). */
+const changesTable = () =>
+  document.querySelector<HTMLElement>(`[role="grid"][aria-label=${JSON.stringify(strings.table)}]`);
 
 /** Props for Workspace changes. */
 export interface WorkspaceChangesTabProps {
@@ -37,6 +45,19 @@ export function WorkspaceChangesTab({ log }: WorkspaceChangesTabProps) {
   useEffect(() => log.retain(), [log]);
   const state = useSyncExternalStore(log.subscribe, log.getSnapshot, log.getSnapshot);
   const format = useHistoryFormat();
+  // Set when one of this tab's buttons is pressed. If that button then goes (the last page came, or a failed
+  // first page is read again) and focus fell to the page, it goes to the table instead of being lost.
+  const pressed = useRef(false);
+  useEffect(() => {
+    if (!pressed.current || state.status === 'loading' || state.status === 'more') return;
+    pressed.current = false;
+    const focused = document.activeElement;
+    if (focused === null || focused === document.body) changesTable()?.focus();
+  }, [state.status, state.hasMore]);
+  const press = (action: () => void) => () => {
+    pressed.current = true;
+    action();
+  };
 
   if (state.status === 'forbidden') {
     // The reader lost `audit.read` while here (AC-4618): the permission's own sentence, in place of the table.
@@ -44,7 +65,7 @@ export function WorkspaceChangesTab({ log }: WorkspaceChangesTabProps) {
   }
   if (state.status === 'failed') {
     return (
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={log.retry}>
+      <EmptyState tone="error" title={strings.failedTitle} onRetry={press(log.retry)}>
         {state.message}
       </EmptyState>
     );
@@ -79,7 +100,6 @@ export function WorkspaceChangesTab({ log }: WorkspaceChangesTabProps) {
         rows={state.entries}
         getRowId={(entry) => entry.id}
         renderCell={renderCell}
-        isScrollable
         isLoading={state.status === 'loading'}
         emptyState={
           <EmptyState icon="clock" title={strings.emptyTitle}>
@@ -87,17 +107,19 @@ export function WorkspaceChangesTab({ log }: WorkspaceChangesTabProps) {
           </EmptyState>
         }
       />
-      {state.status === 'more-failed' ? (
-        // The rows stay; only the next page failed.
-        <EmptyState layout="row" tone="error" title={strings.failedMore} onRetry={log.retry}>
+      {state.status === 'more-failed' && (
+        // The rows stay; only the next page failed. The one button below turns into Try again, so focus stays on it.
+        <EmptyState layout="row" tone="error" title={strings.failedMore}>
           {state.message}
         </EmptyState>
-      ) : (
-        state.hasMore && (
-          <Button onPress={log.more} isPending={state.status === 'more'}>
-            {strings.showMore}
-          </Button>
-        )
+      )}
+      {state.hasMore && (
+        <Button
+          onPress={press(state.status === 'more-failed' ? log.retry : log.more)}
+          isPending={state.status === 'more'}
+        >
+          {state.status === 'more-failed' ? strings.tryAgain : strings.showMore}
+        </Button>
       )}
     </>
   );
@@ -121,14 +143,6 @@ function useHistoryFormat(): HistoryFormat {
 /** Workspace changes while its route loads: the table's skeleton rows, in the loaded layout (AC-4615). */
 export function WorkspaceChangesPending() {
   return (
-    <Table
-      label={strings.table}
-      columns={COLUMNS}
-      rows={[]}
-      getRowId={() => ''}
-      renderCell={() => null}
-      isScrollable
-      isLoading
-    />
+    <Table label={strings.table} columns={COLUMNS} rows={[]} getRowId={() => ''} renderCell={() => null} isLoading />
   );
 }
