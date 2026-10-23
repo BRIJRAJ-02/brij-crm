@@ -140,7 +140,7 @@ export const strings = {
     limit: { tone: 'warning', title: 'Calendar not connected', text: 'You’ve connected the most accounts you can.' },
     off: {
       tone: 'info',
-      title: 'Calendar sync isn’t set up',
+      title: 'Calendar sync is off',
       text: 'Connecting calendars isn’t available here yet. Your booking pages still use your hours.',
     },
     failed: {

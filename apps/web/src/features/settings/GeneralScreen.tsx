@@ -17,7 +17,7 @@ import {
   Skeleton,
   type Toasts,
 } from '@crm/ui';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
 import { ChangeAddressDialog } from './ChangeAddressDialog.tsx';
 import { DeleteWorkspaceDialog } from './DeleteWorkspaceDialog.tsx';
@@ -48,7 +48,8 @@ export interface GeneralScreenProps {
 
 /**
  * A Card of rows, each saving on its own (the owner's save rule, 21 October 2026): the name, saved when the field is
- * left or on Enter with "Name changed." and Undo (an empty name is refused on the field, and Esc puts it back); the
+ * left, on Enter or when the page goes with it still typed, with "Name changed." and Undo (an empty name is refused on
+ * the field, and Esc puts it back; a failure for any other reason is also a toast, as focus may have left); the
  * web address as its whole link with Copy, and Change, which opens the address dialog; the time zone, saved at once
  * with Undo. Readers who can't change them get one note at the top and locked fields. Owners also get a Danger zone
  * with Delete workspace, which opens the typed name confirm.
@@ -107,8 +108,16 @@ export function GeneralScreen({
         });
       })
       .catch((error: unknown) => {
-        // Refused or lost: the typed name stays in the field with the reason, for Enter to try again.
-        setNameError(isDataError(error) ? error.message : strings.somethingWrong);
+        // Refused or lost: the typed name stays in the field for Enter to try again. A refusal of the name says why on
+        // the field; anything else is a toast too, said even after focus has left the field.
+        const isNameRefused =
+          isDataError(error) && error.data?.refusals?.some((each) => each.field === 'name') === true;
+        if (isNameRefused) {
+          setNameError(error.message);
+          return;
+        }
+        setNameError(strings.nameNotSaved);
+        fail(error);
       })
       .finally(() => {
         sending.current = undefined;
@@ -129,6 +138,18 @@ export function GeneralScreen({
     if (sending.current === commit.name) return;
     rename(commit.name, settings.name, true);
   };
+  // A name still typed when the page goes (Back, a link from the keyboard) is saved as leaving the field would: not
+  // every browser says the field was left as it is taken away.
+  const commitOnLeave = useRef(commitName);
+  useEffect(() => {
+    commitOnLeave.current = commitName;
+  });
+  useEffect(
+    () => () => {
+      commitOnLeave.current();
+    },
+    [],
+  );
 
   const setZone = (zone: string, previous: string, withUndo: boolean) => {
     setZoneBusy(true);
@@ -285,7 +306,11 @@ export function GeneralPending() {
             <Skeleton shape="field" />
           </SettingsRow>
           <SettingsRow title={strings.webAddress} description={<Skeleton width="long" />}>
-            {mayManage && <Button isDisabled>{strings.changeAddress}</Button>}
+            {mayManage && (
+              <Button label={strings.changeAddressLabel} isDisabled>
+                {strings.changeAddress}
+              </Button>
+            )}
           </SettingsRow>
           <SettingsRow title={strings.timeZone} control="field">
             <Skeleton shape="field" />

@@ -1,7 +1,9 @@
 // Settings › Round robin in Chromium: New group shows once (the empty state's while there are no groups, then the
-// bar's, SS-R2); the group dialog's name error goes as soon as a name is typed (SS-R3); who can join is said under
-// the member picker with a Set hours link, and the server's refusal of someone who can't gains the same link to their
-// hours (SS-R1); without booking.manage the page isn't there (SS-R10); axe is clean at 390 in light and dark.
+// bar's, SS-R2); the group dialog's name error goes as soon as a name is typed (SS-R3); who can join is said in the
+// member picker's hint, as plain text, and the server's refusal of someone who can't offers to remove them and their
+// hours in a new tab, for the member that was sent even after the draft changes; a refusal of someone no longer
+// active offers only the remove (SS-R1); without booking.manage the page isn't there (SS-R10); axe is clean at 390
+// in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
 import { dataError, type DataLayer, type MemberSummary, type MyAccess, type RotationView } from '@crm/data';
@@ -145,6 +147,11 @@ describe('New group, once', () => {
     // The card's line, in plain words.
     await expect.element(page.getByText('Fair · last 30 days · 1 booking page')).toBeVisible();
   });
+
+  it('says a group on no booking page in the same small letters', async () => {
+    await renderRoundRobin([{ ...SALES, pages: 0 }]);
+    await expect.element(page.getByText('Fair · last 30 days · not on a booking page yet')).toBeVisible();
+  });
 });
 
 describe('the group dialog', () => {
@@ -156,29 +163,82 @@ describe('the group dialog', () => {
     expect(page.getByText(strings.nameRequired).elements()).toEqual([]);
   });
 
-  it('says who can join, with Set hours, and links a refused member to their hours', async () => {
+  it('says who can join in the picker’s hint, with no link away from the group', async () => {
+    await renderDialog(layerWith([SALES]), SALES);
+    await expect.element(page.getByText(strings.membersHint(2))).toBeVisible();
+    expect(page.getByRole('link').elements()).toEqual([]);
+    // The window's help.
+    await expect.element(page.getByRole('button', { name: `About ${strings.window}` })).toBeVisible();
+  });
+
+  it('offers a refused member’s hours in a new tab, and to remove them, for the member that was sent', async () => {
+    const LEE: MemberSummary = { id: '0199a6f2-0000-7000-8000-000000000003', name: 'Lee Chen', email: 'lee@acme.dev' };
+    const [ada] = SALES.members;
+    if (ada === undefined) throw new Error('Sales has Ada.');
+    const withLee: RotationView = {
+      ...SALES,
+      members: [...SALES.members, { ...ada, memberId: LEE.id, name: LEE.name }],
+    };
     const refused = 'Maya Patel needs to set hours or connect a calendar first.';
-    const data = layerWith([SALES], () =>
+    const data = layerWith([withLee], () =>
       Promise.reject(
         dataError('CONFIG_INVALID', refused, {
           refusals: [{ code: 'CONFIG_INVALID', message: refused, field: 'members.1' }],
         }),
       ),
     );
-    await renderDialog(data, SALES);
-    // Under the picker, before anything is sent.
-    await expect.element(page.getByText(strings.canJoin)).toBeVisible();
-    const hint = page.getByRole('link', { name: strings.setHours });
-    expect(hint.elements()).toHaveLength(1);
-    expect(hint.element().getAttribute('href')).toBe('/w/acme/bookings/availability');
-    // The window's help.
-    await expect.element(page.getByRole('button', { name: `About ${strings.window}` })).toBeVisible();
-
+    shown = await renderInApp(
+      () => (
+        <RotationDialog
+          data={data}
+          slug="acme"
+          people={[ADA, MAYA, LEE]}
+          rotation={withLee}
+          isOpen
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/settings/scheduling/round-robin', at: '/w/acme/settings/scheduling/round-robin' },
+    );
     await userEvent.click(page.getByRole('button', { name: strings.save, exact: true }));
     const alert = page.getByRole('alert').filter({ hasText: refused });
     await expect.element(alert).toBeVisible();
     const toHours = alert.getByRole('link', { name: strings.setHours });
     expect(toHours.element().getAttribute('href')).toBe(`/w/acme/bookings/availability?member=${MAYA.id}`);
+    // A new tab, so the group being made stays.
+    expect(toHours.element().getAttribute('target')).toBe('_blank');
+
+    // Ada leaves the draft from above Maya: the refusal still names Maya, and still opens Maya's hours.
+    await userEvent.click(page.getByRole('button', { name: strings.remove(ADA.name), exact: true }));
+    await expect.element(alert).toBeVisible();
+    expect(toHours.element().getAttribute('href')).toBe(`/w/acme/bookings/availability?member=${MAYA.id}`);
+
+    // Removing Maya takes the refusal with her.
+    await userEvent.click(alert.getByRole('button', { name: strings.removeRefused(MAYA.name) }));
+    expect(page.getByRole('alert').filter({ hasText: refused }).elements()).toEqual([]);
+    expect(page.getByRole('button', { name: strings.remove(MAYA.name), exact: true }).elements()).toEqual([]);
+  });
+
+  it('offers only to remove someone no longer active, whose hours wouldn’t help', async () => {
+    const FORMER = { memberId: '0199a6f2-0000-7000-8000-000000000009', name: 'Sam Former' };
+    const [ada] = SALES.members;
+    if (ada === undefined) throw new Error('Sales has Ada.');
+    const withFormer: RotationView = { ...SALES, members: [...SALES.members, { ...ada, ...FORMER }] };
+    const refused = 'Only active members of this workspace can be in a rotation.';
+    const data = layerWith([withFormer], () =>
+      Promise.reject(
+        dataError('CONFIG_INVALID', refused, {
+          refusals: [{ code: 'CONFIG_INVALID', message: refused, field: 'members.2' }],
+        }),
+      ),
+    );
+    await renderDialog(data, withFormer);
+    await userEvent.click(page.getByRole('button', { name: strings.save, exact: true }));
+    const alert = page.getByRole('alert').filter({ hasText: refused });
+    await expect.element(alert).toBeVisible();
+    await expect.element(alert.getByRole('button', { name: strings.removeRefused(FORMER.name) })).toBeVisible();
+    expect(alert.getByRole('link').elements()).toEqual([]);
   });
 });
 

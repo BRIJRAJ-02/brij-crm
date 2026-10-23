@@ -26,8 +26,10 @@ export interface ChangeAddressDialogProps {
  * A Modal with the address Field after a quiet "/w/", checked as typed the way first run checks it (a spinner while
  * it asks, a tick and "Free", "Taken" with free ones to pick under it), the sentence on what happens to old links,
  * then Cancel (ESC) and Change address, which waits until a new address is free (or couldn't be checked: the server
- * checks it again). It stays open while the change is sent; a refusal shows on the field, anything else above it.
- * Mount it afresh for each opening (a `key`), so the field starts from the address again.
+ * checks it again). The field takes focus on opening, and once a new address is typed a click outside no longer
+ * closes it. It stays open while the change is sent; a refusal shows on the field, anything else above it. If the
+ * workspace moved but the page couldn't open there, it says so and sends nothing more. Mount it afresh for each
+ * opening (a `key`), so the field starts from the address again.
  */
 export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved }: ChangeAddressDialogProps) {
   const [draft, setDraft] = useState(from);
@@ -35,6 +37,9 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
   // The server's refusal of the address, on the field; anything else that went wrong, in a Callout over it.
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const [failure, setFailure] = useState<string | undefined>(undefined);
+  // Where the workspace moved, when the page then couldn't open there: a reload does, and a second change would be
+  // sent to the old address.
+  const [movedTo, setMovedTo] = useState<string | undefined>(undefined);
   // The address checked as typed, through the one address check; the workspace's own address counts as free.
   const check = useCallback(
     (candidate: string) => (candidate === from ? Promise.resolve(true) : data.workspaces.slugAvailable(candidate)),
@@ -49,31 +54,31 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
   // No check, hint or mark while the field still holds the address it has now.
   const state = isNew ? address.state : undefined;
   const suggestions = isNew ? address.suggestions : [];
-  const canChange = isNew && refusal === undefined && (state === 'free' || state === 'unknown');
+  const canChange =
+    isNew && refusal === undefined && movedTo === undefined && (state === 'free' || state === 'unknown');
 
   const commit = () => {
     if (!canChange || isBusy) return;
     setBusy(true);
     setRefusal(undefined);
     setFailure(undefined);
-    data.workspace
-      .update(slug, { slug: draft })
-      .then(
-        // The page moves to the new address, and this dialog goes with the old page.
-        (updated) => onMoved(updated.slug),
-        (error: unknown) => {
+    data.workspace.update(slug, { slug: draft }).then(
+      // The page moves to the new address, and this dialog goes with the old page.
+      (updated) => {
+        onMoved(updated.slug).catch(() => {
+          // It moved, but the page couldn't open there: the dialog waits no longer, and says where it is now.
           setBusy(false);
-          const message = isDataError(error) ? error.message : strings.somethingWrong;
-          const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
-          if (isDataError(error) && (error.code === 'SLUG_TAKEN' || field === 'slug')) setRefusal(message);
-          else setFailure(message);
-        },
-      )
-      // It moved, but the page couldn't open there: the dialog waits no longer, and says so.
-      .catch(() => {
+          setMovedTo(updated.slug);
+        });
+      },
+      (error: unknown) => {
         setBusy(false);
-        setFailure(strings.somethingWrong);
-      });
+        const message = isDataError(error) ? error.message : strings.somethingWrong;
+        const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+        if (isDataError(error) && (error.code === 'SLUG_TAKEN' || field === 'slug')) setRefusal(message);
+        else setFailure(message);
+      },
+    );
   };
   const pick = (next: string) => {
     setDraft(next);
@@ -97,6 +102,8 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
     <Modal
       title={strings.moveTitle}
       isOpen={isOpen}
+      // A typed address is only thrown away by Cancel or Esc.
+      isDismissable={!isNew}
       isBusy={isBusy}
       onOpenChange={(open) => {
         if (!open && !isBusy) onClose();
@@ -112,9 +119,17 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
         </>
       }
     >
-      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+      {movedTo !== undefined ? (
+        <Callout tone="warning">{strings.movedReload(movedTo)}</Callout>
+      ) : (
+        failure !== undefined && <Callout tone="danger">{failure}</Callout>
+      )}
       <Field
         label={strings.webAddress}
+        // Typing the address is the dialog's one job, so its field takes focus when it opens.
+        // eslint-disable-next-line jsx-a11y-x/no-autofocus
+        autoFocus
+        isReadOnly={movedTo !== undefined}
         autoComplete="off"
         maxLength={SLUG_MAX}
         prefix={strings.addressPrefix}
@@ -147,7 +162,8 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
               : ''}
         </span>
       </VisuallyHidden>
-      <span>{isNew && state !== 'invalid' ? strings.moveText(from, draft) : strings.moveTextAny(from)}</span>
+      {/* "Moves from /w/a to /w/b" only for an address it can move to; until then, what happens to the old one. */}
+      <span>{canChange ? strings.moveText(from, draft) : strings.moveTextAny(from)}</span>
     </Modal>
   );
 }

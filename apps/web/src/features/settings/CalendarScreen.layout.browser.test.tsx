@@ -225,6 +225,8 @@ describe('Settings › Calendars’ words', () => {
     await expect.element(page.getByText(strings.offTitle)).toBeVisible();
     await expect.element(page.getByText(strings.offText)).toBeVisible();
     expect(strings.offTitle).toBe('Calendar sync is off');
+    // The same words when a connect comes back to find it off.
+    expect(strings.results.off.title).toBe(strings.offTitle);
   });
 
   it('says what connecting does while nothing is connected', async () => {

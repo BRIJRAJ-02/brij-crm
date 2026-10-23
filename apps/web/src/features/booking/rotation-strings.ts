@@ -1,6 +1,10 @@
 // Round robin's copy (spec 0029): Settings › Scheduling › Round robin, the group dialog, and a round robin page's
 // Team card. Plain words, no dashes as punctuation. In code these are rotations; on screen, round robin groups (the
 // owner, 22 October 2026: "if this is round robin, call it that").
+
+/** Who can be in a group (SS-R1), said in the member picker's hint until the picker can mark who can't. */
+const CAN_JOIN = 'Only people with hours or a calendar can join.';
+
 export const strings = {
   title: 'Round robin',
   group: 'Scheduling',
@@ -29,7 +33,7 @@ export const strings = {
     [
       strategy === 'fair' ? 'Fair' : strategy === 'priority' ? 'Priority' : 'Even',
       `last ${String(days)} days`,
-      pages === 0 ? 'Not on a booking page yet' : pages === 1 ? '1 booking page' : `${String(pages)} booking pages`,
+      pages === 0 ? 'not on a booking page yet' : pages === 1 ? '1 booking page' : `${String(pages)} booking pages`,
     ].join(' · '),
   members: (name: string) => `Members of ${name}`,
   columns: {
@@ -71,11 +75,13 @@ export const strings = {
   days: (count: number) => `${String(count)} days`,
   addMember: 'Add a member',
   addMemberPlaceholder: 'Search people',
-  /** Under the member picker, and on the server's refusal of someone who can't take meetings yet. */
-  canJoin: 'Only people with hours or a calendar can join.',
+  /** On the server's refusal of someone who can't take meetings yet: their hours, in a new tab, so the group stays. */
   setHours: 'Set hours',
+  /** On the server's refusal of one member: save the group without them. */
+  removeRefused: (name: string) => `Remove ${name} from the group`,
   noMembersLeft: 'Everyone is in it already.',
-  membersCount: (count: number) => `${String(count)} of 20 members`,
+  /** The member picker's hint: how many, and who can join. */
+  membersHint: (count: number) => `${String(count)} of 20 members. ${CAN_JOIN}`,
   needTwo: 'Add at least 2 members.',
   tooMany: 'A group holds at most 20 members.',
   weightFor: (name: string, rotation: string) => `Weight for ${name} in ${rotation}`,
@@ -172,6 +178,8 @@ export const strings = {
   distributionTab: 'Distribution',
   distribution: {
     intro: (days: number) => `Meetings in the last ${String(days)} days, against each person’s fair share.`,
+    /** A member's line: they see only their own row, with no fair share column. */
+    ownIntro: (days: number) => `Your meetings in the last ${String(days)} days.`,
     failed: 'Couldn’t load the distribution',
     count: 'Meetings',
     fair: 'Fair share',

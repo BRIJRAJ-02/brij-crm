@@ -1,11 +1,13 @@
 // Settings › General in Chromium, saving at once (SS-G1 to SS-G4): a rename saves when the field is left (once, even
-// after Enter) with "Name changed." and Undo; an empty name is refused on the field and nothing is sent; Change opens
-// the address dialog with its field, checked as typed, and Change address waits for a free one; there is no Save bar
-// and no browser confirm on leaving; a member reads one note and finds the fields locked; the delete confirm says
-// what happens in the open; axe is clean at 390 in light and dark.
+// after Enter, and once while it is on its way) with "Name changed." and Undo; an empty name is refused on the field
+// and nothing is sent; a refused name stays in the field with the reason, and one lost for another reason is a toast
+// too; Change opens the address dialog with its field focused, checked as typed, and Change address waits for a free
+// one; a move whose page couldn't open says where it went and sends nothing more; there is no Save bar and no browser
+// confirm on leaving, and a name still typed then is saved; a member reads one note and finds the fields locked; the
+// delete confirm says what happens in the open; axe is clean at 390 in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
-import type { DataLayer, WorkspaceSettings } from '@crm/data';
+import { dataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
 import { createToasts } from '@crm/ui';
 import type { RouterHistory } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -26,10 +28,20 @@ const SAVED: WorkspaceSettings = {
 /** An address another workspace has. */
 const TAKEN = 'acme-taken';
 
-/** A data layer holding the workspace's settings, which its update changes as the server would. */
-function layer() {
+/** How the server answers a rename: with the settings it would save, or not. */
+type Answer = (next: WorkspaceSettings) => Promise<WorkspaceSettings>;
+
+/** A data layer holding the workspace's settings, which its update changes as the server would; `answer`, when
+ * given, stands in for the server on a rename (one held on its way, or refused). */
+function layer(answer?: Answer) {
   let saved = SAVED;
   const update = vi.fn((_slug: string, change: Partial<WorkspaceSettings>) => {
+    if (answer !== undefined && change.name !== undefined) {
+      return answer({ ...saved, ...change }).then((next) => {
+        saved = next;
+        return next;
+      });
+    }
     saved = { ...saved, ...change };
     return Promise.resolve(saved);
   });
@@ -53,10 +65,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The page for an owner (or, `asMember`, someone without workspace.manage), reading its settings back on a change. */
-async function renderGeneral({ asMember = false }: { readonly asMember?: boolean } = {}) {
-  const { data, update, read } = layer();
-  const onMoved = vi.fn(() => Promise.resolve());
+/** The page for an owner (or, `asMember`, someone without workspace.manage), reading its settings back on a change;
+ * `answer` answers a rename, and `isMoveLost` has the page fail to open at a new address. */
+async function renderGeneral({
+  asMember = false,
+  answer,
+  isMoveLost = false,
+}: { readonly asMember?: boolean; readonly answer?: Answer; readonly isMoveLost?: boolean } = {}) {
+  const { data, update, read } = layer(answer);
+  const onMoved = vi.fn(() => (isMoveLost ? Promise.reject(new Error('The page didn’t load.')) : Promise.resolve()));
   const toasts = createToasts();
   function Page() {
     const [settings, setSettings] = useState(SAVED);
@@ -104,6 +121,56 @@ describe('the name', () => {
     expect(update).toHaveBeenLastCalledWith('acme', { name: 'Acme' });
   });
 
+  it('sends a rename once while it is on its way, then says so', async () => {
+    let release: () => void = () => undefined;
+    const { update } = await renderGeneral({
+      answer: (next) =>
+        new Promise((resolve) => {
+          release = () => {
+            resolve(next);
+          };
+        }),
+    });
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme Labs');
+    await userEvent.keyboard('{Enter}');
+    // Still on its way when the field is left: not sent again.
+    await userEvent.tab();
+    expect(update).toHaveBeenCalledTimes(1);
+    release();
+    await expect.element(page.getByText(strings.nameChanged)).toBeVisible();
+    expect(update).toHaveBeenCalledTimes(1);
+    await expect.element(nameField()).toHaveValue('Acme Labs');
+  });
+
+  it('keeps a refused name in the field, with the reason under it', async () => {
+    const reason = 'Use 1 to 64 characters for the name.';
+    await renderGeneral({
+      answer: () =>
+        Promise.reject(
+          dataError('CONFIG_INVALID', reason, {
+            refusals: [{ code: 'CONFIG_INVALID', message: reason, field: 'name' }],
+          }),
+        ),
+    });
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme Labs');
+    await userEvent.tab();
+    await expect.element(page.getByText(reason)).toBeVisible();
+    await expect.element(nameField()).toHaveValue('Acme Labs');
+    expect(page.getByText(strings.nameChanged).elements()).toEqual([]);
+  });
+
+  it('says a rename lost for another reason as a toast too, as focus has left the field', async () => {
+    await renderGeneral({ answer: () => Promise.reject(new Error('Failed to fetch')) });
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme Labs');
+    await userEvent.tab();
+    await expect.element(page.getByText(strings.somethingWrong)).toBeVisible();
+    await expect.element(page.getByText(strings.nameNotSaved)).toBeVisible();
+    await expect.element(nameField()).toHaveValue('Acme Labs');
+  });
+
   it('refuses an empty name on the field and sends nothing', async () => {
     const { update } = await renderGeneral();
     await userEvent.clear(nameField());
@@ -125,6 +192,8 @@ describe('the web address', () => {
     await expect.element(dialog).toBeVisible();
     const field = dialog.getByRole('textbox', { name: strings.webAddress });
     await expect.element(field).toHaveValue('acme');
+    // Typing the address is the dialog's one job.
+    await expect.element(field).toHaveFocus();
     const change = dialog.getByRole('button', { name: strings.moveAction });
     await expect.element(change).toBeDisabled();
 
@@ -132,6 +201,9 @@ describe('the web address', () => {
     await userEvent.type(field, TAKEN);
     await expect.element(dialog.getByText(strings.addressTaken, { exact: true })).toBeVisible();
     await expect.element(change).toBeDisabled();
+    // No "moves to" an address it can't move to.
+    expect(dialog.getByText(strings.moveText('acme', TAKEN)).elements()).toEqual([]);
+    await expect.element(dialog.getByText(strings.moveTextAny('acme'))).toBeVisible();
 
     await userEvent.clear(field);
     await userEvent.type(field, 'acme-labs');
@@ -144,12 +216,28 @@ describe('the web address', () => {
     });
     expect(update).toHaveBeenCalledWith('acme', { slug: 'acme-labs' });
   });
+
+  it('says where it went when the page couldn’t open there, and sends nothing more', async () => {
+    const { update } = await renderGeneral({ isMoveLost: true });
+    await userEvent.click(page.getByRole('button', { name: strings.changeAddressLabel }));
+    const dialog = page.getByRole('dialog', { name: strings.moveTitle });
+    const field = dialog.getByRole('textbox', { name: strings.webAddress });
+    await userEvent.clear(field);
+    await userEvent.type(field, 'acme-labs');
+    const change = dialog.getByRole('button', { name: strings.moveAction });
+    await expect.element(change).toBeEnabled();
+    await userEvent.click(change);
+    await expect.element(dialog.getByText(strings.movedReload('acme-labs'))).toBeVisible();
+    expect(dialog.getByText(strings.somethingWrong).elements()).toEqual([]);
+    await expect.element(change).toBeDisabled();
+    expect(update).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('saving at once', () => {
-  it('has no Save bar, and leaving asks nothing', async () => {
+  it('has no Save bar, leaving asks nothing, and a name still typed is saved', async () => {
     const confirm = vi.spyOn(globalThis, 'confirm').mockReturnValue(false);
-    await renderGeneral();
+    const { update } = await renderGeneral();
     await userEvent.type(nameField(), ' Labs');
     expect(page.getByRole('button', { name: 'Save' }).elements()).toEqual([]);
     expect(page.getByRole('button', { name: 'Discard' }).elements()).toEqual([]);
@@ -159,6 +247,11 @@ describe('saving at once', () => {
       expect(shown?.router.state.location.pathname).toBe('/w/acme/settings/members');
     });
     expect(confirm).not.toHaveBeenCalled();
+    // Saved as leaving the field would, whether or not the browser said it was left.
+    await vi.waitFor(() => {
+      expect(update).toHaveBeenCalledWith('acme', { name: 'Acme Labs' });
+    });
+    expect(update).toHaveBeenCalledTimes(1);
   });
 });
 

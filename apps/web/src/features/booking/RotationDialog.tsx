@@ -2,8 +2,8 @@
 // Purpose: make or change a rotation (spec 0029, AC-728, AC-729; spec 0037): its name, how it picks, the window it counts over, where returning guests go, and its 2 to 20 members.
 // Main task: add the people who share the meetings, set each one's weight, priority, daily and weekly caps and on or off, then Create or Save.
 // Leaves out: shares and history (the Rotations screen), teams (#23 brings rotations that follow a team), and marking who
-// can't join in the picker (that needs the server to say who can host; until then a line under it says who can, and
-// links to their hours).
+// can't join in the picker (that needs the server to say who can host; until then its hint says who can, and the
+// server's refusal of one member offers to remove them or open their hours in a new tab).
 import {
   isDataError,
   type DataLayer,
@@ -13,10 +13,10 @@ import {
 } from '@crm/data';
 import {
   Button,
+  ButtonLink,
   Callout,
   Field,
   InfoTip,
-  Link,
   Modal,
   Radio,
   RadioGroup,
@@ -102,9 +102,15 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
   const [id] = useState(() => data.rotations.newId());
   const [isBusy, setBusy] = useState(false);
   const [isConfirming, setConfirming] = useState(false);
-  const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
+  // What went wrong, and the member a refusal was about, taken from the list that was sent, not the draft since.
+  const [failure, setFailure] = useState<{ readonly message: string; readonly memberId?: string } | undefined>(
+    undefined,
+  );
   const [nameError, setNameError] = useState<string | undefined>(undefined);
-  const nameOf = (memberId: string) => people.find((person) => person.id === memberId)?.name ?? memberId;
+  const nameOf = (memberId: string) =>
+    people.find((person) => person.id === memberId)?.name ??
+    rotation?.members.find((member) => member.memberId === memberId)?.name ??
+    memberId;
   const removed = (rotation?.members ?? []).filter(
     (member) => !members.some((each) => each.memberId === member.memberId),
   );
@@ -115,9 +121,15 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     .filter((person) => !members.some((member) => member.memberId === person.id))
     .map((person) => ({ id: person.id, label: person.name, description: person.email }));
   const countError = members.length < 2 ? strings.needTwo : members.length > 20 ? strings.tooMany : undefined;
-  // A refusal about one member ("Maya Patel needs to set hours or connect a calendar first.") links to their hours.
-  const refused = failure?.field?.startsWith('members.') === true ? failure.field.slice('members.'.length) : undefined;
-  const refusedHours = refused === undefined ? undefined : availabilityHref(slug, members[Number(refused)]?.memberId);
+  // A refusal about one member ("Maya Patel needs to set hours or connect a calendar first.") offers to remove them,
+  // and, while they are an active member (so hours are what they lack), their hours in a new tab, so the group stays.
+  const refused = failure?.memberId;
+  const isRefusedActive = refused !== undefined && people.some((person) => person.id === refused);
+  const removeMember = (memberId: string) => {
+    setMembers((current) => current.filter((each) => each.memberId !== memberId));
+    // The refusal was about them, so it goes with them.
+    if (failure?.memberId === memberId) setFailure(undefined);
+  };
 
   const submit = () => {
     if (isBusy) return;
@@ -154,9 +166,11 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
         setBusy(false);
         setConfirming(false);
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+        const index = field?.startsWith('members.') === true ? Number(field.slice('members.'.length)) : undefined;
+        const memberId = index === undefined ? undefined : list[index]?.memberId;
         setFailure({
           message: isDataError(error) ? error.message : strings.somethingWrong,
-          ...(field === undefined ? {} : { field }),
+          ...(memberId === undefined ? {} : { memberId }),
         });
       },
     );
@@ -234,7 +248,9 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
             variant="ghost"
             icon="x"
             label={strings.remove(who)}
-            onPress={() => setMembers((current) => current.filter((each) => each.memberId !== member.memberId))}
+            onPress={() => {
+              removeMember(member.memberId);
+            }}
           />
         );
     }
@@ -272,7 +288,26 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           {failure !== undefined && (
             <Callout
               tone="danger"
-              {...(refusedHours === undefined ? {} : { actions: <Link href={refusedHours}>{strings.setHours}</Link> })}
+              {...(refused === undefined
+                ? {}
+                : {
+                    actions: (
+                      <>
+                        <Button
+                          onPress={() => {
+                            removeMember(refused);
+                          }}
+                        >
+                          {strings.removeRefused(nameOf(refused))}
+                        </Button>
+                        {isRefusedActive && (
+                          <ButtonLink href={availabilityHref(slug, refused)} isExternal icon="external-link">
+                            {strings.setHours}
+                          </ButtonLink>
+                        )}
+                      </>
+                    ),
+                  })}
             >
               {failure.message}
             </Callout>
@@ -332,7 +367,8 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
             isSearchable
             isDisabled={left.length === 0 || members.length >= 20}
             value={null}
-            hint={strings.membersCount(members.length)}
+            // Who can join, in plain words (SS-R1): a link here would open the reader's own hours, not a teammate's.
+            hint={strings.membersHint(members.length)}
             {...(hasTried && countError !== undefined ? { error: countError } : {})}
             onChange={(memberId) => {
               if (memberId === null) return;
@@ -342,10 +378,6 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
               ]);
             }}
           />
-          {/* Who can join, until the picker can mark those who can't (SS-R1): with their hours a click away. */}
-          <Callout tone="info" actions={<Link href={availabilityHref(slug)}>{strings.setHours}</Link>}>
-            {strings.canJoin}
-          </Callout>
           {members.length > 0 && (
             <Table
               label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}

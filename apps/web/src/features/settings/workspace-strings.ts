@@ -31,6 +31,10 @@ export const strings = {
     `Links and bookmarks with /w/${from} keep working and open the new address, and no other workspace can take /w/${from}.`,
   moveAction: 'Change address',
   moved: (to: string) => `The workspace is now at /w/${to}.`,
+  /** It moved, but the page couldn't open there. */
+  movedReload: (to: string) => `The workspace is now at /w/${to}. Reload the page to open it there.`,
+  /** A rename that didn't go through for a reason other than the name: the reason comes as a toast. */
+  nameNotSaved: 'Not saved. Press Enter to try again.',
   nameMissing: 'Name the workspace.',
   nameChanged: 'Name changed.',
   yourNameMissing: 'Enter your name.',
