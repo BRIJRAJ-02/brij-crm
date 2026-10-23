@@ -57,7 +57,13 @@ function BackupCodes({ codes }: { readonly codes: readonly string[] }) {
       <Code variant="list" isCopyable copyLabel={copy.copyCodes}>
         {codes.join('\n')}
       </Code>
-      <Button icon="download" onPress={() => download(codes)}>
+      <Button
+        icon="download"
+        // Focus starts here, not on the title bar's Close, where an Enter would end the only showing (Q103).
+        // eslint-disable-next-line jsx-a11y-x/no-autofocus
+        autoFocus
+        onPress={() => download(codes)}
+      >
         {copy.download}
       </Button>
     </>
@@ -200,6 +206,8 @@ export function TwoFactorSection({
     plain.reset();
     strict.reset();
     setIsOpen(true);
+    // Turning off and new codes open on the app's code, so the code typed at once lands in its boxes (Q86).
+    if (next.kind !== 'setup') strict.focus();
     // Nothing to check first: straight to the QR code.
     if (next.kind === 'setup' && !plain.isNeeded) void startSetup();
   };
