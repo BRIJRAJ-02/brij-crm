@@ -38,6 +38,34 @@
     background: var(--border-strong);
   }
 
+  /* chart: the container's whole width at four rows' height, the bars sharing it; the axis names both ends. */
+  .root[data-size='chart'] {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+    inline-size: 100%;
+  }
+
+  .root[data-size='chart'] .plot {
+    display: flex;
+    block-size: calc(var(--size-row) * 4);
+  }
+
+  .root[data-size='chart'] .slot {
+    flex: 1 1 0;
+    min-inline-size: 0;
+    inline-size: auto;
+  }
+
+  .axis {
+    display: flex;
+    justify-content: space-between;
+    font: var(--text-label);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+  }
+
   @media (forced-colors: active) {
     .bar {
       background: CanvasText;

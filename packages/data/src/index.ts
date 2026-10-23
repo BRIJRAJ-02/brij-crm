@@ -62,6 +62,7 @@ import type {
   JoinRequestView,
   JobView,
   Me,
+  OperatorPeriod,
   MemberView,
   MyAccess,
   ObjectSummary,
@@ -236,6 +237,24 @@ import type {
 
 export type { GlobalSearch, GlobalSearchState } from './search/global.ts';
 export type { RecentItem, RecordHit, SearchMatch, ViewHit } from '@crm/contracts';
+// The operator console (spec 0047): the super admin's read only analytics.
+export type {
+  OperatorFigure,
+  OperatorOverview,
+  OperatorOverviewDay,
+  OperatorPageDay,
+  OperatorPageDetail,
+  OperatorPageRow,
+  OperatorPages,
+  OperatorPageTotals,
+  OperatorPeriod,
+  OperatorRank,
+  OperatorSite,
+  OperatorUserDetail,
+  OperatorUserPage,
+  OperatorUserRow,
+  OperatorUserWorkspace,
+} from '@crm/contracts';
 export type {
   CreateTimeBlockInput,
   TimeBlockKind,
@@ -4533,6 +4552,34 @@ export function createDataLayer({
       of: (workspace: string): PreferencesHeld => preferences.of(workspace),
       load: (workspace: string): Promise<MemberPreferences> => preferences.load(workspace),
       change: (workspace: string, change: PreferencesChange): Promise<boolean> => preferences.change(workspace, change),
+    },
+    /**
+     * The operator console (spec 0047): the super admin's read only analytics
+     * across every workspace, read fresh on each call (no cache, no live
+     * event: the numbers are a snapshot of a period). Anyone the api doesn't
+     * count a super admin is refused NOT_FOUND; a super admin without two
+     * factor TWO_FACTOR_REQUIRED, or with an old sign in SIGN_IN_AGAIN.
+     * Refusals throw a DataError.
+     */
+    operator: {
+      overview: (period: OperatorPeriod) => call((options) => api.operator.overview({ period }, options)),
+      users: (input: { readonly period: OperatorPeriod; readonly q?: string; readonly after?: string }) =>
+        call((options) =>
+          api.operator.users(
+            {
+              period: input.period,
+              ...(input.q === undefined || input.q.trim() === '' ? {} : { q: input.q.trim() }),
+              ...(input.after === undefined ? {} : { after: input.after }),
+            },
+            options,
+          ),
+        ),
+      user: (userId: string, period: OperatorPeriod) =>
+        call((options) => api.operator.user({ userId, period }, options)),
+      pages: (period: OperatorPeriod) => call((options) => api.operator.pages({ period }, options)),
+      page: (pageId: string, period: OperatorPeriod) =>
+        call((options) => api.operator.page({ pageId, period }, options)),
+      site: (period: OperatorPeriod) => call((options) => api.operator.site({ period }, options)),
     },
     account: {
       /**

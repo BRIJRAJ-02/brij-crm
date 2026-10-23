@@ -7,7 +7,7 @@
 
 The owner asked for "a super admin list to see all the users and analytics around each user's usage", with website analytics, dashboard analytics, and booking pages both consolidated and one by one (ask A130). This is the first slice of scope #39, the operator console, and it is read only: no support access to a workspace, no plan changes and no suspensions yet.
 
-The console lives at `/admin`, outside every workspace. It has four pages: **Overview** (the app's dashboard analytics), **Users** (every account and its usage, then one person's page), **Booking pages** (every page together, then one page) and **Website** (the marketing site's visits). Each page reads one period: the last 7, 30 or 90 days.
+The console lives in Settings, in a Super admin group only super admins see (every setting lives under Settings, 20 Oct 2026). It has four pages: **Overview** (the app's dashboard analytics), **Users** (every account and its usage, then one person's page), **Booking pages** (every page together, then one page) and **Website** (the marketing site's visits). Each page reads one period: the last 7, 30 or 90 days.
 
 Reasoning and options: see [rationale.md](rationale.md).
 
@@ -96,7 +96,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 
 **Environment**: `OPERATOR_EMAILS` and `SITE_ORIGINS` (api, optional), `VITE_SITE_HIT_URL` (marketing site build, optional).
 
-**Screens**: `/admin` (Overview), `/admin/users`, `/admin/users/$userId`, `/admin/booking-pages`, `/admin/booking-pages/$pageId`, `/admin/website`, each `?period=7d|30d|90d` (30d by default).
+**Screens**: under `/w/$slug/settings/admin`: Overview, `users`, `users/$userId`, `booking-pages`, `booking-pages/$pageId` and `website`, each `?period=7d|30d|90d` (30d by default). The workspace in the address only places the pages in the app's frame; access never depends on it.
 
 **Implementation skills**: house skills `crm-api-backend`, `crm-data-model-access`, `crm-frontend-state`, `crm-design-system`; `drizzle`, `zod`, `vitest`, `security-and-hardening`, `dataviz`.
 

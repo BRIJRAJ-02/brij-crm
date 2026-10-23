@@ -269,6 +269,7 @@ function FrameWithData({
       slug={slug}
       {...(workspaceName === undefined ? {} : { workspaceName })}
       {...(me === undefined ? {} : { workspaces: me.workspaces })}
+      isOperator={me?.isOperator === true}
       {...(workspace?.access === undefined
         ? {}
         : { roleLabel: workspace.access.roleLabel, isOwner: workspace.access.role === 'owner' })}

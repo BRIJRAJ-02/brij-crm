@@ -15,6 +15,7 @@ import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
+import { strings as admin } from '../admin/strings.ts';
 import type { ObjectTab } from './object-tabs.ts';
 
 export { OBJECT_TABS, isObjectTab, type ObjectTab } from './object-tabs.ts';
@@ -69,7 +70,11 @@ export type SettingsPageId =
   | 'objects'
   | 'jobs'
   | 'trash'
-  | 'rotations';
+  | 'rotations'
+  | 'admin-overview'
+  | 'admin-users'
+  | 'admin-pages'
+  | 'admin-website';
 
 /** Settings › Workspace › Security (spec 0033, milestone 4): the workspace's sign in rules, owners only. */
 export const workspaceSecurityHref = (slug: string) => `/w/${slug}/settings/security`;
@@ -79,7 +84,7 @@ export const workspaceSecurityHref = (slug: string) => `/w/${slug}/settings/secu
  * holds workspace wide scheduling settings (spam protection, defaults) once
  * there are some; one booking page's or one form's settings stay in its editor.
  */
-export type SettingsGroupId = 'account' | 'workspace' | 'scheduling';
+export type SettingsGroupId = 'account' | 'workspace' | 'scheduling' | 'admin';
 
 /** One entry in the settings navigation. */
 export interface SettingsNavEntry {
@@ -98,11 +103,19 @@ export interface SettingsNavEntry {
     | 'box'
     | 'list-checks'
     | 'users-round'
-    | 'trash';
+    | 'trash'
+    | 'chart-line'
+    | 'calendar-days'
+    | 'globe';
   /** A quiet word after the name. Every entry but Trash opens a page in Settings (20 and 22 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
   readonly requires?: Permission;
+  /**
+   * Only for a super admin (spec 0047): the api's `OPERATOR_EMAILS`, which `me.get` reports as `isOperator`. Never
+   * a workspace permission; the server checks every read on its own.
+   */
+  readonly operatorOnly?: true;
 }
 
 /** One group of the settings navigation, under its label. */
@@ -173,23 +186,54 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         { id: 'trash', label: strings.trash, href: trashHref(slug), icon: 'trash' },
       ],
     },
+    {
+      // The operator console (spec 0047): super admins only, so nobody else sees the group at all.
+      id: 'admin',
+      label: admin.group,
+      entries: [
+        { id: 'admin-overview', label: admin.overview, href: adminHref(slug), icon: 'chart-line', operatorOnly: true },
+        { id: 'admin-users', label: admin.users, href: adminHref(slug, 'users'), icon: 'users', operatorOnly: true },
+        {
+          id: 'admin-pages',
+          label: admin.pages,
+          href: adminHref(slug, 'booking-pages'),
+          icon: 'calendar-days',
+          operatorOnly: true,
+        },
+        {
+          id: 'admin-website',
+          label: admin.website,
+          href: adminHref(slug, 'website'),
+          icon: 'globe',
+          operatorOnly: true,
+        },
+      ],
+    },
   ];
 }
+
+/** Settings › Super admin (spec 0047): Overview, or one of its pages. */
+export const adminHref = (slug: string, page?: 'users' | 'booking-pages' | 'website') =>
+  `/w/${slug}/settings/admin${page === undefined ? '' : `/${page}`}`;
 
 /**
  * The groups as this member sees them: entries they may not open are left
  * out, and so is a group left with none, never shown locked (AC-682).
- * `permissions` undefined (still loading) keeps only entries that need none.
+ * `permissions` undefined (still loading) keeps only entries that need none;
+ * Super admin's entries show only when `isOperator` (spec 0047).
  */
 export function visibleSettingsNav(
   groups: readonly SettingsNavGroup[],
   permissions: readonly Permission[] | undefined,
+  isOperator = false,
 ): readonly SettingsNavGroup[] {
   return groups
     .map((group) => ({
       ...group,
       entries: group.entries.filter(
-        (entry) => entry.requires === undefined || (permissions?.includes(entry.requires) ?? false),
+        (entry) =>
+          (entry.operatorOnly !== true || isOperator) &&
+          (entry.requires === undefined || (permissions?.includes(entry.requires) ?? false)),
       ),
     }))
     .filter((group) => group.entries.length > 0);
@@ -210,6 +254,10 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'members') return 'members';
   if (rest === 'scheduling/round-robin' || rest === 'scheduling/rotations') return 'rotations';
   if (rest === 'security') return 'workspace-security';
+  if (rest === 'admin') return 'admin-overview';
+  if (rest === 'admin/users' || rest.startsWith('admin/users/')) return 'admin-users';
+  if (rest === 'admin/booking-pages' || rest.startsWith('admin/booking-pages/')) return 'admin-pages';
+  if (rest === 'admin/website') return 'admin-website';
   return undefined;
 }
 

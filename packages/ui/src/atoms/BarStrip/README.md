@@ -18,11 +18,12 @@ New. A round robin rotation's Distribution tab showed each member's last 12 week
 
 - `label` names the strip for screen readers; each bar's `label` is what its tooltip says and what screen readers hear, as a list.
 - `max` sets the full height. Strips that sit together (one per table row) share one `max` so their bars compare.
+- `size="chart"` (spec 0047, the operator console's daily figures) fills its container's width at four rows' height, the bars sharing it, with `axis` naming the first and last period under it. Why a variant: the console needs the same bars at a page's scale, one series a chart, and a second chart component would draw the same marks again.
 - Pair it with a table view of the same numbers where the exact counts matter (the Distribution tab's Chart and Table switch).
 
 ## States
 
-Bars, empty periods (a hairline stub on the baseline), all empty (only stubs).
+Row and chart sizes. Bars, empty periods (a hairline stub on the baseline), all empty (only stubs).
 
 ## Keyboard
 
