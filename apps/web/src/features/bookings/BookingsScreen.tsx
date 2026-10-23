@@ -1229,6 +1229,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
     setAsking(undefined);
     setFocusDay({ dayKey: asked.dayKey, ...(asked.kind === 'remove' ? {} : { blockId: asked.pieceId }) });
   };
+  // A booking moved to another day is a new block there (a block's id is `<booking>:<day>`): once it shows, focus
+  // follows it rather than falling to the day it left (Q56). Set while rendering, once, as `lastAsked` is.
+  const asked = focusDay?.blockId;
+  if (asked !== undefined && !pieces.some(({ piece }) => piece.id === asked)) {
+    const sourceId = asked.slice(0, asked.lastIndexOf(':'));
+    const moved = pieces.find(({ piece }) => piece.sourceId === sourceId);
+    if (moved !== undefined) setFocusDay({ dayKey: moved.piece.dayKey, blockId: moved.piece.id });
+  }
   const openBooking = open?.kind === 'booking' ? byBooking.get(open.piece.sourceId) : undefined;
   const openEvent = open?.kind === 'event' ? byEvent.get(open.piece.sourceId) : undefined;
   const openTurn = open?.kind === 'closed' ? byTurn.get(open.piece.sourceId) : undefined;
@@ -1653,7 +1661,9 @@ function ListBar({
           {search.source !== 'bookings' && search.link === undefined && (
             <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={hasNoCalendar} />
           )}
-          <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources />
+          {/* Which meetings show is a choice only with a calendar connected: without one there are only bookings, and
+              "Calendar events only" could only show an empty list (Q71). */}
+          <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources={!hasNoCalendar} />
         </>
       }
     />

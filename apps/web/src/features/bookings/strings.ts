@@ -206,7 +206,10 @@ export const strings = {
   bookFailed: 'That booking couldn’t be made. Try again.',
   booked: (name: string) => `Booked with ${name}. The invitation is on its way from your calendar.`,
   bookedQuietly: (name: string) => `Booked with ${name}.`,
-  noCalendar: 'No calendar is connected, so they won’t get an invitation yet. Connect one under Calendar.',
+  /** New meeting without a calendar: the guest is still emailed, with the invitation attached (Q57). What's missing
+   * is the event on the member's own calendar, and a video call's link. */
+  noCalendar:
+    'No calendar is connected, so this won’t go on your calendar and a video call gets no link. They’re still emailed. Connect one under Calendar.',
   holdThisTime: 'Reserve for link only pages',
   holdFor: 'For',
   anyPrivatePage: 'Any link only page',
