@@ -10,7 +10,7 @@ import { PublicBookInput, PublicGuestsInput } from './booking/public.ts';
 import { BookingPageSettings, BookingSlug } from './booking/settings.ts';
 import { FormSlug, SlugInput } from './forms/forms.ts';
 import { contract } from './index.ts';
-import { installPlainErrors, PLAIN_ERRORS, plainIssueMessage } from './plain-errors.ts';
+import { installPlainErrors, isPlainFallback, PLAIN_ERRORS, plainIssueMessage } from './plain-errors.ts';
 import { MemberName, PublicHandle } from './profile.ts';
 import { TaskTitle } from './tasks.ts';
 import { EmailValue, PersonalNameValue, TextValue } from './values/attribute-values.ts';
@@ -75,8 +75,9 @@ describe('plainIssueMessage', () => {
   });
 
   it('names the shape an address or date takes, never the pattern', () => {
-    expect(messagesOf(z.email(), 'ada@')).toEqual(['Enter an email address like name@example.com.']);
-    expect(messagesOf(z.url(), 'not a site')).toEqual(['Enter a web address like example.com.']);
+    expect(messagesOf(z.email(), 'grace@')).toEqual(['Enter an email address, such as ada@example.com.']);
+    expect(messagesOf(z.url(), 'not a site')).toEqual(['Enter a full web address, such as https://example.com.']);
+    expect(messagesOf(z.hostname(), 'not a site')).toEqual(['Enter a web address, such as example.com.']);
     expect(messagesOf(z.iso.date(), '2026-02-31x')).toEqual(['This isn’t a valid date.']);
     expect(messagesOf(z.iso.datetime(), 'tomorrow')).toEqual(['This isn’t a valid date.']);
     expect(messagesOf(z.e164(), '0770')).toEqual([PLAIN_ERRORS.phone]);
@@ -129,6 +130,27 @@ describe('plainIssueMessage', () => {
 
   it('answers any code it doesn’t know in plain words too', () => {
     expect(plainIssueMessage({ code: 'custom', input: 'x', path: [] })).toBe('This isn’t valid.');
+  });
+
+  it('knows its own sentences, so a toast never shows one alone', () => {
+    const own = [
+      ...Object.values(PLAIN_ERRORS),
+      ...messagesOf(z.string().min(3), 'ab'),
+      ...messagesOf(z.string().max(2000), 'x'.repeat(2001)),
+      ...messagesOf(z.string().length(6), '1'),
+      ...messagesOf(z.number().min(-5), -6),
+      ...messagesOf(z.number().max(0.5), 1),
+      ...messagesOf(z.number().positive(), 0),
+      ...messagesOf(z.number().lt(10), 10),
+      ...messagesOf(z.number().multipleOf(15), 20),
+      ...messagesOf(z.array(z.string()).min(2), []),
+      ...messagesOf(z.array(z.string()).max(1), ['a', 'b']),
+      ...messagesOf(z.array(z.string()).length(2), ['a']),
+    ];
+    for (const message of own) expect(isPlainFallback(message), message).toBe(true);
+    for (const message of ['Give your name.', 'Keep the title to 120 characters.', 'Use 3 to 40 lowercase letters.']) {
+      expect(isPlainFallback(message), message).toBe(false);
+    }
   });
 });
 
@@ -208,7 +230,7 @@ describe('the most used typed fields', () => {
   it('record values a person types', () => {
     expectPlain(messagesOf(TextValue, 'x'.repeat(501))[0], 'x'.repeat(501));
     expect(messagesOf(PersonalNameValue, { firstName: ' ', lastName: 'Lovelace' })).toEqual([
-      'Type the name, or leave it empty.',
+      'Fill in the name, or clear it.',
     ]);
   });
 });
@@ -287,6 +309,9 @@ describe('every contract input', () => {
           if (parsed.success) continue;
           for (const issue of parsed.error.issues) {
             if (ZOD_OWN.test(issue.message) || !/[.?]$/.test(issue.message)) raw.push(`${name}: ${issue.message}`);
+            // Never what was typed, either: a schema's own words included.
+            const typed = typeof probe === 'string' ? probe.trim() : '';
+            if (typed.length >= 4 && issue.message.includes(typed)) raw.push(`${name} echoes: ${issue.message}`);
           }
         }
       }

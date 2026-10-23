@@ -273,7 +273,7 @@ export function forwardedHeaders(headers: Headers, clientIp: string | undefined,
 /** The body of a route that names an email: the shared email schema (trimmed, lowercased, 254 at most). */
 const EmailBody = z.looseObject({ email: EmailValue });
 /** What a sign in body without a usable email answers with. */
-const EMAIL_NEEDED = 'Enter an email address like name@example.com.';
+const EMAIL_NEEDED = 'Enter an email address, such as ada@example.com.';
 const SendCodeBody = z.object({ email: EmailValue, type: z.string() });
 const SignInCodeBody = z.object({ email: EmailValue });
 
@@ -772,7 +772,7 @@ export function createAuth({
             const { userId, sessionId } = signedIn();
             // Only the app: the email second factor is off, and the issuer is ours.
             if (!EnableBody.safeParse(ctx.body ?? {}).success)
-              throw inputInvalid('Set up two factor with an authenticator app.');
+              throw inputInvalid('Set up two factor sign in with an authenticator app.');
             await requireFreshSession(userId, sessionId);
           } else if (ctx.path === '/two-factor/generate-backup-codes') {
             const { userId, sessionId } = signedIn();

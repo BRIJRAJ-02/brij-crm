@@ -45,7 +45,7 @@ export const FormOrigin = z
       if (!url.hostname.includes('.') && url.hostname !== 'localhost') throw new Error('no host');
       return `${url.protocol}//${url.host}`;
     } catch {
-      context.addIssue({ code: 'custom', message: `“${value}” isn’t a web address, such as acme.com.` });
+      context.addIssue({ code: 'custom', message: 'Enter a web address, such as acme.com.' });
       return z.NEVER;
     }
   });

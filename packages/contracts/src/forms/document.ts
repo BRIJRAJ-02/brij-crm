@@ -175,7 +175,7 @@ export const FormDocument = z
         context.addIssue({
           code: 'custom',
           path: [...at, 'key'],
-          message: `Two questions both use the key “${question.key}”.`,
+          message: 'Two questions use the same key.',
         });
       }
       if (question.choiceKeys !== undefined) {

@@ -193,7 +193,7 @@ export const SetInviteLinkInput = WorkspaceScoped.extend({
     .optional(),
   maxUses: z
     .number()
-    .int({ error: 'Use a whole number of uses.' })
+    .int({ error: 'Use a whole number.' })
     .min(1, { error: 'Allow at least 1 use.' })
     .max(INVITE_LINK_USES_MAX, { error: `Allow at most ${INVITE_LINK_USES_MAX.toLocaleString('en')} uses.` })
     .nullable()

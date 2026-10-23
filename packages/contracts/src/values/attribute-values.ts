@@ -239,7 +239,7 @@ export type UrlValue = z.infer<typeof UrlValue>;
 const part = z
   .string()
   .trim()
-  .min(1, { error: 'Type this part of the address, or leave it empty.' })
+  .min(1, { error: 'Fill in this part of the address, or clear it.' })
   .max(200, { error: 'Keep each part of the address to 200 characters.' });
 
 function inRange(limit: number) {
@@ -284,7 +284,7 @@ export function fullNameOf(firstName: string | undefined, lastName: string | und
 const namePart = z
   .string()
   .trim()
-  .min(1, { error: 'Type the name, or leave it empty.' })
+  .min(1, { error: 'Fill in the name, or clear it.' })
   .max(200, { error: 'Keep each name to 200 characters.' });
 
 /** A person's name. `fullName` is required, and is made from the first and last name when not given. */

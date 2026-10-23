@@ -6,7 +6,7 @@ import { installPlainErrors, PLAIN_ERRORS } from '@crm/contracts';
 import { ORPCError, ValidationError } from '@orpc/server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as z from 'zod';
-import { INPUT_INVALID_MESSAGE, inputProblems, toApiError } from './errors.ts';
+import { INPUT_INVALID_MESSAGE, inputProblems, MAX_INPUT_ISSUES, toApiError } from './errors.ts';
 
 beforeAll(() => {
   installPlainErrors();
@@ -57,8 +57,8 @@ describe('bad input in plain words', () => {
     expect(error.data).toEqual({
       issues: [
         { path: ['name'], message: 'Add this.' },
-        { path: ['email'], message: 'Enter an email address like name@example.com.' },
-        { path: ['website'], message: 'Enter a web address like example.com.' },
+        { path: ['email'], message: 'Enter an email address, such as ada@example.com.' },
+        { path: ['website'], message: 'Enter a full web address, such as https://example.com.' },
         { path: ['title'], message: 'Use 60 characters or fewer.' },
         { path: ['seats'], message: 'Use 10 or less.' },
         { path: ['kind'], message: 'Pick one of the choices.' },
@@ -93,7 +93,7 @@ describe('bad input in plain words', () => {
     expect(error.data).toEqual({
       issues: [
         { path: ['title'], message: 'Add this.' },
-        { path: ['guests', 1], message: 'Enter an email address like name@example.com.' },
+        { path: ['guests', 1], message: 'Enter an email address, such as ada@example.com.' },
       ],
     });
   });
@@ -125,6 +125,12 @@ describe('inputProblems', () => {
       issues: [{ path: ['name'], message: 'Give your name.' }],
     });
     expect(inputProblems(found, { leadWithField: true }).message).toBe('Give your name.');
+  });
+
+  it('sends at most 50 issues for the RPC, so a huge bad payload can’t make a huger answer', async () => {
+    const schema = z.object({ tags: z.array(z.string()) });
+    const { error } = toApiError(await refusedBy(schema, { tags: Array.from({ length: 80 }, () => 1) }));
+    expect((error.data as { issues: unknown[] }).issues).toHaveLength(MAX_INPUT_ISSUES);
   });
 
   it('lets a rule over the whole input lead even when a field’s may', () => {

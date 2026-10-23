@@ -5,6 +5,7 @@
 // module is in the first load, so it reads the plain code list.
 import type { ApiRefusal, ErrorCode, InputIssue } from '@crm/contracts';
 import { ERROR_CODES } from '@crm/contracts/codes';
+import { isPlainFallback } from '@crm/contracts/plain-words';
 import { ORPCError } from '@orpc/client';
 
 /**
@@ -97,9 +98,18 @@ export function refusalFor(error: DataError, attributeId: string): string | unde
   return isAboutAttributes ? undefined : error.message;
 }
 
-/** The sentence that sums up a refused write, in the same words as `refusalFor`: its first refusal's, else the answer's. */
+/**
+ * The sentence that sums up a refused write, in the same words as `refusalFor`:
+ * its first refusal's, else its first input problem's, else the answer's. An
+ * input problem in the safety net's words ("Add this.", `isPlainFallback`)
+ * names no field, so it never stands alone in a toast: the answer's sentence
+ * does.
+ */
 export function refusalSummary(error: DataError): string {
-  return error.data?.refusals?.[0]?.message ?? error.data?.issues?.[0]?.message ?? error.message;
+  const refusal = error.data?.refusals?.[0]?.message;
+  if (refusal !== undefined) return refusal;
+  const issue = error.data?.issues?.[0]?.message;
+  return issue === undefined || isPlainFallback(issue) ? error.message : issue;
 }
 
 /** Whether a thrown value is a DataError, so a screen can read its code. */
