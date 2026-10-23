@@ -1,5 +1,6 @@
 /* Tabs: 40px tabs in text-secondary on a hairline, the chosen one in text with
-   a 2px underline that slides between tabs over duration-move. */
+   a 2px underline that slides between tabs over duration-move. The `feature` variant is a home page's row of a
+   product's areas (see below). */
 @layer components {
   .root {
     display: flex;
@@ -27,6 +28,11 @@
     flex: none;
     min-block-size: var(--size-bar);
     background: var(--surface);
+  }
+
+  /* Tabs drawn under their panels: the bar goes last, the markup order unchanged. */
+  .root[data-placement='bottom'] .bar {
+    order: 1;
   }
 
   .list {
@@ -185,6 +191,98 @@
 
   .list[data-instant] .indicator {
     transition: none;
+  }
+
+  /* A product's areas on its own home page (the marketing site's first fold): equal columns across the width, each
+     an icon tile, a label and a line on what it does, quiet until chosen; the chosen one bright, with the line that
+     slides along the columns' top hairline. On a page under the compact breakpoint the lines go and the tabs
+     shrink to their tile and label. */
+  .bar[data-variant='feature'] {
+    border-block-end: none;
+  }
+
+  .bar[data-variant='feature'] .list {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    align-items: stretch;
+    gap: var(--space-8);
+    padding-inline: 0;
+  }
+
+  .bar[data-variant='feature'] .tab {
+    display: block;
+    block-size: auto;
+    padding: var(--space-16) var(--space-4);
+    border-block-start: var(--border-width-hairline) solid var(--border);
+    border-radius: 0;
+    color: var(--text-tertiary);
+    white-space: normal;
+  }
+
+  .bar[data-variant='feature'] .tab[data-selected] {
+    color: var(--text);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .bar[data-variant='feature'] .tab[data-hovered] {
+      color: var(--text);
+    }
+  }
+
+  .bar[data-variant='feature'] .indicator {
+    inset-block: calc(-1 * var(--border-width-hairline)) auto;
+  }
+
+  .featureBody {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-12);
+  }
+
+  .feature {
+    display: grid;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .featureLabel {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .featureDescription {
+    color: var(--text-tertiary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* Under the page's compact breakpoint (a phone or a tablet): a row that scrolls, as the strip does, each tab as
+     wide as its tile and label on one line, no description, the line still along the top. A page query, as
+     Modal's: a column's own width at 1440 is under the 320px container step. */
+  @media (width < 1024px) {
+    .bar[data-variant='feature'] .list {
+      grid-auto-columns: max-content;
+      gap: var(--space-4);
+    }
+
+    .bar[data-variant='feature'] .tab {
+      padding: var(--space-12) var(--space-8);
+    }
+
+    .featureBody {
+      align-items: center;
+      gap: var(--space-8);
+    }
+
+    .featureLabel {
+      white-space: nowrap;
+    }
+
+    .featureDescription {
+      display: none;
+    }
   }
 
   /* In a slot with a height (the record panel), the chosen panel fills what the tabs leave. */

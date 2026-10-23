@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Timefix · Book the meeting. Keep the customer.</title>
+    <meta
+      name="description"
+      content="Booking pages, forms and CRM in one place. Every booking becomes a customer record."
+    />
+    <link rel="canonical" href="https://timefix.ai/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Timefix" />
+    <meta property="og:url" content="https://timefix.ai/" />
+    <meta property="og:title" content="Timefix · Book the meeting. Keep the customer." />
+    <meta
+      property="og:description"
+      content="Booking pages, forms and CRM in one place. Every booking becomes a customer record."
+    />
+    <!-- The share image: the fold itself at 1200 × 630 (scratchpad og.mjs captures it from the dev server). -->
+    <meta property="og:image" content="https://timefix.ai/brand/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Timefix: Book the meeting. Keep the customer. A person’s record in the app, her intro call in its activity."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://timefix.ai/brand/og.png" />
+    <!-- Every page is pitch black in every theme, so the phone's browser bar matches it. -->
+    <meta name="theme-color" content="#000000" />
+    <!-- The other areas' first screens, warm before their tab is picked. -->
+    <link rel="prefetch" href="/shots/booking-1.webp" as="image" />
+    <link rel="prefetch" href="/shots/forms-1.webp" as="image" />
+    <link rel="prefetch" href="/shots/calendar-1.webp" as="image" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/brand/timefix-mark.svg" type="image/svg+xml" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://timefix.ai/#organization",
+            "name": "Timefix",
+            "url": "https://timefix.ai/",
+            "logo": "https://timefix.ai/brand/timefix-mark.svg"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "Timefix",
+            "url": "https://timefix.ai/",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "description": "Booking pages, forms and CRM in one place. Every booking lands in your CRM.",
+            "publisher": { "@id": "https://timefix.ai/#organization" }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"><!--app--></div>
+    <script type="module" src="/src/client.tsx"></script>
+  </body>
+</html>

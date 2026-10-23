@@ -2,7 +2,10 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
+import { useState } from 'react';
+import { Form } from '../../molecules/Form/Form.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
+import type { FieldAttribute } from '../types.ts';
 import { expect, fn } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.email;
@@ -84,5 +87,83 @@ export const Guidance: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('textbox', { name: 'Email' })).toHaveAttribute('placeholder', 'ada@example.com');
+  },
+};
+
+const submitted = fn();
+
+/** Several emails in a form, as New meeting's Also invite. */
+function SeveralForm({
+  onSubmit,
+  isSending = false,
+  limit,
+}: {
+  readonly onSubmit: () => void;
+  readonly isSending?: boolean;
+  readonly limit?: FieldAttribute['limit'];
+}) {
+  const several = { ...(sample.several?.attribute ?? sample.attribute), ...(limit === undefined ? {} : { limit }) };
+  const [value, setValue] = useState<readonly string[]>(['ada@example.com', 'ada@work.example.com']);
+  return (
+    <Stage width="narrow">
+      <Form label="Invite" submitLabel="Send" onSubmit={onSubmit} isBusy={isSending}>
+        <AttributeEditor
+          attribute={several}
+          value={value}
+          surface="form"
+          isDisabled={isSending}
+          onCommit={(next) => {
+            setValue(Array.isArray(next) ? next.filter((item): item is string => typeof item === 'string') : []);
+          }}
+        />
+      </Form>
+    </Stage>
+  );
+}
+
+/**
+ * Several values in a form: the name leads, over the chips; Enter with an address typed adds it and never submits
+ * the form around it, while Enter in the empty add field still does.
+ */
+export const SeveralInAForm: Story = {
+  render: () => <SeveralForm onSubmit={submitted} />,
+  play: async ({ canvas, userEvent }) => {
+    submitted.mockClear();
+    const list = canvas.getByRole('list', { name: 'Emails' });
+    await expect(list.querySelectorAll('li')).toHaveLength(2);
+    // The name comes before the chips, as a Field's label comes before its box.
+    const name = canvas.getByText('Emails', { selector: 'span' });
+    await expect(name.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const add = canvas.getByRole('textbox', { name: 'Emails' });
+    await userEvent.click(add);
+    await userEvent.keyboard('lovelace@example.org{Enter}');
+    await expect(canvas.getByRole('list', { name: 'Emails' }).querySelectorAll('li')).toHaveLength(3);
+    await expect(submitted).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Enter}');
+    await expect(submitted).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** While the form around it sends: the add field and each Remove are off (the chips stay as they are), and nothing is added or removed. */
+export const SeveralWhileSending: Story = {
+  render: () => <SeveralForm onSubmit={submitted} isSending />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Emails' })).toBeInTheDocument();
+    await expect(canvas.getByRole('textbox', { name: 'Emails' })).toBeDisabled();
+    for (const remove of canvas.getAllByRole('button', { name: /^Remove/ })) await expect(remove).toBeDisabled();
+  },
+};
+
+/** At the list's limit: one more typed is refused in the add field with the caller's words, and what was typed stays. */
+export const SeveralAtTheLimit: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <SeveralForm onSubmit={submitted} limit={{ count: 2, message: 'Up to 2 addresses.' }} />,
+  play: async ({ canvas, userEvent }) => {
+    const add = canvas.getByRole('textbox', { name: 'Emails' });
+    await userEvent.click(add);
+    await userEvent.keyboard('lovelace@example.org{Enter}');
+    await expect(canvas.getByText('Up to 2 addresses.')).toBeInTheDocument();
+    await expect(add).toHaveValue('lovelace@example.org');
+    await expect(canvas.getByRole('list', { name: 'Emails' }).querySelectorAll('li')).toHaveLength(2);
   },
 };

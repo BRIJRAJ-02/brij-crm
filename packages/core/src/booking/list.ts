@@ -7,6 +7,7 @@
 // The week view reads a range: its bookings, and the reader's own calendar
 // events from spec 0024's sync beside them.
 import { and, asc, desc, eq, gt, gte, lt, or, sql } from 'drizzle-orm';
+import type { RecordRefDisplay } from '@crm/contracts/values';
 import {
   BOOKINGS_LIST_MAX,
   BookingLocation,
@@ -26,7 +27,7 @@ import { inWorkspace } from '../access/run.ts';
 import { checkId, isUuid } from '../engine/ids.ts';
 import { inputInvalid } from '../engine/refusals.ts';
 import { blockOccurrences } from './blocks.ts';
-import { linksOf, seenLinks } from './links.ts';
+import { handLinkOf, linkedRecords, linksOf, seenLinks } from './links.ts';
 
 const { bookingPages, bookings, members } = schema;
 
@@ -93,6 +94,7 @@ function itemOf(
     readonly hostName: string | null;
   },
   seen: ReadonlySet<string>,
+  linked: ReadonlyMap<string, RecordRefDisplay>,
 ): BookingListItem {
   const place = BookingLocation.safeParse(location);
   return {
@@ -111,6 +113,7 @@ function itemOf(
     visitorTimeZone: row.visitorTimeZone,
     status: row.status === 'cancelled' ? 'cancelled' : 'confirmed',
     ...linksOf(row, seen),
+    ...handLinkOf(row, linked),
     ...(row.videoUrl === null ? {} : { videoUrl: row.videoUrl }),
     ...(row.cancelReason === null ? {} : { cancelReason: row.cancelReason }),
     ...(row.cancelledBy === 'guest' || row.cancelledBy === 'host' || row.cancelledBy === 'calendar'
@@ -158,7 +161,12 @@ export async function listWorkspaceBookings(
       scope.access,
       rows.map(({ booking }) => booking),
     );
-    return rows.map((row) => itemOf(row, seen));
+    const linked = await linkedRecords(
+      tx,
+      scope.access,
+      rows.map(({ booking }) => booking),
+    );
+    return rows.map((row) => itemOf(row, seen, linked));
   });
 }
 
@@ -291,7 +299,12 @@ export async function readBookingsCalendar(
       scope.access,
       rows.map(({ booking }) => booking),
     );
-    return { bookings: rows.map((row) => itemOf(row, seen)), events, busy, blocks: [...blocks] };
+    const linked = await linkedRecords(
+      tx,
+      scope.access,
+      rows.map(({ booking }) => booking),
+    );
+    return { bookings: rows.map((row) => itemOf(row, seen, linked)), events, busy, blocks: [...blocks] };
   });
 }
 
@@ -389,10 +402,15 @@ export async function listMeetings(
       scope.access,
       rows.map(({ booking }) => booking),
     );
+    const linked = await linkedRecords(
+      tx,
+      scope.access,
+      rows.map(({ booking }) => booking),
+    );
     const bookingItems: Listed[] = rows.map((row) => ({
       at: row.booking.startsAt.toISOString(),
       id: row.booking.id,
-      item: { kind: 'booking', booking: itemOf(row, seen) },
+      item: { kind: 'booking', booking: itemOf(row, seen, linked) },
     }));
 
     // The reader's own calendar events, from the calendars on their week (and the panel's pick).

@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import type { EngineRefusal } from '@crm/contracts/values';
+import type { AccessRules } from '../access/policy.ts';
 import { setObjectArchived } from './definitions.ts';
 import { deleteRecord, restoreRecord } from './deletion.ts';
 import { getHistory } from './history.ts';
@@ -491,6 +492,33 @@ describe('searchRecords (AC-289, AC-292, AC-304)', () => {
     ).toEqual([bo]);
     // Wildcards match literally.
     expect(await searchRecords(w.scope, { objectId: w.people, query: '%%%' })).toEqual([]);
+  });
+
+  it('answers each result’s first email the reader may see, never a hidden one (spec 0027’s follow up)', async () => {
+    const w = await world();
+    await person(w, 'Anna', 'anna@north.example');
+    await person(w, 'Andy');
+    const found = await searchRecords(w.scope, { objectId: w.people, query: 'An' });
+    expect(found.map((result) => [result.ref.name, result.detail])).toEqual([
+      ['Andy', undefined],
+      ['Anna', 'anna@north.example'],
+    ]);
+    // A reader who may not see Email gets the names alone.
+    const rules: AccessRules = {
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'attribute', objectId: w.people, attributeId: w.person('email_addresses') },
+          level: 'hidden',
+        },
+      ],
+      records: [],
+    };
+    const hidden = await searchRecords(rescope(w.scope, { role: 'member', rules }), {
+      objectId: w.people,
+      query: 'An',
+    });
+    expect(hidden.map((result) => result.detail)).toEqual([undefined, undefined]);
   });
 
   it('marks results linked from the record edited, and names who holds a taken one (or hides them)', async () => {

@@ -565,6 +565,33 @@ describe('free and busy per calendar (AC-994, AC-995)', () => {
 });
 
 describe('where bookings go (AC-996 to AC-998, AC-1004, AC-1005)', () => {
+  it('puts one event on the calendar the member picked (New meeting), never on one they can only read', async () => {
+    const w = await world();
+    await withTeam(w);
+    const main = await w.calendar('ada@acme.dev');
+    const team = await w.calendar('Team');
+    const holidays = await w.calendar('Holidays');
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'Intro', timeZone: 'UTC' });
+    await setPageDestination(w.owner, { pageId: page.id, calendarId: team.id });
+    const input = {
+      memberId: w.ownerId,
+      title: 'Intro',
+      start: day(5, 10),
+      end: day(5, 11),
+      attendees: [{ email: 'cy@globex.com' }],
+      timeZone: 'UTC',
+      video: false,
+      pageId: page.id,
+    };
+    // The pick wins over the page's own calendar.
+    const picked = await w.events.createEvent(w.system, { ...input, requestId: newId(), calendarId: main.id });
+    expect(picked.calendarId).toBe(main.id);
+    // One they can only read is passed over: the page's own takes it, as with no pick.
+    const readOnly = await w.events.createEvent(w.system, { ...input, requestId: newId(), calendarId: holidays.id });
+    expect(readOnly.calendarId).toBe(team.id);
+    expect(w.fake.createdIn().slice(-2)).toEqual(['ada@acme.dev', 'team@group.calendar']);
+  });
+
   it('writes to the destination or the page’s own, moves in the calendar it made the event in, and falls back', async () => {
     const w = await world();
     await withTeam(w);

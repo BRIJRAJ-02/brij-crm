@@ -1,0 +1,80 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "outputDirectory": "dist",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/b/:path*",
+      "destination": "https://timefix.com/b/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/f/:path*",
+      "destination": "https://timefix.com/f/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/embed/:path*",
+      "destination": "https://timefix.com/embed/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/embed.js",
+      "destination": "https://timefix.com/embed.js",
+      "permanent": true
+    },
+    {
+      "source": "/((?!(?:email-preferences|availability|integrations|developers|reschedule|theme-boot|two-factor|dashboard|undefined|accounts|bookings|calendar|callback|captures|download|manifest|schedule|security|settings|sign-out|webhooks|account|billing|booking|contact|favicon|objects|pricing|privacy|profile|sign-in|sign-up|sitemap|support|timefix|welcome|assets|cancel|health|invite|logout|manage|public|robots|search|signin|signup|static|status|verify|about|admin|brand|email|embed|forms|inbox|index|legal|links|login|oauth|terms|users|apps|auth|blog|book|demo|docs|edit|form|help|home|join|mail|null|root|team|user|api|app|new|www)(?:/|$))[a-z0-9][a-z0-9-]{1,38}[a-z0-9])",
+      "destination": "https://timefix.com/$1",
+      "permanent": true
+    },
+    {
+      "source": "/((?!(?:email-preferences|availability|integrations|developers|reschedule|theme-boot|two-factor|dashboard|undefined|accounts|bookings|calendar|callback|captures|download|manifest|schedule|security|settings|sign-out|webhooks|account|billing|booking|contact|favicon|objects|pricing|privacy|profile|sign-in|sign-up|sitemap|support|timefix|welcome|assets|cancel|health|invite|logout|manage|public|robots|search|signin|signup|static|status|verify|about|admin|brand|email|embed|forms|inbox|index|legal|links|login|oauth|terms|users|apps|auth|blog|book|demo|docs|edit|form|help|home|join|mail|null|root|team|user|api|app|new|www)(?:/|$))[a-z0-9][a-z0-9-]{1,38}[a-z0-9])/([a-z0-9][a-z0-9-]{0,59})",
+      "destination": "https://timefix.com/$1/$2",
+      "permanent": true
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'none'; script-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/shots/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, stale-while-revalidate=86400"
+        }
+      ]
+    }
+  ]
+}

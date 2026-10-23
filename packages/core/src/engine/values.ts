@@ -6,7 +6,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { SYSTEM_ONLY_TYPES, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
 import { parseAttributeInput } from './parse-value.ts';
-import { canonicalId, checkId, isUuid, uuidArray } from './ids.ts';
+import { canonicalId, checkId, isUuid, uuidArray, uuidList } from './ids.ts';
 import { postgresError, refuse, writeConflict } from './refusals.ts';
 import { syncSortKey } from './sort-keys.ts';
 import { uniqueKeyOf } from './unique.ts';
@@ -164,6 +164,26 @@ export async function loadSearchAttributes(
   const byObject = new Map<string, Map<string, AttributeDef>>(objectIds.map((id) => [id, new Map()]));
   for (const row of rows) if (row.objectId !== null) byObject.get(row.objectId)?.set(row.id, row);
   return byObject;
+}
+
+/**
+ * The name (primary) attribute of each object `recordIds` sit on, by object then id, in one statement: what a read
+ * that shows only names passes `readRecords` (a booking's hand link), so no object's other attributes are loaded. An
+ * object with no name attribute is left out, and the read loads its attributes as usual.
+ */
+export async function loadNameAttributes(
+  tx: WorkspaceTx,
+  recordIds: readonly string[],
+): Promise<ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>> {
+  if (recordIds.length === 0) return new Map();
+  const rows = await tx
+    .select(DEF_COLUMNS)
+    .from(attributes)
+    .where(
+      sql`${attributes.id} in (select o.primary_attribute_id from objects o
+        where o.id in (select r.object_id from records r where r.id = any(${uuidList(recordIds)})))`,
+    );
+  return new Map(rows.flatMap((row) => (row.objectId === null ? [] : [[row.objectId, new Map([[row.id, row]])]])));
 }
 
 /** Some attributes by id, wherever they sit (a filter through a relationship names the far object's). */

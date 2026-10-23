@@ -10,7 +10,7 @@ import { useFirstDay } from '../features/workspace/first-day.ts';
 import { memberZone } from '../features/booking/zone.ts';
 
 // Bookings › List (spec 0025, AC-646; every meeting, the owner's ask of 21 October 2026): Upcoming, Past (`tab=past`)
-// or Canceled (`tab=cancelled`), All, Bookings or Calendar (`src`), one booking page (`link`) and the calendars the
+// or Cancelled (`tab=cancelled`), All, Bookings or Calendar (`src`), one booking page (`link`) and the calendars the
 // panel picks (`cal`), a page at a time (More). The loader waits for the list's first page through the data layer;
 // the screen holds it, so it is read again whenever the person comes back to the page. Changing the tab or the source
 // changes only the search, never the loader's deps, so the screen stays. The Bookings layout draws the frame, the
@@ -72,7 +72,7 @@ function List({ objects, pages }: ListLoaded) {
   const navigate = useNavigate();
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
-  const actions = useMemo(() => hostActions(data, toasts, slug), [data, toasts, slug]);
+  const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
   return (
     <BookingsListScreen
       slug={slug}

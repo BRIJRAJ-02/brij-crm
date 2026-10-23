@@ -30,6 +30,11 @@ export const PublicBookingPage = z.object({
   description: z.string(),
   /** The host's name as the workspace shows it (never their email). */
   hostName: z.string(),
+  /**
+   * The host's picture on our own origin (`/api/public/booking/<key>/picture?v=`, 23 Oct 2026): only on a personal
+   * page whose owner's account has a Google picture, never Google's address itself. A team page has none (AC-754).
+   */
+  hostImage: z.string().optional(),
   durations: z.array(BookingDuration),
   location: PublicLocation,
   /** The host's zone, for "times shown in …" when the visitor changes theirs. */
@@ -55,6 +60,27 @@ export const PublicBookingPage = z.object({
 });
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;
+
+/**
+ * A personal page's host picture, as our origin serves it: `GET /api/public/booking/:publicKey/picture?v=`. The
+ * version names the picture (core's `pictureVersion`), and the route answers only the current one.
+ */
+export function bookingPicturePath(publicKey: string, version: string): string {
+  return `/api/public/booking/${encodeURIComponent(publicKey)}/picture?v=${encodeURIComponent(version)}`;
+}
+
+/**
+ * A profile's picture, as our origin serves it: `GET /api/public/profiles/:handle/picture?v=`. Under `profiles`, not
+ * `handles`: `/handles/:handle/:slug` is a page's address, and `picture` is a slug a page may have.
+ */
+export function profilePicturePath(handle: string, version: string): string {
+  return `/api/public/profiles/${encodeURIComponent(handle)}/picture?v=${encodeURIComponent(version)}`;
+}
+
+/** The signed in person's own picture, for the app (Settings › Profile): `GET /api/me/picture?v=`, never shared. */
+export function myPicturePath(version: string): string {
+  return `/api/me/picture?v=${encodeURIComponent(version)}`;
+}
 
 /** `GET /api/public/handles/:handle/:slug`: the page a handle address names, by its key, and the current handle. */
 export const PublicAddress = z.object({
@@ -91,7 +117,7 @@ export const PublicProfile = z.object({
   name: z.string(),
   /** Up to two initials, for the avatar without a picture. */
   initials: z.string(),
-  /** An https picture, when the account has one. */
+  /** The person's picture on our own origin (`/api/public/profiles/<handle>/picture?v=`), when the account has one. */
   image: z.string().optional(),
   bio: z.string(),
   links: z.array(PublicProfileLink),

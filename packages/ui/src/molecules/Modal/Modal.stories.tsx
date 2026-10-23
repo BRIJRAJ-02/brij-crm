@@ -112,6 +112,43 @@ export const ConfirmOpen: Story = {
 };
 
 /** A window for a larger task: an icon, the record it works on, and a close button. */
+/** `isWide`: a 980px window for a reference with a rail beside its sections. */
+export const WindowWide: Story = {
+  render: () => (
+    <Stage>
+      <ModalTrigger defaultOpen>
+        <Button icon="layout-grid">All features</Button>
+        <Modal
+          variant="window"
+          isWide
+          title="Everything in the product"
+          icon="layout-grid"
+          context="65 features"
+          actions={
+            <>
+              <Button slot="close" kbd="ESC">
+                Close
+              </Button>
+              <Button variant="primary">Get started</Button>
+            </>
+          }
+        >
+          <Checkbox label="Custom objects" defaultSelected isReadOnly />
+          <Checkbox label="Saved views with filters, sorts and groups" defaultSelected isReadOnly />
+        </Modal>
+      </ModalTrigger>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await within(document.body).findByRole('dialog', { name: 'Everything in the product' });
+    const wide = getComputedStyle(document.documentElement).getPropertyValue('--size-dialog-wide').trim();
+    const column = getComputedStyle(document.documentElement).getPropertyValue('--size-column').trim();
+    await expect(Math.round(dialog.getBoundingClientRect().width)).toBe(
+      Number.parseFloat(wide) + Number.parseFloat(column),
+    );
+  },
+};
+
 export const Window: Story = {
   render: () => (
     <Stage>

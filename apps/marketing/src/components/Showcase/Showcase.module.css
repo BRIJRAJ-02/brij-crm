@@ -1,0 +1,12 @@
+/* Showcase: the chosen area's Slides, then the feature tabs under them as a caption row (the owner, 23 October
+   2026: the tabs below the screen). The fold grows past one screen when it must. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .fit {
+    padding-block-end: var(--space-8);
+  }
+}

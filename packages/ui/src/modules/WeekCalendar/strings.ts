@@ -11,7 +11,7 @@ export const strings = {
       ...(status === undefined ? [] : [status]),
       time,
       ...(detail === undefined ? [] : [detail]),
-      ...(isCancelled === true ? ['canceled'] : []),
+      ...(isCancelled === true ? ['cancelled'] : []),
     ].join(', '),
   details: 'Details',
   more: (count: number) => `+${String(count)}`,

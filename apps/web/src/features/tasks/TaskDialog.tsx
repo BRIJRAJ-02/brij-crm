@@ -32,16 +32,14 @@ import {
   Modal,
   RelativeTime,
   Tooltip,
-  type AttributeEditorProps,
   type FieldAttribute,
-  type ListSource,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { memberDisplay } from './entries.ts';
 import { deleteWithUndo } from './undo-delete.ts';
 import { strings } from './strings.ts';
-import { useRecordSearch } from '../records/links.ts';
+import { editorSearch, useRecordSearch } from '../records/links.ts';
 
 /** Props for the task dialog. */
 export interface TaskDialogProps {
@@ -60,14 +58,6 @@ export interface TaskDialogProps {
   /** The list the dialog opened from, by its name: it takes focus back after a delete. */
   readonly listLabel?: string;
 }
-
-/**
- * A search of one display shape as the editor takes it: AttributeEditor types
- * its search over every attribute type's display, and each editor reads only
- * its own.
- */
-const editorSearch = <T,>(search: (query: string) => ListSource<T>) =>
-  search as unknown as NonNullable<AttributeEditorProps['onSearch']>;
 
 /** The member a member editor committed, or null when it was cleared. */
 function memberIdOf(value: unknown): string | null {

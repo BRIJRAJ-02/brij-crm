@@ -19,7 +19,7 @@ Ported from the artifact's Avatar card. Record chips, the record header, presenc
 - Initials sit at about 40% of the diameter in medium weight: `xs` and `sm` show one initial (8px and 9px), `md` 9.6px, `lg` 12.8px, `title` 19.2px and `xl` 28.8px show two. The line box is one em tall, which puts Inter's capitals on the optical centre. These sizes are worked out from the diameter on purpose, so the avatar is the one place exempt from the type scale; other text keeps to the `text-*` tokens.
 - The tile is a soft tint of its hue (`tag-<hue>-bg`) with the initials in that hue's darker text shade, and no ring (owner, 22 October 2026). Forced colours draw a hairline, since the fill is gone there.
 - `hue` comes from the display shape when it names one; otherwise a stable hash of `id` picks one of the nine, so a person keeps their colour.
-- `src` loads only from our origin, `data:image` or `blob:` (`safeImageSrc`, AC-14); anything else, or a broken picture, shows the initials.
+- `src` loads only from our origin, `data:image` or `blob:` (`safeImageSrc`, AC-14); anything else, or a broken picture, shows the initials. A person's Google account picture reaches it through the api's own origin routes (23 Oct 2026: `bookingPicturePath`, `profilePicturePath` and `myPicturePath` in `@crm/contracts`), never Google's address.
 - `isDecorative` hides it from screen readers when the name is written beside it (chips do this). Otherwise it reads as an image named after the person.
 - `AvatarStack` shows `max` avatars and "+N", and names everyone in it for screen readers.
 - `total` counts people the stack stands for but wasn't given (a public team page sends only 4 faces and how many more), so "+N" counts them too. `label` replaces the names as the stack's accessible name ("Team of 6") where names aren't for reading out.
@@ -35,4 +35,4 @@ It takes no focus.
 ## Differences from the artifact
 
 - `size` is a named step, not a number; `hue` replaces `color`, and `id` seeds the hue.
-- `isDecorative` replaces `decorative`. Outside pictures are refused until #32 serves them through our origin.
+- `isDecorative` replaces `decorative`. Outside pictures are refused: a Google account picture comes through the api's own origin routes, and other outside pictures wait for #32.
