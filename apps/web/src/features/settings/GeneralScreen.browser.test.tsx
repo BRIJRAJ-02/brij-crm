@@ -1,6 +1,7 @@
 // Settings › General in Chromium, saving at once (SS-G1 to SS-G4): a rename saves when the field is left (once, even
-// after Enter, and once while it is on its way) with "Name changed." and Undo; an empty name is refused on the field
-// and nothing is sent; a refused name stays in the field with the reason, said in a toast too, as is one lost for
+// after Enter, and once while it is on its way) with "Name changed." and Undo, one toast at a time whose Undo puts
+// back only the last rename (Q99), closes on leaving, and undoes nothing once the server holds a newer name (after
+// coming back, or another admin's); an empty name is refused on the field and nothing is sent; a refused name stays in the field with the reason, said in a toast too, as is one lost for
 // another reason; Change opens the address dialog with its field focused, checked as typed, and Change address waits
 // for a free one, said once the page opened there; once an address is typed a click outside keeps the dialog; a move
 // whose page couldn't open says where it went (announced, focus on Close), sends nothing more, says no "now at", and
@@ -10,7 +11,7 @@
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
 import { dataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
-import { createToasts } from '@crm/ui';
+import { createToasts, type ToastContent, type Toasts } from '@crm/ui';
 import type { RouterHistory } from '@tanstack/react-router';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,8 +34,9 @@ const TAKEN = 'acme-taken';
 /** How the server answers a rename: with the settings it would save, or not. */
 type Answer = (next: WorkspaceSettings) => Promise<WorkspaceSettings>;
 
-/** A data layer holding the workspace's settings, which its update changes as the server would; `answer`, when
- * given, stands in for the server on a rename (one held on its way, or refused). */
+/** A data layer holding the workspace's settings, which its update changes as the server would and its get reads;
+ * `answer`, when given, stands in for the server on a rename (one held on its way, or refused), and `write` is another
+ * admin's change, which this page isn't told of. */
 function layer(answer?: Answer) {
   let saved = SAVED;
   const update = vi.fn((_slug: string, change: Partial<WorkspaceSettings>) => {
@@ -47,11 +49,19 @@ function layer(answer?: Answer) {
     saved = { ...saved, ...change };
     return Promise.resolve(saved);
   });
+  const get = vi.fn(() => Promise.resolve(saved));
   const data = {
-    workspace: { update, delete: vi.fn(() => new Promise(() => undefined)) },
+    workspace: { get, update, delete: vi.fn(() => new Promise(() => undefined)) },
     workspaces: { slugAvailable: (slug: string) => Promise.resolve(slug !== TAKEN) },
   } as unknown as DataLayer;
-  return { data, update, read: () => saved };
+  return {
+    data,
+    update,
+    read: () => saved,
+    write: (change: Partial<WorkspaceSettings>) => {
+      saved = { ...saved, ...change };
+    },
+  };
 }
 
 let shown: InApp | undefined;
@@ -68,19 +78,34 @@ afterEach(() => {
 });
 
 /** The page for an owner (or, `asMember`, someone without workspace.manage), reading its settings back on a change;
- * `answer` answers a rename, and `isMoveLost` has the page fail to open at a new address. */
+ * `answer` answers a rename, and `isMoveLost` has the page fail to open at a new address. `raised` holds every toast
+ * raised, so a test can press an Undo the screen has closed; `remount` leaves General and comes back. */
 async function renderGeneral({
   asMember = false,
   answer,
   isMoveLost = false,
 }: { readonly asMember?: boolean; readonly answer?: Answer; readonly isMoveLost?: boolean } = {}) {
-  const { data, update, read } = layer(answer);
+  const { data, update, read, write } = layer(answer);
   const onMoved = vi.fn(() => (isMoveLost ? Promise.reject(new Error('The page didn’t load.')) : Promise.resolve()));
-  const toasts = createToasts();
+  const queue = createToasts();
+  const raised: ToastContent[] = [];
+  const toasts: Toasts = {
+    ...queue,
+    toast: (content, options) => {
+      raised.push(content);
+      return queue.toast(content, options);
+    },
+  };
+  let remount: () => void = () => undefined;
   function Page() {
     const [settings, setSettings] = useState(SAVED);
+    const [mount, setMount] = useState(0);
+    remount = () => {
+      setMount((was) => was + 1);
+    };
     return (
       <GeneralScreen
+        key={mount}
         data={data}
         toasts={toasts}
         slug="acme"
@@ -103,7 +128,15 @@ async function renderGeneral({
     pattern: '/w/$slug/settings/general',
     at: '/w/acme/settings/general',
   });
-  return { update, onMoved };
+  return {
+    update,
+    onMoved,
+    write,
+    raised,
+    remount: () => {
+      remount();
+    },
+  };
 }
 
 const nameField = () => page.getByRole('textbox', { name: strings.name });
@@ -121,6 +154,56 @@ describe('the name', () => {
     await userEvent.click(page.getByRole('button', { name: strings.undo }));
     await expect.element(nameField()).toHaveValue('Acme');
     expect(update).toHaveBeenLastCalledWith('acme', { name: 'Acme' });
+  });
+
+  it('keeps one Name changed. toast, whose Undo puts back only the last rename (Q99)', async () => {
+    const { update } = await renderGeneral();
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme B');
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByText(strings.nameChanged)).toBeVisible();
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme C');
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => update.mock.calls.length).toBe(2);
+    // The first toast went when the second came, so no older Undo is left to press.
+    await expect.poll(() => page.getByText(strings.nameChanged).elements().length).toBe(1);
+    expect(page.getByRole('button', { name: strings.undo }).elements()).toHaveLength(1);
+    await userEvent.click(page.getByRole('button', { name: strings.undo }));
+    await expect.element(nameField()).toHaveValue('Acme B');
+    expect(update).toHaveBeenLastCalledWith('acme', { name: 'Acme B' });
+  });
+
+  it('closes the Undo on leaving, and an old Undo pressed after coming back undoes nothing (Q99)', async () => {
+    const { update, raised, remount } = await renderGeneral();
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme B');
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByText(strings.nameChanged)).toBeVisible();
+    remount();
+    await expect.poll(() => page.getByRole('button', { name: strings.undo }).elements().length).toBe(0);
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme C');
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => update.mock.calls.length).toBe(2);
+    await expect.element(page.getByText(strings.nameChanged)).toBeVisible();
+    // The first rename's Undo, pressed as if its toast had stayed: the server holds Acme C, so nothing is sent.
+    raised.find((each) => each.message === strings.nameChanged)?.action?.onAction();
+    await expect.element(page.getByText(strings.undoStale('name'))).toBeVisible();
+    expect(update).toHaveBeenCalledTimes(2);
+    await expect.element(nameField()).toHaveValue('Acme C');
+  });
+
+  it('undoes nothing once another admin renamed it since, though the page still shows this rename', async () => {
+    const { update, write } = await renderGeneral();
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme Labs');
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByText(strings.nameChanged)).toBeVisible();
+    write({ name: 'Acme Other' });
+    await userEvent.click(page.getByRole('button', { name: strings.undo }));
+    await expect.element(page.getByText(strings.undoStale('name'))).toBeVisible();
+    expect(update).toHaveBeenCalledTimes(1);
   });
 
   it('sends a rename once while it is on its way, then says so', async () => {
