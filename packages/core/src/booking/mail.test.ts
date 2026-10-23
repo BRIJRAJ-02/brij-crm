@@ -9,9 +9,9 @@ import { newId } from '../engine/ids.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { testScope } from '../testing.ts';
 import { NO_CALENDAR, type BookingCalendar } from './calendar.ts';
-import { addGuests, cancelBooking, guestTarget, hostTarget, moveBooking } from './change.ts';
+import { addGuests, cancelBooking, guestTarget, hostTarget, moveBooking, removeGuest } from './change.ts';
 import type { BookingMailKind } from './mail-queue.ts';
-import { markInvited, prepareBookingMail, whenLine } from './mail.ts';
+import { markInvited, markUninvited, prepareBookingMail, whenLine } from './mail.ts';
 import { createBookingPage } from './pages.ts';
 import { bookPublicSlot } from './public.ts';
 
@@ -177,6 +177,49 @@ describe('changes (AC-638 to AC-640)', () => {
       'ada@example.com',
     ]);
     expect(cancelled.messages[2]?.subject).toBe('Cancelled by guest: Intro call with Grace Hopper');
+  });
+});
+
+describe('a guest taken off (QA Q81)', () => {
+  it('is told once, with a cancelled calendar file, and is invited again when added back', async () => {
+    const b = await booked(NO_CALENDAR, ['ann@navy.example']);
+    const confirmed = await b.prepare('confirmed');
+    await markInvited(b.system, b.bookingId, confirmed.invited);
+    const target = guestTarget(await enterBookingByToken({ db }, b.manageToken));
+    await removeGuest(target, b.deps, { email: 'ann@navy.example' });
+    const told = await b.prepare('guests');
+    expect(told.messages.map((mail) => [mail.to, mail.subject])).toEqual([
+      ['ann@navy.example', 'No longer invited: Intro call with Ada Host'],
+    ]);
+    expect(told.messages[0]?.ics?.method).toBe('CANCEL');
+    expect(unfolded(told.messages[0]?.ics?.content)).toContain('ann@navy.example');
+    // Never the visitor's link: it is their key.
+    expect(JSON.stringify(told.messages)).not.toContain(b.manageToken);
+    expect(told.uninvited).toEqual(['ann@navy.example']);
+    await markUninvited(b.system, b.bookingId, told.uninvited ?? []);
+    // Told once: a later run says nothing more, and a move or cancel no longer reaches them.
+    expect((await b.prepare('guests')).messages).toEqual([]);
+    await moveBooking(target, b.deps, { start: new Date('2026-11-02T10:00:00.000Z') });
+    expect((await b.prepare('moved')).messages.map((mail) => mail.to)).not.toContain('ann@navy.example');
+    // Added back, they are invited again.
+    await addGuests(target, b.deps, { emails: ['ann@navy.example'] });
+    const again = await b.prepare('guests');
+    expect(again.messages.map((mail) => [mail.to, mail.subject])).toEqual([
+      ['ann@navy.example', 'Invitation: Intro call with Ada Host'],
+    ]);
+    await markInvited(b.system, b.bookingId, again.invited);
+    // Taken off a second time, nothing more goes: removing and adding back can't be used to mail them again and again.
+    await removeGuest(target, b.deps, { email: 'ann@navy.example' });
+    expect((await b.prepare('guests')).messages).toEqual([]);
+    await addGuests(target, b.deps, { emails: ['ann@navy.example'] });
+    expect((await b.prepare('guests')).messages).toEqual([]);
+  });
+
+  it('says nothing to someone taken off before their invitation went', async () => {
+    const b = await booked(NO_CALENDAR, ['ann@navy.example']);
+    const target = guestTarget(await enterBookingByToken({ db }, b.manageToken));
+    await removeGuest(target, b.deps, { email: 'ann@navy.example' });
+    expect((await b.prepare('guests')).messages).toEqual([]);
   });
 });
 

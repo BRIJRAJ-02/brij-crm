@@ -14,6 +14,7 @@ import {
   handOnBooking,
   remakeEvent,
   markInvited,
+  markUninvited,
   prepareBookingMail,
   type BookingMailDeps,
   type ReseatDeps,
@@ -104,5 +105,6 @@ export async function runBookingMail(deps: BookingMailTaskDeps, payload: unknown
     throw new Error('A booking email failed to send; the worker log has its booking id.');
   }
   await markInvited(scope, bookingId, prepared.invited);
+  await markUninvited(scope, bookingId, prepared.uninvited ?? []);
   deps.log.info('booking.mail.sent', { bookingId, kind, messages: prepared.messages.length });
 }
