@@ -38,7 +38,7 @@ export const preferencesHref = settingsHomeHref;
  */
 export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/calendars`;
 
-/** Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and time zone here. */
+/** Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and public profile. */
 export const profileHref = (slug: string) => `/w/${slug}/settings/account/profile`;
 
 /** Settings › Workspace › General (spec 0031, AC-822): the workspace's name, time zone and address, and its delete. */
@@ -99,7 +99,7 @@ export interface SettingsNavEntry {
     | 'list-checks'
     | 'users-round'
     | 'trash';
-  /** A quiet word after the name. Every entry but Trash opens a page in Settings (20 and 22 Oct 2026). */
+  /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
   readonly requires?: Permission;
@@ -115,12 +115,12 @@ export interface SettingsNavGroup {
 /**
  * The settings navigation (spec 0026, AC-682): Account (Profile, spec 0031;
  * Preferences, Notifications, spec 0038), Scheduling (Calendars, 21 Oct 2026)
- * and Workspace (General and Members, spec 0031; Objects, Background jobs).
- * Every entry is a page in Settings: the Booking pages and Forms links into
+ * and Workspace (General and Members, spec 0031; Objects, Background jobs,
+ * Trash). Every entry is a page in Settings: the Booking pages and Forms links into
  * Captures went on 20 Oct 2026, as neither has workspace wide settings yet
  * (each page's and each form's own settings live in its editor). Every
- * member may open each page today: everyone reads Members and Objects and
- * sees their own jobs.
+ * member may open each page but Round robin and Security: everyone reads
+ * Members and Objects, sees their own jobs and the trash they may see.
  */
 export function settingsNav(slug: string): readonly SettingsNavGroup[] {
   return [
@@ -168,8 +168,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
-        // The trash left the sidebar for here (the owner, 22 October 2026). The one entry outside Settings: it opens
-        // the trash's own page, at its own address, which deletes' Undo toasts and ⌘K's Open trash also reach.
+        // The trash left the sidebar for here (the owner, 22 October 2026), and opens inside Settings, its sidebar
+        // and trail kept (A120, 23 October 2026). ⌘K's Open trash reaches the same address; the old one redirects.
         { id: 'trash', label: strings.trash, href: trashHref(slug), icon: 'trash' },
       ],
     },
@@ -210,6 +210,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'members') return 'members';
   if (rest === 'scheduling/round-robin' || rest === 'scheduling/rotations') return 'rotations';
   if (rest === 'security') return 'workspace-security';
+  if (rest === 'trash') return 'trash';
   return undefined;
 }
 

@@ -2,7 +2,7 @@
 
 Spec 0022, milestones 1 to 4. The workspace's trash: a record deleted from a table waits here for 30 days, then the daily cleanup removes it for good.
 
-## The trash (`/w/$slug/trash`, TrashScreen)
+## The trash (`/w/$slug/settings/trash`, TrashScreen)
 
 - **Purpose**: every record deleted in the last 30 days that the person may see, newest first.
 - **Main task**: find a record deleted by mistake and restore it, seeing on its row why one can't come back; owners and admins also delete forever and empty the trash.
@@ -10,8 +10,8 @@ Spec 0022, milestones 1 to 4. The workspace's trash: a record deleted from a tab
 
 ## Notes
 
-- "Trash" sits in the sidebar for every member, after Records, Bookings and Captures. The TopBar counts what the trash holds ("10,000+" past the cap); the toolbar's Object select ("All objects", then every object the person may see, archived ones marked) narrows it, kept in the address as `?object=<id>`.
-- The list is the DataGrid, read only, fed by `data.trash.view` (windows by cursor, 100 a block, with the count), through `useTrash`. Its columns are synthetic attributes (`trash.ts`), so each value draws through its one field design: Name (a record reference, plain, never a link), Object (text), Deleted by (an actor: a member, "Someone removed from this workspace", "The system", "An API key"), Deleted (a timestamp) and Removed after (a date, 30 days on, in the browser's time zone). A name hidden from the person reads "Unnamed <singular>", like an empty one.
+- Trash is reached from Settings › Workspace › Trash, at /w/$slug/settings/trash; the old /w/$slug/trash redirects there, keeping `?object=`. It draws inside Settings (A120, 23 October 2026): the settings sidebar stays, Trash current in it, and the bar's trail reads Settings › Workspace › Trash. The grid fills the view under the bar, edge to edge (SettingsPage's `fillsView`), as a records table does. The TopBar counts what the trash holds ("10,000+" past the cap); the toolbar's Object select ("All objects", then every object the person may see, archived ones marked) narrows it, kept in the address as `?object=<id>`.
+- The list is the DataGrid, read only, fed by `data.trash.view` (windows by cursor, 100 a block, with the count), through `useTrash`. Its columns are synthetic attributes (`trash.ts`), so each value draws through its one field design: Name (a record reference, plain, never a link), Object (text), Deleted by (an actor: a member, "Someone removed from this workspace", "The system", "An API key"), Deleted (a timestamp) and Deleted forever on (a date, 30 days on, in the member's time zone). A name hidden from the person reads "Unnamed <singular>", like an empty one.
 - Ticking rows shows the floating BulkActionBar with Restore. It is enabled when at least one selected record's object is one the person may change, else disabled with "You can view these records but not restore them." Restored rows leave at once; a refused one comes back with its reason on its Name cell (the grid's `cellErrors`, kept until the person leaves), and one toast sums it up ("Restored 46 records. 2 couldn’t be restored; each row says why."). Focus goes back to the grid where the first restored row was.
 - States: the grid's loading rows, "The trash is empty. Deleted records stay here for 30 days.", "No deleted <plural>." for an object with none, and the grid's error state with Retry.
 - Live: deletes, restores and purges anywhere settle the open trash 1.5 seconds after the last (spread 0 to 2 seconds). This tab's own deletes and undos settle it too, since their echoes never come back.

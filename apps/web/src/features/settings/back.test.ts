@@ -51,9 +51,18 @@ describe('the back link', () => {
   it('goes to the workspace’s home with nothing remembered, or a page of another workspace', () => {
     const storage = memoryStorage();
     expect(backHref(storage, 'acme')).toBe('/w/acme');
-    rememberPlace(storage, '/w/globex/trash');
+    rememberPlace(storage, '/w/globex/tasks');
     expect(backHref(storage, 'acme')).toBe('/w/acme');
     expect(backHref(undefined, 'acme')).toBe('/w/acme');
+  });
+
+  it('never remembers the trash, which sits in Settings (A120), with or without its object filter', () => {
+    const storage = memoryStorage();
+    rememberPlace(storage, '/w/acme/objects/people');
+    rememberPlace(storage, '/w/acme/settings/trash');
+    rememberPlace(storage, '/w/acme/settings/trash?object=abc');
+    expect(isSettingsPath('/w/acme/settings/trash')).toBe(true);
+    expect(backHref(storage, 'acme')).toBe('/w/acme/objects/people');
   });
 
   it('never returns into Settings, even from a value written by hand', () => {
@@ -64,7 +73,7 @@ describe('the back link', () => {
 
   it('goes home when storage is blocked, without throwing', () => {
     expect(() => {
-      rememberPlace(blocked, '/w/acme/trash');
+      rememberPlace(blocked, '/w/acme/tasks');
     }).not.toThrow();
     expect(backHref(blocked, 'acme')).toBe('/w/acme');
   });

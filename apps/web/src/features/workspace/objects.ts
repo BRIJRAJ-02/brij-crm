@@ -20,8 +20,8 @@ export const objectHref = (slug: string, object: Pick<ObjectSummary, 'apiSlug'>)
 export const viewHref = (slug: string, objectSlug: string, viewId: string) =>
   `/w/${slug}/objects/${objectSlug}/views/${viewId}`;
 
-/** The workspace's trash (spec 0022). */
-export const trashHref = (slug: string) => `/w/${slug}/trash`;
+/** The workspace's trash (spec 0022): Settings › Workspace › Trash since 23 October 2026 (A120). */
+export const trashHref = (slug: string) => `/w/${slug}/settings/trash`;
 
 /** My tasks' address (spec 0019). */
 export const tasksHref = (slug: string) => `/w/${slug}/tasks`;

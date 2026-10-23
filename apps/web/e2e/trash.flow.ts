@@ -2,7 +2,8 @@
 // browsers: an owner ticks two people and deletes them after the confirm; a
 // second browser, the same person on the same table, sees them leave live;
 // the toast's Undo brings them back on both. One person deleted alone goes at
-// once; the Trash lists them and Restore brings them back. A person whose
+// once; the Trash, in Settings (A120) and at its old address with the
+// object filter kept, lists them and Restore brings them back. A person whose
 // email another record took meanwhile stays in the trash, the reason on its
 // Name cell. ⌘Z after a create moves the record to the trash (AC-522 to
 // AC-527, AC-533, AC-534, AC-541, AC-542).
@@ -104,12 +105,25 @@ test.describe('trash', () => {
     await expect(page.getByText('Deleted Ada Byron.')).toBeVisible();
     await addPerson(page, 'Ada', 'Again', `ada-${tag}@acme.com`);
 
-    // The Trash lists them, newest first (AC-533).
+    // The Trash lists them, newest first (AC-533), inside Settings (A120): the settings sidebar stays, Trash
+    // current in it, and the bar's trail reads Settings › Workspace › Trash.
     await openTrash(page);
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/trash$`));
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash$`));
+    const settings = page.getByRole('navigation', { name: 'Settings' });
+    await expect(settings.getByRole('link', { name: 'Trash', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('main').getByRole('list').first()).toHaveText(/^Settings\s*Workspace\s*Trash$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Trash' })).toBeVisible();
     const trash = page.getByRole('grid', { name: 'Trash' });
     await expect(trash.getByRole('rowheader')).toHaveText([/Ada Byron/, /Cy Lane/]);
     await checkScreen(page, 'trash-list');
+    // The old address lands here too, keeping its object filter.
+    await page.getByRole('button', { name: /All objects/ }).click();
+    await page.getByRole('option', { name: 'People' }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash\\?object=[0-9a-f-]{36}$`));
+    const object = new URL(page.url()).searchParams.get('object') ?? '';
+    await page.goto(`/w/${slug}/trash?object=${object}`);
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash\\?object=${object}$`));
+    await expect(trash.getByRole('rowheader')).toHaveText([/Ada Byron/, /Cy Lane/]);
 
     // Restore both: Cy comes back, Ada stays with the reason on her Name cell (AC-534).
     await tick(page, 'Ada Byron', 'Trash').click();
@@ -120,9 +134,10 @@ test.describe('trash', () => {
     await expect(trash.getByRole('rowheader', { name: /Ada Byron/ })).toHaveAttribute('aria-invalid', 'true');
     await checkScreen(page, 'trash-refused');
 
-    // Back on People, Cy is there; the other browser saw it too.
+    // Back on People (Settings' way back returns to where it was opened from), Cy is there; the other browser saw
+    // it too.
     if (LIVE) await expect(table(reader).getByRole('rowheader', { name: /Cy Lane/ })).toBeVisible();
-    await page.getByRole('link', { name: 'People' }).click();
+    await settings.getByRole('link', { name: 'Leave settings' }).click();
     await expect(table(page).getByRole('rowheader', { name: /Cy Lane/ })).toBeVisible();
 
     // ⌘Z after a create moves it to the trash (AC-541).

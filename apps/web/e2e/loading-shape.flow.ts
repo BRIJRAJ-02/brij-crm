@@ -30,7 +30,7 @@ const at =
     `/w/${slug}/${where}`;
 
 const ALL_SCREENS: readonly Screen[] = [
-  { name: 'records', start: at('trash'), target: sidebar('People') },
+  { name: 'records', start: at('tasks'), target: sidebar('People') },
   {
     name: 'record overview',
     start: at('objects/people'),
@@ -55,16 +55,16 @@ const ALL_SCREENS: readonly Screen[] = [
     start: ({ slug, recordId }) => `/w/${slug}/objects/people/${recordId}/overview`,
     target: tab('Tasks'),
   },
-  { name: 'bookings calendar', start: at('trash'), target: sidebar('Bookings') },
+  { name: 'bookings calendar', start: at('tasks'), target: sidebar('Bookings') },
   { name: 'bookings list', start: at('bookings/calendar'), target: tab('List') },
   { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
-  { name: 'captures links', start: at('trash'), target: sidebar('Captures') },
+  { name: 'captures links', start: at('tasks'), target: sidebar('Captures') },
   { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
   { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },
   { name: 'form editor', start: at('captures/forms'), target: card('Untitled form') },
   {
     name: 'settings preferences',
-    start: at('trash'),
+    start: at('tasks'),
     target: (page) => page.getByRole('link', { name: 'Settings' }).first(),
   },
   { name: 'settings calendars', start: at('settings/account/preferences'), target: sidebar('Calendars') },

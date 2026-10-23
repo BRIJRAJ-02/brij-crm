@@ -33,6 +33,11 @@ export interface SettingsPageProps {
   readonly hasTabs?: boolean;
   /** At the view's foot: the library SaveBar, for a page that saves its changes with one Save. */
   readonly footer?: ReactNode;
+  /**
+   * The body is a grid that fills the view and scrolls itself (Trash): it sits straight under the bar, edge to
+   * edge, with no settings column around it, as a records table does.
+   */
+  readonly fillsView?: boolean;
   readonly children: ReactNode;
 }
 
@@ -55,6 +60,7 @@ export function SettingsPage({
   titleRef,
   hasTabs = false,
   footer,
+  fillsView = false,
   children,
 }: SettingsPageProps) {
   const { slug = '' } = useParams({ strict: false });
@@ -93,16 +99,21 @@ export function SettingsPage({
                 </TopBar>,
                 slot,
               )}
-            <SettingsLayout
-              header="bar"
-              hasTabs={hasTabs}
-              title={title}
-              isLoading={isLoading}
-              hasTile={hasTile}
-              footer={footer}
-            >
-              {children}
-            </SettingsLayout>
+            {fillsView ? (
+              // The view is a column: the body's bars take their height, and the grid the rest of it.
+              children
+            ) : (
+              <SettingsLayout
+                header="bar"
+                hasTabs={hasTabs}
+                title={title}
+                isLoading={isLoading}
+                hasTile={hasTile}
+                footer={footer}
+              >
+                {children}
+              </SettingsLayout>
+            )}
           </>
         ),
       }}
