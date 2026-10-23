@@ -4,7 +4,7 @@
 // Leaves out: IP addresses (never shown), other people's activity, and anything older than 90 days.
 import { isDataError, type ActivityPage, type DataLayer, type SecurityActivity } from '@crm/data';
 import { Button, Card, EmptyState, RelativeTime, SettingsRow, SettingsSection, Skeleton } from '@crm/ui';
-import { Suspense, use, useState } from 'react';
+import { Suspense, use, useDeferredValue, useState, type ReactNode } from 'react';
 import { devicePlace } from './security-lines.ts';
 import { strings } from './security-strings.ts';
 
@@ -23,12 +23,27 @@ export interface RecentActivitySectionProps {
   readonly first: Promise<ActivityPage | undefined>;
   /** Reads the first page again (this route's loader alone), after a failure. */
   readonly onRetry: () => void;
+  /** The section's heading, where another page shows the same list (History's "Your sign ins"); "Recent activity". */
+  readonly title?: string;
+  /** The line under the heading; the last 90 days' line when left out. */
+  readonly description?: ReactNode;
 }
 
-/** Recent activity: its own loading rows while the first page arrives, then the table. */
-export function RecentActivitySection(props: RecentActivitySectionProps) {
+/**
+ * Recent activity: its own loading rows while the first page arrives, then the table. A new first page (a retry, or
+ * a read after a change on the page) keeps what shows until it arrives, marked busy, so the rows never flash away.
+ */
+export function RecentActivitySection({
+  data,
+  first,
+  onRetry,
+  title = copy.section,
+  description = copy.description,
+}: RecentActivitySectionProps) {
+  // The page shown while a newer one is on its way: the first read has none, so it shows the loading rows.
+  const shown = useDeferredValue(first);
   return (
-    <SettingsSection title={copy.section} description={copy.description}>
+    <SettingsSection title={title} description={description}>
       <Suspense
         fallback={
           <Card isBusy>
@@ -38,20 +53,36 @@ export function RecentActivitySection(props: RecentActivitySectionProps) {
           </Card>
         }
       >
-        <ActivityTable {...props} />
+        <ActivityTable data={data} first={shown} onRetry={onRetry} isStale={shown !== first} />
       </Suspense>
     </SettingsSection>
   );
 }
 
-function ActivityTable({ data, first, onRetry }: RecentActivitySectionProps) {
+function ActivityTable({
+  data,
+  first,
+  onRetry,
+  isStale,
+}: Pick<RecentActivitySectionProps, 'data' | 'first' | 'onRetry'> & { readonly isStale: boolean }) {
+  // Always called, on every render, with the promise the loader made: never a new one made here.
   const page = use(first);
-  if (page === undefined) return <EmptyState tone="error" title={copy.failedTitle} onRetry={onRetry} />;
+  if (page === undefined) {
+    return <EmptyState tone="error" title={copy.failedTitle} onRetry={onRetry} isLoading={isStale} />;
+  }
   // A new first page (a retry) starts the older pages over.
-  return <ActivityRows key={page.items[0]?.id ?? 'none'} data={data} page={page} />;
+  return <ActivityRows key={page.items[0]?.id ?? 'none'} data={data} page={page} isStale={isStale} />;
 }
 
-function ActivityRows({ data, page }: { readonly data: DataLayer; readonly page: ActivityPage }) {
+function ActivityRows({
+  data,
+  page,
+  isStale,
+}: {
+  readonly data: DataLayer;
+  readonly page: ActivityPage;
+  readonly isStale: boolean;
+}) {
   const [more, setMore] = useState<{ readonly items: readonly SecurityActivity[]; readonly cursor?: string }>({
     items: [],
     ...(page.nextCursor === undefined ? {} : { cursor: page.nextCursor }),
@@ -97,7 +128,7 @@ function ActivityRows({ data, page }: { readonly data: DataLayer; readonly page:
 
   return (
     <>
-      <Card>
+      <Card isBusy={isStale}>
         {/* Nothing yet is one quiet line, not a block. */}
         {items.length === 0 ? <EmptyState layout="row" icon="shield-check" title={copy.empty} /> : items.map(eventRow)}
       </Card>

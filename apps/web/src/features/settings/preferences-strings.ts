@@ -5,14 +5,17 @@ export const strings = {
   title: 'Preferences',
   appearance: 'Appearance',
   theme: 'Theme',
-  themeDescription: 'Saved on this browser.',
-  system: 'System preference',
+  themeDescription: 'Only on this browser.',
+  /** The theme that follows the device's light or dark setting. */
+  system: 'Automatic',
   light: 'Light',
   dark: 'Dark',
   /** Dates (the member's own, in this workspace, on every device). */
   dates: 'Dates and time',
   timeZone: 'Time zone',
   timeZoneDescription: 'Dates and times across the app show in this zone.',
+  /** The Time zone row's InfoTip: where these three are kept, unlike the theme. */
+  timeZoneInfo: 'Time zone, date format and week start follow you on every device, in this workspace only.',
   dateFormat: 'Date format',
   weekStart: 'Week starts on',
   automatic: (example: string) => `Automatic (${example})`,
@@ -22,11 +25,10 @@ export const strings = {
   /** Where the workspace opens. */
   startPage: 'Start page',
   landing: 'Open on',
-  landingDescription: 'The page this workspace opens on.',
+  landingDescription: 'Where this workspace opens.',
   homeSetup: 'Setup checklist on Home',
-  homeSetupDescription: 'Shows the steps left to set up this workspace at the top of Home.',
-  /** Becomes "Home" once the Home page lands (the home lane): the workspace opens on its first object until then. */
-  home: 'First object in the sidebar',
+  homeSetupDescription: 'The steps left to set up this workspace, at the top of Home.',
+  home: 'Home',
   tasks: 'Tasks',
   /** The save toast and its Undo. */
   saved: 'Preferences saved',
@@ -37,7 +39,8 @@ export const strings = {
   tryAgain: 'Try again',
   /** The sidebar (spec 0034): what it shows, kept for the person on every device. */
   sidebar: 'Sidebar',
-  sidebarDescription: 'Kept for you on every device.',
   customise: 'Items in your sidebar',
-  customiseDescription: 'Show or hide each object and Scheduling page, or put the default back.',
+  customiseDescription: 'Show, hide or reorder what’s in your sidebar.',
+  /** The row's button; its name for screen readers stays "Customise sidebar", the dialog it opens. */
+  customiseAction: 'Customise',
 } as const;

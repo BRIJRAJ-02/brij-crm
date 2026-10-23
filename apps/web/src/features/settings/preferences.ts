@@ -74,10 +74,13 @@ export interface PreferenceEdit {
   readonly undo: PreferencesChange;
 }
 
-/** The change a select makes from `before`, or undefined when it picks what is already there. */
+/**
+ * The change a select (or the Setup checklist switch, `on` or `off`) makes from `before`, or undefined when it picks
+ * what is already there.
+ */
 export function editOf(
   before: MemberPreferences,
-  field: 'timeZone' | 'dateFormat' | 'weekStart' | 'landing',
+  field: 'timeZone' | 'dateFormat' | 'weekStart' | 'landing' | 'homeSetup',
   id: string,
 ): PreferenceEdit | undefined {
   switch (field) {
@@ -99,6 +102,15 @@ export function editOf(
       return JSON.stringify(next) === JSON.stringify(before.landing)
         ? undefined
         : { change: { landing: next }, undo: { landing: before.landing } };
+    }
+    case 'homeSetup': {
+      // Only the checklist's key moves; any other Home section put away stays put away.
+      const hidden = before.homeHidden ?? [];
+      const others = hidden.filter((key) => key !== 'setup');
+      const isOn = id === 'on';
+      return isOn === !hidden.includes('setup')
+        ? undefined
+        : { change: { homeHidden: isOn ? others : [...others, 'setup'] }, undo: { homeHidden: hidden } };
     }
   }
 }

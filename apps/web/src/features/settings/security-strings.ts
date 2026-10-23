@@ -77,9 +77,10 @@ export const strings = {
   /** Two factor sign in (AC-881, AC-883, AC-885). */
   twoFactor: {
     section: 'Two factor sign in',
-    /** Says what the tip used to, so the section needs none. */
-    description: 'A code from an app after your email code or Google, so your email alone can’t sign you in.',
+    description: 'Ask for a code from an app each time you sign in.',
     app: 'Authenticator app',
+    /** The Authenticator app row's InfoTip: why it is worth it (SettingsSection has no slot beside its heading). */
+    appInfo: 'Even if someone gets into your email, they can’t sign in without your phone.',
     appOff: 'Off',
     appOn: 'On',
     /** On, and a workspace requires it (AC-885). */
@@ -92,9 +93,14 @@ export const strings = {
     newCodes: 'Make new codes',
     failedTitle: 'Couldn’t load two factor sign in',
     setupTitle: 'Set up two factor sign in',
-    scan: 'Scan this with your authenticator app, then enter the code it shows.',
+    /** Beside the QR code, in order; the code's boxes sit under the third. */
+    steps: [
+      '1. Open an authenticator app, like Google Authenticator, 1Password or Authy.',
+      '2. Scan the code, or type the key.',
+      '3. Enter the 6 digit code it shows.',
+    ],
     qrLabel: 'QR code for your authenticator app',
-    key: 'Can’t scan? Enter this key instead:',
+    key: 'Setup key',
     copyKey: 'Copy the setup key',
     firstCode: 'Code from your authenticator app',
     turnOn: 'Turn on',
