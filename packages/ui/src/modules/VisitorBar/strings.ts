@@ -16,6 +16,9 @@ export const strings = {
   unreachable: 'Couldn’t read your calendar. Showing all times.',
   reconnect: 'Your calendar needs reconnecting. In Timefix, open Settings, then Calendar.',
   bookingAs: (name: string) => `Booking as ${name}`,
+  // Match with your calendar from a known visitor's own menu: the call to action is a stranger's entry point.
+  match: 'Match with your calendar',
+  matchAgain: 'See matching times',
   showAll: 'Show all times',
   notYou: 'Not you?',
 } as const;

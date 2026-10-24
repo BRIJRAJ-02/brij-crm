@@ -31,6 +31,8 @@ export const strings = {
   timeName: (time: string, day: string, minutes: number) => `${time}, ${day}, ${String(minutes)} minutes`,
   book: 'Book',
   bookAt: (day: string, time: string) => `Book ${day} at ${time}`,
+  // The best match in words, for the dialog's question ("You’re both free at 9:30 AM on Tue 20 Oct").
+  matchWhen: (time: string, day: string) => `${time} on ${day}`,
   zoneSearch: 'Search city or GMT offset',
   zoneNone: (query: string) => `No time zone matches "${query}".`,
   changeZone: (zone: string) => `Show times in another time zone. Now ${zone}`,

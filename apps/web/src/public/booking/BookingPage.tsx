@@ -65,6 +65,7 @@ import {
   zoneName,
 } from './time.ts';
 import { readReturn, returnPath, tidiedAddress, type Chosen, type ConnectResult } from './visitor.ts';
+import type { MatchCalendarStep } from '@crm/ui/public-booking/visitor';
 
 // The visitor bar and the details step load beside the first paint, not in it (the page's size budget): both
 // start loading as this module does, so they are there long before the page's own read answers.
@@ -102,6 +103,9 @@ type Loaded =
 
 /** One slots read covers 62 days (two months of the month view). */
 const CHUNK_DAYS = 62;
+
+/** How many other matching times See the other times offers: a handful, not every match the horizon holds. */
+const MATCH_OTHERS = 6;
 
 /** Where "Claim your free page" goes: www.timefix.com, tagged as this page's claim link (the wordmark beside it tags itself). */
 const CLAIM_URL = claimPageHref('booking_page');
@@ -484,6 +488,9 @@ function Booking({
   // "Not you?": no name, no email and no overlay for the rest of the visit.
   const [notYou, setNotYou] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  // Match with your calendar (the owner, 25 Oct 2026): the dialog opens from the page's call to action, and
+  // again on the way back from Google, where it waits for the overlay before it says what matched.
+  const [matchOpen, setMatchOpen] = useState(connected === 'connected');
   // Book by chat's conversation (spec 0042), kept while the length, the zone or the view changes.
   const [chatMemory, setChatMemory] = useState<ChatMemory | undefined>(undefined);
   const zones = useMemo(() => zoneItems(zone, now()), [zone, now]);
@@ -783,6 +790,93 @@ function Booking({
           ? 'unreachable'
           : 'on'
         : person.calendar;
+  // What the match found: the times both are free, the best of them first (the server picks Best: the soonest
+  // shared times in working hours with a gap either side, packages/core/src/booking/overlay.ts).
+  const matches = isOverlaid ? allStarts.filter((start) => !clashes.has(start)) : [];
+  const bestMatch = matches.find((start) => best.has(start)) ?? matches[0];
+  const otherMatches = matches.filter((start) => start !== bestMatch).slice(0, MATCH_OTHERS);
+  const matchDays = [...new Map(otherMatches.map((start) => [dayKey(Date.parse(start), zone), []])).keys()].map(
+    (key) => ({
+      day: dayLabels(key, locale).short,
+      times: otherMatches
+        .filter((start) => dayKey(Date.parse(start), zone) === key)
+        .map((start) => {
+          const label = timeLabel(start, zone, locale, hour12);
+          return { id: start, label, name: strings.timeName(label, dayLabels(key, locale).short, duration) };
+        }),
+    }),
+  );
+  // Waiting always has somewhere to go: a calendar we couldn't read, a read that failed, and a trip to Google
+  // that came back with no calendar on all land on the failed state, which offers Try again and Close.
+  const matchStep: MatchCalendarStep =
+    isUnreadable || read.failed
+      ? 'failed'
+      : isOverlaid
+        ? matches.length === 0
+          ? 'unmatched'
+          : 'matched'
+        : person?.calendar === 'on'
+          ? 'waiting'
+          : connected === 'connected'
+            ? viewer === undefined
+              ? 'waiting'
+              : 'failed'
+            : person?.calendar === 'needs-reconnect'
+              ? 'failed'
+              : 'why';
+  const bookMatch = (start: string) => {
+    setMatchOpen(false);
+    setNotice(undefined);
+    const key = dayKey(Date.parse(start), zone);
+    setDay(key);
+    // The month moves with it, so Back from the details form lands on the day it booked.
+    setMonth(monthOf(key));
+    setTime(start);
+    setStep({ step: 'details', attempt: crypto.randomUUID(), back: false });
+  };
+  const canMatch = connectHref !== undefined || person?.calendar === 'on';
+  const match =
+    canMatch && !isPreview
+      ? {
+          step: matchStep,
+          isOpen: matchOpen,
+          onOpenChange: setMatchOpen,
+          host: { name: page.hostName, ...(page.hostImage === undefined ? {} : { image: page.hostImage }) },
+          ...(known === undefined ? {} : { visitor: known }),
+          ...(connectHref === undefined ? {} : { connectHref }),
+          ...(bestMatch === undefined
+            ? {}
+            : {
+                result: {
+                  count: matches.length,
+                  best: {
+                    id: bestMatch,
+                    label: timeLabel(bestMatch, zone, locale, hour12),
+                    name: strings.timeName(
+                      timeLabel(bestMatch, zone, locale, hour12),
+                      dayLabels(dayKey(Date.parse(bestMatch), zone), locale).short,
+                      duration,
+                    ),
+                    ...(best.has(bestMatch) ? { isBest: true } : {}),
+                  },
+                  when: strings.matchWhen(
+                    timeLabel(bestMatch, zone, locale, hour12),
+                    dayLabels(dayKey(Date.parse(bestMatch), zone), locale).short,
+                  ),
+                  ...(matchDays.length === 0 ? {} : { days: matchDays }),
+                },
+              }),
+          onBook: bookMatch,
+          // Already showing every time: the dialog is left with Close alone rather than a primary that does nothing.
+          ...(showAll
+            ? {}
+            : {
+                onShowAll: () => {
+                  setShowAll(true);
+                },
+              }),
+        }
+      : undefined;
   const showsBar = viewer !== undefined && !viewer.isHost && (person !== undefined || connectHref !== undefined);
   // Its space is held while the page asks who the visitor is, so the card doesn't jump down under a reaching hand.
   const holdsBar = viewer === undefined && !isPreview;
@@ -797,7 +891,8 @@ function Booking({
           </Callout>
         )}
         <Suspense fallback={null}>
-          {holdsBar && <VisitorBar isLoading />}
+          {/* holdsBar is only true off an embed, so the call to action's own space is the space to hold. */}
+          {holdsBar && <VisitorBar isLoading holdsMatch />}
           {showsBar && (
             <VisitorBar
               {...(person === undefined
@@ -807,6 +902,7 @@ function Booking({
               {...(connectHref === undefined ? {} : { connectHref })}
               showAll={showAll}
               onShowAllChange={setShowAll}
+              {...(match === undefined ? {} : { match })}
             />
           )}
         </Suspense>

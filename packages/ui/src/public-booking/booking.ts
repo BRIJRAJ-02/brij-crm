@@ -44,6 +44,12 @@ export { LinkList, LinkListToolbar, type LinkRow } from '../modules/LinkList/Lin
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';
 export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';
+export type {
+  MatchCalendarDay,
+  MatchCalendarProps,
+  MatchCalendarResult,
+  MatchCalendarStep,
+} from '../modules/MatchCalendar/MatchCalendar.tsx';
 
 /** Props for BookingProvider. */
 export interface BookingProviderProps {
