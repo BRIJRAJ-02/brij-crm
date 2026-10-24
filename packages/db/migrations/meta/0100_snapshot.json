@@ -1,5 +1,5 @@
 {
-  "id": "cb47ebf3-8706-44a8-ac9d-125bba9b562e",
+  "id": "004795ce-1cca-4424-bc9e-d3d94cc4dfa9",
   "prevId": "65fe8059-f5b9-4ab4-8063-e55c8a5c9afa",
   "version": "7",
   "dialect": "postgresql",
@@ -18047,6 +18047,82 @@
       },
       "isRLSEnabled": false
     },
+    "auth.profile_item_press_days": {
+      "name": "profile_item_press_days",
+      "schema": "auth",
+      "columns": {
+        "item_id": {
+          "name": "item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "presses": {
+          "name": "presses",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "profile_item_press_days_day": {
+          "name": "profile_item_press_days_day",
+          "columns": [
+            {
+              "expression": "day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "profile_item_press_days_item_fk": {
+          "name": "profile_item_press_days_item_fk",
+          "tableFrom": "profile_item_press_days",
+          "tableTo": "profile_items",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "profile_item_press_days_pkey": {
+          "name": "profile_item_press_days_pkey",
+          "columns": [
+            "item_id",
+            "day"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "profile_item_press_days_count": {
+          "name": "profile_item_press_days_count",
+          "value": "\"auth\".\"profile_item_press_days\".\"presses\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "auth.profile_item_presses": {
       "name": "profile_item_presses",
       "schema": "auth",
@@ -18353,6 +18429,89 @@
         "profile_items_plain": {
           "name": "profile_items_plain",
           "value": "\"auth\".\"profile_items\".\"kind\" not in ('link', 'heading', 'contact') or \"auth\".\"profile_items\".\"page_id\" is null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "auth.profile_view_days": {
+      "name": "profile_view_days",
+      "schema": "auth",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "views": {
+          "name": "views",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "visitors": {
+          "name": "visitors",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "profile_view_days_day": {
+          "name": "profile_view_days_day",
+          "columns": [
+            {
+              "expression": "day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "profile_view_days_user_fk": {
+          "name": "profile_view_days_user_fk",
+          "tableFrom": "profile_view_days",
+          "tableTo": "user",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "profile_view_days_pkey": {
+          "name": "profile_view_days_pkey",
+          "columns": [
+            "user_id",
+            "day"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "profile_view_days_count": {
+          "name": "profile_view_days_count",
+          "value": "\"auth\".\"profile_view_days\".\"views\" >= 0 and \"auth\".\"profile_view_days\".\"visitors\" >= 0"
         }
       },
       "isRLSEnabled": false

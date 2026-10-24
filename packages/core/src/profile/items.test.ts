@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import type { ProfileBlock } from '@crm/contracts';
-import { countItemPress, enterLinkPage } from '../access/door.ts';
+import { countItemPress, countProfileView, enterLinkPage } from '../access/door.ts';
 import { readLinkPage } from '../booking/public.ts';
 import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { newId } from '../engine/ids.ts';
@@ -463,13 +463,21 @@ describe('a link page', () => {
     const gone = await add(ada.scope, link('Gone', 'gone.dev'));
     const visitor = (n: number) => n.toString(16).padStart(32, '0');
     const day = (back: number) => new Date(Date.now() - back * 86_400_000).toISOString().slice(0, 10);
-    const view = (back: number, n: number, views = 1) =>
-      testQuery(ownerUrl, `insert into auth.profile_views (user_id, day, visitor, views) values ($1, $2, $3, $4)`, [
-        ada.userId,
-        day(back),
-        visitor(n),
-        views,
-      ]);
+    // A visitor's row and the day's row, as crm_count_profile_view keeps them.
+    const view = async (back: number, n: number, views = 1) => {
+      await testQuery(
+        ownerUrl,
+        `insert into auth.profile_views (user_id, day, visitor, views) values ($1, $2, $3, $4)`,
+        [ada.userId, day(back), visitor(n), views],
+      );
+      await testQuery(
+        ownerUrl,
+        `insert into auth.profile_view_days (user_id, day, views, visitors) values ($1, $2, $3, 1)
+         on conflict (user_id, day) do update set views = profile_view_days.views + excluded.views,
+           visitors = profile_view_days.visitors + 1`,
+        [ada.userId, day(back), views],
+      );
+    };
     await view(0, 1, 3);
     await view(5, 2);
     await view(29, 3);
@@ -499,6 +507,17 @@ describe('a link page', () => {
     );
     expect(left.map((row) => row.day)).not.toContain(day(400));
     expect(left).toHaveLength(5);
+    const days = await testQuery<{ day: string }>(
+      ownerUrl,
+      `select day::text as day from auth.profile_view_days where user_id = $1`,
+      [ada.userId],
+    );
+    expect(days.map((row) => row.day)).not.toContain(day(400));
+    // The counters keep the day rows themselves: a real view adds to today's.
+    await countProfileView({ db }, ada.userId, visitor(1));
+    await countProfileView({ db }, ada.userId, visitor(99));
+    expect((await readProfileCounts(ada.scope)).views).toBe(7);
+    expect((await readProfileCounts(ada.scope)).visitors).toBe(4);
   });
 
   it('pages a visitor’s read at 20 with a cursor, and a search finds matches flat', async () => {

@@ -209,12 +209,11 @@ export function pageItem(id: string, choice: ProfilePageChoice): ProfileItem {
 /** The page's figures as one sentence under the Blocks heading (AC-5127): views, visitors, and the change. */
 export function figuresLine(counts: ProfileCounts): string {
   const { days, views, visitors, before } = counts;
-  if (views === 0) return strings.noViews(days);
+  if (views === 0) return before.views === 0 ? strings.noViewsYet(days) : strings.noViews(days, before.views);
   const said = strings.views(views, visitors, days);
   if (before.views === 0) return `${said}.`;
-  const change = Math.round(((views - before.views) / before.views) * 100);
-  if (change > 0) return said + strings.viewsUp(change, days);
-  if (change < 0) return said + strings.viewsDown(-change, days);
+  if (views > before.views) return said + strings.viewsUp(before.views, days);
+  if (views < before.views) return said + strings.viewsDown(before.views, days);
   return said + strings.viewsSame(days);
 }
 

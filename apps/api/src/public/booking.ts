@@ -353,7 +353,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   /** The signed in person's id on this request, or undefined: no session, or one that couldn't be read. */
   const signedInAs = async (c: Context<{ Variables: Variables }>): Promise<string | undefined> => {
     const auth = services.visitor?.auth;
-    if (auth === undefined) return undefined;
+    // No cookie, no session: most visitors never cost a session read.
+    if (auth === undefined || (c.req.header('cookie') ?? '') === '') return undefined;
     try {
       return (await auth.session(c.req.raw.headers, c.get('clientIp')))?.user.id;
     } catch {
@@ -361,10 +362,15 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   };
 
-  /** Today's visitor id on a link page, or undefined for a machine or with no counters (spec 0051, AC-5124). */
+  /**
+   * Today's visitor id on a link page, or undefined for a machine, with no counters, or for a read another site made
+   * (an image or a script there would otherwise count its own visitors as views; spec 0051, AC-5124).
+   */
   const profileVisitor = (c: Context<{ Variables: Variables }>, ownerUserId: string): string | undefined => {
     const userAgent = c.req.header('user-agent');
     if (services.views === undefined || userAgent === undefined || isMachine(userAgent)) return undefined;
+    const site = c.req.header('sec-fetch-site');
+    if (site !== undefined && site !== 'same-origin') return undefined;
     return visitorId(services.views.visitorKey, {
       day: utcDay(services.now?.() ?? new Date()),
       ip: c.get('clientIp'),
@@ -399,13 +405,15 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     const handle = c.req.param('handle');
     const silent = () => c.body(null, 204, { 'cache-control': 'no-store' });
     if (!HANDLE_PATTERN.test(handle)) return silent();
+    // A machine's press never spends a person's budget: dropped before the limits.
+    const userAgent = c.req.header('user-agent');
+    if (services.views === undefined || userAgent === undefined || isMachine(userAgent)) return silent();
+    // The handle's budget is per address it is reached by: an old handle has its own (noted for the spec).
     const over = limited([
       [`profile:press:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.pressesPerAddress],
       [`profile:press-handle:${handle}`, BOOKING_LIMITS.pressesPerHandle],
     ]);
     if (over !== undefined) return silent();
-    const userAgent = c.req.header('user-agent');
-    if (services.views === undefined || userAgent === undefined || isMachine(userAgent)) return silent();
     const item = (await c.req.text().catch(() => '')).trim().slice(0, 64);
     // The visitor is keyed on the handle's place; the core reads the owner and checks the block is theirs and live.
     const visitor = visitorId(services.views.visitorKey, {

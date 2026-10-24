@@ -42,6 +42,8 @@ export type LinkPageState =
        * arrive, or when their read failed (the figures are a nicety: the blocks never wait for them).
        */
       readonly counts?: ProfileCounts;
+      /** The figures' read failed and there are none to show: the screen says so; Try again reads them again. */
+      readonly countsFailed?: boolean;
     };
 
 /** One workspace's copy of the blocks, as a screen retains it. */
@@ -310,6 +312,7 @@ export function createLinkPageStore(deps: LinkPageDeps) {
     let landed = 0;
     let state: LinkPageState = { status: 'loading' };
     let counts: ProfileCounts | undefined;
+    let countsFailed = false;
     const listeners = new Set<() => void>();
 
     const show = () => {
@@ -324,25 +327,38 @@ export function createLinkPageStore(deps: LinkPageDeps) {
           pendingIds: new Set(pending.flatMap((change) => (change.adds === undefined ? [] : [change.adds]))),
           isSaving: pending.length > 0,
           ...(counts === undefined ? {} : { counts }),
+          ...(countsFailed ? { countsFailed: true } : {}),
         };
       }
       for (const listener of listeners) listener();
     };
 
-    // The figures, read beside each read of the blocks; a failed read keeps the last ones (or none).
+    // The figures: read when a screen holds the page (and on Try again), never with every read of the blocks, and
+    // only the newest answer lands. A failed read keeps the last figures, or says they didn't load. They are not
+    // live: a screen shows them as of when it opened, which is what a 30 day figure needs.
+    let countsAsked = 0;
+    let countsAt: number | undefined;
     const readCounts = () => {
+      const asked = (countsAsked += 1);
+      countsAt = now();
       deps.api.counts({ workspace }).then(
         (answer) => {
+          if (asked !== countsAsked) return;
           counts = answer;
-          show();
+          countsFailed = false;
+          if (confirmed !== undefined) show();
         },
-        () => undefined,
+        () => {
+          if (asked !== countsAsked) return;
+          countsAt = undefined;
+          countsFailed = counts === undefined;
+          if (confirmed !== undefined) show();
+        },
       );
     };
 
     const read = (): Promise<ProfileItems> => {
       const asOf = landed;
-      if (reading === undefined) readCounts();
       reading ??= deps.api
         .items({ workspace })
         .then(
@@ -473,6 +489,7 @@ export function createLinkPageStore(deps: LinkPageDeps) {
       getSnapshot: () => state,
       retain() {
         if (readAt === undefined || now() - readAt >= LINK_PAGE_FRESH_MS) void read().catch(() => undefined);
+        if (countsAt === undefined || now() - countsAt >= LINK_PAGE_FRESH_MS) readCounts();
         return () => undefined;
       },
       retry() {
@@ -481,6 +498,7 @@ export function createLinkPageStore(deps: LinkPageDeps) {
           show();
         }
         void read().catch(() => undefined);
+        readCounts();
       },
     };
     return { holder, read, save, order, archive, remove };

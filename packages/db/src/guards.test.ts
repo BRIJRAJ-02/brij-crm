@@ -1798,8 +1798,10 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'known_device',
     'operator_event',
     'passkey',
+    'profile_item_press_days',
     'profile_item_presses',
     'profile_items',
+    'profile_view_days',
     'profile_views',
     'public_handles',
     'public_profiles',
@@ -1955,6 +1957,10 @@ describe('the auth schema: global identity, outside row level security (spec 000
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
       // The link page's blocks (migration 0098), through crm_handle's functions only.
+      'profile_item_press_days DELETE',
+      'profile_item_press_days INSERT',
+      'profile_item_press_days SELECT',
+      'profile_item_press_days UPDATE',
       'profile_item_presses DELETE',
       'profile_item_presses INSERT',
       'profile_item_presses SELECT',
@@ -1964,6 +1970,10 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'profile_items SELECT',
       'profile_items UPDATE',
       // Its views and presses (migration 0100), likewise.
+      'profile_view_days DELETE',
+      'profile_view_days INSERT',
+      'profile_view_days SELECT',
+      'profile_view_days UPDATE',
       'profile_views DELETE',
       'profile_views INSERT',
       'profile_views SELECT',

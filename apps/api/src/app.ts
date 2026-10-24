@@ -211,6 +211,9 @@ const NO_MAILER: Mailer = {
 };
 
 /** The API. `router` is the app's own unless a test passes one. */
+/** The one public link page write: a block's press, `/api/public/handles/<handle>/press`. */
+const LINK_PAGE_PRESS = /^\/api\/public\/handles\/[a-z0-9-]+\/press$/;
+
 export function createApp({
   services,
   env,
@@ -360,6 +363,8 @@ export function createApp({
     const origin = c.get('origin');
     // A public booking page's own writes (book, chat, the guest page's changes) from the booking origin.
     if (origin === bookingOrigin && c.req.path.startsWith('/api/public/booking/')) return next();
+    // A link page's press beacon (spec 0051, AC-5125), from the public origin the page is served on; that one route.
+    if (origin === bookingOrigin && LINK_PAGE_PRESS.test(c.req.path) && c.req.method === 'POST') return next();
     if (!origin || !allowedOrigins.has(origin)) {
       return errorResponse('FORBIDDEN_ORIGIN', 'This request came from an origin the API does not accept.');
     }

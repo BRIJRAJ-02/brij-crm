@@ -445,6 +445,49 @@ export const profileItemPresses = auth.table(
   ],
 );
 
+/**
+ * A link page's views by day (spec 0051, AC-5127): one row per owner and UTC day, kept beside `profile_views` by the
+ * same statement (a visitor's first view of the day adds one visitor), so the editor's figures read at most 60 rows
+ * however many people looked.
+ */
+export const profileViewDays = auth.table(
+  'profile_view_days',
+  {
+    userId: uuid('user_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    views: integer('views').notNull().default(0),
+    visitors: integer('visitors').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ name: 'profile_view_days_pkey', columns: [t.userId, t.day] }),
+    foreignKey({ name: 'profile_view_days_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete(
+      'cascade',
+    ),
+    index('profile_view_days_day').on(t.day),
+    check('profile_view_days_count', sql`${t.views} >= 0 and ${t.visitors} >= 0`),
+  ],
+);
+
+/** A link page block's presses by day (spec 0051, AC-5127), kept beside `profile_item_presses` the same way. */
+export const profileItemPressDays = auth.table(
+  'profile_item_press_days',
+  {
+    itemId: uuid('item_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    presses: integer('presses').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ name: 'profile_item_press_days_pkey', columns: [t.itemId, t.day] }),
+    foreignKey({
+      name: 'profile_item_press_days_item_fk',
+      columns: [t.itemId],
+      foreignColumns: [profileItems.id],
+    }).onDelete('cascade'),
+    index('profile_item_press_days_day').on(t.day),
+    check('profile_item_press_days_count', sql`${t.presses} >= 0`),
+  ],
+);
+
 /** Which workspaces a user is in, for "my workspaces". Written with the workspace, never read for access. */
 export const workspaceMembership = auth.table(
   'workspace_membership',

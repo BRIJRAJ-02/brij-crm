@@ -423,7 +423,13 @@ function Blocks({
     <PreviewLayout preview={preview} previewShare="wide">
       <Card
         title={strings.blocks}
-        description={counts === undefined ? strings.blocksText : `${strings.blocksText} ${figuresLine(counts)}`}
+        description={
+          counts !== undefined
+            ? `${strings.blocksText} ${figuresLine(counts)}`
+            : state.status === 'ready' && state.countsFailed === true
+              ? `${strings.blocksText} ${strings.countsFailed}`
+              : strings.blocksText
+        }
         actions={addMenu}
       >
         {list}

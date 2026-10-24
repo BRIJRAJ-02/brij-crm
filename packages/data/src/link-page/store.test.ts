@@ -119,11 +119,15 @@ describe('the link page store', () => {
     expect(after.status === 'ready' && after.pendingIds.size).toBe(0);
   });
 
-  it('holds the page’s figures beside its blocks, read with them', async () => {
+  it('reads the page’s figures when a screen holds it, not with every read of the blocks', async () => {
     const h = harness();
     await h.ready();
     await h.settle();
-    const state = h.store.of('acme').getSnapshot();
+    const held = h.store.of('acme');
+    expect(held.getSnapshot()).not.toHaveProperty('counts');
+    held.retain();
+    await h.settle();
+    const state = held.getSnapshot();
     expect(state.status === 'ready' && state.counts).toEqual(COUNTS);
   });
 

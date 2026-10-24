@@ -96,17 +96,21 @@ describe('the block registry', () => {
       before: { views: before, visitors: before },
       presses: [{ id: 'l', presses: 3 }],
     });
-    expect(figuresLine(counts(0, 0, 5))).toBe('No views yet in the last 30 days.');
-    expect(figuresLine(counts(1, 1, 0))).toBe('1 view from 1 visitor in the last 30 days.');
-    expect(figuresLine(counts(150, 90, 100))).toBe(
-      '150 views from 90 visitors in the last 30 days, up 50% on the 30 before.',
+    const nb = (text: string) => text.replace(/\u00a0/g, ' ');
+    expect(nb(figuresLine(counts(0, 0, 0)))).toBe('No views yet in the last 30 days.');
+    expect(nb(figuresLine(counts(0, 0, 5)))).toBe('No views in the last 30 days, down from 5 in the 30 days before.');
+    expect(nb(figuresLine(counts(1, 1, 0)))).toBe('1 view from 1 visitor in the last 30 days.');
+    expect(nb(figuresLine(counts(1500, 90, 100)))).toBe(
+      '1,500 views from 90 visitors in the last 30 days, up from 100 in the 30 days before.',
     );
-    expect(figuresLine(counts(50, 40, 100))).toBe(
-      '50 views from 40 visitors in the last 30 days, down 50% on the 30 before.',
+    expect(nb(figuresLine(counts(50, 40, 100)))).toBe(
+      '50 views from 40 visitors in the last 30 days, down from 100 in the 30 days before.',
     );
-    expect(figuresLine(counts(100, 40, 100))).toBe(
-      '100 views from 40 visitors in the last 30 days, the same as the 30 before.',
+    expect(nb(figuresLine(counts(100, 40, 100)))).toBe(
+      '100 views from 40 visitors in the last 30 days, the same as the 30 days before.',
     );
+    // A number never parts from its word.
+    expect(figuresLine(counts(2, 1, 0))).toContain('2\u00a0views');
     const link: ProfileItem = {
       kind: 'link',
       id: 'l',
@@ -115,7 +119,7 @@ describe('the block registry', () => {
       hue: 'blue',
       updatedAt: '',
     };
-    expect(pressesChip(link, counts(1, 1, 0))).toEqual(['3 presses']);
+    expect(pressesChip(link, counts(1, 1, 0))).toEqual(['3\u00a0presses']);
     expect(pressesChip({ ...link, id: 'other' }, counts(1, 1, 0))).toEqual(['No presses yet']);
     expect(pressesChip({ kind: 'heading', id: 'h', title: 'H', updatedAt: '' }, counts(1, 1, 0))).toEqual([]);
     expect(pressesChip(link, undefined)).toEqual([]);

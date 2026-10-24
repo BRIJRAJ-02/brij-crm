@@ -611,4 +611,55 @@ describe('page views for the operator console (spec 0047, AC-1625)', () => {
     // Another person's figures name nothing of these.
     expect(JSON.stringify(await other.client.profile.counts({ workspace: other.slug }))).not.toContain(site.id);
   });
+
+  it('takes a press from the public origin the page is served on, but no other, and no view another site makes', async () => {
+    const PUBLIC = 'https://book.example';
+    const env = { ...testEnv(), BOOKING_PUBLIC_ORIGIN: PUBLIC };
+    const onPublic = createApp({
+      services: {
+        ...testServices(env, { db, identity, mailer: createMailpitMailer({ url: MAILPIT_URL, from: env.MAIL_FROM }) }),
+        bookingCalendar: calendar,
+        bookingLimiter: createMemoryLimiter(),
+      },
+      env,
+    });
+    const m = await memberWithWorkspace(app);
+    const handle = `beacon-${newId().slice(-8)}`;
+    await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
+    const site = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'link', title: 'Site', url: 'ada.dev' },
+      mutationId: newId(),
+    });
+    const ip = newIp();
+    const press = (origin: string) =>
+      onPublic.request(`/api/public/handles/${handle}/press`, {
+        method: 'POST',
+        headers: {
+          [EDGE_HEADER]: TEST_EDGE_SECRET,
+          'x-forwarded-for': ip,
+          'user-agent': CHROME,
+          [ORIGIN_HEADER]: origin,
+          origin,
+        },
+        body: site.id,
+      });
+    expect((await press(PUBLIC)).status).toBe(204);
+    expect((await press('https://elsewhere.example')).status).toBe(403);
+    // A read another site makes (an image there) is answered but never a view.
+    await onPublic.request(`/api/public/handles/${handle}`, {
+      headers: {
+        [EDGE_HEADER]: TEST_EDGE_SECRET,
+        'x-forwarded-for': ip,
+        'user-agent': CHROME,
+        'sec-fetch-site': 'cross-site',
+      },
+    });
+    await settle();
+    expect(await m.client.profile.counts({ workspace: m.slug })).toMatchObject({
+      views: 0,
+      presses: [{ id: site.id, presses: 1 }],
+    });
+  });
 });

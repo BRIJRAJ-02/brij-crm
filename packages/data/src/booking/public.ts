@@ -206,11 +206,11 @@ export function createHandleClient(options: PublicClientOptions & { readonly bea
         ...(query.after === undefined ? {} : { after: query.after }),
         ...(query.q === undefined ? {} : { q: query.q }),
       }).toString();
-      // The first page's read is a view (AC-5124): it goes with the visitor's cookies, so the owner's own isn't one.
+      // The first page's read is a view (AC-5124): it goes with this site's cookies, so the owner's own isn't one.
       const isView = search === '';
       return call<PublicProfile>(
         `${encodeURIComponent(handle)}${isView ? '' : `?${search}`}`,
-        isView ? { credentials: 'include' } : {},
+        isView ? { credentials: 'same-origin' } : {},
       );
     },
     press: (handle, itemId) => {

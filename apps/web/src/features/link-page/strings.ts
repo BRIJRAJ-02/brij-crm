@@ -1,23 +1,30 @@
 // Settings › Account › Link page's copy (spec 0051).
 import { navStrings } from './nav-strings.ts';
 
+/** A count as the browser's language writes it, as Forms' counts are. */
+const figure = (count: number) => new Intl.NumberFormat().format(count);
+
 export const strings = {
   title: navStrings.title,
   /** The page's place in Settings: a page of Profile's. */
   profile: 'Profile',
   blocks: 'Blocks',
   blocksText: 'In the order visitors see them.',
-  // The figures (AC-5127): over the last 30 days, with the 30 before as the comparison.
+  // The figures (AC-5127): over the last 30 days, with the 30 before as the comparison. A number keeps its word on
+  // its line (a no break space), so a phone never strands the "2" away from "views".
   noPresses: 'No presses yet',
-  presses: (count: number) => `${count.toLocaleString()} ${count === 1 ? 'press' : 'presses'}`,
-  noViews: (days: number) => `No views yet in the last ${String(days)} days.`,
+  presses: (count: number) => `${figure(count)}\u00a0${count === 1 ? 'press' : 'presses'}`,
+  noViewsYet: (days: number) => `No views yet in the last ${String(days)}\u00a0days.`,
+  noViews: (days: number, before: number) =>
+    `No views in the last ${String(days)}\u00a0days, down from ${figure(before)} in the ${String(days)}\u00a0days before.`,
   views: (views: number, visitors: number, days: number) =>
-    `${views.toLocaleString()} ${views === 1 ? 'view' : 'views'} from ${visitors.toLocaleString()} ${
+    `${figure(views)}\u00a0${views === 1 ? 'view' : 'views'} from ${figure(visitors)}\u00a0${
       visitors === 1 ? 'visitor' : 'visitors'
-    } in the last ${String(days)} days`,
-  viewsUp: (percent: number, days: number) => `, up ${String(percent)}% on the ${String(days)} before.`,
-  viewsDown: (percent: number, days: number) => `, down ${String(percent)}% on the ${String(days)} before.`,
-  viewsSame: (days: number) => `, the same as the ${String(days)} before.`,
+    } in the last ${String(days)}\u00a0days`,
+  viewsUp: (before: number, days: number) => `, up from ${figure(before)} in the ${String(days)}\u00a0days before.`,
+  viewsDown: (before: number, days: number) => `, down from ${figure(before)} in the ${String(days)}\u00a0days before.`,
+  viewsSame: (days: number) => `, the same as the ${String(days)}\u00a0days before.`,
+  countsFailed: 'Views and presses didn’t load.',
   add: 'Add',
   addLink: 'Link',
   addLinkText: 'A website, a profile, an email or a phone number',

@@ -313,6 +313,9 @@ describe("migration 0018's closing check", () => {
     'revoke all (user_id, picture_hidden, updated_at) on auth.user_prefs from crm_handle',
     // And migration 0097's social links, with its own closing check.
     'revoke all on auth.social_links from crm_handle',
+    // And migrations 0098 and 0100's link page (its blocks, views and presses), with their own closing checks.
+    'revoke all on auth.profile_items, auth.profile_views, auth.profile_item_presses from crm_handle',
+    'revoke all on auth.profile_view_days, auth.profile_item_press_days from crm_handle',
   ];
 
   /** Runs `sql` (the check) after `setup`, in a transaction that is rolled back, so nothing outlives the test. */
