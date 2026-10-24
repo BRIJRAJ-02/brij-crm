@@ -12,6 +12,10 @@
     border-radius: var(--radius-md);
   }
 
+  .root[data-size='fill'] {
+    inline-size: 100%;
+  }
+
   .ground {
     fill: light-dark(var(--surface), var(--surface-inverse));
   }
@@ -32,6 +36,11 @@
 
   .layout > .root {
     inline-size: var(--size-column);
+  }
+
+  .root[data-size='sm'],
+  .layout > .root[data-size='sm'] {
+    inline-size: var(--size-column-narrow);
   }
 
   .aside {

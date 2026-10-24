@@ -77,3 +77,38 @@ export const Narrow: Story = {
     await expect(Math.round(first.left)).toBe(Math.round(code.left));
   },
 };
+
+/** `size="fill"`: the code takes its slot's whole width, as the link page's QR Modal draws it to be scanned or saved. */
+export const Fill: Story = {
+  args: { value: 'https://timefix.com/anish', label: 'QR code for your link page', size: 'fill' },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <QrCode {...args} />
+    </Stage>
+  ),
+  play: async ({ canvasElement, canvas }) => {
+    const code = canvas.getByRole('img', { name: 'QR code for your link page' });
+    const slot = code.parentElement;
+    const room = slot === null ? 0 : slot.clientWidth - parseFloat(getComputedStyle(slot).paddingInline || '0') * 2;
+    // Its slot's whole width (inside the slot's padding), past the default size-menu.
+    await expect(Math.abs(code.getBoundingClientRect().width - room)).toBeLessThan(1);
+    await expect(code.getBoundingClientRect().width).toBeGreaterThan(240);
+    await expect(canvasElement.querySelector('svg[data-size="fill"]')).not.toBeNull();
+  },
+};
+
+/** `size="sm"` with a column: a code in a card among others (Home's link page card), the words beside it. */
+export const Small: Story = {
+  args: { value: 'https://timefix.com/anish', label: 'QR code for your link page', size: 'sm' },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <QrCode {...args}>
+        <p>timefix.com/anish</p>
+      </QrCode>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const code = canvas.getByRole('img', { name: 'QR code for your link page' });
+    await expect(Math.round(code.getBoundingClientRect().width)).toBe(120);
+  },
+};

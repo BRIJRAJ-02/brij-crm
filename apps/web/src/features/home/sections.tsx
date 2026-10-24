@@ -3,6 +3,7 @@
 // which reads its own data and draws its own loading, empty and error states.
 import type { HomeSection } from './registry.ts';
 import { CapturesSection } from './sections/CapturesSection.tsx';
+import { LinkPageSection } from './sections/LinkPageSection.tsx';
 import { MetricsSection } from './sections/MetricsSection.tsx';
 import { RecentSection } from './sections/RecentSection.tsx';
 import { SetupSection } from './sections/SetupSection.tsx';
@@ -38,6 +39,15 @@ export const HOME_SECTIONS: readonly HomeSection[] = [
     // One member is not a team, and the read is behind Bookings.
     isVisible: ({ members, permissions }) => members.length > 1 && permissions.includes('booking.manage'),
     Component: TeamSection,
+  },
+  {
+    id: 'linkPage',
+    title: 'Your link page',
+    width: 'half',
+    // Everyone has a link page once they claim a handle; before, the card says how (AC-5123).
+    isVisible: () => true,
+    isHideable: true,
+    Component: LinkPageSection,
   },
   { id: 'metrics', title: 'This week', width: 'full', isVisible: () => true, Component: MetricsSection },
 ];
