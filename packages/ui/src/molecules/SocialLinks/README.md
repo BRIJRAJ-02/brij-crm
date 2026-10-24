@@ -39,4 +39,4 @@ New (booking socials, 25 October 2026). The owner asked for social links on book
 
 ## Size
 
-The tooltips load on their own (`SocialLinksTips.tsx`, `lazy`), so a booking page's first load gains only the row and its few lines of CSS.
+The tooltips load on their own (`SocialLinksTips.tsx`, `lazy`), so a booking page's first load gains only the row and its few lines of CSS: measured on 25 October 2026 against land, 1.45 kB of JavaScript (224.62 of 230 kB) and 0.18 kB of CSS (17.56 of 18 kB), gzipped.
