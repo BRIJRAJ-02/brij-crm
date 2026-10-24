@@ -16,7 +16,7 @@ New (25 October 2026). The profile used to be BookingProfile with a LinkList of 
   - `contact`: the owner's contact card (spec 0051, AC-5115): its tile is an id card on `accent-soft`, its title the card's full name and its line the job title and company, and it ends in "Save contact" in the `link` colour. It is one plain link to the card's vCard on our own origin (`/api/public/handles/<handle>/contact.vcf`, answered as an attachment), opened in place, so it works with no script and straight from a QR code, and a phone offers to add the card to its contacts.
   - A link with no line under it centres its title across the row, as any link in bio page does, so a short title ("X") never hangs by the tile; its end takes the tile's width so the centre is the row's own.
 - **After** (`after`): a refusal's Callout, Show more.
-- **Foot**: BookingFoot, tagged `booking_profile`.
+- **Foot** (`foot`): the public page passes BookingFoot, tagged `booking_profile`. A slot rather than drawn here: the app's editor draws this page too, and a module both bundles import is split into a chunk of its own, taking BookingFrame's CSS out of the booking page's first load (0.6 kB more, gzipped, measured 25 October 2026). The editor's preview has no foot.
 
 Why the letter tile isn't an Avatar: an Avatar is a person (initials from a name, a circle or a workspace square at the avatar sizes), while this tile is one of the faces of one slot (a brand mark on a hairline, a Lucide icon on the sunken surface, a calendar or an id card on the accent's soft surface, a letter on a hue), all at the tile's own size. Bending Avatar to draw marks and icons, or adding a tile size to it for this slot alone, would have spread the tile across two components; the hue pairs are the same `tag-<hue>` tokens Avatar and Tag read.
 
@@ -32,7 +32,7 @@ Why the letter tile isn't an Avatar: an Avatar is a person (initials from a name
     { kind: 'heading', id, title: 'Find me' },
     { kind: 'link', id, title: 'LinkedIn', href: 'https://www.linkedin.com/in/anish', mark: 'linkedin', hue: 'blue' },
   ]}
-  claimHref={claimPageHref('booking_profile')}
+  foot={<BookingFoot page="booking_profile" claimHref={claimPageHref('booking_profile')} />}
   onPress={(id) => beacon(id)}
 />
 ```

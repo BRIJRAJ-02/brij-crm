@@ -2,13 +2,17 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
+import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkPage, LinkPageTile, type LinkPageBlock } from './LinkPage.tsx';
 
 const meta = {
   title: 'Modules/LinkPage',
   component: LinkPage,
-  args: { claimHref: 'https://www.timefix.com/?utm_content=claim_link', onPress: fn() },
+  args: {
+    foot: <BookingFoot page="booking_profile" claimHref="https://www.timefix.com/?utm_content=claim_link" />,
+    onPress: fn(),
+  },
   render: (args) => (
     <Stage width="fill" height="page">
       <LinkPage {...args} />

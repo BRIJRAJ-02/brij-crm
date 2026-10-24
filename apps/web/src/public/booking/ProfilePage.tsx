@@ -6,6 +6,7 @@
 // press counter (later phases), and any count of blocks (read a page at a time, never all at once).
 import { createHandleClient, isDataError, type PublicProfile, type PublicProfileItem } from '@crm/data/booking';
 import {
+  BookingFoot,
   BookingMessage,
   Button,
   Callout,
@@ -44,6 +45,9 @@ type Loaded =
     };
 
 /** The link page: the person, then their blocks a page at a time, with a search once there are many. */
+/** The page's foot: "Powered by Timefix", tagged as the profile, and Claim your free page. */
+const foot = <BookingFoot page="booking_profile" claimHref={claimPageHref('booking_profile')} />;
+
 export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   const client = useMemo(() => createHandleClient({ origin: globalThis.location.origin }), []);
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
@@ -153,7 +157,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   }
   // While loading: the person's and the blocks' own shapes at once (this is the page's first paint, so there is no
   // content for a skeleton to flash in front of), so nothing moves when they arrive.
-  if (loaded.state === 'loading') return <LinkPage claimHref={claimPageHref('booking_profile')} />;
+  if (loaded.state === 'loading') return <LinkPage foot={foot} />;
 
   const { profile, items } = loaded;
   const current = profile.handle;
@@ -174,7 +178,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         : { socials: <SocialLinks links={profile.socials} label={strings.socials(profile.name)} /> })}
       blocks={blocks}
       {...(isSearching ? { summary: strings.matches(blocks.length) } : {})}
-      claimHref={claimPageHref('booking_profile')}
+      foot={foot}
       {...(isLong
         ? {
             toolbar: <LinkListToolbar searchLabel={strings.searchLinks} query={query} onQueryChange={setQuery} />,

@@ -6,10 +6,8 @@ import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
-import type { PoweredByPage } from '../../lib/powered-by.ts';
 import { safeHref } from '../../lib/safe-href.ts';
 import { initialsOf } from '../../lib/stable-hue.ts';
-import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
 import styles from './LinkPage.module.css';
 import { strings } from './strings.ts';
 
@@ -85,10 +83,12 @@ export interface LinkPageProps {
   readonly empty?: ReactNode;
   /** After the blocks: a refusal's Callout, Show more. */
   readonly after?: ReactNode;
-  /** Where "Claim your free page" goes. */
-  readonly claimHref?: string;
-  /** Which page the foot's links are tagged as. */
-  readonly page?: PoweredByPage;
+  /**
+   * Under everything: the public page's BookingFoot ("Powered by Timefix", Claim your free page). A slot rather than
+   * drawn here, so the app's editor, which draws this page too, never shares the booking page's frame with the
+   * public bundle (a module both import is split into a chunk of its own, and its CSS from the page's first load).
+   */
+  readonly foot?: ReactNode;
   /**
    * Drawn inside the editor's phone (`PreviewLayout`): a plain region rather than the page's `main`, the height its
    * content takes, and inert, so a press never leaves the editor.
@@ -375,8 +375,7 @@ export function LinkPage({
   summary,
   empty,
   after,
-  claimHref,
-  page = 'booking_profile',
+  foot,
   isPreview = false,
   layout = 'page',
   caption,
@@ -476,7 +475,7 @@ export function LinkPage({
           </div>
         )}
         {after}
-        <BookingFoot page={page} {...(claimHref === undefined ? {} : { claimHref })} />
+        {foot}
       </div>
     </Root>
   );
