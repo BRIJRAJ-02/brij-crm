@@ -7,6 +7,7 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkList, type LinkListProps, type LinkRow } from './LinkList.tsx';
 import { LinkListRowOrder } from './RowOrder.tsx';
+import { LinkPageTile } from '../LinkPage/LinkPage.tsx';
 
 function icons(title: string, isOff = false) {
   return (
@@ -710,4 +711,49 @@ export const ReorderNarrow: Story = {
     await expect(facts).toBeVisible();
     await expect(facts.getBoundingClientRect().top).toBeGreaterThanOrEqual(title.bottom);
   },
+};
+
+/** Rows with a tile before the title (a link page's blocks in its editor), moving by their grips. */
+export const Leading: Story = {
+  args: {
+    label: 'Blocks',
+    hasLeading: true,
+    onMove: fn(),
+    rowOrder: LinkListRowOrder,
+    rows: [
+      {
+        id: 'intro',
+        title: 'Intro call',
+        address: 'Booking page',
+        chips: [],
+        leading: (
+          <LinkPageTile block={{ kind: 'page', id: 'intro', title: 'Intro call', href: '/a/intro', facts: '' }} />
+        ),
+      },
+      {
+        id: 'in',
+        title: 'LinkedIn',
+        address: 'linkedin.com/in/anish',
+        chips: [],
+        leading: (
+          <LinkPageTile
+            block={{ kind: 'link', id: 'in', title: 'LinkedIn', href: '', mark: 'linkedin', hue: 'blue' }}
+          />
+        ),
+      },
+      {
+        id: 'deck',
+        title: 'Our deck',
+        address: 'example.com/deck',
+        chips: [],
+        leading: <LinkPageTile block={{ kind: 'link', id: 'deck', title: 'Our deck', href: '', hue: 'purple' }} />,
+      },
+    ],
+  },
+};
+
+/** Tiled rows while they load: the tile's place is held, so the titles land where the lines stood. */
+export const LeadingLoading: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Blocks', hasLeading: true, status: 'loading', rows: [] },
 };

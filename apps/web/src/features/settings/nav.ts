@@ -10,6 +10,7 @@ import { strings as calendar } from './calendar-strings.ts';
 import { historyHref } from './history-href.ts';
 import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
+import { strings as linkPage } from '../link-page/strings.ts';
 import { strings as rotations } from '../booking/rotation-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
@@ -45,6 +46,9 @@ export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/sched
 /** Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and public profile. */
 export const profileHref = (slug: string) => `/w/${slug}/settings/account/profile`;
 
+/** Settings › Account › Link page (spec 0051): the person's page at /<handle>, built as blocks. */
+export const linkPageHref = (slug: string) => `/w/${slug}/settings/account/link-page`;
+
 /** Settings › Workspace › General (spec 0031, AC-822): the workspace's name, time zone and address, and its delete. */
 export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/general`;
 
@@ -63,6 +67,7 @@ export const securitySettingsHref = (slug: string) => `/w/${slug}/settings/accou
 /** The settings navigation's pages: Account's, then Scheduling's and Workspace's. */
 export type SettingsPageId =
   | 'profile'
+  | 'link-page'
   | 'preferences'
   | 'security'
   | 'calendars'
@@ -148,6 +153,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
       entries: [
         // Profile first (spec 0031, AC-832): every member has one.
         { id: 'profile', label: workspace.profileTitle, href: profileHref(slug), icon: 'user-round' },
+        // The person's link page (spec 0051), under their profile: theirs in every workspace, like the handle.
+        { id: 'link-page', label: linkPage.title, href: linkPageHref(slug), icon: 'globe' },
         { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
         { id: 'security', label: security.title, href: securitySettingsHref(slug), icon: 'shield-check' },
         { id: 'notifications', label: notifications.title, href: notificationSettingsHref(slug), icon: 'bell' },
@@ -251,6 +258,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   const match = /^\/w\/[^/]+\/settings\/(.+?)\/*$/.exec(pathname);
   const rest = match?.[1] ?? '';
   if (rest === 'account/profile') return 'profile';
+  if (rest === 'account/link-page') return 'link-page';
   if (rest === 'account/preferences') return 'preferences';
   if (rest === 'general') return 'general';
   if (rest === 'scheduling/calendars' || rest === 'account/calendars' || rest === 'calendar') return 'calendars';

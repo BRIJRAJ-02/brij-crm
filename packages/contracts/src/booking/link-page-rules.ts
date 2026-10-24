@@ -129,3 +129,35 @@ export const PUBLIC_LINK_MARKS = [
   'tiktok',
   'threads',
 ] as const;
+
+/** The hosts each network's links live on: the same table as `values/social.ts` (a test holds them equal). */
+export const LINK_MARK_HOSTS: Readonly<Record<(typeof PUBLIC_LINK_MARKS)[number], readonly string[]>> = {
+  linkedin: ['linkedin.com'],
+  x: ['x.com', 'twitter.com'],
+  instagram: ['instagram.com'],
+  github: ['github.com'],
+  facebook: ['facebook.com', 'fb.com'],
+  youtube: ['youtube.com'],
+  angellist: ['wellfound.com', 'angel.co'],
+  tiktok: ['tiktok.com'],
+  threads: ['threads.com', 'threads.net'],
+};
+
+/**
+ * The network whose mark a link shows (AC-5110): the one its web address's host is on (`uk.linkedin.com` is
+ * LinkedIn's), else none. The server answers it with the page, and the editor's preview draws the same before
+ * saving, so the public bundle never parses an address.
+ */
+export function linkMarkOf(url: string): (typeof PUBLIC_LINK_MARKS)[number] | undefined {
+  let host: string;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return undefined;
+    host = parsed.hostname.toLowerCase().replace(/^(?:www|m|mobile)\./, '');
+  } catch {
+    return undefined;
+  }
+  return PUBLIC_LINK_MARKS.find((mark) =>
+    LINK_MARK_HOSTS[mark].some((own) => host === own || host.endsWith(`.${own}`)),
+  );
+}

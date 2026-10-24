@@ -1,27 +1,24 @@
 // Brief
-// Purpose: a person's public profile at /<handle> (22 Oct 2026, the Cal.com profile): who they are and what can be booked.
-// Main task: pick one of their Public booking links; the whole row opens it at /<handle>/<slug>.
-// Leaves out: Link only pages (they work by address but are never listed), booking itself (each link's page), and
-// any count of links (read a page at a time, never all at once).
-import { createHandleClient, isDataError, type PublicProfile, type PublicProfileLink } from '@crm/data/booking';
+// Purpose: a person's link page at /<handle> (spec 0051, built as blocks): the one address they hand over at an event,
+// who they are, how to book them, and where else to find them.
+// Main task: a visitor presses one block (a booking page, a link) and lands where they meant to go.
+// Leaves out: Link only booking pages (never listed), booking itself (each page's own), the contact card, the socials
+// row and the press counter (later phases), and any count of blocks (read a page at a time, never all at once).
+import { createHandleClient, isDataError, type PublicProfile, type PublicProfileItem } from '@crm/data/booking';
 import {
   BookingMessage,
-  BookingProfile,
-  BookingProfileSection,
   Button,
   Callout,
   claimPageHref,
   EmptyState,
-  LinkList,
   LinkListToolbar,
-  LoadingNow,
-  type LinkRow,
+  LinkPage,
 } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { sectionsOf } from './sections.ts';
+import { blocksOf } from './link-page.ts';
 import { strings, tabTitle } from './strings.ts';
 
-/** Past this many links, a search sits above the list. */
+/** Past this many blocks, a search sits above them. */
 const SEARCH_FROM = 8;
 /** How long typing rests before the search reads. */
 const SEARCH_WAIT_MS = 250;
@@ -41,23 +38,11 @@ type Loaded =
   | {
       readonly state: 'ready';
       readonly profile: PublicProfile;
-      readonly links: readonly PublicProfileLink[];
+      readonly items: readonly PublicProfileItem[];
       readonly next?: string;
     };
 
-/** A link as a row: its title, description and lengths, and Team for a team page. */
-function rowOf(handle: string, link: PublicProfileLink): LinkRow {
-  return {
-    id: link.slug,
-    title: link.title,
-    address: '',
-    ...(link.description === '' ? {} : { description: link.description }),
-    chips: [...link.durations.map((minutes) => strings.minutesShort(minutes)), ...(link.isTeam ? [strings.team] : [])],
-    href: `/${encodeURIComponent(handle)}/${encodeURIComponent(link.slug)}`,
-  };
-}
-
-/** The profile: the person's card, then their Public links a page at a time, with a search once there are many. */
+/** The link page: the person, then their blocks a page at a time, with a search once there are many. */
 export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   const client = useMemo(() => createHandleClient({ origin: globalThis.location.origin }), []);
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
@@ -65,9 +50,9 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   const [searched, setSearched] = useState('');
   const [isMoreLoading, setMoreLoading] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
-  // A search that failed: said under the search, the profile stays.
+  // A search that failed: said under the search, the page stays.
   const [searchFailed, setSearchFailed] = useState(false);
-  // Whether the unsearched list is long enough for a search: once true, it stays while the person searches.
+  // Whether the unsearched page is long enough for a search: once true, it stays while the person searches.
   const [isLong, setLong] = useState(false);
   // Only the newest read lands: a slow answer to an older search never replaces a newer one.
   const latest = useRef(0);
@@ -79,13 +64,13 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         (profile) => {
           if (ticket !== latest.current) return;
           if (profile.handle !== handle) onMoved(profile.handle);
-          if (search === '' && (profile.links.length > SEARCH_FROM || profile.next !== undefined)) setLong(true);
+          if (search === '' && (profile.items.length > SEARCH_FROM || profile.next !== undefined)) setLong(true);
           setMoreFailed(false);
           setSearchFailed(false);
           setLoaded({
             state: 'ready',
             profile,
-            links: profile.links,
+            items: profile.items,
             ...(profile.next === undefined ? {} : { next: profile.next }),
           });
         },
@@ -127,14 +112,14 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
     setMoreLoading(true);
     setMoreFailed(false);
     client
-      .profile(handle, { after: loaded.next, ...(searched === '' ? {} : { q: searched }) })
+      .profile(handle, { after: loaded.next })
       .then(
         (page) => {
           if (ticket !== latest.current) return;
           setLoaded({
             state: 'ready',
             profile: loaded.profile,
-            links: [...loaded.links, ...page.links],
+            items: [...loaded.items, ...page.items],
             ...(page.next === undefined ? {} : { next: page.next }),
           });
         },
@@ -159,31 +144,16 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
       </BookingMessage>
     );
   }
-  if (loaded.state === 'loading') {
-    // The person's card and the links' own rows as skeletons, so nothing moves when they arrive. The rows are
-    // drawn at once rather than after the loading delay: this is the page's first paint, so there is no content
-    // for a skeleton to flash in front of.
-    return (
-      <BookingProfile claimHref={claimPageHref('booking_profile')}>
-        <LoadingNow>
-          <LinkList
-            label={strings.profileLinks}
-            searchLabel={strings.searchLinks}
-            isToolbarHidden
-            status="loading"
-            rows={[]}
-            onOpen={() => undefined}
-          />
-        </LoadingNow>
-      </BookingProfile>
-    );
-  }
+  // While loading: the person's and the blocks' own shapes at once (this is the page's first paint, so there is no
+  // content for a skeleton to flash in front of), so nothing moves when they arrive.
+  if (loaded.state === 'loading') return <LinkPage claimHref={claimPageHref('booking_profile')} />;
 
-  const { profile, links } = loaded;
+  const { profile, items } = loaded;
   const current = profile.handle;
-  const sections = sectionsOf(links);
+  const isSearching = searched !== '';
+  const blocks = blocksOf(current, items);
   return (
-    <BookingProfile
+    <LinkPage
       person={{
         name: profile.name,
         id: current,
@@ -191,37 +161,33 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         // Our own origin's copy of their account picture; the initials show if it fails.
         ...(profile.image === undefined ? {} : { image: profile.image }),
       }}
+      blocks={blocks}
+      {...(isSearching && blocks.length > 0 ? { summary: strings.matches(blocks.length) } : {})}
       claimHref={claimPageHref('booking_profile')}
-    >
-      {isLong && <LinkListToolbar searchLabel={strings.searchLinks} query={query} onQueryChange={setQuery} />}
-      {searchFailed && <Callout tone="danger">{strings.searchFailed}</Callout>}
-      {links.length === 0 ? (
+      {...(isLong
+        ? {
+            toolbar: <LinkListToolbar searchLabel={strings.searchLinks} query={query} onQueryChange={setQuery} />,
+          }
+        : {})}
+      empty={
         <EmptyState
-          title={searched === '' ? strings.noLinksTitle : strings.noMatchesTitle(searched)}
-          icon={searched === '' ? 'calendar-clock' : 'search'}
+          title={isSearching ? strings.noMatchesTitle(searched) : strings.noLinksTitle}
+          icon={isSearching ? 'search' : 'link'}
         >
-          {searched === '' ? strings.noLinksText : strings.noMatchesText}
+          {isSearching ? strings.noMatchesText : strings.noLinksText}
         </EmptyState>
-      ) : (
-        sections.map((section) => (
-          <BookingProfileSection key={section.key} {...(section.title === undefined ? {} : { title: section.title })}>
-            <LinkList
-              label={section.title === undefined ? strings.profileLinks : strings.sectionLinks(section.title)}
-              searchLabel={strings.searchLinks}
-              isToolbarHidden
-              rowsAreLinks
-              rows={section.links.map((link) => rowOf(current, link))}
-              onOpen={() => undefined}
-            />
-          </BookingProfileSection>
-        ))
-      )}
-      {moreFailed && <Callout tone="danger">{strings.moreFailed}</Callout>}
-      {loaded.next !== undefined && (
-        <Button isPending={isMoreLoading} onPress={more}>
-          {strings.showMore}
-        </Button>
-      )}
-    </BookingProfile>
+      }
+      after={
+        <>
+          {searchFailed && <Callout tone="danger">{strings.searchFailed}</Callout>}
+          {moreFailed && <Callout tone="danger">{strings.moreFailed}</Callout>}
+          {!isSearching && loaded.next !== undefined && (
+            <Button isPending={isMoreLoading} onPress={more}>
+              {strings.showMore}
+            </Button>
+          )}
+        </>
+      }
+    />
   );
 }

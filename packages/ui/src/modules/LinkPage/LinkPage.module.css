@@ -1,0 +1,258 @@
+/* A link page, /<handle> (spec 0051): one column a thumb reaches, the person first (face, name, bio, their social
+   icons), then the blocks as whole rows to press, each a raised card with a leading tile, grouped under small
+   headings, then the foot. On the booking pages' background, so the two read as one product. */
+@layer components {
+  .root {
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    min-block-size: 100dvb;
+    padding: var(--space-32) var(--space-16);
+    background: var(--surface-subtle);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* In the editor's phone: the height its content takes, the phone's own background. */
+  .root[data-preview] {
+    min-block-size: auto;
+    padding-block: var(--space-24);
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-24);
+    inline-size: 100%;
+    max-inline-size: var(--size-page-card);
+  }
+
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-8);
+    text-align: center;
+  }
+
+  .hero > :first-child {
+    margin-block-end: var(--space-4);
+  }
+
+  .name {
+    margin: 0;
+    inline-size: 100%;
+    color: var(--text);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+    overflow-wrap: anywhere;
+  }
+
+  .bio {
+    margin: 0;
+    inline-size: 100%;
+    max-inline-size: var(--size-dialog);
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
+
+  .summary {
+    margin: 0;
+    padding-inline: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .blocks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-24);
+    animation: rise var(--duration-popover) var(--ease-out) both;
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .heading {
+    margin: 0;
+    padding-inline: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    overflow-wrap: anywhere;
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: flex;
+  }
+
+  .block {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-12);
+    min-inline-size: 0;
+    padding: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+    color: var(--text);
+    text-decoration: none;
+    outline: none;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .block:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .block:not([data-loading]):hover {
+      border-color: var(--border-strong);
+      background: var(--surface-hover);
+    }
+
+    .block:not([data-loading]):hover .end {
+      color: var(--text-secondary);
+    }
+  }
+
+  /* The leading tile: a network's mark, a picked icon, a letter on its hue, or a booking page's calendar. */
+  .tile {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    inline-size: calc(var(--size-row) + var(--space-6));
+    block-size: calc(var(--size-row) + var(--space-6));
+    border-radius: var(--radius-lg);
+    background: var(--surface-sunken);
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .tile[data-tile='mark'] {
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
+  }
+
+  .tile[data-tile='page'] {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .tile[data-tile='loading'] {
+    background: var(--surface-sunken);
+  }
+
+  .tile[data-hue='gray'] {
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+  }
+  .tile[data-hue='red'] {
+    background: var(--tag-red-bg);
+    color: var(--tag-red-text);
+  }
+  .tile[data-hue='orange'] {
+    background: var(--tag-orange-bg);
+    color: var(--tag-orange-text);
+  }
+  .tile[data-hue='yellow'] {
+    background: var(--tag-yellow-bg);
+    color: var(--tag-yellow-text);
+  }
+  .tile[data-hue='lime'] {
+    background: var(--tag-lime-bg);
+    color: var(--tag-lime-text);
+  }
+  .tile[data-hue='green'] {
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
+  }
+  .tile[data-hue='sky'] {
+    background: var(--tag-sky-bg);
+    color: var(--tag-sky-text);
+  }
+  .tile[data-hue='blue'] {
+    background: var(--tag-blue-bg);
+    color: var(--tag-blue-text);
+  }
+  .tile[data-hue='purple'] {
+    background: var(--tag-purple-bg);
+    color: var(--tag-purple-text);
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .title {
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+    overflow-wrap: anywhere;
+  }
+
+  .note {
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
+
+  .end {
+    display: inline-flex;
+    flex: none;
+    color: var(--text-tertiary);
+    transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  /* The blocks arrive with a short rise. Movement only where motion is welcome; the fade always. */
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-2);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    @keyframes rise {
+      from {
+        opacity: 0;
+        translate: none;
+      }
+    }
+  }
+
+  @media (forced-colors: active) {
+    .block {
+      border-color: CanvasText;
+    }
+
+    .block:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

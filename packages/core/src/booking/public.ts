@@ -24,7 +24,7 @@ import {
   bookingPicturePath,
   PROFILE_PAGE_SIZE,
   profilePicturePath,
-  describeLink,
+  linkMarkOf,
   PublicProfileItem,
   type PublicAddress,
   type PublicProfile,
@@ -306,7 +306,7 @@ function publicItemOf(row: LinkPageRow, pages: ReadonlyMap<string, PageRow>): Pu
   if (row.kind === 'link') {
     const url = typeof data.url === 'string' ? data.url : '';
     // The network's own mark for a profile or site on it, matched here so the public bundle never parses addresses.
-    const network = /^https?:/i.test(url) ? describeLink(url).network : undefined;
+    const network = linkMarkOf(url);
     candidate = {
       kind: 'link',
       id: row.id,

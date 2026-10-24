@@ -38,8 +38,12 @@ import { LinkList, LinkListRowOrder } from '@crm/ui';
   onOpen={open}
   onMove={(id, toIndex) => move(id, toIndex)}
   rowOrder={LinkListRowOrder}
-/>
+/>;
 ```
+
+## Rows with a tile
+
+`leading` puts a tile before a row's title (25 October 2026): the link page's editor (spec 0051) lists blocks that read apart at a glance by a network's mark, an icon or a letter, the tiles the page itself draws (`LinkPageTile`). Give every row one and the list `hasLeading`, so loading rows hold the tile's place. Why a variant and not a new list: the rows are the same rows (title, address, the menu, the drag), only a tile joins them, in the comfortable density only.
 
 ## Density
 

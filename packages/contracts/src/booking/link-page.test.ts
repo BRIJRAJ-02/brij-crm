@@ -1,0 +1,86 @@
+// The link page's rules (spec 0051): the one address check (AC-5103) and the network marks (AC-5110), which must
+// answer exactly what `values/social.ts` answers for the url field.
+import { describe, expect, it } from 'vitest';
+import { describeLink, SOCIAL_NETWORKS } from '../values/social.ts';
+import { checkProfileLink, linkMarkOf, PUBLIC_LINK_MARKS } from './link-page-rules.ts';
+import { ProfileBlock } from './link-page.ts';
+
+describe('checkProfileLink', () => {
+  it('keeps the schemes the spec allows, and puts https before a bare address', () => {
+    expect(checkProfileLink(' www.timefix.com ')).toEqual({ ok: true, url: 'https://www.timefix.com' });
+    expect(checkProfileLink('example.com:8080/path')).toEqual({ ok: true, url: 'https://example.com:8080/path' });
+    for (const url of [
+      'https://ada.dev/a?b=c#d',
+      'http://ada.dev',
+      'mailto:ada@ada.dev',
+      'tel:+441234',
+      'sms:+441234',
+    ]) {
+      expect(checkProfileLink(url)).toEqual({ ok: true, url });
+    }
+    expect(checkProfileLink('HTTPS://Ada.dev/Path')).toMatchObject({ ok: true });
+  });
+
+  it('refuses every other scheme, credentials, control characters, a word and a long address', () => {
+    for (const url of [
+      'javascript:alert(1)',
+      'JavaScript:alert(1)',
+      'data:text/html,hi',
+      'vbscript:x',
+      'file:///etc/passwd',
+      'ftp://ada.dev',
+      'https://user:pass@ada.dev',
+      'https://ada.dev\tx',
+      'java\tscript:alert(1)',
+      'intro',
+      'https://localhost',
+      'mailto:',
+    ]) {
+      expect(checkProfileLink(url), url).toMatchObject({ ok: false });
+    }
+    expect(checkProfileLink('')).toEqual({ ok: false, reason: 'empty' });
+    expect(checkProfileLink(`https://ada.dev/${'a'.repeat(2_000)}`)).toEqual({ ok: false, reason: 'too_long' });
+  });
+});
+
+describe('linkMarkOf', () => {
+  it('names the same network as the url field for every host it knows', () => {
+    expect([...PUBLIC_LINK_MARKS].sort()).toEqual([...SOCIAL_NETWORKS].sort());
+    for (const url of [
+      'https://www.linkedin.com/in/ada',
+      'https://uk.linkedin.com/in/ada',
+      'https://twitter.com/ada',
+      'https://x.com/ada/status/1',
+      'https://m.facebook.com/ada',
+      'https://fb.com/ada',
+      'https://www.youtube.com/@ada',
+      'https://wellfound.com/u/ada',
+      'https://angel.co/ada',
+      'https://www.tiktok.com/@ada',
+      'https://www.threads.net/@ada',
+      'https://github.com/ada',
+      'https://instagram.com/ada',
+      'https://ada.dev',
+      'https://notlinkedin.com/in/ada',
+    ]) {
+      expect(linkMarkOf(url), url).toBe(describeLink(url).network);
+    }
+    expect(linkMarkOf('mailto:ada@linkedin.com')).toBeUndefined();
+  });
+});
+
+describe('ProfileBlock', () => {
+  it('checks each kind’s fields and makes a link canonical', () => {
+    expect(ProfileBlock.parse({ kind: 'link', title: ' Site ', url: 'ada.dev' })).toEqual({
+      kind: 'link',
+      title: 'Site',
+      url: 'https://ada.dev',
+    });
+    expect(ProfileBlock.safeParse({ kind: 'heading', title: 'x'.repeat(41) }).success).toBe(false);
+    expect(ProfileBlock.safeParse({ kind: 'link', title: 'A', url: 'https://a.dev', icon: 'bomb' }).success).toBe(
+      false,
+    );
+    expect(ProfileBlock.safeParse({ kind: 'contact', fullName: 'Ada' }).success).toBe(false);
+    expect(ProfileBlock.safeParse({ kind: 'link', title: 'Two\nlines', url: 'https://a.dev' }).success).toBe(false);
+  });
+});

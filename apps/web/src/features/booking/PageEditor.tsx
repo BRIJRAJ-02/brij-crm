@@ -52,7 +52,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { calendarSettingsHref, profileHref } from '../settings/nav.ts';
+import { calendarSettingsHref, linkPageHref, profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { noVideoLinkReason } from './destination.ts';
@@ -411,20 +411,6 @@ export function PageEditor({
     );
     return isWaiting ? <Tooltip content={strings.saveAddressFirst}>{button}</Tooltip> : button;
   };
-  // The owner's sections so far, from their other pages, for the Profile section's choices; a new one is typed in.
-  const pageList = useCaptureList(data.bookingPages.view(slug));
-  const sectionItems: SelectItem[] = [
-    ...new Set(
-      [
-        ...(pageList.status === 'ready' ? pageList.items : [])
-          .filter((each) => each.ownerMemberId === page.ownerMemberId)
-          .map((each) => each.profileSection),
-        draft.profileSection,
-      ].filter((section): section is string => section !== null),
-    ),
-  ]
-    .sort((left, right) => left.localeCompare(right))
-    .map((section) => ({ id: section, label: section }));
   const isTeam = page.kind === 'round_robin';
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
@@ -705,30 +691,13 @@ export function PageEditor({
                         </FieldGroup>
                       </Card>
                       {page.handle !== undefined && !draft.isPrivate && (
-                        // Where it sits on the owner's profile, /<handle> (so only once there is a handle): under a
-                        // section heading, or none. Pages keep the order they were made in (a drag order on the
-                        // Links list is left for later).
+                        // Where it sits on the owner's link page at /<handle> (spec 0051): a Public page joins it by
+                        // itself, and its place and heading are set on the link page, with the rest of the page.
                         <Card title={strings.profile}>
-                          <SettingsRow
-                            title={strings.profileSection}
-                            description={strings.profileSectionLine}
-                            control="field"
-                          >
-                            <Select
-                              label={strings.profileSection}
-                              isLabelHidden
-                              searchLabel={strings.findSection}
-                              placeholder={strings.noSection}
-                              items={sectionItems}
-                              value={draft.profileSection}
-                              isClearable
-                              isReadOnly={isLocked}
-                              onChange={(id) => change({ profileSection: id })}
-                              onCreate={(label) => {
-                                const section = label.trim().slice(0, 40);
-                                if (section !== '') change({ profileSection: section });
-                              }}
-                            />
+                          <SettingsRow title={strings.onLinkPage} description={strings.onLinkPageLine}>
+                            <ButtonLink href={linkPageHref(slug)} icon="pencil">
+                              {strings.editLinkPage}
+                            </ButtonLink>
                           </SettingsRow>
                         </Card>
                       )}

@@ -11,7 +11,7 @@ interface ProfileSearch {
 }
 
 // Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and time zone in this workspace,
-// their public profile, and the order it lists their Public pages in (owner ask A102).
+// their public profile, and a row that opens their link page's editor (spec 0051).
 export const Route = createFileRoute('/w/$slug/settings/account/profile')({
   // A result this build doesn't know (one the API added since) says the sync didn't work, rather than nothing.
   validateSearch: (search: Record<string, unknown>): ProfileSearch => {
@@ -20,12 +20,6 @@ export const Route = createFileRoute('/w/$slug/settings/account/profile')({
     return { 'google-photo': isGooglePhotoResult(result) ? result : 'failed' };
   },
   loader: async ({ context, params }) => {
-    // The booking pages, read beside the profile and never waited for: the order's section shows its own loading
-    // and failure, so a slow or refused list never holds up the page.
-    context.data.bookingPages
-      .view(params.slug)
-      .ready()
-      .catch(() => undefined);
     try {
       return { profile: await context.data.profile.get(params.slug) };
     } catch (error) {

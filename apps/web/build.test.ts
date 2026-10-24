@@ -251,4 +251,18 @@ describe('the first load', () => {
     expect(firstLoad(manifest, 'book.html').js.filter(carries)).toEqual([]);
     expect(firstLoad(manifest, 'form.html').js.filter(carries)).toEqual([]);
   });
+
+  // AC-5131 (spec 0051): `/b/:key` and `/<handle>/<slug>` load exactly what they loaded before the link page. The
+  // booking entry's first load holds none of it (no LinkPage class, no profile module); the link page is the
+  // profile's own chunk, which only `/<handle>` loads, through a dynamic import.
+  it('keeps the link page out of the booking page’s first load', () => {
+    const { chunks, js, css: sheets } = firstLoad(manifest, 'book.html');
+    const read = (file: string) => readFileSync(path.join(outDir, file), 'utf8');
+    expect(chunks.filter((key) => /ProfilePage|link-page/.test(key))).toEqual([]);
+    expect(js.filter((file) => read(file).includes('ws-LinkPage-'))).toEqual([]);
+    expect(sheets.filter((file) => read(file).includes('ws-LinkPage-'))).toEqual([]);
+    const profile = Object.keys(manifest).find((key) => key.endsWith('public/booking/ProfilePage.tsx'));
+    expect(profile).toBeDefined();
+    expect(manifest['book.html']?.dynamicImports ?? []).toContain(profile);
+  });
 });

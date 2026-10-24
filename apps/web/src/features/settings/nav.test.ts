@@ -85,7 +85,7 @@ describe('visibleSettingsNav', () => {
     expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'])).toEqual(workspaceGroups);
     // Without it, Scheduling keeps Calendars and loses only Round robin.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
-      ['profile', 'preferences', 'security', 'notifications'],
+      ['profile', 'link-page', 'preferences', 'security', 'notifications'],
       ['calendars'],
       ['general', 'members', 'objects', 'jobs', 'history', 'trash'],
     ]);
@@ -134,6 +134,7 @@ describe('settingsPageOf', () => {
   it('marks the page each address shows', () => {
     expect(settingsPageOf('/w/acme/settings/account/preferences')).toBe('preferences');
     expect(settingsPageOf('/w/acme/settings/account/profile')).toBe('profile');
+    expect(settingsPageOf('/w/acme/settings/account/link-page')).toBe('link-page');
     expect(settingsPageOf('/w/acme/settings/general')).toBe('general');
     expect(settingsPageOf('/w/acme/settings/scheduling/calendars')).toBe('calendars');
     expect(settingsPageOf('/w/acme/settings/account/calendars')).toBe('calendars');

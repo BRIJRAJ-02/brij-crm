@@ -97,15 +97,14 @@ export const strings = {
   saveAddressFirst: 'Save to use this address',
   /** The preview's note while the hours or limits have unsaved changes: its times come from the server. */
   previewSavedTimes: 'Shows your saved times until you save.',
-  findSection: 'Find or add a section',
   /** With no handle yet, the page keeps its /b/ link and this links to Settings › Profile. */
   setHandle: 'Set your handle to get a short address',
   slugChanging: 'Links with the old address keep working and move to the new one.',
   slugRequired: 'Give the page a web address.',
   slugInvalid: 'Use lowercase letters, numbers and single hyphens.',
-  profileSection: 'Section',
-  profileSectionLine: 'Pages in the same section are listed together.',
-  noSection: 'No section',
+  onLinkPage: 'On your link page',
+  onLinkPageLine: 'A Public page shows on your link page. Move it, or put it under a heading, there.',
+  editLinkPage: 'Edit link page',
   meeting: 'Meeting',
   durations: 'Durations',
   location: 'Location',

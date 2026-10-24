@@ -41,6 +41,8 @@ export { BookingChanges, type CancelOutcome, type GuestsOutcome } from '../modul
 export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';
 /** A profile's booking links (22 Oct 2026): the rows Captures › Links draws, the whole row opening the page. */
 export { LinkList, LinkListToolbar, type LinkRow } from '../modules/LinkList/LinkList.tsx';
+/** The link page at `/<handle>` (spec 0051): the person, their blocks in their order, the foot. */
+export { LinkPage, type LinkPageBlock, type LinkPagePerson } from '../modules/LinkPage/LinkPage.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';
 export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';

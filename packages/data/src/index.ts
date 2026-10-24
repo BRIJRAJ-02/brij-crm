@@ -170,6 +170,7 @@ export type {
 } from './preferences/store.ts';
 import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
+import { linkMarkOf, PROFILE_LINK_ICONS } from '@crm/contracts/link-page';
 import { blockLimit, checkBlock, createLinkPageStore, type BlockDraft, type LinkPageHeld } from './link-page/store.ts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState } from './link-page/store.ts';
 export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
@@ -4091,6 +4092,10 @@ export function createDataLayer({
       limit: (items: readonly ProfileItem[], kind: ProfileBlockKind): string | undefined => blockLimit(items, kind),
       /** A new block's id. */
       newId: (): string => mintId(),
+      /** The network whose mark a link's address shows, as the server will answer it. */
+      markOf: (url: string) => linkMarkOf(url),
+      /** The icons a link may pick, in the order the editor offers them. */
+      icons: PROFILE_LINK_ICONS,
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {

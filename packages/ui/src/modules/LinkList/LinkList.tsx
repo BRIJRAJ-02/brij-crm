@@ -49,6 +49,11 @@ export interface LinkRow {
    * ("Default"), read with the name. States that come and go (`badge`) stay at the row's end.
    */
   readonly titleBadge?: string;
+  /**
+   * A tile before the title, for rows that are told apart at a glance by what they are (a link page's blocks: a
+   * network's mark, an icon, a letter). Give every row one, and the list `hasLeading`, so loading rows hold its place.
+   */
+  readonly leading?: ReactNode;
   /** A grey badge before the switch, only when it isn't taking people ("Off", "Not published", "Copying"). */
   readonly badge?: string;
   /** Off (not taking people): the title reads in the secondary colour, as the switch says. */
@@ -127,6 +132,8 @@ export interface LinkListProps {
    * loads dnd-kit, and no lazy chunk splits the files every page loads first.
    */
   readonly rowOrder?: ComponentType<RowOrderProps>;
+  /** Every row has a `leading` tile: loading rows hold its place, so the titles land where the lines stood. */
+  readonly hasLeading?: boolean;
 }
 
 /** Props for LinkListToolbar. */
@@ -212,6 +219,7 @@ export function LinkList({
   rowsAreLinks = false,
   onMove,
   rowOrder: RowOrder,
+  hasLeading = false,
 }: LinkListProps) {
   const isCompact = density === 'compact';
   const isCard = isCompact && placement === 'card';
@@ -270,7 +278,14 @@ export function LinkList({
       <div {...frameProps}>
         {toolbar}
         <div className={styles.root} aria-busy="true">
-          {showSkeleton && <SkeletonRows count={SKELETON_ROWS} isCompact={isCompact} hasGrip={moves !== undefined} />}
+          {showSkeleton && (
+            <SkeletonRows
+              count={SKELETON_ROWS}
+              isCompact={isCompact}
+              hasGrip={moves !== undefined}
+              hasLeading={hasLeading}
+            />
+          )}
           <VisuallyHidden>{strings.loading(label)}</VisuallyHidden>
         </div>
       </div>
@@ -359,16 +374,23 @@ function SkeletonRows({
   count,
   isCompact,
   hasGrip,
+  hasLeading,
 }: {
   readonly count: number;
   readonly isCompact: boolean;
   readonly hasGrip: boolean;
+  readonly hasLeading: boolean;
 }) {
   return Array.from({ length: count }, (_, index) => (
     // The last one is marked: the loading words for screen readers follow it, so it isn't the last child.
     <div key={index} className={styles.row} data-loading="" data-last={index === count - 1 || undefined}>
       {/* The grip's place, so the titles that follow land where these lines stood. */}
       {hasGrip && <span className={styles.grip} />}
+      {hasLeading && (
+        <span className={styles.leading}>
+          <span className={styles.leadingLoading} />
+        </span>
+      )}
       <div className={styles.main}>
         <span className={styles.skeletonTitle}>
           <Skeleton width="medium" />
@@ -387,6 +409,7 @@ function SkeletonRows({
 function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isCompact: boolean }) {
   return (
     <>
+      {row.leading !== undefined && <span className={styles.leading}>{row.leading}</span>}
       <div className={styles.main}>
         <div className={styles.titleLine}>
           <span className={styles.title} title={isCompact ? row.title : undefined}>

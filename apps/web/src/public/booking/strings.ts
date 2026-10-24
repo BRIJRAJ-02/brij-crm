@@ -94,17 +94,16 @@ export const strings = {
   },
   loading: 'Loading…',
   // A person's profile, /<handle> (22 Oct 2026).
-  profileLinks: 'Booking links',
   searchLinks: 'Search links',
   team: 'Team',
-  noLinksTitle: 'Nothing to book here yet',
-  noLinksText: 'This person has no public booking links right now.',
-  noMatchesTitle: (query: string) => `No links match “${query}”`,
+  noLinksTitle: 'Nothing here yet',
+  noLinksText: 'This person hasn’t added any links yet.',
+  noMatchesTitle: (query: string) => `Nothing matches “${query}”`,
+  matches: (count: number) => (count === 1 ? '1 match' : `${String(count)} matches`),
   noMatchesText: 'Try fewer or other words.',
   showMore: 'Show more',
   moreFailed: 'More links didn’t load. Try again.',
   searchFailed: 'That search didn’t go through. Try again in a moment.',
-  sectionLinks: (section: string) => `${section} links`,
   profileNotFound: 'No one has this address.',
   // The guest page.
   titles: {
