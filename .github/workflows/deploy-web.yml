@@ -13,7 +13,7 @@
 # value (apps/web/client-secrets.ts).
 #
 # Two productions deploy from the same commit, one job each (the matrix below): brij-crm on the personal Vercel,
-# and Timefix (app.timefix.ai, project timefix-app on the Timefix Vercel team, its own Neon database). A target
+# and Timefix (app.timefix.com, project timefix-app on the Timefix Vercel team, its own Neon database). A target
 # whose token is unset is skipped with a notice.
 # Repository variables: VERCEL_ORG_ID, VERCEL_PROJECT_ID, TIMEFIX_VERCEL_ORG_ID, TIMEFIX_VERCEL_PROJECT_ID,
 # SENTRY_ORG, SENTRY_PROJECT_WEB
@@ -118,7 +118,7 @@ jobs:
             project: TIMEFIX_VERCEL_PROJECT_ID
             token: TIMEFIX_VERCEL_TOKEN
             owner: TIMEFIX_DATABASE_URL_OWNER
-            health: https://app.timefix.ai/api/health
+            health: https://app.timefix.com/api/health
             # Beside its Neon database: Timefix's is in us-east-1.
             region: iad1
     runs-on: ubuntu-latest

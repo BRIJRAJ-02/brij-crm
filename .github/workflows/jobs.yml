@@ -7,7 +7,7 @@
 # API has no such endpoint (it answers NOT_FOUND, or FORBIDDEN_ORIGIN to a write with no Origin), which this treats
 # as nothing to do.
 #
-# Each production gets its own run: brij-crm (JOBS_RUN_SECRET) and Timefix at app.timefix.ai (TIMEFIX_JOBS_RUN_SECRET),
+# Each production gets its own run: brij-crm (JOBS_RUN_SECRET) and Timefix at app.timefix.com (TIMEFIX_JOBS_RUN_SECRET),
 # each the same value as that Vercel project's Production JOBS_RUN_SECRET. A target whose secret is unset does nothing.
 # Timefix, on Vercel Pro, also runs the same turn every 15 minutes from Vercel Cron (GET with CRON_SECRET, a crons entry
 # its deploy patches in; spec 0045), so this run is a second floor there; brij-crm, on Hobby, has only this one.
@@ -38,7 +38,7 @@ jobs:
             url: https://brij-crm-phi.vercel.app/api/internal/jobs/run
           - target: timefix
             secret: TIMEFIX_JOBS_RUN_SECRET
-            url: https://app.timefix.ai/api/internal/jobs/run
+            url: https://app.timefix.com/api/internal/jobs/run
     steps:
       - name: Run the job queue for one turn
         env:

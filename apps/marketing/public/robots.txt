@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://timefix.ai/sitemap.xml
+Sitemap: https://www.timefix.com/sitemap.xml
