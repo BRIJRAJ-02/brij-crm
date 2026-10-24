@@ -101,6 +101,8 @@ describe('@crm/ui', () => {
       'LinkListToolbar',
       'LoadingNow',
       'LockReason',
+      'MatchCalendar',
+      'MatchCalendarCta',
       'MeetingCard',
       'Mention',
       'Menu',
