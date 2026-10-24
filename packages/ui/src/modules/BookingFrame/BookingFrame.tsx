@@ -66,8 +66,18 @@ export interface BookingFrameProps {
   readonly cover?: ReactNode;
   /** A band at the cover's foot, drawn as `footer` is: the List view's Book bar. */
   readonly coverFooter?: ReactNode;
-  /** What the card shows (`month`, `list`, `chat`): a change crossfades the card's content. Never at first paint. */
+  /**
+   * `body` (the default): the cover takes the panes' and the footer's box, under the heading row (List, Book by chat).
+   * `card`: it takes the whole card, its heading row too (the details step), which hides with the month.
+   */
+  readonly coverPlace?: 'body' | 'card';
+  /** What the card shows (`month`, `list`, `chat`, `details`): a change crossfades the card's content. Never at first paint. */
   readonly view?: string;
+  /**
+   * Which way the step went, when it did: `forward` slides the cover in from the end (the details step), `back` the
+   * month in from the start (Back, or a time someone just took). Reduced motion keeps the fade alone.
+   */
+  readonly enter?: 'forward' | 'back';
   /**
    * Where "Claim your free page" goes: `claimPageHref('booking_page')`, tagged as the wordmark beside it is. Leave
    * it off to show the wordmark alone (a recognised visitor).
@@ -103,7 +113,9 @@ export function BookingFrame({
   footer,
   cover,
   coverFooter,
+  coverPlace = 'body',
   view,
+  enter,
   claimHref,
   logo = TIMEFIX_LOGO,
 }: BookingFrameProps) {
@@ -112,6 +124,7 @@ export function BookingFrame({
   const [shown, setShown] = useState({ view, isMoved: false });
   if (shown.view !== view) setShown({ view, isMoved: true });
   const isCovered = cover !== undefined;
+  const isCardCovered = isCovered && coverPlace === 'card';
   const claim = claimHref === undefined ? {} : { claimHref };
   return (
     <main className={styles.root}>
@@ -199,12 +212,17 @@ export function BookingFrame({
             aria-busy={isLoading || undefined}
           >
             {(heading !== undefined || toolbar !== undefined) && (
-              <div className={styles.head}>
+              <div className={styles.head} inert={isCardCovered}>
                 {heading !== undefined && <h2 className={styles.heading}>{heading}</h2>}
                 {toolbar !== undefined && <div className={styles.toolbar}>{toolbar}</div>}
               </div>
             )}
-            <div className={styles.stage} data-moved={shown.isMoved || undefined}>
+            <div
+              className={styles.stage}
+              data-moved={shown.isMoved || undefined}
+              data-place={isCovered ? coverPlace : undefined}
+              data-enter={enter}
+            >
               {/* Covered, the month still sets the card's size: hidden, out of the reading order and out of reach. */}
               <div className={styles.under} inert={isCovered}>
                 <div className={styles.panes} data-panes={aside === undefined ? 'one' : 'two'}>

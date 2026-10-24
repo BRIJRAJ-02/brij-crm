@@ -18,7 +18,11 @@ import {
   type PublicViewerAnswer,
   type SlotsOverlay,
 } from '@crm/data/booking';
-import type { BookingDetailsOutcome, BookingDetailsValues } from '@crm/ui/public-booking/details';
+import type {
+  BookingDetails as DetailsStep,
+  BookingDetailsOutcome,
+  BookingDetailsValues,
+} from '@crm/ui/public-booking/details';
 import {
   BookingFrame,
   BookingMessage,
@@ -34,7 +38,7 @@ import {
   type BookingFact,
   type SelectItem,
 } from '@crm/ui/public-booking';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { createElement, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { railHost, railTitle } from './host.ts';
 import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
@@ -75,6 +79,28 @@ const VisitorBar = lazy(() => visitorModule.then((module) => ({ default: module.
 // Book by chat (spec 0042) loads only when Chat is first chosen.
 const ChatPanel = lazy(() => import('./ChatPanel.tsx').then((module) => ({ default: module.ChatPanel })));
 const BookingDetails = lazy(() => detailsModule.then((module) => ({ default: module.BookingDetails })));
+
+/**
+ * The details step once its code is in, which it nearly always is by the time a visitor presses Book: drawn at once,
+ * so it slides in with the step rather than after a Suspense fallback's hold. Until then (or if it failed) the page
+ * draws it through the lazy path, as before.
+ */
+function useLoadedDetails(): typeof DetailsStep | undefined {
+  const [loaded, setLoaded] = useState<{ readonly step: typeof DetailsStep } | undefined>(undefined);
+  useEffect(() => {
+    let isCurrent = true;
+    detailsModule.then(
+      (module) => {
+        if (isCurrent) setLoaded({ step: module.BookingDetails });
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+  return loaded?.step;
+}
 
 /** Props for the page: its key, the visitor's language and zone, the clock, a prefill, and where success goes. */
 export interface BookingPageProps {
@@ -495,6 +521,7 @@ function Booking({
   );
   const [month, setMonth] = useState(monthOf(pickedDay ?? today));
   const [pickedTime, setTime] = useState<string | undefined>(undefined);
+  const LoadedDetails = useLoadedDetails();
   const [step, setStep] = useState<{
     readonly step: 'pick' | 'details';
     readonly attempt: string;
@@ -933,26 +960,26 @@ function Booking({
     ...(banner === undefined ? {} : { banner }),
   };
 
-  if (isDetails) {
-    // The form says who's booking, with its own Not you: the bar would say it twice.
-    const { banner: _bar, ...details } = frame;
-    return (
-      <BookingFrame {...details}>
-        <Suspense fallback={null}>
-          <BookingDetails
-            key={step.attempt}
-            needsPhone={page.location.type === 'phone'}
-            {...(known === undefined ? (prefill === undefined ? {} : { prefill }) : { prefill: known })}
-            onBack={() => {
-              setStep({ step: 'pick', attempt: '', back: true });
-              setNotice(undefined);
-            }}
-            onSubmit={book}
-          />
-        </Suspense>
-      </BookingFrame>
-    );
-  }
+  // The details step (spec 0025) draws over the whole card, its heading row too: the month stays underneath and
+  // keeps the card its size, so the step moves nothing but its own content in, from the end, and Back from the start.
+  const detailsProps = {
+    needsPhone: page.location.type === 'phone',
+    ...(known === undefined ? (prefill === undefined ? {} : { prefill }) : { prefill: known }),
+    onBack: () => {
+      setStep({ step: 'pick', attempt: '', back: true });
+      setNotice(undefined);
+    },
+    onSubmit: book,
+  };
+  const detailsStep = !isDetails ? undefined : LoadedDetails === undefined ? (
+    <Suspense fallback={null}>
+      <BookingDetails key={step.attempt} {...detailsProps} />
+    </Suspense>
+  ) : (
+    createElement(LoadedDetails, { key: step.attempt, ...detailsProps })
+  );
+  // The form says who's booking, with its own Not you: the bar would say it twice.
+  const { banner: _bar, ...withoutBar } = frame;
 
   const noTimes = allStarts.length === 0 && loaded.size >= Math.min(chunks, 2);
   // Every open time clashes with the visitor's calendar: say so, with Show all times.
@@ -1055,7 +1082,7 @@ function Booking({
   );
   const noticeLine = notice === undefined ? undefined : <Callout tone="danger">{notice}</Callout>;
 
-  if (message !== undefined) {
+  if (message !== undefined && detailsStep === undefined) {
     // Nothing to pick in any view: the message alone, the same card whichever view is chosen.
     return (
       <BookingFrame {...frame} heading={strings.chooseTime} toolbar={viewSwitch} view={view}>
@@ -1068,7 +1095,8 @@ function Booking({
   // The month is the card in every view: List and Book by chat (spec 0042) draw over it, in exactly its box, so a
   // switch between views moves nothing on the page (the owner, 25 October 2026).
   const cover =
-    view === 'list' ? (
+    detailsStep ??
+    (view === 'list' ? (
       <>
         {noticeLine}
         <DayStrip
@@ -1103,18 +1131,23 @@ function Booking({
           />
         </Suspense>
       )
-    ) : undefined;
+    ) : undefined);
 
   return (
     <BookingFrame
-      {...frame}
+      {...(isDetails ? withoutBar : frame)}
       heading={strings.chooseTime}
       toolbar={viewSwitch}
-      view={view}
+      view={isDetails ? 'details' : view}
+      {...(isDetails
+        ? { coverPlace: 'card' as const, enter: 'forward' as const }
+        : step.back
+          ? { enter: 'back' as const }
+          : {})}
       aside={slotList('column')}
       footer={bookBar}
       {...(cover === undefined ? {} : { cover })}
-      {...(view === 'list' ? { coverFooter: bookBar } : {})}
+      {...(view === 'list' && !isDetails ? { coverFooter: bookBar } : {})}
     >
       {noticeLine}
       <MonthTiles

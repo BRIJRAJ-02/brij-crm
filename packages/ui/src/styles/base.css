@@ -96,6 +96,18 @@
     pointer-events: none;
   }
 
+  /* Between the public pages (a booking to its guest page, a form to its booking, a profile to a page) the whole
+     page crossfades where the browser can, over duration-move, instead of swapping at once: the `page` navigations
+     (the rule at the foot of this file) capture the page, on a public page only, so the app's own loads and the
+     toasts' transitions never do. A browser without it simply loads the next page. */
+  :root[data-public-page]:active-view-transition-type(page) {
+    view-transition-name: root;
+  }
+
+  ::view-transition-group(root) {
+    animation-duration: var(--duration-move);
+  }
+
   ::view-transition-new(.toast):only-child {
     animation: toast-rise var(--duration-modal) var(--ease-out);
   }
@@ -122,4 +134,10 @@
       translate: 0 100%;
     }
   }
+}
+
+/* Opts every same origin navigation into a cross document view transition of type `page` (above). */
+@view-transition {
+  navigation: auto;
+  types: page;
 }

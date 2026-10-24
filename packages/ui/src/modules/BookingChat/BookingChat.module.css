@@ -61,8 +61,10 @@
     background: var(--accent-soft);
   }
 
+  /* Each day's times start a group of their own: as far under the reply as the reply sits under the card's heading. */
   .offers {
     inline-size: 100%;
+    margin-block-start: var(--space-16);
   }
 
   .suggestions {
