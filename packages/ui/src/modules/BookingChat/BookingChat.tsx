@@ -184,10 +184,11 @@ export function BookingChat({
           {error.message}
         </Callout>
       )}
-      <div className={styles.composer}>
+      <div className={styles.composer} data-disabled={isDone || undefined}>
         <div className={styles.field}>
           <Field
             ref={fieldRef}
+            variant="cell"
             label={strings.message}
             isLabelHidden
             placeholder={strings.placeholder}

@@ -11,6 +11,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createToasts } from '../../provider/toasts.tsx';
 import { UiProvider } from '../../provider/UiProvider.tsx';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { BookingFrame, BookingProfile, type BookingFact } from './BookingFrame.tsx';
 
 /** How far apart a loading region and the loaded one may stand, in pixels. */
@@ -147,5 +148,70 @@ describe('a profile before its person arrives', () => {
     const loaded = heightOf('header');
     expect(loading).toBeGreaterThan(0);
     expect(Math.abs(loading - loaded)).toBeLessThanOrEqual(TOLERANCE);
+  });
+});
+
+describe('a booking card switching views', () => {
+  /** The card's month: a tall pane, the times beside it, and the Book bar. */
+  const month = { aside: <p>Times</p>, footer: <button type="button">Book</button> };
+  // Eight blocks, about 440 px: a month's height.
+  const tall = (
+    <div>
+      Month
+      <Skeleton shape="block" lines={8} />
+    </div>
+  );
+  const card = () => host.querySelector('section')?.getBoundingClientRect();
+
+  it('keeps the card the month’s size whichever view covers it', () => {
+    draw(
+      <BookingFrame heading="Choose a time" view="month" {...month}>
+        {tall}
+      </BookingFrame>,
+    );
+    const atMonth = card();
+    // A short List and a long chat: neither sets the card's size.
+    draw(
+      <BookingFrame heading="Choose a time" view="list" {...month} cover={<p>Days</p>} coverFooter={month.footer}>
+        {tall}
+      </BookingFrame>,
+    );
+    const atList = card();
+    draw(
+      <BookingFrame heading="Choose a time" view="chat" {...month} cover={<Skeleton shape="block" lines={20} />}>
+        {tall}
+      </BookingFrame>,
+    );
+    const atChat = card();
+    expect(atMonth?.height).toBeGreaterThan(440);
+    expect(atList?.height).toBe(atMonth?.height);
+    expect(atChat?.height).toBe(atMonth?.height);
+    expect(atChat?.y).toBe(atMonth?.y);
+  });
+
+  it('hides the month under a cover from the reading order and from the keyboard', () => {
+    draw(
+      <BookingFrame heading="Choose a time" view="list" {...month} cover={<p>Days</p>}>
+        {tall}
+      </BookingFrame>,
+    );
+    const under = host.querySelector('[inert]');
+    expect(under?.textContent).toContain('Month');
+    expect(getComputedStyle(under ?? document.body).visibility).toBe('hidden');
+  });
+
+  it('fades only a view chosen after the first paint', () => {
+    draw(
+      <BookingFrame heading="Choose a time" view="list" {...month} cover={<p>Days</p>}>
+        {tall}
+      </BookingFrame>,
+    );
+    expect(host.querySelector('[data-moved]')).toBeNull();
+    draw(
+      <BookingFrame heading="Choose a time" view="chat" {...month} cover={<p>Chat</p>}>
+        {tall}
+      </BookingFrame>,
+    );
+    expect(host.querySelector('[data-moved]')).not.toBeNull();
   });
 });
