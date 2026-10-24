@@ -4,7 +4,7 @@ A person's own social links as a row of brand marks: a host's LinkedIn, X, websi
 
 ## Why it exists
 
-New (booking socials, 25 October 2026). The owner asked for social links on booking pages, which the booking rail, the `/<handle>` profile and (spec 0051) the link page all draw the same way. Reuse first: each link is a `ButtonLink` (ghost, `lg`, icon only), so hover, focus, the 34px hit area and the forced colours look are Button's own, and the mark is `ProviderMark` (the globe Icon for a website), already in every page that draws a Button. What none of them could be is the row itself: a named list of links, laid out so the first mark lines up with the text above, with tooltips that load off the first load. LinkChip shows one link with its words, for a record's url value; a row of marks with no words is a different thing, so it is not a variant of LinkChip.
+New (booking socials, 25 October 2026). The owner asked for social links on booking pages, which the booking rail, the `/<handle>` profile and (spec 0051) the link page all draw the same way. Reuse first: each link is a `ButtonLink` (ghost, `lg`, icon only), so hover, focus, the 34px hit area and the forced colours look are Button's own, and the mark is `ProviderMark` (Lucide’s `link` Icon for a website: a globe beside the rail’s time zone, also a globe, read as one more zone), already in every page that draws a Button. What none of them could be is the row itself: a named list of links, laid out so the first mark lines up with the text above, with tooltips that load off the first load. LinkChip shows one link with its words, for a record's url value; a row of marks with no words is a different thing, so it is not a variant of LinkChip.
 
 ## Use
 

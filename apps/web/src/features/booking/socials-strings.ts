@@ -1,7 +1,7 @@
 /** The booking page editor's Social links card (booking socials, 25 Oct 2026). */
 export const strings = {
   title: 'Social links',
-  shown: 'Show my social links',
+  shown: 'Show on this page',
   everywhere: 'Shown on all your booking pages and your profile.',
   none: 'You haven’t added any yet.',
   edit: 'Edit social links',

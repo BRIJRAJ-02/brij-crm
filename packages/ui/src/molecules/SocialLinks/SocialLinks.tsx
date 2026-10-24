@@ -21,8 +21,13 @@ export interface SocialLinkItem {
 export interface SocialLinksProps {
   /** In the person's order. Nothing draws when there are none. */
   readonly links: readonly SocialLinkItem[];
-  /** The list's name for screen readers: "Ada Lovelace elsewhere". */
+  /** The list's name for screen readers: "Ada Lovelace’s social links". */
   readonly label?: string;
+  /**
+   * Drawn with phrasing elements (a `span` list), for a row inside text: a settings row's description (the booking
+   * editor's card). Screen readers hear the same list.
+   */
+  readonly isInline?: boolean;
 }
 
 /** One link's accessible name: the network, then where it goes ("LinkedIn, @ada"). */
@@ -35,11 +40,11 @@ export function socialLinkTip(link: Pick<SocialLinkItem, 'network' | 'label'>): 
   return `${strings.names[link.network]} · ${link.label}`;
 }
 
-/** One link: the brand's mark (a globe for a website), opening in a new tab as the person's own (`rel="me"`). */
+/** One link: the brand's mark (Lucide's link for a website: a globe would read as the time zone above it), opening in a new tab as the person's own (`rel="me"`). */
 function SocialLink({ link }: { readonly link: SocialLinkItem }) {
   const look = { variant: 'ghost', size: 'lg', isExternal: true, relations: ['me', 'nofollow'] } as const;
   return link.network === 'website' ? (
-    <ButtonLink {...look} href={link.href} icon="globe" label={socialLinkName(link)} />
+    <ButtonLink {...look} href={link.href} icon="link" isIconMark label={socialLinkName(link)} />
   ) : (
     <ButtonLink {...look} href={link.href} provider={link.network} label={socialLinkName(link)} />
   );
@@ -54,17 +59,30 @@ const LazyTipped = lazy(() => import('./SocialLinksTips.tsx').then((module) => (
  * named "LinkedIn, @ada", with a tooltip on hover or focus, opening in a new tab. Quiet ghost buttons, so the row says
  * who the person is without competing with the page's one action. Draws nothing when there are none.
  */
-export function SocialLinks({ links, label = strings.label }: SocialLinksProps) {
+export function SocialLinks({ links, label = strings.label, isInline = false }: SocialLinksProps) {
   if (links.length === 0) return null;
-  const list = (wrap: (link: SocialLinkItem, element: ReactElement) => ReactElement) => (
-    <ul className={styles.root} aria-label={label}>
-      {links.map((link) => (
+  const list = (wrap: (link: SocialLinkItem, element: ReactElement) => ReactElement) => {
+    const items = links.map((link) =>
+      isInline ? (
+        <span key={link.network} role="listitem" className={styles.item}>
+          {wrap(link, <SocialLink link={link} />)}
+        </span>
+      ) : (
         <li key={link.network} className={styles.item}>
           {wrap(link, <SocialLink link={link} />)}
         </li>
-      ))}
-    </ul>
-  );
+      ),
+    );
+    return isInline ? (
+      <span role="list" className={styles.root} aria-label={label}>
+        {items}
+      </span>
+    ) : (
+      <ul className={styles.root} aria-label={label}>
+        {items}
+      </ul>
+    );
+  };
   return (
     <Suspense fallback={list((_link, element) => element)}>
       <LazyTipped render={list} />

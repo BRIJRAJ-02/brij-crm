@@ -34,9 +34,9 @@ export interface SocialLinksEditorProps {
   readonly tone?: 'default' | 'bare';
 }
 
-/** A network's mark: its brand's own, or the globe for a website. */
+/** A network's mark: its brand's own, or Lucide’s link for a website. */
 function NetworkMark({ network }: { readonly network: SocialLinkNetwork }) {
-  return network === 'website' ? <Icon name="globe" /> : <ProviderMark provider={network} />;
+  return network === 'website' ? <Icon name="link" /> : <ProviderMark provider={network} />;
 }
 
 /** True when the text is a whole link, which then shows without the field's prefix. */
@@ -63,7 +63,7 @@ function RowMenu({
   const label = strings.rowMenu(SOCIAL_LINK_NAMES[network]);
   return (
     <MenuTrigger>
-      <Button variant="ghost" size="lg" icon="ellipsis" label={label} isDisabled={isDisabled} />
+      <Button variant="ghost" icon="ellipsis" label={label} isDisabled={isDisabled} />
       <Menu
         label={label}
         onAction={(key) => {
@@ -223,7 +223,8 @@ export function SocialLinksEditor({
               {...(row.error === undefined ? {} : { error: row.error })}
               {...(canEdit
                 ? {
-                    after: (
+                    // Inside the box, as Your page's Copy is, so every field on the screen ends on one line.
+                    suffix: (
                       <RowMenu
                         network={row.network}
                         at={index}

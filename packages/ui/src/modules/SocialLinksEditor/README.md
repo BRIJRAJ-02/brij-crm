@@ -4,7 +4,7 @@ Where a person keeps their own social links: one settings row per network, each 
 
 ## Why it exists
 
-New (booking socials, 25 October 2026). Settings › Profile and the booking page editor's Edit social links dialog edit the same set, so they draw the same editor. Reuse first: each link is a `SettingsRow` (the network's mark as its leading mark, the network's name as its title) holding a `Field` (the network's address as its `prefix`, its example handle as the placeholder) with a row `Menu` after it, the same parts Settings › Profile's Handle and Bio rows and its Public pages order use; the card is `Card`, its footer the dashed Add Button with a `Menu` of networks. What none of them hold is the set itself: one row per network, in order, checked as each field is left by the rule the server keeps (`checkSocialLink` in `@crm/contracts`), so a module.
+New (booking socials, 25 October 2026). Settings › Profile and the booking page editor's Edit social links dialog edit the same set, so they draw the same editor. Reuse first: each link is a `SettingsRow` (the network's mark as its leading mark, the network's name as its title) holding a `Field` (the network's address as its `prefix`, its example handle as the placeholder) with a row `Menu` in its `suffix` (inside the box, as Your page's Copy is, so every field on the screen ends on one line), the same parts Settings › Profile's Handle and Bio rows and its Public pages order use; the card is `Card`, its footer the dashed Add Button with a `Menu` of networks. What none of them hold is the set itself: one row per network, in order, checked as each field is left by the rule the server keeps (`checkSocialLink` in `@crm/contracts`), so a module.
 
 ## Use
 

@@ -198,6 +198,12 @@
     color: var(--text-secondary);
   }
 
+  /* An icon standing among brand marks (a website in a row of social links) takes the text colour, as the black
+     marks do. */
+  .root[data-icon-mark] {
+    color: var(--text);
+  }
+
   .root[data-variant='dashed'] {
     border-style: dashed;
     border-color: var(--control-border);

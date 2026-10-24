@@ -69,6 +69,8 @@ function EditDialog({
   return (
     <Modal
       title={strings.dialogTitle}
+      variant="window"
+      icon="link"
       isOpen
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
@@ -127,10 +129,21 @@ function OwnSocialsCard({
     ) : state.status === 'error' ? undefined : links.length === 0 ? (
       strings.none
     ) : (
-      <SocialLinks links={previewSocials(links)} />
+      <SocialLinks links={previewSocials(links)} isInline />
+    );
+  const edit =
+    state.status === 'error' ? undefined : (
+      <Button
+        isDisabled={state.status !== 'ready' || !state.canChange}
+        onPress={() => {
+          setEditing(true);
+        }}
+      >
+        {links.length === 0 ? strings.add : strings.edit}
+      </Button>
     );
   return (
-    <Card title={strings.title} description={strings.everywhere}>
+    <Card title={strings.title} description={strings.everywhere} {...(edit === undefined ? {} : { actions: edit })}>
       <SettingsRow title={strings.shown} {...(marks === undefined ? {} : { description: marks })}>
         <Switch
           label={strings.shown}
@@ -140,7 +153,7 @@ function OwnSocialsCard({
           onChange={onShownChange}
         />
       </SettingsRow>
-      {state.status === 'error' ? (
+      {state.status === 'error' && (
         <Callout
           tone="danger"
           title={strings.failed}
@@ -148,17 +161,6 @@ function OwnSocialsCard({
         >
           {state.message}
         </Callout>
-      ) : (
-        <div>
-          <Button
-            isDisabled={state.status !== 'ready' || !state.canChange}
-            onPress={() => {
-              setEditing(true);
-            }}
-          >
-            {links.length === 0 ? strings.add : strings.edit}
-          </Button>
-        </div>
       )}
       {isEditing && state.status === 'ready' && (
         <EditDialog

@@ -75,6 +75,11 @@ interface IconOnlyFace {
   readonly children?: never;
   readonly icon: IconName;
   readonly provider?: never;
+  /**
+   * The icon stands as a mark among brand marks (a person's website among their social links): drawn at the marks'
+   * size (`size-icon`) and in the text colour, as the black marks are, rather than as a quiet control's glyph.
+   */
+  readonly isIconMark?: boolean;
   /** The accessible name, required because the icon is the only content. */
   readonly label: string;
 }
@@ -141,6 +146,7 @@ function lookAttributes(look: ButtonLook, face: ButtonFace) {
     'data-icon-only': face.children === undefined || undefined,
     'data-full-width': look.isFullWidth === 'center' ? 'center' : look.isFullWidth === true ? 'start' : undefined,
     'data-collapsible': look.isLabelCollapsible === true || undefined,
+    'data-icon-mark': ('isIconMark' in face && face.isIconMark === true) || undefined,
   };
 }
 
@@ -184,7 +190,10 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
       {isPending ? (
         <Spinner />
       ) : face.icon !== undefined ? (
-        <Icon name={face.icon} size={look.size === 'sm' ? 'xs' : 'sm'} />
+        <Icon
+          name={face.icon}
+          size={'isIconMark' in face && face.isIconMark === true ? 'md' : look.size === 'sm' ? 'xs' : 'sm'}
+        />
       ) : (
         face.provider !== undefined && <ProviderMark provider={face.provider} size={look.size === 'lg' ? 'md' : 'sm'} />
       )}

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
+import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SocialLinks, type SocialLinkItem } from './SocialLinks.tsx';
 
@@ -35,6 +36,15 @@ export const Default: Story = {
     await expect(linkedin).toHaveAttribute('href', 'https://linkedin.com/in/ada-lovelace');
     await expect(linkedin).toHaveAttribute('target', '_blank');
     await expect(linkedin).toHaveAttribute('rel', 'me nofollow noopener noreferrer');
+  },
+};
+
+/** Hovering a mark shows the network and where it goes, after the tooltip's pause. */
+export const Tooltip: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await hoverFresh(userEvent, canvas.getByRole('link', { name: 'X, @ada' }));
+    await expect(await shownTooltip()).toHaveTextContent('X · @ada');
   },
 };
 
