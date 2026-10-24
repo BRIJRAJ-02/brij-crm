@@ -71,20 +71,23 @@ export const Still: Story = {
   },
 };
 
-/** Text rows: each holds its own line box, so a loading heading is exactly as tall as the heading. */
+/**
+ * Text rows: each holds the line box of the font it sits in, so a loading title is exactly as tall as the title.
+ * It goes in a paragraph carrying that font, never inside a real heading, which would then be an empty heading.
+ */
 export const TextShape: Story = {
   render: () => (
     <Stage direction="column" width="narrow">
-      <h2>
+      <p data-heading="">
         <Skeleton shape="text" width="medium" />
-      </h2>
+      </p>
       <p>
         <Skeleton shape="text" lines={2} />
       </p>
     </Stage>
   ),
   play: async ({ canvasElement }) => {
-    const heading = canvasElement.querySelector('h2');
+    const heading = canvasElement.querySelector('[data-heading]');
     const row = heading?.querySelector('[data-shape="text"]');
     if (heading === null || row === null || row === undefined) throw new Error('a heading with a text row expected');
     const line = Number.parseFloat(globalThis.getComputedStyle(heading).lineHeight);

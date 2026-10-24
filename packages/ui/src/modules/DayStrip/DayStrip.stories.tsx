@@ -28,6 +28,20 @@ export const Default: Story = {
   },
 };
 
+/** The days before they are known: a day's tile in each place, so the times under them never move. */
+export const Loading: Story = {
+  args: { days: [], isLoading: true },
+  render: (args) => (
+    <Stage width="fill">
+      <DayStrip {...args} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelectorAll('[data-loading]').length).toBeGreaterThan(0);
+    await expect(canvasElement.querySelector('[aria-busy="true"]')).not.toBeNull();
+  },
+};
+
 /** The story's own state, in a component so the artifact's preview can render it too. */
 function Interactive(args: ComponentProps<typeof DayStrip>) {
   const [value, setValue] = useState(args.value);

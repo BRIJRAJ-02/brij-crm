@@ -75,7 +75,9 @@ export function SlotList({
         </p>
       ) : (
         <div className={styles.head}>
-          <h2 className={styles.heading}>{heading}</h2>
+          {/* Only once there is a day: a heading with nothing in it is an empty heading, and `.head` holds the
+              row's height either way. */}
+          {heading !== '' && <h2 className={styles.heading}>{heading}</h2>}
           {onHour12Change !== undefined && (
             <SegmentedControl
               label={strings.clock}
@@ -96,7 +98,7 @@ export function SlotList({
           <VisuallyHidden>{strings.loading}</VisuallyHidden>
           <ul className={styles.list} aria-busy="true">
             {Array.from({ length: GHOST_SLOTS }, (_, index) => (
-              <li key={index} className={styles.item} data-ghost="" aria-hidden="true">
+              <li key={index} className={styles.item} data-loading="" aria-hidden="true">
                 <Skeleton shape="fill" />
               </li>
             ))}

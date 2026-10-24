@@ -25,7 +25,9 @@ Weekday names, the first day of the week and every label come from the provider'
 
 ## States
 
-Open, closed, chosen, today, Best, hover, focus, pressed; the first and last bookable month turn the arrows off.
+Open, closed, chosen, today, Best, hover, focus, pressed, loading; the first and last bookable month turn the arrows off.
+
+`isLoading` is the month drawn before any day's times are known: the tiles stand in their places quietly, the grid is `aria-busy`, and no day's label says it has no times, which while the times are still coming would not be true. The booking page draws it that way from its first paint, so the month never arrives, it only fills in.
 
 ## Keyboard
 

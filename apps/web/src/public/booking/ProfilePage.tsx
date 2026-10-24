@@ -164,7 +164,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
     // drawn at once rather than after the loading delay: this is the page's first paint, so there is no content
     // for a skeleton to flash in front of.
     return (
-      <BookingProfile>
+      <BookingProfile claimHref={claimPageHref('booking_profile')}>
         <LoadingNow>
           <LinkList
             label={strings.profileLinks}

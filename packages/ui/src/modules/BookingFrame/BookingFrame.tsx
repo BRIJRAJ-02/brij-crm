@@ -99,10 +99,10 @@ export function BookingFrame({
   return (
     <main className={styles.root}>
       <div className={styles.layout}>
-        <aside className={styles.rail} aria-label={isLoading ? strings.loading : strings.about}>
+        <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
           {isLoading ? (
             /* The shape the host will take, line for line, so nothing moves when the page's facts arrive. */
-            <div className={styles.identity} aria-busy="true">
+            <div className={styles.identity}>
               <Skeleton shape="circle" size="xl" />
               <div className={styles.names}>
                 <p className={styles.host}>
@@ -120,7 +120,7 @@ export function BookingFrame({
                   <span className={styles.factIcon}>
                     <Skeleton shape="tile" />
                   </span>
-                  <span className={styles.factBody} data-ghost="">
+                  <span className={styles.factBody} data-loading="">
                     <Skeleton shape="field" width="medium" />
                   </span>
                 </li>
@@ -128,7 +128,7 @@ export function BookingFrame({
                   <span className={styles.factIcon}>
                     <Skeleton shape="tile" />
                   </span>
-                  <span className={styles.factBody} data-ghost="">
+                  <span className={styles.factBody} data-loading="">
                     <Skeleton shape="text" width="long" />
                   </span>
                 </li>

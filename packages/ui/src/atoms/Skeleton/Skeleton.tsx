@@ -18,13 +18,13 @@ export type SkeletonAlign = 'start' | 'center';
 export type SkeletonSize = 'xs' | 'sm' | 'md' | 'lg' | 'title' | 'xl';
 
 /** The shapes a `lines` count repeats: the rest draw once. */
-const REPEATABLE: readonly SkeletonShape[] = ['line', 'text', 'block'];
+const REPEATABLE: readonly SkeletonShape[] = ['line', 'text'];
 
 /** Props for Skeleton. */
 export interface SkeletonProps {
   readonly shape?: SkeletonShape;
   readonly width?: SkeletonWidth;
-  /** Several rows, the last text one shorter. `line`, `text` and `block` only. */
+  /** Several rows of text, the last one shorter. `line` and `text` only. */
   readonly lines?: number;
   /** Where the lines sit, matching the text they stand in for: `center` under a centred title (EmptyState). Lines only. */
   readonly align?: SkeletonAlign;
@@ -57,7 +57,7 @@ export function Skeleton({ shape = 'line', width, lines = 1, align = 'start', si
             key={index}
             className={styles.root}
             data-shape={shape}
-            data-width={shape === 'block' || index < lines - 1 ? width : 'medium'}
+            data-width={index === lines - 1 ? 'medium' : width}
             data-still={still}
           />
         ))}

@@ -169,7 +169,9 @@ export function BookingPage({
         if (isCurrent) setViewer(answer);
       },
       () => {
-        // Nobody in particular: the page works the same.
+        // A refused read answers nobody, rather than nothing: left unsettled, the bar's held place would pulse
+        // above a page that is otherwise perfectly usable, for the rest of the visit.
+        if (isCurrent) setViewer({ isHost: false, canConnect: false });
       },
     );
     return () => {
@@ -291,12 +293,17 @@ export function LoadingBooking({
           segments={viewSegments}
         />
       }
-      footer={
-        <Button variant="primary" size="lg" isFullWidth="center" isDisabled>
-          {strings.book}
-        </Button>
-      }
+      // Chat has no times pane and no Book bar, so its loading shape has neither either.
       {...(view === 'month' ? { aside: times } : {})}
+      {...(view === 'chat'
+        ? {}
+        : {
+            footer: (
+              <Button variant="primary" size="lg" isFullWidth="center" isDisabled>
+                {strings.book}
+              </Button>
+            ),
+          })}
     >
       {view === 'month' ? (
         <MonthTiles
@@ -308,9 +315,15 @@ export function LoadingBooking({
           onMonthChange={() => undefined}
           canPrevious={false}
           canNext={false}
+          isLoading
         />
+      ) : view === 'chat' ? (
+        <Skeleton shape="block" lines={4} />
       ) : (
-        times
+        <>
+          <DayStrip days={[]} value={undefined} onChange={() => undefined} isLoading />
+          {times}
+        </>
       )}
     </BookingFrame>
   );

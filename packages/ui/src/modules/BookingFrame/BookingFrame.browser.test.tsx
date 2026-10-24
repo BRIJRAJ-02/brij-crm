@@ -61,9 +61,7 @@ describe('a booking page before its facts arrive', () => {
     // they arrive, so the loading rail draws the two lines most of them take and no test can hold it tighter.
     draw(<BookingFrame heading="Choose a time" />);
     const ghost = { names: heightOf('aside > div > div'), facts: heightOf('aside ul') };
-    draw(
-      <BookingFrame host={{ name: 'Ada Lovelace' }} title="Intro call" facts={FACTS} heading="Choose a time" />,
-    );
+    draw(<BookingFrame host={{ name: 'Ada Lovelace' }} title="Intro call" facts={FACTS} heading="Choose a time" />);
     const real = { names: heightOf('aside > div > div'), facts: heightOf('aside ul') };
     expect(ghost.names).toBeGreaterThan(0);
     expect(ghost.facts).toBeGreaterThan(0);
@@ -90,15 +88,13 @@ describe('a booking page before its facts arrive', () => {
 });
 
 describe('a profile before its person arrives', () => {
-  it('draws a card the height the person’s card will be, with the links loading under it', () => {
+  it('draws a card the height the person’s card will be', () => {
     draw(<BookingProfile />);
     const loading = heightOf('header');
     expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
-    // Drawn at once, not after the loading delay: a public page's first paint is already its loading state.
-    expect(host.querySelectorAll('[data-shape]').length).toBeGreaterThan(3);
-    draw(
-      <BookingProfile person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Engineer, and I like short meetings.' }} />,
-    );
+    // The picture's place and two rows of text: the page adds the links' own rows under it.
+    expect(host.querySelectorAll('[data-shape]')).toHaveLength(3);
+    draw(<BookingProfile person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Engineer, and I like short meetings.' }} />);
     const loaded = heightOf('header');
     expect(loading).toBeGreaterThan(0);
     expect(Math.abs(loading - loaded)).toBeLessThanOrEqual(TOLERANCE);

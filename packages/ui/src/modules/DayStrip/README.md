@@ -14,7 +14,9 @@ New. ChoiceChips and SegmentedControl hold a few labelled choices that fit on on
 
 ## States
 
-Default, chosen, Best, hover, focus, pressed.
+Default, chosen, Best, hover, focus, pressed, loading.
+
+`isLoading` draws a week of day tiles in their own size while the days are still coming, so the times under them never move when they arrive. They hold still under reduced motion.
 
 ## Keyboard
 

@@ -117,7 +117,7 @@
   /* A fact's place while the page loads: a real fact is sized by the control
      in it (the length switch, the zone), so its placeholder has to be told to
      take the row, or the row would stand at the icon's width alone. */
-  .factBody[data-ghost] {
+  .factBody[data-loading] {
     flex: 1;
   }
 

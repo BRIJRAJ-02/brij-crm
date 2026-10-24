@@ -88,6 +88,24 @@ export const LastMonth: Story = {
   },
 };
 
+/**
+ * The month before any day's times are known: the month reads, every tile waits with it, and no day says it has
+ * no times, which while the times are still coming would not be true.
+ */
+export const Loading: Story = {
+  args: { openDays: new Set<string>(), isLoading: true, canPrevious: false, canNext: false },
+  render: (args) => (
+    <Stage width="narrow">
+      <MonthTiles {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvasElement.querySelector('[data-loading]')).not.toBeNull();
+    await expect(canvasElement.querySelector('[role="group"]')).toHaveAttribute('aria-busy', 'true');
+    await expect(canvas.queryByLabelText(/no times/i)).toBeNull();
+  },
+};
+
 /** The story's own state, in a component so the artifact's preview can render it too. */
 function Interactive(args: ComponentProps<typeof MonthTiles>) {
   const [value, setValue] = useState(args.value);

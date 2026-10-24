@@ -35,6 +35,9 @@ if (embed !== undefined) closeOnEscape(embed, postToHost, window);
 const RESERVED = new Set(['embed', 'mode', 'fid', 'host', 'ctx', 'page', 'referrer', 'from']);
 const prefill = Object.fromEntries([...params].filter(([key]) => !RESERVED.has(key) && !key.startsWith('utm_')));
 const address = decodeURIComponent(window.location.pathname.replace(/^\/f\//, '').split('/')[0] ?? '');
+// Inside a site's frame the form is not a page of ours: it has no ground, so the tinted one its shell names
+// comes off before anything paints into it.
+if (embedded) delete document.documentElement.dataset.publicPage;
 const client = createPublicFormClient();
 // The form's own shape, drawn before the read even begins: the card, the headline's place, the questions' places
 // and the button's. A visitor's first paint is then the page rather than a blank window, and the words land in
