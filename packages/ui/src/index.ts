@@ -104,10 +104,10 @@ export {
 export { SocialLinksEditor, type SocialLinksEditorProps } from './modules/SocialLinksEditor/SocialLinksEditor.tsx';
 /** The social links editor's draft: stored links to rows, rows back to checked links, and whether a draft changed. */
 export {
-  draftOf as socialLinksDraftOf,
-  isDraftChanged as isSocialLinksDraftChanged,
-  linksOf as socialLinksOfDraft,
-  type DraftLinks as SocialLinksDraftLinks,
+  isSocialLinksDraftChanged,
+  socialLinksDraftOf,
+  socialLinksOfDraft,
+  type SocialLinksDraftLinks,
   type SocialLinkDraft,
   type StoredSocialLink,
 } from './modules/SocialLinksEditor/draft.ts';

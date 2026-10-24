@@ -2,16 +2,16 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { draftOf, type SocialLinkDraft } from './draft.ts';
+import { socialLinksDraftOf, type SocialLinkDraft } from './draft.ts';
 import { SocialLinksEditor, type SocialLinksEditorProps } from './SocialLinksEditor.tsx';
 
-const THREE = draftOf([
+const THREE = socialLinksDraftOf([
   { network: 'linkedin', href: 'https://linkedin.com/in/ada-lovelace' },
   { network: 'x', href: 'https://x.com/ada' },
   { network: 'website', href: 'https://ada.dev' },
 ]);
 
-const ALL = draftOf([
+const ALL = socialLinksDraftOf([
   { network: 'linkedin', href: 'https://linkedin.com/in/ada-lovelace' },
   { network: 'x', href: 'https://x.com/ada' },
   { network: 'instagram', href: 'https://instagram.com/ada.l' },
