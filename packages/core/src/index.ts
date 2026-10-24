@@ -132,6 +132,15 @@ export {
   type WorkspaceDeletion,
 } from './workspace/settings.ts';
 export { getMyProfile, updateMyMemberProfile, type ProfileExtras } from './members/profile.ts';
+// The link page's blocks (spec 0051): the caller's own, in schema auth, through crm_handle's definers.
+export {
+  archiveProfileItem,
+  deleteProfileItem,
+  listProfilePageChoices,
+  orderProfileItems,
+  readProfileItems,
+  saveProfileItem,
+} from './profile/items.ts';
 // A person's own account picture from our origin (23 Oct 2026): only Google's account pictures, with their version.
 export { servedPicture, type AccountPicture } from './booking/picture.ts';
 export {

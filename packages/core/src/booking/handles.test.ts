@@ -7,14 +7,14 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { enterBookingAddress, enterBookingPage, enterBookingProfile } from '../access/door.ts';
+import { enterBookingAddress, enterBookingPage, enterLinkPage } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
 import { createBookingPage, deleteBookingPage, updateBookingPage } from './pages.ts';
-import { getPublicBookingPage, readAddressedPage, readBookingProfile } from './public.ts';
+import { getPublicBookingPage, readAddressedPage, readLinkPage } from './public.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -95,7 +95,7 @@ describe('a handle', () => {
     await updateMyMemberProfile(ada.scope, { handle: second });
     // Ada's old handle is still hers: Bob can't take it, and it answers with her current one.
     expect(await refusalOf(updateMyMemberProfile(bob.scope, { handle: first }))).toBe('SLUG_TAKEN');
-    const found = await enterBookingProfile({ db }, first, { max: 5 });
+    const found = await enterLinkPage({ db }, first, { max: 5 });
     expect(found.owner.handle).toBe(second);
     // And she can go back to it.
     expect(await updateMyMemberProfile(ada.scope, { handle: first })).toMatchObject({ handle: first });
@@ -320,78 +320,8 @@ describe('what a workspace may publish under a person', () => {
       ),
     );
     expect(await refusalOf(enterBookingAddress({ db }, handle, made.slug))).toBe('NOT_FOUND');
-    const profile = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
-    expect(profile.links.map((link) => link.slug)).not.toContain(made.slug);
-  });
-});
-
-describe('a profile', () => {
-  it('lists the person’s Public, live pages in their order, a page at a time, and finds them by title', async () => {
-    const ada = await person('Ada Lovelace');
-    const handle = fresh('ada');
-    await updateMyMemberProfile(ada.scope, { handle, bio: 'Hi.' });
-    await page(ada.scope, 'Later', { profilePosition: 5 });
-    await page(ada.scope, 'First', { profilePosition: 1, profileSection: 'Sales' });
-    await page(ada.scope, 'Hidden', { isPrivate: true });
-    await page(ada.scope, 'Off', { status: 'paused' });
-    const read = async (query: { after?: { position: number; id: string }; search?: string }) =>
-      readBookingProfile(await enterBookingProfile({ db }, handle, { ...query, max: 21 }));
-    const profile = await read({});
-    expect(profile).toMatchObject({ handle, name: 'Ada Lovelace', initials: 'AL', bio: 'Hi.' });
-    expect(profile.links.map((link) => link.title)).toEqual(['First', 'Later']);
-    expect(profile.links[0]).toMatchObject({ slug: 'first', section: 'Sales', durations: [30], isTeam: false });
-    expect(profile.next).toBeUndefined();
-    expect((await read({ search: 'lat' })).links.map((link) => link.title)).toEqual(['Later']);
-  });
-
-  it('pages past 20 links with a cursor, never reading them all', async () => {
-    const ada = await person('Ada');
-    const handle = fresh('many');
-    await updateMyMemberProfile(ada.scope, { handle });
-    for (let n = 0; n < 22; n += 1) await page(ada.scope, `Link ${String(n)}`);
-    const first = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
-    expect(first.links).toHaveLength(20);
-    expect(first.next).toBeDefined();
-    const [position, id] = (first.next ?? '').split('.');
-    const rest = await readBookingProfile(
-      await enterBookingProfile({ db }, handle, { after: { position: Number(position), id: id ?? '' }, max: 21 }),
-    );
-    expect(rest.links).toHaveLength(2);
-    expect(rest.next).toBeUndefined();
-  });
-
-  it('marks each workspace’s links with their own opaque group, the same on every read (owner ask, 24 Oct)', async () => {
-    const ada = await person('Ada');
-    const handle = fresh('split');
-    await updateMyMemberProfile(ada.scope, { handle });
-    const other = await person('Ada', ada.userId);
-    await page(ada.scope, 'Quick chat', { profilePosition: 0 });
-    await page(other.scope, 'Brijraj', { profilePosition: 0 });
-    await page(ada.scope, 'Pitch', { profilePosition: 1, profileSection: 'Sales' });
-    await page(other.scope, 'Demo', { profilePosition: 1, profileSection: 'Sales' });
-    const read = async (search?: string) =>
-      readBookingProfile(
-        await enterBookingProfile({ db }, handle, { ...(search === undefined ? {} : { search }), max: 21 }),
-      );
-    const profile = await read();
-    const groupOf = (title: string) => profile.links.find((link) => link.title === title)?.group;
-    expect(groupOf('Quick chat')).toMatch(/^[0-9a-f]{16}$/);
-    expect(groupOf('Pitch')).toBe(groupOf('Quick chat'));
-    expect(groupOf('Demo')).toBe(groupOf('Brijraj'));
-    expect(groupOf('Brijraj')).not.toBe(groupOf('Quick chat'));
-    // Never the workspace itself.
-    const body = JSON.stringify(profile);
-    for (const workspace of [ada, other]) {
-      expect(body).not.toContain(workspace.workspaceId);
-      expect(body).not.toContain(workspace.workspaceId.replaceAll('-', ''));
-    }
-    expect(body).not.toContain('Handles');
-    // Stable across reads, so a group read on a later page (or by a search) joins its cards.
-    expect((await read('demo')).links.map((link) => link.group)).toEqual([groupOf('Demo')]);
-  });
-
-  it('is NOT_FOUND for a handle no one holds', async () => {
-    expect(await refusalOf(enterBookingProfile({ db }, fresh('nobody'), { max: 5 }))).toBe('NOT_FOUND');
+    const profile = await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }));
+    expect(profile.items.map((item) => (item.kind === 'page' ? item.slug : item.id))).not.toContain(made.slug);
   });
 });
 

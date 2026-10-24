@@ -718,39 +718,75 @@ export interface ProfileCursor {
   readonly id: string;
 }
 
-/** One listed page's entry, with its position on the profile (the next read's cursor). */
-export interface ProfilePageEntry extends BookingEntry {
-  readonly position: number;
+/** The ids crm_booking_owner_pages reads past row level security, and whether visitors see the page now. */
+interface OwnedPageRow extends PageKeyRow {
+  readonly is_live: boolean;
 }
 
-interface ProfilePageRow extends PageKeyRow {
-  readonly profile_position: number;
+/** One of a person's booking pages that may sit on their link page, as its read only entry. */
+export interface OwnedPageEntry extends BookingEntry {
+  /** Visitors see it now: live, not paused. */
+  readonly isLive: boolean;
 }
 
 /**
- * A profile `/<handle>` (22 Oct 2026): the handle's person (current or old handle), and up to `max` of their
- * Public, live pages in workspaces that exist, in their order, after `after`, optionally only titles holding
- * `search` (`crm_booking_profile_pages`, ids only), each as its read only `booking` entry. A handle no one holds is
+ * Which of a person's booking pages may sit on their link page (spec 0051, AC-5104): Public, not deleted, theirs
+ * as an active member of a workspace that exists (`crm_booking_owner_pages`, ids only), only those `pageIds` names
+ * when given, each as its read only `booking` entry. `ownerUserId` is the session's own id, or the id a handle named:
+ * never an input. Used by the link page's services only.
+ */
+export async function enterOwnedPages(
+  deps: { readonly db: Database },
+  ownerUserId: string,
+  pageIds?: readonly string[],
+): Promise<readonly OwnedPageEntry[]> {
+  if (!isUuid(ownerUserId)) return [];
+  const wanted = pageIds?.filter((id) => isUuid(id));
+  if (wanted !== undefined && wanted.length === 0) return [];
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<OwnedPageRow>(
+      sql`select workspace_id::text as workspace_id, page_id::text as page_id, is_live from crm_booking_owner_pages(${ownerUserId}::uuid, ${wanted === undefined ? null : `{${wanted.join(',')}}`}::uuid[])`,
+    ),
+  );
+  return found.rows.map((row) => ({ ...readOnlyEntry(deps.db, row), isLive: row.is_live }));
+}
+
+/** One live block of a link page as `crm_profile_items_public` answers it. */
+export interface LinkPageRow extends Record<string, unknown> {
+  readonly id: string;
+  readonly kind: string;
+  readonly position: number;
+  readonly data: unknown;
+  readonly workspace_id: string | null;
+  readonly page_id: string | null;
+}
+
+/**
+ * A link page `/<handle>` (spec 0051): the handle's person (current or old handle), up to `max` of their live blocks
+ * in order after `after` (`crm_profile_items_public`), and of the booking pages those blocks name, the ones visitors
+ * see now (`crm_booking_owner_pages`, live only), each as its read only `booking` entry. A handle no one holds is
  * NOT_FOUND. Exported only from `@crm/core/public`.
  */
-export async function enterBookingProfile(
+export async function enterLinkPage(
   deps: { readonly db: Database },
   handle: string,
-  query: { readonly after?: ProfileCursor; readonly search?: string; readonly max: number },
-): Promise<{ readonly owner: HandleOwner; readonly pages: readonly ProfilePageEntry[] }> {
+  query: { readonly after?: ProfileCursor; readonly max: number },
+): Promise<{
+  readonly owner: HandleOwner;
+  readonly rows: readonly LinkPageRow[];
+  readonly pages: readonly OwnedPageEntry[];
+}> {
   const owner = await handleOwner(deps.db, handle);
   if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
   const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
-  const search = query.search === undefined || query.search.trim() === '' ? null : query.search.trim().slice(0, 120);
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
-    tx.execute<ProfilePageRow>(
-      sql`select workspace_id::text as workspace_id, page_id::text as page_id, profile_position from crm_booking_profile_pages(${owner.userId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${search}, ${query.max}::integer)`,
+    tx.execute<LinkPageRow>(
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id from crm_profile_items_public(${owner.userId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
     ),
   );
-  return {
-    owner,
-    pages: found.rows.map((row) => ({ ...readOnlyEntry(deps.db, row), position: row.profile_position })),
-  };
+  const pageIds = found.rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
+  const pages = (await enterOwnedPages(deps, owner.userId, pageIds)).filter((entry) => entry.isLive);
+  return { owner, rows: found.rows, pages };
 }
 
 /**

@@ -7,7 +7,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { enterBookingPage, enterBookingProfile, findHandleOwner } from '../access/door.ts';
+import { enterBookingPage, enterLinkPage, findHandleOwner } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -16,7 +16,7 @@ import { testScope } from '../testing.ts';
 import { greeting } from './chat/agent.ts';
 import { createBookingPage } from './pages.ts';
 import { accountPicture, isPictureHost, pictureVersion } from './picture.ts';
-import { getPublicBookingPage, readBookingProfile, readPagePicture, readProfilePicture } from './public.ts';
+import { getPublicBookingPage, readLinkPage, readPagePicture, readProfilePicture } from './public.ts';
 
 const GOOGLE = 'https://lh3.googleusercontent.com/a/ACg8ocK_abc-123=s96-c';
 const SIZED = 'https://lh3.googleusercontent.com/a/ACg8ocK_abc-123=s256-c';
@@ -189,7 +189,7 @@ describe('a profile’s picture', () => {
     const ada = await person('Ada Lovelace', GOOGLE);
     const handle = `ada-${randomUUID().slice(0, 8)}`;
     await updateMyMemberProfile(ada.scope, { handle });
-    const profile = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
+    const profile = await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }));
     const version = pictureVersion(ada.userId, GOOGLE);
     expect(profile.image).toBe(`/api/public/profiles/${handle}/picture?v=${version}`);
     expect(JSON.stringify(profile)).not.toContain('googleusercontent');
@@ -200,7 +200,7 @@ describe('a profile’s picture', () => {
     const bob = await person('Bob', 'https://evil.example/me.png');
     const handle = `bob-${randomUUID().slice(0, 8)}`;
     await updateMyMemberProfile(bob.scope, { handle });
-    const profile = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
+    const profile = await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }));
     expect(profile.image).toBeUndefined();
     expect(readProfilePicture(await findHandleOwner({ db }, handle))).toBeUndefined();
     const missing = await findHandleOwner({ db }, `nobody-${randomUUID().slice(0, 8)}`).catch(
@@ -277,7 +277,7 @@ describe('a person who keeps their picture off their public pages (owner ask A12
     expect(facts.hostName).toBe('Ada Lovelace');
     expect(await readPagePicture(await enterBookingPage({ db }, page.publicKey), counting)).toBeUndefined();
     expect(asked).toEqual([]);
-    const profile = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
+    const profile = await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }));
     expect(profile.image).toBeUndefined();
     expect(profile.initials).toBe('AL');
     expect(JSON.stringify(profile)).not.toContain('picture');
@@ -294,7 +294,7 @@ describe('a person who keeps their picture off their public pages (owner ask A12
       `/api/public/booking/${page.publicKey}/picture?v=${version}`,
     );
     expect(await readPagePicture(again, counting)).toEqual({ url: new URL(SIZED), version });
-    expect((await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }))).image).toBe(
+    expect((await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }))).image).toBe(
       `/api/public/profiles/${handle}/picture?v=${version}`,
     );
   });
