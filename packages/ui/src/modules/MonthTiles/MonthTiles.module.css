@@ -50,7 +50,9 @@
     text-transform: uppercase;
   }
 
+  /* Six weeks, every row a tile's height, a row of blanks too: every month is one height. */
   .grid {
+    grid-auto-rows: 1fr;
     animation: month-fade var(--duration-move) var(--ease-out) both;
   }
 

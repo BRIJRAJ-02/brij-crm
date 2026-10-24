@@ -187,7 +187,6 @@ export const NoTimes: Story = {
 /** Booked: the last reply stays, and the field and buttons are done. */
 export const Done: Story = {
   args: { isDone: true, doneNote: 'Booked. Opening your booking.' },
-  parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage width="fill">
       <BookingChat

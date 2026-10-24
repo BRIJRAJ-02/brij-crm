@@ -21,7 +21,7 @@ New. ChoiceChips hold a few labelled choices in a row; a day's times run long, s
 
 `variant="offers"` (the booking chat, spec 0042) makes each time an action rather than a choice: no picked state and no `aria-pressed`, the day as a small label rather than a heading, and no clock switch. Why a variant: the chat offers the same times as the picker, so they must look the same; only what pressing one means differs. The clock switch shows only when `onHour12Change` is given.
 
-`layout="column"` (the default) is one time a row, scrolling in its pane with a fade at the foot; `grid` runs two to four across as its container allows (the List view, phones). `isLoading` draws a skeleton; `empty` takes the list's place when a day has nothing to show. `drawKey` changes with the day, zone or view so the times stagger in again.
+`layout="column"` (the default) is one time a row, scrolling in its pane with a fade at the foot; `grid` runs two to four across as its container allows (the List view, phones), and takes the rest of a column it sits in, rows from the top. `isLoading` draws a skeleton; `empty` takes the list's place when a day has nothing to show. `drawKey` changes with the day or zone so the times stagger in again. At its end a column's scroll goes on to the page's, so a swipe on a phone never stops in the times.
 
 ## States
 

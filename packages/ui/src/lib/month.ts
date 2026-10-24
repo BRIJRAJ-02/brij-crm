@@ -70,7 +70,10 @@ export function weekStartDay(weekStart: WeekStart = 'auto'): (typeof DAY_NAMES)[
   return weekStart === 'auto' ? undefined : DAY_NAMES[CHOSEN_DAY[weekStart]];
 }
 
-/** The month's cells from the first weekday: blanks, then each day key. */
+/** The cells every month's grid holds: six weeks of seven days. */
+const SIX_WEEKS = 42;
+
+/** The month's cells from the first weekday: blanks, then each day key, then blanks to six weeks. */
 export function monthCells(
   month: string,
   locale: string,
@@ -82,6 +85,9 @@ export function monthCells(
   return [
     ...Array.from({ length: lead }, () => undefined),
     ...Array.from({ length: days }, (_, index) => `${month}-${String(index + 1).padStart(2, '0')}`),
+    // Always six weeks: a month is then one height whichever month it is, so paging months, or a page jumping to
+    // the month of its first time, never moves what stands under it (25 October 2026).
+    ...Array.from({ length: SIX_WEEKS - lead - days }, () => undefined),
   ];
 }
 
