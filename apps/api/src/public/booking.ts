@@ -20,6 +20,7 @@
 //   GET  /api/public/booking/connect/callback    Google's answer: the guest's sealed cookie
 //   POST /api/public/booking/connect/forget      drops the guest's calendar
 //   GET  /api/public/handles/:handle             ?after&q: a link page and a page of its blocks (spec 0051)
+//   GET  /api/public/handles/:handle/contact.vcf  the link page's contact card as a vCard (spec 0051)
 //   GET  /api/public/handles/:handle/:slug       the page a handle address names, by its public key
 //   GET  /api/public/booking/:publicKey/picture  a personal page's host picture, from our origin (23 Oct 2026)
 //   GET  /api/public/profiles/:handle/picture    a profile's picture, likewise (`picture.ts` fetches both)
@@ -74,13 +75,16 @@ import {
   removeGuest,
   enterBookingAddress,
   enterBookingPage,
+  enterContactCard,
   enterLinkPage,
   findHandleOwner,
   getPublicBookingPage,
   readAddressedPage,
   readLinkPage,
   readPagePicture,
+  readContactCard,
   readProfilePicture,
+  writeVcard,
   isPageHost,
   type AccountPicture,
   type AccountPictureReader,
@@ -364,6 +368,38 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
         max: search === undefined ? PROFILE_PAGE_SIZE + 1 : PROFILE_LIMITS.items + 1,
       });
       return ok(await readLinkPage(found, search === undefined ? {} : { search }));
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  // A link page's contact card as a vCard 3.0 (spec 0051, AC-5114, AC-5115): a plain download, so Save contact is a
+  // plain link that works with no script and from a QR code. Before `/:slug`, which a dotted name never is. A handle
+  // no one holds and one with no card answer the same 404. The picture is embedded only when the person has one and
+  // hasn't hidden it, and a picture that won't fetch leaves it out rather than failing the card.
+  app.get('/public/handles/:handle/contact.vcf', async (c) => {
+    const handle = c.req.param('handle');
+    if (!HANDLE_PATTERN.test(handle)) return answer('NOT_FOUND', 'There’s no contact card here.');
+    const refused = limited([
+      [`booking:vcard:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.vcardsPerAddress],
+      [`booking:vcard-handle:${handle}`, BOOKING_LIMITS.vcardsPerHandle],
+    ]);
+    if (refused !== undefined) return refused;
+    try {
+      const contact = readContactCard(await enterContactCard({ db }, handle));
+      const fetched = contact.picture === undefined ? undefined : await services.pictures.fetch(contact.picture.url);
+      if (fetched?.ok === false) {
+        log.warn('booking.vcard.picture_missed', { requestId: c.get('requestId'), reason: fetched.reason });
+      }
+      const body = writeVcard(contact.card, fetched?.ok === true ? fetched : undefined);
+      return new Response(body, {
+        headers: {
+          'content-type': 'text/vcard; charset=utf-8',
+          'content-disposition': `attachment; filename="${contact.handle}.vcf"`,
+          'cache-control': 'private, no-store',
+          'x-robots-tag': 'noindex',
+        },
+      });
     } catch (error) {
       return refusalAnswer(error);
     }

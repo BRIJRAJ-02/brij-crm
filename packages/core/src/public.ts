@@ -6,6 +6,7 @@ export {
   enterBookingAddress,
   enterBookingByToken,
   enterBookingPage,
+  enterContactCard,
   enterLinkPage,
   findHandleOwner,
   type BookingEntry,
@@ -18,6 +19,7 @@ export {
   bookPublicSlot,
   countPageView,
   readAddressedPage,
+  readContactCard,
   readLinkPage,
   readHandoffPrefill,
   getPublicBookingPage,
@@ -31,6 +33,8 @@ export {
   type PublicBookingDeps,
   type PublicPictureDeps,
 } from './booking/public.ts';
+// The link page's contact card as a vCard (spec 0051, AC-5114).
+export { writeVcard, type VcardPhoto } from './profile/vcard.ts';
 // A host's account picture (23 Oct 2026): only Google's picture hosts, so the api's fetch goes nowhere else.
 export { isPictureHost, pictureVersion, type AccountPicture, type AccountPictureReader } from './booking/picture.ts';
 // The booking chat (spec 0042): one turn, through the slots and booking services above.

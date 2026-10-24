@@ -2,7 +2,7 @@
 // answer exactly what `values/social.ts` answers for the url field.
 import { describe, expect, it } from 'vitest';
 import { describeLink, SOCIAL_NETWORKS } from '../values/social.ts';
-import { checkProfileLink, linkMarkOf, PUBLIC_LINK_MARKS } from './link-page-rules.ts';
+import { checkContactCard, checkProfileLink, linkMarkOf, PUBLIC_LINK_MARKS } from './link-page-rules.ts';
 import { ProfileBlock } from './link-page.ts';
 
 describe('checkProfileLink', () => {
@@ -120,7 +120,49 @@ describe('ProfileBlock', () => {
     expect(ProfileBlock.safeParse({ kind: 'link', title: 'A', url: 'https://a.dev', icon: 'bomb' }).success).toBe(
       false,
     );
-    expect(ProfileBlock.safeParse({ kind: 'contact', fullName: 'Ada' }).success).toBe(false);
+    expect(ProfileBlock.parse({ kind: 'contact', fullName: ' Ada ', website: 'ada.dev' })).toEqual({
+      kind: 'contact',
+      fullName: 'Ada',
+      website: 'https://ada.dev',
+    });
+    for (const card of [
+      { fullName: '' },
+      { fullName: 'Ada', email: 'ada' },
+      { fullName: 'Ada', phone: '12' },
+      { fullName: 'Ada', phone: '+1 (555) 0100 ext' },
+      { fullName: 'Ada', website: 'mailto:ada@ada.dev' },
+      { fullName: 'Ada', jobTitle: '' },
+      { fullName: 'Ada', note: 'two\nlines' },
+      { fullName: 'x'.repeat(81) },
+    ]) {
+      expect(ProfileBlock.safeParse({ kind: 'contact', ...card }).success, JSON.stringify(card)).toBe(false);
+    }
     expect(ProfileBlock.safeParse({ kind: 'link', title: 'Two\nlines', url: 'https://a.dev' }).success).toBe(false);
+  });
+});
+
+describe('checkContactCard', () => {
+  it('keeps what was given, trimmed and canonical, and says each field’s problem', () => {
+    expect(
+      checkContactCard({ fullName: ' Ada ', phone: '+44 (20) 7946-0958', email: 'ada@acme.dev', company: ' ' }),
+    ).toEqual({ ok: true, card: { fullName: 'Ada', phone: '+44 (20) 7946-0958', email: 'ada@acme.dev' } });
+    expect(checkContactCard({ fullName: 'Ada', jobTitle: 'x'.repeat(121) })).toEqual({
+      ok: false,
+      problems: { jobTitle: 'Keep the job title to 120 characters.' },
+    });
+  });
+
+  it('answers only what the database’s check accepts', () => {
+    for (const typed of ['ada@acme.dev', 'a.b+c@x.co', 'ada@acme', 'ada @acme.dev', 'ada@@acme.dev']) {
+      const checked = checkContactCard({ fullName: 'Ada', email: typed });
+      expect(checked.ok, typed).toBe(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(typed));
+    }
+    for (const typed of ['+1 555 0100', '(020) 7946 0958', '12', '+', 'x123', '1'.repeat(21)]) {
+      const checked = checkContactCard({ fullName: 'Ada', phone: typed });
+      const digits = typed.replace(/\D/g, '').length;
+      expect(checked.ok, typed).toBe(/^\+?[0-9 ().-]+$/.test(typed) && digits >= 3 && digits <= 20);
+    }
+    const site = checkContactCard({ fullName: 'Ada', website: 'acme.dev/about us' });
+    expect(site.ok && site.card.website).toBe('https://acme.dev/about%20us');
   });
 });

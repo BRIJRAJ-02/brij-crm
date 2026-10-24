@@ -5,6 +5,20 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkPage, LinkPageTile, type LinkPageBlock } from './LinkPage.tsx';
 
+const meta = {
+  title: 'Modules/LinkPage',
+  component: LinkPage,
+  args: { claimHref: 'https://www.timefix.com/?utm_content=claim_link', onPress: fn() },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} />
+    </Stage>
+  ),
+} satisfies Meta<typeof LinkPage>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
 /** Anish's page at an event: his booking pages, his site, his networks, under two headings. */
 function anishBlocks(): readonly LinkPageBlock[] {
   return [
@@ -34,25 +48,20 @@ function anishBlocks(): readonly LinkPageBlock[] {
   ];
 }
 
+/**
+ * The blocks rise in with `both` fill, and the test runner pauses animations, which holds that entrance at its first
+ * frame (opacity 0) until the hook after the play settles it. A play that reads the blocks settles it first, as a
+ * visitor sees them a moment after the page draws.
+ */
+function settleEntrance(root: HTMLElement) {
+  for (const entrance of root.getAnimations({ subtree: true })) entrance.finish();
+}
+
 const PERSON = {
   name: 'Anish Gupta',
   id: 'anish',
   bio: 'Cofounder at Timefix. Ask me about scheduling that books itself.',
 };
-
-const meta = {
-  title: 'Modules/LinkPage',
-  component: LinkPage,
-  args: { claimHref: 'https://www.timefix.com/?utm_content=claim_link', onPress: fn() },
-  render: (args) => (
-    <Stage width="fill" height="page">
-      <LinkPage {...args} />
-    </Stage>
-  ),
-} satisfies Meta<typeof LinkPage>;
-
-export default meta;
-type Story = StoryObj<typeof meta>;
 
 /** The page a visitor scans to at an event: the person, then their blocks in their order, the foot. */
 export const Default: Story = {
@@ -63,7 +72,8 @@ export const Default: Story = {
       <LinkPage {...args} blocks={anishBlocks()} />
     </Stage>
   ),
-  play: async ({ canvas, args }) => {
+  play: async ({ canvas, canvasElement, args }) => {
+    settleEntrance(canvasElement);
     await expect(canvas.getByRole('heading', { level: 1, name: 'Anish Gupta' })).toBeVisible();
     await expect(canvas.getByRole('heading', { level: 2, name: 'Find me' })).toBeVisible();
     // A booking page opens in this tab; an outside link in a new one, never sending where it came from.
@@ -196,12 +206,45 @@ export const Schemes: Story = {
       />
     </Stage>
   ),
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
     await expect(canvas.queryByRole('link', { name: /Not a link/ })).toBeNull();
     await expect(canvas.getByText('Not a link')).toBeVisible();
     const mail = canvas.getByRole('link', { name: /Email me/ });
     await expect(mail).toHaveAttribute('href', 'mailto:anish@timefix.com');
     await expect(mail).not.toHaveAttribute('target');
     await expect(canvas.getByRole('link', { name: /Call me/ })).toHaveAttribute('href', 'tel:+919999999999');
+  },
+};
+
+/**
+ * The contact card (AC-5109, AC-5115): the name and the line under it, and Save contact, a plain link to the card's
+ * vCard that a phone offers to add to its contacts, from a QR code too.
+ */
+export const ContactCard: Story = {
+  args: { person: PERSON },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage
+        {...args}
+        blocks={[
+          {
+            kind: 'contact',
+            id: 'card',
+            title: 'Anish Gupta',
+            line: 'Cofounder · Timefix',
+            href: '/api/public/handles/anish/contact.vcf',
+          },
+          ...anishBlocks(),
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    const save = canvas.getByRole('link', { name: /Anish Gupta.*Save contact/ });
+    await expect(save).toBeVisible();
+    await expect(save).toHaveAttribute('href', '/api/public/handles/anish/contact.vcf');
+    await expect(save).not.toHaveAttribute('target');
   },
 };

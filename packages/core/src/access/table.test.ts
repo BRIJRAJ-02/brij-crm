@@ -6,6 +6,7 @@ import { sql } from 'drizzle-orm';
 import { PERMISSIONS, type GlobalSearchResults } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import * as core from '../index.ts';
 import * as system from '../system.ts';
 import { testScope } from '../testing.ts';
@@ -240,7 +241,7 @@ describe('the access table', () => {
   });
 });
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 beforeAll(() => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-table-tests' });
@@ -391,6 +392,49 @@ describe('the walk: a principal without the access is refused', () => {
       // Another member never sees the owner's rail: each reads their own row.
       expect((await core.readNav(scope)).rail).toBe(false);
       expect((await core.readNav(owner)).rail).toBe(true);
+    },
+  );
+
+  it.each(entries.filter(([, entry]) => 'ownLinkPage' in entry).map(([name]) => name))(
+    '%s keeps to the caller’s own link page: a key is refused, another person’s block is absent',
+    async (name) => {
+      const { workspaceId, ownerId, memberId } = await memberOf('member');
+      const [ada, bea] = [core.newId(), core.newId()];
+      for (const id of [ada, bea]) {
+        await testQuery(ownerUrl, `insert into auth."user" (id, name, email) values ($1, 'Someone', $2)`, [
+          id,
+          `${id}@example.com`,
+        ]);
+      }
+      const adaScope = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId }, userId: ada });
+      const beaScope = testScope({ db, workspaceId, actor: { type: 'member', id: memberId }, userId: bea });
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() } });
+      const theirs = await core.saveProfileItem(adaScope, {
+        id: core.newId(),
+        block: { kind: 'heading', title: 'Ada’s' },
+      });
+      const inputs: Readonly<Record<string, unknown>> = {
+        saveProfileItem: { id: theirs.id, block: { kind: 'heading', title: 'Bea’s now' } },
+        orderProfileItems: [theirs.id],
+        archiveProfileItem: { id: theirs.id, archived: true },
+        deleteProfileItem: theirs.id,
+      };
+      expect(await refusalOf(service(name)(key, inputs[name]))).toMatchObject({ code: 'FORBIDDEN' });
+      const outcome = await service(name)(beaScope, inputs[name]).then(
+        (value) => ({ value }),
+        (error: unknown) => ({ refusal: core.isRefusal(error) ? error.refusal.code : error }),
+      );
+      if (name === 'readProfileItems' || name === 'listProfilePageChoices') {
+        expect(JSON.stringify(outcome)).not.toContain(theirs.id);
+      } else if (name === 'orderProfileItems') {
+        // Bea's order can only name Bea's own blocks: Ada's id makes it stale.
+        expect(outcome).toEqual({ refusal: 'CONFIG_INVALID' });
+      } else {
+        expect(outcome).toEqual({ refusal: 'NOT_FOUND' });
+      }
+      expect((await core.readProfileItems(adaScope)).items).toEqual([
+        expect.objectContaining({ id: theirs.id, title: 'Ada’s' }),
+      ]);
     },
   );
 

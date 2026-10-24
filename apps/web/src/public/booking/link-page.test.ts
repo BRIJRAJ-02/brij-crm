@@ -7,9 +7,9 @@ import { blocksOf } from './link-page.ts';
 describe('blocksOf', () => {
   it('maps every kind in order, and skips one it doesn’t know', () => {
     const later = {
-      kind: 'contact',
+      kind: 'music',
       id: '00000000-0000-7000-8000-000000000009',
-      fullName: 'Ada',
+      title: 'My playlist',
     } as unknown as PublicProfileItem;
     const items: PublicProfileItem[] = [
       {
@@ -31,6 +31,14 @@ describe('blocksOf', () => {
         mark: 'linkedin',
         hue: 'blue',
       },
+      {
+        kind: 'contact',
+        id: '00000000-0000-7000-8000-000000000004',
+        fullName: 'Ada Lovelace',
+        jobTitle: 'Founder',
+        company: 'Acme',
+      },
+      { kind: 'contact', id: '00000000-0000-7000-8000-000000000005', fullName: 'Ada' },
     ];
     expect(blocksOf('ada', items)).toEqual([
       {
@@ -48,6 +56,19 @@ describe('blocksOf', () => {
         href: 'https://www.linkedin.com/in/ada',
         hue: 'blue',
         mark: 'linkedin',
+      },
+      {
+        kind: 'contact',
+        id: '00000000-0000-7000-8000-000000000004',
+        title: 'Ada Lovelace',
+        line: 'Founder · Acme',
+        href: '/api/public/handles/ada/contact.vcf',
+      },
+      {
+        kind: 'contact',
+        id: '00000000-0000-7000-8000-000000000005',
+        title: 'Ada',
+        href: '/api/public/handles/ada/contact.vcf',
       },
     ]);
   });

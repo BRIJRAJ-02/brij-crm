@@ -235,5 +235,30 @@ describe('checkBlock', () => {
     const many = Array.from({ length: 12 }, (_, n) => heading(`h${String(n)}`, `H ${String(n)}`));
     expect(blockLimit(many, 'heading')).toBe('A link page holds up to 12 headings.');
     expect(blockLimit(many, 'link')).toBeUndefined();
+    const card = { kind: 'contact', id: 'c', fullName: 'Ada', updatedAt: '' } as const;
+    expect(blockLimit([card], 'contact')).toBe('A link page holds one contact card.');
+  });
+
+  it('checks a contact card field by field, keeping only what was given', () => {
+    expect(
+      checkBlock(
+        { kind: 'contact', fullName: ' Ada Lovelace ', jobTitle: '', email: 'ada@acme.dev', website: 'acme.dev' },
+        items,
+      ),
+    ).toEqual({
+      ok: true,
+      block: { kind: 'contact', fullName: 'Ada Lovelace', email: 'ada@acme.dev', website: 'https://acme.dev' },
+    });
+    expect(
+      checkBlock({ kind: 'contact', fullName: '', email: 'ada', phone: 'call me', website: 'mailto:a@b.co' }, items),
+    ).toEqual({
+      ok: false,
+      problems: {
+        fullName: 'Enter the name.',
+        email: 'Enter an email address, like ana@example.com.',
+        phone: 'Use digits, with a + and the country code if you like.',
+        website: 'Use a web address, like timefix.com.',
+      },
+    });
   });
 });

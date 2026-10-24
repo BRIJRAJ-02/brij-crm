@@ -3,7 +3,7 @@
 // crm_handle's definers, run inside the caller's workspace transaction with the session's own user id: no input names
 // the owner, so no role in any workspace reaches another person's page. A booking page block names a page by its
 // workspace and id; which of the person's pages it may name, and what the editor shows of one, comes through the
-// door (`enterOwnedPages`), each read as the page's read only `booking` actor in its own workspace.
+// door (`enterOwnPages`), each read as the page's read only `booking` actor in its own workspace.
 //
 // No audit row: the blocks are the person's, not the workspace's, and a workspace's history is read by its admins.
 // (The identity login keeps the default grant every auth table gets; the app reaches the table only through here.)
@@ -16,10 +16,9 @@ import {
   type ProfilePageChoice,
   type ProfilePageFacts,
 } from '@crm/contracts';
-import { schema, type Database, type WorkspaceTx } from '@crm/db';
+import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { enterOwnedPages, type OwnedPageEntry } from '../access/door.ts';
-import { checkScope } from '../access/mint.ts';
+import { enterOwnPages, ownUserId, type OwnedPageEntry } from '../access/door.ts';
 import { isUuid } from '../engine/ids.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -46,12 +45,7 @@ const ITEM_COLUMNS = sql.raw(
 
 /** The caller's identity, which their link page belongs to; a member made without one has none. */
 function ownerOf(scope: EngineScope): string {
-  checkScope(scope);
-  const { principal } = scope.access;
-  if (principal.kind !== 'member' || principal.userId === undefined) {
-    throw refuse('FORBIDDEN', 'Only a signed in person has a link page.');
-  }
-  return principal.userId;
+  return ownUserId(scope);
 }
 
 function iso(value: string | Date): string {
@@ -163,10 +157,10 @@ async function readRows(tx: WorkspaceTx, owner: string, archived: boolean): Prom
 }
 
 /** The facts of every booking page the rows name, as the door lets the owner place them now. */
-async function factsForRows(db: Database, owner: string, rows: readonly ItemRow[]): Promise<FactsByPage> {
+async function factsForRows(scope: EngineScope, rows: readonly ItemRow[]): Promise<FactsByPage> {
   const pageIds = rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
   if (pageIds.length === 0) return new Map();
-  return factsOf(await enterOwnedPages({ db }, owner, pageIds));
+  return factsOf(await enterOwnPages(scope, pageIds));
 }
 
 /** Both lists, read in one transaction, with their pages' facts. */
@@ -175,7 +169,7 @@ async function readAll(scope: EngineScope, owner: string): Promise<ProfileItems>
     await readRows(tx, owner, false),
     await readRows(tx, owner, true),
   ]);
-  const facts = await factsForRows(scope.db, owner, [...live, ...archived]);
+  const facts = await factsForRows(scope, [...live, ...archived]);
   const items = (rows: readonly ItemRow[]) =>
     rows.flatMap((row) => {
       const item = itemOf(row, facts);
@@ -197,7 +191,7 @@ export async function listProfilePageChoices(scope: EngineScope): Promise<readon
   const owner = ownerOf(scope);
   const live = await inWorkspace(scope, (tx) => readRows(tx, owner, false));
   const placed = new Set(live.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : [])));
-  const entries = (await enterOwnedPages({ db: scope.db }, owner)).filter((entry) => !placed.has(entry.pageId));
+  const entries = (await enterOwnPages(scope)).filter((entry) => !placed.has(entry.pageId));
   const facts = await factsOf(entries);
   return [...facts]
     .map(([pageId, found]) => ({ workspaceId: found.workspaceId, pageId, facts: found.facts }))
@@ -214,11 +208,15 @@ function refusalOf(error: unknown): unknown {
   const pg = postgresError(error);
   if (pg === undefined) return error;
   if (pg.code === '54000') {
-    const kind = (['link', 'heading', 'page'] as const).find((each) => each === pg.detail);
+    const kind = (['link', 'heading', 'page', 'contact'] as const).find((each) => each === pg.detail);
     return refuse('LIMIT_REACHED', profileLimitSentence(kind ?? 'items'));
   }
   if (pg.code === '23505' && pg.constraint === 'profile_items_heading_once') {
     return refuseOn('CONFIG_INVALID', 'You already have a heading called that.', 'title');
+  }
+  // One live contact card (AC-5102): a second, or one restored beside another, is refused as the limit it is.
+  if (pg.code === '23505' && pg.constraint === 'profile_items_contact_once') {
+    return refuse('LIMIT_REACHED', profileLimitSentence('contact'));
   }
   if (pg.code === '23505' && pg.constraint === 'profile_items_page_once') {
     return refuse('CONFIG_INVALID', 'That booking page is on your link page already.');
@@ -241,6 +239,11 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
   }
   if (block.kind === 'heading')
     return { kind: block.kind, data: { title: block.title }, workspaceId: null, pageId: null };
+  if (block.kind === 'contact') {
+    // The card's fields as the schema kept them: an empty one was refused there, never stored.
+    const { kind, ...data } = block;
+    return { kind, data, workspaceId: null, pageId: null };
+  }
   return {
     kind: block.kind,
     data: {
@@ -258,7 +261,7 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
 /**
  * Adds or edits one block of the caller's link page (AC-5101 to AC-5107), idempotent on `id`: the same add again
  * answers the block already made. The fields are checked against their kind's schema here too, so a caller in core
- * gets the contract's refusals; a booking page must be one the caller may place (`enterOwnedPages`). A new block goes
+ * gets the contract's refusals; a booking page must be one the caller may place (`enterOwnPages`). A new block goes
  * at the end. Past a limit, `LIMIT_REACHED` with the limit's sentence; a repeated heading, or a page already there,
  * `CONFIG_INVALID`; another person's id, `NOT_FOUND`.
  */
@@ -276,7 +279,7 @@ export async function saveProfileItem(
   }
   const block = parsed.data;
   if (block.kind === 'page') {
-    const [entry] = await enterOwnedPages({ db: scope.db }, owner, [block.pageId]);
+    const [entry] = await enterOwnPages(scope, [block.pageId]);
     if (entry?.scope.workspaceId !== block.workspaceId) {
       throw refuse('NOT_FOUND', 'That booking page can’t go on your link page.');
     }
@@ -302,7 +305,7 @@ export async function saveProfileItem(
     }
   });
   if (row === undefined) throw refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
-  const item = itemOf(row, await factsForRows(scope.db, owner, [row]));
+  const item = itemOf(row, await factsForRows(scope, [row]));
   if (item === undefined) throw new Error('A saved block read back as nothing.');
   return item;
 }

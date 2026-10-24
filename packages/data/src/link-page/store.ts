@@ -7,6 +7,7 @@
 // list is refused by the server and read again.
 import type { ProfileBlock, ProfileItem, ProfileItems, ProfilePageChoice } from '@crm/contracts';
 import {
+  checkContactCard,
   checkProfileLink,
   linkMarkOf,
   PROFILE_LIMITS,
@@ -16,6 +17,7 @@ import {
   profileLimitSentence,
   profileLinkProblem,
   type ProfileBlockKind,
+  type ProfileContactField,
 } from '@crm/contracts/link-page';
 import type { PROFILE_HUES } from '@crm/contracts/link-page';
 import { toDataError, type DataError } from '../errors.ts';
@@ -128,7 +130,9 @@ interface Pending {
 }
 
 /** Why a block can't be saved as typed, by field: the same rules the server keeps, said before anything is sent. */
-export type BlockProblems = Readonly<Partial<Record<'title' | 'url' | 'note' | 'icon' | 'page', string>>>;
+export type BlockProblems = Readonly<
+  Partial<Record<'title' | 'url' | 'note' | 'icon' | 'page' | ProfileContactField, string>>
+>;
 
 /** The refusal toast's action. */
 const TRY_AGAIN = 'Try again';
@@ -205,7 +209,8 @@ export type BlockDraft =
       readonly hue?: (typeof PROFILE_HUES)[number];
     }
   | { readonly kind: 'heading'; readonly title: string }
-  | { readonly kind: 'page'; readonly workspaceId?: string; readonly pageId?: string };
+  | { readonly kind: 'page'; readonly workspaceId?: string; readonly pageId?: string }
+  | ({ readonly kind: 'contact' } & Readonly<Partial<Record<ProfileContactField, string>>>);
 
 /** A title's problem: present, one line, and short enough for its kind. */
 function titleProblem(title: string, kind: 'link' | 'heading'): string | undefined {
@@ -233,6 +238,13 @@ export function checkBlock(
       return { ok: false, problems: { page: 'Pick a booking page.' } };
     }
     return { ok: true, block: { kind: 'page', workspaceId: draft.workspaceId, pageId: draft.pageId } };
+  }
+  if (draft.kind === 'contact') {
+    const { kind: _kind, ...typed } = draft;
+    const checked = checkContactCard(typed);
+    return checked.ok
+      ? { ok: true, block: { kind: 'contact', ...checked.card } }
+      : { ok: false, problems: checked.problems };
   }
   const problems: Partial<Record<'title' | 'url' | 'note' | 'icon' | 'page', string>> = {};
   const title = titleProblem(draft.title, draft.kind);

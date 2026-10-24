@@ -13,7 +13,7 @@ import type {
 } from '@crm/data';
 import type { Hue, IconName, LinkPageBlock, LinkPageMark } from '@crm/ui';
 import type { ComponentType } from 'react';
-import { HeadingEditor, LinkEditor, PageChooser } from './editors.tsx';
+import { ContactEditor, HeadingEditor, LinkEditor, PageChooser } from './editors.tsx';
 import { strings } from './strings.ts';
 
 /** What a block's editor Modal is handed: the block being edited (none for an add), and what it needs to check. */
@@ -29,6 +29,10 @@ export interface BlockEditorProps {
   readonly newHue: Hue;
   /** The link page's store: its checks, marks and the booking pages to choose from. */
   readonly linkPage: LinkPageStore;
+  /** The networks already in the person's social icons: a link to one is allowed, with a quiet note saying so. */
+  readonly socialNetworks: readonly string[];
+  /** The person's name, a new contact card's full name to start from. */
+  readonly ownerName: string;
   /**
    * Checked and ready: the screen saves it (shown at once) and closes the Modal. A booking page comes with its
    * facts, so its row shows them before the server answers.
@@ -75,6 +79,13 @@ export const BLOCK_KINDS: Readonly<Record<ProfileBlockKind, BlockKind>> = {
     Editor: LinkEditor,
     isEditable: true,
   },
+  contact: {
+    label: strings.addContact,
+    description: strings.addContactText,
+    icon: 'id-card',
+    Editor: ContactEditor,
+    isEditable: true,
+  },
   heading: {
     label: strings.addHeading,
     description: strings.addHeadingText,
@@ -85,7 +96,7 @@ export const BLOCK_KINDS: Readonly<Record<ProfileBlockKind, BlockKind>> = {
 };
 
 /** The Add menu's kinds, in order. */
-export const ADDABLE: readonly ProfileBlockKind[] = ['page', 'link', 'heading'];
+export const ADDABLE: readonly ProfileBlockKind[] = ['page', 'link', 'contact', 'heading'];
 
 /** A booking page's lengths and kind, said once: "30 min · 60 min · Team". */
 export function pageFacts(page: { readonly durations: readonly number[]; readonly isTeam: boolean }): string {
@@ -103,6 +114,7 @@ function shownAddress(url: string): string {
 export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWords {
   if (item.kind === 'link') return { title: item.title, address: shownAddress(item.url) };
   if (item.kind === 'heading') return { title: item.title, address: strings.heading };
+  if (item.kind === 'contact') return { title: item.fullName, address: contactWords(item, true) };
   if (item.page === undefined) {
     // Unavailable leads the line, as Paused does, so a phone keeps the row on one line.
     return {
@@ -126,6 +138,18 @@ export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWor
   };
 }
 
+/** A contact card's line: its job title and company, after "Contact card" in the editor's row. */
+export function contactWords(card: { readonly jobTitle?: string; readonly company?: string }, inRow = false): string {
+  return [...(inRow ? [strings.contactCard] : []), card.jobTitle, card.company]
+    .filter((part): part is string => part !== undefined && part !== '')
+    .join(' · ');
+}
+
+/** Where a person's contact card is saved from: its vCard on this origin (AC-5114). */
+export function contactHref(handle: string): string {
+  return `/api/public/handles/${encodeURIComponent(handle)}/contact.vcf`;
+}
+
 /**
  * A block as the preview draws it, or undefined for one a visitor wouldn't see (a paused or unavailable booking
  * page): the same LinkPage block the public page draws.
@@ -136,6 +160,16 @@ export function previewBlock(
   markOf: (url: string) => LinkPageMark | undefined,
 ): LinkPageBlock | undefined {
   if (item.kind === 'heading') return { kind: 'heading', id: item.id, title: item.title };
+  if (item.kind === 'contact') {
+    const line = contactWords(item);
+    return {
+      kind: 'contact',
+      id: item.id,
+      title: item.fullName,
+      href: contactHref(handle),
+      ...(line === '' ? {} : { line }),
+    };
+  }
   if (item.kind === 'link') {
     const mark = markOf(item.url);
     return {

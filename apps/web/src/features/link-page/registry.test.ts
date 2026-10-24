@@ -23,7 +23,7 @@ const page = (status: 'live' | 'paused'): ProfileItem => ({
 
 describe('the block registry', () => {
   it('offers every kind it has an editor for, in the Add menu’s order', () => {
-    expect(ADDABLE).toEqual(['page', 'link', 'heading']);
+    expect(ADDABLE).toEqual(['page', 'link', 'contact', 'heading']);
     expect(ADDABLE.every((kind) => BLOCK_KINDS[kind].label !== '')).toBe(true);
   });
 
@@ -63,5 +63,28 @@ describe('the block registry', () => {
       ),
     ).toMatchObject({ mark: 'linkedin', hue: 'red' });
     expect(pageFacts({ durations: [15, 30], isTeam: true })).toBe('15 min · 30 min · Team');
+  });
+
+  it('reads and draws the contact card: its name, its line, and Save contact to its vCard', () => {
+    const card: ProfileItem = {
+      kind: 'contact',
+      id: 'c',
+      fullName: 'Ada Lovelace',
+      jobTitle: 'Founder',
+      company: 'Acme',
+      email: 'ada@acme.dev',
+      updatedAt: '',
+    };
+    expect(rowWords(card)).toEqual({ title: 'Ada Lovelace', address: 'Contact card · Founder · Acme' });
+    expect(previewBlock(card, 'ada lovelace', () => undefined)).toEqual({
+      kind: 'contact',
+      id: 'c',
+      title: 'Ada Lovelace',
+      line: 'Founder · Acme',
+      href: '/api/public/handles/ada%20lovelace/contact.vcf',
+    });
+    const bare: ProfileItem = { kind: 'contact', id: 'd', fullName: 'Ada', updatedAt: '' };
+    expect(rowWords(bare).address).toBe('Contact card');
+    expect(previewBlock(bare, 'ada', () => undefined)).not.toHaveProperty('line');
   });
 });

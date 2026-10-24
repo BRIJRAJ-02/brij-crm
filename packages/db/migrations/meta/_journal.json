@@ -694,6 +694,13 @@
       "when": 1792877134875,
       "tag": "0098_profile_items",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1792880117909,
+      "tag": "0099_contact_card",
+      "breakpoints": true
     }
   ]
 }

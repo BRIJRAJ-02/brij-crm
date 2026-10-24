@@ -89,6 +89,16 @@ export function rescope(scope: EngineScope, actor: Actor, access: Access): Engin
   return mintScope({ db: scope.db, workspaceId: scope.workspaceId, actor, access });
 }
 
+/**
+ * A scope on the same database as `scope` (checked first), in the workspace and as the actor `fields` name. Only the
+ * door calls it (`enterOwnPages`): a person's own booking pages in each of their workspaces, each as its read only
+ * `booking` actor, once `crm_booking_owner_pages` has named them theirs (spec 0051).
+ */
+export function mintBeside(scope: EngineScope, fields: Omit<ScopeFields, 'db'>): EngineScope {
+  checkScope(scope);
+  return mintScope({ ...fields, db: scope.db });
+}
+
 /** A scope that wasn't minted here: a programming error, answered as INTERNAL and logged. */
 function forged(reason: string): Error {
   return new Error(`Refused a scope the access door did not make (${reason}).`);

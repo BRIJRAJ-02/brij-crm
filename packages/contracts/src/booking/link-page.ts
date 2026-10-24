@@ -5,7 +5,9 @@
 import * as z from 'zod';
 import { HUES } from '../values/hue-list.ts';
 import {
+  checkContactCard,
   checkProfileLink,
+  type ProfileContactField,
   PROFILE_LINK_ICONS,
   PROFILE_NOTE_MAX,
   PROFILE_TITLE_MAX,
@@ -66,8 +68,42 @@ export const ProfilePageBlock = z.object({
 /** A booking page block. */
 export type ProfilePageBlock = z.infer<typeof ProfilePageBlock>;
 
+/** One contact card field: what `checkContactCard` keeps of it, refused in its words. */
+const contactField = (field: ProfileContactField) =>
+  z.string().transform((typed, ctx) => {
+    const checked = checkContactCard({ fullName: 'A', [field]: typed });
+    const kept = checked.ok ? checked.card[field] : undefined;
+    if (kept !== undefined) return kept;
+    const problem = checked.ok ? undefined : checked.problems[field];
+    ctx.issues.push({ code: 'custom', message: problem ?? 'Leave it out when it is empty.', input: typed });
+    return z.NEVER;
+  });
+
+/**
+ * The contact card (AC-5113): the fields its owner typed, a full name required and the rest optional, each kept as
+ * `checkContactCard` keeps it. Nothing comes from a CRM record. At most one is live (AC-5102); it is saved as a vCard
+ * from the page (AC-5114).
+ */
+export const ProfileContactBlock = z.object({
+  kind: z.literal('contact'),
+  fullName: contactField('fullName'),
+  jobTitle: contactField('jobTitle').optional(),
+  company: contactField('company').optional(),
+  email: contactField('email').optional(),
+  phone: contactField('phone').optional(),
+  website: contactField('website').optional(),
+  note: contactField('note').optional(),
+});
+/** A contact card block. */
+export type ProfileContactBlock = z.infer<typeof ProfileContactBlock>;
+
 /** One block's fields, by kind: what every write is checked against before it is stored. */
-export const ProfileBlock = z.discriminatedUnion('kind', [ProfileLinkBlock, ProfileHeadingBlock, ProfilePageBlock]);
+export const ProfileBlock = z.discriminatedUnion('kind', [
+  ProfileLinkBlock,
+  ProfileHeadingBlock,
+  ProfilePageBlock,
+  ProfileContactBlock,
+]);
 /** One block's fields. */
 export type ProfileBlock = z.infer<typeof ProfileBlock>;
 
@@ -103,6 +139,7 @@ export const ProfileItem = z.discriminatedUnion('kind', [
   ProfileLinkBlock.extend({ ...Stored, url: z.string(), hue: z.enum(HUES) }),
   ProfileHeadingBlock.extend(Stored),
   ProfilePageBlock.extend({ ...Stored, page: ProfilePageFacts.optional() }),
+  ProfileContactBlock.extend(Stored),
 ]);
 /** One block as the editor reads it. */
 export type ProfileItem = z.infer<typeof ProfileItem>;
@@ -150,6 +187,14 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
     durations: z.array(BookingDuration),
     /** A team page books one of several people. */
     isTeam: z.boolean(),
+  }),
+  /** The contact card: its name and the line under it; the rest is in the vCard its Save contact downloads. */
+  z.object({
+    kind: z.literal('contact'),
+    id: Uuid,
+    fullName: z.string().min(1),
+    jobTitle: z.string().optional(),
+    company: z.string().optional(),
   }),
 ]);
 /** One block as a visitor reads it. */

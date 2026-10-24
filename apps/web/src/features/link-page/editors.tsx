@@ -20,7 +20,7 @@ import {
 } from '@crm/ui';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { linksHref } from '../booking/links.ts';
-import { pageFacts, type BlockEditorProps } from './registry.tsx';
+import { contactHref, contactWords, pageFacts, type BlockEditorProps } from './registry.tsx';
 import { ICON_WORDS, strings } from './strings.ts';
 
 /** The Modal every block editor sits in: its title, Cancel and the submit, and "How it looks" under the fields. */
@@ -79,7 +79,7 @@ function iconItems(icons: readonly ProfileLinkIcon[]): readonly SelectItem[] {
 }
 
 /** Add or edit a link: its title, address, note and icon, with the block drawn as typed under them. */
-export function LinkEditor({ item, items, newHue, linkPage, onSubmit, onClose }: BlockEditorProps) {
+export function LinkEditor({ item, items, newHue, linkPage, socialNetworks, onSubmit, onClose }: BlockEditorProps) {
   const formId = useId();
   const editing = item?.kind === 'link' ? item : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
@@ -100,6 +100,8 @@ export function LinkEditor({ item, items, newHue, linkPage, onSubmit, onClose }:
   const checked = linkPage.check(draft, items, editing?.id);
   const shownUrl = checked.ok && checked.block.kind === 'link' ? checked.block.url : url.trim();
   const mark = linkPage.markOf(shownUrl);
+  // Allowed all the same: someone may want their LinkedIn as a big row too (crm-87, phase 1c review).
+  const isInSocials = mark !== undefined && socialNetworks.includes(mark);
   const submit = () => {
     if (!checked.ok) {
       setProblems(checked.problems);
@@ -149,7 +151,7 @@ export function LinkEditor({ item, items, newHue, linkPage, onSubmit, onClose }:
           isVerbatim
           maxLength={2_000}
           placeholder={strings.linkUrlPlaceholder}
-          hint={strings.linkUrlHint}
+          hint={isInSocials ? strings.alreadySocial : strings.linkUrlHint}
           value={url}
           onChange={(next) => {
             setUrl(next);
@@ -252,6 +254,137 @@ export function HeadingEditor({ item, items, linkPage, onSubmit, onClose }: Bloc
             setProblem(undefined);
           }}
           {...(problem === undefined ? {} : { error: problem })}
+        />
+      </Form>
+    </EditorModal>
+  );
+}
+
+/** The contact card's fields as typed. */
+interface ContactTyped {
+  readonly fullName: string;
+  readonly jobTitle: string;
+  readonly company: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly website: string;
+  readonly note: string;
+}
+
+/**
+ * Add or edit the contact card (AC-5113): a full name and, only when given, a job title, a company, one email, one
+ * phone, one website and a note, typed here and never read from a CRM record. Under them, the card as a visitor sees
+ * it. A new card starts from the person's name; nothing else is filled in for them, so nothing is published unasked.
+ */
+export function ContactEditor({ item, items, handle, linkPage, ownerName, onSubmit, onClose }: BlockEditorProps) {
+  const formId = useId();
+  const editing = item?.kind === 'contact' ? item : undefined;
+  const [typed, setTyped] = useState<ContactTyped>({
+    fullName: editing?.fullName ?? ownerName,
+    jobTitle: editing?.jobTitle ?? '',
+    company: editing?.company ?? '',
+    email: editing?.email ?? '',
+    phone: editing?.phone ?? '',
+    website: editing?.website ?? '',
+    note: editing?.note ?? '',
+  });
+  const [problems, setProblems] = useState<BlockProblems>({});
+  const draft: BlockDraft = { kind: 'contact', ...typed };
+  const submit = () => {
+    const checked = linkPage.check(draft, items, editing?.id);
+    if (!checked.ok) {
+      setProblems(checked.problems);
+      return;
+    }
+    onSubmit(draft);
+  };
+  /** One field, wired to its value and its problem, which clears as it is typed in. */
+  const field = (name: keyof ContactTyped) => ({
+    name,
+    autoComplete: 'off',
+    value: typed[name],
+    onChange: (next: string) => {
+      setTyped((was) => ({ ...was, [name]: next }));
+      if (problems[name] !== undefined) setProblems((was) => ({ ...was, [name]: undefined }));
+    },
+    ...(problems[name] === undefined ? {} : { error: problems[name] }),
+  });
+  const line = contactWords({ jobTitle: typed.jobTitle.trim(), company: typed.company.trim() });
+  return (
+    <EditorModal
+      title={editing === undefined ? strings.newContact : strings.editContact}
+      formId={formId}
+      submitLabel={editing === undefined ? strings.add : strings.save}
+      onClose={onClose}
+      preview={
+        <LinkPage
+          layout="blocks"
+          caption={strings.howItLooks}
+          blocks={[
+            {
+              kind: 'contact',
+              id: editing?.id ?? 'draft',
+              title: typed.fullName.trim() === '' ? strings.contactName : typed.fullName.trim(),
+              href: contactHref(handle),
+              ...(line === '' ? {} : { line }),
+            },
+          ]}
+        />
+      }
+    >
+      <Form
+        id={formId}
+        onSubmit={submit}
+        label={editing === undefined ? strings.newContact : strings.editContact}
+        focusesFirstField
+      >
+        <Field
+          {...field('fullName')}
+          label={strings.contactName}
+          hint={strings.contactHint}
+          isRequired
+          maxLength={80}
+        />
+        <Field
+          {...field('jobTitle')}
+          label={strings.contactJob}
+          placeholder={strings.contactJobPlaceholder}
+          maxLength={120}
+        />
+        <Field {...field('company')} label={strings.contactCompany} maxLength={120} />
+        <Field
+          {...field('email')}
+          label={strings.contactEmail}
+          type="email"
+          inputMode="email"
+          isVerbatim
+          placeholder={strings.contactEmailPlaceholder}
+          maxLength={120}
+        />
+        <Field
+          {...field('phone')}
+          label={strings.contactPhone}
+          type="tel"
+          inputMode="tel"
+          isVerbatim
+          placeholder={strings.contactPhonePlaceholder}
+          maxLength={32}
+        />
+        <Field
+          {...field('website')}
+          label={strings.contactWebsite}
+          type="url"
+          inputMode="url"
+          isVerbatim
+          placeholder={strings.contactWebsitePlaceholder}
+          maxLength={2_000}
+        />
+        <Field
+          {...field('note')}
+          label={strings.contactNote}
+          placeholder={strings.contactNotePlaceholder}
+          maxLength={120}
+          showCounter
         />
       </Form>
     </EditorModal>

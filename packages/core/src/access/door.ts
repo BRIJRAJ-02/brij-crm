@@ -21,6 +21,7 @@ import {
   HANDLE_PATTERN,
   INVITE_INVALID_MESSAGE,
   isReservedHandle,
+  PROFILE_LIMITS,
   SIGN_IN_AGAIN_MESSAGE,
   SLUG_PATTERN,
   TWO_FACTOR_REQUIRED_MESSAGE,
@@ -28,7 +29,8 @@ import {
 } from '@crm/contracts';
 import { publicSocialsOf } from '../booking/socials.ts';
 import type { EmailLink } from '../emails/preferences.ts';
-import { mintScope, rescope, type EngineScope } from './mint.ts';
+import { checkScope, mintBeside, mintScope, rescope, type EngineScope, type ScopeFields } from './mint.ts';
+import { inWorkspace } from './run.ts';
 import {
   bookingAccess,
   emailLinkAccess,
@@ -742,26 +744,88 @@ export interface OwnedPageEntry extends BookingEntry {
   readonly isLive: boolean;
 }
 
-/**
- * Which of a person's booking pages may sit on their link page (spec 0051, AC-5104): Public, not deleted, theirs
- * as an active member of a workspace that exists (`crm_booking_owner_pages`, ids only), only those `pageIds` names
- * when given, each as its read only `booking` entry. `ownerUserId` is the session's own id, or the id a handle named:
- * never an input. Used by the link page's services only.
- */
-export async function enterOwnedPages(
-  deps: { readonly db: Database },
+/** How the owned pages read reaches the database and mints each page's entry: a handle's, or the session's. */
+interface OwnedPagesWay {
+  readonly read: (work: (tx: WorkspaceTx) => Promise<readonly OwnedPageRow[]>) => Promise<readonly OwnedPageRow[]>;
+  readonly mint: (fields: Omit<ScopeFields, 'db'>) => EngineScope;
+}
+
+/** `crm_booking_owner_pages` for `ownerUserId`, each page as its read only `booking` entry. */
+async function ownedPages(
+  way: OwnedPagesWay,
   ownerUserId: string,
   pageIds?: readonly string[],
 ): Promise<readonly OwnedPageEntry[]> {
   if (!isUuid(ownerUserId)) return [];
   const wanted = pageIds?.filter((id) => isUuid(id));
   if (wanted !== undefined && wanted.length === 0) return [];
-  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
-    tx.execute<OwnedPageRow>(
+  const rows = await way.read(async (tx) => {
+    const found = await tx.execute<OwnedPageRow>(
       sql`select workspace_id::text as workspace_id, page_id::text as page_id, is_live from crm_booking_owner_pages(${ownerUserId}::uuid, ${wanted === undefined ? null : `{${wanted.join(',')}}`}::uuid[])`,
-    ),
+    );
+    return found.rows;
+  });
+  return rows.map((row) => ({
+    scope: way.mint({
+      workspaceId: row.workspace_id,
+      actor: { type: 'booking', id: row.page_id },
+      access: bookingAccess(row.page_id, []),
+    }),
+    pageId: row.page_id,
+    people: '',
+    companies: '',
+    isLive: row.is_live,
+  }));
+}
+
+/**
+ * Which of a person's booking pages may sit on their link page (spec 0051, AC-5104): Public, not deleted, theirs
+ * as an active member of a workspace that exists (`crm_booking_owner_pages`, ids only), only those `pageIds` names
+ * when given, each as its read only `booking` entry. `ownerUserId` is the id a handle named: never an input. For a
+ * visitor's read of `/<handle>`; the person's own editor enters through `enterOwnPages`.
+ */
+export async function enterOwnedPages(
+  deps: { readonly db: Database },
+  ownerUserId: string,
+  pageIds?: readonly string[],
+): Promise<readonly OwnedPageEntry[]> {
+  return ownedPages(
+    {
+      read: (work) => deps.db.withWorkspace(NO_WORKSPACE, work),
+      mint: (fields) => mintScope({ ...fields, db: deps.db }),
+    },
+    ownerUserId,
+    pageIds,
   );
-  return found.rows.map((row) => ({ ...readOnlyEntry(deps.db, row), isLive: row.is_live }));
+}
+
+/**
+ * The signed in person's own id from a member scope the door made (spec 0051): their link page is their account's,
+ * never a workspace's. Anyone else (a key, a form, the system) is FORBIDDEN.
+ */
+export function ownUserId(scope: EngineScope): string {
+  checkScope(scope);
+  const { principal } = scope.access;
+  if (principal.kind !== 'member' || principal.userId === undefined) {
+    throw refuse('FORBIDDEN', 'Only a signed in person has a link page.');
+  }
+  return principal.userId;
+}
+
+/**
+ * The signed in person's own booking pages that may sit on their link page, from every workspace they are in, as
+ * `enterOwnedPages` answers them, read through their own scope (the definer reads no workspace's rows) and each
+ * entered beside it (`mintBeside`) as the page's read only `booking` actor. The owner is the scope's own identity.
+ */
+export async function enterOwnPages(
+  scope: EngineScope,
+  pageIds?: readonly string[],
+): Promise<readonly OwnedPageEntry[]> {
+  return ownedPages(
+    { read: (work) => inWorkspace(scope, work), mint: (fields) => mintBeside(scope, fields) },
+    ownUserId(scope),
+    pageIds,
+  );
 }
 
 /** One live block of a link page as `crm_profile_items_public` answers it. */
@@ -801,6 +865,29 @@ export async function enterLinkPage(
   const pageIds = found.rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
   const pages = (await enterOwnedPages(deps, owner.userId, pageIds)).filter((entry) => entry.isLive);
   return { owner, rows: found.rows, pages };
+}
+
+/**
+ * A link page's contact card (spec 0051, AC-5114): the handle's person (current or old handle) and the stored fields
+ * of their live contact card, read through `crm_profile_items_public` like the page itself, so an archived card is
+ * never served. A handle no one holds, and a person with no card, are the same NOT_FOUND. Exported only from
+ * `@crm/core/public`.
+ */
+export async function enterContactCard(
+  deps: { readonly db: Database },
+  handle: string,
+): Promise<{ readonly owner: HandleOwner; readonly data: unknown }> {
+  const owner = await handleOwner(deps.db, handle);
+  const missing = () => refuse('NOT_FOUND', 'There’s no contact card here.');
+  if (owner === undefined) throw missing();
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ readonly data: unknown } & Record<string, unknown>>(
+      sql`select data from crm_profile_items_public(${owner.userId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where kind = 'contact' limit 1`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) throw missing();
+  return { owner, data: row.data };
 }
 
 /**

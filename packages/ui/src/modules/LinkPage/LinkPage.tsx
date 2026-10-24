@@ -45,6 +45,19 @@ export type LinkPageBlock =
       readonly href: string;
       /** Its lengths and kind, said once: "30 min · 60 min · Team". */
       readonly facts: string;
+    }
+  | {
+      readonly kind: 'contact';
+      readonly id: string;
+      /** The card's full name. */
+      readonly title: string;
+      /** The job title and company, said once: "Cofounder · Timefix". */
+      readonly line?: string;
+      /**
+       * The card as a vCard on this site, `/api/public/handles/<handle>/contact.vcf`: a plain link, so Save contact
+       * works with no script and from a QR code, and a phone offers to add it to its contacts.
+       */
+      readonly href: string;
     };
 
 /** The person at the top of the page. */
@@ -153,6 +166,13 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
       </span>
     );
   }
+  if (block.kind === 'contact') {
+    return (
+      <span className={styles.tile} data-tile="page">
+        <Icon name="id-card" />
+      </span>
+    );
+  }
   if (block.mark !== undefined) {
     return (
       <span className={styles.tile} data-tile="mark">
@@ -180,8 +200,9 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
 
 /** A block's words: its title and the line under it. */
 function BlockText({ title, line }: { readonly title: string; readonly line?: string }) {
+  const isLone = line === undefined || line === '';
   return (
-    <span className={styles.text}>
+    <span className={styles.text} {...(isLone ? { 'data-lone': '' } : {})}>
       <span className={styles.title}>{title}</span>
       {line !== undefined && line !== '' && <span className={styles.note}>{line}</span>}
     </span>
@@ -255,6 +276,32 @@ const RENDERERS: {
       </a>
     );
   },
+  contact: (block, onPress) => {
+    // Only this site's own path: the card is served by the api, never from elsewhere.
+    const target = block.href.startsWith('/') && !/^\/[/\\]/.test(block.href) ? block.href : undefined;
+    const body = (
+      <>
+        <LinkPageTile block={block} />
+        <BlockText title={block.title} {...(block.line === undefined ? {} : { line: block.line })} />
+      </>
+    );
+    if (target === undefined) {
+      return (
+        <span className={styles.block} data-inert="">
+          {body}
+        </span>
+      );
+    }
+    return (
+      <a className={styles.block} href={target} onClick={onPress}>
+        {body}
+        <span className={styles.end} data-end="book">
+          {strings.saveContact}
+          <Icon name="user-plus" size="sm" />
+        </span>
+      </a>
+    );
+  },
 };
 
 /** One block in its row. */
@@ -268,7 +315,11 @@ function BlockRow({
   const press = onPress === undefined ? undefined : () => onPress(block.id);
   return (
     <li className={styles.item}>
-      {block.kind === 'link' ? RENDERERS.link(block, press) : RENDERERS.page(block, press)}
+      {block.kind === 'link'
+        ? RENDERERS.link(block, press)
+        : block.kind === 'page'
+          ? RENDERERS.page(block, press)
+          : RENDERERS.contact(block, press)}
     </li>
   );
 }

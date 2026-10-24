@@ -128,6 +128,16 @@ describe('Hide my photo on booking pages (owner ask A124)', () => {
     const none = await pictureAnswer(`/api/public/booking/${page.publicKey}/picture?v=000000000000`);
     expect(none.status).toBe(404);
 
+    // The contact card's vCard embeds the picture while it shows (AC-5114).
+    await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'contact', fullName: 'Ada' },
+      mutationId: newId(),
+    });
+    const shownCard = (await read(`handles/${handle}/contact.vcf`)).text.replace(/\r\n /g, '');
+    expect(shownCard).toContain(`PHOTO;ENCODING=b;TYPE=PNG:${Buffer.from(PNG).toString('base64')}`);
+
     const hidden = await m.client.profile.update({ workspace: m.slug, pictureHidden: true, mutationId: newId() });
     expect(hidden).toMatchObject({ pictureHidden: true, handle });
     expect((await m.client.profile.get({ workspace: m.slug })).pictureHidden).toBe(true);
@@ -150,6 +160,11 @@ describe('Hide my photo on booking pages (owner ask A124)', () => {
     // Both picture routes answer exactly as for a person with none: no hint that one exists, and Google not asked.
     expect(await pictureAnswer(pagePicture)).toEqual(none);
     expect(await pictureAnswer(profilePicture)).toEqual(none);
+    // The vCard: the card without its picture.
+    const hiddenCard = await read(`handles/${handle}/contact.vcf`);
+    expect(hiddenCard.status).toBe(200);
+    expect(hiddenCard.text).toContain('FN:Ada');
+    expect(hiddenCard.text).not.toContain('PHOTO');
     expect(fetched.length).toBe(before);
 
     // A booking's answer, its guest page and the chat name no picture either.

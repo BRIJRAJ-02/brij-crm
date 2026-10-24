@@ -7,4 +7,6 @@ export const strings = {
   loading: 'Loading…',
   /** A booking page block's end: what pressing it does. */
   book: 'Book',
+  /** A contact card block's end: it saves the card to the visitor's contacts. */
+  saveContact: 'Save contact',
 } as const;

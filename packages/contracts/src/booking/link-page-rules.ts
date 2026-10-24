@@ -4,18 +4,19 @@
 import { HUES } from '../values/hue-list.ts';
 
 /** The kinds this build draws. A read that meets any other kind skips it. */
-export const PROFILE_BLOCK_KINDS = ['link', 'page', 'heading'] as const;
+export const PROFILE_BLOCK_KINDS = ['link', 'page', 'heading', 'contact'] as const;
 /** One of the kinds this build draws. */
 export type ProfileBlockKind = (typeof PROFILE_BLOCK_KINDS)[number];
 
 /** How many blocks of each kind one link page holds, and in all (AC-5102). */
-export const PROFILE_LIMITS = { items: 60, link: 40, heading: 12, page: 60 } as const;
+export const PROFILE_LIMITS = { items: 60, link: 40, heading: 12, page: 60, contact: 1 } as const;
 
 /** The sentence a full kind is refused and disabled with (AC-5102), the server's and the editor's alike. */
 export function profileLimitSentence(kind: ProfileBlockKind | 'items'): string {
   if (kind === 'items') return `A link page holds up to ${String(PROFILE_LIMITS.items)} blocks.`;
   if (kind === 'link') return `A link page holds up to ${String(PROFILE_LIMITS.link)} links.`;
   if (kind === 'heading') return `A link page holds up to ${String(PROFILE_LIMITS.heading)} headings.`;
+  if (kind === 'contact') return 'A link page holds one contact card.';
   return `A link page holds up to ${String(PROFILE_LIMITS.page)} booking pages.`;
 }
 
@@ -191,4 +192,100 @@ export function linkMarkOf(url: string): (typeof PUBLIC_LINK_MARKS)[number] | un
   return PUBLIC_LINK_MARKS.find((mark) =>
     LINK_MARK_HOSTS[mark].some((own) => host === own || host.endsWith(`.${own}`)),
   );
+}
+
+/** The contact card's fields (AC-5113), in the order the editor asks for them and the vCard writes them. */
+export const PROFILE_CONTACT_FIELDS = ['fullName', 'jobTitle', 'company', 'email', 'phone', 'website', 'note'] as const;
+/** One of the contact card's fields. */
+export type ProfileContactField = (typeof PROFILE_CONTACT_FIELDS)[number];
+
+/** The longest each contact card field may be, the database's check alike. */
+export const PROFILE_CONTACT_MAX = {
+  fullName: 80,
+  jobTitle: 120,
+  company: 120,
+  email: 120,
+  phone: 32,
+  website: PROFILE_LINK_MAX,
+  note: 120,
+} as const satisfies Record<ProfileContactField, number>;
+
+/** A contact card's email: something, an at sign, a host with a dot, no spaces (the database's check alike). */
+export const PROFILE_CONTACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** A contact card's phone: a plus, digits, and the spaces, dots, dashes and brackets people put in. */
+export const PROFILE_CONTACT_PHONE = /^\+?[\d ().-]+$/;
+
+/** A contact card as stored: a full name, and the rest only when given. */
+export interface ProfileContactCard {
+  readonly fullName: string;
+  readonly jobTitle?: string;
+  readonly company?: string;
+  readonly email?: string;
+  readonly phone?: string;
+  readonly website?: string;
+  readonly note?: string;
+}
+
+/** What a typed contact card becomes: the card stored, or each field's problem. */
+export type ProfileContactChecked =
+  | { readonly ok: true; readonly card: ProfileContactCard }
+  | { readonly ok: false; readonly problems: Readonly<Partial<Record<ProfileContactField, string>>> };
+
+/** The words each field's name takes in a refusal. */
+const CONTACT_WORDS: Readonly<Record<ProfileContactField, string>> = {
+  fullName: 'name',
+  jobTitle: 'job title',
+  company: 'company',
+  email: 'email',
+  phone: 'phone',
+  website: 'website',
+  note: 'note',
+};
+
+/**
+ * A contact card as typed (AC-5113), checked the same way in the editor and on the server: each field trimmed, an
+ * empty one left out, a full name required; one line each with no control characters; an email with an at sign and a
+ * host, a phone of digits (at least 3, at most 20) and what people put around them, and a website made canonical as
+ * a link's address is (`checkProfileLink`) but only a web one. What it answers is what the database's check accepts.
+ */
+export function checkContactCard(typed: Readonly<Partial<Record<ProfileContactField, string>>>): ProfileContactChecked {
+  const problems: Partial<Record<ProfileContactField, string>> = {};
+  const card: Partial<Record<ProfileContactField, string>> = {};
+  for (const field of PROFILE_CONTACT_FIELDS) {
+    const value = (typed[field] ?? '').trim();
+    if (value === '') {
+      if (field === 'fullName') problems.fullName = 'Enter the name.';
+      continue;
+    }
+    if (PROFILE_CONTROL.test(value)) {
+      problems[field] = 'Keep it to one line, with no special characters.';
+      continue;
+    }
+    if (field === 'website') {
+      const checked = checkProfileLink(value);
+      if (!checked.ok && checked.reason === 'too_long') problems.website = profileLinkProblem('too_long');
+      else if (!checked.ok || !/^https?:/.test(checked.url)) problems.website = 'Use a web address, like timefix.com.';
+      else card.website = checked.url;
+      continue;
+    }
+    if (value.length > PROFILE_CONTACT_MAX[field]) {
+      problems[field] = `Keep the ${CONTACT_WORDS[field]} to ${String(PROFILE_CONTACT_MAX[field])} characters.`;
+      continue;
+    }
+    if (field === 'email' && !PROFILE_CONTACT_EMAIL.test(value)) {
+      problems.email = 'Enter an email address, like ana@example.com.';
+      continue;
+    }
+    if (field === 'phone') {
+      const digits = value.replace(/\D/g, '').length;
+      if (!PROFILE_CONTACT_PHONE.test(value) || digits < 3 || digits > 20) {
+        problems.phone = 'Use digits, with a + and the country code if you like.';
+        continue;
+      }
+    }
+    card[field] = value;
+  }
+  if (Object.keys(problems).length > 0 || card.fullName === undefined) return { ok: false, problems };
+  return { ok: true, card: { ...card, fullName: card.fullName } };
 }

@@ -26,7 +26,9 @@ import {
   profilePicturePath,
   checkProfileLink,
   linkMarkOf,
+  ProfileContactBlock,
   PublicProfileItem,
+  type ProfileContactCard,
   type PublicAddress,
   type PublicProfile,
 } from '@crm/contracts';
@@ -279,6 +281,24 @@ export function readProfilePicture(owner: HandleOwner): AccountPicture | undefin
 }
 
 /**
+ * A link page's contact card as its vCard is written (AC-5113, AC-5114): the card's stored fields checked again, and
+ * the person's picture to embed, unless they have none or hid it (the door reads no image then). A card whose stored
+ * fields no longer pass the rule is NOT_FOUND, as no card is.
+ */
+export function readContactCard(found: { readonly owner: HandleOwner; readonly data: unknown }): {
+  readonly card: ProfileContactCard;
+  readonly handle: string;
+  readonly picture?: AccountPicture;
+} {
+  const data = typeof found.data === 'object' && found.data !== null ? found.data : {};
+  const parsed = ProfileContactBlock.safeParse({ ...data, kind: 'contact' });
+  if (!parsed.success) throw refuse('NOT_FOUND', 'There’s no contact card here.');
+  const { kind: _kind, ...card } = parsed.data;
+  const picture = readProfilePicture(found.owner);
+  return { card, handle: found.owner.handle, ...(picture === undefined ? {} : { picture }) };
+}
+
+/**
  * The page a handle address names (22 Oct 2026), by its public key, and the owner's current handle: the public
  * page then reads it as `/b/<key>` does, closed or not. A deleted page is NOT_FOUND.
  */
@@ -313,7 +333,10 @@ interface PageRow {
 
 /** Whether a block holds the words searched for: its title and its note, or a page's description (AC-5133). */
 function matches(item: PublicProfileItem, words: string): boolean {
-  const said = [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
+  const said =
+    item.kind === 'contact'
+      ? [item.fullName, item.jobTitle ?? '', item.company ?? '']
+      : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
   return said.some((text) => text.toLowerCase().includes(words));
 }
 
@@ -344,6 +367,15 @@ function publicItemOf(row: LinkPageRow, pages: ReadonlyMap<string, PageRow>): Pu
     const page = row.page_id === null ? undefined : pages.get(row.page_id);
     if (page === undefined) return undefined;
     candidate = { kind: 'page', id: row.id, ...page };
+  } else if (row.kind === 'contact') {
+    // Its name and the line under it only: the email, phone and the rest are in the vCard (AC-5114).
+    candidate = {
+      kind: 'contact',
+      id: row.id,
+      fullName: data.fullName,
+      ...(typeof data.jobTitle === 'string' ? { jobTitle: data.jobTitle } : {}),
+      ...(typeof data.company === 'string' ? { company: data.company } : {}),
+    };
   } else {
     return undefined;
   }

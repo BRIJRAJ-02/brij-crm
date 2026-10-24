@@ -42,7 +42,7 @@ import { useMemo, useState } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
-import { ADDABLE, BLOCK_KINDS, previewBlock, rowWords } from './registry.tsx';
+import { ADDABLE, BLOCK_KINDS, contactHref, previewBlock, rowWords } from './registry.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the Link page screen. */
@@ -72,6 +72,7 @@ function shownItem(
   const updatedAt = new Date().toISOString();
   if (block.kind === 'heading') return { kind: 'heading', id, title: block.title, updatedAt };
   if (block.kind === 'page') return { ...block, id, ...(page === undefined ? {} : { page }), updatedAt };
+  if (block.kind === 'contact') return { ...block, id, updatedAt };
   return { ...block, id, hue: block.hue ?? (was?.kind === 'link' ? was.hue : 'blue'), updatedAt };
 }
 
@@ -135,6 +136,7 @@ function Blocks({
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
   const items = useMemo(() => (state.status === 'ready' ? state.items : []), [state]);
+  const socialNetworks = useMemo(() => (profile.socials ?? []).map((link) => link.network), [profile.socials]);
   const archived = state.status === 'ready' ? state.archived : [];
   const pending = state.status === 'ready' ? state.pendingIds : new Set<string>();
 
@@ -195,6 +197,8 @@ function Blocks({
   };
   const copyHrefOf = (item: ProfileItem): string | undefined => {
     if (item.kind === 'link') return item.url;
+    // The card's vCard, as a visitor saves it: the same address Save contact opens, and a QR code can carry.
+    if (item.kind === 'contact') return `${publicBookingOrigin()}${contactHref(handle)}`;
     if (item.kind === 'page' && item.page !== undefined) {
       return `${publicBookingOrigin()}/${encodeURIComponent(handle)}/${encodeURIComponent(item.page.slug)}`;
     }
@@ -451,6 +455,8 @@ function Blocks({
           handle={handle}
           newHue={nextHue(items)}
           linkPage={linkPage}
+          socialNetworks={socialNetworks}
+          ownerName={profile.name}
           onSubmit={submit}
           onClose={() => setEditing(undefined)}
         />

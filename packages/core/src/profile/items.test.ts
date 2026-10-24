@@ -62,6 +62,10 @@ async function person(name: string, userId: string = randomUUID(), workspace = '
 
 const fresh = (stem: string) => `${stem}-${randomUUID().slice(0, 8)}`;
 
+/** A visitor's block by its words: a contact card by its name. */
+const titleOf = (item: { readonly kind: string; readonly title?: string; readonly fullName?: string }) =>
+  item.kind === 'contact' ? item.fullName : item.title;
+
 async function refusalOf(promise: Promise<unknown>): Promise<{ code: string; message: string } | undefined> {
   try {
     await promise;
@@ -385,6 +389,66 @@ describe('a link page', () => {
     });
   });
 
+  it('keeps one contact card, its empty fields left out, and shows a visitor its name and line only', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('card');
+    await updateMyMemberProfile(ada.scope, { handle });
+    const card = await add(ada.scope, {
+      kind: 'contact',
+      fullName: ' Ada Lovelace ',
+      jobTitle: 'Founder',
+      company: 'Acme',
+      email: 'ada@acme.dev',
+      phone: '+44 20 7946 0958',
+      website: 'acme.dev',
+    });
+    expect(card).toMatchObject({ kind: 'contact', fullName: 'Ada Lovelace', website: 'https://acme.dev' });
+    expect(card).not.toHaveProperty('note');
+    const second = await refusalOf(add(ada.scope, { kind: 'contact', fullName: 'Ada at home' }));
+    expect(second).toEqual({ code: 'LIMIT_REACHED', message: 'A link page holds one contact card.' });
+    const seen = await visitorRead(handle);
+    expect(seen.items).toEqual([
+      { kind: 'contact', id: card.id, fullName: 'Ada Lovelace', jobTitle: 'Founder', company: 'Acme' },
+    ]);
+    expect((await visitorRead(handle, { search: 'acme' })).items.map(titleOf)).toEqual(['Ada Lovelace']);
+    // Archived, another may be made; the first then can't come back beside it.
+    await archiveProfileItem(ada.scope, { id: card.id, archived: true });
+    await add(ada.scope, { kind: 'contact', fullName: 'Ada at home' });
+    const restore = await refusalOf(archiveProfileItem(ada.scope, { id: card.id, archived: false }));
+    expect(restore?.code).toEqual('LIMIT_REACHED');
+  });
+
+  it('refuses a contact card the rule refuses, in core and in the database alike', async () => {
+    const ada = await person('Ada');
+    for (const [block, field] of [
+      [{ kind: 'contact', fullName: '' }, 'fullName'],
+      [{ kind: 'contact', fullName: 'Ada', email: 'ada at acme' }, 'email'],
+      [{ kind: 'contact', fullName: 'Ada', phone: 'call me' }, 'phone'],
+      [{ kind: 'contact', fullName: 'Ada', website: 'mailto:ada@acme.dev' }, 'website'],
+    ] as const) {
+      const refused = await refusalOf(add(ada.scope, block));
+      expect(refused?.code, field).toEqual('CONFIG_INVALID');
+    }
+    // Past core's own check, the database's check refuses the same shapes.
+    for (const given of [
+      { fullName: '' },
+      { fullName: 'Ada', email: 'ada at acme' },
+      { fullName: 'Ada', phone: '12' },
+      { fullName: 'Ada', website: 'javascript:alert(1)' },
+      { fullName: 'Ada', colour: 'red' },
+      { fullName: ' Ada' },
+    ]) {
+      await expect(
+        testQuery(appUrl, `select crm_save_profile_item($1, $2, 'contact', $3, null, null)`, [
+          ada.userId,
+          newId(),
+          JSON.stringify(given),
+        ]),
+        JSON.stringify(given),
+      ).rejects.toThrow(/PROFILE_ITEM_DATA/);
+    }
+  });
+
   it('pages a visitor’s read at 20 with a cursor, and a search finds matches flat', async () => {
     const ada = await person('Ada');
     const handle = fresh('many');
@@ -403,19 +467,19 @@ describe('a link page', () => {
     expect(rest.items).toHaveLength(2);
     expect(rest.next).toBeUndefined();
     const found = await visitorRead(handle, { search: 'podcast' });
-    expect(found.items.map((item) => item.title)).toEqual(['Link 7']);
+    expect(found.items.map(titleOf)).toEqual(['Link 7']);
     expect((await visitorRead(handle, { search: 'links' })).items).toEqual([]);
     expect(found.next).toBeUndefined();
   });
 
-  it('skips a block of a kind this build doesn’t draw, in both reads', async () => {
+  it('skips a block whose stored fields no longer parse, in both reads', async () => {
     const ada = await person('Ada');
     const handle = fresh('later');
     await updateMyMemberProfile(ada.scope, { handle });
     await add(ada.scope, link('Site', 'https://ada.dev'));
     await testQuery(
       ownerUrl,
-      `insert into auth.profile_items (id, user_id, kind, position, data) values ($1, $2, 'contact', 5, '{"fullName":"Ada"}')`,
+      `insert into auth.profile_items (id, user_id, kind, position, data) values ($1, $2, 'contact', 5, '{"fullName":""}')`,
       [newId(), ada.userId],
     );
     expect((await readProfileItems(ada.scope)).items.map((item) => item.kind)).toEqual(['link']);
@@ -458,7 +522,7 @@ describe('the backfill (migration 0098, AC-5129)', () => {
     expect(
       items.map((item) => (item.kind === 'page' ? item.page?.title : item.kind === 'heading' ? `# ${item.title}` : '')),
     ).toEqual(['Coffee', 'Paused', '# Sales', 'Pitch', 'Demo']);
-    expect((await visitorRead(handle)).items.map((item) => item.title)).toEqual(['Coffee', 'Sales', 'Pitch', 'Demo']);
+    expect((await visitorRead(handle)).items.map(titleOf)).toEqual(['Coffee', 'Sales', 'Pitch', 'Demo']);
   });
 
   it('heads each workspace’s pages with no section with that workspace’s name', async () => {

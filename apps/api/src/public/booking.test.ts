@@ -214,7 +214,7 @@ describe('handle addresses (22 Oct 2026)', () => {
       expect(text).not.toContain(secret);
     }
     const body = PublicProfile.parse(JSON.parse(text));
-    expect(body.items.map((item) => [item.kind, item.title])).toEqual([
+    expect(body.items.map((item) => [item.kind, 'title' in item ? item.title : item.fullName])).toEqual([
       ['link', 'LinkedIn'],
       ['heading', 'Meet me'],
       ['page', 'Quick chat'],
@@ -223,7 +223,52 @@ describe('handle addresses (22 Oct 2026)', () => {
     expect(body.items[0]).toMatchObject({ url: 'https://linkedin.com/in/ada', mark: 'linkedin' });
     // A search answers the matches flat.
     const found = PublicProfile.parse(await (await handles(`${handle}?q=chat`)).json());
-    expect(found.items.map((item) => item.title)).toEqual(['Quick chat']);
+    expect(found.items.map((item) => ('title' in item ? item.title : item.fullName))).toEqual(['Quick chat']);
+  });
+
+  it('answers the contact card as a vCard to download, and 404 with none, archived, or no such person (AC-5114)', async () => {
+    const m = await memberWithWorkspace(app);
+    const handle = `card-${newId().slice(-8)}`;
+    await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
+    expect((await handles(`${handle}/contact.vcf`)).status).toBe(404);
+    expect((await handles(`nobody-${newId().slice(-8)}/contact.vcf`)).status).toBe(404);
+    const card = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: {
+        kind: 'contact',
+        fullName: 'Ada Lovelace',
+        company: 'Acme, Inc.',
+        email: 'ada@acme.dev',
+        phone: '+44 20 7946 0958',
+      },
+      mutationId: newId(),
+    });
+    const second = await failure(() =>
+      m.client.profile.saveItem({
+        workspace: m.slug,
+        id: newId(),
+        block: { kind: 'contact', fullName: 'Ada at home' },
+        mutationId: newId(),
+      }),
+    );
+    expect(second).toMatchObject({ code: 'LIMIT_REACHED', message: 'A link page holds one contact card.' });
+    const answer = await handles(`${handle}/contact.vcf`);
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get('content-type')).toBe('text/vcard; charset=utf-8');
+    expect(answer.headers.get('content-disposition')).toBe(`attachment; filename="${handle}.vcf"`);
+    expect(answer.headers.get('cache-control')).toContain('no-store');
+    const vcard = await answer.text();
+    expect(vcard.split('\r\n')).toEqual(
+      expect.arrayContaining(['FN:Ada Lovelace', 'ORG:Acme\\, Inc.', 'EMAIL;TYPE=INTERNET:ada@acme.dev']),
+    );
+    expect(vcard).not.toContain('PHOTO');
+    expect(vcard).not.toContain(m.email);
+    // The page shows its name only; the rest is in the file.
+    const page = PublicProfile.parse(await (await handles(handle)).json());
+    expect(page.items).toEqual([{ kind: 'contact', id: card.id, fullName: 'Ada Lovelace', company: 'Acme, Inc.' }]);
+    await m.client.profile.archiveItem({ workspace: m.slug, id: card.id, archived: true, mutationId: newId() });
+    expect((await handles(`${handle}/contact.vcf`)).status).toBe(404);
   });
 
   it('keeps each person’s link page their own: another member’s id changes nothing', async () => {

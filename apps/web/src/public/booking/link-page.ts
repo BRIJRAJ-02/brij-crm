@@ -1,6 +1,7 @@
 // The link page's blocks as `/<handle>` draws them (spec 0051): each public block mapped onto the library's
 // LinkPage block, and any kind this bundle doesn't know skipped, so a page with a newer kind of block still draws
-// everything else. A booking page block opens `/<handle>/<slug>`; a link opens its owner's address as stored.
+// everything else. A booking page block opens `/<handle>/<slug>`; a link opens its owner's address as stored; the
+// contact card downloads its vCard.
 import type { PublicProfileItem } from '@crm/data/booking';
 import type { LinkPageBlock } from '@crm/ui/public-booking';
 import { strings } from './strings.ts';
@@ -37,6 +38,19 @@ export function blocksOf(handle: string, items: readonly PublicProfileItem[]): r
             ].join(' · '),
           },
         ];
+      case 'contact': {
+        const line = [item.jobTitle, item.company].filter((part) => part !== undefined && part !== '').join(' · ');
+        return [
+          {
+            kind: 'contact',
+            id: item.id,
+            title: item.fullName,
+            ...(line === '' ? {} : { line }),
+            // The card as a vCard, from the api on this origin: a plain link a phone offers to add (AC-5115).
+            href: `/api/public/handles/${encodeURIComponent(handle)}/contact.vcf`,
+          },
+        ];
+      }
       default:
         // A kind this bundle was built before: skipped, never a crash.
         return [];
