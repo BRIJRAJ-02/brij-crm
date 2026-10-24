@@ -7,7 +7,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { enterBookingAddress, enterBookingPage, enterLinkPage } from '../access/door.ts';
+import { enterBookingAddress, enterBookingPage, enterLinkPage, readHandleOffer } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -322,6 +322,68 @@ describe('what a workspace may publish under a person', () => {
     expect(await refusalOf(enterBookingAddress({ db }, handle, made.slug))).toBe('NOT_FOUND');
     const profile = await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }));
     expect(profile.items.map((item) => (item.kind === 'page' ? item.slug : item.id))).not.toContain(made.slug);
+  });
+});
+
+/*
+ * Whether an address is free (25 Oct 2026), and the one rule that matters: `free` only for a handle genuinely
+ * nobody holds, and a handle somebody holds reads exactly as a word kept for Timefix does, whether or not
+ * anything of theirs is public. Not because that keeps a secret (it cannot: the reserved words ship in the
+ * browser, and a handle somebody holds answers with their profile anyway), but so the offer is only ever made for
+ * an address a visitor could really take.
+ */
+describe('a free address', () => {
+  it('is free for a handle nobody holds', async () => {
+    expect(await readHandleOffer({ db }, fresh('nobody'))).toBe('free');
+  });
+
+  it('is absent for a handle somebody holds', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('ada');
+    await updateMyMemberProfile(ada.scope, { handle });
+    expect(await readHandleOffer({ db }, handle)).toBe('absent');
+  });
+
+  it('is absent for a handle whose pages are all unlisted, exactly as a reserved word is', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('quiet');
+    await updateMyMemberProfile(ada.scope, { handle });
+    // A Link only page: it works by its own key but is never on the profile, so there is nothing public here.
+    await page(ada.scope, 'Hidden', { isPrivate: true });
+    const held = await readHandleOffer({ db }, handle);
+    expect(held).toBe('absent');
+    // The one claim this test exists for: held but unlisted and reserved are the same answer, not two, so the
+    // offer is never made for either.
+    expect(held).toBe(await readHandleOffer({ db }, 'settings'));
+    expect(held).toBe(await readHandleOffer({ db }, 'book'));
+    // The profile read itself still answers the profile, with no blocks: unlisted pages are absent, not locked.
+    expect((await readLinkPage(await enterLinkPage({ db }, handle, { max: 5 }))).items).toEqual([]);
+  });
+
+  it('offers only an address the claim then accepts, and that address stops being free once claimed', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('ada');
+    expect(await readHandleOffer({ db }, handle)).toBe('free');
+    // What `free` promised: the claim goes through, with the same checks the offer made.
+    expect(await updateMyMemberProfile(ada.scope, { handle })).toMatchObject({ handle });
+    expect(await readHandleOffer({ db }, handle)).toBe('absent');
+  });
+
+  it('is absent for an old handle its person still holds', async () => {
+    const ada = await person('Ada');
+    const first = fresh('first');
+    await updateMyMemberProfile(ada.scope, { handle: first });
+    await updateMyMemberProfile(ada.scope, { handle: fresh('second') });
+    expect(await readHandleOffer({ db }, first)).toBe('absent');
+  });
+
+  it('is absent for every word kept for Timefix, and for anything no handle could be', async () => {
+    for (const reserved of ['settings', 'api', 'book', 'admin', 'sign-up', 'www']) {
+      expect(await readHandleOffer({ db }, reserved)).toBe('absent');
+    }
+    for (const malformed of ['ab', 'Ada', 'has_underscore', '-leading', 'trailing-', 'a'.repeat(41), '']) {
+      expect(await readHandleOffer({ db }, malformed)).toBe('absent');
+    }
   });
 });
 

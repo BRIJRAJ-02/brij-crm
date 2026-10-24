@@ -11,6 +11,7 @@ export {
   enterContactCard,
   enterLinkPage,
   findHandleOwner,
+  readHandleOffer,
   type BookingEntry,
   type HandleOwner,
   type LinkPageRow,

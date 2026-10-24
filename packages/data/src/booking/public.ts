@@ -6,6 +6,7 @@
 // with issues), and being offline `API_UNAVAILABLE`.
 import type {
   PublicAddress,
+  PublicHandleOffer,
   PublicProfile,
   PublicBooked,
   PublicBookInput,
@@ -25,6 +26,7 @@ import type { FetchLike } from '../fetch.ts';
 
 export type {
   PublicAddress,
+  PublicHandleOffer,
   PublicProfile,
   PublicProfileItem,
   PublicBooked,
@@ -109,7 +111,7 @@ export interface PublicClientOptions {
  * The plain calls the public clients make to `/api/public/booking/*`: each
  * failure a DataError with the API's code, being offline `API_UNAVAILABLE`.
  */
-export function publicCaller(options: PublicClientOptions, area: 'booking' | 'handles' = 'booking') {
+export function publicCaller(options: PublicClientOptions, area: 'booking' | 'handles' | 'profiles' = 'booking') {
   const send = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const now = options.now ?? Date.now;
   const base = `${options.origin}/api/public/${area}`;
@@ -189,6 +191,12 @@ export interface HandleClient {
    * purpose when it can't go. Nothing comes back.
    */
   press(handle: string, itemId: string): void;
+  /**
+   * Whether `/<handle>` is free to claim (25 Oct 2026), asked only once `profile` answered NOT_FOUND. One of two
+   * words: `free`, or `absent` for a handle somebody holds, a word kept for Timefix and a word no handle could be
+   * alike, so the answer never says whether a private account is behind an address.
+   */
+  offer(handle: string): Promise<PublicHandleOffer>;
 }
 
 /** Sends a beacon: the browser's `navigator.sendBeacon`, or a test's own. */
@@ -197,6 +205,7 @@ export type BeaconLike = (url: string, body: string) => boolean;
 /** The handle client, on `origin` (the page's own), with `fetch` passed in for tests. */
 export function createHandleClient(options: PublicClientOptions & { readonly beacon?: BeaconLike }): HandleClient {
   const { base, call } = publicCaller(options, 'handles');
+  const profiles = publicCaller(options, 'profiles');
   const beacon: BeaconLike =
     options.beacon ?? ((url, body) => typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, body));
   return {
@@ -221,6 +230,8 @@ export function createHandleClient(options: PublicClientOptions & { readonly bea
       }
     },
     address: (handle, slug) => call<PublicAddress>(`${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`),
+    // Under `profiles`, where `/handles/:handle/:slug` would read `offer` as a page's slug.
+    offer: (handle) => profiles.call<PublicHandleOffer>(`${encodeURIComponent(handle)}/offer`),
   };
 }
 

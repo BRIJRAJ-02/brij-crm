@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useFocusVisible } from 'react-aria';
 import { Avatar, AvatarStack, type AvatarStackPerson } from '../../atoms/Avatar/Avatar.tsx';
-import { Button } from '../../atoms/Button/Button.tsx';
+import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -69,8 +70,18 @@ export interface BookingFrameProps {
   readonly cover?: ReactNode;
   /** A band at the cover's foot, drawn as `footer` is: the List view's Book bar. */
   readonly coverFooter?: ReactNode;
-  /** What the card shows (`month`, `list`, `chat`): a change crossfades the card's content. Never at first paint. */
+  /**
+   * `body` (the default): the cover takes the panes' and the footer's box, under the heading row (List, Book by chat).
+   * `card`: it takes the whole card, its heading row too (the details step), which hides with the month.
+   */
+  readonly coverPlace?: 'body' | 'card';
+  /** What the card shows (`month`, `list`, `chat`, `details`): a change crossfades the card's content. Never at first paint. */
   readonly view?: string;
+  /**
+   * Which way the step went, when it did: `forward` slides the cover in from the end (the details step), `back` the
+   * month in from the start (Back, or a time someone just took). Reduced motion keeps the fade alone.
+   */
+  readonly enter?: 'forward' | 'back';
   /**
    * Where "Claim your free page" goes: `claimPageHref('booking_page')`, tagged as the wordmark beside it is. Leave
    * it off to show the wordmark alone (a recognised visitor).
@@ -106,15 +117,20 @@ export function BookingFrame({
   footer,
   cover,
   coverFooter,
+  coverPlace = 'body',
   view,
+  enter,
   claimHref,
   logo = TIMEFIX_LOGO,
 }: BookingFrameProps) {
   const isLoading = host === undefined || title === undefined;
-  // Only a view changed after the first paint fades: the page's first view is simply there.
-  const [shown, setShown] = useState({ view, isMoved: false });
-  if (shown.view !== view) setShown({ view, isMoved: true });
+  // Only a view changed after the first paint moves: the page's first view is simply there. One chosen from the
+  // keyboard (the switch's arrows, Enter on Book or Back) shows at once, decided as it changes: keys never wait.
+  const { isFocusVisible } = useFocusVisible();
+  const [shown, setShown] = useState({ view, isMoved: false, isInstant: false });
+  if (shown.view !== view) setShown({ view, isMoved: true, isInstant: isFocusVisible });
   const isCovered = cover !== undefined;
+  const isCardCovered = isCovered && coverPlace === 'card';
   const claim = claimHref === undefined ? {} : { claimHref };
   return (
     <main className={styles.root}>
@@ -203,16 +219,25 @@ export function BookingFrame({
           {banner}
           <section
             className={styles.card}
-            aria-label={heading ?? title ?? strings.loading}
+            // Covered whole (the details step), the step's own form names what the card holds.
+            {...(isCardCovered ? {} : { 'aria-label': heading ?? title ?? strings.loading })}
+            data-instant={shown.isInstant || undefined}
+            data-place={isCardCovered ? 'card' : undefined}
             aria-busy={isLoading || undefined}
           >
             {(heading !== undefined || toolbar !== undefined) && (
-              <div className={styles.head}>
+              <div className={styles.head} inert={isCardCovered}>
                 {heading !== undefined && <h2 className={styles.heading}>{heading}</h2>}
                 {toolbar !== undefined && <div className={styles.toolbar}>{toolbar}</div>}
               </div>
             )}
-            <div className={styles.stage} data-moved={shown.isMoved || undefined}>
+            <div
+              className={styles.stage}
+              data-moved={shown.isMoved || undefined}
+              data-instant={shown.isInstant || undefined}
+              data-place={isCovered ? coverPlace : undefined}
+              data-enter={enter}
+            >
               {/* Covered, the month still sets the card's size: hidden, out of the reading order and out of reach. */}
               <div className={styles.under} inert={isCovered}>
                 <div className={styles.panes} data-panes={aside === undefined ? 'one' : 'two'}>
@@ -371,6 +396,70 @@ export function BookingProfileSection({ title, children }: BookingProfileSection
       )}
       {children}
     </section>
+  );
+}
+
+/**
+ * The longest handle the action quotes back. Past it the button names the address instead: a handle can be 40
+ * characters, and quoting one of those pushes the button past the card on a phone, while the headline above
+ * carries the whole address anyway.
+ */
+const ACTION_HANDLE_MAX = 18;
+
+/** Props for BookingHandleOffer. */
+export interface BookingHandleOfferProps {
+  /** The address as the visitor reads it in the bar, host and all: "timefix.com/ada". */
+  readonly address: string;
+  /** The handle alone, as the action quotes it back: "ada". */
+  readonly handle: string;
+  /** Where the action goes: the sign in page carrying this handle (`signInPath` in `@crm/contracts/brand`). */
+  readonly claimHref: string;
+}
+
+/**
+ * A `/<handle>` nobody holds (25 Oct 2026): the dead end turned into an offer,
+ * laid out as Cal.com's version of the same page and dressed as ours. The
+ * quiet fact first ("Page not found"), then the headline with the address
+ * itself as its subject and the accent on what is being offered
+ * ("timefix.com/ada is free"), then one bordered card that is the action, with
+ * the address quoted back on its button so the visitor reads it twice.
+ *
+ * Nothing else: no list of other places to go, and no claim link in the foot,
+ * since the card already is the claim. Only an address nobody holds reaches
+ * this page; a word kept for Timefix and a handle somebody holds both read as
+ * BookingMessage's plain not found, so this page can never say that a private
+ * account exists.
+ */
+export function BookingHandleOffer({ address, handle, claimHref }: BookingHandleOfferProps) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  const leadId = useId();
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
+  return (
+    <main className={styles.root}>
+      <div className={styles.narrow}>
+        <div className={styles.offerHead}>
+          {/* The quiet label a section heading uses: the same quiet line, in the same place above a block. */}
+          <p id={leadId} className={styles.sectionTitle}>
+            {strings.offerLead}
+          </p>
+          {/* The heading takes focus, so the fact follows the offer rather than being left above it unread. */}
+          <h1 ref={heading} tabIndex={-1} aria-describedby={leadId} className={styles.offerTitle}>
+            {address} <span className={styles.offerFree}>{strings.offerFree}</span>
+          </h1>
+        </div>
+        <div className={styles.message}>
+          <p className={styles.description}>{strings.offerText}</p>
+          <div className={styles.offerAction}>
+            <ButtonLink variant="primary" size="lg" isFullWidth="center" href={claimHref}>
+              {handle.length > ACTION_HANDLE_MAX ? strings.offerActionLong : strings.offerAction(handle)}
+            </ButtonLink>
+          </div>
+        </div>
+        <BookingFoot page="booking_profile" />
+      </div>
+    </main>
   );
 }
 

@@ -143,6 +143,28 @@ export const PublicProfile = z.object({
 /** A person's public profile. */
 export type PublicProfile = z.infer<typeof PublicProfile>;
 
+/**
+ * Why `/<handle>` has nothing to show (25 Oct 2026). A closed pair, never a reason in words:
+ * * `free`: nobody holds the address, and nothing keeps anyone from taking it, so the page offers it.
+ * * `absent`: anything else, as one answer. A handle somebody holds, a word kept for Timefix
+ *   (`RESERVED_HANDLES`) and a word that could never be a handle all read `absent`. That adds no signal beyond
+ *   what a profile read already gives: `RESERVED_HANDLES` ships in the browser, so anyone can subtract it, and a
+ *   handle somebody holds answers with their profile either way. What the one word does buy is that the offer
+ *   itself is never made for an address that is not free to take.
+ */
+export const HANDLE_OFFERS = ['free', 'absent'] as const;
+/** Why `/<handle>` has nothing to show. */
+export type HandleOffer = (typeof HANDLE_OFFERS)[number];
+
+/**
+ * `GET /api/public/profiles/:handle/offer`: whether the address is free to claim, asked only once a profile read
+ * found nothing. The answer is the one word and nothing else: the asker already knows which address it asked
+ * about, so the handle is never echoed back.
+ */
+export const PublicHandleOffer = z.object({ status: z.enum(HANDLE_OFFERS) });
+/** Whether `/<handle>` is free to claim. */
+export type PublicHandleOffer = z.infer<typeof PublicHandleOffer>;
+
 /** A profile read's query: the cursor after which to read, and words the titles hold. */
 export const PublicProfileQuery = z.object({
   after: z

@@ -6,6 +6,13 @@
    step, so every control inside squares its corners. On its own page from the
    page breakpoint, a card (Classic, Steps) sits centred on the ground colour;
    the one at a time frame (`data-frame='open'`) has no card. */
+/* The public pages' crossfade between each other (styles/base.css says what it captures): only the pages that load
+   this module opt in, never the app. */
+@view-transition {
+  navigation: auto;
+  types: page;
+}
+
 @layer components {
   .root {
     display: flex;
@@ -162,8 +169,10 @@
     display: none;
   }
 
-  /* The thank you: the booking confirmation's badge, heading and muted line, centred. */
+  /* The thank you: the booking confirmation's badge, heading and muted line, centred. It rises into the card as the
+     form leaves it, so sending reads as one move, the badge growing in after it. */
   .thanks {
+    animation: thanks-rise var(--duration-modal) var(--ease-out);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -260,9 +269,17 @@
     }
   }
 
+  @keyframes thanks-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
   /* The fades stay; the rise and the growth go. */
   @media (prefers-reduced-motion: reduce) {
-    .badge {
+    .badge,
+    .thanks {
       animation-name: fade;
     }
   }

@@ -1,6 +1,8 @@
 // The Timefix links' one builder: every surface's link carries the same four tags, and nothing personal rides in it.
 import { describe, expect, it } from 'vitest';
 import {
+  signInPath,
+  TIMEFIX_APP,
   POWERED_BY_EMAILS,
   POWERED_BY_PAGES,
   POWERED_BY_PLACEMENTS,
@@ -89,5 +91,27 @@ describe('timefixUrl', () => {
   it('keeps every tag a plain lowercase word, each surface named once', () => {
     for (const word of [...POWERED_BY_SURFACES, ...POWERED_BY_PLACEMENTS]) expect(word).toMatch(/^[a-z]+(?:_[a-z]+)*$/);
     expect(new Set(POWERED_BY_SURFACES).size).toBe(POWERED_BY_SURFACES.length);
+  });
+});
+
+describe('signInPath', () => {
+  it('is the relative sign in page on its own, which is right where one host serves both', () => {
+    expect(signInPath()).toBe('/sign-in');
+    expect(signInPath({ handle: 'ada' })).toBe('/sign-in?handle=ada');
+    expect(signInPath({ handle: '' })).toBe('/sign-in');
+  });
+
+  it('carries the free address to an https app origin', () => {
+    expect(signInPath({ handle: 'ada', appOrigin: TIMEFIX_APP })).toBe('https://app.timefix.com/sign-in?handle=ada');
+    // An origin given with a path keeps only its origin.
+    expect(signInPath({ handle: 'ada', appOrigin: 'https://app.timefix.com/elsewhere' })).toBe(
+      'https://app.timefix.com/sign-in?handle=ada',
+    );
+  });
+
+  it('drops anything but an https origin, so no caller can hand the link to another host', () => {
+    for (const origin of ['', 'nonsense', 'http://app.timefix.com', '//evil.test', 'javascript:alert(1)']) {
+      expect(signInPath({ handle: 'ada', appOrigin: origin }), origin).toBe('/sign-in?handle=ada');
+    }
   });
 });

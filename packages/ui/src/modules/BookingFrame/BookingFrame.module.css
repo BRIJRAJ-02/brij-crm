@@ -4,6 +4,13 @@
    the times side by side at one height so the times scroll in their pane, and
    a band across the foot for the Book bar). Below it everything stacks and
    Timefix moves to the page's end. */
+/* The public pages' crossfade between each other (styles/base.css says what it captures): only the pages that load
+   this module opt in, never the app. */
+@view-transition {
+  navigation: auto;
+  types: page;
+}
+
 @layer components {
   .root {
     box-sizing: border-box;
@@ -172,14 +179,20 @@
   .under {
     display: flex;
     flex-direction: column;
+  }
+
+  .head,
+  .under {
     transition: opacity var(--duration-move) var(--ease-out);
   }
 
+  .head[inert],
   .under[inert] {
     opacity: 0;
     visibility: hidden;
   }
 
+  /* Switching views, the month goes in duration-exit as the view comes in. */
   .stage[data-moved] .under[inert] {
     transition:
       opacity var(--duration-exit) var(--ease-out),
@@ -193,8 +206,62 @@
     flex-direction: column;
   }
 
+  /* The details step takes the whole card, the heading row with it, and the card is as tall as the taller of the
+     month and the step: the step lies over the heading row and the month in one grid area, so a long form (a phone,
+     guests) grows the card once rather than scrolling inside it. What it covers goes at once: the 16 px slide is the
+     move, with nothing showing through. */
+  .card[data-place='card'] {
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  .stage[data-place='card'] {
+    display: contents;
+  }
+
+  .card[data-place='card'] > .head {
+    grid-area: 1 / 1;
+  }
+
+  .stage[data-place='card'] > .under {
+    grid-area: 2 / 1;
+  }
+
+  .stage[data-place='card'] > .cover {
+    position: static;
+    grid-area: 1 / 1 / -1 / -1;
+  }
+
+  .head[inert],
+  .stage[data-place='card'] > .under[inert] {
+    transition: none;
+  }
+
   .stage[data-moved] .cover {
     animation: cover-in var(--duration-move) var(--ease-out);
+  }
+
+  /* A step moves the way it went: the details in from the end, Back's month (or List) in from the start. */
+  .stage[data-moved][data-enter='forward'] .cover {
+    animation-name: step-forward;
+  }
+
+  .stage[data-moved][data-enter='back'] .cover,
+  .stage[data-enter='back'] .under:not([inert]) {
+    animation: step-back var(--duration-move) var(--ease-out);
+  }
+
+  /* Chosen from the keyboard (the view switch's arrows, Enter on Book or Back), a view or a step shows at once:
+     keys never wait on a move. Decided as the view changes, so focus moving on later never replays anything. */
+  .stage[data-instant][data-moved] .under,
+  .card[data-instant] > .head {
+    transition: none;
+  }
+
+  .stage[data-instant][data-moved] .cover,
+  .stage[data-instant][data-enter='back'] .cover,
+  .stage[data-instant][data-enter='back'] .under:not([inert]) {
+    animation: none;
   }
 
   /* A view's parts top down; a last part that doesn't grow (the chat's composer, loading) sits at the foot. */
@@ -221,10 +288,10 @@
     padding: var(--space-20);
   }
 
-  /* Stacked under the month, the times scroll in a box of their own, ten rows tall (five rows of times): the card
+  /* Stacked under the month, the times scroll in a box of their own, eight rows tall (four rows of times and the next one's top): the card
      is the same height whichever day is open and however many times it has. */
   .aside {
-    block-size: calc(var(--size-row) * 10);
+    block-size: calc(var(--size-row) * 8);
     padding-block-start: 0;
     contain: size;
   }
@@ -281,13 +348,53 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* An address nobody holds (25 Oct 2026): the quiet fact and the headline stand
+     above the card, as Cal.com's page does, so the card below is plainly the
+     one thing to press. */
+  .offerHead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  /* The accent marks what is on offer. `--link` is the accent tuned for text:
+     `--accent` is 3.6:1 on this ground in dark, and `--accent-line` is a line
+     token, held only to the 3:1 a ring needs. */
+  .offerFree {
+    color: var(--link);
+  }
+
+  /* The action spans the card, as the Book bar spans the booking page's: one card, one thing to press. */
+  .offerAction {
+    display: flex;
+  }
+
+  .offerAction > * {
+    flex: 1;
+  }
+
+  /* The offer is the page, so its headline carries the page: the note title's
+     size, the one step above a heading the tokens already hold. An address can
+     be 40 characters, so it breaks where it must rather than running off a
+     phone. */
+  .offerTitle {
+    margin: 0;
+    /* The same small inset a section heading takes, so the lead line and the headline share one left edge. */
+    padding-inline: var(--space-4);
+    color: var(--text);
+    font: var(--text-note-title);
+    letter-spacing: var(--tracking-note-title);
+    overflow-wrap: anywhere;
+  }
+
   .messageTitle {
     margin: 0;
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
   }
 
-  .messageTitle:focus {
+  .messageTitle:focus,
+  .offerTitle:focus {
     outline: none;
   }
 
@@ -436,6 +543,29 @@
   @keyframes cover-in {
     from {
       opacity: 0;
+    }
+  }
+
+  @keyframes step-forward {
+    from {
+      opacity: 0;
+      translate: var(--space-16) 0;
+    }
+  }
+
+  @keyframes step-back {
+    from {
+      opacity: 0;
+      translate: calc(-1 * var(--space-16)) 0;
+    }
+  }
+
+  /* Reduced motion keeps the fade and drops the slide. */
+  @media (prefers-reduced-motion: reduce) {
+    .stage[data-moved][data-enter='forward'] .cover,
+    .stage[data-moved][data-enter='back'] .cover,
+    .stage[data-enter='back'] .under:not([inert]) {
+      animation-name: cover-in;
     }
   }
 

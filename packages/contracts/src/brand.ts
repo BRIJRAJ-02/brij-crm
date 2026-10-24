@@ -7,6 +7,39 @@
 export const TIMEFIX_SITE = 'https://www.timefix.com';
 
 /**
+ * The app, where signing in and signing up both happen (the server decides which an email is), beside the public
+ * booking origin. The marketing site holds the same address in `apps/marketing/src/site.ts`.
+ */
+export const TIMEFIX_APP = 'https://app.timefix.com';
+
+/** Where the app's sign in page lives, the one way in for a new person too. */
+export const SIGN_IN_PATH = '/sign-in';
+
+/**
+ * The sign in page, carrying the address a visitor was offered (`/<handle>` that nobody holds, 25 Oct 2026), so
+ * they do not have to type it again. `appOrigin` lets a page on one origin point at the app on another; left off,
+ * or anything but an `https` origin, the path is relative, which is what a deployment serving both on one origin
+ * wants and what keeps this from building a link to somebody else's host. The handle rides as `handle`, already
+ * public (it is the address the visitor typed), and nothing else ever does.
+ */
+export function signInPath(options: { readonly handle?: string; readonly appOrigin?: string } = {}): string {
+  const base = `${httpsOrigin(options.appOrigin)}${SIGN_IN_PATH}`;
+  const { handle } = options;
+  return handle === undefined || handle === '' ? base : `${base}?${new URLSearchParams({ handle }).toString()}`;
+}
+
+/** `value` as an `https` origin alone, or the empty string for anything else, so no caller can hand over a host. */
+function httpsOrigin(value: string | undefined): string {
+  if (value === undefined || value === '') return '';
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.origin : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
  * The public pages a Timefix link sits on, sent as `utm_medium`: the booking page (one page at both of its
  * addresses, `/b/<key>` and `/<handle>/<slug>`, framed or not), a person's profile (`/<handle>`), the guest's page
  * just after booking and when they come back to it, and the hosted form (framed or not).

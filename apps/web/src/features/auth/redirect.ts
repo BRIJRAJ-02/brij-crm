@@ -2,6 +2,8 @@
 // honoured only when it is a path in this app, so a link can never send a
 // person to another site after they sign in.
 
+import { HANDLE_PATTERN } from '@crm/contracts/handles';
+
 /** The sign in pages themselves, lowercase: going back to one after signing in would loop. */
 const SIGN_IN_PATHS = ['/sign-in', '/verify', '/two-factor'];
 
@@ -68,12 +70,20 @@ const ERROR_MAX = 64;
 
 /**
  * The sign in pages' search: where to go afterwards, the code a refused
- * Google sign in came back with, and why the session ended under the person.
+ * Google sign in came back with, why the session ended under the person, and a
+ * free booking address the visitor was offered.
  */
 export interface SignInSearch {
   readonly redirect?: string;
   readonly error?: string;
   readonly signedOut?: SignedOut;
+  /**
+   * The free address a visitor was offered at `/<handle>` (25 Oct 2026). Nothing reads it yet: first run has no
+   * handle step, and a handle is claimed in Settings › Account › Profile, so it is kept here only so the address
+   * stays in this page's own URL rather than being stripped off it. It does not survive the next navigation, and
+   * the offer page says only that signing up is the step, never that the address is already claimed.
+   */
+  readonly handle?: string;
 }
 
 /**
@@ -83,9 +93,11 @@ export interface SignInSearch {
  * string. The page maps the code to its own words and never shows it as given.
  */
 export function redirectSearch(search: Record<string, unknown>): SignInSearch {
-  const { redirect, error, signedOut } = search;
+  const { redirect, error, signedOut, handle } = search;
   return {
     ...(typeof redirect === 'string' ? { redirect } : {}),
+    // Kept only when it has a handle's shape, so nothing else can ride in the address.
+    ...(typeof handle === 'string' && HANDLE_PATTERN.test(handle) ? { handle } : {}),
     ...(typeof error === 'string' && error !== '' && error.length <= ERROR_MAX ? { error } : {}),
     ...(signedOut === 'ended' || signedOut === 'unsaved' || signedOut === 'deleted' ? { signedOut } : {}),
   };

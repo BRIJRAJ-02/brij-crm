@@ -2,7 +2,13 @@
 // calls, its body, and each failure as a DataError with the API's code.
 import { describe, expect, it } from 'vitest';
 import { createManageClient } from './manage.ts';
-import { createBookingClient, isDataError, withPreviewDraft, type PublicBookingPage } from './public.ts';
+import {
+  createBookingClient,
+  createHandleClient,
+  isDataError,
+  withPreviewDraft,
+  type PublicBookingPage,
+} from './public.ts';
 
 function fake(answer: (url: string, init?: RequestInit) => Response) {
   const calls: { url: string; init?: RequestInit }[] = [];
@@ -235,5 +241,29 @@ describe('withPreviewDraft', () => {
     expect(withPreviewDraft(saved, { type: 'crm:preview', draft: {} })?.socials).toEqual([ada]);
     const team = { ...page, team: { avatars: [], more: 0 } };
     expect(withPreviewDraft(team, { type: 'crm:preview', draft })?.socials).toBeUndefined();
+  });
+});
+
+describe('createHandleClient', () => {
+  it('asks whether an address is free under profiles, where a page\u2019s slug can never shadow it', async () => {
+    const calls: string[] = [];
+    const client = createHandleClient({
+      origin: 'https://timefix.test',
+      fetch: (input) => {
+        calls.push(input instanceof Request ? input.url : input.toString());
+        return Promise.resolve(Response.json({ handle: 'ada', status: 'free' }));
+      },
+    });
+    expect(await client.offer('ada')).toEqual({ handle: 'ada', status: 'free' });
+    expect(calls).toEqual(['https://timefix.test/api/public/profiles/ada/offer']);
+  });
+
+  it('hands a refused answer back as a DataError, so the page keeps its plain not found', async () => {
+    const client = createHandleClient({
+      origin: 'https://timefix.test',
+      fetch: () => Promise.resolve(Response.json({ code: 'RATE_LIMITED', message: 'Too many.' }, { status: 429 })),
+    });
+    const failure = await client.offer('ada').catch((error: unknown) => error);
+    expect(isDataError(failure) && failure.code).toBe('RATE_LIMITED');
   });
 });
