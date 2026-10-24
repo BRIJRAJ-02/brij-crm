@@ -276,11 +276,11 @@ export function LoadingBooking({
   readonly timeZone: string;
   readonly now: () => number;
 }) {
-  // The host's default comes with the facts, so this shape follows the visitor's own choice, then what this page
-  // opened in last time, then Month: the place it holds is the one the page that arrives takes.
-  const [view, setView] = useState<SlotView>(
-    () => savedView() ?? openedBefore(globalThis.location.pathname) ?? 'month',
-  );
+  // The address this shape is drawn at, read once, before a handle address replaces it.
+  const [addressPath] = useState(() => globalThis.location.pathname);
+  // The host's default comes with the facts, which this shape can't wait for, so it holds the place the page took
+  // here last time (a choice made on it, else its host's default as it was then), and Month for a page never met.
+  const [view, setView] = useState<SlotView>(() => openedBefore(addressPath) ?? 'month');
   const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
   const today = dayKey(now(), timeZone);
   const times = (
@@ -309,7 +309,7 @@ export function LoadingBooking({
           onChange={(next) => {
             const picked = next === 'list' || next === 'chat' ? next : 'month';
             setView(picked);
-            saveView(picked);
+            saveView(addressPath, picked);
           }}
           segments={viewSegments}
         />
@@ -420,9 +420,10 @@ function Booking({
   // The view the host set the page to open in. The facts are read without a schema, so an API that doesn't send it
   // yet reads as Month, the view every page had before this was a setting.
   const opensIn = viewOf(page.defaultView) ?? 'month';
-  // The view this opens in (owner, 25 Oct 2026): what this browser chose before, else the host's own default, which
-  // came with the page's facts. Read once, as the card is first drawn, so the page never paints one view and swaps.
-  const [picked, setView] = useState<SlotView>(() => savedView() ?? opensIn);
+  // The view this opens in (owner, 25 Oct 2026): what was chosen on this page before, else the host's own default,
+  // which came with the page's facts. Read once, as the card is first drawn, so the page never paints and swaps.
+  // A page whose entry has been pushed out opens in its host's default again, never in nothing.
+  const [picked, setView] = useState<SlotView>(() => savedView(addressPath) ?? opensIn);
   // The editor's preview is inert, so nothing inside it switches the view: it reads the host's setting straight from
   // the page, and the choice they haven't saved yet shows the moment they pick it. A visitor keeps their own.
   const view = isEditorPreview ? opensIn : picked;
@@ -911,7 +912,7 @@ function Booking({
       onChange={(next) => {
         const picked = next === 'list' || next === 'chat' ? next : 'month';
         setView(picked);
-        saveView(picked);
+        saveView(addressPath, picked);
       }}
       segments={[
         { value: 'month', label: strings.month, icon: 'calendar', isIconOnly: true },

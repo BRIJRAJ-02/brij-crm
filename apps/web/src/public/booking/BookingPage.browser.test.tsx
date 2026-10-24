@@ -6,7 +6,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BookingPage } from './BookingPage.tsx';
-import { openedBefore, rememberOpened } from './prefs.ts';
+import { openedBefore, rememberOpened, saveView } from './prefs.ts';
 
 const KEY = 'abcdefghijklmnop';
 
@@ -104,12 +104,20 @@ describe('the view a booking page opens in', () => {
     expect(chosenView()).toBe('list');
   });
 
-  it('keeps a visitor’s own remembered choice over the host’s default', async () => {
+  it('keeps the choice made on this page over the host’s default', async () => {
     fakeApi('chat');
-    globalThis.localStorage.setItem('crm.booking.view', 'month');
+    saveView(globalThis.location.pathname, 'month');
     show();
     await loaded();
     expect(chosenView()).toBe('month');
+  });
+
+  it('ignores a choice made on another page, and opens in the host’s view', async () => {
+    fakeApi('chat');
+    saveView('/someone/else', 'month');
+    show();
+    await loaded();
+    expect(chosenView()).toBe('chat');
   });
 
   it('remembers the view the page opened in, under an address the store never spells out', async () => {
