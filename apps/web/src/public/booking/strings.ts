@@ -70,6 +70,8 @@ export const strings = {
     tooMany: 'Too many attempts just now. Wait a moment and try again.',
     closed: 'This page isn’t taking bookings any more.',
     failed: 'That did not go through. Try again in a moment.',
+    /** A refusal naming no field (the bot checks): something the visitor can check, not a shrug. */
+    check: 'We couldn’t take that booking. Check your details and try again.',
     offline: 'That did not go through. Check your connection and try again.',
   },
   // States.

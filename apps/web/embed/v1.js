@@ -471,7 +471,8 @@
       for (var i = 0; i < fields.length; i += 1) {
         var field = fields[i];
         var name = legacy ? field.getAttribute('data-crm-field') : field.name;
-        if (name === 'company_url') {
+        // The honeypot: `tf-trap` since 25 Oct 2026 (autofill filled `company_url`), the old name for snippets already pasted.
+        if (name === 'tf-trap' || name === 'company_url') {
           trap = field.value;
           continue;
         }

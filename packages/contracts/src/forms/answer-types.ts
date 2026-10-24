@@ -77,8 +77,25 @@ export const SHORT_ANSWER_MAX = 200;
 /** The longest long text answer. */
 export const LONG_ANSWER_MAX = 2_000;
 
-/** The honeypot's input name: a person never fills it (spec 0023, bots and abuse). */
+/** The honeypot's key in a submission's body: a person never fills it (spec 0023, bots and abuse). */
 export const HONEYPOT_KEY = 'company_url';
+
+/**
+ * The honeypot input's `name` and the root of its `id` on every page we draw.
+ * Never a word autofill knows (company, url, name, email...): Chrome ignores
+ * `autocomplete="off"` on those and filled `company_url`, refusing real
+ * bookings as bots (25 Oct 2026). The hyphen keeps it out of the question key
+ * pattern, so it never meets a real question.
+ */
+export const HONEYPOT_INPUT_NAME = 'tf-trap';
+
+/** What keeps password managers out of the honeypot: 1Password, LastPass, Bitwarden and Dashlane's own skip marks. */
+export const HONEYPOT_IGNORE_ATTRIBUTES = {
+  'data-1p-ignore': 'true',
+  'data-lpignore': 'true',
+  'data-bwignore': 'true',
+  'data-form-type': 'other',
+} as const;
 
 /** The least time from the page loading to a submit, below which it is spam. */
 export const MIN_FILL_MS = 2_000;

@@ -97,7 +97,10 @@ describe('the site’s own HTML', () => {
   });
 
   it('brings the honeypot, the polite thank you and the alert line, then the script, and leaves files out', () => {
-    expect(html).toContain('name="company_url" tabindex="-1" autocomplete="off"');
+    expect(html).toContain(
+      '<input type="text" id="tfx-demo-request-tf-trap" name="tf-trap" tabindex="-1" autocomplete="off" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">',
+    );
+    expect(html).not.toContain('company_url');
     expect(html).toContain('<p role="status" data-timefix-success="Thanks, we will write back."></p>');
     expect(html).toContain('<p role="alert" data-timefix-error></p>');
     expect(html).toContain('<button type="submit">Send it</button>');
