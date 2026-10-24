@@ -84,6 +84,10 @@ import type {
   WorkspaceDomainsView,
   DeletedWorkspace,
   MyProfile,
+  ProfileBlock,
+  ProfileBlockKind,
+  ProfileItem,
+  ProfilePageChoice,
   WorkspaceSettings,
 } from '@crm/contracts';
 import type { GlobalSearch } from './search/global.ts';
@@ -166,6 +170,8 @@ export type {
 } from './preferences/store.ts';
 import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
+import { blockLimit, checkBlock, createLinkPageStore, type BlockDraft, type LinkPageHeld } from './link-page/store.ts';
+export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState } from './link-page/store.ts';
 export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
 import { createOperatorStore } from './operator/store.ts';
@@ -417,6 +423,12 @@ export type {
   WorkspaceSummary,
   DeletedWorkspace,
   MyProfile,
+  ProfileBlockKind,
+  ProfileItem,
+  ProfileLinkIcon,
+  ProfilePageChoice,
+  ProfilePageFacts,
+  PublicProfileItem,
   WorkspaceSettings,
 } from '@crm/contracts';
 export type {
@@ -1152,6 +1164,7 @@ export function createDataLayer({
     schedules.clear();
     preferences.clear();
     pictureChoice.clear();
+    linkPage.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
   const reset = (isSignedIn: boolean) => {
@@ -1976,6 +1989,19 @@ export function createDataLayer({
     api: {
       get: (input) => beforeRead(input.workspace).then(() => call((options) => api.preferences.get(input, options))),
       update: (input) => call((options) => api.preferences.update(input, options)),
+    },
+    mintId,
+    notify,
+  });
+  // Settings › Account › Link page (spec 0051): the person's own blocks, the same in every workspace.
+  const linkPage = createLinkPageStore({
+    api: {
+      items: (input) => call((options) => api.profile.items(input, options)),
+      pageChoices: (input) => call((options) => api.profile.pageChoices(input, options)),
+      saveItem: (input) => call((options) => api.profile.saveItem(input, options)),
+      orderItems: (input) => call((options) => api.profile.orderItems({ ...input, ids: [...input.ids] }, options)),
+      archiveItem: (input) => call((options) => api.profile.archiveItem(input, options)),
+      deleteItem: (input) => call((options) => api.profile.deleteItem(input, options)),
     },
     mintId,
     notify,
@@ -4036,6 +4062,35 @@ export function createDataLayer({
         me = undefined;
         return restored;
       },
+    },
+    /**
+     * Settings › Account › Link page (spec 0051): the person's own blocks at `/<handle>`, the same in every
+     * workspace. Every change shows at once and is sent after the ones before it; refused, it is put back and a
+     * toast says why, with Try again.
+     */
+    linkPage: {
+      /** The blocks, held while a screen shows them (`useLinkPage`). */
+      view: (workspace: string): LinkPageHeld => linkPage.of(workspace),
+      /** Reads them now (the route's loader); rejects with the refusal. */
+      read: (workspace: string): Promise<void> => linkPage.read(workspace).then(() => undefined),
+      /** Adds or edits a block: `shown` at once, idempotent on `id`. Answers whether it landed. */
+      save: (workspace: string, id: string, block: ProfileBlock, shown: ProfileItem): Promise<boolean> =>
+        linkPage.save(workspace, id, block, shown),
+      /** The whole order of the live blocks. */
+      order: (workspace: string, ids: readonly string[]): Promise<boolean> => linkPage.order(workspace, ids),
+      /** Archives a block, or restores it to the end. */
+      archive: (workspace: string, id: string, archived: boolean): Promise<boolean> =>
+        linkPage.archive(workspace, id, archived),
+      /** Deletes a block for good (the screen asks first). */
+      remove: (workspace: string, id: string): Promise<boolean> => linkPage.remove(workspace, id),
+      /** The booking pages the person may still place, from every workspace, read fresh each time. */
+      pageChoices: (workspace: string): Promise<readonly ProfilePageChoice[]> => linkPage.pageChoices(workspace),
+      /** A block as typed, checked as the server will: each field's problem, or the block to send. */
+      check: (draft: BlockDraft, items: readonly ProfileItem[], editing?: string) => checkBlock(draft, items, editing),
+      /** Whether one more block of a kind fits: undefined, or the limit's sentence. */
+      limit: (items: readonly ProfileItem[], kind: ProfileBlockKind): string | undefined => blockLimit(items, kind),
+      /** A new block's id. */
+      newId: (): string => mintId(),
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {

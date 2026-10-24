@@ -23,7 +23,7 @@ import type { FetchLike } from '../fetch.ts';
 export type {
   PublicAddress,
   PublicProfile,
-  PublicProfileLink,
+  PublicProfileItem,
   PublicBooked,
   PublicChanged,
   PublicGuestsAnswer,
