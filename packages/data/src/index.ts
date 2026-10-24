@@ -893,6 +893,15 @@ export interface DataLayerOptions {
    * last person outside the layer, such as the router's loaded pages.
    */
   readonly onSessionChange?: () => void;
+  /**
+   * Whether anyone is signed in, each time the layer learns it for certain:
+   * when `me.get` answers, and when a session ends under the person. The app
+   * keeps it as a hint that survives a reload, so the next load knows which
+   * screen to hold the place for (the app's or sign in's) before `me.get`
+   * answers. It is a guess for painting only: the answer here always
+   * overrules it, and nothing may be read or shown on the strength of it.
+   */
+  readonly onSessionKnown?: (isSignedIn: boolean) => void;
   /** The network. The browser's `fetch` by default; tests pass a fake API. */
   readonly fetch?: FetchLike;
   /**
@@ -963,6 +972,7 @@ export function createDataLayer({
   onSignedOut,
   currentPath,
   onSessionChange = () => undefined,
+  onSessionKnown = () => undefined,
   fetch = (input, init) => globalThis.fetch(input, init),
   realtimeUrl,
   onDefinitionsChange = () => undefined,
@@ -1143,10 +1153,12 @@ export function createDataLayer({
     preferences.clear();
     pictureChoice.clear();
   };
-  const reset = () => {
+  /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
+  const reset = (isSignedIn: boolean) => {
     forget();
     ended = false;
     seenPerson = false;
+    sessionKnown(isSignedIn);
     onSessionChange();
   };
 
@@ -1219,9 +1231,19 @@ export function createDataLayer({
     return held;
   }
 
+  /** Hands the app what the layer now knows about the session; it never gets to break the call it came from. */
+  function sessionKnown(isSignedIn: boolean) {
+    try {
+      onSessionKnown(isSignedIn);
+    } catch {
+      // Only a hint for the next load's first paint: a failure here changes nothing here.
+    }
+  }
+
   /** The session ended under the person (a 401): off to sign in once, saying whether a change was lost. */
   function endSession() {
     ended = true;
+    sessionKnown(false);
     // A write still waiting for its answer is lost with the session (its layer leaves with the records), so
     // sign in says so; read before forget() clears the log.
     const unsaved = mutations.unanswered();
@@ -2982,11 +3004,17 @@ export function createDataLayer({
             // Someone is signed in again (in another tab, say): the next 401 ends their session too.
             ended = false;
             seenPerson = true;
+            // Now known for certain: the app keeps it as the next load's hint for which screen to hold a place for.
+            sessionKnown(true);
             return answer;
           },
           (error: unknown) => {
             const failure = toDataError(error);
-            if (failure.code === 'UNAUTHENTICATED') return undefined;
+            // A 401 here is an answer, not a failure: nobody is signed in, and the app may keep that as its hint.
+            if (failure.code === 'UNAUTHENTICATED') {
+              sessionKnown(false);
+              return undefined;
+            }
             me = undefined;
             throw failure;
           },
@@ -4911,7 +4939,7 @@ export function createDataLayer({
           }
           deletingAccount = false;
           takeHeldEnding();
-          reset();
+          reset(false);
           // The session is gone and sign in says the account was deleted: a call still out that answers 401 now
           // ends nothing more (sign in again starts afresh).
           ended = true;

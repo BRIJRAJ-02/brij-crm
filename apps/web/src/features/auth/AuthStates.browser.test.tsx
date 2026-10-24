@@ -8,7 +8,8 @@ import { page } from 'vitest/browser';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { EmailPreferencesError } from '../email/EmailPreferencesScreen.tsx';
 import { JoinScreen } from '../join/JoinScreen.tsx';
-import { AuthError } from './AuthStates.tsx';
+import { AuthError, SessionPending } from './AuthStates.tsx';
+import { writeSessionHint } from './hint.ts';
 import { TwoFactorScreen } from './TwoFactorScreen.tsx';
 
 let shown: InApp | undefined;
@@ -151,5 +152,63 @@ describe('EmailPreferencesError', () => {
     });
     await expect.element(page.getByRole('heading', { level: 1, name: 'Email preferences' })).toBeVisible();
     await expect.element(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  });
+});
+
+describe('SessionPending', () => {
+  const hint = (value: 'in' | 'out' | undefined) => {
+    if (value === undefined) window.localStorage.removeItem('crm.session');
+    else writeSessionHint(window.localStorage, value);
+  };
+  afterEach(() => {
+    hint(undefined);
+  });
+
+  it('holds the app’s own place while the session is unknown, with no sign in screen in sight', async () => {
+    hint('in');
+    shown = await renderInApp(() => <SessionPending title="Opening Timefix" />, { data: {}, pattern: '/', at: '/' });
+    await expect.element(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
+    expect(isSplit()).toBe(false);
+    expect(document.body.textContent).not.toContain('Sign in or sign up');
+  });
+
+  it('holds the app’s place on `/` for a browser that has no hint at all, never sign in’s', async () => {
+    hint(undefined);
+    shown = await renderInApp(() => <SessionPending title="Opening Timefix" />, { data: {}, pattern: '/', at: '/' });
+    await expect.element(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
+    expect(isSplit()).toBe(false);
+  });
+
+  it('holds sign in’s place on the sign in pages when the browser has never said, where that is the likelier end', async () => {
+    hint(undefined);
+    shown = await renderInApp(() => <SessionPending title="Sign in or sign up" whenUnknown="signIn" />, {
+      data: {},
+      pattern: '/sign-in',
+      at: '/sign-in',
+    });
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Sign in or sign up' })).toBeVisible();
+    expect(isSplit()).toBe(true);
+  });
+
+  it('still holds the app’s place on a sign in page for a browser that was signed in', async () => {
+    hint('in');
+    shown = await renderInApp(() => <SessionPending title="Sign in or sign up" whenUnknown="signIn" />, {
+      data: {},
+      pattern: '/sign-in',
+      at: '/sign-in',
+    });
+    await expect.element(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
+    expect(document.body.textContent).not.toContain('Sign in or sign up');
+  });
+
+  it('holds sign in’s place for a browser whose last visit ended signed out, so there is no detour', async () => {
+    hint('out');
+    shown = await renderInApp(() => <SessionPending title="Sign in or sign up" />, {
+      data: {},
+      pattern: '/sign-in',
+      at: '/sign-in',
+    });
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Sign in or sign up' })).toBeVisible();
+    expect(isSplit()).toBe(true);
   });
 });

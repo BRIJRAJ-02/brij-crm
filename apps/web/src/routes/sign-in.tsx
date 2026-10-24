@@ -1,6 +1,6 @@
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
+import { AuthError, SessionPending } from '../features/auth/AuthStates.tsx';
 import { readLastEmail, sessionStore } from '../features/auth/pending.ts';
 import { redirectSearch, safeRedirect } from '../features/auth/redirect.ts';
 import { SignInScreen } from '../features/auth/SignInScreen.tsx';
@@ -23,9 +23,10 @@ export const Route = createFileRoute('/sign-in')({
     );
     return { google, email: readLastEmail(sessionStore(window)) };
   },
+  // Someone already signed in goes straight on: hold the app's place for them, not the form's (SessionPending).
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.signInTitle} isSplit />
+      <SessionPending title={strings.signInTitle} whenUnknown="signIn" />
     </LoadingNow>
   ),
   errorComponent: () => <AuthError title={strings.signInTitle} isSplit />,

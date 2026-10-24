@@ -1,6 +1,6 @@
 // Sign in for the data layer (spec 0005). The Better Auth client loads on
 // first use through a dynamic import, so the first load stays small; the
-// session, `me` and the caches are the layer's to reset around it.
+// session, `me` and the caches are the layer's to reset around it, which also tells it who is signed in now.
 import { type DataFault, toDataError } from '../errors.ts';
 import type { FetchLike } from '../fetch.ts';
 import type { AuthClient, SecondFactorKind, SessionUser, SignInOutcome, TwoFactorSetup } from './client.ts';
@@ -12,7 +12,7 @@ export interface AuthOptions {
   readonly origin: string;
   readonly fetch: FetchLike;
   /** Forgets everything cached for the person who was signed in. */
-  readonly reset: () => void;
+  readonly reset: (isSignedIn: boolean) => void;
   /** Monitoring: a sign in failure the server can't have seen (see `DataLayerOptions.report`). */
   readonly report?: (fault: DataFault) => void;
 }
@@ -76,12 +76,12 @@ export function createAuth({ origin, fetch, reset, report }: AuthOptions): Auth 
     },
     async verify(email, code) {
       const outcome = await (await load()).verify(email, code);
-      if (outcome === 'signed-in') reset();
+      if (outcome === 'signed-in') reset(true);
       return outcome;
     },
     async secondStep(kind, code, remember) {
       await (await load()).secondStep(kind, code, remember);
-      reset();
+      reset(true);
     },
     twoFactor: {
       async start() {
@@ -110,7 +110,7 @@ export function createAuth({ origin, fetch, reset, report }: AuthOptions): Auth 
       try {
         await (await load()).signOut();
       } finally {
-        reset();
+        reset(false);
       }
     },
     async session() {

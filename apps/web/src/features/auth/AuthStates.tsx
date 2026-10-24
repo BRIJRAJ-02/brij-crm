@@ -6,6 +6,8 @@
 import { AuthLayout, Button, Callout, Skeleton, WorkspacePreview } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
+import { localStore, readSessionHint } from './hint.ts';
+import { OpeningApp } from './OpeningApp.tsx';
 import { strings } from './strings.ts';
 import { PRODUCT_LOGO } from '../../brand.ts';
 
@@ -36,6 +38,60 @@ export function AuthPending({ title, isSplit = false }: { readonly title: string
       <Skeleton lines={3} />
     </AuthLayout>
   );
+}
+
+/**
+ * Which place to hold while the session is unknown, for a browser that has
+ * never said: `app` for `/`, which a signed in person opens far more often
+ * than a stranger does, and `signIn` for the sign in pages, whose whole
+ * purpose is for someone signed out.
+ */
+type WhenUnknown = 'app' | 'signIn';
+
+/**
+ * The place a page before the app holds while it checks who is signed in
+ * (the owner, 24 October 2026: "before checking it flashed the signup page").
+ * The screen that follows is sign in's for someone signed out and the app's
+ * for someone signed in, and until `me.get` answers neither is known, so this
+ * holds the place of whichever this browser's last visit ended in: the app's
+ * own loading state (`OpeningApp`), or sign in's own frame when the hint says
+ * nobody was signed in, so a signed out person reaches sign in with no
+ * detour. A browser that has never said takes `whenUnknown`. A wrong guess
+ * costs a loading state, never a wrong screen: the real answer always
+ * overrules it, and nothing of anyone's is shown here.
+ */
+export function SessionPending({
+  title,
+  whenUnknown = 'app',
+}: {
+  readonly title: string;
+  readonly whenUnknown?: WhenUnknown;
+}) {
+  if (holdsApp(whenUnknown)) return <OpeningApp />;
+  return <AuthPending title={title} isSplit />;
+}
+
+/** Whether the app's own place is the one to hold: what the hint says, else `whenUnknown`. */
+function holdsApp(whenUnknown: WhenUnknown): boolean {
+  const hint = readSessionHint(localStore(window));
+  return hint === undefined ? whenUnknown === 'app' : hint === 'in';
+}
+
+/**
+ * The same choice for a check that failed: inside the app's own frame for
+ * someone this browser last saw signed in, so "Can't open Timefix" never
+ * arrives dressed as sign in and reads as "you have been signed out".
+ */
+export function SessionError({
+  title,
+  text,
+  whenUnknown = 'app',
+}: {
+  readonly title: string;
+  readonly text?: string | undefined;
+  readonly whenUnknown?: WhenUnknown;
+}) {
+  return <AuthError title={title} text={text} isSplit={!holdsApp(whenUnknown)} />;
 }
 
 /**

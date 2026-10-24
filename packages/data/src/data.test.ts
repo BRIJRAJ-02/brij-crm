@@ -845,6 +845,64 @@ describe('me.get', () => {
     fail = false;
     expect(await data.me.get()).toEqual(ME);
   });
+
+  it('says whether anyone is signed in, each time it knows for certain', async () => {
+    const known: boolean[] = [];
+    const api = fakeApi();
+    const { data } = layer(api, undefined, { onSessionKnown: (isSignedIn) => known.push(isSignedIn) });
+    await data.me.get();
+    // The cached answer is the same knowledge, not new knowledge.
+    await data.me.get();
+    expect(known).toEqual([true]);
+  });
+
+  it('says nobody is signed in when it hears so', async () => {
+    const known: boolean[] = [];
+    const api = fakeApi({
+      me: () => {
+        throw unauthenticated();
+      },
+    });
+    const { data } = layer(api, undefined, { onSessionKnown: (isSignedIn) => known.push(isSignedIn) });
+    expect(await data.me.get()).toBeUndefined();
+    expect(known).toEqual([false]);
+  });
+
+  it('says nobody is signed in when a session ends under the person', async () => {
+    const known: boolean[] = [];
+    let session = true;
+    const api = fakeApi({
+      me: () => {
+        if (!session) throw unauthenticated();
+        return ME;
+      },
+      objects: () => {
+        throw unauthenticated();
+      },
+    });
+    const { data } = layer(api, undefined, { onSessionKnown: (isSignedIn) => known.push(isSignedIn) });
+    await data.me.get();
+    session = false;
+    await failure(data.objects.list('acme'));
+    expect(known).toEqual([true, false]);
+  });
+
+  it('knows a session again after a sign in, and never on a failed answer', async () => {
+    const known: boolean[] = [];
+    let fail = true;
+    const api = fakeApi({
+      me: () => {
+        if (fail) throw new ORPCError('INTERNAL', { status: 500, message: 'Database exploded at row 7' });
+        return ME;
+      },
+    });
+    const { data } = layer(api, undefined, { onSessionKnown: (isSignedIn) => known.push(isSignedIn) });
+    await failure(data.me.get());
+    expect(known).toEqual([]);
+    fail = false;
+    expect(await data.me.get()).toEqual(ME);
+    expect(known).toEqual([true]);
+  });
 });
 
 describe('objects.list', () => {

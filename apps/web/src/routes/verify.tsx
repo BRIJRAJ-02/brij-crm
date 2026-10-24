@@ -1,6 +1,6 @@
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
+import { AuthError, SessionPending } from '../features/auth/AuthStates.tsx';
 import { readPending, sessionStore } from '../features/auth/pending.ts';
 import { redirectSearch, safeRedirect } from '../features/auth/redirect.ts';
 import { strings } from '../features/auth/strings.ts';
@@ -20,9 +20,10 @@ export const Route = createFileRoute('/verify')({
     }
     return { pending };
   },
+  // As on /sign-in: someone already signed in goes straight on, so their place is the app's (SessionPending).
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.verifyTitle} isSplit />
+      <SessionPending title={strings.verifyTitle} whenUnknown="signIn" />
     </LoadingNow>
   ),
   errorComponent: () => <AuthError title={strings.verifyTitle} isSplit />,
