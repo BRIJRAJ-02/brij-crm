@@ -120,12 +120,8 @@ export const OtherTimes: Story = {
     // The list enters with `both` fill, and this is the one entrance that starts inside a play function,
     // after the hook that settles animations has already run. The test runner pauses animations, which
     // holds a `both` one at its first frame, opacity 0, so settle this one before reading it or shooting it.
-    // Settled again on each try: on a busy runner (WebKit in CI) the entrance can start after the first look, and a
-    // single pass finished nothing.
-    await waitFor(() => {
-      for (const entrance of times.getAnimations({ subtree: true })) entrance.finish();
-      return expect(times).toBeVisible();
-    });
+    for (const entrance of times.getAnimations({ subtree: true })) entrance.finish();
+    await expect(times).toBeVisible();
     await userEvent.click(await screen.findByRole('button', { name: /2:00 PM/ }));
     await expect(args.onBook).toHaveBeenCalledWith('2026-10-20T14:00:00.000Z');
   },
