@@ -231,13 +231,53 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* An address nobody holds (25 Oct 2026): the quiet fact and the headline stand
+     above the card, as Cal.com's page does, so the card below is plainly the
+     one thing to press. */
+  .offerHead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  /* The accent marks what is on offer. `--link` is the accent tuned for text:
+     `--accent` is 3.6:1 on this ground in dark, and `--accent-line` is a line
+     token, held only to the 3:1 a ring needs. */
+  .offerFree {
+    color: var(--link);
+  }
+
+  /* The action spans the card, as the Book bar spans the booking page's: one card, one thing to press. */
+  .offerAction {
+    display: flex;
+  }
+
+  .offerAction > * {
+    flex: 1;
+  }
+
+  /* The offer is the page, so its headline carries the page: the note title's
+     size, the one step above a heading the tokens already hold. An address can
+     be 40 characters, so it breaks where it must rather than running off a
+     phone. */
+  .offerTitle {
+    margin: 0;
+    /* The same small inset a section heading takes, so the lead line and the headline share one left edge. */
+    padding-inline: var(--space-4);
+    color: var(--text);
+    font: var(--text-note-title);
+    letter-spacing: var(--tracking-note-title);
+    overflow-wrap: anywhere;
+  }
+
   .messageTitle {
     margin: 0;
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
   }
 
-  .messageTitle:focus {
+  .messageTitle:focus,
+  .offerTitle:focus {
     outline: none;
   }
 

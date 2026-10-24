@@ -3,8 +3,14 @@
 // Main task: pick one of their Public booking links; the whole row opens it at /<handle>/<slug>.
 // Leaves out: Link only pages (they work by address but are never listed), booking itself (each link's page), and
 // any count of links (read a page at a time, never all at once).
+//
+// An address nobody holds (25 Oct 2026): the page asks the server once, and only once a profile read answered
+// NOT_FOUND, whether the address is free; `free` turns the dead end into the offer to claim it, and `absent` keeps
+// the plain not found. A word kept for Timefix and a handle somebody holds (listed or not) both answer `absent`, so
+// nothing here can say that a private account is behind an address.
 import { createHandleClient, isDataError, type PublicProfile, type PublicProfileLink } from '@crm/data/booking';
 import {
+  BookingHandleOffer,
   BookingMessage,
   BookingProfile,
   BookingProfileSection,
@@ -18,8 +24,14 @@ import {
   type LinkRow,
 } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { claimHandleHref } from './claim.ts';
 import { sectionsOf } from './sections.ts';
 import { strings, tabTitle } from './strings.ts';
+
+/** The address as the visitor reads it in the bar: the host they are on, then the handle. */
+function addressOf(handle: string): string {
+  return `${globalThis.location.host}/${handle}`;
+}
 
 /** Past this many links, a search sits above the list. */
 const SEARCH_FROM = 8;
@@ -36,7 +48,11 @@ export interface ProfilePageProps {
 
 type Loaded =
   | { readonly state: 'loading' }
+  /** The profile read found nothing: which of the three reasons it was is still being asked. */
+  | { readonly state: 'checking' }
   | { readonly state: 'gone' }
+  /** Nobody holds this address: the page offers it. */
+  | { readonly state: 'free' }
   | { readonly state: 'failed' }
   | {
       readonly state: 'ready';
@@ -97,7 +113,8 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
               setSearchFailed(true);
               return was;
             }
-            return { state: isDataError(error) && error.code === 'NOT_FOUND' ? 'gone' : 'failed' };
+            // Nothing to show: which of the three reasons comes next, from the server (the effect below).
+            return { state: isDataError(error) && error.code === 'NOT_FOUND' ? 'checking' : 'failed' };
           });
         },
       );
@@ -114,12 +131,34 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
     const timer = globalThis.setTimeout(() => setSearched(wanted), SEARCH_WAIT_MS);
     return () => globalThis.clearTimeout(timer);
   }, [query, searched]);
+  // Nothing to show: ask once whether the address is free. Only `free` from the server ever shows the offer, so a
+  // read that failed, and every other reason, settle on the plain not found. The not found card holds its loading
+  // shape while the answer is out: it is the likelier of the two, and the page cannot know which is coming, so the
+  // offer does change the shape when it lands. If that read ever gets slow, the honest fix is to answer it in the
+  // profile read itself rather than to dress up the swap.
+  useEffect(() => {
+    if (loaded.state !== 'checking') return;
+    let isLive = true;
+    client.offer(handle).then(
+      (offer) => {
+        if (isLive) setLoaded({ state: offer.status === 'free' ? 'free' : 'gone' });
+      },
+      () => {
+        if (isLive) setLoaded({ state: 'gone' });
+      },
+    );
+    return () => {
+      isLive = false;
+    };
+  }, [client, handle, loaded.state]);
   useEffect(() => {
     // The tab says what the heading says, with the product, as the booking pages' tabs do (QA Q76).
     if (loaded.state === 'ready') document.title = tabTitle(loaded.profile.name);
+    else if (loaded.state === 'free') document.title = tabTitle(strings.handleFreeTab(addressOf(handle)));
+    // Nothing while the free read is out: the tab is the one place a premature answer would be read as words.
     else if (loaded.state === 'gone') document.title = tabTitle(strings.notFoundTitle);
     else if (loaded.state === 'failed') document.title = tabTitle(strings.failedTitle);
-  }, [loaded]);
+  }, [handle, loaded]);
 
   const more = () => {
     if (loaded.state !== 'ready' || loaded.next === undefined || isMoreLoading) return;
@@ -145,6 +184,13 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
       .finally(() => setMoreLoading(false));
   };
 
+  if (loaded.state === 'free') {
+    return <BookingHandleOffer address={addressOf(handle)} handle={handle} claimHref={claimHandleHref(handle)} />;
+  }
+  if (loaded.state === 'checking') {
+    // The not found card's own shape while the one remaining question is asked.
+    return <BookingMessage title={strings.notFoundTitle} page="booking_profile" isLoading />;
+  }
   if (loaded.state === 'gone') {
     return (
       <BookingMessage title={strings.notFoundTitle} page="booking_profile">

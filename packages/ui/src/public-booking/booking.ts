@@ -28,6 +28,8 @@ export {
 export {
   BookingFoot,
   BookingFrame,
+  /** An address nobody holds (25 Oct 2026): the offer to claim it, and the one action. */
+  BookingHandleOffer,
   BookingMessage,
   BookingProfile,
   BookingProfileSection,

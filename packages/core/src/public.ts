@@ -8,6 +8,7 @@ export {
   enterBookingPage,
   enterBookingProfile,
   findHandleOwner,
+  readHandleOffer,
   type BookingEntry,
   type HandleOwner,
   type ProfileCursor,

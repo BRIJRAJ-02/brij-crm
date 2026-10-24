@@ -23,6 +23,7 @@
 //   GET  /api/public/handles/:handle/:slug       the page a handle address names, by its public key
 //   GET  /api/public/booking/:publicKey/picture  a personal page's host picture, from our origin (23 Oct 2026)
 //   GET  /api/public/profiles/:handle/picture    a profile's picture, likewise (`picture.ts` fetches both)
+//   GET  /api/public/profiles/:handle/offer      whether the address is free to claim (25 Oct 2026)
 //
 // A slots read from a recognised visitor with a calendar also reads their
 // busy times (at most 3 seconds, failing open) and answers which slots clash
@@ -39,6 +40,7 @@ import {
   PublicMoveInput,
   PublicMoveSlotsQuery,
   PROFILE_PAGE_SIZE,
+  type PublicHandleOffer,
   PublicProfileQuery,
   PublicRemoveGuestInput,
   type PublicPrefill,
@@ -78,6 +80,7 @@ import {
   getPublicBookingPage,
   readAddressedPage,
   readBookingProfile,
+  readHandleOffer,
   readPagePicture,
   readProfilePicture,
   isPageHost,
@@ -337,6 +340,28 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (refused !== undefined) return refused;
     try {
       return await servePicture(c, readProfilePicture(await findHandleOwner({ db }, handle)));
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  // Whether an address is free to claim (25 Oct 2026). Under `profiles` beside the picture, never under
+  // `/handles/:handle/…`, where `offer` would shadow a page whose slug is "offer". The answer is one of two words:
+  // a handle somebody holds, a word kept for Timefix and a word no handle could be all read `absent`. That is not
+  // a secret kept (RESERVED_HANDLES ships in the browser, and a handle somebody holds answers with their profile
+  // anyway); it is so that the offer is only ever made for an address that is genuinely free to take.
+  app.get('/public/profiles/:handle/offer', async (c) => {
+    const handle = c.req.param('handle').toLowerCase();
+    // The instance's own ceiling first, as a form submission does: nothing below runs in a flood, whatever
+    // addresses it comes from.
+    const refused = limited([
+      ['booking:offer:instance', BOOKING_LIMITS.offersPerInstance],
+      [`booking:offer:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.offersPerAddress],
+    ]);
+    if (refused !== undefined) return refused;
+    try {
+      // The answer is the one word: the handle came from the asker, so it is never echoed back.
+      return ok({ status: await readHandleOffer({ db }, handle) } satisfies PublicHandleOffer);
     } catch (error) {
       return refusalAnswer(error);
     }

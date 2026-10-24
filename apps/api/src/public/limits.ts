@@ -20,6 +20,14 @@ export const BOOKING_LIMITS = {
   /** The booking chat (spec 0042, AC-1520): 30 turns a minute per address, 600 per page; a turn that books also counts as a booking. */
   chatPerAddress: { max: 30, windowMs: 60_000 },
   chatPerPage: { max: 600, windowMs: 60_000 },
+  /**
+   * Whether an address is free (25 Oct 2026): 10 a minute per client address, and 50 a second across this
+   * instance. The page asks once, only after a profile read found nothing, so this is low on purpose. It slows a
+   * sweep of which addresses are taken rather than stopping one: the per address window is this process's own
+   * memory (#41), and a fresh client address starts a fresh one, so the instance ceiling is what holds a flood.
+   */
+  offersPerAddress: { max: 10, windowMs: 60_000 },
+  offersPerInstance: { max: 50, windowMs: 1_000 },
   /** A host's picture (23 Oct 2026): 60 a minute per address, 600 per page or handle; the edge keeps most of them. */
   picturesPerAddress: { max: 60, windowMs: 60_000 },
   picturesPerTarget: { max: 600, windowMs: 60_000 },

@@ -12,6 +12,7 @@ import { SlotList } from '../SlotList/SlotList.tsx';
 import { LinkList } from '../LinkList/LinkList.tsx';
 import {
   BookingFrame,
+  BookingHandleOffer,
   BookingMessage,
   BookingProfile,
   BookingProfileSection,
@@ -144,7 +145,7 @@ export const ProfileNotFound: Story = {
   render: () => (
     <Stage width="fill" height="page">
       <BookingMessage title="Page not found" page="booking_profile">
-        No one has this address.
+        This address has no public page.
       </BookingMessage>
     </Stage>
   ),
@@ -288,3 +289,33 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
     </Stage>
   );
 }
+
+/** An address nobody holds (25 Oct 2026): the quiet fact, the offer, and the one action. The foot carries the
+   wordmark alone, since the card is already the claim. */
+export const HandleFree: Story = {
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingHandleOffer address="timefix.com/ada" handle="ada" claimHref="/sign-in?handle=ada" />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(timefixLinkTags(canvasElement)).toEqual([timefixTags('booking_profile', 'footer_logo')]);
+  },
+};
+
+/**
+ * The longest address a handle can make, which has to break rather than run off a phone. No screenshot: the wrap
+ * it proves is the browser's own, and this lane doesn't add baselines.
+ */
+export const HandleFreeLongest: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingHandleOffer
+        address="timefix.com/ada-lovelace-and-charles-babbage-1843"
+        handle="ada-lovelace-and-charles-babbage-1843"
+        claimHref="/sign-in?handle=ada-lovelace-and-charles-babbage-1843"
+      />
+    </Stage>
+  ),
+};
