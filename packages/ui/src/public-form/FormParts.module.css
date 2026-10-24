@@ -6,6 +6,13 @@
    step, so every control inside squares its corners. On its own page from the
    page breakpoint, a card (Classic, Steps) sits centred on the ground colour;
    the one at a time frame (`data-frame='open'`) has no card. */
+/* The public pages' crossfade between each other (styles/base.css says what it captures): only the pages that load
+   this module opt in, never the app. */
+@view-transition {
+  navigation: auto;
+  types: page;
+}
+
 @layer components {
   .root {
     display: flex;

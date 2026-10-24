@@ -163,6 +163,34 @@ export const StepToDetailsAndBack: Story = {
   },
 };
 
+/** From the keyboard (25 October 2026): a view or a step chosen by key shows at once, and nothing replays after. */
+export const FromTheKeyboard: Story = {
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas, canvasElement }) => {
+    // The card's own moves: its heading row, the month under, and the view or step over it (not the times' own
+    // stagger, the switches' indicators or a button's colour).
+    const running = () => {
+      const card = canvasElement.querySelector('section');
+      const stage = card?.lastElementChild;
+      return [card?.firstElementChild, stage?.firstElementChild, stage?.children[1]]
+        .flatMap((part) => part?.getAnimations() ?? [])
+        .filter((each) => each.playState === 'running');
+    };
+    await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
+    canvas.getByRole('radio', { name: 'Month' }).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(canvas.getByRole('radio', { name: 'List' })).toBeChecked();
+    await expect(running()).toEqual([]);
+    // Book by key: the details show at once, focus on their heading.
+    canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' }).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(canvas.getByRole('heading', { name: 'Your details' })).toHaveFocus();
+    await expect(running()).toEqual([]);
+    await userEvent.tab();
+    await expect(running()).toEqual([]);
+  },
+};
+
 /** The second step: the rail with the picked time, the details in the card. */
 export const Details: Story = {
   args: {
@@ -399,7 +427,11 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
           <SegmentedControl
             label="View"
             value={view}
-            onChange={setView}
+            onChange={(next) => {
+              setView(next);
+              // A switch is a fresh look, as the page's is: Back's slide doesn't replay.
+              setStep('pick');
+            }}
             segments={[
               { value: 'month', label: 'Month', icon: 'calendar', isIconOnly: true },
               { value: 'list', label: 'List', icon: 'list', isIconOnly: true },

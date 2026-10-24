@@ -85,6 +85,12 @@ const showAddress = (pathname: string) => {
 /** Whether a plain `/b/<key>` visit moves to the page's handle address: never framed, nor on a return from Google. */
 const mayMove = path !== null && !isManage && embed === undefined && !/[?&](?:calendar|d|day|tz)=/.test(address.search);
 
+/** Skips the cross document crossfade of the navigation now leaving, where the browser has one (`pageswap`). */
+function skipPageCrossfade(event: Event): void {
+  const swap: Event & { readonly viewTransition?: { readonly skipTransition: () => void } | null } = event;
+  swap.viewTransition?.skipTransition();
+}
+
 /** The booking page (or its guest page) for a public key, as `/b/<key>` has always drawn it. */
 function renderBooking(publicKey: string) {
   // The address now: a handle address may have moved to the current handle since the visit began.
@@ -123,6 +129,9 @@ function renderBooking(publicKey: string) {
             onBooked={(token) => {
               forgetHandoff(publicKey, storage);
               const manage = `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token, welcome: '1' }).toString()}`;
+              // The guest page arrives with its own rise, so no page crossfade first: it would land on its loading card
+              // and then rise again.
+              globalThis.addEventListener('pageswap', skipPageCrossfade, { once: true });
               // Inside an embed the guest page opens on the whole tab: it carries the guest's token, so it is
               // never framed.
               if (embed === undefined) globalThis.location.assign(manage);

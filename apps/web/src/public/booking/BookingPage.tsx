@@ -1080,7 +1080,13 @@ function Booking({
       {time === undefined ? strings.book : strings.bookAt(dayHeading, timeLabel(time, zone, locale, hour12))}
     </Button>
   );
-  const noticeLine = notice === undefined ? undefined : <Callout tone="danger">{notice}</Callout>;
+  const noticeLine =
+    notice === undefined ? undefined : (
+      // Said as it shows: Back put focus on the day, and the reason is why.
+      <Callout tone="danger" isAnnounced>
+        {notice}
+      </Callout>
+    );
 
   if (message !== undefined && detailsStep === undefined) {
     // Nothing to pick in any view: the message alone, the same card whichever view is chosen.

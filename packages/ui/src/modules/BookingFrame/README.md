@@ -53,11 +53,11 @@ The profile's column starts at the top rather than centring, unlike the booking 
 
 ## States
 
-Three panes, two panes, List over the month (`SwitchingViews`), a personal page with the host's picture (initials if it fails), a team page, loading; BookingMessage's loading (the heading's and the line's places, and no picture, since a message never has one), message and Try again; BookingProfile's loaded, with sections (a row with no address shows none), empty, and loading.
+Three panes, two panes, List over the month (`SwitchingViews`), the details step over the card and Back (`StepToDetailsAndBack`), the same from the keyboard (`FromTheKeyboard`), a page loading on chat (`ChatLoadingOverMonth`), a personal page with the host's picture (initials if it fails), a team page, loading; BookingMessage's loading (the heading's and the line's places, and no picture, since a message never has one), message and Try again; BookingProfile's loaded, with sections (a row with no address shows none), empty, and loading.
 
 ## Keyboard
 
-None of its own. BookingMessage focuses its heading as it shows.
+None of its own. A view or a step chosen from the keyboard (the view switch's arrows, Enter on Book or Back) shows at once, with no fade or slide, decided as it changes, so focus moving on later never replays one. BookingMessage focuses its heading as it shows.
 
 ## Differences from the artifact
 

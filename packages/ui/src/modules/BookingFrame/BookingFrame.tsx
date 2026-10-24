@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useFocusVisible } from 'react-aria';
 import { Avatar, AvatarStack, type AvatarStackPerson } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -120,9 +121,11 @@ export function BookingFrame({
   logo = TIMEFIX_LOGO,
 }: BookingFrameProps) {
   const isLoading = host === undefined || title === undefined;
-  // Only a view changed after the first paint fades: the page's first view is simply there.
-  const [shown, setShown] = useState({ view, isMoved: false });
-  if (shown.view !== view) setShown({ view, isMoved: true });
+  // Only a view changed after the first paint moves: the page's first view is simply there. One chosen from the
+  // keyboard (the switch's arrows, Enter on Book or Back) shows at once, decided as it changes: keys never wait.
+  const { isFocusVisible } = useFocusVisible();
+  const [shown, setShown] = useState({ view, isMoved: false, isInstant: false });
+  if (shown.view !== view) setShown({ view, isMoved: true, isInstant: isFocusVisible });
   const isCovered = cover !== undefined;
   const isCardCovered = isCovered && coverPlace === 'card';
   const claim = claimHref === undefined ? {} : { claimHref };
@@ -208,7 +211,10 @@ export function BookingFrame({
           {banner}
           <section
             className={styles.card}
-            aria-label={heading ?? title ?? strings.loading}
+            // Covered whole (the details step), the step's own form names what the card holds.
+            {...(isCardCovered ? {} : { 'aria-label': heading ?? title ?? strings.loading })}
+            data-instant={shown.isInstant || undefined}
+            data-place={isCardCovered ? 'card' : undefined}
             aria-busy={isLoading || undefined}
           >
             {(heading !== undefined || toolbar !== undefined) && (
@@ -220,6 +226,7 @@ export function BookingFrame({
             <div
               className={styles.stage}
               data-moved={shown.isMoved || undefined}
+              data-instant={shown.isInstant || undefined}
               data-place={isCovered ? coverPlace : undefined}
               data-enter={enter}
             >

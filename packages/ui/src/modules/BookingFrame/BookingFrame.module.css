@@ -4,6 +4,13 @@
    the times side by side at one height so the times scroll in their pane, and
    a band across the foot for the Book bar). Below it everything stacks and
    Timefix moves to the page's end. */
+/* The public pages' crossfade between each other (styles/base.css says what it captures): only the pages that load
+   this module opt in, never the app. */
+@view-transition {
+  navigation: auto;
+  types: page;
+}
+
 @layer components {
   .root {
     box-sizing: border-box;
@@ -129,7 +136,6 @@
   }
 
   .card {
-    position: relative;
     display: flex;
     flex-direction: column;
     border: var(--border-width-hairline) solid var(--border);
@@ -186,12 +192,7 @@
     visibility: hidden;
   }
 
-  /* The details step takes the whole card, the heading row with it. */
-  .stage[data-place='card'] {
-    position: static;
-  }
-
-  .head[inert],
+  /* Switching views, the month goes in duration-exit as the view comes in. */
   .stage[data-moved] .under[inert] {
     transition:
       opacity var(--duration-exit) var(--ease-out),
@@ -205,26 +206,62 @@
     flex-direction: column;
   }
 
+  /* The details step takes the whole card, the heading row with it, and the card is as tall as the taller of the
+     month and the step: the step lies over the heading row and the month in one grid area, so a long form (a phone,
+     guests) grows the card once rather than scrolling inside it. What it covers goes at once: the 16 px slide is the
+     move, with nothing showing through. */
+  .card[data-place='card'] {
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  .stage[data-place='card'] {
+    display: contents;
+  }
+
+  .card[data-place='card'] > .head {
+    grid-area: 1 / 1;
+  }
+
+  .stage[data-place='card'] > .under {
+    grid-area: 2 / 1;
+  }
+
+  .stage[data-place='card'] > .cover {
+    position: static;
+    grid-area: 1 / 1 / -1 / -1;
+  }
+
+  .head[inert],
+  .stage[data-place='card'] > .under[inert] {
+    transition: none;
+  }
+
   .stage[data-moved] .cover {
     animation: cover-in var(--duration-move) var(--ease-out);
   }
 
-  /* A view chosen from the keyboard (the switch's arrows) shows at once: keys never wait on a fade. */
-  .card:has(:focus-visible) .cover {
-    animation: none;
-  }
-
-  .card:has(:focus-visible) .under {
-    transition: none;
-  }
-
-  /* A step moves the way it went: the details in from the end, Back's month in from the start. */
+  /* A step moves the way it went: the details in from the end, Back's month (or List) in from the start. */
   .stage[data-moved][data-enter='forward'] .cover {
     animation-name: step-forward;
   }
 
+  .stage[data-moved][data-enter='back'] .cover,
   .stage[data-enter='back'] .under:not([inert]) {
     animation: step-back var(--duration-move) var(--ease-out);
+  }
+
+  /* Chosen from the keyboard (the view switch's arrows, Enter on Book or Back), a view or a step shows at once:
+     keys never wait on a move. Decided as the view changes, so focus moving on later never replays anything. */
+  .stage[data-instant][data-moved] .under,
+  .card[data-instant] > .head {
+    transition: none;
+  }
+
+  .stage[data-instant][data-moved] .cover,
+  .stage[data-instant][data-enter='back'] .cover,
+  .stage[data-instant][data-enter='back'] .under:not([inert]) {
+    animation: none;
   }
 
   /* A view's parts top down; a last part that doesn't grow (the chat's composer, loading) sits at the foot. */
@@ -486,6 +523,7 @@
   /* Reduced motion keeps the fade and drops the slide. */
   @media (prefers-reduced-motion: reduce) {
     .stage[data-moved][data-enter='forward'] .cover,
+    .stage[data-moved][data-enter='back'] .cover,
     .stage[data-enter='back'] .under:not([inert]) {
       animation-name: cover-in;
     }
