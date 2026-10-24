@@ -42,11 +42,35 @@ const httpsUrl = (value: string | undefined): URL | undefined => {
   return url.protocol === 'https:' ? url : undefined;
 };
 
+/** parent-hint.ts's SESSION_HINT_COOKIE and SESSION_HINT_PRESENT: the parent domain hint, presence and nothing else. */
+export const SESSION_HINT_COOKIE = 'tf_signed_in';
+export const SESSION_HINT_PRESENT = '1';
+
+/** public-paths.ts's STAY_PARAM: the query that keeps the apex's home on the marketing site. */
+export const STAY_PARAM = 'stay';
+
+/** public-paths.ts's PublicHostMove: where to go, and whether a cookie decided it (so it may never be cached). */
+export type PublicHostMove = {
+  readonly location: string;
+  readonly onCookie: boolean;
+};
+
+/** public-paths.ts's hasSessionHint: whether this request carries the parent domain session hint. */
+export function hasSessionHint(cookie: string | undefined): boolean {
+  if (cookie === undefined || cookie === '') return false;
+  return cookie.split(';').some((pair) => {
+    const at = pair.indexOf('=');
+    if (at < 0) return false;
+    return pair.slice(0, at).trim() === SESSION_HINT_COOKIE && pair.slice(at + 1).trim() === SESSION_HINT_PRESENT;
+  });
+}
+
 /**
- * public-paths.ts's publicHostRedirect: where a request on the public booking origin's host goes instead (a 308),
+ * public-paths.ts's publicHostRedirect: where a request on the public booking origin's host goes instead,
  * `PUBLIC_HOST_HOME_URL`, for any path that doesn't belong there, `/` included; undefined, so nothing changes, for
  * every other request, and whenever a setting is missing or not https, or the public origin is the app's own or
- * the home's.
+ * the home's. The apex's home alone reads the session hint cookie: with it the browser goes to `APP_URL` instead,
+ * and `?stay=1` skips the cookie and keeps the marketing site.
  */
 export function publicHostRedirect(
   url: URL,
@@ -55,7 +79,8 @@ export function publicHostRedirect(
     readonly BOOKING_PUBLIC_ORIGIN?: string | undefined;
     readonly APP_URL?: string | undefined;
   },
-): string | undefined {
+  cookie?: string,
+): PublicHostMove | undefined {
   const home = httpsUrl(env.PUBLIC_HOST_HOME_URL);
   const publicOrigin = httpsUrl(env.BOOKING_PUBLIC_ORIGIN);
   const app = httpsUrl(env.APP_URL);
@@ -63,7 +88,11 @@ export function publicHostRedirect(
   if (url.host !== publicOrigin.host || app.host === publicOrigin.host || home.host === publicOrigin.host) {
     return undefined;
   }
-  return PUBLIC_HOST_PATH.test(url.pathname) ? undefined : home.href;
+  if (PUBLIC_HOST_PATH.test(url.pathname)) return undefined;
+  if (url.pathname === '/' && !url.searchParams.has(STAY_PARAM)) {
+    return { location: hasSessionHint(cookie) ? new URL('/', app).href : home.href, onCookie: true };
+  }
+  return { location: home.href, onCookie: false };
 }
 
 /**
@@ -139,17 +168,21 @@ export function apiTarget(env: { readonly API_ORIGIN_INTERNAL?: string | undefin
 export default function middleware(request: Request): Response {
   const url = new URL(request.url);
   // One deployment answers on both hosts with opposite moves, so a cache that keeps one must keep it per host.
-  const moved = (location: string) =>
+  // A move read off this browser's own cookie is nobody else's answer: it is never stored, it names `cookie` in
+  // `vary` as well, and it is a 302, since a permanent move is exactly what a browser does remember.
+  const moved = (move: PublicHostMove) =>
     new Response(null, {
-      status: 308,
-      headers: { location, 'cache-control': 'public, max-age=3600', vary: 'host' },
+      status: move.onCookie ? 302 : 308,
+      headers: move.onCookie
+        ? { location: move.location, 'cache-control': 'private, no-store', vary: 'cookie, host' }
+        : { location: move.location, 'cache-control': 'public, max-age=3600', vary: 'host' },
     });
-  const home = publicHostRedirect(url, process.env);
+  const home = publicHostRedirect(url, process.env, request.headers.get('cookie') ?? undefined);
   if (home !== undefined) return moved(home);
   if (!isApiPath(url.pathname)) {
     // The API is never a handle address, and is answered below whatever happens, so it is never moved from here.
     const booking = handleHostRedirect(url, process.env);
-    if (booking !== undefined) return moved(booking);
+    if (booking !== undefined) return moved({ location: booking, onCookie: false });
     return next();
   }
 
