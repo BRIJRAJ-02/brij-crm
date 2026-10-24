@@ -281,6 +281,26 @@ export const Searchable: Story = {
   },
 };
 
+/** Nothing to choose yet, with a create: it still opens, says how to add one, and adds what is typed. */
+export const CreateFirst: Story = {
+  args: { label: 'Section', items: [], optionStyle: 'plain', placeholder: 'No section', onCreate: fn() },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Section/ }));
+    const list = await listbox();
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', 'Search'));
+    await expect(list).toHaveTextContent('Type a name to add one');
+    await userEvent.keyboard('Work');
+    await userEvent.click(await within(document.body).findByRole('option', { name: /Work/ }));
+    await expect(args.onCreate).toHaveBeenCalledWith('Work');
+  },
+};
+
 /**
  * A search lists the options whose label starts with what is typed first, and marks the first: "cl" puts
  * "Closed won" and "Closed lost" before "Declined", which only holds it, so Enter chooses what was meant.

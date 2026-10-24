@@ -431,6 +431,8 @@ export function Select({
       placeholder={placeholder ?? strings.choose}
       {...(isLabelHidden ? { 'aria-label': label } : {})}
       selectionMode={selectionMode}
+      // React Aria opens no list with nothing in it; a list that creates opens anyway, to take the first one typed.
+      {...(onCreate === undefined ? {} : { allowsEmptyCollection: true })}
       {...(isMultiple ? { value: [...chosenIds] } : {})}
       {...(isMultiple || value === undefined ? {} : { value })}
       {...(isMultiple || defaultValue === undefined ? {} : { defaultValue })}
