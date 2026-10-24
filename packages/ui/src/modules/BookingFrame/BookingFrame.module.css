@@ -209,6 +209,15 @@
     animation: cover-in var(--duration-move) var(--ease-out);
   }
 
+  /* A view chosen from the keyboard (the switch's arrows) shows at once: keys never wait on a fade. */
+  .card:has(:focus-visible) .cover {
+    animation: none;
+  }
+
+  .card:has(:focus-visible) .under {
+    transition: none;
+  }
+
   /* A step moves the way it went: the details in from the end, Back's month in from the start. */
   .stage[data-moved][data-enter='forward'] .cover {
     animation-name: step-forward;
