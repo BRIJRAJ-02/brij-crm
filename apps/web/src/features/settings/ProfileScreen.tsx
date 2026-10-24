@@ -22,7 +22,7 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { handleProblem } from '@crm/contracts/handles';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
@@ -31,6 +31,13 @@ import { PhotoSwitch, PhotoSwitchPending } from './PhotoSwitch.tsx';
 import { ProfilePagesLoading, ProfilePagesSection } from './ProfilePagesSection.tsx';
 import { strings as pagesCopy } from './profile-pages-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
+import {
+  SocialLinksSectionPending,
+  SocialLinksSectionSlot,
+  type SocialsDraftControl,
+  type SocialsDraftState,
+} from './socials-slot.tsx';
+import { strings as socialsCopy } from './socials-strings.ts';
 import { strings as securityCopy } from './security-strings.ts';
 import { strings, type GooglePhotoResult } from './workspace-strings.ts';
 
@@ -93,6 +100,15 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
   const [handle, setHandle] = useState(profile.handle ?? profile.suggestedHandle ?? '');
   const [isClaiming, setClaiming] = useState(false);
   const [bio, setBio] = useState(profile.bio);
+  // Their social links (booking socials, 25 Oct 2026): a draft saved with the rest of the page; absent for a member
+  // with no sign in of their own.
+  // The section loads on its own (socials-slot.tsx) and says whether its draft changed; the page reaches it to save.
+  const savedSocials = profile.socials;
+  const [socialsDraft, setSocialsDraft] = useState<SocialsDraftState>({ isChanged: false, hasError: false });
+  const socialsControl = useRef<SocialsDraftControl | undefined>(undefined);
+  const onSocialsDraft = useCallback((state: SocialsDraftState) => {
+    setSocialsDraft(state);
+  }, []);
   const [isSaving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   // Why the last save failed, said in the bar.
@@ -103,7 +119,8 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
     profile.handle === undefined ? isClaiming && wantedHandle !== '' : wantedHandle !== profile.handle;
   const isBioDirty = bio.trim() !== profile.bio;
   const isNameDirty = name.trim() !== profile.name;
-  const isDirty = isNameDirty || isHandleDirty || isBioDirty;
+  const isSocialsDirty = savedSocials !== undefined && socialsDraft.isChanged;
+  const isDirty = isNameDirty || isHandleDirty || isBioDirty || isSocialsDirty;
   // Leaving for Google would lose unsaved changes, so the button waits for them, and says so in the row.
   const pictureNote =
     profile.google !== undefined && isDirty
@@ -118,15 +135,18 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
   const isNameMissing = name.trim() === '';
   const handleError = isHandleDirty ? handleProblem(wantedHandle) : undefined;
   const isBioWithoutHandle = isBioDirty && profile.handle === undefined && !isHandleDirty;
+  const hasSocialsError = savedSocials !== undefined && socialsDraft.hasError;
   const blockedReason = isNameMissing
     ? strings.yourNameMissing
     : handleError !== undefined
       ? strings.handleFix
       : isBioWithoutHandle
         ? strings.bioNeedsHandle
-        : undefined;
+        : hasSocialsError
+          ? socialsCopy.fix
+          : undefined;
 
-  const send = (change: { readonly name?: string; readonly handle?: string; readonly bio?: string }) => {
+  const send = (change: Parameters<DataLayer['profile']['update']>[1]) => {
     setSaving(true);
     setFailure(undefined);
     data.profile
@@ -149,10 +169,14 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
   };
   const save = () => {
     if (!isDirty || isSaving || blockedReason !== undefined) return;
+    // Every link checked as the server will: one that won't save says why under its field, and nothing is sent.
+    const links = isSocialsDirty ? socialsControl.current?.collect() : undefined;
+    if (links === 'wrong') return;
     send({
       ...(isNameDirty ? { name: name.trim() } : {}),
       ...(isHandleDirty ? { handle: wantedHandle } : {}),
       ...(isBioDirty ? { bio: bio.trim() } : {}),
+      ...(links === undefined ? {} : { socials: links }),
     });
   };
   // Claim takes the suggested handle at once, on its own.
@@ -186,6 +210,7 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
             setHandle(profile.handle ?? profile.suggestedHandle ?? '');
             setClaiming(false);
             setBio(profile.bio);
+            socialsControl.current?.discard();
             setFailure(undefined);
           }}
           onFocusAway={() => pageHeading(document)?.focus()}
@@ -330,6 +355,19 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
           )}
         </Card>
       </SettingsSection>
+      {/* Their social links (booking socials, 25 Oct 2026): the person's own, saved with the bar like the bio. */}
+      {savedSocials !== undefined && (
+        <SocialLinksSectionSlot
+          saved={savedSocials}
+          isSaving={isSaving}
+          onDraft={onSocialsDraft}
+          controlRef={socialsControl}
+          onEdit={() => {
+            setFailure(undefined);
+            setJustSaved(false);
+          }}
+        />
+      )}
       {/* The order the profile lists their Public pages in (owner ask A102): moves save at once, apart from the bar. */}
       <ProfilePagesSection data={data} slug={slug} profile={profile} />
       {/* Last on the person's own page, set apart under its own heading (the owner, 22 October 2026). */}
@@ -371,6 +409,7 @@ export function ProfilePending() {
           </SettingsRow>
         </Card>
       </SettingsSection>
+      <SocialLinksSectionPending />
       <SettingsSection title={pagesCopy.section} description={pagesCopy.sectionText}>
         <ProfilePagesLoading />
       </SettingsSection>

@@ -6,6 +6,7 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { poweredByHref, type PoweredByPage } from '../../lib/powered-by.ts';
+import { SocialLinks, type SocialLinkItem } from '../../molecules/SocialLinks/SocialLinks.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
 import styles from './BookingFrame.module.css';
 import { strings } from './strings.ts';
@@ -24,6 +25,8 @@ export interface BookingHost {
   readonly image?: string;
   /** A team page's hosts (spec 0037, AC-1339): their faces stack in place of the one picture. */
   readonly team?: BookingTeam;
+  /** The host's social links (booking socials, 25 Oct 2026), the last line of their block; never on a team page. */
+  readonly socials?: readonly SocialLinkItem[];
 }
 
 /** A team page's stack: up to 4 faces, everyone it stands for, and its accessible name ("Team of 6"). */
@@ -203,6 +206,11 @@ export function BookingFrame({
                   ))}
                 </ul>
               )}
+              {/* Last in the block (booking socials): it arrives with the facts, and on a wide page nothing under it
+                  moves, since the foot is pinned to the rail's end. */}
+              {host.team === undefined && host.socials !== undefined && (
+                <SocialLinks links={host.socials} label={strings.socials(host.name)} />
+              )}
             </div>
           )}
           <BookingFoot placement="rail" logo={logo} {...claim} />
@@ -304,6 +312,8 @@ export interface BookingProfilePerson {
   readonly id: string;
   readonly image?: string;
   readonly bio?: string;
+  /** Their social links (booking socials, 25 Oct 2026), under the bio. */
+  readonly socials?: readonly SocialLinkItem[];
 }
 
 /** Props for BookingProfile. */
@@ -354,6 +364,9 @@ export function BookingProfile({ person, children, claimHref }: BookingProfilePr
                 <h1 className={styles.host}>{person.name}</h1>
                 {person.bio !== undefined && person.bio !== '' && <p className={styles.description}>{person.bio}</p>}
               </div>
+              {person.socials !== undefined && (
+                <SocialLinks links={person.socials} label={strings.socials(person.name)} />
+              )}
             </>
           )}
         </header>

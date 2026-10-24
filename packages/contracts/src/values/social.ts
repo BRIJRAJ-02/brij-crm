@@ -6,6 +6,8 @@
 // store the same canonical link and refuse the same input. Each caller words
 // a refusal its own way from the `reason`.
 import { UrlValue } from './attribute-values.ts';
+import { safeLink } from './safe-link.ts';
+import { SOCIAL_LINK_NAMES, WEBSITE_LINK_MAX, type SocialLinkNetwork } from './social-networks.ts';
 
 /** The networks whose profile links show the network's mark and the handle. */
 export type SocialNetwork =
@@ -338,4 +340,115 @@ export function urlContainsNeedles(needle: string): readonly string[] {
   const text = needle.trim().toLowerCase();
   if (!/^@[^@/\s]+$/.test(text)) return [text];
   return [text, `/${text.slice(1)}`];
+}
+
+/**
+ * Why a person's own social link was refused (booking socials, 25 Oct 2026): `empty`; `invalid` (not a handle the
+ * network takes, nor a link); `not_profile` (a link, but not to a profile on that network: a post, a search, or
+ * another site); `other_network` (a profile on a different network, named); `too_long`; `credentials` (a website
+ * link holding a name or password).
+ */
+export type SocialLinkRefusal =
+  | { readonly reason: 'empty' | 'invalid' | 'not_profile' | 'too_long' | 'credentials' }
+  | { readonly reason: 'other_network'; readonly network: SocialNetwork };
+
+/** A checked social link: its one canonical link, or why it was refused. */
+export type SocialLinkChecked =
+  { readonly ok: true; readonly value: string } | ({ readonly ok: false } & SocialLinkRefusal);
+
+/** A person's website: an `http` or `https` link that `safeLink` takes, with no name or password, on no network. */
+function checkWebsite(text: string): SocialLinkChecked {
+  if (text.length > WEBSITE_LINK_MAX) return { ok: false, reason: 'too_long' };
+  const link = checkWebLink(text);
+  if (!link.ok) return { ok: false, reason: link.reason === 'too_long' ? 'too_long' : 'invalid' };
+  const parsed = parse(link.value);
+  // `https:ada.dev` and `https:/ada.dev` parse, but aren't how a link is written: refused, never stored as typed.
+  if (parsed === undefined || !/^https?:\/\//i.test(link.value) || safeLink(link.value) === undefined) {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (parsed.username !== '' || parsed.password !== '') return { ok: false, reason: 'credentials' };
+  const elsewhere = networkOfHost(parsed.hostname);
+  if (elsewhere !== undefined) return { ok: false, reason: 'other_network', network: elsewhere };
+  if (link.value.length > WEBSITE_LINK_MAX) return { ok: false, reason: 'too_long' };
+  return { ok: true, value: link.value };
+}
+
+/**
+ * A person's own social link, typed as a handle (`ada`, `@ada`) or pasted as a link, to its one canonical link:
+ * the profile on the network's own host (`checkSocialProfile`), or for `website` the checked link. Stricter than a
+ * record's url field: a network's link must be a profile on that network, so a LinkedIn mark never opens a link
+ * page or a post. The editor and the server's write path both run it, so they keep and refuse the same input; a
+ * canonical link checks as itself.
+ */
+export function checkSocialLink(network: SocialLinkNetwork, draft: string): SocialLinkChecked {
+  const text = draft.trim();
+  if (text === '') return { ok: false, reason: 'empty' };
+  if (network === 'website') return checkWebsite(text);
+  const checked = checkSocialProfile(network, text, 'person');
+  if (!checked.ok) return checked.reason === 'other_network' ? checked : { ok: false, reason: 'invalid' };
+  const parsed = parse(checked.value);
+  if (parsed === undefined || networkOfHost(parsed.hostname) !== network) return { ok: false, reason: 'not_profile' };
+  const profile = NETWORKS[network].profileOf(segmentsOf(parsed));
+  // A pasted link's handle must be one the network takes, as a typed one must: no spaces, no direction marks.
+  if (profile === undefined || !NETWORKS[network].handle.test(decoded(profile.handle).replace(/^@/, ''))) {
+    return { ok: false, reason: 'not_profile' };
+  }
+  return { ok: true, value: checked.value };
+}
+
+/** A refusal in plain words, the same in the editor and from the server. */
+export function socialLinkProblem(network: SocialLinkNetwork, refusal: SocialLinkRefusal): string {
+  const name = SOCIAL_LINK_NAMES[network];
+  switch (refusal.reason) {
+    case 'empty':
+      return network === 'website'
+        ? 'Paste the link to your website.'
+        : `Type your ${name} handle, or paste your profile link.`;
+    case 'invalid':
+      return network === 'website'
+        ? 'That link doesn’t look right. Try one like https://ada.dev.'
+        : `That doesn’t look like your ${name} handle. Type it like ${exampleHandle(network)}, or paste your profile link.`;
+    case 'not_profile':
+      return `That isn’t a link to a ${name} profile. Paste the link to your own page.`;
+    case 'other_network':
+      return network === 'website'
+        ? `That’s a ${SOCIAL_LINK_NAMES[refusal.network]} link. Add it as ${SOCIAL_LINK_NAMES[refusal.network]} instead.`
+        : `That’s a link to ${SOCIAL_LINK_NAMES[refusal.network]}, not ${name}.`;
+    case 'too_long':
+      return 'Keep the link to 2,000 characters.';
+    case 'credentials':
+      return 'Take the name and password out of the link.';
+  }
+}
+
+/**
+ * What a network's field shows before the handle ("linkedin.com/in/", "youtube.com/@"); empty for a website, whose
+ * field holds the whole link.
+ */
+export function socialLinkPrefix(network: SocialLinkNetwork): string {
+  if (network === 'website') return '';
+  const def = NETWORKS[network];
+  return `${def.hosts[0] ?? ''}/${def.pathOf('')}`;
+}
+
+/** The field's placeholder: the network's example handle as typed after the prefix, or an example website. */
+export function socialLinkPlaceholder(network: SocialLinkNetwork): string {
+  return network === 'website' ? 'https://ada.dev' : NETWORKS[network].example;
+}
+
+/**
+ * What a stored link shows in its field after the prefix: the profile's handle (no `@` where the prefix holds it),
+ * or the whole link for a website or a link that isn't a profile.
+ */
+export function socialLinkFieldValue(network: SocialLinkNetwork, href: string): string {
+  if (network === 'website') return href;
+  const parsed = parse(href);
+  if (parsed === undefined || networkOfHost(parsed.hostname) !== network) return href;
+  const profile = NETWORKS[network].profileOf(segmentsOf(parsed));
+  if (profile === undefined) return href;
+  // What follows the prefix: the handle, unless the profile's path isn't under it (LinkedIn's `company/acme`,
+  // YouTube's `c/name`): then the whole link, which checks as itself.
+  const path = decoded(profile.path);
+  const prefixPath = NETWORKS[network].pathOf('');
+  return path.toLowerCase().startsWith(prefixPath.toLowerCase()) ? path.slice(prefixPath.length) : href;
 }

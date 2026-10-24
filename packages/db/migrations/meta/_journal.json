@@ -680,6 +680,13 @@
       "when": 1792867974498,
       "tag": "0096_booking_default_view",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1792873421166,
+      "tag": "0097_social_links",
+      "breakpoints": true
     }
   ]
 }

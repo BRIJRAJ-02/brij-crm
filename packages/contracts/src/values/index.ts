@@ -148,3 +148,19 @@ export {
   type SocialNetwork,
   type WebLinkChecked,
 } from './social.ts';
+export {
+  checkSocialLink,
+  socialLinkFieldValue,
+  socialLinkPlaceholder,
+  socialLinkPrefix,
+  socialLinkProblem,
+  type SocialLinkChecked,
+  type SocialLinkRefusal,
+} from './social.ts';
+export {
+  isSocialLinkNetwork,
+  SOCIAL_LINK_NAMES,
+  SOCIAL_LINK_NETWORKS,
+  SOCIAL_LINKS_MAX,
+  WEBSITE_LINK_MAX,
+} from './social-networks.ts';

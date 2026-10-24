@@ -84,6 +84,7 @@ import type {
   WorkspaceDomainsView,
   DeletedWorkspace,
   MyProfile,
+  SocialLink,
   WorkspaceSettings,
 } from '@crm/contracts';
 import type { GlobalSearch } from './search/global.ts';
@@ -167,6 +168,8 @@ export type {
 import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
 export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
+import type { SocialLinksAccess, SocialLinksStore } from './profile/socials.ts';
+export type { SocialLinksAccess, SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
 import { createOperatorStore } from './operator/store.ts';
 import {
@@ -417,6 +420,9 @@ export type {
   WorkspaceSummary,
   DeletedWorkspace,
   MyProfile,
+  PublicSocialLink,
+  SocialLink,
+  SocialLinkNetwork,
   WorkspaceSettings,
 } from '@crm/contracts';
 export type {
@@ -1152,6 +1158,7 @@ export function createDataLayer({
     schedules.clear();
     preferences.clear();
     pictureChoice.clear();
+    socialLinks?.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
   const reset = (isSignedIn: boolean) => {
@@ -1989,6 +1996,23 @@ export function createDataLayer({
     mintId,
     notify,
   });
+  // The person's social links (booking socials, 25 Oct 2026), loaded on first use (out of the first load) by the one
+  // screen that holds them, the booking page editor's card. It reads the profile itself (the picture store's read),
+  // and a read sent before a change landed never puts its older answer over it; Settings › Profile's Save hands it
+  // the set it saved.
+  let socialLinks: SocialLinksStore | undefined;
+  let socialLinksLoading: Promise<SocialLinksStore> | undefined;
+  const loadSocialLinks = (): Promise<SocialLinksStore> =>
+    (socialLinksLoading ??= import('./profile/socials.ts').then(({ createSocialLinksStore }) => {
+      socialLinks = createSocialLinksStore({
+        read: (workspace) => pictureChoice.read(workspace),
+        update: (input) => call((options) => api.profile.update(input, options)),
+        mintId,
+        notify,
+        refusals: { refusalSummary },
+      });
+      return socialLinks;
+    }));
   /**
    * The member's time zone in a workspace: their Preferences once read (the workspace's pages read them first),
    * else the browser's. Relative dates in filters, rules, bulk targets and exports resolve in it.
@@ -4050,6 +4074,12 @@ export function createDataLayer({
       setPictureHidden: (workspace: string, isHidden: boolean): Promise<boolean> =>
         pictureChoice.change(workspace, isHidden),
       /**
+       * Their social links (booking socials, 25 Oct 2026), the same in every workspace: the store, loaded on first use
+       * (the screens that edit them load lazily too). Its `of` holds the set as screens show it; `change` replaces the
+       * whole set at once, put back with a toast and Try again if refused.
+       */
+      loadSocials: (): Promise<SocialLinksAccess> => loadSocialLinks(),
+      /**
        * Changes their name or time zone (null follows the workspace's), or their handle and bio (the person's, in
        * every workspace). The member list is read again; a new handle changes every page's address, so the
        * booking pages are read again too.
@@ -4061,11 +4091,19 @@ export function createDataLayer({
           readonly timeZone?: string | null;
           readonly handle?: string;
           readonly bio?: string;
+          /** Their whole set of social links, in order. */
+          readonly socials?: readonly SocialLink[];
         },
       ): Promise<MyProfile> {
+        const { socials, ...rest } = change;
         const updated = await call((options) =>
-          api.profile.update({ workspace, ...change, mutationId: mintId() }, options),
+          api.profile.update(
+            { workspace, ...rest, ...(socials === undefined ? {} : { socials: [...socials] }), mutationId: mintId() },
+            options,
+          ),
         );
+        // The answer holds the set as saved, for the booking editor's card and anything else holding it.
+        socialLinks?.landed(workspace, updated);
         members.delete(workspace);
         if (change.handle !== undefined) bookingPageLists.view(workspace).reload();
         return updated;

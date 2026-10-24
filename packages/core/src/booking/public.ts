@@ -43,6 +43,7 @@ import type { BookingEntry, HandleOwner, ProfilePageEntry } from '../access/door
 import { pagePath } from './handles.ts';
 import { servedPicture, type AccountPicture, type AccountPictureReader } from './picture.ts';
 import { isPictureHidden } from './picture-choice.ts';
+import { publicSocialsOf } from './socials.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -220,12 +221,27 @@ export async function getPublicBookingPage(
       ...(team === undefined ? {} : { team: await teamAvatars(tx, team) }),
       // Once the owner has a handle, a plain `/b/<key>` visit moves to `/<handle>/<slug>`.
       ...(path.startsWith('/b/') ? {} : { path }),
+      ...(team === undefined ? await shownSocials(tx, page) : {}),
     };
     return { facts, pictureUser: pictures === undefined ? undefined : await shownPictureOwner(tx, page) };
   });
   if (pictures === undefined || pictureUser === undefined) return facts;
   const picture = servedPicture(pictureUser, await pictures.pictureOf(pictureUser));
   return picture === undefined ? facts : { ...facts, hostImage: bookingPicturePath(facts.publicKey, picture.version) };
+}
+
+/**
+ * The host's social links on a page (booking socials, 25 Oct 2026): a personal page's owner's, while its "Show my
+ * social links" is on and they have any. A team page, or a kind yet to come, names no member (AC-754).
+ */
+async function shownSocials(
+  tx: WorkspaceTx,
+  page: PageRecord,
+): Promise<{ readonly socials?: PublicBookingPage['socials'] }> {
+  const owner = page.kind === 'personal' && page.showSocials ? (page.ownerUserId ?? undefined) : undefined;
+  if (owner === undefined) return {};
+  const socials = await publicSocialsOf(tx, owner);
+  return socials.length === 0 ? {} : { socials: [...socials] };
 }
 
 /**
@@ -369,6 +385,7 @@ export async function readBookingProfile(found: {
     // origin serves it, under the current handle.
     ...withPicture(found.owner),
     bio: found.owner.bio,
+    ...(found.owner.socials.length === 0 ? {} : { socials: [...found.owner.socials] }),
     links: ordered,
     ...(found.pages.length > PROFILE_PAGE_SIZE && last !== undefined
       ? { next: `${String(last.position)}.${last.pageId}` }

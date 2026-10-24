@@ -1,0 +1,17 @@
+/* SocialLinks: a row of icon only ghost link Buttons (30px boxes, 34px hit areas), space-4 apart so the hit areas
+   meet without overlapping, pulled in by half a box less half a mark so the first mark lines up with the text above. */
+@layer components {
+  .root {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin-block: 0;
+    margin-inline: calc((var(--size-icon) - var(--size-input)) / 2) 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: flex;
+  }
+}

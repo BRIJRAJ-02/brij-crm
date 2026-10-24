@@ -6,10 +6,17 @@ import type { PublicBookingPage } from '@crm/data/booking';
 import type { BookingHost } from '@crm/ui/public-booking';
 import { strings } from './strings.ts';
 
-/** The rail's host. A personal page gets `{ name }`, and `image` when the host has a picture (initials if it fails). */
-export function railHost(page: Pick<PublicBookingPage, 'hostName' | 'hostImage' | 'team'>): BookingHost {
+/**
+ * The rail's host. A personal page gets `{ name }`, `image` when the host has a picture (initials if it fails), and
+ * `socials` when the page shows the host's social links (booking socials, 25 Oct 2026).
+ */
+export function railHost(page: Pick<PublicBookingPage, 'hostName' | 'hostImage' | 'team' | 'socials'>): BookingHost {
   if (page.team === undefined) {
-    return { name: page.hostName, ...(page.hostImage === undefined ? {} : { image: page.hostImage }) };
+    return {
+      name: page.hostName,
+      ...(page.hostImage === undefined ? {} : { image: page.hostImage }),
+      ...(page.socials === undefined || page.socials.length === 0 ? {} : { socials: page.socials }),
+    };
   }
   const total = page.team.avatars.length + page.team.more;
   return {

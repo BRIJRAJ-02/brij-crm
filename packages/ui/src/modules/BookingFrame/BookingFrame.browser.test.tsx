@@ -4,6 +4,8 @@
 // under them. These hold the loading rail and the loading profile card to the
 // loaded ones, so a change to either side that parts them fails here rather
 // than on a visitor's phone.
+// The library's layers first, as every page loads them: a module's CSS loaded ahead would declare its layer first.
+import '../../styles/index.css';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -11,7 +13,6 @@ import { createToasts } from '../../provider/toasts.tsx';
 import { UiProvider } from '../../provider/UiProvider.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { BookingFrame, BookingProfile, type BookingFact } from './BookingFrame.tsx';
-import '../../styles/index.css';
 
 /** How far apart a loading region and the loaded one may stand, in pixels. */
 const TOLERANCE = 8;
@@ -78,6 +79,54 @@ describe('a booking page before its facts arrive', () => {
     const avatar = heightOf('aside > div > :first-child');
     expect(ghost).toBeGreaterThan(0);
     expect(Math.abs(ghost - avatar)).toBeLessThanOrEqual(1);
+  });
+
+  it('closes the host’s block with their social links, moving nothing above them', () => {
+    const socials = [
+      { network: 'linkedin', href: 'https://linkedin.com/in/ada', label: 'ada' },
+      { network: 'website', href: 'https://ada.dev', label: 'ada.dev' },
+    ] as const;
+    draw(<BookingFrame host={{ name: 'Ada Lovelace' }} title="Intro call" facts={FACTS} heading="Choose a time" />);
+    const before = {
+      names: heightOf('aside > div > div'),
+      facts: host.querySelector('aside ul')?.getBoundingClientRect().top,
+    };
+    draw(
+      <BookingFrame
+        host={{ name: 'Ada Lovelace', socials: [...socials] }}
+        title="Intro call"
+        facts={FACTS}
+        heading="Choose a time"
+      />,
+    );
+    const identity = host.querySelector('aside > div');
+    const row = identity?.lastElementChild;
+    expect(row?.getAttribute('aria-label')).toBe('Ada Lovelace’s social links');
+    expect(row?.querySelectorAll('a')).toHaveLength(2);
+    // Every link's hit area is at least 32px, and the first mark starts where the name does.
+    for (const link of row?.querySelectorAll('a') ?? []) {
+      expect(link.getBoundingClientRect().height).toBeGreaterThanOrEqual(30);
+    }
+    const name = host.querySelector('aside p')?.getBoundingClientRect().left ?? 0;
+    const mark = row?.querySelector('img, svg')?.getBoundingClientRect().left ?? 0;
+    expect(Math.abs(mark - name)).toBeLessThanOrEqual(1);
+    expect(heightOf('aside > div > div')).toBe(before.names);
+    expect(host.querySelector('aside ul')?.getBoundingClientRect().top).toBe(before.facts);
+  });
+
+  it('draws no social links on a team page, whatever it is given (AC-754)', () => {
+    draw(
+      <BookingFrame
+        host={{
+          name: 'Acme',
+          team: { people: [{ id: 'a', name: 'A' }], total: 1, label: 'Team of 1' },
+          socials: [{ network: 'x', href: 'https://x.com/ada', label: '@ada' }],
+        }}
+        title="Intro call with Acme"
+        heading="Choose a time"
+      />,
+    );
+    expect(host.querySelector('aside a[href="https://x.com/ada"]')).toBeNull();
   });
 
   it('draws no entrance on the rail or the card, so the frame is simply there', () => {

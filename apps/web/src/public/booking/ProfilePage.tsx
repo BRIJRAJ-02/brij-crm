@@ -190,6 +190,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         bio: profile.bio,
         // Our own origin's copy of their account picture; the initials show if it fails.
         ...(profile.image === undefined ? {} : { image: profile.image }),
+        ...(profile.socials === undefined ? {} : { socials: profile.socials }),
       }}
       claimHref={claimPageHref('booking_profile')}
     >

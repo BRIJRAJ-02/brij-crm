@@ -17,6 +17,7 @@ import {
   type DataLayer,
   type MemberSummary,
   type ScheduleView,
+  type PublicSocialLink,
   type SchedulesView,
 } from '@crm/data';
 import { useCalendar, useCaptureList, usePageDestination, useSchedules } from '@crm/data/react';
@@ -90,6 +91,8 @@ import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
+import { SocialsCardSlot } from './socials-slot.tsx';
+import { strings as socialsStrings } from './socials-strings.ts';
 
 /** Props for the editor: the page its route loaded. */
 export interface PageEditorProps {
@@ -145,6 +148,7 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   profilePosition: 'page',
   description: 'page',
   isPrivate: 'page',
+  showSocials: 'page',
   defaultView: 'page',
   title: 'meeting',
   durations: 'meeting',
@@ -187,6 +191,7 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   scheduleId: page.scheduleId,
   rescheduleHost: page.rescheduleHost,
   isPrivate: page.isPrivate,
+  showSocials: page.showSocials,
   defaultView: page.defaultView,
   profileSection: page.profileSection,
   profilePosition: page.profilePosition,
@@ -252,6 +257,11 @@ export function PageEditor({
   const dirty = changed(saved, draft);
   const isPageDirty = !isLocked && Object.keys(dirty).length > 0;
   const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember);
+  // The person's own social links, as the preview shows them while the page's switch is on (booking socials); held
+  // only on their own personal page, the one page that shows them.
+  const showsSocials = ownerMember === undefined && page.kind === 'personal';
+  // The card (loaded on its own, with the person's links store) hands them over as they are now.
+  const [previewLinks, setPreviewLinks] = useState<readonly PublicSocialLink[]>([]);
   // The chosen schedule's week and days off, edited in place and saved by the same Save as the page's settings
   // (through the data layer: shown at once, put back if the server refuses).
   const week = useScheduleDraft({
@@ -563,6 +573,8 @@ export function PageEditor({
                         description: draft.description,
                         durations: draft.durations,
                         location: draft.location,
+                        // The owner's links as they are now, while the draft shows them (booking socials).
+                        ...(showsSocials ? { socials: draft.showSocials ? previewLinks : [] } : {}),
                         defaultView: draft.defaultView,
                       }}
                     />
@@ -730,6 +742,16 @@ export function PageEditor({
                           />
                         </FieldGroup>
                       </Card>
+                      <SocialsCardSlot
+                        data={data}
+                        slug={slug}
+                        onPreviewLinks={setPreviewLinks}
+                        isTeam={page.kind !== 'personal'}
+                        isOwner={ownerMember === undefined}
+                        isShown={draft.showSocials}
+                        isLocked={isLocked}
+                        onShownChange={(showSocials) => change({ showSocials })}
+                      />
                       {page.handle !== undefined && !draft.isPrivate && (
                         // Where it sits on the owner's profile, /<handle> (so only once there is a handle): under a
                         // section heading, or none. Pages keep the order they were made in (a drag order on the
@@ -1100,7 +1122,7 @@ export interface PageEditorPendingProps {
  * whether it has them; Hours draws a one on one page's, the usual kind.
  */
 const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
-  page: [strings.details, strings.sharing],
+  page: [strings.details, strings.sharing, socialsStrings.title],
   meeting: [strings.meeting, strings.location, strings.calendarSection],
   hosts: [rotationStrings.hosts, routingStrings.routing],
   hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff],

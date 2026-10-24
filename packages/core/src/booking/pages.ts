@@ -199,6 +199,7 @@ function viewOf(
     scheduleName: page.scheduleName,
     rescheduleHost: page.rescheduleHost,
     isPrivate: page.isPrivate,
+    showSocials: page.showSocials,
     defaultView: page.defaultView,
     profileSection: page.profileSection,
     profilePosition: page.profilePosition,
@@ -479,6 +480,7 @@ export async function createBookingPage(
       scheduleId: given.scheduleId ?? null,
       rescheduleHost: given.rescheduleHost ?? 'same',
       isPrivate: given.isPrivate ?? false,
+      showSocials: given.showSocials ?? true,
       // Every new page opens in Month, the one view the page had before the host could choose.
       defaultView: given.defaultView ?? 'month',
       profileSection: given.profileSection ?? null,
@@ -514,6 +516,7 @@ export async function createBookingPage(
           hoursMode: settings.scheduleId === null ? 'mine' : 'own',
           rescheduleHost: settings.rescheduleHost,
           isPrivate: settings.isPrivate,
+          showSocials: settings.showSocials,
           defaultView: settings.defaultView,
           profileSection: settings.profileSection,
           profilePosition: settings.profilePosition,
@@ -555,15 +558,18 @@ export async function updateBookingPage(
   return inWorkspace(scope, async (tx) => {
     const page = await pageToChange(tx, scope, input.pageId, true);
     const { settings } = input;
-    // The address after the owner's handle, and where the page sits on their profile, are the owner's alone: an
-    // admin of a workspace may change the page, never what is published under the person's name.
-    const placement = (['slug', 'profileSection', 'profilePosition'] as const).find(
+    // The address after the owner's handle, where the page sits on their profile, and whether it shows their social
+    // links, are the owner's alone: an admin of a workspace may change the page, never what is published under the
+    // person's name.
+    const placement = (['slug', 'profileSection', 'profilePosition', 'showSocials'] as const).find(
       (key) => settings[key] !== undefined,
     );
     if (placement !== undefined && memberOf(scope) !== page.ownerMemberId) {
       throw refuseOn(
         'FORBIDDEN',
-        'Only the page’s owner changes its address and its place on their profile.',
+        placement === 'showSocials'
+          ? 'Only the page’s owner chooses whether it shows their social links.'
+          : 'Only the page’s owner changes its address and its place on their profile.',
         placement,
       );
     }
@@ -630,6 +636,7 @@ export async function updateBookingPage(
             : { scheduleId: settings.scheduleId, hoursMode: settings.scheduleId === null ? 'mine' : 'own' }),
           ...(settings.rescheduleHost === undefined ? {} : { rescheduleHost: settings.rescheduleHost }),
           ...(settings.isPrivate === undefined ? {} : { isPrivate: settings.isPrivate }),
+          ...(settings.showSocials === undefined ? {} : { showSocials: settings.showSocials }),
           ...(settings.defaultView === undefined ? {} : { defaultView: settings.defaultView }),
           ...(settings.profileSection === undefined ? {} : { profileSection: settings.profileSection }),
           ...(settings.profilePosition === undefined ? {} : { profilePosition: settings.profilePosition }),

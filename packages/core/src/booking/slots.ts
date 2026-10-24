@@ -113,6 +113,7 @@ export function pageOf(
     rescheduleHost: row.rescheduleHost === 'rotation' ? 'rotation' : 'same',
     isDeleted: row.deletedAt !== null,
     isPrivate: row.isPrivate,
+    showSocials: row.showSocials,
     // A stored value the check somehow let through reads as Month, the view every page started on.
     defaultView: BookingDefaultView.safeParse(row.defaultView).data ?? 'month',
     profileSection: row.profileSection,
