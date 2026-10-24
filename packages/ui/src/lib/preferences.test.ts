@@ -44,6 +44,10 @@ describe('the week start', () => {
     expect(monthCells('2026-10', 'en-GB', 'monday').indexOf('2026-10-01')).toBe(3);
     expect(monthCells('2026-10', 'en-GB', 'sunday').indexOf('2026-10-01')).toBe(4);
     expect(monthCells('2026-10', 'en-GB', 'saturday').indexOf('2026-10-01')).toBe(5);
+    // Six weeks, whatever the month and the week's first day, so every month's grid is one height.
+    expect(monthCells('2026-10', 'en-GB', 'monday')).toHaveLength(42);
+    expect(monthCells('2026-02', 'en-GB', 'sunday')).toHaveLength(42);
+    expect(monthCells('2026-08', 'en-GB', 'monday')).toHaveLength(42);
     expect(weekdayNames('en-GB', 'sunday')[0]?.long).toBe('Sunday');
     expect(weekdayNames('en-GB', 'saturday')[0]?.long).toBe('Saturday');
   });

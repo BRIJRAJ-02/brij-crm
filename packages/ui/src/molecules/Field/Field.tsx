@@ -112,9 +112,10 @@ export interface FieldProps {
   readonly size?: FieldSize;
   /**
    * `search` is the rounded field with a search icon, for filtering a list.
-   * `cell` is the input a grid cell becomes while it edits: no box of its own,
-   * the cell's height and padding, and no focus ring, since the cell draws the
-   * one ring (and the danger edge while the value is refused).
+   * `cell` is a field whose container draws the box and the ring: the input a
+   * grid cell becomes while it edits (no box of its own, the cell's height and
+   * padding, and no focus ring, since the cell draws the one ring and the
+   * danger edge while the value is refused), and BookingChat's prompt box.
    * `copy` shows a value to copy and never to change (a public link): read
    * only, but drawn as a live field with no lock, a Copy button at its end,
    * and the whole value selected when it takes focus.

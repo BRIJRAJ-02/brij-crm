@@ -221,8 +221,8 @@
     padding: var(--space-20);
   }
 
-  /* Stacked under the month, the times scroll in a box of their own, five rows tall: the card is the same height
-     whichever day is open and however many times it has. */
+  /* Stacked under the month, the times scroll in a box of their own, ten rows tall (five rows of times): the card
+     is the same height whichever day is open and however many times it has. */
   .aside {
     block-size: calc(var(--size-row) * 10);
     padding-block-start: 0;

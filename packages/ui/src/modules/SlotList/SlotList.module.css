@@ -68,7 +68,6 @@
     min-block-size: 0;
     padding-block-end: var(--space-16);
     overflow-y: auto;
-    overscroll-behavior: contain;
     mask-image: linear-gradient(to bottom, var(--surface) calc(100% - var(--space-24)), transparent);
   }
 

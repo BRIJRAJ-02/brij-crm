@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ComponentProps } from 'react';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -89,6 +90,55 @@ export const SwitchingViews: Story = {
     await expect(canvas.getAllByRole('button', { name: 'Book' })).toHaveLength(1);
     await expect(card()?.height).toBe(atMonth?.height);
     await expect(card()?.y).toBe(atMonth?.y);
+  },
+};
+
+/**
+ * A page opening on Book by chat, while it loads: the chat's shape over the month (the greeting's place at the top,
+ * the composer's at the foot), so the card is the month's size from the first frame.
+ */
+export const ChatLoadingOverMonth: Story = {
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingFrame
+        {...args}
+        heading="Choose a time"
+        view="chat"
+        footer={
+          <Button variant="primary" size="lg" isFullWidth="center" isDisabled>
+            Book
+          </Button>
+        }
+        aside={<SlotList heading="" slots={[]} value={undefined} onChange={fn()} isLoading />}
+        cover={
+          <>
+            <Skeleton shape="block" lines={3} />
+            <Skeleton shape="block" />
+          </>
+        }
+      >
+        <MonthTiles
+          month="2026-10"
+          today="2026-10-08"
+          openDays={new Set()}
+          value={undefined}
+          onChange={fn()}
+          onMonthChange={fn()}
+          canPrevious={false}
+          canNext={false}
+          isLoading
+        />
+      </BookingFrame>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const body = canvasElement.querySelector('section > div:last-child')?.getBoundingClientRect();
+    const composer = canvasElement
+      .querySelector('section [inert] + div > div > [data-shape]:last-child')
+      ?.getBoundingClientRect();
+    // The composer's place stands at the foot of the card's body.
+    await expect(composer).toBeDefined();
+    await expect(Math.abs((body?.bottom ?? 0) - (composer?.bottom ?? 0))).toBeLessThanOrEqual(32);
   },
 };
 

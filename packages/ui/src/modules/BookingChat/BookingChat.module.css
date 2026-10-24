@@ -25,7 +25,6 @@
     padding: 0 var(--space-4) var(--space-4) 0;
     border-radius: var(--radius-md);
     overflow-y: auto;
-    overscroll-behavior: contain;
   }
 
   .thread:focus-visible {
@@ -81,7 +80,7 @@
   }
 
   /* The composer (the owner, 25 October 2026: "a prompt box, not a search box"): one raised box a toolbar tall,
-     with an edge that holds 3:1 in both themes (control-border), the message growing a line at a time as it is
+     with an edge that holds 3.5:1 in both themes (control-border), the message growing a line at a time as it is
      typed, and Send inside it at the end. The field draws no box of its own (its cell variant): this box is the
      field's, so it takes the focus ring. */
   .composer {
@@ -102,9 +101,17 @@
       box-shadow var(--duration-hover) var(--ease-hover);
   }
 
-  .composer:focus-within {
+  /* The ring is the message's: Send keeps its own. */
+  .composer:has(.field:focus-within) {
     border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
+  }
+
+  /* Forced colours drop the shadow and the accent: the system's highlight marks the focused message. */
+  @media (forced-colors: active) {
+    .composer:has(.field:focus-within) {
+      outline: var(--border-width-thick) solid Highlight;
+    }
   }
 
   .composer[data-disabled] {

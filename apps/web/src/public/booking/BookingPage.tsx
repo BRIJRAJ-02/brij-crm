@@ -887,6 +887,9 @@ function Booking({
       onChange={(next) => {
         const picked = next === 'list' || next === 'chat' ? next : 'month';
         setView(picked);
+        // A switch is a fresh look: the taken time's note goes, and no day takes focus from the switch.
+        setStep((now) => (now.back ? { ...now, back: false } : now));
+        setNotice(undefined);
         saveView(picked);
       }}
       segments={[

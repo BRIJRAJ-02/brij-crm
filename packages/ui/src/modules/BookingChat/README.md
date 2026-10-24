@@ -24,7 +24,7 @@ New. Nothing in the library draws a conversation: ActivityFeed and NoteList are 
 - `error` is a Callout: Try again with `onRetry`, Start over with `onRestart`, and `isPause` (too many at once) says it as a warning rather than a fault.
 - After a time or a suggestion is pressed its buttons leave with the reply, so focus moves to the field.
 - The thread is twelve rows tall on its own, scrolls, and takes focus so it scrolls from the keyboard in every browser. In a view of a set height (the booking card, whose month sets its size in every view) the chat fills it: the thread takes what the composer leaves, so the composer stands at the foot from the first frame.
-- The composer (25 October 2026, the owner: "a prompt box, not a search box"): one raised box a toolbar tall (`--size-toolbar`, the height of the page's loading `Skeleton shape="block"` in its place), with a `--control-border` edge that holds 3:1 in both themes, the focus ring on the box, the message growing a line at a time, and Send inside it at the end. The field is Field's `cell` variant, the one for a field whose container draws the box and the ring.
+- The composer (25 October 2026, the owner: "a prompt box, not a search box"): one raised box a toolbar tall (`--size-toolbar`, the height of the page's loading `Skeleton shape="block"` in its place), with a `--control-border` edge that holds 3.5:1 in both themes, the focus ring on the box, the message growing a line at a time, and Send inside it at the end. The field is Field's `cell` variant, the one for a field whose container draws the box and the ring.
 - `maxLength` (500) stops typing at the limit; the count shows near it.
 
 ## States
