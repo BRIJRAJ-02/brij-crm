@@ -2,7 +2,7 @@
 // Add menu offers.
 import { describe, expect, it } from 'vitest';
 import type { ProfileItem } from '@crm/data';
-import { ADDABLE, BLOCK_KINDS, contactTitle, pageFacts, previewBlock, rowWords } from './registry.tsx';
+import { ADDABLE, BLOCK_KINDS, pageFacts, previewBlock, rowWords } from './registry.tsx';
 
 const page = (status: 'live' | 'paused'): ProfileItem => ({
   kind: 'page',
@@ -86,8 +86,5 @@ describe('the block registry', () => {
     const bare: ProfileItem = { kind: 'contact', id: 'd', fullName: 'Ada', updatedAt: '' };
     expect(rowWords(bare).address).toBe('Contact card');
     expect(previewBlock(bare, 'ada', () => undefined)).not.toHaveProperty('line');
-    // The page's own person's card is titled "Contact card": the page says their name over it already.
-    expect(previewBlock(card, 'ada', () => undefined, ' ada lovelace ')).toMatchObject({ title: 'Contact card' });
-    expect(contactTitle('Ada  Lovelace', 'Grace Hopper')).toBe('Ada  Lovelace');
   });
 });

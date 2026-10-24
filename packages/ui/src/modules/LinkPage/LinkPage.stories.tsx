@@ -254,7 +254,7 @@ export const ContactCard: Story = {
 };
 
 /**
- * A contact card with no line under its title stays by its tile (only a live link centres a lone title), and a card
+ * A contact card with no line under its title keeps it by its tile, centred in the row's height, and a card
  * whose address isn't this site's own path draws as words, with no Save contact.
  */
 export const ContactCardStates: Story = {
@@ -265,7 +265,7 @@ export const ContactCardStates: Story = {
       <LinkPage
         {...args}
         blocks={[
-          { kind: 'contact', id: 'bare', title: 'Contact card', href: '/api/public/handles/anish/contact.vcf' },
+          { kind: 'contact', id: 'bare', title: 'Anish Gupta', href: '/api/public/handles/anish/contact.vcf' },
           { kind: 'contact', id: 'elsewhere', title: 'Not ours', href: 'https://example.com/card.vcf' },
         ]}
       />
@@ -273,8 +273,11 @@ export const ContactCardStates: Story = {
   ),
   play: async ({ canvas, canvasElement }) => {
     settleEntrance(canvasElement);
-    const bare = canvas.getByRole('link', { name: /Contact card.*Save contact/ });
-    await expect(bare.querySelector('[data-lone]')).toBeNull();
+    const bare = canvas.getByRole('link', { name: /Anish Gupta.*Save contact/ });
+    // Left aligned like every other title: it starts right after the tile.
+    const title = bare.querySelector('[class*="-title"]')?.getBoundingClientRect();
+    const tile = bare.querySelector('[data-tile]')?.getBoundingClientRect();
+    await expect((title?.left ?? 0) - (tile?.right ?? 0)).toBeLessThan(20);
     await expect(canvas.queryByRole('link', { name: /Not ours/ })).toBeNull();
     await expect(canvas.getByText('Not ours')).toBeVisible();
   },

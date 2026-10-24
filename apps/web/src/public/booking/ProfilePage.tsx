@@ -162,7 +162,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   const { profile, items } = loaded;
   const current = profile.handle;
   const isSearching = searched !== '';
-  const blocks = blocksOf(current, items, profile.name);
+  const blocks = blocksOf(current, items);
   return (
     <LinkPage
       person={{

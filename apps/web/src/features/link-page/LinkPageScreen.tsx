@@ -272,7 +272,7 @@ function Blocks({
   };
 
   const tileOf = (item: ProfileItem): LinkPageBlock => {
-    const block = previewBlock(item, handle, linkPage.markOf, profile.name);
+    const block = previewBlock(item, handle, linkPage.markOf);
     if (block !== undefined) return block;
     // A paused or unavailable page still shows its calendar tile in the list.
     return { kind: 'page', id: item.id, title: rowWords(item).title, href: '', facts: '' };
@@ -325,7 +325,7 @@ function Blocks({
   );
 
   const previewBlocks = items.flatMap((item) => {
-    const block = previewBlock(item, handle, linkPage.markOf, profile.name);
+    const block = previewBlock(item, handle, linkPage.markOf);
     return block === undefined ? [] : [block];
   });
   const preview = (

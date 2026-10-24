@@ -23,7 +23,7 @@ import {
 import { countryOfE164, DIAL_CODES, toE164 } from '@crm/contracts/forms';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { linksHref } from '../booking/links.ts';
-import { contactHref, contactTitle, contactWords, pageFacts, type BlockEditorProps } from './registry.tsx';
+import { contactHref, contactWords, pageFacts, type BlockEditorProps } from './registry.tsx';
 import { ICON_WORDS, strings } from './strings.ts';
 
 /** The Modal every block editor sits in: its title, Cancel and the submit, and "How it looks" under the fields. */
@@ -355,7 +355,7 @@ export function ContactEditor({ item, items, handle, linkPage, ownerName, onSubm
             {
               kind: 'contact',
               id: editing?.id ?? 'draft',
-              title: typed.fullName.trim() === '' ? strings.contactName : contactTitle(typed.fullName, ownerName),
+              title: typed.fullName.trim() === '' ? strings.contactName : typed.fullName.trim(),
               href: contactHref(handle),
               ...(line === '' ? {} : { line }),
             },

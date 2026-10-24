@@ -228,15 +228,6 @@
     min-inline-size: 0;
   }
 
-  /*
-   * A title with no line under it sits in the middle of its row, as on any link in bio page, so a short one ("X")
-   * doesn't hang by the tile.
-   */
-  .text[data-lone] {
-    align-items: center;
-    text-align: center;
-  }
-
   .title {
     color: var(--text);
     font: var(--text-title);
@@ -256,12 +247,6 @@
     gap: var(--space-2);
     color: var(--text-tertiary);
     transition: color var(--duration-hover) var(--ease-hover);
-  }
-
-  /* With a lone title, the end takes the tile's width, so the title's middle is the row's own. */
-  .block:has(.text[data-lone]) .end {
-    justify-content: flex-end;
-    min-inline-size: calc(var(--size-row) + var(--space-6));
   }
 
   /* A booking page's and a contact card's end says what pressing it does (Book, Save contact), in the one colour

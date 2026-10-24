@@ -199,19 +199,9 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
 }
 
 /** A block's words: its title and the line under it. */
-function BlockText({
-  title,
-  line,
-  centresLone = false,
-}: {
-  readonly title: string;
-  readonly line?: string;
-  /** A live link with no line centres its title across the row; every other block keeps it by its tile. */
-  readonly centresLone?: boolean;
-}) {
-  const isLone = centresLone && (line === undefined || line === '');
+function BlockText({ title, line }: { readonly title: string; readonly line?: string }) {
   return (
-    <span className={styles.text} {...(isLone ? { 'data-lone': '' } : {})}>
+    <span className={styles.text}>
       <span className={styles.title}>{title}</span>
       {line !== undefined && line !== '' && <span className={styles.note}>{line}</span>}
     </span>
@@ -252,7 +242,7 @@ const RENDERERS: {
           : {})}
       >
         <LinkPageTile block={block} />
-        <BlockText title={block.title} centresLone {...(block.note === undefined ? {} : { line: block.note })} />
+        <BlockText title={block.title} {...(block.note === undefined ? {} : { line: block.note })} />
         <span className={styles.end}>
           <Icon name={isWeb ? 'arrow-up-right' : SCHEME_ICONS[target.scheme]} size="sm" />
         </span>
