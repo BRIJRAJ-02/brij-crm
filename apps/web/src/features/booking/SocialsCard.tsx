@@ -6,7 +6,14 @@
 // which name no host before booking (AC-754).
 // Loaded on its own (socials-slot.tsx), with the editor it opens, so neither rides in the editor's first paint.
 import { describeLink } from '@crm/contracts/social';
-import type { DataLayer, PublicSocialLink, SocialLink, SocialLinksAccess, SocialLinksHeld } from '@crm/data';
+import type {
+  DataLayer,
+  PublicSocialLink,
+  SocialLink,
+  SocialLinksAccess,
+  SocialLinksHeld,
+  SocialLinksState,
+} from '@crm/data';
 import { useSocialLinks } from '@crm/data/react';
 import {
   Button,
@@ -31,10 +38,13 @@ export function previewSocials(links: readonly SocialLink[]): readonly PublicSoc
   return links.map((link) => ({ network: link.network, href: link.href, label: describeLink(link.href).label }));
 }
 
+/** The one loading state: a snapshot must be the same object each time it is asked, or React renders forever. */
+const LOADING: SocialLinksState = { status: 'loading' };
+
 /** What stands in for the person's links until their store is here: loading, read never. */
 const NO_SOCIALS: SocialLinksHeld = {
   subscribe: () => () => undefined,
-  getSnapshot: () => ({ status: 'loading' }),
+  getSnapshot: () => LOADING,
   retain: () => () => undefined,
   retry: () => undefined,
 };
