@@ -336,9 +336,9 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
         <Card>
           <SettingsRow
             title={linkPageCopy.title}
-            description={profile.handle === undefined ? linkPageCopy.noHandleText : publicProfileUrl(profile.handle)}
+            description={profile.handle === undefined ? linkPageCopy.profileNoHandle : publicProfileUrl(profile.handle)}
           >
-            <ButtonLink href={linkPageHref(slug)} icon="pencil">
+            <ButtonLink href={linkPageHref(slug)} icon="pencil" isDisabled={profile.handle === undefined}>
               {linkPageCopy.editLinkPage}
             </ButtonLink>
           </SettingsRow>

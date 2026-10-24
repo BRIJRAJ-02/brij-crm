@@ -99,7 +99,7 @@ export const strings = {
   noLinksTitle: 'Nothing here yet',
   noLinksText: 'This person hasn’t added any links yet.',
   noMatchesTitle: (query: string) => `Nothing matches “${query}”`,
-  matches: (count: number) => (count === 1 ? '1 match' : `${String(count)} matches`),
+  matches: (count: number) => (count === 0 ? 'No matches' : count === 1 ? '1 match' : `${String(count)} matches`),
   noMatchesText: 'Try fewer or other words.',
   showMore: 'Show more',
   moreFailed: 'More links didn’t load. Try again.',

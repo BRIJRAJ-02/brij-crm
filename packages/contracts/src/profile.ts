@@ -96,6 +96,8 @@ export type UpdateMyProfileInput = z.infer<typeof UpdateMyProfileInput>;
 export const SaveProfileItemInput = WorkspaceScoped.extend({
   id: Uuid,
   block: ProfileBlock,
+  /** An edit of a block the editor showed: refused as gone when another tab deleted it, never made again. */
+  isEdit: z.boolean().optional(),
   mutationId: Uuid,
 });
 /** Adds or edits one block of the caller's link page. */

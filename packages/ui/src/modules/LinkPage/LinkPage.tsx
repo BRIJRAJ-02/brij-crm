@@ -7,6 +7,7 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import type { PoweredByPage } from '../../lib/powered-by.ts';
+import { safeHref } from '../../lib/safe-href.ts';
 import { initialsOf } from '../../lib/stable-hue.ts';
 import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
 import styles from './LinkPage.module.css';
@@ -85,6 +86,8 @@ export interface LinkPageProps {
    * editor's "How it looks" for the one block being typed.
    */
   readonly layout?: 'page' | 'blocks';
+  /** With `layout="blocks"`: a small caption naming what the blocks show ("How it looks"). */
+  readonly caption?: string;
   /** A visitor pressed a block (a press counter's beacon). Never holds up the navigation. */
   readonly onPress?: (id: string) => void;
 }
@@ -103,11 +106,39 @@ function groupsOf(blocks: readonly LinkPageBlock[]) {
   return groups;
 }
 
+/** What kind of address a link holds: a web page (a new tab), or an email, a call or a text (the device's app). */
+type LinkScheme = 'web' | 'mail' | 'phone' | 'text';
+
 /**
- * A block's leading tile, the same on the page and in the editor's rows: a link's network mark, its picked icon, or
- * its title's first letter on its hue; a booking page's calendar; a heading's type mark (the editor only).
+ * Where a link may go, and as what, or undefined: the library's one href rule (`safeHref`: web, mailto and tel), plus
+ * `sms:` with a number, the schemes a link page allows. Anything else (`javascript:`, `data:`) never becomes a link.
  */
-export function LinkPageTile({ block }: { readonly block: LinkPageBlock }) {
+function linkTarget(href: string): { readonly href: string; readonly scheme: LinkScheme } | undefined {
+  // eslint-disable-next-line no-control-regex -- a control character in an address never becomes a link.
+  if (/^sms:\+?\d/i.test(href) && !/[\s\u0000-\u001f]/.test(href)) return { href, scheme: 'text' };
+  const safe = safeHref(href);
+  if (safe === undefined || safe.startsWith('/')) return undefined;
+  if (/^mailto:/i.test(safe)) return { href: safe, scheme: 'mail' };
+  if (/^tel:/i.test(safe)) return { href: safe, scheme: 'phone' };
+  return { href: safe, scheme: 'web' };
+}
+
+/** The icon an email, a call or a text shows, at its tile when none is picked and at its end. */
+const SCHEME_ICONS = { mail: 'mail', phone: 'phone', text: 'message-square' } as const;
+
+/**
+ * A block's leading tile, the same on the page and in the editor's rows: a link's network mark, its picked icon, an
+ * email's, a call's or a text's own icon, or its title's first letter on its hue; a booking page's calendar; a
+ * heading's type mark (the editor only). With no block, the tile's place while it loads.
+ */
+export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
+  if (block === undefined) {
+    return (
+      <span className={styles.tile} data-tile="loading">
+        <Skeleton shape="fill" />
+      </span>
+    );
+  }
   if (block.kind === 'page') {
     return (
       <span className={styles.tile} data-tile="page">
@@ -129,10 +160,12 @@ export function LinkPageTile({ block }: { readonly block: LinkPageBlock }) {
       </span>
     );
   }
-  if (block.icon !== undefined) {
+  const scheme = linkTarget(block.href)?.scheme;
+  const icon = block.icon ?? (scheme === undefined || scheme === 'web' ? undefined : SCHEME_ICONS[scheme]);
+  if (icon !== undefined) {
     return (
       <span className={styles.tile} data-tile="icon">
-        <Icon name={block.icon} />
+        <Icon name={icon} />
       </span>
     );
   }
@@ -145,6 +178,16 @@ export function LinkPageTile({ block }: { readonly block: LinkPageBlock }) {
   );
 }
 
+/** A block's words: its title and the line under it. */
+function BlockText({ title, line }: { readonly title: string; readonly line?: string }) {
+  return (
+    <span className={styles.text}>
+      <span className={styles.title}>{title}</span>
+      {line !== undefined && line !== '' && <span className={styles.note}>{line}</span>}
+    </span>
+  );
+}
+
 /** Each kind's one renderer. A block of a kind with none never reaches here: callers skip what they can't map. */
 const RENDERERS: {
   readonly [Kind in Exclude<LinkPageBlock['kind'], 'heading'>]: (
@@ -152,39 +195,66 @@ const RENDERERS: {
     onPress: (() => void) | undefined,
   ) => ReactNode;
 } = {
-  link: (block, onPress) => (
-    <a
-      className={styles.block}
-      href={block.href}
-      target="_blank"
-      // `me` ties the person's own profiles to this page; no referrer, no opener, no endorsement of an outside site.
-      rel="me noopener noreferrer nofollow"
-      onClick={onPress}
-    >
-      <LinkPageTile block={block} />
-      <span className={styles.text}>
-        <span className={styles.title}>{block.title}</span>
-        {block.note !== undefined && block.note !== '' && <span className={styles.note}>{block.note}</span>}
-      </span>
-      <span className={styles.end}>
-        <Icon name="arrow-up-right" size="sm" />
-      </span>
-      <VisuallyHidden>{strings.newTab}</VisuallyHidden>
-    </a>
-  ),
-  page: (block, onPress) => (
-    <a className={styles.block} href={block.href} onClick={onPress}>
-      <LinkPageTile block={block} />
-      <span className={styles.text}>
-        <span className={styles.title}>{block.title}</span>
-        {block.facts !== '' && <span className={styles.note}>{block.facts}</span>}
-      </span>
-      <span className={styles.end} data-end="book">
-        {strings.book}
-        <Icon name="chevron-right" size="sm" />
-      </span>
-    </a>
-  ),
+  link: (block, onPress) => {
+    const target = linkTarget(block.href);
+    // An address the rule refuses draws as words, never as a link.
+    if (target === undefined) {
+      return (
+        <span className={styles.block} data-inert="">
+          <LinkPageTile block={block} />
+          <BlockText title={block.title} {...(block.note === undefined ? {} : { line: block.note })} />
+        </span>
+      );
+    }
+    const isWeb = target.scheme === 'web';
+    return (
+      <a
+        className={styles.block}
+        href={target.href}
+        onClick={onPress}
+        // A web page opens in a new tab, with no referrer, no opener and no endorsement; `me` only on the person's
+        // own profile on a network. An email, a call or a text opens the device's app, in place.
+        {...(isWeb
+          ? {
+              target: '_blank',
+              rel: block.mark === undefined ? 'noopener noreferrer nofollow' : 'me noopener noreferrer nofollow',
+            }
+          : {})}
+      >
+        <LinkPageTile block={block} />
+        <BlockText title={block.title} {...(block.note === undefined ? {} : { line: block.note })} />
+        <span className={styles.end}>
+          <Icon name={isWeb ? 'arrow-up-right' : SCHEME_ICONS[target.scheme]} size="sm" />
+        </span>
+        {isWeb && <VisuallyHidden>{strings.newTab}</VisuallyHidden>}
+      </a>
+    );
+  },
+  page: (block, onPress) => {
+    const target = block.href.startsWith('/') && !/^\/[/\\]/.test(block.href) ? block.href : undefined;
+    const body = (
+      <>
+        <LinkPageTile block={block} />
+        <BlockText title={block.title} line={block.facts} />
+      </>
+    );
+    if (target === undefined) {
+      return (
+        <span className={styles.block} data-inert="">
+          {body}
+        </span>
+      );
+    }
+    return (
+      <a className={styles.block} href={target} onClick={onPress}>
+        {body}
+        <span className={styles.end} data-end="book">
+          {strings.book}
+          <Icon name="chevron-right" size="sm" />
+        </span>
+      </a>
+    );
+  },
 };
 
 /** One block in its row. */
@@ -249,19 +319,33 @@ export function LinkPage({
   page = 'booking_profile',
   isPreview = false,
   layout = 'page',
+  caption,
   onPress,
 }: LinkPageProps) {
+  const captionId = useId();
   if (layout === 'blocks') {
     return (
-      <div className={styles.blocks} data-layout="blocks" inert>
-        {groupsOf(blocks ?? []).map((group, index) => (
-          <Group
-            key={group.heading?.id ?? `top-${String(index)}`}
-            rows={group.rows}
-            onPress={undefined}
-            {...(group.heading === undefined ? {} : { heading: group.heading })}
-          />
-        ))}
+      <div
+        className={styles.draft}
+        data-layout="blocks"
+        role="group"
+        {...(caption === undefined ? {} : { 'aria-labelledby': captionId })}
+      >
+        {caption !== undefined && (
+          <p id={captionId} className={styles.caption}>
+            {caption}
+          </p>
+        )}
+        <div className={styles.blocks} inert>
+          {groupsOf(blocks ?? []).map((group, index) => (
+            <Group
+              key={group.heading?.id ?? `top-${String(index)}`}
+              rows={group.rows}
+              onPress={undefined}
+              {...(group.heading === undefined ? {} : { heading: group.heading })}
+            />
+          ))}
+        </div>
       </div>
     );
   }
@@ -296,8 +380,9 @@ export function LinkPage({
           {socials}
         </header>
         {toolbar}
+        {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
         {summary !== undefined && (
-          <p className={styles.summary} role="status">
+          <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
             {summary}
           </p>
         )}
@@ -306,7 +391,7 @@ export function LinkPage({
             {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
               <li key={index} className={styles.item}>
                 <span className={styles.block} data-loading="">
-                  <span className={styles.tile} data-tile="loading" />
+                  <LinkPageTile />
                   <span className={styles.text}>
                     <span className={styles.title}>
                       <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />

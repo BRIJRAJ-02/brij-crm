@@ -717,7 +717,7 @@ export const ReorderNarrow: Story = {
 export const Leading: Story = {
   args: {
     label: 'Blocks',
-    hasLeading: true,
+    leadingLoading: <LinkPageTile />,
     onMove: fn(),
     rowOrder: LinkListRowOrder,
     rows: [
@@ -755,5 +755,41 @@ export const Leading: Story = {
 /** Tiled rows while they load: the tile's place is held, so the titles land where the lines stood. */
 export const LeadingLoading: Story = {
   parameters: { crm: { screenshot: false } },
-  args: { label: 'Blocks', hasLeading: true, status: 'loading', rows: [] },
+  args: { label: 'Blocks', leadingLoading: <LinkPageTile />, status: 'loading', rows: [] },
+};
+
+/** Tiled rows on a phone: one line each, the long title wrapping and the address under it, the badge kept at the end. */
+export const LeadingNarrow: Story = {
+  args: {
+    label: 'Blocks',
+    leadingLoading: <LinkPageTile />,
+    onMove: fn(),
+    rowOrder: LinkListRowOrder,
+    rows: [
+      {
+        id: 'office',
+        title: 'Office hours for founders and their teams',
+        address: 'Paused, hidden from visitors · Booking page · 30 min',
+        chips: [],
+        isOff: true,
+        leading: (
+          <LinkPageTile block={{ kind: 'page', id: 'office', title: 'Office hours', href: '/a/o', facts: '' }} />
+        ),
+      },
+      {
+        id: 'gone',
+        title: 'Booking page',
+        address: 'This booking page is Link only, deleted, or in a workspace you left.',
+        chips: [],
+        badge: 'Unavailable',
+        isOff: true,
+        leading: <LinkPageTile block={{ kind: 'page', id: 'gone', title: 'Booking page', href: '', facts: '' }} />,
+      },
+    ],
+  },
+  render: (args) => (
+    <Stage width="phone">
+      <LinkList {...args} />
+    </Stage>
+  ),
 };

@@ -71,6 +71,8 @@ export const Default: Story = {
     const linkedin = canvas.getByRole('link', { name: /LinkedIn/ });
     await expect(linkedin).toHaveAttribute('target', '_blank');
     await expect(linkedin).toHaveAttribute('rel', 'me noopener noreferrer nofollow');
+    // A site that isn't the person's own profile carries no `me`.
+    await expect(canvas.getByRole('link', { name: /Our deck/ })).toHaveAttribute('rel', 'noopener noreferrer nofollow');
     await expect(linkedin).toHaveAccessibleName(/opens in a new tab/);
     linkedin.addEventListener('click', (event) => event.preventDefault(), { once: true });
     await userEvent.click(linkedin);
@@ -169,12 +171,37 @@ export const Tiles: Story = {
   ),
 };
 
-/** Only the blocks, inert: an editor's "How it looks" for the block being typed. */
+/** Only the blocks, inert, under their caption: an editor's "How it looks" for the block being typed. */
 export const BlocksOnly: Story = {
-  args: { layout: 'blocks' },
+  args: { layout: 'blocks', caption: 'How it looks' },
   render: (args) => (
     <Stage width="dialog">
       <LinkPage {...args} blocks={anishBlocks().slice(3, 4)} />
     </Stage>
   ),
+};
+
+/** An address the rule refuses (`javascript:`) draws as words, never as a link; an email and a call open in place. */
+export const Schemes: Story = {
+  args: { person: PERSON },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage
+        {...args}
+        blocks={[
+          { kind: 'link', id: 'bad', title: 'Not a link', href: 'javascript:alert(1)', hue: 'red' },
+          { kind: 'link', id: 'mail', title: 'Email me', href: 'mailto:anish@timefix.com', hue: 'blue' },
+          { kind: 'link', id: 'call', title: 'Call me', href: 'tel:+919999999999', hue: 'green' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('link', { name: /Not a link/ })).toBeNull();
+    await expect(canvas.getByText('Not a link')).toBeVisible();
+    const mail = canvas.getByRole('link', { name: /Email me/ });
+    await expect(mail).toHaveAttribute('href', 'mailto:anish@timefix.com');
+    await expect(mail).not.toHaveAttribute('target');
+    await expect(canvas.getByRole('link', { name: /Call me/ })).toHaveAttribute('href', 'tel:+919999999999');
+  },
 };

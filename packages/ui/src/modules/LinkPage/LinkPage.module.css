@@ -65,6 +65,20 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* The blocks alone, an editor's "How it looks": the caption close over them. */
+  .draft {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .caption {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
   .blocks {
     display: flex;
     flex-direction: column;
@@ -125,7 +139,7 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .block:not([data-loading]):hover {
+    .block:not([data-loading], [data-inert]):hover {
       border-color: var(--border-strong);
       background: var(--surface-hover);
     }
@@ -156,13 +170,16 @@
     background: var(--surface-raised);
   }
 
+  /* The booking page's calendar in the link colour: the accent itself is under 3:1 on its soft tile in dark. */
   .tile[data-tile='page'] {
     background: var(--accent-soft);
-    color: var(--accent);
+    color: var(--link);
   }
 
   .tile[data-tile='loading'] {
-    background: var(--surface-sunken);
+    align-items: stretch;
+    justify-content: stretch;
+    background: none;
   }
 
   .tile[data-hue='gray'] {
@@ -233,7 +250,7 @@
 
   /* A booking page's end says what pressing it does, in the one colour that marks the action to take. */
   .end[data-end='book'] {
-    color: var(--accent);
+    color: var(--link);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
   }

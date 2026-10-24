@@ -6,6 +6,7 @@
 // door (`enterOwnedPages`), each read as the page's read only `booking` actor in its own workspace.
 //
 // No audit row: the blocks are the person's, not the workspace's, and a workspace's history is read by its admins.
+// (The identity login keeps the default grant every auth table gets; the app reaches the table only through here.)
 import {
   HUES,
   ProfileBlock,
@@ -19,6 +20,7 @@ import { schema, type Database, type WorkspaceTx } from '@crm/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { enterOwnedPages, type OwnedPageEntry } from '../access/door.ts';
 import { checkScope } from '../access/mint.ts';
+import { isUuid } from '../engine/ids.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -78,7 +80,7 @@ async function factsOf(entries: readonly OwnedPageEntry[]): Promise<FactsByPage>
     const live = new Map(group.map((entry) => [entry.pageId, entry.isLive]));
     await inWorkspace(first.scope, async (tx) => {
       const [workspace] = await tx
-        .select({ name: workspaces.name })
+        .select({ name: workspaces.name, slug: workspaces.slug })
         .from(workspaces)
         .where(and(eq(workspaces.id, workspaceId), isNull(workspaces.deletedAt)));
       if (workspace === undefined) return;
@@ -111,6 +113,7 @@ async function factsOf(entries: readonly OwnedPageEntry[]): Promise<FactsByPage>
             durations: row.durations,
             isTeam: row.kind === 'round_robin',
             workspaceName: workspace.name,
+            workspaceSlug: workspace.slug,
             status: live.get(row.id) === true && row.status === 'live' ? 'live' : 'paused',
           },
         });
@@ -261,7 +264,7 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
  */
 export async function saveProfileItem(
   scope: EngineScope,
-  input: { readonly id: string; readonly block: ProfileBlock },
+  input: { readonly id: string; readonly block: ProfileBlock; readonly isEdit?: boolean },
 ): Promise<ProfileItem> {
   const owner = ownerOf(scope);
   const parsed = ProfileBlock.safeParse(input.block);
@@ -279,7 +282,15 @@ export async function saveProfileItem(
     }
   }
   const row = await inWorkspace(scope, async (tx) => {
-    const live = await readRows(tx, owner, false);
+    // The live blocks only when they are needed: an edit's existence, or a new link's colour.
+    const needsRows = input.isEdit === true || (block.kind === 'link' && block.hue === undefined);
+    const live = needsRows ? await readRows(tx, owner, false) : [];
+    if (input.isEdit === true && !live.some((each) => each.id === input.id)) {
+      const archived = await readRows(tx, owner, true);
+      if (!archived.some((each) => each.id === input.id)) {
+        throw refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
+      }
+    }
     const stored = storedOf(block, nextHue(live.filter((each) => each.kind === 'link').length));
     try {
       const saved = await tx.execute<ItemRow>(
@@ -302,6 +313,9 @@ export async function saveProfileItem(
  */
 export async function orderProfileItems(scope: EngineScope, ids: readonly string[]): Promise<ProfileItems> {
   const owner = ownerOf(scope);
+  if (ids.length === 0 || !ids.every((id) => isUuid(id))) {
+    throw refuse('CONFIG_INVALID', 'Your link page changed somewhere else. It now shows the latest order.');
+  }
   await inWorkspace(scope, async (tx) => {
     try {
       await tx.execute(sql`select crm_order_profile_items(${owner}::uuid, ${`{${ids.join(',')}}`}::uuid[])`);

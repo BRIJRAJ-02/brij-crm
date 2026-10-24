@@ -127,14 +127,6 @@
     flex: none;
   }
 
-  /* A loading row's tile: the size of a link page's tile (LinkPageTile), so nothing moves when it arrives. */
-  .leadingLoading {
-    inline-size: calc(var(--size-row) + var(--space-6));
-    block-size: calc(var(--size-row) + var(--space-6));
-    border-radius: var(--radius-lg);
-    background: var(--surface-sunken);
-  }
-
   .main {
     display: flex;
     flex: 1;

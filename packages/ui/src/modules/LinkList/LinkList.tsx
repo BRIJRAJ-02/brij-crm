@@ -51,7 +51,7 @@ export interface LinkRow {
   readonly titleBadge?: string;
   /**
    * A tile before the title, for rows that are told apart at a glance by what they are (a link page's blocks: a
-   * network's mark, an icon, a letter). Give every row one, and the list `hasLeading`, so loading rows hold its place.
+   * network's mark, an icon, a letter). Give every row one, and the list `leadingLoading`, so loading rows hold its place.
    */
   readonly leading?: ReactNode;
   /** A grey badge before the switch, only when it isn't taking people ("Off", "Not published", "Copying"). */
@@ -132,8 +132,11 @@ export interface LinkListProps {
    * loads dnd-kit, and no lazy chunk splits the files every page loads first.
    */
   readonly rowOrder?: ComponentType<RowOrderProps>;
-  /** Every row has a `leading` tile: loading rows hold its place, so the titles land where the lines stood. */
-  readonly hasLeading?: boolean;
+  /**
+   * Every row has a `leading` tile, and this is the tile's loading form (`<LinkPageTile />`): loading rows draw it, so
+   * the titles land where the lines stood. Set, the rows are laid out for a tile.
+   */
+  readonly leadingLoading?: ReactNode;
 }
 
 /** Props for LinkListToolbar. */
@@ -219,8 +222,9 @@ export function LinkList({
   rowsAreLinks = false,
   onMove,
   rowOrder: RowOrder,
-  hasLeading = false,
+  leadingLoading,
 }: LinkListProps) {
+  const hasLeading = leadingLoading !== undefined;
   const isCompact = density === 'compact';
   const isCard = isCompact && placement === 'card';
   const [ownQuery, setOwnQuery] = useState('');
@@ -284,7 +288,7 @@ export function LinkList({
               count={SKELETON_ROWS}
               isCompact={isCompact}
               hasGrip={moves !== undefined}
-              hasLeading={hasLeading}
+              leadingLoading={leadingLoading}
             />
           )}
           <VisuallyHidden>{strings.loading(label)}</VisuallyHidden>
@@ -375,23 +379,19 @@ function SkeletonRows({
   count,
   isCompact,
   hasGrip,
-  hasLeading,
+  leadingLoading,
 }: {
   readonly count: number;
   readonly isCompact: boolean;
   readonly hasGrip: boolean;
-  readonly hasLeading: boolean;
+  readonly leadingLoading: ReactNode;
 }) {
   return Array.from({ length: count }, (_, index) => (
     // The last one is marked: the loading words for screen readers follow it, so it isn't the last child.
     <div key={index} className={styles.row} data-loading="" data-last={index === count - 1 || undefined}>
       {/* The grip's place, so the titles that follow land where these lines stood. */}
       {hasGrip && <span className={styles.grip} />}
-      {hasLeading && (
-        <span className={styles.leading}>
-          <span className={styles.leadingLoading} />
-        </span>
-      )}
+      {leadingLoading !== undefined && <span className={styles.leading}>{leadingLoading}</span>}
       <div className={styles.main}>
         <span className={styles.skeletonTitle}>
           <Skeleton width="medium" />

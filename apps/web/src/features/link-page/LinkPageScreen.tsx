@@ -5,13 +5,22 @@
 // once, on the list and in the phone, and is saved as it is made.
 // Leaves out: the contact card, the QR, the socials row (they come in later phases), themes and appearance, and the
 // handle itself (Settings › Profile).
-import type { BlockDraft, DataLayer, MyProfile, ProfileBlockKind, ProfileItem, ProfilePageFacts } from '@crm/data';
+import type {
+  BlockDraft,
+  LinkPageStore,
+  MyProfile,
+  ProfileBlock,
+  ProfileBlockKind,
+  ProfileItem,
+  ProfilePageFacts,
+} from '@crm/data';
 import { useLinkPage } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
   Card,
   EmptyState,
+  focusLater,
   HUES,
   LinkList,
   LinkListRowOrder,
@@ -27,9 +36,9 @@ import {
   type LinkPageBlock,
   type LinkRow,
 } from '@crm/ui';
-import { useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
+import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { ADDABLE, BLOCK_KINDS, previewBlock, rowWords } from './registry.tsx';
@@ -37,7 +46,8 @@ import { strings } from './strings.ts';
 
 /** Props for the Link page screen. */
 export interface LinkPageScreenProps {
-  readonly data: DataLayer;
+  /** The link page's store (`data.linkPage.load()`, loaded with the route). */
+  readonly linkPage: LinkPageStore;
   readonly slug: string;
   readonly profile: MyProfile;
 }
@@ -51,35 +61,21 @@ function nextHue(items: readonly ProfileItem[]) {
   return ring[items.filter((item) => item.kind === 'link').length % ring.length] ?? 'blue';
 }
 
-/** The block as the list shows it before the server answers. */
-function shownItem(id: string, draft: BlockDraft, was: ProfileItem | undefined, page?: ProfilePageFacts): ProfileItem {
+/** The block as the list shows it before the server answers: the checked block, as the server will store it. */
+function shownItem(
+  id: string,
+  block: ProfileBlock,
+  was: ProfileItem | undefined,
+  page?: ProfilePageFacts,
+): ProfileItem {
   const updatedAt = new Date().toISOString();
-  if (draft.kind === 'heading') return { kind: 'heading', id, title: draft.title.trim(), updatedAt };
-  if (draft.kind === 'page') {
-    return {
-      kind: 'page',
-      id,
-      workspaceId: draft.workspaceId ?? '',
-      pageId: draft.pageId ?? '',
-      ...(page === undefined ? {} : { page }),
-      updatedAt,
-    };
-  }
-  const note = draft.note.trim();
-  return {
-    kind: 'link',
-    id,
-    title: draft.title.trim(),
-    url: draft.url.trim(),
-    hue: draft.hue ?? (was?.kind === 'link' ? was.hue : 'blue'),
-    ...(note === '' ? {} : { note }),
-    ...(draft.icon === undefined ? {} : { icon: draft.icon as Extract<ProfileItem, { kind: 'link' }>['icon'] }),
-    updatedAt,
-  };
+  if (block.kind === 'heading') return { kind: 'heading', id, title: block.title, updatedAt };
+  if (block.kind === 'page') return { ...block, id, ...(page === undefined ? {} : { page }), updatedAt };
+  return { ...block, id, hue: block.hue ?? (was?.kind === 'link' ? was.hue : 'blue'), updatedAt };
 }
 
 /** The link page editor: the blocks beside the phone. */
-export function LinkPageScreen({ data, slug, profile }: LinkPageScreenProps) {
+export function LinkPageScreen({ linkPage, slug, profile }: LinkPageScreenProps) {
   const handle = profile.handle;
   return (
     <SettingsPage
@@ -109,7 +105,7 @@ export function LinkPageScreen({ data, slug, profile }: LinkPageScreenProps) {
           </Card>
         </PreviewLayout>
       ) : (
-        <Blocks data={data} slug={slug} profile={profile} handle={handle} />
+        <Blocks linkPage={linkPage} slug={slug} profile={profile} handle={handle} />
       )}
     </SettingsPage>
   );
@@ -117,18 +113,19 @@ export function LinkPageScreen({ data, slug, profile }: LinkPageScreenProps) {
 
 /** The blocks, their editors and the phone, once the person has a handle. */
 function Blocks({
-  data,
+  linkPage,
   slug,
   profile,
   handle,
 }: {
-  readonly data: DataLayer;
+  readonly linkPage: LinkPageStore;
   readonly slug: string;
   readonly profile: MyProfile;
   readonly handle: string;
 }) {
   const { toasts } = useRouteContext({ from: '__root__' });
-  const held = data.linkPage.view(slug);
+  const navigate = useNavigate();
+  const held = linkPage.view(slug);
   const state = useLinkPage(held);
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [deleting, setDeleting] = useState<ProfileItem | undefined>(undefined);
@@ -143,11 +140,50 @@ function Blocks({
     const ids = items.map((item) => item.id).filter((each) => each !== id);
     const at = Math.max(0, Math.min(toIndex, ids.length));
     const next = [...ids.slice(0, at), id, ...ids.slice(at)];
-    void data.linkPage.order(slug, next);
+    void linkPage.order(slug, next);
   };
   const moveFromMenu = (item: ProfileItem, toIndex: number) => {
     setSaid(strings.moved(rowWords(item).title, toIndex + 1, items.length));
     move(item.id, toIndex);
+  };
+  /**
+   * Focus after a row leaves (archived, deleted, restored): the menu of the row now in its place, else the one before,
+   * else Add, so a keyboard never lands back at the top of the page.
+   */
+  const focusNear = (grid: string, index: number) => {
+    focusLater(() => {
+      const list = document.querySelector(`[role="grid"][aria-label="${grid}"]`);
+      const buttons = [...(list?.querySelectorAll<HTMLElement>('[role="row"] [role="group"] button') ?? [])];
+      const rowsNow = [...(list?.querySelectorAll<HTMLElement>('[role="row"]') ?? [])];
+      const row = rowsNow[Math.min(index, rowsNow.length - 1)];
+      const inRow = row?.querySelector<HTMLElement>('[role="group"] button');
+      if (inRow !== null && inRow !== undefined) return inRow;
+      if (buttons.length > 0) return buttons.at(-1);
+      return [...document.querySelectorAll<HTMLElement>('button')].find(
+        (button) => button.textContent.trim() === strings.add,
+      );
+    });
+  };
+  const archive = (item: ProfileItem, index: number) => {
+    const before = items.map((each) => each.id);
+    void linkPage.archive(slug, item.id, true);
+    focusNear(strings.blocks, index);
+    // One press, so it says what it did, and Undo puts it back in its place.
+    toasts.toast({
+      tone: 'success',
+      message: strings.archived1(rowWords(item).title),
+      action: {
+        label: strings.undo,
+        onAction: () => {
+          void linkPage.archive(slug, item.id, false);
+          void linkPage.order(slug, before);
+        },
+      },
+    });
+  };
+  const restore = (item: ProfileItem, index: number) => {
+    void linkPage.archive(slug, item.id, false);
+    focusNear(strings.archived, index);
   };
   const copy = (href: string) => {
     navigator.clipboard.writeText(href).then(
@@ -167,10 +203,10 @@ function Blocks({
     setEditing(undefined);
     const withHue: BlockDraft =
       draft.kind === 'link' && draft.hue === undefined ? { ...draft, hue: nextHue(items) } : draft;
-    const checked = data.linkPage.check(withHue, items, was?.id);
+    const checked = linkPage.check(withHue, items, was?.id);
     if (!checked.ok) return;
-    const id = was?.id ?? data.linkPage.newId();
-    void data.linkPage.save(slug, id, checked.block, shownItem(id, withHue, was, page));
+    const id = was?.id ?? linkPage.newId();
+    void linkPage.save(slug, id, checked.block, shownItem(id, checked.block, was, page));
   };
 
   const rowMenu = (item: ProfileItem, index: number) => {
@@ -202,7 +238,12 @@ function Blocks({
             </MenuItem>
           )}
           <MenuSeparator />
-          <MenuItem id="archive" icon="archive" onAction={() => void data.linkPage.archive(slug, item.id, true)}>
+          {item.kind === 'page' && item.page !== undefined && (
+            <MenuItem id="page" icon="calendar-clock" href={pageEditorHref(item.page.workspaceSlug, item.pageId)}>
+              {strings.editPage}
+            </MenuItem>
+          )}
+          <MenuItem id="archive" icon="archive" onAction={() => archive(item, index)}>
             {strings.archive}
           </MenuItem>
           <MenuItem id="delete" icon="trash" isDanger onAction={() => setDeleting(item)}>
@@ -214,7 +255,7 @@ function Blocks({
   };
 
   const tileOf = (item: ProfileItem): LinkPageBlock => {
-    const block = previewBlock(item, handle, data.linkPage.markOf);
+    const block = previewBlock(item, handle, linkPage.markOf);
     if (block !== undefined) return block;
     // A paused or unavailable page still shows its calendar tile in the list.
     return { kind: 'page', id: item.id, title: rowWords(item).title, href: '', facts: '' };
@@ -234,6 +275,9 @@ function Blocks({
       ...(words.badge === undefined ? {} : { badge: words.badge }),
       ...(words.isOff === true ? { isOff: true } : {}),
       ...(isPending ? { isPending: true } : { actions: rowMenu(item, index) }),
+      ...(item.kind === 'page' && item.page !== undefined
+        ? { href: pageEditorHref(item.page.workspaceSlug, item.pageId) }
+        : {}),
     };
   });
 
@@ -245,7 +289,7 @@ function Blocks({
       <Menu label={strings.add}>
         {ADDABLE.map((kind) => {
           const entry = BLOCK_KINDS[kind];
-          const full = data.linkPage.limit(items, kind);
+          const full = linkPage.limit(items, kind);
           return (
             <MenuItem
               key={kind}
@@ -264,7 +308,7 @@ function Blocks({
   );
 
   const previewBlocks = items.flatMap((item) => {
-    const block = previewBlock(item, handle, data.linkPage.markOf);
+    const block = previewBlock(item, handle, linkPage.markOf);
     return block === undefined ? [] : [block];
   });
   const preview = (
@@ -293,7 +337,7 @@ function Blocks({
         searchLabel={strings.blocks}
         placement="card"
         isToolbarHidden
-        hasLeading
+        leadingLoading={<LinkPageTile />}
         rows={[]}
         status="loading"
         onOpen={() => undefined}
@@ -328,11 +372,16 @@ function Blocks({
         searchLabel={strings.blocks}
         placement="card"
         isToolbarHidden
-        hasLeading
+        leadingLoading={<LinkPageTile />}
         rows={rows}
         onOpen={(id) => {
           const item = items.find((each) => each.id === id);
-          if (item !== undefined && BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item });
+          if (item === undefined) return;
+          if (BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item });
+          // A booking page block opens the booking page's own editor, in its workspace.
+          else if (item.kind === 'page' && item.page !== undefined) {
+            void navigate({ href: pageEditorHref(item.page.workspaceSlug, item.pageId) });
+          }
         }}
         onMove={move}
         rowOrder={LinkListRowOrder}
@@ -353,8 +402,8 @@ function Blocks({
             searchLabel={strings.archived}
             placement="card"
             isToolbarHidden
-            hasLeading
-            rows={archived.map((item) => {
+            leadingLoading={<LinkPageTile />}
+            rows={archived.map((item, index) => {
               const words = rowWords(item, namesWorkspace);
               return {
                 id: item.id,
@@ -365,17 +414,13 @@ function Blocks({
                 leading: <LinkPageTile block={tileOf(item)} />,
                 actions: (
                   <>
-                    <Button
-                      variant="ghost"
-                      icon="archive-restore"
-                      onPress={() => void data.linkPage.archive(slug, item.id, false)}
-                    >
+                    <Button variant="ghost" icon="archive-restore" onPress={() => restore(item, index)}>
                       {strings.restore}
                     </Button>
                     <Button
                       variant="ghost"
                       icon="trash"
-                      label={`${strings.remove} ${words.title}`}
+                      label={strings.removeFor(words.title)}
                       onPress={() => setDeleting(item)}
                     />
                   </>
@@ -392,13 +437,19 @@ function Blocks({
           items={items}
           slug={slug}
           handle={handle}
+          newHue={nextHue(items)}
+          linkPage={linkPage}
           onSubmit={submit}
           onClose={() => setEditing(undefined)}
         />
       )}
       {deleting !== undefined && (
         <Modal
-          title={strings.deleteTitle(rowWords(deleting).title)}
+          title={
+            deleting.kind === 'page'
+              ? strings.removePageTitle(rowWords(deleting).title)
+              : strings.deleteTitle(rowWords(deleting).title)
+          }
           tone="danger"
           isOpen
           isBusy={isDeleting}
@@ -416,18 +467,22 @@ function Blocks({
                 isPending={isDeleting}
                 onPress={() => {
                   setIsDeleting(true);
-                  void data.linkPage.remove(slug, deleting.id).finally(() => {
+                  const live = items.findIndex((each) => each.id === deleting.id);
+                  const grid = live === -1 ? strings.archived : strings.blocks;
+                  const index = live === -1 ? archived.findIndex((each) => each.id === deleting.id) : live;
+                  void linkPage.remove(slug, deleting.id).finally(() => {
                     setIsDeleting(false);
                     setDeleting(undefined);
+                    focusNear(grid, index);
                   });
                 }}
               >
-                {strings.deleteBlock}
+                {deleting.kind === 'page' ? strings.removePage : strings.deleteBlock}
               </Button>
             </>
           }
         >
-          {strings.deleteText}
+          {deleting.kind === 'page' ? strings.removePageText : strings.deleteText}
         </Modal>
       )}
       <VisuallyHidden>

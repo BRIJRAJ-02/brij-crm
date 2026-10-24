@@ -35,6 +35,7 @@ const heading = (id: string, title: string): ProfileItem => ({
 
 function harness(first: ProfileItems = { items: [link('a'), link('b')], archived: [] }) {
   const calls: string[] = [];
+  const saveListeners: ((input: unknown) => void)[] = [];
   const answers: { readonly name: string; readonly answer: ReturnType<typeof deferred<unknown>> }[] = [];
   const notices: Notice[] = [];
   const wait = <T>(name: string): Promise<T> => {
@@ -46,7 +47,10 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
   const api: LinkPageApi = {
     items: () => wait('items'),
     pageChoices: () => wait('pageChoices'),
-    saveItem: (input) => wait(`save:${input.id}`),
+    saveItem: (input) => {
+      for (const listen of saveListeners) listen(input);
+      return wait(`save:${input.id}`);
+    },
     orderItems: (input) => wait(`order:${input.ids.join(',')}`),
     archiveItem: (input) => wait(`archive:${input.id}:${String(input.archived)}`),
     deleteItem: (input) => wait(`delete:${input.id}`),
@@ -68,6 +72,12 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
     if (found === undefined) throw new Error(`No call ${name}`);
     found.answer.reject(dataError('CONFIG_INVALID', message));
   };
+  const refuseWith = (name: string, code: string, message: string) => {
+    const found = answers.find((each) => each.name === name);
+    if (found === undefined) throw new Error(`No call ${name}`);
+    found.answer.reject(dataError(code as 'CONFIG_INVALID', message));
+  };
+  const onSave = (listen: (input: unknown) => void) => saveListeners.push(listen);
   const ready = async () => {
     const reading = store.read('acme');
     answer('items', first);
@@ -78,7 +88,7 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
     return state.status === 'ready' ? state.items.map((item) => item.id) : state.status;
   };
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-  return { store, calls, notices, answer, refuse, ready, shown, settle };
+  return { store, calls, notices, answer, refuse, refuseWith, onSave, ready, shown, settle };
 }
 
 describe('the link page store', () => {
@@ -126,6 +136,47 @@ describe('the link page store', () => {
     expect(h.calls.filter((call) => call === 'items')).toHaveLength(2);
   });
 
+  it('leaves a refused add out of the order queued behind it, so only the add is refused', async () => {
+    const h = harness();
+    await h.ready();
+    void h.store.save('acme', 'c', { kind: 'link', title: 'C', url: 'https://c.dev' }, link('c'));
+    void h.store.order('acme', ['c', 'b', 'a']);
+    await h.settle();
+    h.refuse('save:c', 'A link page holds up to 40 links.');
+    await h.settle();
+    expect(h.calls).toContain('order:b,a');
+    expect(h.notices).toHaveLength(1);
+  });
+
+  it('reads again after a limit refusal, so the Add menu catches up with another tab', async () => {
+    const h = harness();
+    await h.ready();
+    void h.store.save('acme', 'c', { kind: 'link', title: 'C', url: 'https://c.dev' }, link('c'));
+    await h.settle();
+    const found = h.calls.indexOf('save:c');
+    expect(found).toBeGreaterThan(-1);
+    // A limit is LIMIT_REACHED: refused with its own code, not CONFIG_INVALID.
+    h.refuseWith('save:c', 'LIMIT_REACHED', 'A link page holds up to 40 links.');
+    await h.settle();
+    expect(h.calls.filter((call) => call === 'items')).toHaveLength(2);
+  });
+
+  it('sends an edit as an edit, so a block another tab deleted is refused rather than made again', async () => {
+    const h = harness();
+    await h.ready();
+    const sent: unknown[] = [];
+    h.onSave((input) => sent.push(input));
+    void h.store.save('acme', 'a', { kind: 'link', title: 'A2', url: 'https://a.dev' }, link('a', 'A2'));
+    void h.store.save('acme', 'z', { kind: 'link', title: 'Z', url: 'https://z.dev' }, link('z'));
+    await h.settle();
+    h.answer('save:a', link('a', 'A2'));
+    await h.settle();
+    expect(sent).toEqual([
+      expect.objectContaining({ id: 'a', isEdit: true }),
+      expect.not.objectContaining({ isEdit: true }),
+    ]);
+  });
+
   it('archives and restores in place, and deletes', async () => {
     const h = harness();
     await h.ready();
@@ -167,7 +218,7 @@ describe('checkBlock', () => {
       ok: false,
       problems: {
         title: 'Give the link a title.',
-        url: 'That address can’t be a link.',
+        url: 'Use a web address, an email or a phone number.',
         note: 'Keep the note to 120 characters.',
       },
     });

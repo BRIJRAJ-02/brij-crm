@@ -61,7 +61,11 @@ export const profileRouter = member.profile.router({
   ]),
   saveItem: member.profile.saveItem.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      saveProfileItem(context.scope, { id: input.id, block: input.block }),
+      saveProfileItem(context.scope, {
+        id: input.id,
+        block: input.block,
+        ...(input.isEdit === undefined ? {} : { isEdit: input.isEdit }),
+      }),
     ),
   ),
   orderItems: member.profile.orderItems.handler(({ context, input }) =>

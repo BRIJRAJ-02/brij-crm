@@ -18,11 +18,10 @@ import {
   type IconName,
   type SelectItem,
 } from '@crm/ui';
-import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { linksHref } from '../booking/links.ts';
 import { pageFacts, type BlockEditorProps } from './registry.tsx';
-import { strings } from './strings.ts';
+import { ICON_WORDS, strings } from './strings.ts';
 
 /** The Modal every block editor sits in: its title, Cancel and the submit, and "How it looks" under the fields. */
 function EditorModal({
@@ -73,19 +72,14 @@ function EditorModal({
 
 /** The icons a link may pick, with Automatic first (the network's logo, else the letter). */
 function iconItems(icons: readonly ProfileLinkIcon[]): readonly SelectItem[] {
-  const words = (icon: string) => {
-    const spaced = icon.replaceAll('-', ' ');
-    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-  };
   return [
-    { id: 'auto', label: strings.iconAuto, description: strings.iconAutoText, icon: 'sparkles' },
-    ...icons.map((icon) => ({ id: icon, label: words(icon), icon: icon })),
+    { id: 'auto', label: strings.iconAuto, description: strings.iconAutoText, icon: 'link' },
+    ...icons.map((icon) => ({ id: icon, label: ICON_WORDS[icon] ?? icon, icon })),
   ];
 }
 
 /** Add or edit a link: its title, address, note and icon, with the block drawn as typed under them. */
-export function LinkEditor({ item, items, onSubmit, onClose }: BlockEditorProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+export function LinkEditor({ item, items, newHue, linkPage, onSubmit, onClose }: BlockEditorProps) {
   const formId = useId();
   const editing = item?.kind === 'link' ? item : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
@@ -93,7 +87,7 @@ export function LinkEditor({ item, items, onSubmit, onClose }: BlockEditorProps)
   const [note, setNote] = useState(editing?.note ?? '');
   const [icon, setIcon] = useState<string>(editing?.icon ?? 'auto');
   const [problems, setProblems] = useState<BlockProblems>({});
-  const icons = useMemo(() => iconItems(data.linkPage.icons), [data]);
+  const icons = useMemo(() => iconItems(linkPage.icons), [linkPage]);
   const draft: BlockDraft = {
     kind: 'link',
     title,
@@ -103,9 +97,9 @@ export function LinkEditor({ item, items, onSubmit, onClose }: BlockEditorProps)
     ...(editing === undefined ? {} : { hue: editing.hue }),
   };
   // The block as it will show: the address as it will be stored when it can be, else as typed.
-  const checked = data.linkPage.check(draft, items, editing?.id);
+  const checked = linkPage.check(draft, items, editing?.id);
   const shownUrl = checked.ok && checked.block.kind === 'link' ? checked.block.url : url.trim();
-  const mark = data.linkPage.markOf(shownUrl);
+  const mark = linkPage.markOf(shownUrl);
   const submit = () => {
     if (!checked.ok) {
       setProblems(checked.problems);
@@ -122,13 +116,15 @@ export function LinkEditor({ item, items, onSubmit, onClose }: BlockEditorProps)
       preview={
         <LinkPage
           layout="blocks"
+          caption={strings.howItLooks}
           blocks={[
             {
               kind: 'link',
               id: editing?.id ?? 'draft',
               title: title.trim() === '' ? strings.linkTitlePlaceholder : title.trim(),
-              href: shownUrl,
-              hue: editing?.hue ?? 'blue',
+              // Only a checked address: one the rule refuses draws as words, never as a link.
+              href: checked.ok ? shownUrl : '',
+              hue: editing?.hue ?? newHue,
               ...(note.trim() === '' ? {} : { note: note.trim() }),
               ...(mark === undefined ? {} : { mark }),
               ...(icon === 'auto' ? {} : { icon: icon as IconName }),
@@ -203,14 +199,13 @@ export function LinkEditor({ item, items, onSubmit, onClose }: BlockEditorProps)
 }
 
 /** Add or rename a heading: its text, with the heading drawn as typed under it. */
-export function HeadingEditor({ item, items, onSubmit, onClose }: BlockEditorProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+export function HeadingEditor({ item, items, linkPage, onSubmit, onClose }: BlockEditorProps) {
   const formId = useId();
   const editing = item?.kind === 'heading' ? item : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const submit = () => {
-    const checked = data.linkPage.check({ kind: 'heading', title }, items, editing?.id);
+    const checked = linkPage.check({ kind: 'heading', title }, items, editing?.id);
     if (!checked.ok) {
       setProblem(checked.problems.title);
       return;
@@ -226,6 +221,7 @@ export function HeadingEditor({ item, items, onSubmit, onClose }: BlockEditorPro
       preview={
         <LinkPage
           layout="blocks"
+          caption={strings.howItLooks}
           blocks={[
             {
               kind: 'heading',
@@ -236,7 +232,12 @@ export function HeadingEditor({ item, items, onSubmit, onClose }: BlockEditorPro
         />
       }
     >
-      <Form id={formId} onSubmit={submit} label={strings.newHeading} focusesFirstField>
+      <Form
+        id={formId}
+        onSubmit={submit}
+        label={editing === undefined ? strings.newHeading : strings.editHeading}
+        focusesFirstField
+      >
         <Field
           label={strings.headingTitle}
           name="title"
@@ -266,8 +267,7 @@ type Choices =
  * Add a booking page: the person's Public pages from every workspace not on the page yet, the workspace named beside
  * each (AC-5117), read fresh each time it opens.
  */
-export function PageChooser({ slug, onSubmit, onClose }: BlockEditorProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+export function PageChooser({ slug, items, linkPage, onSubmit, onClose }: BlockEditorProps) {
   const formId = useId();
   const [choices, setChoices] = useState<Choices>({ status: 'loading' });
   const [picked, setPicked] = useState<string | null>(null);
@@ -275,11 +275,14 @@ export function PageChooser({ slug, onSubmit, onClose }: BlockEditorProps) {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let isCurrent = true;
-    data.linkPage.pageChoices(slug).then(
+    linkPage.pageChoices(slug).then(
       (found) => {
         if (!isCurrent) return;
-        setChoices({ status: 'ready', choices: found });
-        setPicked(found[0]?.pageId ?? null);
+        // Not a page already on the list, one still being added included.
+        const placed = new Set(items.flatMap((item) => (item.kind === 'page' ? [item.pageId] : [])));
+        const open = found.filter((choice) => !placed.has(choice.pageId));
+        setChoices({ status: 'ready', choices: open });
+        setPicked(open[0]?.pageId ?? null);
       },
       (error: unknown) => {
         if (isCurrent)
@@ -289,11 +292,13 @@ export function PageChooser({ slug, onSubmit, onClose }: BlockEditorProps) {
     return () => {
       isCurrent = false;
     };
-  }, [data, slug, attempt]);
+    // The blocks as the chooser opened: a change while it is open never reads the choices again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkPage, slug, attempt]);
   const chosen = choices.status === 'ready' ? choices.choices.find((each) => each.pageId === picked) : undefined;
   const submit = () => {
     if (chosen === undefined) {
-      setProblem('Pick a booking page.');
+      setProblem(strings.pickPage);
       return;
     }
     onSubmit({ kind: 'page', workspaceId: chosen.workspaceId, pageId: chosen.pageId }, chosen.facts);
@@ -325,7 +330,7 @@ export function PageChooser({ slug, onSubmit, onClose }: BlockEditorProps) {
       <EmptyState
         layout="row"
         icon="calendar-clock"
-        title={strings.noPages}
+        title={items.some((item) => item.kind === 'page') ? strings.noPages : strings.noPagesYet}
         actions={<ButtonLink href={linksHref(slug)}>{strings.noPagesAction}</ButtonLink>}
       />
     );

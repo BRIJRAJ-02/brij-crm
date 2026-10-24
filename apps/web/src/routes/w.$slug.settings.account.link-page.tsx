@@ -11,11 +11,13 @@ import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPa
 // never waiting for them: the list shows its own loading and failure, so a slow read never holds up the page.
 export const Route = createFileRoute('/w/$slug/settings/account/link-page')({
   loader: async ({ context, params }) => {
-    context.data.linkPage.read(params.slug).catch(() => undefined);
+    // The store loads with the page (never in the app's first load); its read starts here, never waited for.
+    const linkPage = await context.data.linkPage.load();
+    linkPage.read(params.slug).catch(() => undefined);
     try {
-      return { profile: await context.data.profile.get(params.slug) };
+      return { profile: await context.data.profile.get(params.slug), linkPage };
     } catch (error) {
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { profile: undefined };
+      if (isDataError(error) && error.code === 'NOT_FOUND') return { profile: undefined, linkPage };
       throw error;
     }
   },
@@ -29,11 +31,10 @@ export const Route = createFileRoute('/w/$slug/settings/account/link-page')({
 });
 
 function LinkPageRoute() {
-  const { profile } = Route.useLoaderData();
+  const { profile, linkPage } = Route.useLoaderData();
   const { slug } = Route.useParams();
-  const { data } = Route.useRouteContext();
   if (profile === undefined) return <SettingsMissing backTo="home" />;
-  return <LinkPageScreen key={profile.memberId} data={data} slug={slug} profile={profile} />;
+  return <LinkPageScreen key={profile.memberId} linkPage={linkPage} slug={slug} profile={profile} />;
 }
 
 function LinkPageError({ error }: ErrorComponentProps) {

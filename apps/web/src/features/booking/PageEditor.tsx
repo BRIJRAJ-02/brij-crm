@@ -51,7 +51,7 @@ import {
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
-import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { calendarSettingsHref, linkPageHref, profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
@@ -223,6 +223,8 @@ export function PageEditor({
   const navigate = useNavigate();
   // A page the reader can't change shows as it is, every control read only, with no Save.
   const isLocked = !page.canChange;
+  // The link page is the viewer's own: only the page's owner places it there (an admin editing a teammate's page doesn't).
+  const isOwnPage = useMyAccess()?.memberId === page.ownerMemberId;
   const saved = settingsOf(page);
   const [draft, setDraft] = useState(saved);
   // The address's shape is said once the person leaves the field, not at every key.
@@ -690,10 +692,10 @@ export function PageEditor({
                           />
                         </FieldGroup>
                       </Card>
-                      {page.handle !== undefined && !draft.isPrivate && (
+                      {page.handle !== undefined && !draft.isPrivate && isOwnPage && (
                         // Where it sits on the owner's link page at /<handle> (spec 0051): a Public page joins it by
                         // itself, and its place and heading are set on the link page, with the rest of the page.
-                        <Card title={strings.profile}>
+                        <Card title={strings.linkPage}>
                           <SettingsRow title={strings.onLinkPage} description={strings.onLinkPageLine}>
                             <ButtonLink href={linkPageHref(slug)} icon="pencil">
                               {strings.editLinkPage}

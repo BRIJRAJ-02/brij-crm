@@ -8,13 +8,17 @@ New (25 October 2026). The profile used to be BookingProfile with a LinkList of 
 
 ## Anatomy
 
-- **Hero**, centred: Avatar `xl`, the name as the page's `h1` (`text-heading`), the bio (`text-secondary`), then `socials` (the person's own set of network icons, never a block).
+- **Hero**, centred: Avatar `xl`, the name as the page's `h1` (`text-note-title`: the identity leads), the bio (`text-secondary`), then `socials` (the person's own set of network icons, never a block).
 - **Toolbar** (`toolbar`): a search once there are many blocks.
-- **Blocks**, `space-12` apart, in groups: the blocks before the first heading, then each heading (an `h2`, `text-label-strong`) with the blocks under it. Each block is a raised card (`surface-raised`, hairline, `radius-xl`, `shadow-xs`, `space-12` padding) that is one real link: a leading tile (`LinkPageTile`, `size-row` plus `space-6` square), its title (`text-title`) and a line under it, and an arrow at the end.
-  - `link`: opens the owner's address as typed (never wrapped or redirected) in a new tab, `rel="me noopener noreferrer nofollow"`; its name ends "(opens in a new tab)". Its tile is the network's mark (ProviderMark), else the picked icon, else the title's first letter on its hue's tag colours.
-  - `page`: one of the person's booking pages, opened in this tab; its tile is the calendar on `accent-soft`, its line the lengths ("15 min · 30 min · Team").
+- **Blocks**, `space-12` apart, in groups: the blocks before the first heading, then each heading (an `h2`, `text-body-strong` in the secondary colour) with the blocks under it. Each block is a raised card (`surface-raised`, hairline, `radius-xl`, `shadow-xs`, `space-12` padding) that is one real link: a leading tile (`LinkPageTile`, `size-row` plus `space-6` square), its title (`text-title`) and a line under it, and an arrow at the end.
+  - `link`: the owner's address as stored, never wrapped or redirected, through the library's one href rule (`safeHref`, plus `sms:` with a number); an address the rule refuses draws as words, never as a link. A web address opens in a new tab with `rel="noopener noreferrer nofollow"` (and `me` on a network profile, the person's own), its name ending "(opens in a new tab)", an arrow at its end. An email, a call or a text opens the device's app in place, with a mail, phone or message icon at its end. Its tile is the network's mark (ProviderMark), else the picked icon, else the email's, call's or text's own icon, else the title's first letter on its hue's tag colours.
+  - `page`: one of the person's booking pages (an address on our own origin only), opened in this tab; its tile is the calendar on `accent-soft` in the `link` colour, its line the lengths ("15 min · 30 min · Team"), and it ends in "Book" in the `link` colour (the accent itself falls under AA on a raised card in dark).
 - **After** (`after`): a refusal's Callout, Show more.
 - **Foot**: BookingFoot, tagged `booking_profile`.
+
+Why the letter tile isn't an Avatar: an Avatar is a person (initials from a name, a circle or a workspace square at the avatar sizes), while this tile is one of four faces of one slot (a brand mark on a hairline, a Lucide icon on the sunken surface, a calendar on the accent's soft surface, a letter on a hue), all at the tile's own size. Bending Avatar to draw marks and icons, or adding a tile size to it for this slot alone, would have spread the tile across two components; the hue pairs are the same `tag-<hue>` tokens Avatar and Tag read.
+
+`LinkPageTile` with no block is the tile's loading form (a Skeleton filling its place), which the page's loading blocks and the editor's loading rows (LinkList's `leadingLoading`) both draw, so the tile's size lives in this module alone.
 
 ## Use
 
@@ -32,12 +36,13 @@ New (25 October 2026). The profile used to be BookingProfile with a LinkList of 
 ```
 
 - **A new kind of block** is one more member of `LinkPageBlock` and one more renderer in `RENDERERS` (and a tile in `LinkPageTile`); callers map their data onto the union and skip a kind they can't map, so an older page never breaks on a newer block.
+- **`layout="blocks"`** draws only the blocks, inert, under an optional `caption` ("How it looks"), as a labelled group: an editor's draft of one block.
 - **`isPreview`** draws a plain region (no `main`), its content's height, `inert`: the editor's phone shows the page, and a press there never leaves the editor.
 - **`onPress`** hears a block pressed, for a counter's beacon; it never holds up the navigation.
 
 ## States
 
-Loading (no `person`: the hero's skeleton; no `blocks`: five block shaped places, the tile's and a title line's, so nothing moves when they arrive), empty (`empty` in the list's place), ready, long words (titles, notes, names and bios wrap inside their card), with Show more, and the preview. Hover lifts a card to `surface-hover` and `border-strong` on fine pointers only; focus draws `shadow-focus`; there is no press shrink (house rule). The blocks arrive with a short fade and a `space-2` rise over `duration-popover`; reduced motion keeps the fade.
+Loading (no `person`: the hero's skeleton; no `blocks`: five block shaped places, the tile's and a title line's, so nothing moves when they arrive), a refused address (words, no link), empty (`empty` in the list's place), ready, long words (titles, notes, names and bios wrap inside their card), with Show more, a search's count (`summary`, a status region mounted while a search is in play), the blocks alone, and the preview. Hover lifts a card to `surface-hover` and `border-strong` on fine pointers only; focus draws `shadow-focus`; there is no press shrink (house rule). The blocks arrive with a short fade and a `space-2` rise over `duration-popover`; reduced motion keeps the fade.
 
 ## Keyboard
 

@@ -56,6 +56,11 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   const [isLong, setLong] = useState(false);
   // Only the newest read lands: a slow answer to an older search never replaces a newer one.
   const latest = useRef(0);
+  // Whether the page has drawn once, read by a failed search without a state updater's side effect.
+  const loadedRef = useRef<Loaded['state']>('loading');
+  useEffect(() => {
+    loadedRef.current = loaded.state;
+  }, [loaded.state]);
 
   const load = useCallback(
     (search: string) => {
@@ -79,13 +84,11 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         (error: unknown) => {
           if (ticket !== latest.current) return;
           // Only the first read takes the page: a search that fails says so under the search.
-          setLoaded((was) => {
-            if (was.state === 'ready') {
-              setSearchFailed(true);
-              return was;
-            }
-            return { state: isDataError(error) && error.code === 'NOT_FOUND' ? 'gone' : 'failed' };
-          });
+          if (loadedRef.current === 'ready') {
+            setSearchFailed(true);
+            return;
+          }
+          setLoaded({ state: isDataError(error) && error.code === 'NOT_FOUND' ? 'gone' : 'failed' });
         },
       );
     },
@@ -121,7 +124,8 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
           setLoaded({
             state: 'ready',
             profile: loaded.profile,
-            items: [...loaded.items, ...page.items],
+            // A block the owner moved since the last page can come back: each shows once.
+            items: [...loaded.items, ...page.items.filter((item) => !loaded.items.some((each) => each.id === item.id))],
             ...(page.next === undefined ? {} : { next: page.next }),
           });
         },
@@ -164,7 +168,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         ...(profile.image === undefined ? {} : { image: profile.image }),
       }}
       blocks={blocks}
-      {...(isSearching && blocks.length > 0 ? { summary: strings.matches(blocks.length) } : {})}
+      {...(isSearching ? { summary: strings.matches(blocks.length) } : {})}
       claimHref={claimPageHref('booking_profile')}
       {...(isLong
         ? {

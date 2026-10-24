@@ -10,7 +10,15 @@ const page = (status: 'live' | 'paused'): ProfileItem => ({
   workspaceId: 'w',
   pageId: 'x',
   updatedAt: '',
-  page: { title: 'Intro', slug: 'intro', durations: [30], isTeam: false, workspaceName: 'Acme', status },
+  page: {
+    title: 'Intro',
+    slug: 'intro',
+    durations: [30],
+    isTeam: false,
+    workspaceName: 'Acme',
+    workspaceSlug: 'acme',
+    status,
+  },
 });
 
 describe('the block registry', () => {
@@ -32,8 +40,9 @@ describe('the block registry', () => {
       isOff: true,
       address: 'Paused, hidden from visitors · Booking page · 30 min',
     });
-    expect(rowWords({ kind: 'page', id: 'p', workspaceId: 'w', pageId: 'x', updatedAt: '' })).toMatchObject({
-      badge: 'Unavailable',
+    expect(rowWords({ kind: 'page', id: 'p', workspaceId: 'w', pageId: 'x', updatedAt: '' })).toEqual({
+      title: 'Booking page',
+      address: 'Unavailable, hidden from visitors · Link only, deleted, or in a workspace you left',
       isOff: true,
     });
   });

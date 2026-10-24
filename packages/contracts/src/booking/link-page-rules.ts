@@ -58,30 +58,50 @@ export type ProfileLinkIcon = (typeof PROFILE_LINK_ICONS)[number];
 /** The schemes a link may use (AC-5103). */
 const LINK_SCHEMES = new Set(['https:', 'http:', 'mailto:', 'tel:', 'sms:']);
 
-// Any ASCII control character, NUL to US, and DEL: browsers strip them while resolving, so `java\tscript:` would
-// otherwise read as text and run as script.
+// Any control character, C0, DEL and C1: browsers strip them while resolving, so `java\tscript:` would otherwise
+// read as text and run as script, and the database refuses them in every field (`[[:cntrl:]]`).
 // eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u001f\u007f]/;
+export const PROFILE_CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+
+/** What the database stores (crm_check_profile_item): a web address with a host, or mailto, tel or sms, no spaces. */
+const STORED_SHAPE = /^(https?:\/\/[^/?#@\s]+([/?#]\S*)?|mailto:\S+|tel:\S+|sms:\S+)$/i;
+
+/** An email address typed on its own, with no scheme. */
+const BARE_EMAIL = /^[^\s@/:]+@[^\s@/]+\.[^\s@/]+$/;
+
+/** A phone number typed on its own: a plus, digits, and the spaces, dots, dashes and brackets people put in. */
+const BARE_PHONE = /^\+?[\d\s().-]+$/;
 
 /** What a typed address becomes: the one address stored, or why it can't be a link. */
 export type ProfileLinkChecked =
   | { readonly ok: true; readonly url: string }
   | { readonly ok: false; readonly reason: 'empty' | 'too_long' | 'invalid' };
 
+/** A phone number with what people type around the digits taken out: `+44 20 (7946) 0958` is `+442079460958`. */
+function digitsOf(number: string): string {
+  return number.replace(/[\s().-]/g, '');
+}
+
 /**
  * A link's address as typed, checked and made canonical (AC-5103), the same rule in the editor and on the server:
- * trimmed; `https://` put before an address typed without a scheme; then only `https:`, `http:`, `mailto:`, `tel:`
- * or `sms:`, at most 2,000 characters, no credentials, no control characters, and a host for a web address.
- * `javascript:`, `data:` and every other scheme are refused. The address is never wrapped or redirected: it stays
- * the network's own canonical link, so a phone opens the network's app (the owner, 25 Oct 2026).
+ * trimmed; an email typed on its own becomes `mailto:`, a phone number `tel:` (its spaces, dots, dashes and brackets
+ * taken out), and anything else without a scheme gets `https://`; then only `https:`, `http:`, `mailto:`, `tel:` or
+ * `sms:`, at most 2,000 characters, no credentials, no control characters, a host for a web address, and no spaces
+ * (a web address with spaces or backslashes is stored as the browser resolves it, spaces encoded). `javascript:`,
+ * `data:` and every other scheme are refused. What it answers is exactly what the database's own check accepts. The
+ * address is never wrapped or redirected: it stays the network's own canonical link, so a phone opens the network's
+ * app (the owner, 25 Oct 2026).
  */
 export function checkProfileLink(typed: string): ProfileLinkChecked {
   const value = typed.trim();
   if (value === '') return { ok: false, reason: 'empty' };
   if (value.length > PROFILE_LINK_MAX) return { ok: false, reason: 'too_long' };
-  if (CONTROL.test(value)) return { ok: false, reason: 'invalid' };
-  const hasScheme = /^[a-z][a-z\d+.-]*:/i.test(value) && !/^[^:/]+:\d+(?:[/?#]|$)/.test(value);
-  const full = hasScheme ? value : `https://${value}`;
+  if (PROFILE_CONTROL.test(value)) return { ok: false, reason: 'invalid' };
+  let full: string;
+  if (BARE_EMAIL.test(value)) full = `mailto:${value}`;
+  else if (BARE_PHONE.test(value) && digitsOf(value).replace('+', '').length >= 6) full = `tel:${digitsOf(value)}`;
+  else if (/^[a-z][a-z\d+.-]*:/i.test(value) && !/^[^:/]+:\d+(?:[/?#]|$)/.test(value)) full = value;
+  else full = `https://${value}`;
   let parsed: URL;
   try {
     parsed = new URL(full);
@@ -89,16 +109,27 @@ export function checkProfileLink(typed: string): ProfileLinkChecked {
     return { ok: false, reason: 'invalid' };
   }
   if (!LINK_SCHEMES.has(parsed.protocol)) return { ok: false, reason: 'invalid' };
+  // The scheme as the browser reads it, lowercased; the rest as typed.
+  let url = `${parsed.protocol}${full.slice(full.indexOf(':') + 1)}`;
   if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
     if (parsed.username !== '' || parsed.password !== '') return { ok: false, reason: 'invalid' };
     // A host with a dot (or localhost is never a public link): `https://intro` is a word, not a site.
     if (!parsed.hostname.includes('.') || parsed.hostname.endsWith('.')) return { ok: false, reason: 'invalid' };
     if (!/^\/\//.test(full.slice(parsed.protocol.length))) return { ok: false, reason: 'invalid' };
-  } else if (parsed.pathname.trim() === '') {
-    return { ok: false, reason: 'invalid' };
+    if (/[\s\\]/.test(url)) url = parsed.href;
+  } else if (parsed.protocol === 'tel:' || parsed.protocol === 'sms:') {
+    // The number's own spaces and brackets go; what follows it (`?body=`) keeps its words, encoded.
+    const rest = url.slice(parsed.protocol.length);
+    const at = rest.search(/[?;]/);
+    const number = digitsOf(at === -1 ? rest : rest.slice(0, at));
+    if (!/^\+?\d{3,}$/.test(number)) return { ok: false, reason: 'invalid' };
+    url = `${parsed.protocol}${number}${at === -1 ? '' : rest.slice(at).replace(/\s/g, '%20')}`;
+  } else {
+    if (parsed.pathname.trim() === '' || !parsed.pathname.includes('@')) return { ok: false, reason: 'invalid' };
+    url = url.replace(/\s/g, '%20');
   }
-  const url = hasScheme ? `${parsed.protocol}${full.slice(full.indexOf(':') + 1)}` : full;
   if (url.length > PROFILE_LINK_MAX) return { ok: false, reason: 'too_long' };
+  if (!STORED_SHAPE.test(url)) return { ok: false, reason: 'invalid' };
   return { ok: true, url };
 }
 
@@ -106,7 +137,7 @@ export function checkProfileLink(typed: string): ProfileLinkChecked {
 export function profileLinkProblem(reason: 'empty' | 'too_long' | 'invalid'): string {
   if (reason === 'empty') return 'Enter the address.';
   if (reason === 'too_long') return `Keep the address to ${PROFILE_LINK_MAX.toLocaleString('en-US')} characters.`;
-  return 'That address can’t be a link.';
+  return 'Use a web address, an email or a phone number.';
 }
 
 /** The longest title each kind takes, and a link's note. */

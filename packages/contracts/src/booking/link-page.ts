@@ -10,6 +10,7 @@ import {
   PROFILE_NOTE_MAX,
   PROFILE_TITLE_MAX,
   profileLinkProblem,
+  PROFILE_CONTROL,
   PUBLIC_LINK_MARKS,
 } from './link-page-rules.ts';
 
@@ -33,7 +34,7 @@ const oneLine = (min: number, max: number, empty: string, long: string) =>
     .trim()
     .min(min, empty)
     .max(max, long)
-    .regex(/^[^\r\n]*$/, { error: 'Keep it to one line.' });
+    .refine((text) => !PROFILE_CONTROL.test(text), { error: 'Keep it to one line, with no special characters.' });
 
 /** A link: a title, an address, an optional one line note and an optional icon (AC-5101, AC-5103). */
 export const ProfileLinkBlock = z.object({
@@ -78,6 +79,8 @@ export const ProfilePageFacts = z.object({
   isTeam: z.boolean(),
   /** The workspace it is from, named beside it. */
   workspaceName: z.string(),
+  /** That workspace's address, for its editor's link (`/w/<slug>/captures/links/<page>`). */
+  workspaceSlug: z.string(),
   /**
    * `live`: on the page; `paused`: kept in place but not shown until it is resumed (AC-5104). A page the owner
    * made Link only, deleted, or left the workspace of has no facts at all.

@@ -21,6 +21,46 @@ describe('checkProfileLink', () => {
     expect(checkProfileLink('HTTPS://Ada.dev/Path')).toMatchObject({ ok: true });
   });
 
+  it('turns an email or a phone number typed on its own into its link, and takes spaces out', () => {
+    expect(checkProfileLink('anish@timefix.com')).toEqual({ ok: true, url: 'mailto:anish@timefix.com' });
+    expect(checkProfileLink('+91 99999 99999')).toEqual({ ok: true, url: 'tel:+919999999999' });
+    expect(checkProfileLink('(020) 7946-0958')).toEqual({ ok: true, url: 'tel:02079460958' });
+    expect(checkProfileLink('tel:+44 20 7946 0958')).toEqual({ ok: true, url: 'tel:+442079460958' });
+    expect(checkProfileLink('sms:+1 555 0100?body=Hi there')).toEqual({
+      ok: true,
+      url: 'sms:+15550100?body=Hi%20there',
+    });
+    expect(checkProfileLink('mailto:a@b.com?subject=Hi there')).toEqual({
+      ok: true,
+      url: 'mailto:a@b.com?subject=Hi%20there',
+    });
+    expect(checkProfileLink('https://example.com/my page')).toEqual({ ok: true, url: 'https://example.com/my%20page' });
+    expect(checkProfileLink('https://evil.com\\@good.com')).toEqual({ ok: true, url: 'https://evil.com/@good.com' });
+  });
+
+  it('answers only what the database’s own check stores (crm_check_profile_item)', () => {
+    // The definer's pattern, as written in migration 0096, and its refusal of whitespace and control characters.
+    const stored = /^(https?:\/\/[^/?#@]+([/?#].*)?|mailto:.+|tel:.+|sms:.+)$/i;
+    for (const typed of [
+      'a b.com',
+      'https://a.com# x',
+      'tel:+1 555 0100',
+      'mailto:a b@c.com',
+      'https://evil.com\\@good.com',
+      'https://a.com/\u00a0x',
+      'sms:hello',
+      'https://ex ample.com',
+      '+1',
+      'ada@ada.dev',
+    ]) {
+      const checked = checkProfileLink(typed);
+      if (checked.ok) {
+        expect(stored.test(checked.url), typed).toBe(true);
+        expect(/[\s]/.test(checked.url), typed).toBe(false);
+      }
+    }
+  });
+
   it('refuses every other scheme, credentials, control characters, a word and a long address', () => {
     for (const url of [
       'javascript:alert(1)',

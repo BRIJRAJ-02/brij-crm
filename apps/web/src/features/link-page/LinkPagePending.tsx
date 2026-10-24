@@ -1,6 +1,6 @@
 // The link page editor while its route loads: the same layout, the list's rows and the phone's page as skeletons,
 // so nothing moves when they arrive.
-import { Card, LinkList, LinkListRowOrder, LinkPage, PreviewLayout } from '@crm/ui';
+import { Card, LinkList, LinkListRowOrder, LinkPage, LinkPageTile, PreviewLayout } from '@crm/ui';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { strings } from './strings.ts';
 
@@ -15,7 +15,7 @@ export function LinkPagePending() {
             searchLabel={strings.blocks}
             placement="card"
             isToolbarHidden
-            hasLeading
+            leadingLoading={<LinkPageTile />}
             rows={[]}
             status="loading"
             onOpen={() => undefined}

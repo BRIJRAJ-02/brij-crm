@@ -8,6 +8,7 @@
 import type { ProfileBlock, ProfileItem, ProfileItems, ProfilePageChoice } from '@crm/contracts';
 import {
   checkProfileLink,
+  linkMarkOf,
   PROFILE_LIMITS,
   PROFILE_LINK_ICONS,
   PROFILE_NOTE_MAX,
@@ -55,6 +56,7 @@ export interface LinkPageApi {
     readonly workspace: string;
     readonly id: string;
     readonly block: ProfileBlock;
+    readonly isEdit?: boolean;
     readonly mutationId: string;
   }) => Promise<ProfileItem>;
   readonly orderItems: (input: {
@@ -242,10 +244,13 @@ export function checkBlock(
 
 /** The person's link page in each workspace they open it from, and its writes. */
 export function createLinkPageStore(deps: LinkPageDeps) {
-  const held = new Map<string, ReturnType<typeof make>>();
   const now = deps.now ?? Date.now;
+  // The blocks are the person's, the same in every workspace: one copy and one queue of writes, whichever
+  // workspace a screen opens them from. The workspace only picks the route each call goes through.
+  let held: ReturnType<typeof make> | undefined;
+  let workspace = '';
 
-  function make(workspace: string) {
+  function make() {
     let confirmed: Lists | undefined;
     let failed: DataError | undefined;
     let pending: readonly Pending[] = [];
@@ -280,12 +285,15 @@ export function createLinkPageStore(deps: LinkPageDeps) {
         .items({ workspace })
         .then(
           (answer) => {
-            // A write landed while this read was out: its answer is newer, so this one lands nothing.
+            // A write landed while this read was out: its answer is newer, so this one lands nothing, and the lists
+            // are read again once the writes waiting have gone, so a read meant to catch up still does.
             if (landed === asOf) {
               confirmed = { items: answer.items, archived: answer.archived };
               failed = undefined;
               readAt = now();
               show();
+            } else {
+              void queue.then(() => read()).catch(() => undefined);
             }
             return answer;
           },
@@ -332,36 +340,48 @@ export function createLinkPageStore(deps: LinkPageDeps) {
             action: { label: TRY_AGAIN, onAction: () => void retry() },
           });
           // What failed may have been stale (another tab): read the server's lists again behind the toast.
-          if (refusal.code === 'CONFIG_INVALID' || refusal.code === 'NOT_FOUND') void read().catch(() => undefined);
+          if (['CONFIG_INVALID', 'NOT_FOUND', 'LIMIT_REACHED'].includes(refusal.code))
+            void read().catch(() => undefined);
           return false;
         } finally {
           pending = pending.filter((each) => each.id !== id);
           show();
         }
       });
-      queue = sending;
+      // A listener that throws never jams the writes after it.
+      queue = sending.catch(() => false);
       return sending;
     };
 
-    const save = (id: string, block: ProfileBlock, shown: ProfileItem): Promise<boolean> =>
-      write(
-        {
-          show: upsert(shown),
-          ...(state.status === 'ready' && !state.items.some((item) => item.id === id) ? { adds: id } : {}),
-        },
-        () => deps.api.saveItem({ workspace, id, block, mutationId: deps.mintId() }),
+    // The newest save of each block: Try again on an older one never puts its words back over a newer edit.
+    const latestSave = new Map<string, number>();
+    const save = (id: string, block: ProfileBlock, shown: ProfileItem): Promise<boolean> => {
+      const isEdit = state.status === 'ready' && [...state.items, ...state.archived].some((item) => item.id === id);
+      const ticket = made + 1;
+      latestSave.set(id, ticket);
+      return write(
+        { show: upsert(shown), ...(isEdit ? {} : { adds: id }) },
+        () => deps.api.saveItem({ workspace, id, block, ...(isEdit ? { isEdit } : {}), mutationId: deps.mintId() }),
         (lists, answer) => upsert(answer)(lists),
-        () => save(id, block, shown),
+        () => (latestSave.get(id) === ticket ? save(id, block, shown) : Promise.resolve(false)),
       );
+    };
 
     const order = (ids: readonly string[]): Promise<boolean> =>
       write(
         { show: ordered(ids) },
-        () => deps.api.orderItems({ workspace, ids, mutationId: deps.mintId() }),
+        // The ids are chosen when it is sent, from what the server holds by then (every write before it has landed):
+        // an add that was refused meanwhile is left out rather than making the whole order stale.
+        () => {
+          const base = confirmed ?? { items: [], archived: [] };
+          const sent = ordered(ids)(base).items.map((item) => item.id);
+          return deps.api.orderItems({ workspace, ids: sent, mutationId: deps.mintId() });
+        },
         (_lists, answer) => ({ items: answer.items, archived: answer.archived }),
-        // Try again sends the order as the list stands then, so it never names a block that left meanwhile.
+        // Try again sends the order as the list stands then; with nothing left to order it sends nothing.
         () => {
           const now = state.status === 'ready' ? state.items.map((item) => item.id) : [];
+          if (now.length === 0) return Promise.resolve(false);
           const kept = ids.filter((each) => now.includes(each));
           return order([...kept, ...now.filter((each) => !kept.includes(each))]);
         },
@@ -404,12 +424,10 @@ export function createLinkPageStore(deps: LinkPageDeps) {
     return { holder, read, save, order, archive, remove };
   }
 
-  const of = (workspace: string) => {
-    const found = held.get(workspace);
-    if (found !== undefined) return found;
-    const fresh = make(workspace);
-    held.set(workspace, fresh);
-    return fresh;
+  const of = (opened: string) => {
+    workspace = opened;
+    held ??= make();
+    return held;
   };
 
   return {
@@ -435,9 +453,48 @@ export function createLinkPageStore(deps: LinkPageDeps) {
       deps.api.pageChoices({ workspace }).catch((error: unknown) => {
         throw toDataError(error);
       }),
-    /** Signed out: forgets every workspace's copy. */
+    /** Signed out: forgets the copy. */
     clear: (): void => {
-      held.clear();
+      held = undefined;
     },
   };
 }
+
+/**
+ * The link page's store and its rules as the editor uses them, made once by the data layer the first time a screen
+ * asks (`data.linkPage.load()`), so none of it rides in the app's first load.
+ */
+export function openLinkPage(deps: LinkPageDeps) {
+  const store = createLinkPageStore(deps);
+  return {
+    /** The blocks, held while a screen shows them (`useLinkPage`). */
+    view: (workspace: string): LinkPageHeld => store.of(workspace),
+    /** Reads them now (the route's loader); rejects with the refusal. */
+    read: (workspace: string): Promise<void> => store.read(workspace).then(() => undefined),
+    /** Adds or edits a block: `shown` at once, idempotent on `id`. Answers whether it landed. */
+    save: store.save,
+    /** The whole order of the live blocks. */
+    order: store.order,
+    /** Archives a block, or restores it to the end. */
+    archive: store.archive,
+    /** Deletes a block for good (the screen asks first). */
+    remove: store.remove,
+    /** The booking pages the person may still place, from every workspace, read fresh each time. */
+    pageChoices: store.pageChoices,
+    /** A block as typed, checked as the server will: each field's problem, or the block to send. */
+    check: checkBlock,
+    /** Whether one more block of a kind fits: undefined, or the limit's sentence. */
+    limit: blockLimit,
+    /** The network whose mark a link's address shows, as the server will answer it. */
+    markOf: linkMarkOf,
+    /** The icons a link may pick, in the order the editor offers them. */
+    icons: PROFILE_LINK_ICONS,
+    /** A new block's id. */
+    newId: (): string => deps.mintId(),
+    /** Signed out: forgets the copy. */
+    clear: store.clear,
+  };
+}
+
+/** The link page's store, as `data.linkPage.load()` answers it. */
+export type LinkPageStore = ReturnType<typeof openLinkPage>;

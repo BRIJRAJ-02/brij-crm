@@ -3,8 +3,15 @@
 // copies, and how it draws in the preview (the library's LinkPage block). A later kind (text, a photo, a video, a
 // form, an email capture) is one more entry here, a schema in `@crm/contracts`, and a renderer in LinkPage; the
 // public page maps it in `public/booking/link-page.ts`. A kind the editor has no entry for is skipped, never a crash.
-import type { BlockDraft, ProfileBlockKind, ProfileItem, ProfilePageChoice, ProfilePageFacts } from '@crm/data';
-import type { IconName, LinkPageBlock, LinkPageMark } from '@crm/ui';
+import type {
+  BlockDraft,
+  LinkPageStore,
+  ProfileBlockKind,
+  ProfileItem,
+  ProfilePageChoice,
+  ProfilePageFacts,
+} from '@crm/data';
+import type { Hue, IconName, LinkPageBlock, LinkPageMark } from '@crm/ui';
 import type { ComponentType } from 'react';
 import { HeadingEditor, LinkEditor, PageChooser } from './editors.tsx';
 import { strings } from './strings.ts';
@@ -18,6 +25,10 @@ export interface BlockEditorProps {
   readonly slug: string;
   /** The person's handle, for the preview's booking page addresses. */
   readonly handle: string;
+  /** The colour a new link's letter takes once saved, so "How it looks" shows it before. */
+  readonly newHue: Hue;
+  /** The link page's store: its checks, marks and the booking pages to choose from. */
+  readonly linkPage: LinkPageStore;
   /**
    * Checked and ready: the screen saves it (shown at once) and closes the Modal. A booking page comes with its
    * facts, so its row shows them before the server answers.
@@ -93,7 +104,12 @@ export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWor
   if (item.kind === 'link') return { title: item.title, address: shownAddress(item.url) };
   if (item.kind === 'heading') return { title: item.title, address: strings.heading };
   if (item.page === undefined) {
-    return { title: strings.bookingPage, address: strings.unavailableText, badge: strings.unavailable, isOff: true };
+    // Unavailable leads the line, as Paused does, so a phone keeps the row on one line.
+    return {
+      title: strings.bookingPage,
+      address: `${strings.unavailableLine} · ${strings.unavailableText}`,
+      isOff: true,
+    };
   }
   const facts = pageFacts(item.page);
   const isPaused = item.page.status === 'paused';

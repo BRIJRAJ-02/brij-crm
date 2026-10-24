@@ -157,7 +157,7 @@ describe('a link page', () => {
     ]) {
       expect(await refusalOf(add(ada.scope, link('Bad', url)))).toEqual({
         code: 'CONFIG_INVALID',
-        message: 'That address can’t be a link.',
+        message: 'Use a web address, an email or a phone number.',
       });
     }
     for (const url of ['mailto:ada@ada.dev', 'tel:+441234567890', 'sms:+441234567890', 'http://ada.dev']) {
@@ -322,6 +322,67 @@ describe('a link page', () => {
     expect((await readProfileItems(ada.scope)).items).toEqual([
       expect.objectContaining({ id: mine.id, title: 'Mine' }),
     ]);
+  });
+
+  it('never lets a colleague place a page that isn’t theirs, even in the same workspace', async () => {
+    const ada = await person('Ada');
+    const intro = await page(ada.scope, 'Intro');
+    const bobId = randomUUID();
+    await testQuery(ownerUrl, `insert into auth."user" (id, name, email) values ($1, 'Bob', $2)`, [
+      bobId,
+      `${bobId}@example.com`,
+    ]);
+    const bobMember = newId();
+    await db.withWorkspace(ada.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type) values (${ada.workspaceId}, ${bobMember}, ${bobId}, 'Bob', ${`${bobId}@example.com`}, 'admin', 'system', 'system')`,
+      ),
+    );
+    const bob = testScope({
+      db,
+      workspaceId: ada.workspaceId,
+      actor: { type: 'member', id: bobMember },
+      userId: bobId,
+    });
+    expect(await refusalOf(add(bob, { kind: 'page', workspaceId: ada.workspaceId, pageId: intro.id }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    // Even a row written past the service shows Bob nothing of Ada's page, in his editor or on his public page.
+    const bobHandle = fresh('bob');
+    await updateMyMemberProfile(bob, { handle: bobHandle });
+    await testQuery(
+      ownerUrl,
+      `insert into auth.profile_items (id, user_id, kind, position, data, workspace_id, page_id) values ($1, $2, 'page', 7, '{}', $3, $4)`,
+      [newId(), bobId, ada.workspaceId, intro.id],
+    );
+    expect(
+      (await readProfileItems(bob)).items.filter((item) => item.kind === 'page' && item.page !== undefined),
+    ).toEqual([]);
+    expect((await visitorRead(bobHandle)).items).toEqual([]);
+  });
+
+  it('refuses an edit of a block another tab deleted, rather than making it again', async () => {
+    const ada = await person('Ada');
+    const site = await add(ada.scope, link('Site', 'https://ada.dev'));
+    await deleteProfileItem(ada.scope, site.id);
+    expect(
+      await refusalOf(
+        saveProfileItem(ada.scope, { id: site.id, block: link('Site, renamed', 'https://ada.dev'), isEdit: true }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    expect((await readProfileItems(ada.scope)).items).toEqual([]);
+  });
+
+  it('stores what people type for a phone, an email and a spaced address, as the database accepts it', async () => {
+    const ada = await person('Ada');
+    expect(await add(ada.scope, link('Call me', '+44 20 7946 0958'))).toMatchObject({ url: 'tel:+442079460958' });
+    expect(await add(ada.scope, link('Mail me', 'ada@ada.dev'))).toMatchObject({ url: 'mailto:ada@ada.dev' });
+    expect(await add(ada.scope, link('Text me', 'sms:+1 555 0100?body=Hi there'))).toMatchObject({
+      url: 'sms:+15550100?body=Hi%20there',
+    });
+    expect(await add(ada.scope, link('Page', 'https://example.com/my page'))).toMatchObject({
+      url: 'https://example.com/my%20page',
+    });
   });
 
   it('pages a visitor’s read at 20 with a cursor, and a search finds matches flat', async () => {

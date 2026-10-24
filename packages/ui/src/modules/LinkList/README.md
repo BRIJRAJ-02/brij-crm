@@ -43,7 +43,7 @@ import { LinkList, LinkListRowOrder } from '@crm/ui';
 
 ## Rows with a tile
 
-`leading` puts a tile before a row's title (25 October 2026): the link page's editor (spec 0051) lists blocks that read apart at a glance by a network's mark, an icon or a letter, the tiles the page itself draws (`LinkPageTile`). Give every row one and the list `hasLeading`, so loading rows hold the tile's place. Why a variant and not a new list: the rows are the same rows (title, address, the menu, the drag), only a tile joins them, in the comfortable density only.
+`leading` puts a tile before a row's title (25 October 2026): the link page's editor (spec 0051) lists blocks that read apart at a glance by a network's mark, an icon or a letter, the tiles the page itself draws (`LinkPageTile`). Give every row one and the list `leadingLoading`, the tile's own loading form (`<LinkPageTile />`), which loading rows draw so the titles land where the lines stood; the tile's size lives in one place, LinkPage's module. Narrow (under 480), tiled rows stay on one line: the tile, the words (the title wraps, the address goes under it) and the end. Why a variant and not a new list: the rows are the same rows (title, address, the menu, the drag), only a tile joins them, in the comfortable density only.
 
 ## Density
 

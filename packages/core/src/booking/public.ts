@@ -24,6 +24,7 @@ import {
   bookingPicturePath,
   PROFILE_PAGE_SIZE,
   profilePicturePath,
+  checkProfileLink,
   linkMarkOf,
   PublicProfileItem,
   type PublicAddress,
@@ -305,6 +306,8 @@ function publicItemOf(row: LinkPageRow, pages: ReadonlyMap<string, PageRow>): Pu
   let candidate: unknown;
   if (row.kind === 'link') {
     const url = typeof data.url === 'string' ? data.url : '';
+    // Checked again on the way out: a stored address the rule no longer accepts is never drawn as a link.
+    if (!checkProfileLink(url).ok) return undefined;
     // The network's own mark for a profile or site on it, matched here so the public bundle never parses addresses.
     const network = linkMarkOf(url);
     candidate = {
