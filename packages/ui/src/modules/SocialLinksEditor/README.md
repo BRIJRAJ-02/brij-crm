@@ -18,7 +18,7 @@ else setRows(checked.rows); // every row that won't save now says why
 ```
 
 - Controlled: the screen holds the draft (`SocialLinkDraft[]`) and saves it its own way: Settings › Profile with its SaveBar, the dialog with Save.
-- `draft.ts` holds the plain functions: `draftOf` (stored links to rows, each field holding its handle), `checkedRow`, `linksOf` (rows to canonical links, an empty row left out, or the rows with their errors) and `isDraftChanged`.
+- `draft.ts` holds the plain functions: `socialLinksDraftOf` (stored links to rows, each field holding its handle), `checkedRow`, `socialLinksOfDraft` (rows to canonical links, an empty row left out, or the rows with their errors) and `isSocialLinksDraftChanged`.
 - A field is checked as it is left: a pasted profile link becomes its handle ("https://twitter.com/ada?s=20" reads "ada" after "x.com/"); a link to another network, a post, or another site is refused in plain words under the field ("That’s a link to Instagram, not LinkedIn."). A whole link shows without the prefix.
 - Remove takes a row out of the draft at once, with no confirm: nothing is saved until Save, and Discard brings it back.
 - One row per network, at most ten: Add social link offers only the networks not used, and goes away when every one is.
