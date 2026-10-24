@@ -79,7 +79,16 @@ interface IconOnlyFace {
   readonly label: string;
 }
 
-type ButtonFace = LabelledFace | IconOnlyFace;
+/** A brand's mark alone (a host's LinkedIn on a booking page), named by `label`. */
+interface MarkOnlyFace {
+  readonly children?: never;
+  readonly icon?: never;
+  readonly provider: ProviderName;
+  /** The accessible name, required because the mark is the only content ("LinkedIn, @ada"). */
+  readonly label: string;
+}
+
+type ButtonFace = LabelledFace | IconOnlyFace | MarkOnlyFace;
 
 /** Props for Button: a label (with an optional icon and a fuller `label` name), or an icon with a `label` for its name. */
 export type ButtonProps = ButtonLook &
@@ -274,6 +283,11 @@ export type ButtonLinkProps = Omit<ButtonLook, 'kbd' | 'slot' | 'ref'> &
     readonly isExternal?: boolean;
     /** Saves the address as a file with this name (a calendar's .ics) instead of opening it. */
     readonly download?: string;
+    /**
+     * More link types for an external link, beside `noopener noreferrer`: `me` on a person's own profile, `nofollow`
+     * on a link a visitor didn't write and we don't vouch for (a host's social links).
+     */
+    readonly relations?: readonly ('me' | 'nofollow')[];
   };
 
 /**
@@ -282,7 +296,7 @@ export type ButtonLinkProps = Omit<ButtonLook, 'kbd' | 'slot' | 'ref'> &
  * opens in a new tab with the browser's own gestures.
  */
 export function ButtonLink(props: ButtonLinkProps) {
-  const { href, isExternal = false, download, isDisabled } = props;
+  const { href, isExternal = false, download, isDisabled, relations = [] } = props;
   const face: ButtonFace = props;
   const safe = safeHref(href);
   return (
@@ -290,7 +304,7 @@ export function ButtonLink(props: ButtonLinkProps) {
       className={styles.root}
       {...(safe === undefined ? {} : { href: safe })}
       isDisabled={(isDisabled ?? false) || safe === undefined}
-      {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      {...(isExternal ? { target: '_blank', rel: [...relations, 'noopener', 'noreferrer'].join(' ') } : {})}
       {...(download === undefined ? {} : { download })}
       {...(face.label === undefined ? {} : { 'aria-label': face.label })}
       {...lookAttributes(props, face)}

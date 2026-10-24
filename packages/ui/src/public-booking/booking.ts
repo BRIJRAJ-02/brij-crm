@@ -19,6 +19,8 @@ export { Callout } from '../molecules/Callout/Callout.tsx';
 /** A profile with no links, or none that match (22 Oct 2026). */
 export { EmptyState } from '../molecules/EmptyState/EmptyState.tsx';
 export { SegmentedControl } from '../molecules/SegmentedControl/SegmentedControl.tsx';
+/** A person's social links (booking socials, 25 Oct 2026): the rail and the profile draw them, a link page too. */
+export { SocialLinks, type SocialLinkItem } from '../molecules/SocialLinks/SocialLinks.tsx';
 export { Select, type SelectItem } from '../molecules/Select/Select.tsx';
 export {
   BookingDetails,

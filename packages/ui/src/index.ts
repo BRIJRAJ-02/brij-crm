@@ -94,6 +94,23 @@ export { safeHref } from './lib/safe-href.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
 export { Callout, type CalloutPlacement, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
+export {
+  SocialLinks,
+  socialLinkName,
+  type SocialLinkItem,
+  type SocialLinkNetwork,
+  type SocialLinksProps,
+} from './molecules/SocialLinks/SocialLinks.tsx';
+export { SocialLinksEditor, type SocialLinksEditorProps } from './modules/SocialLinksEditor/SocialLinksEditor.tsx';
+/** The social links editor's draft: stored links to rows, rows back to checked links, and whether a draft changed. */
+export {
+  draftOf as socialLinksDraftOf,
+  isDraftChanged as isSocialLinksDraftChanged,
+  linksOf as socialLinksOfDraft,
+  type DraftLinks as SocialLinksDraftLinks,
+  type SocialLinkDraft,
+  type StoredSocialLink,
+} from './modules/SocialLinksEditor/draft.ts';
 export { FloatingBar, type FloatingBarProps } from './molecules/FloatingBar/FloatingBar.tsx';
 export { Card, type CardPageSize, type CardProps } from './molecules/Card/Card.tsx';
 export { CodeInput, type CodeInputProps, type CodeInputSize } from './molecules/CodeInput/CodeInput.tsx';

@@ -31,9 +31,11 @@ The loading rail is the loaded rail, line for line: the picture at the size the 
 
 A team page (spec 0037, AC-1339) passes `host.team`: up to 4 faces stack in place of the large picture, with "+N" for the rest and the stack named by `label` ("Team of 6"); the host's name line is left out, since the page passes the title as "Intro call with Acme". A personal page leaves `team` off and draws exactly as before; its `host.image` is the host's picture from our own origin (the page's `hostImage`, 23 Oct 2026), and the initials show without one or when it fails.
 
+A personal page's `host.socials` (booking socials, 25 October 2026) draws the host's social links as SocialLinks, the last line of their block, under the facts: it arrives in the same paint as the rest of the host, and on a wide page nothing under it moves, since the foot is pinned to the rail's end. The loading rail reserves nothing for it, since most hosts have none. A team page never draws it.
+
 ### BookingProfile (22 October 2026)
 
-A person's public profile, `/<handle>`, the Cal.com profile the owner pointed at: one card with their picture, their name as the page's `h1` and a one line bio, then their booking links, then the foot. `BookingProfileSection` groups links under the small heading their owner gave them. The links themselves are LinkList's comfortable rows (the whole row opens the page), with LinkListToolbar above them once there are many.
+A person's public profile, `/<handle>`, the Cal.com profile the owner pointed at: one card with their picture, their name as the page's `h1` and a one line bio (and their social links under it, `person.socials`), then their booking links, then the foot. `BookingProfileSection` groups links under the small heading their owner gave them. The links themselves are LinkList's comfortable rows (the whole row opens the page), with LinkListToolbar above them once there are many.
 
 Why a variant here rather than a new module: it is the booking pages' own page, so it keeps their background, centred column, card and foot, which live in this folder. The column is wider than BookingMessage's so a row's title and chips fit.
 

@@ -19,7 +19,7 @@ import {
   type ScheduleView,
   type SchedulesView,
 } from '@crm/data';
-import { useCalendar, useCaptureList, usePageDestination, useSchedules } from '@crm/data/react';
+import { useCalendar, useCaptureList, usePageDestination, useSchedules, useSocialLinks } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
@@ -88,6 +88,7 @@ import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
+import { previewSocials, SocialsCard } from './SocialsCard.tsx';
 
 /** Props for the editor: the page its route loaded. */
 export interface PageEditorProps {
@@ -143,6 +144,7 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   profilePosition: 'page',
   description: 'page',
   isPrivate: 'page',
+  showSocials: 'page',
   title: 'meeting',
   durations: 'meeting',
   location: 'meeting',
@@ -184,6 +186,7 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   scheduleId: page.scheduleId,
   rescheduleHost: page.rescheduleHost,
   isPrivate: page.isPrivate,
+  showSocials: page.showSocials,
   profileSection: page.profileSection,
   profilePosition: page.profilePosition,
 });
@@ -248,6 +251,9 @@ export function PageEditor({
   const dirty = changed(saved, draft);
   const isPageDirty = !isLocked && Object.keys(dirty).length > 0;
   const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember);
+  // The person's own social links, as the preview shows them while the page's switch is on (booking socials).
+  const socials = useSocialLinks(data.profile.socials(slug));
+  const previewLinks = socials.status === 'ready' ? previewSocials(socials.links) : [];
   // The chosen schedule's week and days off, edited in place and saved by the same Save as the page's settings
   // (through the data layer: shown at once, put back if the server refuses).
   const week = useScheduleDraft({
@@ -559,6 +565,10 @@ export function PageEditor({
                         description: draft.description,
                         durations: draft.durations,
                         location: draft.location,
+                        // The owner's links as they are now, while the draft shows them (booking socials).
+                        ...(ownerMember === undefined && page.kind === 'personal'
+                          ? { socials: draft.showSocials ? previewLinks : [] }
+                          : {}),
                       }}
                     />
                   }
@@ -704,6 +714,15 @@ export function PageEditor({
                           />
                         </FieldGroup>
                       </Card>
+                      <SocialsCard
+                        data={data}
+                        slug={slug}
+                        isTeam={page.kind === 'round_robin'}
+                        isOwner={ownerMember === undefined}
+                        isShown={draft.showSocials}
+                        isLocked={isLocked}
+                        onShownChange={(showSocials) => change({ showSocials })}
+                      />
                       {page.handle !== undefined && !draft.isPrivate && (
                         // Where it sits on the owner's profile, /<handle> (so only once there is a handle): under a
                         // section heading, or none. Pages keep the order they were made in (a drag order on the
