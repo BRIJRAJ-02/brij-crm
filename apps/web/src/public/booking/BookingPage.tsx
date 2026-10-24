@@ -193,7 +193,7 @@ export function BookingPage({
         />
       );
     case 'loading':
-      return <BookingFrame />;
+      return <LoadingBooking locale={locale} timeZone={timeZone} now={now} />;
     case 'gone':
       return <BookingMessage title={strings.notFoundTitle}>{strings.notFoundText}</BookingMessage>;
     case 'closed':
@@ -212,6 +212,99 @@ export function BookingPage({
       );
   }
 }
+
+/** The view switch's segments: Month, List or Chat, the same three the loaded page offers. */
+const viewSegments = [
+  { value: 'month', label: strings.month, icon: 'calendar' as const, isIconOnly: true },
+  { value: 'list', label: strings.list, icon: 'list' as const, isIconOnly: true },
+  { value: 'chat', label: strings.chat, icon: 'message-square' as const, isIconOnly: true },
+];
+
+/**
+ * The page while its facts are still coming: the same frame, the same card,
+ * the real month of the visitor's own zone with no day open yet, and a time's
+ * box in each of the times' places. Nothing here is a different shape from
+ * what arrives, so when the facts land the page fills in rather than moving.
+ * The two switches are the loaded page's own and keep working: what they
+ * remember is what the loaded page opens with.
+ */
+function LoadingBooking({
+  locale,
+  timeZone,
+  now,
+}: {
+  readonly locale: string;
+  readonly timeZone: string;
+  readonly now: () => number;
+}) {
+  const [view, setView] = useState<SlotView>(savedView);
+  const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
+  const today = dayKey(now(), timeZone);
+  const times = (
+    <SlotList
+      heading=""
+      slots={[]}
+      value={undefined}
+      onChange={() => undefined}
+      hour12={hour12}
+      onHour12Change={(next) => {
+        setHour12(next);
+        saveHour12(next);
+      }}
+      layout={view === 'month' ? 'column' : 'grid'}
+      isLoading
+    />
+  );
+  return (
+    <BookingFrame
+      claimHref={CLAIM_URL}
+      heading={strings.chooseTime}
+      // The visitor bar's place is held from the first paint, not from the moment the page's facts land, so the
+      // card never drops a row under a reaching hand on the way.
+      banner={
+        <Suspense fallback={null}>
+          <VisitorBar isLoading />
+        </Suspense>
+      }
+      toolbar={
+        <SegmentedControl
+          label={strings.view}
+          value={view}
+          onChange={(next) => {
+            const picked = next === 'list' || next === 'chat' ? next : 'month';
+            setView(picked);
+            saveView(picked);
+          }}
+          segments={viewSegments}
+        />
+      }
+      footer={
+        <Button variant="primary" size="lg" isFullWidth="center" isDisabled>
+          {strings.book}
+        </Button>
+      }
+      {...(view === 'month' ? { aside: times } : {})}
+    >
+      {view === 'month' ? (
+        <MonthTiles
+          month={monthOf(today)}
+          today={today}
+          openDays={NO_DAYS}
+          value={undefined}
+          onChange={() => undefined}
+          onMonthChange={() => undefined}
+          canPrevious={false}
+          canNext={false}
+        />
+      ) : (
+        times
+      )}
+    </BookingFrame>
+  );
+}
+
+/** No day is open until the times arrive. */
+const NO_DAYS: ReadonlySet<string> = new Set();
 
 /** Every zone this browser knows, the current one first, each with its offset. */
 function zoneItems(current: string, at: number): readonly SelectItem[] {

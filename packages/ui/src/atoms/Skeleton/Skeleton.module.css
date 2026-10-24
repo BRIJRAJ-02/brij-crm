@@ -26,10 +26,73 @@
     inline-size: 40%;
   }
 
+  /* A row of text that holds the text's own line box, so the lines it stands in
+     for leave the block exactly as tall as the text will be. The bar itself is
+     the pseudo element, centred in the line. */
+  .root[data-shape='text'] {
+    position: relative;
+    block-size: 1lh;
+    background: none;
+    animation: none;
+  }
+
+  .root[data-shape='text']::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline: 0;
+    block-size: var(--space-8);
+    margin-block: auto;
+    border-radius: var(--radius-xs);
+    background: var(--border);
+    animation: pulse var(--duration-pulse) var(--ease-in-out) infinite;
+    content: '';
+  }
+
+  .root[data-shape='text'][data-still]::before {
+    animation: none;
+  }
+
+  /* Takes the whole slot it sits in: a pane, a card's body, a row a grid already sized. */
+  .root[data-shape='fill'] {
+    block-size: 100%;
+    border-radius: var(--radius-md);
+  }
+
   .root[data-shape='circle'] {
     inline-size: var(--size-chip);
     block-size: var(--size-chip);
     border-radius: var(--radius-full);
+  }
+
+  /* The avatar scale, so a loading face is the size the face will be. */
+  .root[data-shape='circle'][data-size='xs'] {
+    inline-size: var(--avatar-xs);
+    block-size: var(--avatar-xs);
+  }
+
+  .root[data-shape='circle'][data-size='sm'] {
+    inline-size: var(--avatar-sm);
+    block-size: var(--avatar-sm);
+  }
+
+  .root[data-shape='circle'][data-size='md'] {
+    inline-size: var(--avatar-md);
+    block-size: var(--avatar-md);
+  }
+
+  .root[data-shape='circle'][data-size='lg'] {
+    inline-size: var(--avatar-lg);
+    block-size: var(--avatar-lg);
+  }
+
+  .root[data-shape='circle'][data-size='title'] {
+    inline-size: var(--avatar-title);
+    block-size: var(--avatar-title);
+  }
+
+  .root[data-shape='circle'][data-size='xl'] {
+    inline-size: var(--avatar-xl);
+    block-size: var(--avatar-xl);
   }
 
   .root[data-shape='tile'] {
@@ -63,6 +126,12 @@
     flex-direction: column;
     gap: var(--space-8);
     inline-size: 100%;
+  }
+
+  /* Text rows already carry their line box, so they stack with no gap: the
+     block is then exactly as tall as the paragraph it stands in for. */
+  .lines[data-shape='text'] {
+    gap: 0;
   }
 
   /* Under centred text, the shorter last line sits in the middle too. */

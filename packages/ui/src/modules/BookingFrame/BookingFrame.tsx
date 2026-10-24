@@ -37,7 +37,10 @@ const TEAM_FACES = 4;
 
 /** Props for BookingFrame. */
 export interface BookingFrameProps {
-  /** Missing while the page loads: the rail and the card draw as skeletons. */
+  /**
+   * Missing while the page loads: the rail draws as skeletons in the shape the
+   * host will take, and a pane with nothing in it does the same.
+   */
   readonly host?: BookingHost;
   /** The meeting ("Intro call"), the page's `h1`, under the host's name. */
   readonly title?: string;
@@ -98,9 +101,38 @@ export function BookingFrame({
       <div className={styles.layout}>
         <aside className={styles.rail} aria-label={isLoading ? strings.loading : strings.about}>
           {isLoading ? (
-            <div className={styles.identity}>
-              <Skeleton shape="circle" />
-              <Skeleton lines={3} width="medium" />
+            /* The shape the host will take, line for line, so nothing moves when the page's facts arrive. */
+            <div className={styles.identity} aria-busy="true">
+              <Skeleton shape="circle" size="xl" />
+              <div className={styles.names}>
+                <p className={styles.host}>
+                  <Skeleton shape="text" width="medium" />
+                </p>
+                <p className={styles.title}>
+                  <Skeleton shape="text" width="short" />
+                </p>
+              </div>
+              <p className={styles.description}>
+                <Skeleton shape="text" lines={2} />
+              </p>
+              <ul className={styles.facts}>
+                <li className={styles.fact}>
+                  <span className={styles.factIcon}>
+                    <Skeleton shape="tile" />
+                  </span>
+                  <span className={styles.factBody}>
+                    <Skeleton shape="field" width="medium" />
+                  </span>
+                </li>
+                <li className={styles.fact}>
+                  <span className={styles.factIcon}>
+                    <Skeleton shape="tile" />
+                  </span>
+                  <span className={styles.factBody}>
+                    <Skeleton shape="text" width="long" />
+                  </span>
+                </li>
+              </ul>
             </div>
           ) : (
             <div className={styles.identity}>
@@ -156,8 +188,10 @@ export function BookingFrame({
               </div>
             )}
             <div className={styles.panes} data-panes={aside === undefined ? 'one' : 'two'}>
-              <div className={styles.pane}>{isLoading ? <Skeleton shape="block" lines={6} /> : children}</div>
-              {aside !== undefined && <div className={styles.aside}>{isLoading ? <Skeleton lines={6} /> : aside}</div>}
+              {/* A pane draws what it is given, loading or not: the page hands its own month and times, already in
+                  their shape, so the card is the right height from the first paint. */}
+              <div className={styles.pane}>{children ?? <Skeleton shape="block" lines={6} />}</div>
+              {aside !== undefined && <div className={styles.aside}>{aside}</div>}
             </div>
             {footer !== undefined && <div className={styles.footer}>{footer}</div>}
           </section>

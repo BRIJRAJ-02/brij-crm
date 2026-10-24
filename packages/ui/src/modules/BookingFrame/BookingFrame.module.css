@@ -40,11 +40,13 @@
     min-inline-size: 0;
   }
 
+  /* No entrance on the rail or the card: the page's frame is the first thing
+     painted and it never arrives, it is simply there. What animates is the
+     content inside it, where something really does arrive. */
   .identity {
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
-    animation: frame-rise var(--duration-modal) var(--ease-out) both;
   }
 
   .names {
@@ -126,14 +128,16 @@
     border-radius: var(--radius-xl);
     background: var(--surface-raised);
     box-shadow: var(--shadow-md);
-    animation: frame-rise var(--duration-modal) var(--ease-out) calc(var(--duration-hover) / 2) both;
   }
 
+  /* As tall as the heading row's tallest control, so the row keeps its height
+     whether or not the toolbar has arrived. */
   .head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-12);
+    min-block-size: calc(var(--size-control) + 2 * var(--space-2));
     padding: var(--space-20) var(--space-20) 0;
   }
 
@@ -369,26 +373,6 @@
   @media (hover: hover) and (pointer: fine) {
     .claim:hover {
       color: var(--text);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .identity,
-    .card {
-      animation-name: frame-fade;
-    }
-  }
-
-  @keyframes frame-rise {
-    from {
-      opacity: 0;
-      translate: 0 var(--space-8);
-    }
-  }
-
-  @keyframes frame-fade {
-    from {
-      opacity: 0;
     }
   }
 }

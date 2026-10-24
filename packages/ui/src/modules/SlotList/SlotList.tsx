@@ -44,6 +44,9 @@ export interface SlotListProps {
   readonly drawKey?: string;
 }
 
+/** How many time boxes the loading list holds: a working day's worth, so the pane is about as tall as it will be. */
+const GHOST_SLOTS = 12;
+
 /**
  * The times of one day on a booking page (spec 0025, AC-666 to AC-669): the
  * day, the 12h or 24h switch, then the times. Picking a time never moves on;
@@ -87,10 +90,18 @@ export function SlotList({
         </div>
       )}
       {isLoading ? (
-        <div className={styles.loading} aria-busy="true">
+        /* The times' own grid, with a time's box in each place, so the list is
+           already the right height and shape before a single time arrives. */
+        <>
           <VisuallyHidden>{strings.loading}</VisuallyHidden>
-          <Skeleton shape="block" lines={5} />
-        </div>
+          <ul className={styles.list} aria-busy="true">
+            {Array.from({ length: GHOST_SLOTS }, (_, index) => (
+              <li key={index} className={styles.item} data-ghost="" aria-hidden="true">
+                <Skeleton shape="fill" />
+              </li>
+            ))}
+          </ul>
+        </>
       ) : slots.length === 0 && empty !== undefined ? (
         <div className={styles.empty}>{empty}</div>
       ) : (
