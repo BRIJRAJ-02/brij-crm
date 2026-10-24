@@ -92,6 +92,7 @@ import { strings as rotationStrings } from './rotation-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
 import { previewSocials, SocialsCard } from './SocialsCard.tsx';
+import { strings as socialsStrings } from './socials-strings.ts';
 
 /** Props for the editor: the page its route loaded. */
 export interface PageEditorProps {
@@ -1128,7 +1129,7 @@ export interface PageEditorPendingProps {
  * whether it has them; Hours draws a one on one page's, the usual kind.
  */
 const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
-  page: [strings.details, strings.sharing],
+  page: [strings.details, strings.sharing, socialsStrings.title],
   meeting: [strings.meeting, strings.location, strings.calendarSection],
   hosts: [rotationStrings.hosts, routingStrings.routing],
   hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff],
