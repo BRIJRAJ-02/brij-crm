@@ -11,13 +11,21 @@ import middleware, {
   GEO_HEADERS,
   HANDLE_PATH,
   handleHostRedirect,
+  hasSessionHint,
   ORIGIN_HEADER,
   PUBLIC_HOST_PATH,
   publicHostRedirect,
+  SESSION_HINT_COOKIE,
+  SESSION_HINT_PRESENT,
+  STAY_PARAM,
   TRACE_HEADERS,
 } from './middleware.ts';
 import * as paths from './public-paths.ts';
 import { MIDDLEWARE_MATCHER } from './public-paths.ts';
+import {
+  SESSION_HINT_COOKIE as cookieName,
+  SESSION_HINT_PRESENT as cookiePresent,
+} from './src/features/auth/parent-hint.ts';
 
 const API = 'https://api-production.up.railway.app';
 
@@ -283,7 +291,10 @@ describe('the api switch (spec 0045)', () => {
 });
 
 describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
-  const at = (url: string) => middleware(new Request(url));
+  const at = (url: string, headers: Record<string, string> = {}) => middleware(new Request(url, { headers }));
+  const hint = `${SESSION_HINT_COOKIE}=${SESSION_HINT_PRESENT}`;
+  /** The same request made twice: once plain, once carrying the session hint. */
+  const bothWays: readonly Record<string, string>[] = [{}, { cookie: hint }];
 
   beforeEach(() => {
     vi.stubEnv('APP_URL', 'https://app.timefix.com');
@@ -292,7 +303,7 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
     vi.stubEnv('API_ORIGIN_INTERNAL', API);
   });
 
-  it.each(['/', '/sign-in', '/settings/profile', '/w/acme', '/api/rpc/system/status', '/book.html'])(
+  it.each(['/sign-in', '/settings/profile', '/w/acme', '/api/rpc/system/status', '/book.html'])(
     'moves %s there to the marketing site, for good',
     (pathname) => {
       const response = at(`https://timefix.com${pathname}`);
@@ -303,12 +314,50 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
     },
   );
 
+  // The apex's home is the one answer that reads a cookie (25 Oct 2026), so it is never kept for anyone else.
+  it('takes a browser holding the session hint to the app, privately', () => {
+    const response = at('https://timefix.com/', { cookie: `theme=dark; ${hint}` });
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('https://app.timefix.com/');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toBe('cookie, host');
+  });
+
+  it('takes a browser without the hint to the marketing site, and keeps that answer private too', () => {
+    const response = at('https://timefix.com/');
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('https://www.timefix.com/');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toBe('cookie, host');
+  });
+
+  it(`keeps the marketing site with ?${STAY_PARAM}, which may be cached for good`, () => {
+    const response = at(`https://timefix.com/?${STAY_PARAM}=1`, { cookie: hint });
+    expect(response.status).toBe(308);
+    expect(response.headers.get('location')).toBe('https://www.timefix.com/');
+    expect(response.headers.get('cache-control')).toBe('public, max-age=3600');
+    expect(response.headers.get('vary')).toBe('host');
+  });
+
+  it('never reads a cookie for the other paths, so their move stays cacheable for everyone', () => {
+    for (const pathname of ['/sign-in', '/w/acme', '/book.html']) {
+      const response = at(`https://timefix.com${pathname}`, { cookie: hint });
+      expect(response.status, pathname).toBe(308);
+      expect(response.headers.get('location'), pathname).toBe('https://www.timefix.com/');
+      expect(response.headers.get('cache-control'), pathname).toBe('public, max-age=3600');
+      expect(response.headers.get('vary'), pathname).toBe('host');
+    }
+  });
+
   it.each(['/ada', '/ada/30min', '/b/AbCdEfGhIjKlMnOp', '/f/contact', '/embed/v1.js', '/embed.js'])(
-    'keeps %s there',
+    'keeps %s there, with the session hint or without it',
     (pathname) => {
-      const response = at(`https://timefix.com${pathname}`);
-      expect(response.status).not.toBe(308);
-      expect(response.headers.get('x-middleware-next')).toBe('1');
+      for (const headers of bothWays) {
+        const response = at(`https://timefix.com${pathname}`, headers);
+        expect(response.status).not.toBe(308);
+        expect(response.status).not.toBe(302);
+        expect(response.headers.get('x-middleware-next')).toBe('1');
+      }
     },
   );
 
@@ -319,7 +368,11 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
 
   it('leaves the app’s own routes, API and files alone', () => {
     for (const pathname of ['/', '/settings/profile', '/w/acme', '/api/rpc/system/status', '/favicon.ico']) {
-      expect(at(`https://app.timefix.com${pathname}`).status, pathname).not.toBe(308);
+      for (const headers of bothWays) {
+        const response = at(`https://app.timefix.com${pathname}`, headers);
+        expect(response.status, pathname).not.toBe(308);
+        expect(response.status, pathname).not.toBe(302);
+      }
     }
   });
 
@@ -345,14 +398,15 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
   });
 
   it('changes nothing with PUBLIC_HOST_HOME_URL or APP_URL unset, or when the public origin is the app’s own', () => {
+    const moves = (url: string) => [308, 302].includes(at(url, { cookie: hint }).status);
     vi.stubEnv('PUBLIC_HOST_HOME_URL', '');
-    expect(at('https://timefix.com/').status).not.toBe(308);
+    expect(moves('https://timefix.com/')).toBe(false);
     vi.stubEnv('PUBLIC_HOST_HOME_URL', 'https://www.timefix.com');
     vi.stubEnv('APP_URL', '');
-    expect(at('https://timefix.com/').status).not.toBe(308);
+    expect(moves('https://timefix.com/')).toBe(false);
     vi.stubEnv('APP_URL', 'https://app.timefix.com');
     vi.stubEnv('BOOKING_PUBLIC_ORIGIN', 'https://app.timefix.com');
-    expect(at('https://app.timefix.com/').status).not.toBe(308);
+    expect(moves('https://app.timefix.com/')).toBe(false);
   });
 });
 
@@ -389,12 +443,38 @@ describe('the public host check written out in middleware.ts', () => {
       'https://app.timefix.com/settings',
       'https://app.timefix.com/api/rpc/system/status',
     ];
-    for (const each of urls) {
-      expect(publicHostRedirect(new URL(each), env), each).toBe(paths.publicHostRedirect(new URL(each), env));
+    const cookies = [undefined, `${SESSION_HINT_COOKIE}=${SESSION_HINT_PRESENT}`, 'theme=dark'];
+    for (const each of [...urls, `https://timefix.com/?${STAY_PARAM}=1`]) {
+      for (const cookie of cookies) {
+        expect(publicHostRedirect(new URL(each), env, cookie), `${each} ${String(cookie)}`).toEqual(
+          paths.publicHostRedirect(new URL(each), env, cookie),
+        );
+      }
       expect(handleHostRedirect(new URL(each), env), each).toBe(paths.handleHostRedirect(new URL(each), env));
     }
-    expect(publicHostRedirect(new URL('https://timefix.com/settings'), env)).toBe('https://www.timefix.com/');
+    expect(publicHostRedirect(new URL('https://timefix.com/settings'), env)).toEqual({
+      location: 'https://www.timefix.com/',
+      onCookie: false,
+    });
     expect(publicHostRedirect(new URL('https://timefix.com/ada/30min'), env)).toBeUndefined();
     expect(handleHostRedirect(new URL('https://app.timefix.com/ada'), env)).toBe('https://timefix.com/ada');
+  });
+
+  it('reads the session hint cookie exactly as public-paths.ts does', () => {
+    expect(SESSION_HINT_COOKIE).toBe(cookieName);
+    expect(SESSION_HINT_PRESENT).toBe(cookiePresent);
+    expect(STAY_PARAM).toBe(paths.STAY_PARAM);
+    for (const cookie of [
+      undefined,
+      '',
+      `${cookieName}=${cookiePresent}`,
+      `a=1; ${cookieName}=${cookiePresent}; b=2`,
+      `${cookieName}=`,
+      `${cookieName}=0`,
+      `x${cookieName}=${cookiePresent}`,
+      `${cookieName}_other=${cookiePresent}`,
+    ]) {
+      expect(hasSessionHint(cookie), String(cookie)).toBe(paths.hasSessionHint(cookie));
+    }
   });
 });

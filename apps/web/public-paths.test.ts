@@ -11,12 +11,15 @@ import {
   HANDLE_HEADER_SOURCE,
   HANDLE_PATH,
   handleHostRedirect,
+  hasSessionHint,
   PAGE_SOURCE,
   PROFILE_SOURCE,
   publicHostRedirect,
   servedOnPublicHost,
+  STAY_PARAM,
   TOP_LEVEL_FILES,
 } from './public-paths.ts';
+import { SESSION_HINT_COOKIE, SESSION_HINT_PRESENT } from './src/features/auth/parent-hint.ts';
 
 const config = JSON.parse(readFileSync(path.join(import.meta.dirname, 'vercel.json'), 'utf8')) as {
   readonly rewrites: readonly { readonly source: string; readonly destination: string }[];
@@ -152,10 +155,84 @@ describe('the public booking host', () => {
   };
 
   it('moves anything else on that host to the marketing site, and nothing on another host', () => {
-    expect(publicHostRedirect(new URL('https://timefix.com/'), env)).toBe('https://www.timefix.com/');
-    expect(publicHostRedirect(new URL('https://timefix.com/sign-in?next=/w'), env)).toBe('https://www.timefix.com/');
+    expect(publicHostRedirect(new URL('https://timefix.com/'), env)).toEqual({
+      location: 'https://www.timefix.com/',
+      onCookie: true,
+    });
+    expect(publicHostRedirect(new URL('https://timefix.com/sign-in?next=/w'), env)).toEqual({
+      location: 'https://www.timefix.com/',
+      onCookie: false,
+    });
     expect(publicHostRedirect(new URL('https://timefix.com/ada/30min'), env)).toBeUndefined();
     expect(publicHostRedirect(new URL('https://app.timefix.com/'), env)).toBeUndefined();
+  });
+
+  // The owner, 25 Oct 2026: "if I am already logged in and I go to timefix.com, it should just detect and take me
+  // to the dashboard". The session cookie is host only, so the apex can't see it; the parent domain hint can.
+  describe('the apex home and the session hint', () => {
+    const hint = `${SESSION_HINT_COOKIE}=${SESSION_HINT_PRESENT}`;
+    const root = new URL('https://timefix.com/');
+
+    it('sends a browser holding the hint to the app, and says a cookie decided it', () => {
+      expect(publicHostRedirect(root, env, hint)).toEqual({ location: 'https://app.timefix.com/', onCookie: true });
+      expect(publicHostRedirect(root, env, `other=1; ${hint}; third=2`)).toEqual({
+        location: 'https://app.timefix.com/',
+        onCookie: true,
+      });
+      expect(publicHostRedirect(new URL('https://timefix.com/?utm_source=x'), env, hint)).toEqual({
+        location: 'https://app.timefix.com/',
+        onCookie: true,
+      });
+    });
+
+    it('sends a browser without it to the marketing site, as before', () => {
+      for (const cookie of [undefined, '', 'theme=dark', `${SESSION_HINT_COOKIE}=`, `${SESSION_HINT_COOKIE}=0`]) {
+        expect(publicHostRedirect(root, env, cookie), String(cookie)).toEqual({
+          location: 'https://www.timefix.com/',
+          onCookie: true,
+        });
+      }
+      expect(hasSessionHint('tf_signed_in_other=1')).toBe(false);
+      expect(hasSessionHint('xtf_signed_in=1')).toBe(false);
+      expect(hasSessionHint(hint)).toBe(true);
+    });
+
+    it('keeps the marketing site with ?stay, the way back for someone signed in, reading no cookie', () => {
+      expect(publicHostRedirect(new URL(`https://timefix.com/?${STAY_PARAM}=1`), env, hint)).toEqual({
+        location: 'https://www.timefix.com/',
+        onCookie: false,
+      });
+      expect(publicHostRedirect(new URL(`https://timefix.com/?${STAY_PARAM}`), env, hint)).toEqual({
+        location: 'https://www.timefix.com/',
+        onCookie: false,
+      });
+    });
+
+    it('leaves every public path where it is, hint or no hint', () => {
+      const paths = ['/ada', '/ada/30min', '/b/AbCdEfGhIjKlMnOp', '/f/contact', '/embed/v1.js', '/embed.js'];
+      for (const pathname of paths) {
+        const at = new URL(`https://timefix.com${pathname}`);
+        expect(publicHostRedirect(at, env, hint), pathname).toBeUndefined();
+        expect(publicHostRedirect(at, env), pathname).toBeUndefined();
+      }
+    });
+
+    it('never reads the hint on any path but the home, so a cached move stays cacheable', () => {
+      for (const pathname of ['/sign-in', '/settings/profile', '/w/acme', '/book.html']) {
+        expect(publicHostRedirect(new URL(`https://timefix.com${pathname}`), env, hint), pathname).toEqual({
+          location: 'https://www.timefix.com/',
+          onCookie: false,
+        });
+      }
+    });
+
+    it('changes nothing on the app’s own host or a preview, hint or no hint', () => {
+      expect(publicHostRedirect(new URL('https://app.timefix.com/'), env, hint)).toBeUndefined();
+      const oneHost = { ...env, BOOKING_PUBLIC_ORIGIN: 'https://app.timefix.com' };
+      expect(publicHostRedirect(new URL('https://app.timefix.com/'), oneHost, hint)).toBeUndefined();
+      expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: '' }, hint)).toBeUndefined();
+      expect(publicHostRedirect(root, { ...env, APP_URL: undefined }, hint)).toBeUndefined();
+    });
   });
 
   it('does nothing unless both origins are set, https, and apart from the app’s', () => {
