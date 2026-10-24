@@ -194,3 +194,36 @@ export function createAccountSessionsStore(deps: AccountSessionsDeps) {
 
 /** The account sessions store. */
 export type AccountSessionsStore = ReturnType<typeof createAccountSessionsStore>;
+
+/** The account's session procedures of the data layer's client, as `openAccountSessions` calls them. */
+interface SessionProcedures {
+  readonly list: (
+    input: Parameters<AccountSessionsApi['list']>[0],
+    options: { signal?: AbortSignal },
+  ) => ReturnType<AccountSessionsApi['list']>;
+  readonly revoke: (
+    input: Parameters<AccountSessionsApi['revoke']>[0],
+    options: { signal?: AbortSignal },
+  ) => ReturnType<AccountSessionsApi['revoke']>;
+  readonly revokeOthers: (
+    input: undefined,
+    options: { signal?: AbortSignal },
+  ) => ReturnType<AccountSessionsApi['revokeOthers']>;
+}
+
+/** The sessions store with its calls built here, in its own chunk (`lazy-sessions.ts`). */
+export function openAccountSessions(given: {
+  readonly sessions: SessionProcedures;
+  readonly call: <T>(run: (options: { readonly signal?: AbortSignal }) => Promise<T>) => Promise<T>;
+  readonly notify: (notice: Notice) => void;
+}): AccountSessionsStore {
+  const { sessions, call } = given;
+  return createAccountSessionsStore({
+    api: {
+      list: (input) => call((options) => sessions.list(input, options)),
+      revoke: (input) => call((options) => sessions.revoke(input, options)),
+      revokeOthers: () => call((options) => sessions.revokeOthers(undefined, options)),
+    },
+    notify: given.notify,
+  });
+}
