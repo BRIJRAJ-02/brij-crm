@@ -102,6 +102,11 @@ export const bookingPages = pgTable(
     /** A private page (spec 0027, AC-707, AC-708): it may book inside the host's holds, and waives its minimum notice. */
     isPrivate: boolean('is_private').notNull().default(false),
     /**
+     * Whether the page shows its owner's social links under their name (booking socials, migration 0096): on by
+     * default. Read only for a personal page; a team page names no host, so never shows them (AC-754).
+     */
+    showSocials: boolean('show_socials').notNull().default(true),
+    /**
      * Where this page's bookings go (spec 0024 milestone 5, AC-997): one of the owner's writable calendars, or null
      * for the owner's own "Add events to". Its foreign key (hand written in 0052) sets only this column to null when
      * the calendar goes.

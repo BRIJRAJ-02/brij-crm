@@ -7,6 +7,7 @@ import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
 import { BookingDuration, TimeZoneName } from './settings.ts';
 import { Uuid } from '../values/ids.ts';
+import { SOCIAL_LINK_NETWORKS } from '../values/social-networks.ts';
 
 /** A page's public key: 16 URL safe characters. */
 export const PublicKey = z.string().regex(/^[A-Za-z0-9_-]{16}$/, { error: 'That booking link isn’t right.' });
@@ -22,6 +23,19 @@ export const PublicLocation = z.discriminatedUnion('type', [
 ]);
 /** Where the meeting happens. */
 export type PublicLocation = z.infer<typeof PublicLocation>;
+
+/**
+ * One of the host's social links as a public page draws it (booking socials, 25 Oct 2026): the network (its mark and
+ * name), the stored canonical link, and what it reads as ("@ada", "ada.dev"), made by the server so the public
+ * pages carry no link parsing.
+ */
+export const PublicSocialLink = z.object({
+  network: z.enum(SOCIAL_LINK_NETWORKS),
+  href: z.string(),
+  label: z.string(),
+});
+/** One of the host's social links on a public page. */
+export type PublicSocialLink = z.infer<typeof PublicSocialLink>;
 
 /** `GET /api/public/booking/:publicKey`: the page's facts. */
 export const PublicBookingPage = z.object({
@@ -57,6 +71,11 @@ export const PublicBookingPage = z.object({
    * there. Absent while the owner has none.
    */
   path: z.string().optional(),
+  /**
+   * The host's social links, in their order (booking socials, 25 Oct 2026): only on a personal page whose owner has
+   * "Show my social links" on, absent when there are none. A team page names no host, so never has them (AC-754).
+   */
+  socials: z.array(PublicSocialLink).optional(),
 });
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;
@@ -126,6 +145,8 @@ export const PublicProfile = z.object({
   /** The person's picture on our own origin (`/api/public/profiles/<handle>/picture?v=`), when the account has one. */
   image: z.string().optional(),
   bio: z.string(),
+  /** Their social links, in their order, absent when there are none (booking socials, 25 Oct 2026). */
+  socials: z.array(PublicSocialLink).optional(),
   links: z.array(PublicProfileLink),
   /** The cursor of the next page, while there is one. */
   next: z.string().optional(),

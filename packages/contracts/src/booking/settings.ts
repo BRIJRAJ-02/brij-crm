@@ -220,6 +220,11 @@ export const BookingPageSettings = z.object({
   profileSection: z.string().trim().min(1).max(40, 'Keep the section to 40 characters.').nullable(),
   /** Where a Public page sits on its owner's profile: lower first, then oldest first. */
   profilePosition: z.number().int().min(0, 'Use 0 to 999.').max(999, 'Use 0 to 999.'),
+  /**
+   * Whether a personal page shows its owner's social links under their name (booking socials, 25 Oct 2026): on by
+   * default. The owner's alone to change, as the address is; a team page never shows them (AC-754).
+   */
+  showSocials: z.boolean(),
 });
 /** Every setting a member edits. */
 export type BookingPageSettings = z.infer<typeof BookingPageSettings>;
