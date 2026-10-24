@@ -284,8 +284,9 @@ export function BookingProfile({ person, children, claimHref }: BookingProfilePr
                 <p className={styles.host}>
                   <Skeleton shape="text" width="medium" />
                 </p>
+                {/* One row: a bio stands on a card as wide as the list, where most fit a line. */}
                 <p className={styles.description}>
-                  <Skeleton shape="text" lines={2} />
+                  <Skeleton shape="text" width="long" />
                 </p>
               </div>
             </>

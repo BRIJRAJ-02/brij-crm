@@ -1,0 +1,106 @@
+// The public pages' loading shape, measured in a real browser (24 October
+// 2026, the owner: "no flash no nothing"): what a visitor sees before the
+// page's facts arrive has to be the shape of what arrives, or the page moves
+// under them. These hold the loading rail and the loading profile card to the
+// loaded ones, so a change to either side that parts them fails here rather
+// than on a visitor's phone.
+import { act, type ReactNode } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createToasts } from '../../provider/toasts.tsx';
+import { UiProvider } from '../../provider/UiProvider.tsx';
+import { BookingFrame, BookingProfile, type BookingFact } from './BookingFrame.tsx';
+import '../../styles/index.css';
+
+/** How far apart a loading region and the loaded one may stand, in pixels. */
+const TOLERANCE = 8;
+
+let host: HTMLElement;
+let view: Root | undefined;
+
+beforeEach(() => {
+  host = document.createElement('div');
+  // A page's width, so the rail and the card take the page layout, not the stacked one.
+  host.style.inlineSize = '1280px';
+  document.body.append(host);
+  view = createRoot(host);
+});
+
+afterEach(() => {
+  act(() => {
+    view?.unmount();
+  });
+  view = undefined;
+  host.remove();
+});
+
+/** Draws `children` inside the public pages' provider. */
+function draw(children: ReactNode): void {
+  act(() => {
+    view?.render(
+      <UiProvider locale="en-GB" timeZone="Europe/London" toasts={createToasts()} navigate={() => undefined}>
+        {children}
+      </UiProvider>,
+    );
+  });
+}
+
+/** The height of the one region `selector` names, or 0 when it isn't there. */
+function heightOf(selector: string): number {
+  return host.querySelector(selector)?.getBoundingClientRect().height ?? 0;
+}
+
+const FACTS: readonly BookingFact[] = [
+  { id: 'meeting', icon: 'video', children: '30 min · Video call' },
+  { id: 'zone', icon: 'globe', children: 'London time GMT+1' },
+];
+
+describe('a booking page before its facts arrive', () => {
+  it('draws the name, the meeting and the facts in the rows they will take', () => {
+    // The description is left out on purpose: how many lines a host's own words wrap to is not knowable before
+    // they arrive, so the loading rail draws the two lines most of them take and no test can hold it tighter.
+    draw(<BookingFrame heading="Choose a time" />);
+    const ghost = { names: heightOf('aside > div > div'), facts: heightOf('aside ul') };
+    draw(
+      <BookingFrame host={{ name: 'Ada Lovelace' }} title="Intro call" facts={FACTS} heading="Choose a time" />,
+    );
+    const real = { names: heightOf('aside > div > div'), facts: heightOf('aside ul') };
+    expect(ghost.names).toBeGreaterThan(0);
+    expect(ghost.facts).toBeGreaterThan(0);
+    expect(Math.abs(ghost.names - real.names)).toBeLessThanOrEqual(TOLERANCE);
+    expect(Math.abs(ghost.facts - real.facts)).toBeLessThanOrEqual(TOLERANCE);
+  });
+
+  it('draws the picture at the size the picture will be', () => {
+    draw(<BookingFrame heading="Choose a time" />);
+    const ghost = heightOf('aside [data-shape="circle"]');
+    draw(<BookingFrame host={{ name: 'Ada Lovelace' }} title="Intro call" heading="Choose a time" />);
+    // The identity's first child is the host's picture.
+    const avatar = heightOf('aside > div > :first-child');
+    expect(ghost).toBeGreaterThan(0);
+    expect(Math.abs(ghost - avatar)).toBeLessThanOrEqual(1);
+  });
+
+  it('draws no entrance on the rail or the card, so the frame is simply there', () => {
+    draw(<BookingFrame host={{ name: 'Ada Lovelace' }} title="Intro call" heading="Choose a time" />);
+    for (const part of host.querySelectorAll('aside > div, section')) {
+      expect(part.getAnimations()).toHaveLength(0);
+    }
+  });
+});
+
+describe('a profile before its person arrives', () => {
+  it('draws a card the height the person’s card will be, with the links loading under it', () => {
+    draw(<BookingProfile />);
+    const loading = heightOf('header');
+    expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
+    // Drawn at once, not after the loading delay: a public page's first paint is already its loading state.
+    expect(host.querySelectorAll('[data-shape]').length).toBeGreaterThan(3);
+    draw(
+      <BookingProfile person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Engineer, and I like short meetings.' }} />,
+    );
+    const loaded = heightOf('header');
+    expect(loading).toBeGreaterThan(0);
+    expect(Math.abs(loading - loaded)).toBeLessThanOrEqual(TOLERANCE);
+  });
+});

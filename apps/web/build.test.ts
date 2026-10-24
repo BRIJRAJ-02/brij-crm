@@ -174,8 +174,11 @@ describe('the first load', () => {
   // booking page only after a refusal, so the build can't merge them into the app's entry. Same bytes, one file.
   // 42 since Settings › Super admin's address reader (spec 0047, features/admin/search.ts, 0.3 kB): its routes read
   // the period up front, and the build keeps it apart from the entry as it does the bookings routes' search.
+  // 43 since the hosted form draws its own loading shape (24 October 2026): Skeleton is now drawn by all three
+  // entries rather than two, so the build gives it a shared chunk instead of merging a copy into each. Same
+  // bytes, one file.
   it('stays merged into a few dozen files, as it is with no top level await in the build', () => {
-    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(42);
+    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(43);
   });
 
   it('never loads the grid, editor, charts or schema map chunk up front', () => {

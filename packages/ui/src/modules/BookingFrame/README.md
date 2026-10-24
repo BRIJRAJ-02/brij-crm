@@ -25,7 +25,9 @@ New. The public booking page moved onto the library on 20 October 2026 (as the h
 
 The foot's two links go to www.timefix.com with the campaign tags from `@crm/contracts/brand`, the one place the hosted form and the emails take theirs from: the wordmark tags itself (`poweredByHref` with the foot's `page`, the booking page unless BookingProfile, BookingMessage or BookingReceipt's own foot says otherwise), and `claimHref` comes from `claimPageHref` for the same page.
 
-`aside` adds the end pane; leave it off for one wide pane (the details step). `footer` is the band across the card's foot. A fact's `children` may be a control (the time zone's Select). `banner` sits above the card (the visitor's calendar, spec 0028). Without `host` and `title` the frame draws skeletons.
+`aside` adds the end pane; leave it off for one wide pane (the details step). `footer` is the band across the card's foot. A fact's `children` may be a control (the time zone's Select). `banner` sits above the card (the visitor's calendar, spec 0028). Without `host` and `title` the rail draws skeletons.
+
+The loading rail is the loaded rail, line for line: the picture at the size the picture will be (`Skeleton shape="circle" size="xl"`), the name and the meeting in their own line boxes (`shape="text"`, which is `1lh` of the font it sits in), the description two rows, and two facts in the rows the length switch and the zone will take. A pane draws whatever it is given, loading or not, so the page hands its own month and its own times, already in their shape, and the card is the right height from the first paint. The heading row keeps a control's height whether or not the toolbar has arrived. Nothing here animates in: the frame is the first thing painted, so it never arrives, it is simply there, and what animates is the content inside it, where something really does arrive (24 October 2026, the owner: "no flash no nothing").
 
 A team page (spec 0037, AC-1339) passes `host.team`: up to 4 faces stack in place of the large picture, with "+N" for the rest and the stack named by `label` ("Team of 6"); the host's name line is left out, since the page passes the title as "Intro call with Acme". A personal page leaves `team` off and draws exactly as before; its `host.image` is the host's picture from our own origin (the page's `hostImage`, 23 Oct 2026), and the initials show without one or when it fails.
 
@@ -43,11 +45,13 @@ Why a variant here rather than a new module: it is the booking pages' own page, 
 </BookingProfile>
 ```
 
-Without `person` the card draws as a skeleton. Its foot's links are tagged as the profile's (`booking_profile`), and a message on a profile passes `page="booking_profile"` to BookingMessage.
+Without `person` the card draws as a skeleton, with the picture at the picture's own size and the name and bio in their own line boxes, and with no children it draws the links' rows loading too, at once rather than after the loading delay (`LoadingNow`): a public page's first paint is already its loading state, so there is no content for a skeleton to flash in front of. That means `<BookingProfile />` on its own is the whole profile loading, which is what both the page and the fallback for its module draw. Its foot's links are tagged as the profile's (`booking_profile`), and a message on a profile passes `page="booking_profile"` to BookingMessage.
+
+The profile's column starts at the top rather than centring, unlike the booking page's: a list whose length nobody knows until it arrives would otherwise pull the person's own card up the page as the rows filled in.
 
 ## States
 
-Three panes, two panes, a personal page with the host's picture (initials if it fails), a team page, loading; BookingMessage's loading, message and Try again; BookingProfile's loaded, with sections (a row with no address shows none), empty, and loading.
+Three panes, two panes, a personal page with the host's picture (initials if it fails), a team page, loading; BookingMessage's loading (the heading's and the line's places, and no picture, since a message never has one), message and Try again; BookingProfile's loaded, with sections (a row with no address shows none), empty, and loading.
 
 ## Keyboard
 

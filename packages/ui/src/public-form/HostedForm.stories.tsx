@@ -1,8 +1,8 @@
-import type { PublicForm } from '@crm/contracts/forms';
+import { formStrings, type PublicForm } from '@crm/contracts/forms';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Stage } from '../workbench/Stage/Stage.tsx';
-import { HostedForm } from './HostedForm.tsx';
+import { FormLoading, HostedForm } from './HostedForm.tsx';
 
 /** The owner's form: name, work email, phone and a size, as a new form starts with one dropdown added. */
 const LEAD = {
@@ -94,6 +94,24 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** Classic on its own page: the headline, the questions with "(optional)" after the optional ones, "Choose one" in the empty dropdown. */
+/**
+ * Before the form has been read: the same ground, the same card, and the places the headline, the questions and
+ * the button will take. It carries no theme of its own, since the form's Colour is not known yet.
+ */
+export const Loading: Story = {
+  render: () => (
+    <Stage width="fill">
+      <FormLoading mode="page" words={formStrings('en')} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const card = canvasElement.querySelector('[data-frame="card"]');
+    await expect(card?.getAttribute('aria-busy')).toBe('true');
+    await expect(card?.hasAttribute('data-theme')).toBe(false);
+    await expect(canvasElement.querySelectorAll('[data-shape="field"]')).toHaveLength(4);
+  },
+};
+
 export const Classic: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { level: 1, name: LEAD.headline })).toBeInTheDocument();
