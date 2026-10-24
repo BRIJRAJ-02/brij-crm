@@ -30,15 +30,23 @@ describe('sectionsOf', () => {
 
   it('never puts two workspaces in one card, even unsectioned or under the same heading (owner ask, 24 Oct)', () => {
     const links = [link('quick-chat', undefined, A), link('brijraj', undefined, B), link('demo', 'Sales', B)];
+    // The cards with no heading come first, so none sits under another workspace's heading.
     expect(shape([...links, link('pitch', 'sales', A)])).toEqual([
       [undefined, ['quick-chat']],
-      ['sales', ['pitch']],
       [undefined, ['brijraj']],
+      ['sales', ['pitch']],
       ['Sales', ['demo']],
     ]);
     // Workspaces in the order of their first link; every card's key is unique.
     const keys = sectionsOf([...links, link('pitch', 'Sales', A)]).map((each) => each.key);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('keeps one workspace’s cards exactly as Settings arranged them, a headless card after a heading too', () => {
+    expect(shape([link('b', 'Sales'), link('a')])).toEqual([
+      ['Sales', ['b']],
+      [undefined, ['a']],
+    ]);
   });
 
   it('lets a group continue with links read on the next page', () => {
