@@ -52,7 +52,6 @@ type Story = StoryObj<typeof meta>;
 
 /** The page's call to action, above the card: the row's width, with one quiet line under it. */
 export const Cta: StoryObj<MatchCalendarProps> = {
-  parameters: { crm: { preview: true } },
   render: function Render() {
     const [isOpen, setIsOpen] = useState(false);
     return (
@@ -72,8 +71,12 @@ export const Cta: StoryObj<MatchCalendarProps> = {
   },
 };
 
-/** Why, before Google: what it does, and that free or busy is all it reads. */
+/**
+ * Why, before Google: what it does, and that free or busy is all it reads.
+ * The artifact's preview, since a preview draws with React as a browser global and so may hold no state of its own.
+ */
 export const Why: Story = {
+  parameters: { crm: { preview: true } },
   play: async () => {
     const dialog = await screen.findByRole('dialog');
     await expect(dialog).toHaveTextContent('times you’re both free');
