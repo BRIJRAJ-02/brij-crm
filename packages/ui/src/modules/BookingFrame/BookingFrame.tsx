@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { Avatar, AvatarStack, type AvatarStackPerson } from '../../atoms/Avatar/Avatar.tsx';
-import { Button } from '../../atoms/Button/Button.tsx';
+import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -396,6 +396,70 @@ export function BookingProfileSection({ title, children }: BookingProfileSection
       )}
       {children}
     </section>
+  );
+}
+
+/**
+ * The longest handle the action quotes back. Past it the button names the address instead: a handle can be 40
+ * characters, and quoting one of those pushes the button past the card on a phone, while the headline above
+ * carries the whole address anyway.
+ */
+const ACTION_HANDLE_MAX = 18;
+
+/** Props for BookingHandleOffer. */
+export interface BookingHandleOfferProps {
+  /** The address as the visitor reads it in the bar, host and all: "timefix.com/ada". */
+  readonly address: string;
+  /** The handle alone, as the action quotes it back: "ada". */
+  readonly handle: string;
+  /** Where the action goes: the sign in page carrying this handle (`signInPath` in `@crm/contracts/brand`). */
+  readonly claimHref: string;
+}
+
+/**
+ * A `/<handle>` nobody holds (25 Oct 2026): the dead end turned into an offer,
+ * laid out as Cal.com's version of the same page and dressed as ours. The
+ * quiet fact first ("Page not found"), then the headline with the address
+ * itself as its subject and the accent on what is being offered
+ * ("timefix.com/ada is free"), then one bordered card that is the action, with
+ * the address quoted back on its button so the visitor reads it twice.
+ *
+ * Nothing else: no list of other places to go, and no claim link in the foot,
+ * since the card already is the claim. Only an address nobody holds reaches
+ * this page; a word kept for Timefix and a handle somebody holds both read as
+ * BookingMessage's plain not found, so this page can never say that a private
+ * account exists.
+ */
+export function BookingHandleOffer({ address, handle, claimHref }: BookingHandleOfferProps) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  const leadId = useId();
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
+  return (
+    <main className={styles.root}>
+      <div className={styles.narrow}>
+        <div className={styles.offerHead}>
+          {/* The quiet label a section heading uses: the same quiet line, in the same place above a block. */}
+          <p id={leadId} className={styles.sectionTitle}>
+            {strings.offerLead}
+          </p>
+          {/* The heading takes focus, so the fact follows the offer rather than being left above it unread. */}
+          <h1 ref={heading} tabIndex={-1} aria-describedby={leadId} className={styles.offerTitle}>
+            {address} <span className={styles.offerFree}>{strings.offerFree}</span>
+          </h1>
+        </div>
+        <div className={styles.message}>
+          <p className={styles.description}>{strings.offerText}</p>
+          <div className={styles.offerAction}>
+            <ButtonLink variant="primary" size="lg" isFullWidth="center" href={claimHref}>
+              {handle.length > ACTION_HANDLE_MAX ? strings.offerActionLong : strings.offerAction(handle)}
+            </ButtonLink>
+          </div>
+        </div>
+        <BookingFoot page="booking_profile" />
+      </div>
+    </main>
   );
 }
 

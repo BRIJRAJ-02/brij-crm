@@ -19,6 +19,7 @@ import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
 import {
   FORM_SLUG,
   HANDLE_PATTERN,
+  type HandleOffer,
   INVITE_INVALID_MESSAGE,
   isReservedHandle,
   SIGN_IN_AGAIN_MESSAGE,
@@ -687,6 +688,29 @@ export async function findHandleOwner(deps: { readonly db: Database }, handle: s
   const owner = await handleOwner(deps.db, handle);
   if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
   return owner;
+}
+
+/**
+ * Whether `/<handle>` is free to claim (25 Oct 2026), asked only after a profile read found nothing. `free` means
+ * nobody holds the handle and nothing keeps anyone from taking it; everything else is `absent`, one answer for
+ * three reasons: a handle somebody holds (whether or not anything of theirs is public), a word kept for Timefix
+ * (`RESERVED_HANDLES`), and a word no handle could ever be.
+ *
+ * Why one word and not three: not to keep a secret, which it could not. `RESERVED_HANDLES` ships in the browser,
+ * so anyone can subtract it, and a handle somebody holds answers with their public profile through
+ * `enterBookingProfile` either way. It is so that the offer is only ever made for an address that is genuinely
+ * free to take, and so no later caller can grow a reason in words out of this answer.
+ *
+ * Reads through `crm_handle_owner`, the same definer every other handle read goes through, so this adds no way to
+ * the data, and `HANDLE_PATTERN` and `isReservedHandle` are the same checks the claim itself refuses on
+ * (`handleProblem`), so `free` never promises an address the claim would reject. Exported only from
+ * `@crm/core/public`.
+ */
+export async function readHandleOffer(deps: { readonly db: Database }, handle: string): Promise<HandleOffer> {
+  // A word kept for Timefix can never be claimed, so it is never offered.
+  if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return 'absent';
+  // A person holds it, listed or not: `absent`, exactly as a reserved word reads.
+  return (await handleOwner(deps.db, handle)) === undefined ? 'free' : 'absent';
 }
 
 /** A page's narrow, read only entry: its `booking` actor with no record access, as the guest page's. */

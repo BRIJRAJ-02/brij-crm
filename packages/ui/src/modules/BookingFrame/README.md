@@ -53,13 +53,27 @@ Without `person` the card draws as a skeleton, with the picture at the picture's
 
 The profile's column starts at the top rather than centring, unlike the booking page's: a list whose length nobody knows until it arrives would otherwise pull the person's own card up the page as the rows filled in.
 
+### BookingHandleOffer (25 October 2026)
+
+A `/<handle>` nobody holds. Today the page said "Page not found. No one has this address." and stopped; the owner pointed at Cal.com's version of the same page, which tells the visitor the name is still free and offers it, and asked for that in our clothes. So, in order: the quiet fact ("Page not found") as a small label, then the headline with the address itself as its subject and the accent on what is on offer ("timefix.com/ada **is free**"), then one bordered card holding a line and the action, whose button quotes the address back ("Sign up and take /ada"), then the foot. The button names signing up rather than claiming, because that is all it can do today: nothing on the other side reads the address yet, so "Claim" would promise what the next screen doesn't do. Past 18 characters the button says "Sign up and take this address", since a 40 character handle pushes it off a phone and the headline above carries the address whole anyway.
+
+```tsx
+<BookingHandleOffer address="timefix.com/ada" handle="ada" claimHref={signInPath({ handle: 'ada', appOrigin })} />
+```
+
+What it deliberately leaves out: Cal's list of other places to go (documentation, a blog), since a stranger has nowhere useful to be sent and a row of weak links under a strong offer is what `subtractive-design` cuts; and the foot's claim link, since the card already is the claim, so the foot carries the wordmark alone.
+
+Only an address nobody holds reaches this page. A word kept for Timefix (`RESERVED_HANDLES`) and a handle somebody holds, whether or not anything of theirs is public, both keep BookingMessage's plain not found, so the page can never say that a private account sits behind an address. The page decides that from one closed answer, `free` or `absent` (`readHandleOffer` in core, `GET /api/public/profiles/:handle/offer`).
+
+Why these few classes rather than props on BookingMessage: it is the same ground, column, card and foot, which live in this folder, as BookingProfile is. But BookingMessage is one card with a heading inside it, and this page's heading stands above its card, which is what makes the card read as the one thing to press; the three props it would take (a lead line, an accent word, a link action) would make it two components in one. The headline takes the note title's size, one step above a heading, because here the offer is the whole page.
+
 ## States
 
-Three panes, two panes, List over the month (`SwitchingViews`), the details step over the card and Back (`StepToDetailsAndBack`), the same from the keyboard (`FromTheKeyboard`), a page loading on chat (`ChatLoadingOverMonth`), a personal page with the host's picture (initials if it fails), a team page, loading; BookingMessage's loading (the heading's and the line's places, and no picture, since a message never has one), message and Try again; BookingProfile's loaded, with sections (a row with no address shows none), empty, and loading.
+Three panes, two panes, List over the month (`SwitchingViews`), the details step over the card and Back (`StepToDetailsAndBack`), the same from the keyboard (`FromTheKeyboard`), a page loading on chat (`ChatLoadingOverMonth`), a personal page with the host's picture (initials if it fails), a team page, loading; BookingMessage's loading (the heading's and the line's places, and no picture, since a message never has one), message and Try again; BookingProfile's loaded, with sections (a row with no address shows none), empty, and loading; BookingHandleOffer's offer, and the longest address a handle can make, which breaks rather than running off a phone and shortens its button's words.
 
 ## Keyboard
 
-None of its own. A view or a step chosen from the keyboard (the view switch's arrows, Enter on Book or Back) shows at once, with no fade or slide, decided as it changes, so focus moving on later never replays one. BookingMessage focuses its heading as it shows.
+None of its own. A view or a step chosen from the keyboard (the view switch's arrows, Enter on Book or Back) shows at once, with no fade or slide, decided as it changes, so focus moving on later never replays one. BookingMessage and BookingHandleOffer each focus their heading as they show, so a visitor who lands on one is read the offer before the action.
 
 ## Differences from the artifact
 

@@ -109,7 +109,14 @@ export const strings = {
   moreFailed: 'More links didn’t load. Try again.',
   searchFailed: 'That search didn’t go through. Try again in a moment.',
   sectionLinks: (section: string) => `${section} links`,
-  profileNotFound: 'No one has this address.',
+  /**
+   * A profile with nothing to show. Since 25 Oct 2026 this is reached only when the address is somebody's, or a
+   * word kept for Timefix, or the free read itself failed, so it no longer says no one has it: true in all three,
+   * and it still says nothing about whether an account is behind the address.
+   */
+  profileNotFound: 'This address has no public page.',
+  /** A free address (25 Oct 2026): the tab, which says what the page's heading says. The page's own copy is the component's. */
+  handleFreeTab: (address: string) => `${address} is free`,
   // The guest page.
   titles: {
     welcome: 'You’re booked',
