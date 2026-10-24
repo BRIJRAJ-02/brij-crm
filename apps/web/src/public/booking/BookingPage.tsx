@@ -689,7 +689,9 @@ function Booking({
                     ? strings.errors.gone
                     : error.code === 'API_UNAVAILABLE'
                       ? strings.errors.offline
-                      : strings.errors.failed,
+                      : error.code === 'INPUT_INVALID'
+                        ? strings.errors.check
+                        : strings.errors.failed,
           };
         },
       );
