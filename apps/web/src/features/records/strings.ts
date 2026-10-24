@@ -37,6 +37,8 @@ export const strings = {
   addedPerson: (name: string) => `${name} added as a person`,
   /** Related sections and cards (spec 0017, milestone 3): the far object's plural as their noun ("people"). */
   relatedNoun: (pluralName: string) => pluralName.toLowerCase(),
+  /** The Related card Overview holds while the page loads, before its sides are known. */
+  relatedPending: 'Related records',
   /** Remove's confirm (owner rule, 21 Oct: an ending action asks first; its Undo stays one click). */
   removeTitle: (name: string, side: string) => `Remove ${name} from ${side}?`,
   removeText: (name: string, recordName: string) =>

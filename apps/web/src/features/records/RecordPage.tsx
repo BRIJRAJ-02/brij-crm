@@ -64,7 +64,7 @@ import { ActivityTab } from './ActivityTab.tsx';
 import { isRecordTab, recordHref, recordName, type RecordTab } from './details.ts';
 import { OverviewTab } from './OverviewTab.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
-import { RelatedCards, RelatedSections, type RelatedSource } from './RelatedSections.tsx';
+import { PendingRelatedCard, RelatedCards, RelatedSections, type RelatedSource } from './RelatedSections.tsx';
 import { strings } from './strings.ts';
 import { recordLinks } from './timeline.ts';
 
@@ -178,7 +178,7 @@ export function RecordPendingPage() {
   );
 }
 
-/** A tab while the route loads, in that tab's own shape: Overview's two cards, the feed, the notes, the task list. */
+/** A tab while the route loads, in that tab's own shape: Overview's cards, the feed, the notes, the task list. */
 function PendingTab({ tab }: { readonly tab: RecordTab }) {
   if (tab === 'activity') return <ActivityFeed label={strings.activity} entries={NO_ENTRIES} status="loading" />;
   const tasks = <TaskList label={taskStrings.openTasks} tasks={NO_TASKS} status="loading" onToggle={() => undefined} />;
@@ -223,6 +223,7 @@ function PendingTab({ tab }: { readonly tab: RecordTab }) {
       >
         <ActivityFeed label={strings.recentActivity} entries={NO_ENTRIES} status="loading" />
       </Card>
+      <PendingRelatedCard />
     </>
   );
 }

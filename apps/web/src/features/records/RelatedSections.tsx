@@ -247,6 +247,24 @@ export interface RelatedCardsProps {
   readonly onViewAll: (attributeId: string) => void;
 }
 
+/** No rows: the pending card holds none. */
+const NO_RECORDS: readonly RelatedRecord[] = [];
+
+/** Overview's Related card while the page loads, so the first loaded one takes the place it held. */
+export function PendingRelatedCard() {
+  return (
+    <Card isBusy>
+      <RelatedRecords
+        title={strings.relatedPending}
+        noun=""
+        records={NO_RECORDS}
+        status="loading"
+        limit={RELATED_PREVIEW}
+      />
+    </Card>
+  );
+}
+
 /**
  * Overview's Related cards (spec 0017, AC-383): one Card per side that holds
  * many, its first five records and, in the card's actions as Overview's
