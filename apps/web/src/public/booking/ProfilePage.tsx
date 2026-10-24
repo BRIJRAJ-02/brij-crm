@@ -179,6 +179,8 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
       blocks={blocks}
       {...(isSearching ? { summary: strings.matches(blocks.length) } : {})}
       foot={foot}
+      // A press is counted by a beacon (AC-5125): the navigation never waits for it.
+      onPress={(id) => client.press(current, id)}
       {...(isLong
         ? {
             toolbar: <LinkListToolbar searchLabel={strings.searchLinks} query={query} onQueryChange={setQuery} />,

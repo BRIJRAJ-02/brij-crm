@@ -59,6 +59,7 @@ const READS: ReadonlySet<string> = new Set([
   'profile.get',
   // The link page (spec 0051): the caller's own blocks, and the booking pages they may place.
   'profile.items',
+  'profile.counts',
   'profile.pageChoices',
   'deletedWorkspace.deleted',
   'access.mine',

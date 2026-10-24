@@ -6,6 +6,7 @@
 import type {
   BlockDraft,
   LinkPageStore,
+  ProfileCounts,
   ProfileBlockKind,
   ProfileItem,
   ProfilePageChoice,
@@ -203,4 +204,23 @@ export function pageItem(id: string, choice: ProfilePageChoice): ProfileItem {
     page: choice.facts,
     updatedAt: new Date().toISOString(),
   };
+}
+
+/** The page's figures as one sentence under the Blocks heading (AC-5127): views, visitors, and the change. */
+export function figuresLine(counts: ProfileCounts): string {
+  const { days, views, visitors, before } = counts;
+  if (views === 0) return strings.noViews(days);
+  const said = strings.views(views, visitors, days);
+  if (before.views === 0) return `${said}.`;
+  const change = Math.round(((views - before.views) / before.views) * 100);
+  if (change > 0) return said + strings.viewsUp(change, days);
+  if (change < 0) return said + strings.viewsDown(-change, days);
+  return said + strings.viewsSame(days);
+}
+
+/** A block's presses as its row's chip: none for a heading (it can't be pressed), "No presses yet" for zero. */
+export function pressesChip(item: ProfileItem, counts: ProfileCounts | undefined): readonly string[] {
+  if (counts === undefined || item.kind === 'heading') return [];
+  const presses = counts.presses.find((each) => each.id === item.id)?.presses ?? 0;
+  return [presses === 0 ? strings.noPresses : strings.presses(presses)];
 }

@@ -532,4 +532,82 @@ describe('page views for the operator console (spec 0047, AC-1625)', () => {
     await settle();
     expect((await viewsOf(page.id)).map((row) => row.views)).toEqual([1, 2]);
   });
+
+  it('counts a link page’s views and its blocks’ presses, never the owner’s own, a bot’s, or a block not theirs', async () => {
+    const m = await memberWithWorkspace(app);
+    const handle = `counts-${newId().slice(-8)}`;
+    await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
+    const site = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'link', title: 'Site', url: 'ada.dev' },
+      mutationId: newId(),
+    });
+    const heading = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'heading', title: 'More' },
+      mutationId: newId(),
+    });
+    const other = await memberWithWorkspace(app);
+    const theirs = await other.client.profile.saveItem({
+      workspace: other.slug,
+      id: newId(),
+      block: { kind: 'link', title: 'Theirs', url: 'bea.dev' },
+      mutationId: newId(),
+    });
+    const read = (headers: Record<string, string>, query = '') =>
+      app.request(`/api/public/handles/${handle}${query}`, {
+        headers: { [EDGE_HEADER]: TEST_EDGE_SECRET, 'x-forwarded-for': ip, ...headers },
+      });
+    const press = (body: string, headers: Record<string, string> = { 'user-agent': CHROME }) =>
+      app.request(`/api/public/handles/${handle}/press`, {
+        method: 'POST',
+        headers: {
+          [EDGE_HEADER]: TEST_EDGE_SECRET,
+          'x-forwarded-for': ip,
+          'content-type': 'text/plain;charset=UTF-8',
+          [ORIGIN_HEADER]: APP_URL,
+          origin: APP_URL,
+          ...headers,
+        },
+        body,
+      });
+    const ip = newIp();
+    await read({ 'user-agent': CHROME });
+    await read({ 'user-agent': CHROME });
+    // A later page and a search are the same view's reads; the owner, a crawler and no browser count nothing.
+    await read({ 'user-agent': CHROME }, '?q=site');
+    await read({ 'user-agent': CHROME, cookie: m.cookie });
+    await read({ 'user-agent': 'Googlebot/2.1' });
+    await read({});
+    for (const body of [site.id, site.id, heading.id, theirs.id, 'nonsense', '']) {
+      expect((await press(body)).status).toBe(204);
+    }
+    expect((await press(site.id, { 'user-agent': CHROME, cookie: m.cookie })).status).toBe(204);
+    expect((await press(site.id, { 'user-agent': 'facebookexternalhit/1.1' })).status).toBe(204);
+    const nobody = await app.request('/api/public/handles/nobody-here-1/press', {
+      method: 'POST',
+      headers: {
+        [EDGE_HEADER]: TEST_EDGE_SECRET,
+        'x-forwarded-for': ip,
+        'user-agent': CHROME,
+        origin: APP_URL,
+        [ORIGIN_HEADER]: APP_URL,
+      },
+      body: site.id,
+    });
+    expect(nobody.status).toBe(204);
+    await settle();
+    const counts = await m.client.profile.counts({ workspace: m.slug });
+    expect(counts).toEqual({
+      days: 30,
+      views: 2,
+      visitors: 1,
+      before: { views: 0, visitors: 0 },
+      presses: [{ id: site.id, presses: 2 }],
+    });
+    // Another person's figures name nothing of these.
+    expect(JSON.stringify(await other.client.profile.counts({ workspace: other.slug }))).not.toContain(site.id);
+  });
 });

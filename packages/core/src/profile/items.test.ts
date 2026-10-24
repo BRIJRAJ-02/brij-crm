@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import type { ProfileBlock } from '@crm/contracts';
-import { enterLinkPage } from '../access/door.ts';
+import { countItemPress, enterLinkPage } from '../access/door.ts';
 import { readLinkPage } from '../booking/public.ts';
 import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { newId } from '../engine/ids.ts';
@@ -22,6 +22,7 @@ import {
   deleteProfileItem,
   listProfilePageChoices,
   orderProfileItems,
+  readProfileCounts,
   readProfileItems,
   saveProfileItem,
 } from './items.ts';
@@ -61,6 +62,13 @@ async function person(name: string, userId: string = randomUUID(), workspace = '
 }
 
 const fresh = (stem: string) => `${stem}-${randomUUID().slice(0, 8)}`;
+
+/** A person's handle, claimed now: the public counters find them by it. */
+async function handleOf(who: { readonly scope: ReturnType<typeof testScope> }): Promise<string> {
+  const handle = fresh('counts');
+  await updateMyMemberProfile(who.scope, { handle });
+  return handle;
+}
 
 /** A visitor's block by its words: a contact card by its name. */
 const titleOf = (item: { readonly kind: string; readonly title?: string; readonly fullName?: string }) =>
@@ -447,6 +455,50 @@ describe('a link page', () => {
         JSON.stringify(given),
       ).rejects.toThrow(/PROFILE_ITEM_DATA/);
     }
+  });
+
+  it('reads its figures over 30 days against the 30 before, and the cleanup sweeps them after a year', async () => {
+    const ada = await person('Ada');
+    const site = await add(ada.scope, link('Site', 'ada.dev'));
+    const gone = await add(ada.scope, link('Gone', 'gone.dev'));
+    const visitor = (n: number) => n.toString(16).padStart(32, '0');
+    const day = (back: number) => new Date(Date.now() - back * 86_400_000).toISOString().slice(0, 10);
+    const view = (back: number, n: number, views = 1) =>
+      testQuery(ownerUrl, `insert into auth.profile_views (user_id, day, visitor, views) values ($1, $2, $3, $4)`, [
+        ada.userId,
+        day(back),
+        visitor(n),
+        views,
+      ]);
+    await view(0, 1, 3);
+    await view(5, 2);
+    await view(29, 3);
+    await view(30, 4, 2);
+    await view(59, 5);
+    await view(400, 6);
+    const handle = await handleOf(ada);
+    await countItemPress({ db }, handle, site.id, visitor(7));
+    await countItemPress({ db }, handle, site.id, visitor(7));
+    await countItemPress({ db }, handle, gone.id, visitor(8));
+    // The owner's own press, signed in, counts nothing.
+    await countItemPress({ db }, handle, site.id, visitor(9), { signedInAs: ada.userId });
+    await archiveProfileItem(ada.scope, { id: gone.id, archived: true });
+    expect(await readProfileCounts(ada.scope)).toEqual({
+      days: 30,
+      views: 5,
+      visitors: 3,
+      before: { views: 3, visitors: 2 },
+      presses: [{ id: site.id, presses: 2 }],
+    });
+    const swept = await testQuery<{ gone: number }>(appUrl, 'select crm_sweep_profile_counts(500) as gone');
+    expect(Number(swept[0]?.gone)).toBeGreaterThanOrEqual(1);
+    const left = await testQuery<{ day: string }>(
+      ownerUrl,
+      `select day::text as day from auth.profile_views where user_id = $1 order by day`,
+      [ada.userId],
+    );
+    expect(left.map((row) => row.day)).not.toContain(day(400));
+    expect(left).toHaveLength(5);
   });
 
   it('pages a visitor’s read at 20 with a cursor, and a search finds matches flat', async () => {

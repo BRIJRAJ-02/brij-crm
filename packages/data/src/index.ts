@@ -422,6 +422,7 @@ export type {
   DeletedWorkspace,
   MyProfile,
   ProfileBlock,
+  ProfileCounts,
   ProfileBlockKind,
   ProfileItem,
   ProfileLinkIcon,

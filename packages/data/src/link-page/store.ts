@@ -5,7 +5,7 @@
 // list, which puts the rows back, and a toast says why, with Try again. Only the person edits their page, so no
 // live event carries it; another tab's change shows when a screen next holds it, and an order made from a stale
 // list is refused by the server and read again.
-import type { ProfileBlock, ProfileItem, ProfileItems, ProfilePageChoice } from '@crm/contracts';
+import type { ProfileBlock, ProfileCounts, ProfileItem, ProfileItems, ProfilePageChoice } from '@crm/contracts';
 import {
   checkContactCard,
   checkProfileLink,
@@ -37,6 +37,11 @@ export type LinkPageState =
       readonly pendingIds: ReadonlySet<string>;
       /** A change is on its way. */
       readonly isSaving: boolean;
+      /**
+       * The page's views and each block's presses over 30 days (AC-5127), read beside the blocks; absent until they
+       * arrive, or when their read failed (the figures are a nicety: the blocks never wait for them).
+       */
+      readonly counts?: ProfileCounts;
     };
 
 /** One workspace's copy of the blocks, as a screen retains it. */
@@ -52,6 +57,7 @@ export interface LinkPageHeld {
 /** What the store calls on the API. */
 export interface LinkPageApi {
   readonly items: (input: { readonly workspace: string }) => Promise<ProfileItems>;
+  readonly counts: (input: { readonly workspace: string }) => Promise<ProfileCounts>;
   readonly pageChoices: (input: { readonly workspace: string }) => Promise<readonly ProfilePageChoice[]>;
   readonly saveItem: (input: {
     readonly workspace: string;
@@ -95,6 +101,7 @@ export interface LinkPageDeps {
 /** The profile procedures the store calls, as the data layer's oRPC client answers them. */
 interface ProfileProcedures {
   readonly items: (input: { workspace: string }, options: { signal?: AbortSignal }) => Promise<ProfileItems>;
+  readonly counts: (input: { workspace: string }, options: { signal?: AbortSignal }) => Promise<ProfileCounts>;
   readonly pageChoices: (
     input: { workspace: string },
     options: { signal?: AbortSignal },
@@ -302,6 +309,7 @@ export function createLinkPageStore(deps: LinkPageDeps) {
     // Writes landed so far: a read sent before one landed never puts its older answer over it.
     let landed = 0;
     let state: LinkPageState = { status: 'loading' };
+    let counts: ProfileCounts | undefined;
     const listeners = new Set<() => void>();
 
     const show = () => {
@@ -315,13 +323,26 @@ export function createLinkPageStore(deps: LinkPageDeps) {
           archived: lists.archived,
           pendingIds: new Set(pending.flatMap((change) => (change.adds === undefined ? [] : [change.adds]))),
           isSaving: pending.length > 0,
+          ...(counts === undefined ? {} : { counts }),
         };
       }
       for (const listener of listeners) listener();
     };
 
+    // The figures, read beside each read of the blocks; a failed read keeps the last ones (or none).
+    const readCounts = () => {
+      deps.api.counts({ workspace }).then(
+        (answer) => {
+          counts = answer;
+          show();
+        },
+        () => undefined,
+      );
+    };
+
     const read = (): Promise<ProfileItems> => {
       const asOf = landed;
+      if (reading === undefined) readCounts();
       reading ??= deps.api
         .items({ workspace })
         .then(
@@ -518,6 +539,7 @@ export function openLinkPage(given: {
   const deps: LinkPageDeps = {
     api: {
       items: (input) => call((options) => profile.items(input, options)),
+      counts: (input) => call((options) => profile.counts(input, options)),
       pageChoices: (input) => call((options) => profile.pageChoices(input, options)),
       saveItem: (input) => call((options) => profile.saveItem(input, options)),
       orderItems: (input) => call((options) => profile.orderItems({ ...input, ids: [...input.ids] }, options)),

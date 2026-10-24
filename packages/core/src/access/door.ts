@@ -872,6 +872,48 @@ export async function enterLinkPage(
   return { owner, rows: found.rows, pages };
 }
 
+/** A visitor as spec 0047 mints it: the day's HMAC, 32 lowercase hex digits. */
+const PROFILE_VISITOR = /^[0-9a-f]{32}$/;
+
+/**
+ * Counts one view of a link page (spec 0051, AC-5124) for its owner today, by `visitor`, through
+ * `crm_count_profile_view`. The owner is the one a handle read found (`enterLinkPage`), never an input; the caller
+ * has already left out the owner's own reads and known machines. Exported only from `@crm/core/public`.
+ */
+export async function countProfileView(
+  deps: { readonly db: Database },
+  ownerUserId: string,
+  visitor: string,
+): Promise<void> {
+  if (!isUuid(ownerUserId) || !PROFILE_VISITOR.test(visitor)) return;
+  await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute(sql`select crm_count_profile_view(${ownerUserId}::uuid, ${visitor})`),
+  );
+}
+
+/**
+ * Counts one press of a link page's block (spec 0051, AC-5125, AC-5126): the handle's person (current or old
+ * handle), then `crm_count_item_press`, which writes only for one of their live blocks a visitor can press. A handle
+ * no one holds, a made up or archived id, a heading, or the owner's own press (`signedInAs`) writes nothing, and the
+ * caller can't tell which. Exported only
+ * from `@crm/core/public`.
+ */
+export async function countItemPress(
+  deps: { readonly db: Database },
+  handle: string,
+  itemId: string,
+  visitor: string,
+  options: { readonly signedInAs?: string } = {},
+): Promise<void> {
+  if (!isUuid(itemId) || !PROFILE_VISITOR.test(visitor)) return;
+  const owner = await handleOwner(deps.db, handle);
+  // The owner's own presses (signed in on this site) aren't a visitor's.
+  if (owner === undefined || owner.userId === options.signedInAs) return;
+  await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute(sql`select crm_count_item_press(${owner.userId}::uuid, ${itemId}::uuid, ${visitor})`),
+  );
+}
+
 /**
  * A link page's contact card (spec 0051, AC-5114): the handle's person (current or old handle) and the stored fields
  * of their live contact card, read through `crm_profile_items_public` like the page itself, so an archived card is

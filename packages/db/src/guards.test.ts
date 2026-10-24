@@ -144,7 +144,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly thirty security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly thirty four security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -162,6 +162,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_profile_pages', owner: 'crm_booking_lookup' },
       { name: 'crm_calendar_account_shared', owner: 'crm_calendar_lookup' },
       { name: 'crm_claim_workspace_address', owner: 'crm_address' },
+      { name: 'crm_count_item_press', owner: 'crm_handle' },
+      { name: 'crm_count_profile_view', owner: 'crm_handle' },
       { name: 'crm_delete_profile_item', owner: 'crm_handle' },
       { name: 'crm_enqueue_booking_mail', owner: 'crm_queue' },
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
@@ -185,6 +187,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_pictures_hidden', owner: 'crm_handle' },
       { name: 'crm_place_profile_page', owner: 'crm_handle' },
+      { name: 'crm_profile_counts', owner: 'crm_handle' },
       { name: 'crm_profile_items', owner: 'crm_handle' },
       { name: 'crm_profile_items_archived', owner: 'crm_handle' },
       { name: 'crm_profile_items_public', owner: 'crm_handle' },
@@ -198,6 +201,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
       { name: 'crm_social_links_of', owner: 'crm_handle' },
+      { name: 'crm_sweep_profile_counts', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
       { name: 'crm_workspaces_by_domain', owner: 'crm_domain_lookup' },
@@ -223,6 +227,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_calendar_account_shared', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises the unique violation a taken address is refused with.
       { name: 'crm_claim_workspace_address', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_count_item_press', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_count_profile_view', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it answers whether the block was the owner's, and closes the gap it left.
       { name: 'crm_delete_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_booking_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -249,6 +255,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_pictures_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it does nothing when the page is there already or a limit is reached.
       { name: 'crm_place_profile_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items_archived', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -268,6 +275,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_social_links_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it answers how many rows past the year it removed.
+      { name: 'crm_sweep_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspaces_by_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -421,6 +430,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_place_profile_page',
         'crm_check_profile_item',
         'crm_pack_profile_items',
+        // Its views and presses (migration 0100).
+        'crm_count_profile_view',
+        'crm_count_item_press',
+        'crm_profile_counts',
+        'crm_sweep_profile_counts',
       ],
       [
         'crm_save_public_profile(uuid, text, text)',
@@ -438,8 +452,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_archive_profile_item(uuid, uuid, boolean)',
         'crm_delete_profile_item(uuid, uuid)',
         'crm_place_profile_page(uuid, uuid, uuid)',
+        'crm_count_profile_view(uuid, text)',
+        'crm_count_item_press(uuid, uuid, text)',
+        'crm_profile_counts(uuid, date, date)',
+        'crm_sweep_profile_counts(integer)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app'],
+      Array.from({ length: 19 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -1780,7 +1798,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'known_device',
     'operator_event',
     'passkey',
+    'profile_item_presses',
     'profile_items',
+    'profile_views',
     'public_handles',
     'public_profiles',
     'rate_limit',
@@ -1935,10 +1955,19 @@ describe('the auth schema: global identity, outside row level security (spec 000
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
       // The link page's blocks (migration 0098), through crm_handle's functions only.
+      'profile_item_presses DELETE',
+      'profile_item_presses INSERT',
+      'profile_item_presses SELECT',
+      'profile_item_presses UPDATE',
       'profile_items DELETE',
       'profile_items INSERT',
       'profile_items SELECT',
       'profile_items UPDATE',
+      // Its views and presses (migration 0100), likewise.
+      'profile_views DELETE',
+      'profile_views INSERT',
+      'profile_views SELECT',
+      'profile_views UPDATE',
       'public_handles INSERT',
       'public_handles SELECT',
       'public_profiles INSERT',

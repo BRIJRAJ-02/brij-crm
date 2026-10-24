@@ -181,18 +181,40 @@ export interface HandleClient {
   profile(handle: string, query?: { readonly after?: string; readonly q?: string }): Promise<PublicProfile>;
   /** The page `/<handle>/<slug>` names, by its public key, and the owner's current handle. */
   address(handle: string, slug: string): Promise<PublicAddress>;
+  /**
+   * Says a block was pressed (spec 0051, AC-5125): a beacon, so the navigation it starts never waits, and lost on
+   * purpose when it can't go. Nothing comes back.
+   */
+  press(handle: string, itemId: string): void;
 }
 
+/** Sends a beacon: the browser's `navigator.sendBeacon`, or a test's own. */
+export type BeaconLike = (url: string, body: string) => boolean;
+
 /** The handle client, on `origin` (the page's own), with `fetch` passed in for tests. */
-export function createHandleClient(options: PublicClientOptions): HandleClient {
-  const { call } = publicCaller(options, 'handles');
+export function createHandleClient(options: PublicClientOptions & { readonly beacon?: BeaconLike }): HandleClient {
+  const { base, call } = publicCaller(options, 'handles');
+  const beacon: BeaconLike =
+    options.beacon ?? ((url, body) => typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, body));
   return {
     profile: (handle, query = {}) => {
       const search = new URLSearchParams({
         ...(query.after === undefined ? {} : { after: query.after }),
         ...(query.q === undefined || query.q === '' ? {} : { q: query.q }),
       }).toString();
-      return call<PublicProfile>(`${encodeURIComponent(handle)}${search === '' ? '' : `?${search}`}`);
+      // The first page's read is a view (AC-5124): it goes with the visitor's cookies, so the owner's own isn't one.
+      const isView = search === '';
+      return call<PublicProfile>(
+        `${encodeURIComponent(handle)}${isView ? '' : `?${search}`}`,
+        isView ? { credentials: 'include' } : {},
+      );
+    },
+    press: (handle, itemId) => {
+      try {
+        beacon(`${base}/${encodeURIComponent(handle)}/press`, itemId);
+      } catch {
+        // A press that can't be sent is lost on purpose: nothing on the page waits on it.
+      }
     },
     address: (handle, slug) => call<PublicAddress>(`${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`),
   };

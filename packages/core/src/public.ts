@@ -6,6 +6,8 @@ export {
   enterBookingAddress,
   enterBookingByToken,
   enterBookingPage,
+  countItemPress,
+  countProfileView,
   enterContactCard,
   enterLinkPage,
   findHandleOwner,

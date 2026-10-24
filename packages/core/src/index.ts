@@ -138,6 +138,7 @@ export {
   deleteProfileItem,
   listProfilePageChoices,
   orderProfileItems,
+  readProfileCounts,
   readProfileItems,
   saveProfileItem,
 } from './profile/items.ts';

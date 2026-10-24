@@ -431,7 +431,7 @@ describe('the walk: a principal without the access is refused', () => {
         (value) => ({ value }),
         (error: unknown) => ({ refusal: core.isRefusal(error) ? error.refusal.code : error }),
       );
-      if (name === 'readProfileItems' || name === 'listProfilePageChoices') {
+      if (name === 'readProfileItems' || name === 'listProfilePageChoices' || name === 'readProfileCounts') {
         expect(JSON.stringify(outcome)).not.toContain(theirs.id);
         expect(JSON.stringify(outcome)).not.toContain(adaPage.id);
       } else if (name === 'orderProfileItems') {

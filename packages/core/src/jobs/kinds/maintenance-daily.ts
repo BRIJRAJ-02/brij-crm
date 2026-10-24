@@ -15,6 +15,9 @@
 //    and records that point at nothing any more, 500 rows a batch.
 // 1e. `notifications` (spec 0038, AC-1175): notifications marked done more
 //    than 90 days ago, 500 a batch. Unread and read ones stay until done.
+// 1f. `views` (spec 0047): booking page view rows past a year.
+// 1g. `profile_counts` (spec 0051, AC-5128): link page views and presses past
+//    a year, the person's rather than the workspace's, through a definer.
 // 2. `expired`: jobs left `ready` past their hour end `cancelled` with
 //    `JOB_EXPIRED` (the queue row at the expiry normally does it first).
 // 3. `items`: the items of jobs that finished since the last cleanup, all
@@ -58,6 +61,7 @@ const PHASES = [
   'nav',
   'notifications',
   'views',
+  'profile_counts',
   'expired',
   'items',
   'jobs',
@@ -101,6 +105,8 @@ const Totals = z.object({
   notifications: Count.default(0),
   // Added by spec 0047: booking page view rows past a year.
   views: Count.default(0),
+  // Added by spec 0051: link page view and press rows past a year.
+  profileCounts: Count.default(0),
   expired: Count,
   items: Count,
   jobs: Count,
@@ -123,6 +129,7 @@ const NO_TOTALS: Totals = {
   sidebars: 0,
   notifications: 0,
   views: 0,
+  profileCounts: 0,
   expired: 0,
   items: 0,
   jobs: 0,
@@ -181,6 +188,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   sidebars: totals.sidebars + (more.sidebars ?? 0),
   notifications: totals.notifications + (more.notifications ?? 0),
   views: totals.views + (more.views ?? 0),
+  profileCounts: totals.profileCounts + (more.profileCounts ?? 0),
   expired: totals.expired + (more.expired ?? 0),
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
@@ -297,6 +305,20 @@ async function oldPageViews(context: WriteContext, at: Checkpoint, limit: number
   `);
   const count = removed.rowCount ?? 0;
   const totals = plus(at.totals, { views: count });
+  return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1g (spec 0051, AC-5128): link page view and press rows older than a year, `limit` of each a batch, through
+ * `crm_profile_counts`' sweep. They are a person's, not a workspace's, so whichever workspace's cleanup runs first
+ * takes them; the others find none.
+ */
+async function oldProfileCounts(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const swept = await context.tx.execute<{ readonly gone: number } & Record<string, unknown>>(
+    sql`select crm_sweep_profile_counts(${limit}::integer) as gone`,
+  );
+  const count = swept.rows[0]?.gone ?? 0;
+  const totals = plus(at.totals, { profileCounts: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
 
@@ -569,6 +591,8 @@ export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceP
           return oldNotifications(context, at, limit);
         case 'views':
           return oldPageViews(context, at, limit);
+        case 'profile_counts':
+          return oldProfileCounts(context, at, limit);
         case 'expired':
           return expired(context, at, limit);
         case 'items':

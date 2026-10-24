@@ -7,6 +7,17 @@ export const strings = {
   profile: 'Profile',
   blocks: 'Blocks',
   blocksText: 'In the order visitors see them.',
+  // The figures (AC-5127): over the last 30 days, with the 30 before as the comparison.
+  noPresses: 'No presses yet',
+  presses: (count: number) => `${count.toLocaleString()} ${count === 1 ? 'press' : 'presses'}`,
+  noViews: (days: number) => `No views yet in the last ${String(days)} days.`,
+  views: (views: number, visitors: number, days: number) =>
+    `${views.toLocaleString()} ${views === 1 ? 'view' : 'views'} from ${visitors.toLocaleString()} ${
+      visitors === 1 ? 'visitor' : 'visitors'
+    } in the last ${String(days)} days`,
+  viewsUp: (percent: number, days: number) => `, up ${String(percent)}% on the ${String(days)} before.`,
+  viewsDown: (percent: number, days: number) => `, down ${String(percent)}% on the ${String(days)} before.`,
+  viewsSame: (days: number) => `, the same as the ${String(days)} before.`,
   add: 'Add',
   addLink: 'Link',
   addLinkText: 'A website, a profile, an email or a phone number',

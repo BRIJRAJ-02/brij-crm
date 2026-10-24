@@ -3,7 +3,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { BIO_MAX, handleProblem } from './booking/handles.ts';
-import { ProfileBlock, ProfileItem, ProfileItems, ProfilePageChoice } from './booking/link-page.ts';
+import { ProfileBlock, ProfileCounts, ProfileItem, ProfileItems, ProfilePageChoice } from './booking/link-page.ts';
 import { TimeZoneName } from './booking/settings.ts';
 import { Uuid } from './values/ids.ts';
 import { checkSocialLink, socialLinkProblem } from './values/social.ts';
@@ -192,4 +192,6 @@ export const profileContract = {
   orderItems: oc.input(OrderProfileItemsInput).output(ProfileItems),
   archiveItem: oc.input(ArchiveProfileItemInput).output(ProfileItems),
   deleteItem: oc.input(DeleteProfileItemInput).output(z.object({ id: Uuid })),
+  /** The link page's figures (spec 0051, AC-5127): views, visitors and each block's presses over 30 days. */
+  counts: oc.input(WorkspaceScoped).output(ProfileCounts),
 };

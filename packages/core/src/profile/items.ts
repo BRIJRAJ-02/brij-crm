@@ -12,6 +12,8 @@ import {
   ProfileBlock,
   ProfileItem,
   profileLimitSentence,
+  PROFILE_COUNT_DAYS,
+  type ProfileCounts,
   type ProfileItems,
   type ProfilePageChoice,
   type ProfilePageFacts,
@@ -386,4 +388,52 @@ export async function placeNewPage(
   await tx.execute(
     sql`select crm_place_profile_page(${principal.userId}::uuid, ${scope.workspaceId}::uuid, ${page.id}::uuid)`,
   );
+}
+
+/** A UTC day `back` days before `day`, `YYYY-MM-DD`. */
+function dayBefore(day: string, back: number): string {
+  return new Date(Date.parse(`${day}T00:00:00Z`) - back * 86_400_000).toISOString().slice(0, 10);
+}
+
+interface CountRow extends Record<string, unknown> {
+  readonly item_id: string | null;
+  readonly presses: string | number | null;
+  readonly views: string | number | null;
+  readonly visitors: string | number | null;
+}
+
+/** One period's rows from `crm_profile_counts`. */
+async function countsIn(tx: WorkspaceTx, owner: string, from: string, to: string): Promise<readonly CountRow[]> {
+  const found = await tx.execute<CountRow>(
+    sql`select item_id::text as item_id, presses, views, visitors from crm_profile_counts(${owner}::uuid, ${from}::date, ${to}::date)`,
+  );
+  return found.rows;
+}
+
+/**
+ * The caller's link page figures (spec 0051, AC-5127): over the last 30 UTC days, today included, the page's views
+ * and visitors, the 30 days before them as the comparison, and each live block's presses. Their own only: the owner
+ * is the session's identity. Reads two periods in one transaction; writes nothing.
+ */
+export async function readProfileCounts(scope: EngineScope, now: Date = new Date()): Promise<ProfileCounts> {
+  const owner = ownerOf(scope);
+  const days = PROFILE_COUNT_DAYS;
+  const today = now.toISOString().slice(0, 10);
+  const from = dayBefore(today, days - 1);
+  const [current, before] = await inWorkspace(scope, async (tx) => [
+    await countsIn(tx, owner, from, today),
+    await countsIn(tx, owner, dayBefore(from, days), dayBefore(from, 1)),
+  ]);
+  const traffic = (rows: readonly CountRow[]) => {
+    const row = rows.find((each) => each.item_id === null);
+    return { views: Number(row?.views ?? 0), visitors: Number(row?.visitors ?? 0) };
+  };
+  return {
+    days,
+    ...traffic(current),
+    before: traffic(before),
+    presses: current.flatMap((row) =>
+      row.item_id === null || Number(row.presses ?? 0) < 1 ? [] : [{ id: row.item_id, presses: Number(row.presses) }],
+    ),
+  };
 }

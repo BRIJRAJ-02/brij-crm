@@ -5,6 +5,7 @@ import {
   getMyProfile,
   listProfilePageChoices,
   orderProfileItems,
+  readProfileCounts,
   readProfileItems,
   saveProfileItem,
   servedPicture,
@@ -57,6 +58,10 @@ export const profileRouter = member.profile.router({
   }),
   // The link page (spec 0051): the caller's own blocks, in every workspace the same, never another person's.
   items: member.profile.items.handler(({ context }) => readProfileItems(context.scope)),
+  counts: member.profile.counts.handler(async ({ context }) => {
+    const counts = await readProfileCounts(context.scope);
+    return { ...counts, presses: [...counts.presses] };
+  }),
   pageChoices: member.profile.pageChoices.handler(async ({ context }) => [
     ...(await listProfilePageChoices(context.scope)),
   ]),

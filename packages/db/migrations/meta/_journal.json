@@ -701,6 +701,13 @@
       "when": 1792880117909,
       "tag": "0099_contact_card",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1792883978016,
+      "tag": "0100_profile_counts",
+      "breakpoints": true
     }
   ]
 }

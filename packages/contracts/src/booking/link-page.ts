@@ -199,3 +199,22 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
 ]);
 /** One block as a visitor reads it. */
 export type PublicProfileItem = z.infer<typeof PublicProfileItem>;
+
+/** A link page's views and visitors over one period. */
+const ProfileTraffic = z.object({
+  views: z.number().int().min(0),
+  /** One a day: a visitor is the day's HMAC, so the same person on two days is two. */
+  visitors: z.number().int().min(0),
+});
+
+/**
+ * The editor's figures (AC-5127): over the last `days` UTC days (today included), the page's views and visitors,
+ * the same for the period before as the comparison, and each live block's presses. A block with none is absent.
+ */
+export const ProfileCounts = ProfileTraffic.extend({
+  days: z.number().int().min(1),
+  before: ProfileTraffic,
+  presses: z.array(z.object({ id: Uuid, presses: z.number().int().min(1) })),
+});
+/** The editor's figures. */
+export type ProfileCounts = z.infer<typeof ProfileCounts>;

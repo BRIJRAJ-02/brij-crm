@@ -393,6 +393,58 @@ export const profileItems = auth.table(
   ],
 );
 
+/**
+ * A link page's views (spec 0051, AC-5124): one row per owner, UTC day and visitor (the daily HMAC spec 0047 mints,
+ * never an address or a user agent), with how many times that visitor read it that day. Reached only through
+ * crm_handle's definers; swept after a year by the daily cleanup.
+ */
+export const profileViews = auth.table(
+  'profile_views',
+  {
+    userId: uuid('user_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    visitor: text('visitor').notNull(),
+    views: integer('views').notNull().default(1),
+    firstAt: timestamptz('first_at').notNull().defaultNow(),
+    lastAt: timestamptz('last_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'profile_views_pkey', columns: [t.userId, t.day, t.visitor] }),
+    foreignKey({ name: 'profile_views_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    // The cleanup's pick, oldest days first.
+    index('profile_views_day').on(t.day),
+    check('profile_views_visitor', sql`${t.visitor} ~ '^[0-9a-f]{32}$'`),
+    check('profile_views_count', sql`${t.views} >= 1`),
+  ],
+);
+
+/**
+ * A link page block's presses (spec 0051, AC-5125): one row per block, UTC day and visitor, with how many times that
+ * visitor pressed it that day. Goes with its block; swept after a year.
+ */
+export const profileItemPresses = auth.table(
+  'profile_item_presses',
+  {
+    itemId: uuid('item_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    visitor: text('visitor').notNull(),
+    presses: integer('presses').notNull().default(1),
+    firstAt: timestamptz('first_at').notNull().defaultNow(),
+    lastAt: timestamptz('last_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'profile_item_presses_pkey', columns: [t.itemId, t.day, t.visitor] }),
+    foreignKey({
+      name: 'profile_item_presses_item_fk',
+      columns: [t.itemId],
+      foreignColumns: [profileItems.id],
+    }).onDelete('cascade'),
+    index('profile_item_presses_day').on(t.day),
+    check('profile_item_presses_visitor', sql`${t.visitor} ~ '^[0-9a-f]{32}$'`),
+    check('profile_item_presses_count', sql`${t.presses} >= 1`),
+  ],
+);
+
 /** Which workspaces a user is in, for "my workspaces". Written with the workspace, never read for access. */
 export const workspaceMembership = auth.table(
   'workspace_membership',

@@ -2,7 +2,7 @@
 // Add menu offers.
 import { describe, expect, it } from 'vitest';
 import type { ProfileItem } from '@crm/data';
-import { ADDABLE, BLOCK_KINDS, pageFacts, previewBlock, rowWords } from './registry.tsx';
+import { ADDABLE, BLOCK_KINDS, figuresLine, pageFacts, pressesChip, previewBlock, rowWords } from './registry.tsx';
 
 const page = (status: 'live' | 'paused'): ProfileItem => ({
   kind: 'page',
@@ -86,5 +86,38 @@ describe('the block registry', () => {
     const bare: ProfileItem = { kind: 'contact', id: 'd', fullName: 'Ada', updatedAt: '' };
     expect(rowWords(bare).address).toBe('Contact card');
     expect(previewBlock(bare, 'ada', () => undefined)).not.toHaveProperty('line');
+  });
+
+  it('says the page’s figures and each block’s presses in plain words', () => {
+    const counts = (views: number, visitors: number, before: number) => ({
+      days: 30,
+      views,
+      visitors,
+      before: { views: before, visitors: before },
+      presses: [{ id: 'l', presses: 3 }],
+    });
+    expect(figuresLine(counts(0, 0, 5))).toBe('No views yet in the last 30 days.');
+    expect(figuresLine(counts(1, 1, 0))).toBe('1 view from 1 visitor in the last 30 days.');
+    expect(figuresLine(counts(150, 90, 100))).toBe(
+      '150 views from 90 visitors in the last 30 days, up 50% on the 30 before.',
+    );
+    expect(figuresLine(counts(50, 40, 100))).toBe(
+      '50 views from 40 visitors in the last 30 days, down 50% on the 30 before.',
+    );
+    expect(figuresLine(counts(100, 40, 100))).toBe(
+      '100 views from 40 visitors in the last 30 days, the same as the 30 before.',
+    );
+    const link: ProfileItem = {
+      kind: 'link',
+      id: 'l',
+      title: 'Site',
+      url: 'https://ada.dev',
+      hue: 'blue',
+      updatedAt: '',
+    };
+    expect(pressesChip(link, counts(1, 1, 0))).toEqual(['3 presses']);
+    expect(pressesChip({ ...link, id: 'other' }, counts(1, 1, 0))).toEqual(['No presses yet']);
+    expect(pressesChip({ kind: 'heading', id: 'h', title: 'H', updatedAt: '' }, counts(1, 1, 0))).toEqual([]);
+    expect(pressesChip(link, undefined)).toEqual([]);
   });
 });

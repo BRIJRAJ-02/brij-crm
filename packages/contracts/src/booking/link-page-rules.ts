@@ -290,3 +290,6 @@ export function checkContactCard(typed: Readonly<Partial<Record<ProfileContactFi
   if (Object.keys(problems).length > 0 || card.fullName === undefined) return { ok: false, problems };
   return { ok: true, card: { ...card, fullName: card.fullName } };
 }
+
+/** How many days the editor's figures cover (AC-5127), and the period before them is the comparison. */
+export const PROFILE_COUNT_DAYS = 30;

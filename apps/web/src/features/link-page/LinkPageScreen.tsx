@@ -42,7 +42,7 @@ import { useMemo, useState } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
-import { ADDABLE, BLOCK_KINDS, contactHref, previewBlock, rowWords } from './registry.tsx';
+import { ADDABLE, BLOCK_KINDS, contactHref, figuresLine, pressesChip, previewBlock, rowWords } from './registry.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the Link page screen. */
@@ -140,6 +140,7 @@ function Blocks({
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
   const items = useMemo(() => (state.status === 'ready' ? state.items : []), [state]);
+  const counts = state.status === 'ready' ? state.counts : undefined;
   const socialNetworks = useMemo(() => (profile.socials ?? []).map((link) => link.network), [profile.socials]);
   const archived = state.status === 'ready' ? state.archived : [];
   const pending = state.status === 'ready' ? state.pendingIds : new Set<string>();
@@ -287,7 +288,8 @@ function Blocks({
       id: item.id,
       title: words.title,
       address: words.address,
-      chips: [],
+      // Its presses over 30 days, once the figures are here (a pending block has none yet).
+      chips: isPending ? [] : pressesChip(item, counts),
       leading: <LinkPageTile block={tileOf(item)} />,
       ...(words.badge === undefined ? {} : { badge: words.badge }),
       ...(words.isOff === true ? { isOff: true } : {}),
@@ -419,7 +421,11 @@ function Blocks({
   const Editor = editing === undefined ? undefined : BLOCK_KINDS[editing.kind].Editor;
   return (
     <PreviewLayout preview={preview} previewShare="wide">
-      <Card title={strings.blocks} description={strings.blocksText} actions={addMenu}>
+      <Card
+        title={strings.blocks}
+        description={counts === undefined ? strings.blocksText : `${strings.blocksText} ${figuresLine(counts)}`}
+        actions={addMenu}
+      >
         {list}
       </Card>
       {archived.length > 0 && (

@@ -127,6 +127,7 @@ export const ACCESS_TABLE = {
   updateMyMemberProfile: { anyMember: true },
   // The person's own link page (spec 0051): their account's blocks only.
   readProfileItems: { ownLinkPage: true },
+  readProfileCounts: { ownLinkPage: true },
   listProfilePageChoices: { ownLinkPage: true },
   saveProfileItem: { ownLinkPage: true },
   orderProfileItems: { ownLinkPage: true },

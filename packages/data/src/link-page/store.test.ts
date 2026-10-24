@@ -34,6 +34,14 @@ const heading = (id: string, title: string): ProfileItem => ({
   updatedAt: '2026-10-25T00:00:00.000Z',
 });
 
+const COUNTS = {
+  days: 30,
+  views: 12,
+  visitors: 9,
+  before: { views: 4, visitors: 3 },
+  presses: [{ id: 'a', presses: 5 }],
+};
+
 function harness(first: ProfileItems = { items: [link('a'), link('b')], archived: [] }) {
   const calls: string[] = [];
   const saveListeners: ((input: unknown) => void)[] = [];
@@ -47,6 +55,8 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
   };
   const api: LinkPageApi = {
     items: () => wait('items'),
+    // The figures answer at once and are left out of `calls`: the order of the writes is what these tests read.
+    counts: () => Promise.resolve(COUNTS),
     pageChoices: () => wait('pageChoices'),
     saveItem: (input) => {
       for (const listen of saveListeners) listen(input);
@@ -107,6 +117,14 @@ describe('the link page store', () => {
     const after = h.store.of('acme').getSnapshot();
     expect(after.status === 'ready' && after.items.at(-1)).toMatchObject({ title: 'C from the server' });
     expect(after.status === 'ready' && after.pendingIds.size).toBe(0);
+  });
+
+  it('holds the page’s figures beside its blocks, read with them', async () => {
+    const h = harness();
+    await h.ready();
+    await h.settle();
+    const state = h.store.of('acme').getSnapshot();
+    expect(state.status === 'ready' && state.counts).toEqual(COUNTS);
   });
 
   it('sends an order only after the add before it landed', async () => {

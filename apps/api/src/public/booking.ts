@@ -20,6 +20,7 @@
 //   GET  /api/public/booking/connect/callback    Google's answer: the guest's sealed cookie
 //   POST /api/public/booking/connect/forget      drops the guest's calendar
 //   GET  /api/public/handles/:handle             ?after&q: a link page and a page of its blocks (spec 0051)
+//   POST /api/public/handles/:handle/press       a press on a block, the id as text (a beacon), always 204
 //   GET  /api/public/handles/:handle/contact.vcf  the link page's contact card as a vCard (spec 0051)
 //   GET  /api/public/handles/:handle/:slug       the page a handle address names, by its public key
 //   GET  /api/public/booking/:publicKey/picture  a personal page's host picture, from our origin (23 Oct 2026)
@@ -75,6 +76,8 @@ import {
   removeGuest,
   enterBookingAddress,
   enterBookingPage,
+  countItemPress,
+  countProfileView,
   enterContactCard,
   enterLinkPage,
   findHandleOwner,
@@ -347,6 +350,81 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   });
 
+  /** The signed in person's id on this request, or undefined: no session, or one that couldn't be read. */
+  const signedInAs = async (c: Context<{ Variables: Variables }>): Promise<string | undefined> => {
+    const auth = services.visitor?.auth;
+    if (auth === undefined) return undefined;
+    try {
+      return (await auth.session(c.req.raw.headers, c.get('clientIp')))?.user.id;
+    } catch {
+      return undefined;
+    }
+  };
+
+  /** Today's visitor id on a link page, or undefined for a machine or with no counters (spec 0051, AC-5124). */
+  const profileVisitor = (c: Context<{ Variables: Variables }>, ownerUserId: string): string | undefined => {
+    const userAgent = c.req.header('user-agent');
+    if (services.views === undefined || userAgent === undefined || isMachine(userAgent)) return undefined;
+    return visitorId(services.views.visitorKey, {
+      day: utcDay(services.now?.() ?? new Date()),
+      ip: c.get('clientIp'),
+      userAgent,
+      place: `profile:${ownerUserId}`,
+    });
+  };
+
+  /** Counts a link page view in the background, unless it is the owner's own read. */
+  const countView = (c: Context<{ Variables: Variables }>, ownerUserId: string): void => {
+    const visitor = profileVisitor(c, ownerUserId);
+    if (visitor === undefined || services.views === undefined) return;
+    // Past 600 a minute for one page, reads are answered but not counted (AC-5126).
+    if (!limiter(`profile:view-owner:${ownerUserId}`, BOOKING_LIMITS.viewsPerHandle).allowed) return;
+    const counted = signedInAs(c)
+      .then((userId) => (userId === ownerUserId ? undefined : countProfileView({ db }, ownerUserId, visitor)))
+      .catch((error: unknown) => {
+        log.warn('profile.view.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+      });
+    services.views.keepAlive(counted);
+  };
+
+  // A press on a link page's block (spec 0051, AC-5125, AC-5126): the block's public id as text, sent by
+  // `navigator.sendBeacon` so the visitor's navigation never waits. Always 204, whatever happened: a counter never
+  // says whether a handle or an id exists. Limited per address and per handle; a machine's press is dropped.
+  // A press body is one id: anything longer is no press, and is never read.
+  app.use(
+    '/public/handles/:handle/press',
+    bodyLimit({ maxSize: 256, onError: (c) => c.body(null, 204, { 'cache-control': 'no-store' }) }),
+  );
+  app.post('/public/handles/:handle/press', async (c) => {
+    const handle = c.req.param('handle');
+    const silent = () => c.body(null, 204, { 'cache-control': 'no-store' });
+    if (!HANDLE_PATTERN.test(handle)) return silent();
+    const over = limited([
+      [`profile:press:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.pressesPerAddress],
+      [`profile:press-handle:${handle}`, BOOKING_LIMITS.pressesPerHandle],
+    ]);
+    if (over !== undefined) return silent();
+    const userAgent = c.req.header('user-agent');
+    if (services.views === undefined || userAgent === undefined || isMachine(userAgent)) return silent();
+    const item = (await c.req.text().catch(() => '')).trim().slice(0, 64);
+    // The visitor is keyed on the handle's place; the core reads the owner and checks the block is theirs and live.
+    const visitor = visitorId(services.views.visitorKey, {
+      day: utcDay(services.now?.() ?? new Date()),
+      ip: c.get('clientIp'),
+      userAgent,
+      place: `press:${handle}`,
+    });
+    const counted = signedInAs(c)
+      .then((userId) =>
+        countItemPress({ db }, handle, item, visitor, userId === undefined ? {} : { signedInAs: userId }),
+      )
+      .catch((error: unknown) => {
+        log.warn('profile.press.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+      });
+    services.views.keepAlive(counted);
+    return silent();
+  });
+
   // A handle address (22 Oct 2026): the person by a current or old handle, and their link page's blocks (spec 0051),
   // through the door's definers only. A search reads every live block (at most 60) and answers the matches flat.
   app.get('/public/handles/:handle', async (c) => {
@@ -367,7 +445,11 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
         // One more than a page, so the answer knows there is more; every live block for a search.
         max: search === undefined ? PROFILE_PAGE_SIZE + 1 : PROFILE_LIMITS.items + 1,
       });
-      return ok(await readLinkPage(found, search === undefined ? {} : { search }));
+      const page = await readLinkPage(found, search === undefined ? {} : { search });
+      // One view per page load (its first page, no search), never a machine's or the owner's own (AC-5124),
+      // counted after the answer is made and never holding it up.
+      if (search === undefined && position === undefined) countView(c, found.owner.userId);
+      return ok(page);
     } catch (error) {
       return refusalAnswer(error);
     }
