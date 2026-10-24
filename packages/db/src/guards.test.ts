@@ -153,13 +153,16 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       order by 1
     `);
     expect(definers.rows).toEqual([
+      { name: 'crm_archive_profile_item', owner: 'crm_handle' },
       { name: 'crm_booking_by_token', owner: 'crm_booking_lookup' },
+      { name: 'crm_booking_owner_pages', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_owner_slugs', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_address', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_profile_pages', owner: 'crm_booking_lookup' },
       { name: 'crm_calendar_account_shared', owner: 'crm_calendar_lookup' },
       { name: 'crm_claim_workspace_address', owner: 'crm_address' },
+      { name: 'crm_delete_profile_item', owner: 'crm_handle' },
       { name: 'crm_enqueue_booking_mail', owner: 'crm_queue' },
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_email', owner: 'crm_queue' },
@@ -177,13 +180,18 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_operator_pages', owner: 'crm_operator' },
       { name: 'crm_operator_totals', owner: 'crm_operator' },
       { name: 'crm_operator_workspaces', owner: 'crm_operator' },
+      { name: 'crm_order_profile_items', owner: 'crm_handle' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_pictures_hidden', owner: 'crm_handle' },
+      { name: 'crm_profile_items', owner: 'crm_handle' },
+      { name: 'crm_profile_items_archived', owner: 'crm_handle' },
+      { name: 'crm_profile_items_public', owner: 'crm_handle' },
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
+      { name: 'crm_save_profile_item', owner: 'crm_handle' },
       { name: 'crm_save_public_profile', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
@@ -201,7 +209,10 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       order by 1
     `);
     expect(hardening.rows).toEqual([
+      // A plpgsql body: it raises PROFILE_ITEM_LIMIT and the one heading, one page rules on a restore.
+      { name: 'crm_archive_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_booking_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_booking_owner_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_owner_slugs', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_page_by_address', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_page_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -209,6 +220,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_calendar_account_shared', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises the unique violation a taken address is refused with.
       { name: 'crm_claim_workspace_address', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      // A plpgsql body: it answers whether the block was the owner's, and closes the gap it left.
+      { name: 'crm_delete_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_booking_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -226,13 +239,20 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_operator_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_totals', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it raises PROFILE_ORDER_STALE for an order that isn't exactly the live blocks.
+      { name: 'crm_order_profile_items', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_pictures_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_profile_items', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_profile_items_archived', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_profile_items_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it raises PROFILE_ITEM_LIMIT, PROFILE_ITEM_DATA and PROFILE_ITEM_MISSING.
+      { name: 'crm_save_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises the unique violation a taken handle is refused with.
       { name: 'crm_save_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       {
@@ -338,6 +358,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_booking_page_by_address',
         'crm_booking_profile_pages',
         'crm_booking_owner_slugs',
+        'crm_booking_owner_pages',
       ],
       [
         'crm_booking_page_by_key(text)',
@@ -345,8 +366,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_booking_page_by_address(uuid, text)',
         'crm_booking_profile_pages(uuid, smallint, uuid, text, integer)',
         'crm_booking_owner_slugs(uuid, text)',
+        'crm_booking_owner_pages(uuid, uuid[])',
       ],
-      ['app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app'],
     ],
     ['crm_address', ['crm_claim_workspace_address'], ['crm_claim_workspace_address(text)'], ['app']],
     ['crm_calendar_lookup', ['crm_calendar_account_shared'], ['crm_calendar_account_shared(uuid)'], ['app']],
@@ -378,6 +400,17 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_handle_owner',
         'crm_save_picture_hidden',
         'crm_pictures_hidden',
+        // The link page's (migration 0096); the last two, its data check and its packing, run only inside the
+        // others and no one else may call them, so they have no signature below.
+        'crm_profile_items',
+        'crm_profile_items_archived',
+        'crm_profile_items_public',
+        'crm_save_profile_item',
+        'crm_order_profile_items',
+        'crm_archive_profile_item',
+        'crm_delete_profile_item',
+        'crm_check_profile_item',
+        'crm_pack_profile_items',
       ],
       [
         'crm_save_public_profile(uuid, text, text)',
@@ -385,8 +418,15 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_handle_owner(text)',
         'crm_save_picture_hidden(uuid, boolean)',
         'crm_pictures_hidden(uuid[])',
+        'crm_profile_items(uuid)',
+        'crm_profile_items_archived(uuid)',
+        'crm_profile_items_public(uuid, smallint, uuid, integer)',
+        'crm_save_profile_item(uuid, uuid, text, jsonb, uuid, uuid)',
+        'crm_order_profile_items(uuid, uuid[])',
+        'crm_archive_profile_item(uuid, uuid, boolean)',
+        'crm_delete_profile_item(uuid, uuid)',
       ],
-      ['app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -1727,6 +1767,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'known_device',
     'operator_event',
     'passkey',
+    'profile_items',
     'public_handles',
     'public_profiles',
     'rate_limit',
@@ -1742,7 +1783,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'workspace_membership',
   ];
 
-  it("holds Better Auth's tables and the directory, and only the directory carries a workspace id", async () => {
+  it("holds Better Auth's tables and the directory, and only the directory and a link page's blocks carry a workspace id", async () => {
     const tables = await owner.query<{ table: string; workspace: boolean; enabled: boolean }>(`
       select c.relname as table, c.relrowsecurity as enabled,
         exists (
@@ -1753,7 +1794,10 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     expect(tables.rows.map((row) => row.table)).toEqual(AUTH_TABLES);
+    // And a link page's block, which may name a booking page by its workspace and id (migration 0096): never read
+    // for access, since whether a visitor sees the page is still the booking lookup's call.
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
+      'profile_items',
       'workspace_addresses',
       'workspace_directory',
       'workspace_membership',
@@ -1876,6 +1920,11 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
+      // The link page's blocks (migration 0096), through crm_handle's functions only.
+      'profile_items DELETE',
+      'profile_items INSERT',
+      'profile_items SELECT',
+      'profile_items UPDATE',
       'public_handles INSERT',
       'public_handles SELECT',
       'public_profiles INSERT',

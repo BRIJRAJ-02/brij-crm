@@ -673,6 +673,13 @@
       "when": 1792771813066,
       "tag": "0095_google_full_resync",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1792869287213,
+      "tag": "0096_profile_items",
+      "breakpoints": true
     }
   ]
 }

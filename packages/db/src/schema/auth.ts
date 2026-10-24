@@ -22,6 +22,7 @@ import {
   jsonb,
   pgSchema,
   primaryKey,
+  smallint,
   text,
   uniqueIndex,
   uuid,
@@ -339,6 +340,56 @@ export const publicProfiles = auth.table(
       columns: [t.handle],
       foreignColumns: [publicHandles.handle],
     }),
+  ],
+);
+
+/**
+ * The blocks of a person's link page at `/<handle>` (spec 0051, built as blocks): one ordered list per person, never
+ * a workspace's, so leaving a workspace never takes their LinkedIn with it. The common columns are real; everything
+ * else a kind holds is `data`, checked by its Zod schema (`ProfileBlock` in `@crm/contracts`) before every write and
+ * again by the definer, so a new kind is a schema and a renderer, and at most one line in `profile_items_kind`. A
+ * `page` block names a booking page by its workspace and id, and nothing else: whether a visitor sees it is still the
+ * booking lookup's call. `position` is null while archived, so only live blocks hold places; the deferred unique
+ * `(user_id, position)` (hand written in migration 0096) lets a reorder set every place in one statement. Written and
+ * read only through crm_handle's definers (migration 0096); crm_app holds no grant on it.
+ */
+export const profileItems = auth.table(
+  'profile_items',
+  {
+    id: uuid('id').notNull().primaryKey(),
+    userId: uuid('user_id').notNull(),
+    kind: text('kind').notNull(),
+    position: smallint('position'),
+    data: jsonb('data')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    workspaceId: uuid('workspace_id'),
+    pageId: uuid('page_id'),
+    archivedAt: timestamptz('archived_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({ name: 'profile_items_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    check('profile_items_kind', sql`${t.kind} in ('link', 'page', 'heading', 'contact')`),
+    check('profile_items_position', sql`${t.position} between 0 and 999`),
+    check('profile_items_placed', sql`(${t.archivedAt} is null) = (${t.position} is not null)`),
+    check('profile_items_data', sql`jsonb_typeof(${t.data}) = 'object' and pg_column_size(${t.data}) <= 4096`),
+    check('profile_items_target', sql`(${t.workspaceId} is null) = (${t.pageId} is null)`),
+    check('profile_items_page', sql`${t.kind} <> 'page' or ${t.pageId} is not null`),
+    check('profile_items_plain', sql`${t.kind} not in ('link', 'heading', 'contact') or ${t.pageId} is null`),
+    uniqueIndex('profile_items_page_once')
+      .on(t.userId, t.workspaceId, t.pageId)
+      .where(sql`${t.kind} = 'page' and ${t.archivedAt} is null`),
+    uniqueIndex('profile_items_contact_once')
+      .on(t.userId)
+      .where(sql`${t.kind} = 'contact' and ${t.archivedAt} is null`),
+    uniqueIndex('profile_items_heading_once')
+      .on(t.userId, sql`lower(btrim(${t.data} ->> 'title'))`)
+      .where(sql`${t.kind} = 'heading' and ${t.archivedAt} is null`),
+    index('profile_items_archived')
+      .on(t.userId, t.archivedAt)
+      .where(sql`${t.archivedAt} is not null`),
   ],
 );
 
