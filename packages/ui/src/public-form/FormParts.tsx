@@ -1,8 +1,9 @@
-import { HONEYPOT_KEY, type PublicForm, type PublicQuestion } from '@crm/contracts/forms';
+import { HONEYPOT_KEY, type FormStrings, type PublicForm, type PublicQuestion } from '@crm/contracts/forms';
 import type { ReactNode, Ref } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
 import { Link } from '../atoms/Link/Link.tsx';
+import { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { poweredByHref } from '../lib/powered-by.ts';
 import { Callout } from '../molecules/Callout/Callout.tsx';
@@ -13,6 +14,57 @@ import type { HostedFormMode, HostedFormState } from './use-hosted-form.ts';
 
 /** How a layout sits on its page: `card` (Classic and Steps) or `open` (one question at a time, no card). */
 export type FormFrameKind = 'card' | 'open';
+
+/**
+ * The ground every form view stands on: the page or embed sizing, the card on
+ * a tinted ground from the page breakpoint, and whatever foot follows it. The
+ * look (`data-theme` for Colour, `data-corners` for Corners) is passed once a
+ * form has arrived; while one is still loading it is left off, so the page
+ * keeps the colours it painted with rather than guessing a look it may have
+ * to take back.
+ */
+export function FormGround({
+  mode,
+  kind = 'card',
+  look,
+  isLoading = false,
+  container,
+  previewNote,
+  foot,
+  children,
+}: {
+  readonly mode: HostedFormMode;
+  readonly kind?: FormFrameKind;
+  readonly look?: PublicForm['look'];
+  readonly isLoading?: boolean;
+  readonly container?: Ref<HTMLDivElement>;
+  /** Read to screen readers before an inert preview. */
+  readonly previewNote?: string;
+  readonly foot?: ReactNode;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div ref={container}>
+      {previewNote !== undefined && (
+        <VisuallyHidden>
+          <p>{previewNote}</p>
+        </VisuallyHidden>
+      )}
+      <div
+        className={styles.root}
+        data-theme={look?.colour}
+        data-corners={look?.corners}
+        data-mode={mode}
+        data-frame={kind}
+        {...(isLoading ? { 'aria-busy': true } : {})}
+        {...(mode === 'preview' ? { inert: true } : {})}
+      >
+        <div className={styles.card}>{children}</div>
+        {foot}
+      </div>
+    </div>
+  );
+}
 
 /**
  * The frame every layout draws in: the form's look as tokens (`data-theme`
@@ -38,24 +90,16 @@ export function FormFrame({
   readonly children: ReactNode;
 }) {
   return (
-    <div ref={container}>
-      {previewNote !== undefined && (
-        <VisuallyHidden>
-          <p>{previewNote}</p>
-        </VisuallyHidden>
-      )}
-      <div
-        className={styles.root}
-        data-theme={form.look.colour}
-        data-corners={form.look.corners}
-        data-mode={mode}
-        data-frame={kind}
-        {...(mode === 'preview' ? { inert: true } : {})}
-      >
-        <div className={styles.card}>{children}</div>
-        {foot}
-      </div>
-    </div>
+    <FormGround
+      mode={mode}
+      kind={kind}
+      look={form.look}
+      {...(container === undefined ? {} : { container })}
+      {...(previewNote === undefined ? {} : { previewNote })}
+      {...(foot === undefined ? {} : { foot })}
+    >
+      {children}
+    </FormGround>
   );
 }
 
@@ -313,15 +357,50 @@ export function FormMessage({
 }) {
   const Heading = mode === 'page' ? 'h1' : 'h2';
   return (
-    <div className={styles.root} data-mode={mode} data-frame="card">
-      <div className={styles.card}>
-        <header className={styles.header}>
-          <Heading className={styles.headline} data-mode={mode}>
-            {title}
-          </Heading>
-          {text !== undefined && <p className={styles.subheading}>{text}</p>}
-        </header>
+    <FormGround mode={mode}>
+      <header className={styles.header}>
+        <Heading className={styles.headline} data-mode={mode}>
+          {title}
+        </Heading>
+        {text !== undefined && <p className={styles.subheading}>{text}</p>}
+      </header>
+    </FormGround>
+  );
+}
+
+/** How many question places the loading form holds: a short form, the one most pages ask. */
+const LOADING_QUESTIONS = 3;
+
+/**
+ * The form's shape while it is still being read: the same ground, the same
+ * card, the headline's and sub heading's places, three questions' places and
+ * the button's. It draws at once, so a visitor's first paint is the page
+ * rather than a blank window, and it holds the layout the form will take, so
+ * the words land in the places already set out for them.
+ */
+export function FormLoading({ mode, words }: { readonly mode: HostedFormMode; readonly words: FormStrings }) {
+  return (
+    <FormGround mode={mode} isLoading>
+      <VisuallyHidden>
+        <p>{words.loading}</p>
+      </VisuallyHidden>
+      <header className={styles.header}>
+        <p className={styles.headline} data-mode={mode}>
+          <Skeleton shape="text" width="long" />
+        </p>
+        <p className={styles.subheading}>
+          <Skeleton shape="text" width="medium" />
+        </p>
+      </header>
+      <div className={styles.questions}>
+        {Array.from({ length: LOADING_QUESTIONS }, (_, index) => (
+          <div key={index} className={styles.question}>
+            <Skeleton shape="text" width="short" />
+            <Skeleton shape="field" width="full" />
+          </div>
+        ))}
+        <Skeleton shape="field" width="short" />
       </div>
-    </div>
+    </FormGround>
   );
 }

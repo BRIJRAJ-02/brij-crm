@@ -119,6 +119,17 @@
     min-inline-size: 0;
   }
 
+  /* The loading form's column. It mirrors the Classic form's own column
+     (HostedForm's `.form`) rather than reaching into it, because a CSS module
+     styles only itself: the places the questions will take have to be in the
+     same places, or the words would land somewhere else than they were drawn. */
+  .questions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
+    margin-block-start: var(--space-32);
+  }
+
   /* The email typo hint: a muted line under the field with its Use it. */
   .suggestion {
     display: flex;

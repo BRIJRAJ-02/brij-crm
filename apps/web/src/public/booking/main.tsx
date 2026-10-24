@@ -15,10 +15,10 @@
 import '@crm/ui/styles.css';
 import { handleAddressOf } from '@crm/contracts/handles';
 import { createHandleClient, isDataError } from '@crm/data/booking';
-import { BookingMessage, BookingProvider } from '@crm/ui/public-booking';
+import { BookingMessage, BookingProfile, BookingProvider } from '@crm/ui/public-booking';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BookingPage } from './BookingPage.tsx';
+import { BookingPage, LoadingBooking } from './BookingPage.tsx';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
 import { forgetHandoff, takeHandoff, type HandoffStorage } from './prefill.ts';
 import { strings, tabTitle } from './strings.ts';
@@ -153,17 +153,20 @@ if (path !== null) {
   view.render(
     <StrictMode>
       <BookingProvider locale={locale} timeZone={timeZone}>
-        <Suspense fallback={<BookingMessage title={strings.loading} page="booking_profile" isLoading />}>
+        {/* The profile's own shape while its module loads, so the page never swaps one card for another. */}
+        <Suspense fallback={<BookingProfile />}>
           <ProfilePage handle={handled.handle} onMoved={(current) => showAddress(`/${current}`)} />
         </Suspense>
       </BookingProvider>
     </StrictMode>,
   );
 } else if (handled?.kind === 'page') {
+  // The booking page's own shape while the address is looked up: `/<handle>/<slug>` draws exactly what
+  // `/b/<key>` draws, so finding the key fills the page in rather than replacing it.
   view.render(
     <StrictMode>
       <BookingProvider locale={locale} timeZone={timeZone}>
-        <BookingMessage title={strings.loading} isLoading />
+        <LoadingBooking locale={locale} timeZone={timeZone} now={now} />
       </BookingProvider>
     </StrictMode>,
   );

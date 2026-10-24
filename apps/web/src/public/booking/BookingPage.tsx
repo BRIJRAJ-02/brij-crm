@@ -142,6 +142,10 @@ export function BookingPage({
   }, []);
   const isPreview = globalThis.parent !== globalThis.window;
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
+  // Who the visitor is (spec 0028), asked for as the page's own facts are, not after them: the two answers then
+  // land together, so the card is drawn once with the visitor's bar or without it, and never with a held place
+  // that is taken back a moment later.
+  const [viewer, setViewer] = useState<PublicViewerAnswer | undefined>(undefined);
   // The last preview message, kept until the page loads to lay it over.
   const [preview, setPreview] = useState<unknown>(undefined);
   const load = useCallback(() => {
@@ -157,6 +161,21 @@ export function BookingPage({
     );
   }, [client, publicKey, onAddress]);
   useEffect(load, [load]);
+  useEffect(() => {
+    if (isPreview) return;
+    let isCurrent = true;
+    client.viewer(publicKey).then(
+      (answer) => {
+        if (isCurrent) setViewer(answer);
+      },
+      () => {
+        // Nobody in particular: the page works the same.
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [client, publicKey, isPreview]);
   // A slot read can find the page deleted or paused after it loaded: then that state shows, not a retry.
   const ended = useCallback((state: 'gone' | 'closed') => setLoaded({ state }), []);
   // Inside the editor's preview frame, the editor's unsaved draft shows over the saved page (AC-679):
@@ -187,6 +206,7 @@ export function BookingPage({
           onEnded={ended}
           chosen={back.chosen}
           isPreview={isPreview}
+          {...(viewer === undefined ? {} : { viewer })}
           {...(back.result === undefined ? {} : { connected: back.result })}
           {...(prefill === undefined ? {} : { prefill })}
           {...(handoff === undefined ? {} : { handoff })}
@@ -228,7 +248,7 @@ const viewSegments = [
  * The two switches are the loaded page's own and keep working: what they
  * remember is what the loaded page opens with.
  */
-function LoadingBooking({
+export function LoadingBooking({
   locale,
   timeZone,
   now,
@@ -259,13 +279,6 @@ function LoadingBooking({
     <BookingFrame
       claimHref={CLAIM_URL}
       heading={strings.chooseTime}
-      // The visitor bar's place is held from the first paint, not from the moment the page's facts land, so the
-      // card never drops a row under a reaching hand on the way.
-      banner={
-        <Suspense fallback={null}>
-          <VisitorBar isLoading />
-        </Suspense>
-      }
       toolbar={
         <SegmentedControl
           label={strings.view}
@@ -341,6 +354,7 @@ function Booking({
   chosen,
   connected,
   isPreview,
+  viewer,
 }: {
   readonly handoff?: string;
   readonly chosen: Chosen;
@@ -348,6 +362,8 @@ function Booking({
   readonly connected?: ConnectResult;
   /** Inside the editor's preview: no visitor. */
   readonly isPreview: boolean;
+  /** Who the visitor is (spec 0028), read beside the page's own facts so both land together; undefined while it loads. */
+  readonly viewer?: PublicViewerAnswer;
   readonly client: Client;
   readonly page: PublicBookingPage;
   readonly locale: string;
@@ -411,28 +427,11 @@ function Booking({
     readonly back: boolean;
   }>({ step: 'pick', attempt: '', back: false });
   const [notice, setNotice] = useState<string | undefined>(undefined);
-  // Who the visitor is (spec 0028): undefined while it loads, and in the editor's preview.
-  const [viewer, setViewer] = useState<PublicViewerAnswer | undefined>(undefined);
   // "Not you?": no name, no email and no overlay for the rest of the visit.
   const [notYou, setNotYou] = useState(false);
   const [showAll, setShowAll] = useState(false);
   // Book by chat's conversation (spec 0042), kept while the length, the zone or the view changes.
   const [chatMemory, setChatMemory] = useState<ChatMemory | undefined>(undefined);
-  useEffect(() => {
-    if (isPreview) return;
-    let isCurrent = true;
-    client.viewer(page.publicKey).then(
-      (answer) => {
-        if (isCurrent) setViewer(answer);
-      },
-      () => {
-        // Nobody in particular: the page works the same.
-      },
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [client, page.publicKey, isPreview]);
   const zones = useMemo(() => zoneItems(zone, now()), [zone, now]);
   // The tab names the meeting and the host: "Intro call with Ada · Timefix".
   useEffect(() => {

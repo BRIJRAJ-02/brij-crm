@@ -20,6 +20,25 @@
     font-feature-settings: 'cv11', 'ss01';
   }
 
+  /* The public pages (the booking page and the hosted form) stand on the
+     tinted ground, the booking page at every width and the form from the page
+     breakpoint, where its card appears. Their shells name which page they are,
+     so the ground is painted with the stylesheet rather than when the page's
+     script finally runs: a visitor's first paint is then the page's own
+     colour, and nothing changes underfoot when the page draws into it. The
+     value comes from the same token the page itself uses. */
+  :root[data-public-page='booking'],
+  :root[data-public-page='booking'] body {
+    background: var(--surface-subtle);
+  }
+
+  @media (width >= 1024px) {
+    :root[data-public-page='form'],
+    :root[data-public-page='form'] body {
+      background: var(--surface-subtle);
+    }
+  }
+
   /* Keycaps stay sans, so ⌘ and ↵ come from the system face. */
   code,
   samp,

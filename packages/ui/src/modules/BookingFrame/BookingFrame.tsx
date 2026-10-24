@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Avatar, AvatarStack, type AvatarStackPerson } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { LinkList } from '../LinkList/LinkList.tsx';
+import { LoadingNow } from '../../provider/LoadingNow.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { poweredByHref, type PoweredByPage } from '../../lib/powered-by.ts';
@@ -120,7 +122,7 @@ export function BookingFrame({
                   <span className={styles.factIcon}>
                     <Skeleton shape="tile" />
                   </span>
-                  <span className={styles.factBody}>
+                  <span className={styles.factBody} data-ghost="">
                     <Skeleton shape="field" width="medium" />
                   </span>
                 </li>
@@ -128,7 +130,7 @@ export function BookingFrame({
                   <span className={styles.factIcon}>
                     <Skeleton shape="tile" />
                   </span>
-                  <span className={styles.factBody}>
+                  <span className={styles.factBody} data-ghost="">
                     <Skeleton shape="text" width="long" />
                   </span>
                 </li>
@@ -274,9 +276,18 @@ export function BookingProfile({ person, children, claimHref }: BookingProfilePr
       <div className={styles.narrow} data-width="profile">
         <header className={styles.message} data-kind="profile" aria-busy={person === undefined || undefined}>
           {person === undefined ? (
+            /* The picture's own size and the lines' own line boxes, so the name and the bio land where
+               their places were rather than pushing the links down the page. */
             <>
-              <Skeleton shape="circle" />
-              <Skeleton lines={2} />
+              <Skeleton shape="circle" size="xl" />
+              <div className={styles.names}>
+                <p className={styles.host}>
+                  <Skeleton shape="text" width="medium" />
+                </p>
+                <p className={styles.description}>
+                  <Skeleton shape="text" lines={2} />
+                </p>
+              </div>
             </>
           ) : (
             <>
@@ -294,7 +305,23 @@ export function BookingProfile({ person, children, claimHref }: BookingProfilePr
             </>
           )}
         </header>
-        {children}
+        {/* A profile with nothing yet to draw shows the links' own rows loading, so the page it becomes is the
+            page it already looks like, whether the profile's own module has arrived or not. */}
+        {children ??
+          (person === undefined ? (
+            /* Drawn at once rather than after the loading delay: this is the page's first paint, so there is
+               no content for a skeleton to flash in front of. */
+            <LoadingNow>
+              <LinkList
+                label={strings.links}
+                searchLabel={strings.searchLinks}
+                isToolbarHidden
+                status="loading"
+                rows={[]}
+                onOpen={() => undefined}
+              />
+            </LoadingNow>
+          ) : undefined)}
         <BookingFoot page="booking_profile" {...(claimHref === undefined ? {} : { claimHref })} />
       </div>
     </main>
@@ -357,9 +384,15 @@ export function BookingMessage({
       <div className={styles.narrow}>
         <div className={styles.message} aria-busy={isLoading || undefined}>
           {isLoading ? (
+            /* The heading's and the line's own places. No picture: a message never has one, so a circle
+               here would be a shape that never arrives. */
             <>
-              <Skeleton shape="circle" />
-              <Skeleton lines={3} />
+              <p className={styles.messageTitle}>
+                <Skeleton shape="text" width="medium" />
+              </p>
+              <p className={styles.description}>
+                <Skeleton shape="text" lines={2} />
+              </p>
             </>
           ) : (
             <>

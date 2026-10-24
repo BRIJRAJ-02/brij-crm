@@ -123,13 +123,17 @@ export function linkFontPreloads(html: string, base: string, files: readonly str
 }
 
 /**
- * For an app's index.html: a preload for the faces its first screen draws with, by their built (hashed) names.
- * Inter is `font-display: swap`, and the browser only finds it once the stylesheet has arrived and text needs it,
- * so on a cold visit the first screen painted in the fallback face, then again in Inter, and a list that measured
- * its rows in between kept the fallback's heights. Preloaded, Inter starts with the page. Build only (a dev
- * server reads the font from disk), and only `page`: the public pages draw with their own faces.
+ * For an app's HTML entries: a preload for the faces their first screen draws with, by their built (hashed)
+ * names. Inter is `font-display: swap`, and the browser only finds it once the stylesheet has arrived and text
+ * needs it, so on a cold visit the first screen painted in the fallback face, then again in Inter, and a list
+ * that measured its rows in between kept the fallback's heights. Preloaded, Inter starts with the page. Build
+ * only (a dev server reads the font from disk). Every page named draws with the same faces: the app shell and
+ * the public pages (the booking page and the hosted form) all set their type from `--font-sans`.
  */
-export function preloadFonts(fonts: readonly RegExp[] = FIRST_SCREEN_FONTS, page = '/index.html'): Plugin {
+export function preloadFonts(
+  fonts: readonly RegExp[] = FIRST_SCREEN_FONTS,
+  pages: readonly string[] = ['/index.html'],
+): Plugin {
   let base = '/';
   return {
     name: 'crm-ui-font-preload',
@@ -140,7 +144,7 @@ export function preloadFonts(fonts: readonly RegExp[] = FIRST_SCREEN_FONTS, page
     transformIndexHtml: {
       order: 'post',
       handler: (html, context) => {
-        if (context.path !== page) return html;
+        if (!pages.includes(context.path)) return html;
         const files = Object.keys(context.bundle ?? {}).filter((file) => fonts.some((font) => font.test(file)));
         return linkFontPreloads(html, base, files);
       },

@@ -114,6 +114,13 @@
     overflow-wrap: anywhere;
   }
 
+  /* A fact's place while the page loads: a real fact is sized by the control
+     in it (the length switch, the zone), so its placeholder has to be told to
+     take the row, or the row would stand at the icon's width alone. */
+  .factBody[data-ghost] {
+    flex: 1;
+  }
+
   .main {
     display: flex;
     flex-direction: column;
@@ -200,8 +207,13 @@
     gap: var(--space-16);
   }
 
-  /* A profile is a list: the column takes the wider measure the list needs. */
+  /* A profile is a list: the column takes the wider measure the list needs, and
+     starts at the top rather than centring. A list whose length nobody knows
+     until it arrives would otherwise pull the person's own card up the page as
+     the rows filled in; from the top, the card stays where it was drawn and
+     only the foot moves down. */
   .narrow[data-width='profile'] {
+    align-self: start;
     max-inline-size: calc(var(--size-page-card) + var(--size-measure) / 2);
   }
 

@@ -24,7 +24,7 @@ import {
   type HostedSubmitOutcome,
 } from './use-hosted-form.ts';
 
-export { FormMessage } from './FormParts.tsx';
+export { FormLoading, FormMessage } from './FormParts.tsx';
 export type { HostedFormMode, HostedSubmission, HostedSubmitOutcome } from './use-hosted-form.ts';
 
 /** Props for HostedForm. */

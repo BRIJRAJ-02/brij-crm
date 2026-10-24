@@ -158,21 +158,9 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
       </BookingMessage>
     );
   }
-  if (loaded.state === 'loading') {
-    // The card and the rows as skeletons, so nothing moves when they arrive.
-    return (
-      <BookingProfile>
-        <LinkList
-          label={strings.profileLinks}
-          searchLabel={strings.searchLinks}
-          isToolbarHidden
-          status="loading"
-          rows={[]}
-          onOpen={() => undefined}
-        />
-      </BookingProfile>
-    );
-  }
+  // The card and the rows as skeletons, the shape BookingProfile draws for itself, so the page the visitor
+  // already sees while this module loads is the page it stays.
+  if (loaded.state === 'loading') return <BookingProfile />;
 
   const { profile, links } = loaded;
   const current = profile.handle;

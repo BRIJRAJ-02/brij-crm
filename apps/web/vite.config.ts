@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { layerOrder, preloadFonts, uiVite } from '@crm/ui/vite';
+import { FIRST_SCREEN_FONTS, layerOrder, preloadFonts, uiVite } from '@crm/ui/vite';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
@@ -201,8 +201,9 @@ export default defineConfig({
     uiVite(),
     // The cascade layer order as /layers.css, linked ahead of every bundled stylesheet.
     layerOrder(),
-    // Inter preloaded by its built name, so a cold first visit paints in it from the start (never fallback, then Inter).
-    preloadFonts(),
+    // Inter preloaded by its built name on every entry, so a cold first visit paints in it from the start
+    // (never fallback, then Inter): the app, the hosted form and the public booking page all draw with it.
+    preloadFonts(FIRST_SCREEN_FONTS, ['/index.html', '/form.html', '/book.html']),
     // Live updates' socket must be one vercel.json's CSP allows.
     realtimeCsp(),
     // A web DSN must be on Sentry's EU ingest and allowed by the same CSP; both checks run on every build.

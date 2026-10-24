@@ -9,7 +9,8 @@
 // from (`context`); the address's own parameters prefill questions by key.
 import '@crm/ui/styles.css';
 import { createPublicFormClient, loadCaptcha } from '@crm/data/public-form';
-import { mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
+import { themeBarColor } from '@crm/ui/theme';
+import { mountFormLoading, mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
 import { contextFromFrame, contextOfPage, hiddenOf } from './context.ts';
 import { closeOnEscape, embedOf, framedUrl, isOwnBookingPath, reportHeight, type PostToHost } from './frame.ts';
 
@@ -36,6 +37,14 @@ const RESERVED = new Set(['embed', 'mode', 'fid', 'host', 'ctx', 'page', 'referr
 const prefill = Object.fromEntries([...params].filter(([key]) => !RESERVED.has(key) && !key.startsWith('utm_')));
 const address = decodeURIComponent(window.location.pathname.replace(/^\/f\//, '').split('/')[0] ?? '');
 const client = createPublicFormClient();
+// The form's own shape, drawn before the read even begins: the card, the headline's place, the questions' places
+// and the button's. A visitor's first paint is then the page rather than a blank window, and the words land in
+// the places already set out for them. It is taken down in the same frame the real view goes up, so the page
+// never shows both and never shows neither.
+const loading = mountFormLoading(root, mode);
+// The loading card has a height of its own, so a site's frame is sized to it at once rather than clipping it
+// until the form arrives.
+let stopHeight = postHeight(root.lastElementChild);
 
 /** The visitor's country, guessed from the browser's language (en-GB is GB), for phone and country questions. */
 function guessCountry(): string | undefined {
@@ -57,10 +66,10 @@ function contextNow() {
     : contextFromFrame(window.location.search, embed.mode);
 }
 
-/** Inside an embed, tells the host page the drawn form's height whenever it changes. */
-function postHeight(drawn: Element | null): void {
-  if (embed === undefined || drawn === null) return;
-  reportHeight(
+/** Inside an embed, tells the host page the drawn form's height whenever it changes; answers the stop. */
+function postHeight(drawn: Element | null): () => void {
+  if (embed === undefined || drawn === null) return () => undefined;
+  return reportHeight(
     embed,
     postToHost,
     () => drawn.getBoundingClientRect().height,
@@ -82,12 +91,19 @@ function postHeight(drawn: Element | null): void {
 async function start(): Promise<void> {
   const loaded = await client.load(address);
   if (loaded.kind !== 'form') {
-    document.title = mountFormMessage(root, { mode, kind: loaded.kind }).title;
+    const message = mountFormMessage(root, { mode, kind: loaded.kind });
+    stopHeight();
+    loading.destroy();
+    document.title = message.title;
   } else {
     const { form } = loaded;
     document.title = form.headline;
     document.documentElement.lang = form.language;
     document.documentElement.dataset.theme = form.look.colour;
+    // The phone's browser bar takes the form's own colour too, so a dark form never sits inside a light bar.
+    for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+      meta.setAttribute('content', themeBarColor(form.look.colour, meta.getAttribute('media')));
+    }
     // On the root too, so the lists that open outside the form (in a popover) square their corners with it.
     document.documentElement.dataset.corners = form.look.corners;
     const captcha = form.recaptchaSiteKey === undefined ? undefined : loadCaptcha(form.recaptchaSiteKey);
@@ -129,8 +145,10 @@ async function start(): Promise<void> {
         return outcome;
       },
     });
+    stopHeight();
+    loading.destroy();
   }
-  postHeight(root.lastElementChild);
+  stopHeight = postHeight(root.lastElementChild);
 }
 
 void start();
