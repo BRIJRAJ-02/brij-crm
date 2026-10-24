@@ -112,6 +112,7 @@ export function pageOf(
     rescheduleHost: row.rescheduleHost === 'rotation' ? 'rotation' : 'same',
     isDeleted: row.deletedAt !== null,
     isPrivate: row.isPrivate,
+    showSocials: row.showSocials,
     profileSection: row.profileSection,
     profilePosition: row.profilePosition,
     ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),

@@ -84,6 +84,7 @@ import type {
   WorkspaceDomainsView,
   DeletedWorkspace,
   MyProfile,
+  SocialLink,
   WorkspaceSettings,
 } from '@crm/contracts';
 import type { GlobalSearch } from './search/global.ts';
@@ -167,6 +168,8 @@ export type {
 import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
 export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
+import { createSocialLinksStore, type SocialLinksHeld } from './profile/socials.ts';
+export type { SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
 import { createOperatorStore } from './operator/store.ts';
 import {
@@ -417,6 +420,9 @@ export type {
   WorkspaceSummary,
   DeletedWorkspace,
   MyProfile,
+  PublicSocialLink,
+  SocialLink,
+  SocialLinkNetwork,
   WorkspaceSettings,
 } from '@crm/contracts';
 export type {
@@ -1152,6 +1158,7 @@ export function createDataLayer({
     schedules.clear();
     preferences.clear();
     pictureChoice.clear();
+    socialLinks.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
   const reset = (isSignedIn: boolean) => {
@@ -1986,6 +1993,18 @@ export function createDataLayer({
       get: (input) => call((options) => api.profile.get(input, options)),
       update: (input) => call((options) => api.profile.update(input, options)),
     },
+    mintId,
+    notify,
+  });
+  // The person's social links (booking socials, 25 Oct 2026), read with the profile: its read confirms them here.
+  const readProfile = (workspace: string): Promise<MyProfile> =>
+    pictureChoice.read(workspace).then((profile) => {
+      socialLinks.confirm(workspace, profile);
+      return profile;
+    });
+  const socialLinks = createSocialLinksStore({
+    read: readProfile,
+    update: (input) => call((options) => api.profile.update(input, options)),
     mintId,
     notify,
   });
@@ -4040,7 +4059,7 @@ export function createDataLayer({
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {
       /** Reads the profile now (the route's loader); whether their picture shows comes with it, held below. */
-      get: (workspace: string): Promise<MyProfile> => pictureChoice.read(workspace),
+      get: (workspace: string): Promise<MyProfile> => readProfile(workspace),
       /** Whether their picture shows on their booking pages and profile (owner ask A124), as the screen holds it. */
       picture: (workspace: string): PictureChoiceHeld => pictureChoice.of(workspace),
       /**
@@ -4049,6 +4068,14 @@ export function createDataLayer({
        */
       setPictureHidden: (workspace: string, isHidden: boolean): Promise<boolean> =>
         pictureChoice.change(workspace, isHidden),
+      /** Their social links, in order (booking socials, 25 Oct 2026), the same in every workspace, as screens hold them. */
+      socials: (workspace: string): SocialLinksHeld => socialLinks.of(workspace),
+      /**
+       * Replaces their whole set of social links (the booking editor's Edit social links): shown at once, put back
+       * with a toast and Try again if refused. Answers whether it landed.
+       */
+      setSocials: (workspace: string, links: readonly SocialLink[]): Promise<boolean> =>
+        socialLinks.change(workspace, links),
       /**
        * Changes their name or time zone (null follows the workspace's), or their handle and bio (the person's, in
        * every workspace). The member list is read again; a new handle changes every page's address, so the
@@ -4061,11 +4088,19 @@ export function createDataLayer({
           readonly timeZone?: string | null;
           readonly handle?: string;
           readonly bio?: string;
+          /** Their whole set of social links, in order. */
+          readonly socials?: readonly SocialLink[];
         },
       ): Promise<MyProfile> {
+        const { socials, ...rest } = change;
         const updated = await call((options) =>
-          api.profile.update({ workspace, ...change, mutationId: mintId() }, options),
+          api.profile.update(
+            { workspace, ...rest, ...(socials === undefined ? {} : { socials: [...socials] }), mutationId: mintId() },
+            options,
+          ),
         );
+        // The answer holds the set as saved, for the booking editor's card and anything else holding it.
+        socialLinks.landed(workspace, updated);
         members.delete(workspace);
         if (change.handle !== undefined) bookingPageLists.view(workspace).reload();
         return updated;

@@ -205,4 +205,25 @@ describe('withPreviewDraft', () => {
     expect(withPreviewDraft(page, { type: 'other', draft })).toBeUndefined();
     expect(withPreviewDraft(page, 'crm:preview')).toBeUndefined();
   });
+
+  it('shows the host’s links as the editor has them, only well formed ones, and none on a team page', () => {
+    const ada = { network: 'x', href: 'https://x.com/ada', label: '@ada' } as const;
+    const draft = {
+      socials: [
+        ada,
+        { network: 'website', href: 'javascript:alert(1)', label: 'x' },
+        { network: 'myspace', href: 'https://myspace.com/a', label: 'a' },
+        { network: 'website', href: '//evil.example', label: 'evil' },
+        { network: 'github', href: 'https://github.com/ada', label: 7 },
+      ],
+    };
+    expect(withPreviewDraft(page, { type: 'crm:preview', draft })?.socials).toEqual([ada]);
+    // The switch turned off sends none: the saved page's links go too.
+    const saved = { ...page, socials: [ada] };
+    expect(withPreviewDraft(saved, { type: 'crm:preview', draft: { socials: [] } })?.socials).toBeUndefined();
+    // A draft that says nothing of links keeps the page's.
+    expect(withPreviewDraft(saved, { type: 'crm:preview', draft: {} })?.socials).toEqual([ada]);
+    const team = { ...page, team: { avatars: [], more: 0 } };
+    expect(withPreviewDraft(team, { type: 'crm:preview', draft })?.socials).toBeUndefined();
+  });
 });

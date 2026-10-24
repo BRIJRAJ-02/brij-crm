@@ -5,7 +5,8 @@
 // The handle and bio (22 Oct 2026) are the person's, the same in every
 // workspace: they live in schema auth, read and claimed through `booking/handles.ts`.
 // So is whether their picture shows on their public pages (owner ask A124,
-// 23 Oct 2026), read and set through `booking/picture-choice.ts`.
+// 23 Oct 2026), read and set through `booking/picture-choice.ts`, and their social links (25 Oct 2026), through
+// `booking/socials.ts`.
 import { BIO_MAX, handleProblem, type MyProfile, type UpdateMyProfileInput } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq } from 'drizzle-orm';
@@ -14,6 +15,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import { publicProfilesOf, savePublicProfile, suggestHandle } from '../booking/handles.ts';
 import { isPictureHidden, savePictureHidden } from '../booking/picture-choice.ts';
+import { checkedSocialLinks, sameSocialLinks, saveSocialLinks, socialLinksOfUser } from '../booking/socials.ts';
 import { touched } from '../engine/definitions.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
@@ -82,6 +84,7 @@ async function readProfile(
   const suggested = held === undefined && userId !== undefined ? await suggestHandle(tx, row.name) : undefined;
   // The person's choice; a member with no identity of their own has none to make.
   const pictureHidden = userId === undefined ? undefined : await isPictureHidden(tx, userId);
+  const socials = userId === undefined ? undefined : await socialLinksOfUser(tx, userId);
   return {
     memberId,
     name: row.name,
@@ -94,6 +97,7 @@ async function readProfile(
     ...(suggested === undefined ? {} : { suggestedHandle: suggested }),
     bio: held?.bio ?? '',
     ...(pictureHidden === undefined ? {} : { pictureHidden }),
+    ...(socials === undefined ? {} : { socials: [...socials] }),
   };
 }
 
@@ -107,14 +111,15 @@ export async function getMyProfile(scope: EngineScope, extras: ProfileExtras = {
  * Changes the caller's own name (1 to 80 characters) and time zone in this
  * workspace (AC-821): `timeZone` null goes back to the workspace's. Their
  * handle and bio, and whether their picture shows on their public pages
- * (`pictureHidden`), are the person's, in every workspace. A change
+ * (`pictureHidden`), and their social links (`socials`, the whole set in order), are the person's, in every
+ * workspace. A change
  * that changes nothing writes nothing. Otherwise one audit row with only the
  * changed fields, and a `members` outbox row so other members' screens read
  * the name again.
  */
 export async function updateMyMemberProfile(
   scope: EngineScope,
-  input: Pick<UpdateMyProfileInput, 'name' | 'timeZone' | 'handle' | 'bio' | 'pictureHidden'> = {},
+  input: Pick<UpdateMyProfileInput, 'name' | 'timeZone' | 'handle' | 'bio' | 'pictureHidden' | 'socials'> = {},
   extras: ProfileExtras = {},
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
@@ -175,6 +180,20 @@ export async function updateMyMemberProfile(
         await savePictureHidden(tx, userId, input.pictureHidden);
         before.pictureHidden = now.pictureHidden ?? false;
         after.pictureHidden = input.pictureHidden;
+      }
+      // Their social links: the person's, in schema auth, the whole set at once. Only for themself.
+      if (input.socials !== undefined) {
+        const socials = checkedSocialLinks(input.socials);
+        const held = now.socials ?? [];
+        if (!sameSocialLinks(socials, held)) {
+          const userId = selfUserId(scope);
+          if (userId === undefined) {
+            throw refuseOn('FORBIDDEN', 'Only a signed in person has social links.', 'socials');
+          }
+          await saveSocialLinks(tx, userId, socials);
+          before.socials = held.map((link) => link.href);
+          after.socials = socials.map((link) => link.href);
+        }
       }
       if (Object.keys(after).length === 0) return now;
       if (after.name !== undefined || 'timeZone' in after) {

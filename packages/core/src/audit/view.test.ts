@@ -149,6 +149,11 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     row('member.profile_updated', 'member', bea, { before: { bio: 'Hi' }, after: { bio: 'Hello' } }),
     // A key this screen doesn't know yet (photo-switch's) is dropped, and the sentence falls back to "profile".
     row('member.profile_updated', 'member', ada, { before: { pictureHidden: false }, after: { pictureHidden: true } }),
+    // Social links (booking socials, 25 Oct 2026): the lists of links before and after.
+    row('member.profile_updated', 'member', ada, {
+      before: { socials: ['https://x.com/ada'] },
+      after: { socials: ['https://x.com/ada', 'https://ada.dev'] },
+    }),
   ],
   'workspace.updated': [
     row('workspace.updated', 'workspace', newId(), { before: { name: 'Acme' }, after: { name: 'Acme Ltd' } }),
@@ -330,6 +335,18 @@ describe('toEntryView, per action', () => {
     expect(only('booking.reassigned', 1).params).toEqual({ seats: 2 });
     expect(only('member.profile_updated', 0).params).toEqual({ isOwn: true, fields: ['name', 'timeZone'] });
     expect(only('member.profile_updated', 1).params).toEqual({ isOwn: false, fields: ['bio'] });
+  });
+
+  it('names a social links change, with the links before and after as lists', () => {
+    const entry = only('member.profile_updated', 3);
+    expect(entry.params).toEqual({ isOwn: true, fields: ['socials'] });
+    expect(entry.changes).toEqual([
+      {
+        field: 'socials',
+        before: { kind: 'list', items: ['https://x.com/ada'] },
+        after: { kind: 'list', items: ['https://x.com/ada', 'https://ada.dev'] },
+      },
+    ]);
   });
 
   it('drops unknown keys: a profile change with no known field left names no field', () => {

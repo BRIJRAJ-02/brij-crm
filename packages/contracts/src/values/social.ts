@@ -400,7 +400,7 @@ export function socialLinkProblem(network: SocialLinkNetwork, refusal: SocialLin
     case 'invalid':
       return network === 'website'
         ? 'That link doesn’t look right. Try one like https://ada.dev.'
-        : `That isn’t a ${name} handle. Type it as ${exampleHandle(network)}, or paste your profile link.`;
+        : `That doesn’t look like your ${name} handle. Type it like ${exampleHandle(network)}, or paste your profile link.`;
     case 'not_profile':
       return `That isn’t a link to a ${name} profile. Paste the link to your own page.`;
     case 'other_network':

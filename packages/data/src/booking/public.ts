@@ -15,8 +15,11 @@ import type {
   PublicManagedBooking,
   PublicPrefill,
   PublicSlots,
+  PublicSocialLink,
   PublicViewerAnswer,
 } from '@crm/contracts/booking';
+import { safeLink } from '@crm/contracts/safe-link';
+import { isSocialLinkNetwork, SOCIAL_LINKS_MAX } from '@crm/contracts/social-networks';
 import { dataError, isFetchFailure, parseRetryAfter, toDataError, type DataError } from '../errors.ts';
 import type { FetchLike } from '../fetch.ts';
 
@@ -38,6 +41,7 @@ export type {
   PublicPrefill,
   PublicSlot,
   PublicSlots,
+  PublicSocialLink,
   PublicViewer,
   PublicViewerAnswer,
   SlotsOverlay,
@@ -214,22 +218,47 @@ function previewLocation(value: unknown): PublicBookingPage['location'] | undefi
   return undefined;
 }
 
+/** A social link a draft may show: a known network, an http or https link `safeLink` takes, and a short label. */
+function previewSocial(value: unknown): PublicSocialLink | undefined {
+  if (!isRecord(value) || !isSocialLinkNetwork(value.network)) return undefined;
+  const { href, label } = value;
+  if (typeof href !== 'string' || href.length > 2_048 || !/^https?:\/\//i.test(href) || safeLink(href) === undefined) {
+    return undefined;
+  }
+  if (typeof label !== 'string' || label.length > 200) return undefined;
+  return { network: value.network, href, label };
+}
+
+/** A draft's social links, when it sends a list: each well formed one, at most ten. */
+function previewSocials(value: unknown): readonly PublicSocialLink[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.slice(0, SOCIAL_LINKS_MAX).flatMap((each: unknown) => {
+    const link = previewSocial(each);
+    return link === undefined ? [] : [link];
+  });
+}
+
 /**
  * The page with the editor's unsaved draft laid over it (spec 0025, AC-679),
- * from a preview message: only the title, description, durations and location,
- * each taken only when it has the right shape, so a stray message changes
- * nothing. Anything that isn't a preview message answers `undefined`.
+ * from a preview message: only the title, description, durations, location and
+ * the host's social links as the editor shows them (booking socials), each
+ * taken only when it has the right shape, so a stray message changes nothing.
+ * Anything that isn't a preview message answers `undefined`.
  */
 export function withPreviewDraft(page: PublicBookingPage, message: unknown): PublicBookingPage | undefined {
   if (!isRecord(message) || message.type !== PREVIEW_MESSAGE || !isRecord(message.draft)) return undefined;
-  const { title, description, durations, location } = message.draft;
+  const { title, description, durations, location, socials } = message.draft;
   const lengths = Array.isArray(durations) ? durations.filter(isDuration) : [];
   const place = previewLocation(location);
+  const links = previewSocials(socials);
+  // A team page never shows anyone's links (AC-754), whatever a message says.
+  const { socials: _saved, ...rest } = page;
   return {
-    ...page,
+    ...(links === undefined || page.team !== undefined ? page : rest),
     ...(typeof title === 'string' && title.trim() !== '' ? { title } : {}),
     ...(typeof description === 'string' ? { description } : {}),
     ...(lengths.length > 0 ? { durations: lengths } : {}),
     ...(place === undefined ? {} : { location: place }),
+    ...(links === undefined || links.length === 0 || page.team !== undefined ? {} : { socials: [...links] }),
   };
 }

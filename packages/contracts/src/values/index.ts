@@ -163,5 +163,4 @@ export {
   SOCIAL_LINK_NETWORKS,
   SOCIAL_LINKS_MAX,
   WEBSITE_LINK_MAX,
-  type SocialLinkNetwork,
 } from './social-networks.ts';

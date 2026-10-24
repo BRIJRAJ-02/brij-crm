@@ -40,6 +40,8 @@ export type PublicBio = z.infer<typeof PublicBio>;
 
 /** A network a person's social link names, or their website. */
 export const SocialLinkNetwork = z.enum(SOCIAL_LINK_NETWORKS, { error: 'Pick one of the networks.' });
+/** A network a person's social link names, or their website. */
+export type SocialLinkNetwork = z.infer<typeof SocialLinkNetwork>;
 
 /**
  * One of a person's own social links (booking socials, 25 Oct 2026): the network and its one canonical link. A
