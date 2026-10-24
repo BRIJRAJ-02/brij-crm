@@ -117,9 +117,13 @@ export const OtherTimes: Story = {
     const times = await screen.findByRole('group', { name: 'The next matching times' });
     // The button went with its press, so focus is on the first time it drew.
     await waitFor(() => expect(document.activeElement).toHaveTextContent('11:00 AM'));
+    // The list enters with `both` fill, and this is the one entrance that starts inside a play function,
+    // after the hook that settles animations has already run. The test runner pauses animations, which
+    // holds a `both` one at its first frame, opacity 0, so settle this one before reading it or shooting it.
+    for (const entrance of times.getAnimations({ subtree: true })) entrance.finish();
+    await expect(times).toBeVisible();
     await userEvent.click(await screen.findByRole('button', { name: /2:00 PM/ }));
     await expect(args.onBook).toHaveBeenCalledWith('2026-10-20T14:00:00.000Z');
-    await expect(times).toBeVisible();
   },
 };
 
