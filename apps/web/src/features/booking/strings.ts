@@ -103,6 +103,14 @@ export const strings = {
   slugChanging: 'Links with the old address keep working and move to the new one.',
   slugRequired: 'Give the page a web address.',
   slugInvalid: 'Use lowercase letters, numbers and single hyphens.',
+  /**
+   * The Page tab's "Opens in" row (the owner, 25 Oct 2026, looking at their page with Chat open: "default it to
+   * this on my meeting page"): the view the page opens in for a visitor who hasn't picked one of their own.
+   */
+  opensIn: 'Opens in',
+  opensInLine: 'Which way to pick a time a visitor sees first. They can switch, and their choice is remembered.',
+  /** The three views, each named as the page's own switch names it. */
+  opensInViews: { month: 'Month', list: 'List', chat: 'Book by chat' },
   profileSection: 'Section',
   profileSectionLine: 'Pages in the same section are listed together.',
   noSection: 'No section',
