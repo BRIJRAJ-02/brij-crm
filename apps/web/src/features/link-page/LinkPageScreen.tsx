@@ -54,7 +54,11 @@ export interface LinkPageScreenProps {
 }
 
 /** Which editor is open: a kind's add, or a block's edit. */
-type Editing = { readonly kind: ProfileBlockKind; readonly item?: ProfileItem };
+/**
+ * The Modal open: its kind, the block being edited (none for an add), and the id its save goes under, minted as it
+ * opens, so a second press of Add before the Modal closes saves the same block again rather than a second one.
+ */
+type Editing = { readonly kind: ProfileBlockKind; readonly item?: ProfileItem; readonly id: string };
 
 /** A new link's letter colour: the next of the hues after the links so far, gray last, as the server would pick. */
 function nextHue(items: readonly ProfileItem[]) {
@@ -186,6 +190,13 @@ function Blocks({
     });
   };
   const restore = (item: ProfileItem, index: number) => {
+    // A kind that is full can't take this one back (the one contact card, the 12 headings): said at once, rather
+    // than shown and then put back when the server refuses it.
+    const full = linkPage.limit(items, item.kind);
+    if (full !== undefined) {
+      toasts.toast({ tone: 'danger', message: full });
+      return;
+    }
     void linkPage.archive(slug, item.id, false);
     focusNear(strings.archived, index);
   };
@@ -211,7 +222,7 @@ function Blocks({
       draft.kind === 'link' && draft.hue === undefined ? { ...draft, hue: nextHue(items) } : draft;
     const checked = linkPage.check(withHue, items, was?.id);
     if (!checked.ok) return;
-    const id = was?.id ?? linkPage.newId();
+    const id = was?.id ?? editing?.id ?? linkPage.newId();
     void linkPage.save(slug, id, checked.block, shownItem(id, checked.block, was, page));
   };
 
@@ -224,7 +235,7 @@ function Blocks({
         <Button variant="ghost" icon="ellipsis" label={strings.moreFor(words.title)} />
         <Menu label={strings.moreFor(words.title)}>
           {kind.isEditable && (
-            <MenuItem id="edit" icon="pencil" onAction={() => setEditing({ kind: item.kind, item })}>
+            <MenuItem id="edit" icon="pencil" onAction={() => setEditing({ kind: item.kind, item, id: item.id })}>
               {strings.edit}
             </MenuItem>
           )}
@@ -261,7 +272,7 @@ function Blocks({
   };
 
   const tileOf = (item: ProfileItem): LinkPageBlock => {
-    const block = previewBlock(item, handle, linkPage.markOf);
+    const block = previewBlock(item, handle, linkPage.markOf, profile.name);
     if (block !== undefined) return block;
     // A paused or unavailable page still shows its calendar tile in the list.
     return { kind: 'page', id: item.id, title: rowWords(item).title, href: '', facts: '' };
@@ -303,7 +314,7 @@ function Blocks({
               icon={entry.icon}
               description={full ?? entry.description}
               isDisabled={full !== undefined}
-              onAction={() => setEditing({ kind })}
+              onAction={() => setEditing({ kind, id: linkPage.newId() })}
             >
               {entry.label}
             </MenuItem>
@@ -314,7 +325,7 @@ function Blocks({
   );
 
   const previewBlocks = items.flatMap((item) => {
-    const block = previewBlock(item, handle, linkPage.markOf);
+    const block = previewBlock(item, handle, linkPage.markOf, profile.name);
     return block === undefined ? [] : [block];
   });
   const preview = (
@@ -393,7 +404,7 @@ function Blocks({
         onOpen={(id) => {
           const item = items.find((each) => each.id === id);
           if (item === undefined) return;
-          if (BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item });
+          if (BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item, id: item.id });
           // A booking page block opens the booking page's own editor, in its workspace.
           else if (item.kind === 'page' && item.page !== undefined) {
             void navigate({ href: pageEditorHref(item.page.workspaceSlug, item.pageId) });

@@ -23,7 +23,10 @@ export const BOOKING_LIMITS = {
   /** A host's picture (23 Oct 2026): 60 a minute per address, 600 per page or handle; the edge keeps most of them. */
   picturesPerAddress: { max: 60, windowMs: 60_000 },
   picturesPerTarget: { max: 600, windowMs: 60_000 },
-  /** A link page's contact card as a vCard (spec 0051, AC-5114): 20 a minute per address, 300 per handle. */
+  /**
+   * A link page's contact card as a vCard (spec 0051, AC-5114): 20 a minute per address; past 300 a minute for one
+   * handle, its cards go without the picture (the fetches of Google are what the handle's budget bounds).
+   */
   vcardsPerAddress: { max: 20, windowMs: 60_000 },
   vcardsPerHandle: { max: 300, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;

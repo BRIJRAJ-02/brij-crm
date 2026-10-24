@@ -59,10 +59,11 @@ export type ProfileLinkIcon = (typeof PROFILE_LINK_ICONS)[number];
 /** The schemes a link may use (AC-5103). */
 const LINK_SCHEMES = new Set(['https:', 'http:', 'mailto:', 'tel:', 'sms:']);
 
-// Any control character, C0, DEL and C1: browsers strip them while resolving, so `java\tscript:` would otherwise
+// Any control character, C0, DEL and C1, and the line and paragraph separators (U+2028, U+2029, which address
+// books read as line breaks and a UTF-8 database may count as control characters): browsers strip them while resolving, so `java\tscript:` would otherwise
 // read as text and run as script, and the database refuses them in every field (`[[:cntrl:]]`).
 // eslint-disable-next-line no-control-regex
-export const PROFILE_CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+export const PROFILE_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 
 /** What the database stores (crm_check_profile_item): a web address with a host, or mailto, tel or sms, no spaces. */
 const STORED_SHAPE = /^(https?:\/\/[^/?#@\s]+([/?#]\S*)?|mailto:\S+|tel:\S+|sms:\S+)$/i;
@@ -255,7 +256,7 @@ export function checkContactCard(typed: Readonly<Partial<Record<ProfileContactFi
   for (const field of PROFILE_CONTACT_FIELDS) {
     const value = (typed[field] ?? '').trim();
     if (value === '') {
-      if (field === 'fullName') problems.fullName = 'Enter the name.';
+      if (field === 'fullName') problems.fullName = 'Enter your name.';
       continue;
     }
     if (PROFILE_CONTROL.test(value)) {
@@ -280,7 +281,7 @@ export function checkContactCard(typed: Readonly<Partial<Record<ProfileContactFi
     if (field === 'phone') {
       const digits = value.replace(/\D/g, '').length;
       if (!PROFILE_CONTACT_PHONE.test(value) || digits < 3 || digits > 20) {
-        problems.phone = 'Use digits, with a + and the country code if you like.';
+        problems.phone = 'Enter the number with its country code.';
         continue;
       }
     }

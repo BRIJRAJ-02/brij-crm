@@ -254,9 +254,9 @@ describe('checkBlock', () => {
     ).toEqual({
       ok: false,
       problems: {
-        fullName: 'Enter the name.',
+        fullName: 'Enter your name.',
         email: 'Enter an email address, like ana@example.com.',
-        phone: 'Use digits, with a + and the country code if you like.',
+        phone: 'Enter the number with its country code.',
         website: 'Use a web address, like timefix.com.',
       },
     });

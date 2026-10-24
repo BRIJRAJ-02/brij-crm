@@ -413,6 +413,13 @@ describe('the walk: a principal without the access is refused', () => {
         id: core.newId(),
         block: { kind: 'heading', title: 'Ada’s' },
       });
+      // Ada's own Public booking page: Bea may neither choose it nor place it.
+      const adaPage = await core.createBookingPage(adaScope, {
+        id: core.newId(),
+        title: 'Ada’s intro',
+        timeZone: 'UTC',
+        settings: {},
+      });
       const inputs: Readonly<Record<string, unknown>> = {
         saveProfileItem: { id: theirs.id, block: { kind: 'heading', title: 'Bea’s now' } },
         orderProfileItems: [theirs.id],
@@ -426,15 +433,28 @@ describe('the walk: a principal without the access is refused', () => {
       );
       if (name === 'readProfileItems' || name === 'listProfilePageChoices') {
         expect(JSON.stringify(outcome)).not.toContain(theirs.id);
+        expect(JSON.stringify(outcome)).not.toContain(adaPage.id);
       } else if (name === 'orderProfileItems') {
         // Bea's order can only name Bea's own blocks: Ada's id makes it stale.
         expect(outcome).toEqual({ refusal: 'CONFIG_INVALID' });
       } else {
         expect(outcome).toEqual({ refusal: 'NOT_FOUND' });
       }
-      expect((await core.readProfileItems(adaScope)).items).toEqual([
-        expect.objectContaining({ id: theirs.id, title: 'Ada’s' }),
-      ]);
+      expect((await core.readProfileItems(adaScope)).items).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: theirs.id, title: 'Ada’s' })]),
+      );
+      if (name === 'saveProfileItem') {
+        const placing = await core
+          .saveProfileItem(beaScope, {
+            id: core.newId(),
+            block: { kind: 'page', workspaceId, pageId: adaPage.id },
+          })
+          .then(
+            () => 'placed',
+            (error: unknown) => (core.isRefusal(error) ? error.refusal.code : error),
+          );
+        expect(placing).toBe('NOT_FOUND');
+      }
     },
   );
 

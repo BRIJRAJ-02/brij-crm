@@ -12,10 +12,9 @@ export const homeStrings = {
   modalTitle: 'Your link page QR code',
   download: 'Download PNG',
   downloadFailed: 'The code didn’t save. Take a screenshot of it instead.',
-  close: 'Close',
   noHandle: 'Claim your address to get a link page',
   noHandleText: 'Pick a handle in your profile, and your page and its QR code are ready at once.',
   goToProfile: 'Go to Profile',
   failed: 'Your link page didn’t load',
-  unavailable: 'This card didn’t load. Reload the page to try again.',
+  unavailable: 'Reload the page to try again.',
 } as const;

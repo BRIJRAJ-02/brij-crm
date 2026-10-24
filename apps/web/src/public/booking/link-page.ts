@@ -6,8 +6,21 @@ import type { PublicProfileItem } from '@crm/data/booking';
 import type { LinkPageBlock } from '@crm/ui/public-booking';
 import { strings } from './strings.ts';
 
-/** The blocks of one page of a profile, in order, as LinkPage draws them. */
-export function blocksOf(handle: string, items: readonly PublicProfileItem[]): readonly LinkPageBlock[] {
+/** Whether two names are the same person's, ignoring case and spaces. */
+export function sameName(left: string, right: string): boolean {
+  const plain = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+  return plain(left) === plain(right);
+}
+
+/**
+ * The blocks of one page of a profile, in order, as LinkPage draws them. A contact card that is the page's own
+ * person (`personName`) is titled "Contact card", since the page already says their name over it.
+ */
+export function blocksOf(
+  handle: string,
+  items: readonly PublicProfileItem[],
+  personName = '',
+): readonly LinkPageBlock[] {
   return items.flatMap((item): LinkPageBlock[] => {
     switch (item.kind) {
       case 'link':
@@ -44,7 +57,7 @@ export function blocksOf(handle: string, items: readonly PublicProfileItem[]): r
           {
             kind: 'contact',
             id: item.id,
-            title: item.fullName,
+            title: sameName(item.fullName, personName) ? strings.contactCard : item.fullName,
             ...(line === '' ? {} : { line }),
             // The card as a vCard, from the api on this origin: a plain link a phone offers to add (AC-5115).
             href: `/api/public/handles/${encodeURIComponent(handle)}/contact.vcf`,

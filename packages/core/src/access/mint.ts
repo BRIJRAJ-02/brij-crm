@@ -16,7 +16,7 @@
 import type { Database } from '@crm/db';
 import type { Limits } from '../engine/limits.ts';
 import type { Actor } from '../engine/scope.ts';
-import type { Access } from './policy.ts';
+import { bookingAccess, type Access } from './policy.ts';
 
 const SEALED: unique symbol = Symbol('crm.engineScope');
 
@@ -90,13 +90,19 @@ export function rescope(scope: EngineScope, actor: Actor, access: Access): Engin
 }
 
 /**
- * A scope on the same database as `scope` (checked first), in the workspace and as the actor `fields` name. Only the
- * door calls it (`enterOwnPages`): a person's own booking pages in each of their workspaces, each as its read only
- * `booking` actor, once `crm_booking_owner_pages` has named them theirs (spec 0051).
+ * A booking page's read only scope on the same database as `scope` (checked first), in the page's own workspace: its
+ * `booking` actor with no record access, as every public page read has. Only the door calls it (`enterOwnPages`): a
+ * person's own booking pages in each of their workspaces, once `crm_booking_owner_pages` has named them theirs (spec
+ * 0051). It mints nothing else, so no other actor or access can be had from a scope this way.
  */
-export function mintBeside(scope: EngineScope, fields: Omit<ScopeFields, 'db'>): EngineScope {
+export function mintPageBeside(scope: EngineScope, workspaceId: string, pageId: string): EngineScope {
   checkScope(scope);
-  return mintScope({ ...fields, db: scope.db });
+  return mintScope({
+    db: scope.db,
+    workspaceId,
+    actor: { type: 'booking', id: pageId },
+    access: bookingAccess(pageId, []),
+  });
 }
 
 /** A scope that wasn't minted here: a programming error, answered as INTERNAL and logged. */

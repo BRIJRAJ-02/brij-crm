@@ -3,6 +3,7 @@
 // which reads its own data and draws its own loading, empty and error states.
 import type { HomeSection } from './registry.ts';
 import { CapturesSection } from './sections/CapturesSection.tsx';
+import { homeStrings as linkPageStrings } from '../link-page/home-strings.ts';
 import { LinkPageSection } from './sections/LinkPageSection.tsx';
 import { MetricsSection } from './sections/MetricsSection.tsx';
 import { RecentSection } from './sections/RecentSection.tsx';
@@ -42,7 +43,7 @@ export const HOME_SECTIONS: readonly HomeSection[] = [
   },
   {
     id: 'linkPage',
-    title: 'Your link page',
+    title: linkPageStrings.title,
     width: 'half',
     // Everyone has a link page once they claim a handle; before, the card says how (AC-5123).
     isVisible: () => true,

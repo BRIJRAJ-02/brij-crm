@@ -35,8 +35,11 @@ export type FetchedPicture =
   | { readonly ok: true; readonly type: PictureType; readonly bytes: Uint8Array }
   | { readonly ok: false; readonly reason: PictureMiss };
 
-/** Fetches one account picture URL (one `accountPicture` gave). Never throws. */
-export type PictureFetch = (url: URL) => Promise<FetchedPicture>;
+/**
+ * Fetches one account picture URL (one `accountPicture` gave). Never throws. `types` narrows what is asked for (the
+ * `accept` header): the vCard asks for JPEG or PNG, which every address book shows, never WebP.
+ */
+export type PictureFetch = (url: URL, options?: { readonly types?: readonly PictureType[] }) => Promise<FetchedPicture>;
 
 const REDIRECTS: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 
@@ -92,8 +95,9 @@ export function createPictureFetch(
   const send = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const timeoutMs = options.timeoutMs ?? PICTURE_TIMEOUT_MS;
   const maxBytes = options.maxBytes ?? PICTURE_MAX_BYTES;
-  return async (start) => {
+  return async (start, wanted = {}) => {
     const signal = AbortSignal.timeout(timeoutMs);
+    const accept = (wanted.types ?? [...PICTURE_TYPES]).join(',');
     try {
       let url = start;
       for (let hop = 0; hop <= PICTURE_REDIRECTS; hop += 1) {
@@ -102,7 +106,7 @@ export function createPictureFetch(
         const response = await send(url, {
           redirect: 'manual',
           signal,
-          headers: { accept: [...PICTURE_TYPES].join(',') },
+          headers: { accept },
         });
         if (REDIRECTS.has(response.status)) {
           await response.body?.cancel();

@@ -380,14 +380,19 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   app.get('/public/handles/:handle/contact.vcf', async (c) => {
     const handle = c.req.param('handle');
     if (!HANDLE_PATTERN.test(handle)) return answer('NOT_FOUND', 'There’s no contact card here.');
-    const refused = limited([
-      [`booking:vcard:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.vcardsPerAddress],
-      [`booking:vcard-handle:${handle}`, BOOKING_LIMITS.vcardsPerHandle],
-    ]);
+    // Per address only: a handle wide limit would let a few addresses switch off a person's Save contact for everyone.
+    const refused = limited([[`booking:vcard:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.vcardsPerAddress]]);
     if (refused !== undefined) return refused;
     try {
       const contact = readContactCard(await enterContactCard({ db }, handle));
-      const fetched = contact.picture === undefined ? undefined : await services.pictures.fetch(contact.picture.url);
+      // The handle's own budget bounds the fetches of Google: past it, the card goes without its picture.
+      const fetchesPicture =
+        contact.picture !== undefined &&
+        limited([[`booking:vcard-handle:${contact.handle}`, BOOKING_LIMITS.vcardsPerHandle]]) === undefined;
+      const fetched =
+        contact.picture === undefined || !fetchesPicture
+          ? undefined
+          : await services.pictures.fetch(contact.picture.url, { types: ['image/jpeg', 'image/png'] });
       if (fetched?.ok === false) {
         log.warn('booking.vcard.picture_missed', { requestId: c.get('requestId'), reason: fetched.reason });
       }
@@ -397,6 +402,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
           'content-type': 'text/vcard; charset=utf-8',
           'content-disposition': `attachment; filename="${contact.handle}.vcf"`,
           'cache-control': 'private, no-store',
+          'x-content-type-options': 'nosniff',
+          'content-security-policy': "default-src 'none'",
           'x-robots-tag': 'noindex',
         },
       });

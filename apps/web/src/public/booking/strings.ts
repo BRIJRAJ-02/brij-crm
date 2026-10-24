@@ -103,6 +103,8 @@ export const strings = {
   socials: (name: string) => `${name}’s social links`,
   team: 'Team',
   noLinksTitle: 'Nothing here yet',
+  /** A contact card's title when it is the page's own person: the page already says their name. */
+  contactCard: 'Contact card',
   noLinksText: 'This person hasn’t added any links yet.',
   noMatchesTitle: (query: string) => `Nothing matches “${query}”`,
   matches: (count: number) => (count === 0 ? 'No matches' : count === 1 ? '1 match' : `${String(count)} matches`),

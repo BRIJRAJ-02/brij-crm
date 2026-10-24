@@ -368,13 +368,16 @@ function publicItemOf(row: LinkPageRow, pages: ReadonlyMap<string, PageRow>): Pu
     if (page === undefined) return undefined;
     candidate = { kind: 'page', id: row.id, ...page };
   } else if (row.kind === 'contact') {
-    // Its name and the line under it only: the email, phone and the rest are in the vCard (AC-5114).
+    // The card's whole rule first, as its vCard reads it, so the page never offers a card that answers 404. Then its
+    // name and the line under it only: the email, phone and the rest are in the vCard (AC-5114).
+    const card = ProfileContactBlock.safeParse({ ...data, kind: 'contact' });
+    if (!card.success) return undefined;
     candidate = {
       kind: 'contact',
       id: row.id,
-      fullName: data.fullName,
-      ...(typeof data.jobTitle === 'string' ? { jobTitle: data.jobTitle } : {}),
-      ...(typeof data.company === 'string' ? { company: data.company } : {}),
+      fullName: card.data.fullName,
+      ...(card.data.jobTitle === undefined ? {} : { jobTitle: card.data.jobTitle }),
+      ...(card.data.company === undefined ? {} : { company: card.data.company }),
     };
   } else {
     return undefined;

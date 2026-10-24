@@ -145,6 +145,15 @@ export function contactWords(card: { readonly jobTitle?: string; readonly compan
     .join(' · ');
 }
 
+/**
+ * A contact card's title as the page draws it: "Contact card" when it is the page's own person (the page says their
+ * name already, over it), else the card's full name. The same rule as the public page's (`blocksOf`).
+ */
+export function contactTitle(fullName: string, personName: string): string {
+  const plain = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+  return plain(fullName) === plain(personName) ? strings.contactCard : fullName.trim();
+}
+
 /** Where a person's contact card is saved from: its vCard on this origin (AC-5114). */
 export function contactHref(handle: string): string {
   return `/api/public/handles/${encodeURIComponent(handle)}/contact.vcf`;
@@ -158,6 +167,7 @@ export function previewBlock(
   item: ProfileItem,
   handle: string,
   markOf: (url: string) => LinkPageMark | undefined,
+  personName = '',
 ): LinkPageBlock | undefined {
   if (item.kind === 'heading') return { kind: 'heading', id: item.id, title: item.title };
   if (item.kind === 'contact') {
@@ -165,7 +175,7 @@ export function previewBlock(
     return {
       kind: 'contact',
       id: item.id,
-      title: item.fullName,
+      title: contactTitle(item.fullName, personName),
       href: contactHref(handle),
       ...(line === '' ? {} : { line }),
     };

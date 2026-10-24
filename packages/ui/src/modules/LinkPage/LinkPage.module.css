@@ -144,7 +144,7 @@
       background: var(--surface-hover);
     }
 
-    .block:not([data-loading]):hover .end:not([data-end='book']) {
+    .block:not([data-loading]):hover .end:not([data-end='action']) {
       color: var(--text-secondary);
     }
   }
@@ -170,8 +170,9 @@
     background: var(--surface-raised);
   }
 
-  /* The booking page's calendar in the link colour: the accent itself is under 3:1 on its soft tile in dark. */
-  .tile[data-tile='page'] {
+  /* A booking page's calendar and a contact card's id card in the link colour: the accent itself is under 3:1 on
+     its soft tile in dark. */
+  .tile:is([data-tile='page'], [data-tile='card']) {
     background: var(--accent-soft);
     color: var(--link);
   }
@@ -263,8 +264,9 @@
     min-inline-size: calc(var(--size-row) + var(--space-6));
   }
 
-  /* A booking page's end says what pressing it does, in the one colour that marks the action to take. */
-  .end[data-end='book'] {
+  /* A booking page's and a contact card's end says what pressing it does (Book, Save contact), in the one colour
+     that marks the action to take. */
+  .end[data-end='action'] {
     color: var(--link);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);

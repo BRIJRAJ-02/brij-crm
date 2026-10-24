@@ -248,3 +248,30 @@ export const ContactCard: Story = {
     await expect(save).not.toHaveAttribute('target');
   },
 };
+
+/**
+ * A contact card with no line under its title stays by its tile (only a live link centres a lone title), and a card
+ * whose address isn't this site's own path draws as words, with no Save contact.
+ */
+export const ContactCardStates: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { person: PERSON },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage
+        {...args}
+        blocks={[
+          { kind: 'contact', id: 'bare', title: 'Contact card', href: '/api/public/handles/anish/contact.vcf' },
+          { kind: 'contact', id: 'elsewhere', title: 'Not ours', href: 'https://example.com/card.vcf' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    const bare = canvas.getByRole('link', { name: /Contact card.*Save contact/ });
+    await expect(bare.querySelector('[data-lone]')).toBeNull();
+    await expect(canvas.queryByRole('link', { name: /Not ours/ })).toBeNull();
+    await expect(canvas.getByText('Not ours')).toBeVisible();
+  },
+};

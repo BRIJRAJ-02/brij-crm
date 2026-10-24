@@ -13,14 +13,17 @@ import {
   Form,
   LinkPage,
   Modal,
+  PhoneField,
   Select,
   Skeleton,
   type IconName,
+  type PhoneFieldValue,
   type SelectItem,
 } from '@crm/ui';
+import { countryOfE164, DIAL_CODES, toE164 } from '@crm/contracts/forms';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { linksHref } from '../booking/links.ts';
-import { contactHref, contactWords, pageFacts, type BlockEditorProps } from './registry.tsx';
+import { contactHref, contactTitle, contactWords, pageFacts, type BlockEditorProps } from './registry.tsx';
 import { ICON_WORDS, strings } from './strings.ts';
 
 /** The Modal every block editor sits in: its title, Cancel and the submit, and "How it looks" under the fields. */
@@ -260,36 +263,61 @@ export function HeadingEditor({ item, items, linkPage, onSubmit, onClose }: Bloc
   );
 }
 
-/** The contact card's fields as typed. */
+/** The contact card's fields as typed, the phone as its country and national number. */
 interface ContactTyped {
   readonly fullName: string;
   readonly jobTitle: string;
   readonly company: string;
   readonly email: string;
-  readonly phone: string;
+  readonly phone: PhoneFieldValue;
   readonly website: string;
   readonly note: string;
 }
 
+/** The country a new number starts in: the browser's language's region ("en-IN" is IN), else the US. */
+function guessCountry(): string {
+  try {
+    return new Intl.Locale(navigator.language).maximize().region ?? 'US';
+  } catch {
+    return 'US';
+  }
+}
+
+/** A stored number (E.164, "+919999999999") as the phone field shows it: its country and the rest. */
+function phoneOf(stored: string | undefined, guess: string): PhoneFieldValue {
+  if (stored === undefined || stored === '') return { country: guess, national: '' };
+  const digits = stored.replace(/\D/g, '');
+  const country = countryOfE164(`+${digits}`);
+  const code = country === undefined ? undefined : DIAL_CODES.get(country);
+  if (country === undefined || code === undefined) return { country: guess, national: stored };
+  return { country, national: digits.slice(code.length) };
+}
+
 /**
  * Add or edit the contact card (AC-5113): a full name and, only when given, a job title, a company, one email, one
- * phone, one website and a note, typed here and never read from a CRM record. Under them, the card as a visitor sees
- * it. A new card starts from the person's name; nothing else is filled in for them, so nothing is published unasked.
+ * phone (the same country and number field as forms and the Phone attribute, saved as E.164), one website and a
+ * note, typed here and never read from a CRM record. Under them, the card as a visitor sees it. A new card starts
+ * from the person's name; nothing else is filled in for them, so nothing is published unasked.
  */
 export function ContactEditor({ item, items, handle, linkPage, ownerName, onSubmit, onClose }: BlockEditorProps) {
   const formId = useId();
   const editing = item?.kind === 'contact' ? item : undefined;
-  const [typed, setTyped] = useState<ContactTyped>({
+  const [guess] = useState(guessCountry);
+  const [typed, setTyped] = useState<ContactTyped>(() => ({
     fullName: editing?.fullName ?? ownerName,
     jobTitle: editing?.jobTitle ?? '',
     company: editing?.company ?? '',
     email: editing?.email ?? '',
-    phone: editing?.phone ?? '',
+    phone: phoneOf(editing?.phone, guess),
     website: editing?.website ?? '',
     note: editing?.note ?? '',
-  });
+  }));
   const [problems, setProblems] = useState<BlockProblems>({});
-  const draft: BlockDraft = { kind: 'contact', ...typed };
+  const draft: BlockDraft = {
+    kind: 'contact',
+    ...typed,
+    phone: typed.phone.national.trim() === '' ? '' : toE164(typed.phone.country, typed.phone.national),
+  };
   const submit = () => {
     const checked = linkPage.check(draft, items, editing?.id);
     if (!checked.ok) {
@@ -298,14 +326,17 @@ export function ContactEditor({ item, items, handle, linkPage, ownerName, onSubm
     }
     onSubmit(draft);
   };
-  /** One field, wired to its value and its problem, which clears as it is typed in. */
-  const field = (name: keyof ContactTyped) => ({
+  const clear = (name: keyof ContactTyped) => {
+    if (problems[name] !== undefined) setProblems((was) => ({ ...was, [name]: undefined }));
+  };
+  /** One text field, wired to its value and its problem, which clears as it is typed in. */
+  const field = (name: Exclude<keyof ContactTyped, 'phone'>) => ({
     name,
     autoComplete: 'off',
     value: typed[name],
     onChange: (next: string) => {
       setTyped((was) => ({ ...was, [name]: next }));
-      if (problems[name] !== undefined) setProblems((was) => ({ ...was, [name]: undefined }));
+      clear(name);
     },
     ...(problems[name] === undefined ? {} : { error: problems[name] }),
   });
@@ -324,7 +355,7 @@ export function ContactEditor({ item, items, handle, linkPage, ownerName, onSubm
             {
               kind: 'contact',
               id: editing?.id ?? 'draft',
-              title: typed.fullName.trim() === '' ? strings.contactName : typed.fullName.trim(),
+              title: typed.fullName.trim() === '' ? strings.contactName : contactTitle(typed.fullName, ownerName),
               href: contactHref(handle),
               ...(line === '' ? {} : { line }),
             },
@@ -338,13 +369,8 @@ export function ContactEditor({ item, items, handle, linkPage, ownerName, onSubm
         label={editing === undefined ? strings.newContact : strings.editContact}
         focusesFirstField
       >
-        <Field
-          {...field('fullName')}
-          label={strings.contactName}
-          hint={strings.contactHint}
-          isRequired
-          maxLength={80}
-        />
+        <p>{strings.contactHint}</p>
+        <Field {...field('fullName')} label={strings.contactName} isRequired maxLength={80} />
         <Field
           {...field('jobTitle')}
           label={strings.contactJob}
@@ -361,14 +387,17 @@ export function ContactEditor({ item, items, handle, linkPage, ownerName, onSubm
           placeholder={strings.contactEmailPlaceholder}
           maxLength={120}
         />
-        <Field
-          {...field('phone')}
+        <PhoneField
           label={strings.contactPhone}
-          type="tel"
-          inputMode="tel"
-          isVerbatim
-          placeholder={strings.contactPhonePlaceholder}
-          maxLength={32}
+          name="phone"
+          guess={guess}
+          hint={strings.contactPhoneHint}
+          value={typed.phone}
+          onChange={(next) => {
+            setTyped((was) => ({ ...was, phone: next }));
+            clear('phone');
+          }}
+          {...(problems.phone === undefined ? {} : { error: problems.phone })}
         />
         <Field
           {...field('website')}
@@ -383,6 +412,7 @@ export function ContactEditor({ item, items, handle, linkPage, ownerName, onSubm
           {...field('note')}
           label={strings.contactNote}
           placeholder={strings.contactNotePlaceholder}
+          hint={strings.contactNoteHint}
           maxLength={120}
           showCounter
         />

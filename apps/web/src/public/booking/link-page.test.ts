@@ -72,4 +72,15 @@ describe('blocksOf', () => {
       },
     ]);
   });
+
+  it('titles the page’s own person’s contact card "Contact card", and anyone else’s by their name', () => {
+    const card: PublicProfileItem = {
+      kind: 'contact',
+      id: '00000000-0000-7000-8000-000000000004',
+      fullName: ' ada  LOVELACE ',
+      jobTitle: 'Founder',
+    };
+    expect(blocksOf('ada', [card], 'Ada Lovelace')[0]).toMatchObject({ title: 'Contact card', line: 'Founder' });
+    expect(blocksOf('ada', [card], 'Grace Hopper')[0]).toMatchObject({ title: ' ada  LOVELACE ' });
+  });
 });

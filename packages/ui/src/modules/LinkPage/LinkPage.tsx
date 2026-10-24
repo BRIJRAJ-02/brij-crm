@@ -168,7 +168,7 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
   }
   if (block.kind === 'contact') {
     return (
-      <span className={styles.tile} data-tile="page">
+      <span className={styles.tile} data-tile="card">
         <Icon name="id-card" />
       </span>
     );
@@ -199,8 +199,17 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
 }
 
 /** A block's words: its title and the line under it. */
-function BlockText({ title, line }: { readonly title: string; readonly line?: string }) {
-  const isLone = line === undefined || line === '';
+function BlockText({
+  title,
+  line,
+  centresLone = false,
+}: {
+  readonly title: string;
+  readonly line?: string;
+  /** A live link with no line centres its title across the row; every other block keeps it by its tile. */
+  readonly centresLone?: boolean;
+}) {
+  const isLone = centresLone && (line === undefined || line === '');
   return (
     <span className={styles.text} {...(isLone ? { 'data-lone': '' } : {})}>
       <span className={styles.title}>{title}</span>
@@ -243,7 +252,7 @@ const RENDERERS: {
           : {})}
       >
         <LinkPageTile block={block} />
-        <BlockText title={block.title} {...(block.note === undefined ? {} : { line: block.note })} />
+        <BlockText title={block.title} centresLone {...(block.note === undefined ? {} : { line: block.note })} />
         <span className={styles.end}>
           <Icon name={isWeb ? 'arrow-up-right' : SCHEME_ICONS[target.scheme]} size="sm" />
         </span>
@@ -269,7 +278,7 @@ const RENDERERS: {
     return (
       <a className={styles.block} href={target} onClick={onPress}>
         {body}
-        <span className={styles.end} data-end="book">
+        <span className={styles.end} data-end="action">
           {strings.book}
           <Icon name="chevron-right" size="sm" />
         </span>
@@ -295,7 +304,7 @@ const RENDERERS: {
     return (
       <a className={styles.block} href={target} onClick={onPress}>
         {body}
-        <span className={styles.end} data-end="book">
+        <span className={styles.end} data-end="action">
           {strings.saveContact}
           <Icon name="user-plus" size="sm" />
         </span>

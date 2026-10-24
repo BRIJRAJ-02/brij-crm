@@ -1,5 +1,5 @@
 import { encode } from 'uqr';
-import { Children, useMemo, type ReactNode } from 'react';
+import { Children, useMemo, type ReactNode, type Ref } from 'react';
 import styles from './QrCode.module.css';
 
 /** Props for QrCode. */
@@ -19,6 +19,8 @@ export interface QrCodeProps {
    * whole width, for a code shown to be scanned from across a table or saved to print (the link page's QR Modal).
    */
   readonly size?: 'sm' | 'md' | 'fill';
+  /** The code's own SVG, for a caller that saves it as an image (the link page's Download PNG). */
+  readonly ref?: Ref<SVGSVGElement>;
 }
 
 /** The quiet margin around the modules, in modules, as scanners need. */
@@ -29,7 +31,7 @@ const QUIET_ZONE = 4;
  * themes, since not every scanner reads an inverted code. `uqr` is imported
  * only here. With `children`, a column beside it.
  */
-export function QrCode({ value, label, children, size: width = 'md' }: QrCodeProps) {
+export function QrCode({ value, label, children, size: width = 'md', ref }: QrCodeProps) {
   const { path, size } = useMemo(() => {
     const { data } = encode(value, { ecc: 'M', border: QUIET_ZONE });
     const runs: string[] = [];
@@ -42,6 +44,7 @@ export function QrCode({ value, label, children, size: width = 'md' }: QrCodePro
   }, [value]);
   const code = (
     <svg
+      ref={ref}
       className={styles.root}
       data-size={width}
       role="img"

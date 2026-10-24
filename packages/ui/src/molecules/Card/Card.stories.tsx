@@ -187,3 +187,35 @@ export const TableFirst: Story = {
     await expect(Math.round(gap(first, table))).toBe(Math.round(gap(second, text)));
   },
 };
+
+/** A footer of a few actions in a phone's width: they wrap onto a second line at the end rather than run off. */
+export const FooterWraps: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="phone">
+      <Card
+        {...args}
+        title="Your link page"
+        footer={
+          <>
+            <Button icon="copy">Copy link</Button>
+            <Button icon="arrow-up-right">Open</Button>
+            <Button icon="qr-code">Show QR code</Button>
+          </>
+        }
+      >
+        <p>timefix.com/anish</p>
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    const frame = canvasElement.querySelector('.ws-card-root')?.getBoundingClientRect();
+    await expect(frame).toBeDefined();
+    // Every action stays inside the card's frame.
+    for (const name of ['Copy link', 'Open', 'Show QR code']) {
+      const button = canvas.getByRole('button', { name }).getBoundingClientRect();
+      await expect(button.left).toBeGreaterThanOrEqual(frame?.left ?? Infinity);
+      await expect(button.right).toBeLessThanOrEqual(frame?.right ?? -Infinity);
+    }
+  },
+};

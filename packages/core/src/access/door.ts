@@ -29,7 +29,7 @@ import {
 } from '@crm/contracts';
 import { publicSocialsOf } from '../booking/socials.ts';
 import type { EmailLink } from '../emails/preferences.ts';
-import { checkScope, mintBeside, mintScope, rescope, type EngineScope, type ScopeFields } from './mint.ts';
+import { checkScope, mintPageBeside, mintScope, rescope, type EngineScope } from './mint.ts';
 import { inWorkspace } from './run.ts';
 import {
   bookingAccess,
@@ -744,10 +744,10 @@ export interface OwnedPageEntry extends BookingEntry {
   readonly isLive: boolean;
 }
 
-/** How the owned pages read reaches the database and mints each page's entry: a handle's, or the session's. */
+/** How the owned pages read reaches the database and mints each page's read only entry: a handle's, or the session's. */
 interface OwnedPagesWay {
   readonly read: (work: (tx: WorkspaceTx) => Promise<readonly OwnedPageRow[]>) => Promise<readonly OwnedPageRow[]>;
-  readonly mint: (fields: Omit<ScopeFields, 'db'>) => EngineScope;
+  readonly mint: (workspaceId: string, pageId: string) => EngineScope;
 }
 
 /** `crm_booking_owner_pages` for `ownerUserId`, each page as its read only `booking` entry. */
@@ -766,11 +766,7 @@ async function ownedPages(
     return found.rows;
   });
   return rows.map((row) => ({
-    scope: way.mint({
-      workspaceId: row.workspace_id,
-      actor: { type: 'booking', id: row.page_id },
-      access: bookingAccess(row.page_id, []),
-    }),
+    scope: way.mint(row.workspace_id, row.page_id),
     pageId: row.page_id,
     people: '',
     companies: '',
@@ -792,7 +788,13 @@ export async function enterOwnedPages(
   return ownedPages(
     {
       read: (work) => deps.db.withWorkspace(NO_WORKSPACE, work),
-      mint: (fields) => mintScope({ ...fields, db: deps.db }),
+      mint: (workspaceId, pageId) =>
+        mintScope({
+          db: deps.db,
+          workspaceId,
+          actor: { type: 'booking', id: pageId },
+          access: bookingAccess(pageId, []),
+        }),
     },
     ownerUserId,
     pageIds,
@@ -815,14 +817,17 @@ export function ownUserId(scope: EngineScope): string {
 /**
  * The signed in person's own booking pages that may sit on their link page, from every workspace they are in, as
  * `enterOwnedPages` answers them, read through their own scope (the definer reads no workspace's rows) and each
- * entered beside it (`mintBeside`) as the page's read only `booking` actor. The owner is the scope's own identity.
+ * entered beside it (`mintPageBeside`) as the page's read only `booking` actor. The owner is the scope's own identity.
  */
 export async function enterOwnPages(
   scope: EngineScope,
   pageIds?: readonly string[],
 ): Promise<readonly OwnedPageEntry[]> {
   return ownedPages(
-    { read: (work) => inWorkspace(scope, work), mint: (fields) => mintBeside(scope, fields) },
+    {
+      read: (work) => inWorkspace(scope, work),
+      mint: (workspaceId, pageId) => mintPageBeside(scope, workspaceId, pageId),
+    },
     ownUserId(scope),
     pageIds,
   );

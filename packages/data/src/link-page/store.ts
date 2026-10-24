@@ -226,7 +226,7 @@ function titleProblem(title: string, kind: 'link' | 'heading'): string | undefin
 /**
  * A block as typed, checked by the rules the server keeps (its kind's lengths, the address rule, a heading's text
  * once, ignoring case and surrounding spaces, among the blocks held): each field's problem, or the block to send.
- * No Zod: this runs in the first load's layer, and the server checks again with the schemas.
+ * No Zod: the store loads with the editor (its own chunk), and the server checks again with the schemas.
  */
 export function checkBlock(
   draft: BlockDraft,

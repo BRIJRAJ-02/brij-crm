@@ -90,7 +90,7 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
     <Card
       title={strings.title}
       actions={
-        <ButtonLink variant="ghost" icon="pencil" href={linkPageHref(slug)}>
+        <ButtonLink variant="ghost" href={linkPageHref(slug)}>
           {strings.edit}
         </ButtonLink>
       }
@@ -112,7 +112,7 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
         </p>
         <p>{strings.scan}</p>
       </QrCode>
-      {isShowing && <QrModal address={address} shown={shown} handle={handle} onClose={() => setShowing(false)} />}
+      <QrModal address={address} shown={shown} handle={handle} isOpen={isShowing} onClose={() => setShowing(false)} />
     </Card>
   );
 }
@@ -122,20 +122,23 @@ function QrModal({
   address,
   shown,
   handle,
+  isOpen,
   onClose,
 }: {
   readonly address: string;
   /** The address without its scheme, as the card shows it. */
   readonly shown: string;
   readonly handle: string;
+  /** Kept mounted, so the Modal's own exit plays as it closes. */
+  readonly isOpen: boolean;
   readonly onClose: () => void;
 }) {
   const { toasts } = useRouteContext({ from: '__root__' });
-  const codeRef = useRef<HTMLDivElement>(null);
+  const codeRef = useRef<SVGSVGElement>(null);
   const [isSaving, setSaving] = useState(false);
   const download = () => {
-    const svg = codeRef.current?.querySelector('svg');
-    if (svg === null || svg === undefined || isSaving) return;
+    const svg = codeRef.current;
+    if (svg === null || isSaving) return;
     setSaving(true);
     qrPng(svg)
       .then((png) => saveFile(png, `${handle}-link-page.png`))
@@ -145,7 +148,7 @@ function QrModal({
   return (
     <Modal
       title={strings.modalTitle}
-      isOpen
+      isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
@@ -158,9 +161,7 @@ function QrModal({
         </>
       }
     >
-      <div ref={codeRef}>
-        <QrCode value={address} label={strings.qrLabel} size="fill" />
-      </div>
+      <QrCode ref={codeRef} value={address} label={strings.qrLabel} size="fill" />
       <p>
         <strong>{shown}</strong>
       </p>
