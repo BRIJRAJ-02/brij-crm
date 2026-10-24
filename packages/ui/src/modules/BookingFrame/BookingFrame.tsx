@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Avatar, AvatarStack, type AvatarStackPerson } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -59,6 +59,16 @@ export interface BookingFrameProps {
   /** A band across the card's foot: the Book bar. */
   readonly footer?: ReactNode;
   /**
+   * Another view of the times (List, Book by chat), drawn over the month: the panes and the footer stay underneath,
+   * hidden and inert, and the cover takes exactly their box. So every view is the month view's size, and switching
+   * views moves nothing on the page (the owner, 25 October 2026).
+   */
+  readonly cover?: ReactNode;
+  /** A band at the cover's foot, drawn as `footer` is: the List view's Book bar. */
+  readonly coverFooter?: ReactNode;
+  /** What the card shows (`month`, `list`, `chat`): a change crossfades the card's content. Never at first paint. */
+  readonly view?: string;
+  /**
    * Where "Claim your free page" goes: `claimPageHref('booking_page')`, tagged as the wordmark beside it is. Leave
    * it off to show the wordmark alone (a recognised visitor).
    */
@@ -91,10 +101,17 @@ export function BookingFrame({
   children,
   aside,
   footer,
+  cover,
+  coverFooter,
+  view,
   claimHref,
   logo = TIMEFIX_LOGO,
 }: BookingFrameProps) {
   const isLoading = host === undefined || title === undefined;
+  // Only a view changed after the first paint fades: the page's first view is simply there.
+  const [shown, setShown] = useState({ view, isMoved: false });
+  if (shown.view !== view) setShown({ view, isMoved: true });
+  const isCovered = cover !== undefined;
   const claim = claimHref === undefined ? {} : { claimHref };
   return (
     <main className={styles.root}>
@@ -187,13 +204,24 @@ export function BookingFrame({
                 {toolbar !== undefined && <div className={styles.toolbar}>{toolbar}</div>}
               </div>
             )}
-            <div className={styles.panes} data-panes={aside === undefined ? 'one' : 'two'}>
-              {/* A pane draws what it is given, loading or not: the page hands its own month and times, already in
-                  their shape, so the card is the right height from the first paint. */}
-              <div className={styles.pane}>{children ?? <Skeleton shape="block" lines={6} />}</div>
-              {aside !== undefined && <div className={styles.aside}>{aside}</div>}
+            <div className={styles.stage} data-moved={shown.isMoved || undefined}>
+              {/* Covered, the month still sets the card's size: hidden, out of the reading order and out of reach. */}
+              <div className={styles.under} inert={isCovered}>
+                <div className={styles.panes} data-panes={aside === undefined ? 'one' : 'two'}>
+                  {/* A pane draws what it is given, loading or not: the page hands its own month and times, already
+                      in their shape, so the card is the right height from the first paint. */}
+                  <div className={styles.pane}>{children ?? <Skeleton shape="block" lines={6} />}</div>
+                  {aside !== undefined && <div className={styles.aside}>{aside}</div>}
+                </div>
+                {footer !== undefined && <div className={styles.footer}>{footer}</div>}
+              </div>
+              {isCovered && (
+                <div key={view} className={styles.cover}>
+                  <div className={styles.coverBody}>{cover}</div>
+                  {coverFooter !== undefined && <div className={styles.footer}>{coverFooter}</div>}
+                </div>
+              )}
             </div>
-            {footer !== undefined && <div className={styles.footer}>{footer}</div>}
           </section>
           <BookingFoot placement="page" logo={logo} {...claim} />
         </div>

@@ -1,12 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ComponentProps } from 'react';
-import { expect, fn, userEvent } from 'storybook/test';
+import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
+import { DayStrip } from '../DayStrip/DayStrip.tsx';
 import { MonthTiles } from '../MonthTiles/MonthTiles.tsx';
 import { SlotList } from '../SlotList/SlotList.tsx';
 import { LinkList } from '../LinkList/LinkList.tsx';
@@ -68,6 +69,26 @@ export const ChooseATime: Story = {
       timefixTags('booking_page', 'footer_logo'),
       timefixTags('booking_page', 'claim_link'),
     ]);
+  },
+};
+
+/**
+ * List over the month (25 October 2026): the month stays underneath, hidden and inert, and sets the card's size, so
+ * switching views moves nothing; the views crossfade.
+ */
+export const SwitchingViews: Story = {
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas, canvasElement }) => {
+    const card = () => canvasElement.querySelector('section')?.getBoundingClientRect();
+    const atMonth = card();
+    await userEvent.click(canvas.getByRole('radio', { name: 'List' }));
+    // The month fades out and the List in over it; settled, the List is read at rest.
+    await waitFor(() => expect(document.getAnimations().filter((each) => each.playState === 'running')).toEqual([]));
+    await expect(canvas.getByRole('group', { name: /days/i })).toBeVisible();
+    // The month is out of reach under the List: one Book bar to press, one set of times.
+    await expect(canvas.getAllByRole('button', { name: 'Book' })).toHaveLength(1);
+    await expect(card()?.height).toBe(atMonth?.height);
+    await expect(card()?.y).toBe(atMonth?.y);
   },
 };
 
@@ -250,20 +271,43 @@ export const ProfileEmpty: Story = {
 function Interactive(args: ComponentProps<typeof BookingFrame>) {
   const [day, setDay] = useState('2026-10-08');
   const [time, setTime] = useState<string | undefined>(undefined);
+  const [view, setView] = useState('month');
+  const bookBar = (
+    <Button variant="primary" size="lg" isFullWidth="center" isDisabled={time === undefined}>
+      {time === undefined ? 'Book' : `Book Thu Oct 8 at ${time}`}
+    </Button>
+  );
   return (
     <Stage width="fill" height="page">
       <BookingFrame
         {...args}
         heading="Choose a time"
-        footer={
-          <Button variant="primary" size="lg" isFullWidth="center" isDisabled={time === undefined}>
-            {time === undefined ? 'Book' : `Book Thu Oct 8 at ${time}`}
-          </Button>
-        }
+        footer={bookBar}
+        view={view}
+        {...(view === 'list'
+          ? {
+              cover: (
+                <>
+                  <DayStrip days={[...OPEN]} value={day} onChange={setDay} />
+                  <SlotList
+                    heading="Thu Oct 8"
+                    slots={TIMES}
+                    value={time}
+                    onChange={setTime}
+                    hour12
+                    onHour12Change={fn()}
+                    layout="grid"
+                  />
+                </>
+              ),
+              coverFooter: bookBar,
+            }
+          : {})}
         toolbar={
           <SegmentedControl
             label="View"
-            defaultValue="month"
+            value={view}
+            onChange={setView}
             segments={[
               { value: 'month', label: 'Month', icon: 'calendar', isIconOnly: true },
               { value: 'list', label: 'List', icon: 'list', isIconOnly: true },

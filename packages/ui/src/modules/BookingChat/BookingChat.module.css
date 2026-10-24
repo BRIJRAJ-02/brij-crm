@@ -3,19 +3,24 @@
    start on the subtle surface; the last reply's times and suggestions sit
    under it; the message field and Send are pinned at the foot. */
 @layer components {
+  /* In a view of a set height (the booking card's, which the month sets) the chat fills it: the thread takes what
+     the composer leaves, so the composer stands at the foot from the first frame. */
   .root {
     display: flex;
+    flex: 1;
     flex-direction: column;
     gap: var(--space-12);
     min-inline-size: 0;
+    min-block-size: 0;
   }
 
   .thread {
     display: flex;
+    /* Twelve rows tall on its own: room for a reply with its times, on a phone too. */
+    flex: 1 1 calc(var(--size-row) * 12);
     flex-direction: column;
     gap: var(--space-12);
-    /* Twelve rows tall: room for a reply with its times, on a phone too. */
-    block-size: calc(var(--size-row) * 12);
+    min-block-size: 0;
     margin: 0;
     padding: 0 var(--space-4) var(--space-4) 0;
     border-radius: var(--radius-md);
@@ -75,13 +80,40 @@
     color: var(--text-secondary);
   }
 
+  /* The composer (the owner, 25 October 2026: "a prompt box, not a search box"): one raised box a toolbar tall,
+     with an edge that holds 3:1 in both themes (control-border), the message growing a line at a time as it is
+     typed, and Send inside it at the end. The field draws no box of its own (its cell variant): this box is the
+     field's, so it takes the focus ring. */
   .composer {
     display: flex;
+    flex: none;
     align-items: flex-end;
-    gap: var(--space-8);
+    gap: var(--space-4);
+    box-sizing: border-box;
+    min-block-size: var(--size-toolbar);
+    padding: var(--space-8);
+    padding-inline-start: var(--space-2);
+    border: var(--border-width-hairline) solid var(--control-border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+    transition:
+      border-color var(--duration-hover) var(--ease-hover),
+      box-shadow var(--duration-hover) var(--ease-hover);
+  }
+
+  .composer:focus-within {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .composer[data-disabled] {
+    border-color: var(--field-border);
+    box-shadow: none;
   }
 
   .field {
+    display: flex;
     flex: 1;
     min-inline-size: 0;
   }

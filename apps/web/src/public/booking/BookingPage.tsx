@@ -262,7 +262,11 @@ export function LoadingBooking({
   const [view, setView] = useState<SlotView>(savedView);
   const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
   const today = dayKey(now(), timeZone);
-  const times = (
+  // A page that opens on chat fetches the chat's code at once, beside the page's read, not after it.
+  useEffect(() => {
+    if (view === 'chat') void import('./ChatPanel.tsx');
+  }, [view]);
+  const times = (layout: 'column' | 'grid') => (
     <SlotList
       heading=""
       slots={[]}
@@ -273,9 +277,14 @@ export function LoadingBooking({
         setHour12(next);
         saveHour12(next);
       }}
-      layout={view === 'month' ? 'column' : 'grid'}
+      layout={layout}
       isLoading
     />
+  );
+  const bookBar = (
+    <Button variant="primary" size="lg" isFullWidth="center" isDisabled>
+      {strings.book}
+    </Button>
   );
   return (
     <BookingFrame
@@ -293,39 +302,46 @@ export function LoadingBooking({
           segments={viewSegments}
         />
       }
-      // Chat has no times pane and no Book bar, so its loading shape has neither either.
-      {...(view === 'month' ? { aside: times } : {})}
-      {...(view === 'chat'
-        ? {}
-        : {
-            footer: (
-              <Button variant="primary" size="lg" isFullWidth="center" isDisabled>
-                {strings.book}
-              </Button>
+      view={view}
+      // The month sets the card's size in every view, so List and Chat draw over it, as the loaded page does.
+      aside={times('column')}
+      footer={bookBar}
+      {...(view === 'list'
+        ? {
+            cover: (
+              <>
+                <DayStrip days={[]} value={undefined} onChange={() => undefined} isLoading />
+                {times('grid')}
+              </>
             ),
-          })}
+            coverFooter: bookBar,
+          }
+        : view === 'chat'
+          ? { cover: <ChatLoading /> }
+          : {})}
     >
-      {view === 'month' ? (
-        <MonthTiles
-          month={monthOf(today)}
-          today={today}
-          openDays={NO_DAYS}
-          value={undefined}
-          onChange={() => undefined}
-          onMonthChange={() => undefined}
-          canPrevious={false}
-          canNext={false}
-          isLoading
-        />
-      ) : view === 'chat' ? (
-        <Skeleton shape="block" lines={4} />
-      ) : (
-        <>
-          <DayStrip days={[]} value={undefined} onChange={() => undefined} isLoading />
-          {times}
-        </>
-      )}
+      <MonthTiles
+        month={monthOf(today)}
+        today={today}
+        openDays={NO_DAYS}
+        value={undefined}
+        onChange={() => undefined}
+        onMonthChange={() => undefined}
+        canPrevious={false}
+        canNext={false}
+        isLoading
+      />
     </BookingFrame>
+  );
+}
+
+/** The chat's shape while it loads: the greeting's place at the top and the composer's at the foot. */
+function ChatLoading() {
+  return (
+    <>
+      <Skeleton shape="block" lines={3} />
+      <Skeleton shape="block" />
+    </>
   );
 }
 
@@ -839,7 +855,7 @@ function Booking({
       {strings.allBusy(page.hostName)}
     </Callout>
   ) : undefined;
-  const slotList = (
+  const slotList = (layout: 'column' | 'grid') => (
     <SlotList
       heading={dayHeading}
       slots={times.map((start) => {
@@ -859,9 +875,9 @@ function Booking({
         setHour12(next);
         saveHour12(next);
       }}
-      layout={view === 'month' ? 'column' : 'grid'}
+      layout={layout}
       isLoading={isLoading}
-      drawKey={`${day ?? ''}|${zone}|${view}`}
+      drawKey={`${day ?? ''}|${zone}`}
     />
   );
   const viewSwitch = (
@@ -881,35 +897,6 @@ function Booking({
     />
   );
 
-  if (view === 'chat') {
-    // Book by chat (spec 0042): the same card and rail, the conversation in the picker's place.
-    return (
-      <BookingFrame {...frame} heading={strings.chooseTime} toolbar={viewSwitch}>
-        {message ??
-          (chatMemory === undefined && allStarts.length === 0 && !noTimes ? (
-            <Skeleton shape="block" lines={4} />
-          ) : (
-            <Suspense fallback={<Skeleton shape="block" lines={4} />}>
-              <ChatPanel
-                client={client}
-                page={page}
-                locale={locale}
-                zone={zone}
-                hour12={hour12}
-                duration={duration}
-                starts={allStarts}
-                startedAt={startedAt}
-                memory={chatMemory}
-                onMemory={setChatMemory}
-                onDuration={setDuration}
-                onBooked={onBooked}
-              />
-            </Suspense>
-          ))}
-      </BookingFrame>
-    );
-  }
-
   const bookBar = (
     <Button
       variant="primary"
@@ -924,42 +911,82 @@ function Booking({
       {time === undefined ? strings.book : strings.bookAt(dayHeading, timeLabel(time, zone, locale, hour12))}
     </Button>
   );
+  const noticeLine = notice === undefined ? undefined : <Callout tone="danger">{notice}</Callout>;
+
+  if (message !== undefined) {
+    // Nothing to pick in any view: the message alone, the same card whichever view is chosen.
+    return (
+      <BookingFrame {...frame} heading={strings.chooseTime} toolbar={viewSwitch} view={view}>
+        {noticeLine}
+        {message}
+      </BookingFrame>
+    );
+  }
+
+  // The month is the card in every view: List and Book by chat (spec 0042) draw over it, in exactly its box, so a
+  // switch between views moves nothing on the page (the owner, 25 October 2026).
+  const cover =
+    view === 'list' ? (
+      <>
+        {noticeLine}
+        <DayStrip
+          days={[...openDays].sort()}
+          bestDays={bestDays}
+          value={day}
+          onChange={pickDay}
+          focusesValue={step.back}
+          // Its tiles' places until the first times arrive, so the times below never move up to meet them.
+          isLoading={isLoading && openDays.size === 0}
+        />
+        {slotList('grid')}
+      </>
+    ) : view === 'chat' ? (
+      chatMemory === undefined && allStarts.length === 0 && !noTimes ? (
+        <ChatLoading />
+      ) : (
+        <Suspense fallback={<ChatLoading />}>
+          <ChatPanel
+            client={client}
+            page={page}
+            locale={locale}
+            zone={zone}
+            hour12={hour12}
+            duration={duration}
+            starts={allStarts}
+            startedAt={startedAt}
+            memory={chatMemory}
+            onMemory={setChatMemory}
+            onDuration={setDuration}
+            onBooked={onBooked}
+          />
+        </Suspense>
+      )
+    ) : undefined;
 
   return (
     <BookingFrame
       {...frame}
       heading={strings.chooseTime}
       toolbar={viewSwitch}
-      {...(message === undefined ? { footer: bookBar } : {})}
-      {...(view === 'month' && message === undefined ? { aside: slotList } : {})}
+      view={view}
+      aside={slotList('column')}
+      footer={bookBar}
+      {...(cover === undefined ? {} : { cover })}
+      {...(view === 'list' ? { coverFooter: bookBar } : {})}
     >
-      {notice !== undefined && <Callout tone="danger">{notice}</Callout>}
-      {message ??
-        (view === 'month' ? (
-          <MonthTiles
-            month={month}
-            today={today}
-            openDays={openDays}
-            bestDays={bestDays}
-            value={day}
-            onChange={pickDay}
-            onMonthChange={showMonth}
-            canPrevious={month > monthOf(today)}
-            canNext={month < monthOf(horizon)}
-            focusesValue={step.back}
-          />
-        ) : (
-          <>
-            <DayStrip
-              days={[...openDays].sort()}
-              bestDays={bestDays}
-              value={day}
-              onChange={pickDay}
-              focusesValue={step.back}
-            />
-            {slotList}
-          </>
-        ))}
+      {noticeLine}
+      <MonthTiles
+        month={month}
+        today={today}
+        openDays={openDays}
+        bestDays={bestDays}
+        value={day}
+        onChange={pickDay}
+        onMonthChange={showMonth}
+        canPrevious={month > monthOf(today)}
+        canNext={month < monthOf(horizon)}
+        focusesValue={step.back && view === 'month'}
+      />
     </BookingFrame>
   );
 }
