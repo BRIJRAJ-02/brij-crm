@@ -44,8 +44,15 @@ export interface SlotListProps {
   readonly drawKey?: string;
 }
 
-/** How many time boxes the loading list holds: a working day's worth, so the pane is about as tall as it will be. */
-const GHOST_SLOTS = 12;
+/**
+ * How many time boxes the loading list holds: a nine to five day at half hour
+ * steps, which is what a page offers until its owner says otherwise. The list
+ * is better a little too tall than a little too short: inside a site's frame
+ * the page is only as tall as the height it last reported, so a list that
+ * grows when the times land leaves the frame scrolling until the new height
+ * reaches the host, while one that shrinks never does.
+ */
+const GHOST_SLOTS = 16;
 
 /**
  * The times of one day on a booking page (spec 0025, AC-666 to AC-669): the

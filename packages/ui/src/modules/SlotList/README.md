@@ -27,7 +27,7 @@ New. ChoiceChips hold a few labelled choices in a row; a day's times run long, s
 
 Default, picked (picker only), Best, busy, hover, focus, pressed, loading, empty.
 
-Loading draws the times' own grid with a time's box in each place, at a time's own height, rather than one block: the list is then already the shape and the height it will be, so the times land in the places that were drawn for them instead of pushing the page around (24 October 2026). The boxes have no entrance of their own, since a placeholder arrives with the page rather than after it.
+Loading draws the times' own grid with a time's box in each place, at a time's own height, rather than one block: the list is then already the shape and the height it will be, so the times land in the places that were drawn for them instead of pushing the page around (24 October 2026). It holds a nine to five day at half hour steps, which is what a page offers until its owner says otherwise, and is deliberately a little too tall rather than a little too short: inside a site's frame the page is only as tall as the height it last reported, so a list that grows when the times land leaves the frame scrolling until the new height reaches the host, while one that shrinks never does (`apps/web/e2e/embed.flow.ts`). The boxes have no entrance of their own, since a placeholder arrives with the page rather than after it.
 
 ## Keyboard
 
