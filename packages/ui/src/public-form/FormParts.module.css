@@ -119,6 +119,18 @@
     min-inline-size: 0;
   }
 
+  /* The loading shape's questions column. It keeps its own copy of the Classic
+     form's column (HostedForm's `.form`) rather than reaching into it, because
+     one component owns its styles (`pnpm house-rules`). The places the
+     questions will take have to be the places they were drawn in, so
+     `FormLoading.browser.test.tsx` holds the two together. */
+  .questions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
+    margin-block-start: var(--space-32);
+  }
+
   /* The email typo hint: a muted line under the field with its Use it. */
   .suggestion {
     display: flex;

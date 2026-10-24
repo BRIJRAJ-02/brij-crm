@@ -12,6 +12,8 @@ export { Avatar } from '../atoms/Avatar/Avatar.tsx';
 export { claimPageHref, poweredByHref, type PoweredByPage } from '../lib/powered-by.ts';
 export { Button, ButtonLink } from '../atoms/Button/Button.tsx';
 export { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
+/** Inside it a loading state draws at once: a public page's first paint is already its loading state, so there is nothing for a skeleton to flash in front of. */
+export { LoadingNow } from '../provider/LoadingNow.tsx';
 export { Switch } from '../atoms/Switch/Switch.tsx';
 export { Callout } from '../molecules/Callout/Callout.tsx';
 /** A profile with no links, or none that match (22 Oct 2026). */

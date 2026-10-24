@@ -71,6 +71,62 @@ export const Still: Story = {
   },
 };
 
+/**
+ * Text rows: each holds the line box of the font it sits in, so a loading title is exactly as tall as the title.
+ * It goes in a paragraph carrying that font, never inside a real heading, which would then be an empty heading.
+ */
+export const TextShape: Story = {
+  render: () => (
+    <Stage direction="column" width="narrow">
+      <p data-heading="">
+        <Skeleton shape="text" width="medium" />
+      </p>
+      <p>
+        <Skeleton shape="text" lines={2} />
+      </p>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const heading = canvasElement.querySelector('[data-heading]');
+    const row = heading?.querySelector('[data-shape="text"]');
+    if (heading === null || row === null || row === undefined) throw new Error('a heading with a text row expected');
+    const line = Number.parseFloat(globalThis.getComputedStyle(heading).lineHeight);
+    await expect(Math.abs(row.getBoundingClientRect().height - line)).toBeLessThan(1);
+  },
+};
+
+/** The avatar scale: a loading face is the size the face will be. */
+export const CircleSizes: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Skeleton shape="circle" size="sm" />
+      <Skeleton shape="circle" size="lg" />
+      <Skeleton shape="circle" size="xl" />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const sizes = [...canvasElement.querySelectorAll('[data-shape="circle"]')].map(
+      (circle) => circle.getBoundingClientRect().width,
+    );
+    await expect(sizes).toHaveLength(3);
+    await expect(sizes[0]).toBeLessThan(sizes[1] ?? 0);
+    await expect(sizes[1]).toBeLessThan(sizes[2] ?? 0);
+  },
+};
+
+/** Fill: a placeholder that takes the whole slot a layout already sized. */
+export const FillShape: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Skeleton shape="fill" />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const fill = canvasElement.querySelector('[data-shape="fill"]');
+    await expect(fill?.getBoundingClientRect().width).toBeGreaterThan(0);
+  },
+};
+
 /** A field's box, for a settings row while its page loads: as tall as a field, a menu wide, or across its slot. */
 export const FieldShape: Story = {
   render: () => (

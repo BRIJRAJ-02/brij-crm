@@ -11,12 +11,19 @@
     min-block-size: 0;
   }
 
+  /* The row keeps its height with or without the day's name, so the times below
+     it never move when the day arrives. */
   .head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-8);
     min-block-size: var(--size-control);
+  }
+
+  /* Without a heading the clock switch still sits at the row's end. */
+  .head > :only-child {
+    margin-inline-start: auto;
   }
 
   .heading {
@@ -96,6 +103,13 @@
     animation-delay: calc(var(--slot-index, 0) * var(--duration-hover) / 6);
   }
 
+  /* A time's place while the times load: a time's own height, and no entrance,
+     since a placeholder arrives with the page rather than after it. */
+  .item[data-loading] {
+    min-block-size: calc(var(--size-row) + var(--space-8));
+    animation: none;
+  }
+
   .slot {
     display: flex;
     flex: 1;
@@ -158,7 +172,6 @@
     color: inherit;
   }
 
-  .loading,
   .empty {
     padding-block: var(--space-8);
   }

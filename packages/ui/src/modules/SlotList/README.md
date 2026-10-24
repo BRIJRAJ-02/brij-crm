@@ -27,6 +27,8 @@ New. ChoiceChips hold a few labelled choices in a row; a day's times run long, s
 
 Default, picked (picker only), Best, busy, hover, focus, pressed, loading, empty.
 
+Loading draws the times' own grid with a time's box in each place, at a time's own height, rather than one block: the list is then already the shape and the height it will be, so the times land in the places that were drawn for them instead of pushing the page around (24 October 2026). The boxes have no entrance of their own, since a placeholder arrives with the page rather than after it.
+
 ## Keyboard
 
 Tab reaches each time; Enter or Space picks. The clock switch is a SegmentedControl (the arrows move).

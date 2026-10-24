@@ -142,6 +142,10 @@ export function BookingPage({
   }, []);
   const isPreview = globalThis.parent !== globalThis.window;
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
+  // Who the visitor is (spec 0028), asked for as the page's own facts are, not after them: the two answers then
+  // land together, so the card is drawn once with the visitor's bar or without it, and never with a held place
+  // that is taken back a moment later.
+  const [viewer, setViewer] = useState<PublicViewerAnswer | undefined>(undefined);
   // The last preview message, kept until the page loads to lay it over.
   const [preview, setPreview] = useState<unknown>(undefined);
   const load = useCallback(() => {
@@ -157,6 +161,23 @@ export function BookingPage({
     );
   }, [client, publicKey, onAddress]);
   useEffect(load, [load]);
+  useEffect(() => {
+    if (isPreview) return;
+    let isCurrent = true;
+    client.viewer(publicKey).then(
+      (answer) => {
+        if (isCurrent) setViewer(answer);
+      },
+      () => {
+        // A refused read answers nobody, rather than nothing: left unsettled, the bar's held place would pulse
+        // above a page that is otherwise perfectly usable, for the rest of the visit.
+        if (isCurrent) setViewer({ isHost: false, canConnect: false });
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [client, publicKey, isPreview]);
   // A slot read can find the page deleted or paused after it loaded: then that state shows, not a retry.
   const ended = useCallback((state: 'gone' | 'closed') => setLoaded({ state }), []);
   // Inside the editor's preview frame, the editor's unsaved draft shows over the saved page (AC-679):
@@ -187,13 +208,14 @@ export function BookingPage({
           onEnded={ended}
           chosen={back.chosen}
           isPreview={isPreview}
+          {...(viewer === undefined ? {} : { viewer })}
           {...(back.result === undefined ? {} : { connected: back.result })}
           {...(prefill === undefined ? {} : { prefill })}
           {...(handoff === undefined ? {} : { handoff })}
         />
       );
     case 'loading':
-      return <BookingFrame />;
+      return <LoadingBooking locale={locale} timeZone={timeZone} now={now} />;
     case 'gone':
       return <BookingMessage title={strings.notFoundTitle}>{strings.notFoundText}</BookingMessage>;
     case 'closed':
@@ -212,6 +234,103 @@ export function BookingPage({
       );
   }
 }
+
+/** The view switch's segments: Month, List or Chat, the same three the loaded page offers. */
+const viewSegments = [
+  { value: 'month', label: strings.month, icon: 'calendar' as const, isIconOnly: true },
+  { value: 'list', label: strings.list, icon: 'list' as const, isIconOnly: true },
+  { value: 'chat', label: strings.chat, icon: 'message-square' as const, isIconOnly: true },
+];
+
+/**
+ * The page while its facts are still coming: the same frame, the same card,
+ * the real month of the visitor's own zone with no day open yet, and a time's
+ * box in each of the times' places. Nothing here is a different shape from
+ * what arrives, so when the facts land the page fills in rather than moving.
+ * The two switches are the loaded page's own and keep working: what they
+ * remember is what the loaded page opens with.
+ */
+export function LoadingBooking({
+  locale,
+  timeZone,
+  now,
+}: {
+  readonly locale: string;
+  readonly timeZone: string;
+  readonly now: () => number;
+}) {
+  const [view, setView] = useState<SlotView>(savedView);
+  const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
+  const today = dayKey(now(), timeZone);
+  const times = (
+    <SlotList
+      heading=""
+      slots={[]}
+      value={undefined}
+      onChange={() => undefined}
+      hour12={hour12}
+      onHour12Change={(next) => {
+        setHour12(next);
+        saveHour12(next);
+      }}
+      layout={view === 'month' ? 'column' : 'grid'}
+      isLoading
+    />
+  );
+  return (
+    <BookingFrame
+      claimHref={CLAIM_URL}
+      heading={strings.chooseTime}
+      toolbar={
+        <SegmentedControl
+          label={strings.view}
+          value={view}
+          onChange={(next) => {
+            const picked = next === 'list' || next === 'chat' ? next : 'month';
+            setView(picked);
+            saveView(picked);
+          }}
+          segments={viewSegments}
+        />
+      }
+      // Chat has no times pane and no Book bar, so its loading shape has neither either.
+      {...(view === 'month' ? { aside: times } : {})}
+      {...(view === 'chat'
+        ? {}
+        : {
+            footer: (
+              <Button variant="primary" size="lg" isFullWidth="center" isDisabled>
+                {strings.book}
+              </Button>
+            ),
+          })}
+    >
+      {view === 'month' ? (
+        <MonthTiles
+          month={monthOf(today)}
+          today={today}
+          openDays={NO_DAYS}
+          value={undefined}
+          onChange={() => undefined}
+          onMonthChange={() => undefined}
+          canPrevious={false}
+          canNext={false}
+          isLoading
+        />
+      ) : view === 'chat' ? (
+        <Skeleton shape="block" lines={4} />
+      ) : (
+        <>
+          <DayStrip days={[]} value={undefined} onChange={() => undefined} isLoading />
+          {times}
+        </>
+      )}
+    </BookingFrame>
+  );
+}
+
+/** No day is open until the times arrive. */
+const NO_DAYS: ReadonlySet<string> = new Set();
 
 /** Every zone this browser knows, the current one first, each with its offset. */
 function zoneItems(current: string, at: number): readonly SelectItem[] {
@@ -248,6 +367,7 @@ function Booking({
   chosen,
   connected,
   isPreview,
+  viewer,
 }: {
   readonly handoff?: string;
   readonly chosen: Chosen;
@@ -255,6 +375,8 @@ function Booking({
   readonly connected?: ConnectResult;
   /** Inside the editor's preview: no visitor. */
   readonly isPreview: boolean;
+  /** Who the visitor is (spec 0028), read beside the page's own facts so both land together; undefined while it loads. */
+  readonly viewer?: PublicViewerAnswer;
   readonly client: Client;
   readonly page: PublicBookingPage;
   readonly locale: string;
@@ -318,28 +440,11 @@ function Booking({
     readonly back: boolean;
   }>({ step: 'pick', attempt: '', back: false });
   const [notice, setNotice] = useState<string | undefined>(undefined);
-  // Who the visitor is (spec 0028): undefined while it loads, and in the editor's preview.
-  const [viewer, setViewer] = useState<PublicViewerAnswer | undefined>(undefined);
   // "Not you?": no name, no email and no overlay for the rest of the visit.
   const [notYou, setNotYou] = useState(false);
   const [showAll, setShowAll] = useState(false);
   // Book by chat's conversation (spec 0042), kept while the length, the zone or the view changes.
   const [chatMemory, setChatMemory] = useState<ChatMemory | undefined>(undefined);
-  useEffect(() => {
-    if (isPreview) return;
-    let isCurrent = true;
-    client.viewer(page.publicKey).then(
-      (answer) => {
-        if (isCurrent) setViewer(answer);
-      },
-      () => {
-        // Nobody in particular: the page works the same.
-      },
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [client, page.publicKey, isPreview]);
   const zones = useMemo(() => zoneItems(zone, now()), [zone, now]);
   // The tab names the meeting and the host: "Intro call with Ada · Timefix".
   useEffect(() => {

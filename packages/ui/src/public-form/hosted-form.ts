@@ -11,7 +11,7 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { UiProvider } from '../provider/UiProvider.tsx';
 import { createToasts } from '../provider/toasts.tsx';
-import { FormMessage, HostedForm, type HostedFormMode, type HostedFormProps } from './HostedForm.tsx';
+import { FormLoading, FormMessage, HostedForm, type HostedFormMode, type HostedFormProps } from './HostedForm.tsx';
 
 export type { HostedFormMode, HostedSubmission, HostedSubmitOutcome } from './HostedForm.tsx';
 
@@ -58,6 +58,19 @@ function mount(
 
 /** A page with no form to draw: an address that names none, or a load that failed. */
 export type FormMessageKind = 'missing' | 'failed';
+
+/**
+ * Draws the form's shape before the form itself has arrived: the same ground,
+ * the same card, and the places the headline, the questions and the button
+ * will take. Mounted the moment the page's script runs, so the first paint is
+ * the page rather than a blank window, and replaced in place by the form, the
+ * message or the closed note once the read answers.
+ */
+export function mountFormLoading(root: HTMLElement, mode: HostedFormMode): HostedFormHandle {
+  const view = mount(root);
+  view.draw(createElement(FormLoading, { mode, words: formStrings('en') }));
+  return { update: () => undefined, destroy: view.destroy };
+}
 
 /**
  * Draws a message in the form's place: a plain not found page with no

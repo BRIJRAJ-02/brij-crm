@@ -37,7 +37,10 @@ const TEAM_FACES = 4;
 
 /** Props for BookingFrame. */
 export interface BookingFrameProps {
-  /** Missing while the page loads: the rail and the card draw as skeletons. */
+  /**
+   * Missing while the page loads: the rail draws as skeletons in the shape the
+   * host will take, and a pane with nothing in it does the same.
+   */
   readonly host?: BookingHost;
   /** The meeting ("Intro call"), the page's `h1`, under the host's name. */
   readonly title?: string;
@@ -96,11 +99,40 @@ export function BookingFrame({
   return (
     <main className={styles.root}>
       <div className={styles.layout}>
-        <aside className={styles.rail} aria-label={isLoading ? strings.loading : strings.about}>
+        <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
           {isLoading ? (
+            /* The shape the host will take, line for line, so nothing moves when the page's facts arrive. */
             <div className={styles.identity}>
-              <Skeleton shape="circle" />
-              <Skeleton lines={3} width="medium" />
+              <Skeleton shape="circle" size="xl" />
+              <div className={styles.names}>
+                <p className={styles.host}>
+                  <Skeleton shape="text" width="medium" />
+                </p>
+                <p className={styles.title}>
+                  <Skeleton shape="text" width="short" />
+                </p>
+              </div>
+              <p className={styles.description}>
+                <Skeleton shape="text" lines={2} />
+              </p>
+              <ul className={styles.facts}>
+                <li className={styles.fact}>
+                  <span className={styles.factIcon}>
+                    <Skeleton shape="tile" />
+                  </span>
+                  <span className={styles.factBody} data-loading="">
+                    <Skeleton shape="field" width="medium" />
+                  </span>
+                </li>
+                <li className={styles.fact}>
+                  <span className={styles.factIcon}>
+                    <Skeleton shape="tile" />
+                  </span>
+                  <span className={styles.factBody} data-loading="">
+                    <Skeleton shape="text" width="long" />
+                  </span>
+                </li>
+              </ul>
             </div>
           ) : (
             <div className={styles.identity}>
@@ -156,8 +188,10 @@ export function BookingFrame({
               </div>
             )}
             <div className={styles.panes} data-panes={aside === undefined ? 'one' : 'two'}>
-              <div className={styles.pane}>{isLoading ? <Skeleton shape="block" lines={6} /> : children}</div>
-              {aside !== undefined && <div className={styles.aside}>{isLoading ? <Skeleton lines={6} /> : aside}</div>}
+              {/* A pane draws what it is given, loading or not: the page hands its own month and times, already in
+                  their shape, so the card is the right height from the first paint. */}
+              <div className={styles.pane}>{children ?? <Skeleton shape="block" lines={6} />}</div>
+              {aside !== undefined && <div className={styles.aside}>{aside}</div>}
             </div>
             {footer !== undefined && <div className={styles.footer}>{footer}</div>}
           </section>
@@ -240,9 +274,19 @@ export function BookingProfile({ person, children, claimHref }: BookingProfilePr
       <div className={styles.narrow} data-width="profile">
         <header className={styles.message} data-kind="profile" aria-busy={person === undefined || undefined}>
           {person === undefined ? (
+            /* The picture's own size and the lines' own line boxes, so the name and the bio land where
+               their places were rather than pushing the links down the page. */
             <>
-              <Skeleton shape="circle" />
-              <Skeleton lines={2} />
+              <Skeleton shape="circle" size="xl" />
+              <div className={styles.names}>
+                <p className={styles.host}>
+                  <Skeleton shape="text" width="medium" />
+                </p>
+                {/* One row: a bio stands on a card as wide as the list, where most fit a line. */}
+                <p className={styles.description}>
+                  <Skeleton shape="text" width="long" />
+                </p>
+              </div>
             </>
           ) : (
             <>
@@ -323,9 +367,15 @@ export function BookingMessage({
       <div className={styles.narrow}>
         <div className={styles.message} aria-busy={isLoading || undefined}>
           {isLoading ? (
+            /* The heading's and the line's own places. No picture: a message never has one, so a circle
+               here would be a shape that never arrives. */
             <>
-              <Skeleton shape="circle" />
-              <Skeleton lines={3} />
+              <p className={styles.messageTitle}>
+                <Skeleton shape="text" width="medium" />
+              </p>
+              <p className={styles.description}>
+                <Skeleton shape="text" lines={2} />
+              </p>
             </>
           ) : (
             <>

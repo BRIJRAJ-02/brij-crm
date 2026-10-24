@@ -31,6 +31,26 @@
     transition: background-color var(--duration-hover) var(--ease-hover);
   }
 
+  /* A day's place while the days load: the tile's own size, quiet, and no press. */
+  .day[data-loading] {
+    block-size: calc(var(--size-row) * 1.5);
+    background: var(--border);
+    cursor: default;
+    animation: day-pulse var(--duration-pulse) var(--ease-in-out) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .day[data-loading] {
+      animation: none;
+    }
+  }
+
+  @keyframes day-pulse {
+    50% {
+      opacity: var(--opacity-pulse);
+    }
+  }
+
   .day[aria-pressed='true'] {
     background: var(--accent);
     color: var(--on-accent);

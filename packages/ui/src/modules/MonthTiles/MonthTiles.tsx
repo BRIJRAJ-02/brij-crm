@@ -23,6 +23,11 @@ export interface MonthTilesProps {
   readonly canNext: boolean;
   /** Focuses the chosen day once it's drawn: coming back from the details step. */
   readonly focusesValue?: boolean;
+  /**
+   * The month is drawn but no day's times are known yet: the tiles stand in their places quietly, and no day
+   * says it has no times, which while the times are still coming would not be true.
+   */
+  readonly isLoading?: boolean;
 }
 
 /** The next open day from `from` in a direction, within the open days given. */
@@ -48,6 +53,7 @@ export function MonthTiles({
   canPrevious,
   canNext,
   focusesValue = false,
+  isLoading = false,
 }: MonthTilesProps) {
   const { locale, weekStart } = useFormatSettings();
   const grid = useRef<HTMLDivElement>(null);
@@ -124,6 +130,7 @@ export function MonthTiles({
         data-direction={shown.direction}
         role="group"
         aria-label={monthName(month, locale)}
+        aria-busy={isLoading || undefined}
         onTouchStart={(event) => {
           touch.current = event.touches[0]?.clientX;
         }}
@@ -141,7 +148,12 @@ export function MonthTiles({
           const isOpen = openDays.has(key);
           const isToday = key === today;
           const isBest = isOpen && bestDays?.has(key) === true;
-          const label = [labels.label, isToday ? strings.today : undefined, isOpen ? undefined : strings.noTimes]
+          const label = [
+            labels.label,
+            isToday ? strings.today : undefined,
+            // While the times are still coming, no day has been found closed yet.
+            isOpen || isLoading ? undefined : strings.noTimes,
+          ]
             .filter((part) => part !== undefined)
             .join(', ');
           return (
@@ -150,6 +162,7 @@ export function MonthTiles({
               type="button"
               data-day={key}
               className={styles.day}
+              data-loading={isLoading ? '' : undefined}
               data-best={isBest ? '' : undefined}
               disabled={!isOpen}
               aria-pressed={isOpen ? key === value : undefined}

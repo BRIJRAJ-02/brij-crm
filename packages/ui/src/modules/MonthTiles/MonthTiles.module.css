@@ -90,6 +90,14 @@
     cursor: default;
   }
 
+  /* A day's place while the times load: the month reads, and the tiles wait
+     with it rather than saying they are closed. */
+  .day[data-loading] {
+    background: var(--surface-selected);
+    color: var(--text-tertiary);
+    animation: month-pulse var(--duration-pulse) var(--ease-in-out) infinite;
+  }
+
   /* The chosen day in the accent, as the app's date picker chooses (the
      owner's call, 20 October 2026: inverse ink was the page's brightest block
      in dark). */
@@ -142,8 +150,18 @@
       animation-name: month-fade;
     }
 
+    .day[data-loading] {
+      animation: none;
+    }
+
     .day[aria-pressed='true'] {
       animation: none;
+    }
+  }
+
+  @keyframes month-pulse {
+    50% {
+      opacity: var(--opacity-pulse);
     }
   }
 

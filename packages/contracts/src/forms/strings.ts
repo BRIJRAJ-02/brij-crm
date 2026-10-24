@@ -18,6 +18,8 @@ export interface FormStrings {
   readonly sending: string;
   readonly chooseOne: string;
   readonly closed: string;
+  /** Read out while the form itself is still being fetched, so the loading page says what it is waiting for. */
+  readonly loading: string;
   readonly notFoundTitle: string;
   readonly notFound: string;
   readonly tooMany: string;
@@ -91,6 +93,7 @@ const EN: FormStrings = {
   sending: 'Sending…',
   chooseOne: 'Choose one',
   closed: 'This form isn’t taking enquiries right now.',
+  loading: 'Loading the form…',
   notFoundTitle: 'Form not found',
   notFound: 'This form doesn’t exist, or its address changed.',
   tooMany: 'That did not go through. Try again in a moment.',

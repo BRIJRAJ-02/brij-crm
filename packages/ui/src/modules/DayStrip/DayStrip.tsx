@@ -1,6 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { dayLabels } from '../../lib/month.ts';
 import { useFormatSettings } from '../../provider/context.ts';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import styles from './DayStrip.module.css';
 import { strings } from './strings.ts';
 
@@ -14,14 +15,19 @@ export interface DayStripProps {
   readonly onChange: (day: string) => void;
   /** Focuses the chosen day once drawn: coming back from the details step. */
   readonly focusesValue?: boolean;
+  /** Draws a day's tile in each place while the days load, so the times under them never move. */
+  readonly isLoading?: boolean;
 }
+
+/** How many day tiles the loading strip holds: a week, which is about what fits before it scrolls. */
+const GHOST_DAYS = 7;
 
 /**
  * A booking page's List view (spec 0025, AC-666): only the days with times,
  * sideways, each its weekday over its date. The chosen day slides into view.
  * One day is in the tab order and the arrows move along them.
  */
-export function DayStrip({ days, bestDays, value, onChange, focusesValue = false }: DayStripProps) {
+export function DayStrip({ days, bestDays, value, onChange, focusesValue = false, isLoading = false }: DayStripProps) {
   const { locale } = useFormatSettings();
   const strip = useRef<HTMLDivElement>(null);
   const button = (key: string) => strip.current?.querySelector<HTMLButtonElement>(`button[data-day="${key}"]`);
@@ -49,6 +55,16 @@ export function DayStrip({ days, bestDays, value, onChange, focusesValue = false
     event.preventDefault();
     button(to)?.focus();
   };
+  if (isLoading) {
+    return (
+      <div className={styles.root} aria-busy="true">
+        <VisuallyHidden>{strings.loading}</VisuallyHidden>
+        {Array.from({ length: GHOST_DAYS }, (_, index) => (
+          <span key={index} className={styles.day} data-loading="" aria-hidden="true" />
+        ))}
+      </div>
+    );
+  }
   return (
     <div ref={strip} className={styles.root} role="group" aria-label={strings.days}>
       {days.map((key) => {
