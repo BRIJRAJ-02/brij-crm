@@ -4,6 +4,7 @@
 import type { MyProfile, SocialLink } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import { dataError } from '../errors.ts';
+import { refusalSummary } from '../refusals.ts';
 import type { Notice } from '../notice.ts';
 import { createSocialLinksStore, SOCIAL_LINKS_FRESH_MS } from './socials.ts';
 
@@ -45,6 +46,7 @@ function setup() {
     update: (input) => pending('update', input),
     mintId: () => `m${String((ids += 1))}`,
     notify: (notice) => notices.push(notice),
+    refusals: { refusalSummary },
     now: () => clock.at,
   });
   return { calls, notices, store, clock };

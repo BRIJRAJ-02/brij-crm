@@ -17,6 +17,7 @@
     "./member-names": "./src/member-names.ts",
     "./safe-link": "./src/values/safe-link.ts",
     "./social-networks": "./src/values/social-networks.ts",
+    "./social": "./src/values/social.ts",
     "./picker": "./src/values/picker.ts",
     "./activity-keys": "./src/activity-keys.ts",
     "./link-limits": "./src/link-limits.ts",

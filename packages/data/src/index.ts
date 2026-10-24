@@ -168,8 +168,8 @@ export type {
 import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
 export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
-import { createSocialLinksStore, type SocialLinksHeld } from './profile/socials.ts';
-export type { SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
+import type { SocialLinksAccess, SocialLinksStore } from './profile/socials.ts';
+export type { SocialLinksAccess, SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
 import { createOperatorStore } from './operator/store.ts';
 import {
@@ -1158,7 +1158,7 @@ export function createDataLayer({
     schedules.clear();
     preferences.clear();
     pictureChoice.clear();
-    socialLinks.clear();
+    socialLinks?.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
   const reset = (isSignedIn: boolean) => {
@@ -1996,14 +1996,23 @@ export function createDataLayer({
     mintId,
     notify,
   });
-  // The person's social links (booking socials, 25 Oct 2026), read with the profile: the profile's read goes through
-  // their store (which takes the picture store's read), so an older read never undoes a change that landed.
-  const socialLinks = createSocialLinksStore({
-    read: (workspace) => pictureChoice.read(workspace),
-    update: (input) => call((options) => api.profile.update(input, options)),
-    mintId,
-    notify,
-  });
+  // The person's social links (booking socials, 25 Oct 2026), loaded on first use (out of the first load) by the one
+  // screen that holds them, the booking page editor's card. It reads the profile itself (the picture store's read),
+  // and a read sent before a change landed never puts its older answer over it; Settings › Profile's Save hands it
+  // the set it saved.
+  let socialLinks: SocialLinksStore | undefined;
+  let socialLinksLoading: Promise<SocialLinksStore> | undefined;
+  const loadSocialLinks = (): Promise<SocialLinksStore> =>
+    (socialLinksLoading ??= import('./profile/socials.ts').then(({ createSocialLinksStore }) => {
+      socialLinks = createSocialLinksStore({
+        read: (workspace) => pictureChoice.read(workspace),
+        update: (input) => call((options) => api.profile.update(input, options)),
+        mintId,
+        notify,
+        refusals: { refusalSummary },
+      });
+      return socialLinks;
+    }));
   /**
    * The member's time zone in a workspace: their Preferences once read (the workspace's pages read them first),
    * else the browser's. Relative dates in filters, rules, bulk targets and exports resolve in it.
@@ -4055,7 +4064,7 @@ export function createDataLayer({
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {
       /** Reads the profile now (the route's loader); whether their picture shows comes with it, held below. */
-      get: (workspace: string): Promise<MyProfile> => socialLinks.read(workspace),
+      get: (workspace: string): Promise<MyProfile> => pictureChoice.read(workspace),
       /** Whether their picture shows on their booking pages and profile (owner ask A124), as the screen holds it. */
       picture: (workspace: string): PictureChoiceHeld => pictureChoice.of(workspace),
       /**
@@ -4064,14 +4073,12 @@ export function createDataLayer({
        */
       setPictureHidden: (workspace: string, isHidden: boolean): Promise<boolean> =>
         pictureChoice.change(workspace, isHidden),
-      /** Their social links, in order (booking socials, 25 Oct 2026), the same in every workspace, as screens hold them. */
-      socials: (workspace: string): SocialLinksHeld => socialLinks.of(workspace),
       /**
-       * Replaces their whole set of social links (the booking editor's Edit social links): shown at once, put back
-       * with a toast and Try again if refused. Answers whether it landed.
+       * Their social links (booking socials, 25 Oct 2026), the same in every workspace: the store, loaded on first use
+       * (the screens that edit them load lazily too). Its `of` holds the set as screens show it; `change` replaces the
+       * whole set at once, put back with a toast and Try again if refused.
        */
-      setSocials: (workspace: string, links: readonly SocialLink[]): Promise<boolean> =>
-        socialLinks.change(workspace, links),
+      loadSocials: (): Promise<SocialLinksAccess> => loadSocialLinks(),
       /**
        * Changes their name or time zone (null follows the workspace's), or their handle and bio (the person's, in
        * every workspace). The member list is read again; a new handle changes every page's address, so the
@@ -4096,7 +4103,7 @@ export function createDataLayer({
           ),
         );
         // The answer holds the set as saved, for the booking editor's card and anything else holding it.
-        socialLinks.landed(workspace, updated);
+        socialLinks?.landed(workspace, updated);
         members.delete(workspace);
         if (change.handle !== undefined) bookingPageLists.view(workspace).reload();
         return updated;

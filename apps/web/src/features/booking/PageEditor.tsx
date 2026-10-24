@@ -17,10 +17,10 @@ import {
   type DataLayer,
   type MemberSummary,
   type ScheduleView,
+  type PublicSocialLink,
   type SchedulesView,
-  type SocialLinksHeld,
 } from '@crm/data';
-import { useCalendar, useCaptureList, usePageDestination, useSchedules, useSocialLinks } from '@crm/data/react';
+import { useCalendar, useCaptureList, usePageDestination, useSchedules } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
@@ -91,7 +91,7 @@ import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
-import { previewSocials, SocialsCard } from './SocialsCard.tsx';
+import { SocialsCardSlot } from './socials-slot.tsx';
 import { strings as socialsStrings } from './socials-strings.ts';
 
 /** Props for the editor: the page its route loaded. */
@@ -173,14 +173,6 @@ const TIME_KEYS: readonly (keyof BookingPageSettings)[] = [
   'dailyLimit',
   'slotStep',
 ];
-
-/** What a page that shows no one's social links holds in their place: nothing, read never. */
-const NO_SOCIALS: SocialLinksHeld = {
-  subscribe: () => () => undefined,
-  getSnapshot: () => ({ status: 'loading' }),
-  retain: () => () => undefined,
-  retry: () => undefined,
-};
 
 /** The settings the editor edits, from the page. */
 const settingsOf = (page: BookingPageView): BookingPageSettings => ({
@@ -268,8 +260,8 @@ export function PageEditor({
   // The person's own social links, as the preview shows them while the page's switch is on (booking socials); held
   // only on their own personal page, the one page that shows them.
   const showsSocials = ownerMember === undefined && page.kind === 'personal';
-  const socials = useSocialLinks(showsSocials ? data.profile.socials(slug) : NO_SOCIALS);
-  const previewLinks = socials.status === 'ready' ? previewSocials(socials.links) : [];
+  // The card (loaded on its own, with the person's links store) hands them over as they are now.
+  const [previewLinks, setPreviewLinks] = useState<readonly PublicSocialLink[]>([]);
   // The chosen schedule's week and days off, edited in place and saved by the same Save as the page's settings
   // (through the data layer: shown at once, put back if the server refuses).
   const week = useScheduleDraft({
@@ -750,9 +742,10 @@ export function PageEditor({
                           />
                         </FieldGroup>
                       </Card>
-                      <SocialsCard
+                      <SocialsCardSlot
                         data={data}
                         slug={slug}
+                        onPreviewLinks={setPreviewLinks}
                         isTeam={page.kind !== 'personal'}
                         isOwner={ownerMember === undefined}
                         isShown={draft.showSocials}
