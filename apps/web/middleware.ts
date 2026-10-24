@@ -138,15 +138,20 @@ export function apiTarget(env: { readonly API_ORIGIN_INTERNAL?: string | undefin
 
 export default function middleware(request: Request): Response {
   const url = new URL(request.url);
+  // One deployment answers on both hosts with opposite moves, so a cache that keeps one must keep it per host.
+  const moved = (location: string) =>
+    new Response(null, {
+      status: 308,
+      headers: { location, 'cache-control': 'public, max-age=3600', vary: 'host' },
+    });
   const home = publicHostRedirect(url, process.env);
-  if (home !== undefined) {
-    return new Response(null, { status: 308, headers: { location: home, 'cache-control': 'public, max-age=3600' } });
+  if (home !== undefined) return moved(home);
+  if (!isApiPath(url.pathname)) {
+    // The API is never a handle address, and is answered below whatever happens, so it is never moved from here.
+    const booking = handleHostRedirect(url, process.env);
+    if (booking !== undefined) return moved(booking);
+    return next();
   }
-  const booking = handleHostRedirect(url, process.env);
-  if (booking !== undefined) {
-    return new Response(null, { status: 308, headers: { location: booking, 'cache-control': 'public, max-age=3600' } });
-  }
-  if (!isApiPath(url.pathname)) return next();
 
   const origin = process.env.API_ORIGIN_INTERNAL ?? '';
   const proxied = apiTarget(process.env) === 'proxy';

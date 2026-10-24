@@ -299,6 +299,7 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
       expect(response.status).toBe(308);
       expect(response.headers.get('location')).toBe('https://timefix.ai/');
       expect(response.headers.get('cache-control')).toBe('public, max-age=3600');
+      expect(response.headers.get('vary')).toBe('host');
     },
   );
 
@@ -332,6 +333,7 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
       expect(response.status, pathname).toBe(308);
       expect(response.headers.get('location'), pathname).toBe(location);
       expect(response.headers.get('cache-control')).toBe('public, max-age=3600');
+      expect(response.headers.get('vary')).toBe('host');
     }
   });
 
