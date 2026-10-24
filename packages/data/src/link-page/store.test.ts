@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProfileItem, ProfileItems } from '@crm/contracts';
 import { dataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
+import { refusalSummary } from '../refusals.ts';
 import { blockLimit, checkBlock, createLinkPageStore, type LinkPageApi } from './store.ts';
 
 /** A promise and its resolve and reject, for answering a call by hand. */
@@ -60,6 +61,7 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
     api,
     mintId: () => `m${String((minted += 1))}`,
     notify: (notice) => notices.push(notice),
+    summary: refusalSummary,
     now: () => 0,
   });
   const answer = (name: string, value: unknown) => {

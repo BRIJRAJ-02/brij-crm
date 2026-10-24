@@ -4064,7 +4064,7 @@ export function createDataLayer({
     linkPage: {
       load: (): Promise<LinkPageStore> =>
         (linkPage ??= import('./link-page/store.ts').then(({ openLinkPage }) =>
-          openLinkPage({ profile: api.profile, call, mintId, notify }),
+          openLinkPage({ profile: api.profile, call, mintId, notify, summary: refusalSummary }),
         )),
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */

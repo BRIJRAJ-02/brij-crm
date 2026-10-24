@@ -22,7 +22,6 @@ import {
 import type { PROFILE_HUES } from '@crm/contracts/link-page';
 import { toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
-import { refusalSummary } from '../refusals.ts';
 
 /** The blocks as a screen holds them. */
 export type LinkPageState =
@@ -84,6 +83,11 @@ export interface LinkPageDeps {
   readonly api: LinkPageApi;
   readonly mintId: () => string;
   readonly notify: (notice: Notice) => void;
+  /**
+   * A refusal's one sentence (`refusalSummary`), handed in by the data layer rather than imported, so this store's
+   * chunk shares nothing with the first load but what the layer passes it.
+   */
+  readonly summary: (error: DataError) => string;
   /** The clock, in milliseconds; tests pass their own. */
   readonly now?: () => number;
 }
@@ -373,7 +377,7 @@ export function createLinkPageStore(deps: LinkPageDeps) {
           const refusal = toDataError(error);
           deps.notify({
             tone: 'danger',
-            message: refusalSummary(refusal),
+            message: deps.summary(refusal),
             action: { label: TRY_AGAIN, onAction: () => void retry() },
           });
           // What failed may have been stale (another tab): read the server's lists again behind the toast.
@@ -508,6 +512,7 @@ export function openLinkPage(given: {
   readonly call: <T>(run: (options: { readonly signal?: AbortSignal }) => Promise<T>) => Promise<T>;
   readonly mintId: () => string;
   readonly notify: (notice: Notice) => void;
+  readonly summary: (error: DataError) => string;
 }) {
   const { profile, call } = given;
   const deps: LinkPageDeps = {
@@ -521,6 +526,7 @@ export function openLinkPage(given: {
     },
     mintId: given.mintId,
     notify: given.notify,
+    summary: given.summary,
   };
   const store = createLinkPageStore(deps);
   return {
