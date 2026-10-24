@@ -254,7 +254,7 @@ export function PrivacyPage() {
 
       <LegalHeading>Contact</LegalHeading>
       <LegalParagraph>
-        Questions or requests: <Link href="mailto:privacy@timefix.com">privacy@timefix.com</Link>.
+        Questions or requests: <Link href="mailto:privacy@timefix.ai">privacy@timefix.ai</Link>.
       </LegalParagraph>
     </LegalPage>
   );

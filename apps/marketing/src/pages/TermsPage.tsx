@@ -104,7 +104,7 @@ export function TermsPage() {
 
       <LegalHeading>Contact</LegalHeading>
       <LegalParagraph>
-        Questions about these terms: <Link href="mailto:privacy@timefix.com">privacy@timefix.com</Link>.
+        Questions about these terms: <Link href="mailto:privacy@timefix.ai">privacy@timefix.ai</Link>.
       </LegalParagraph>
     </LegalPage>
   );
