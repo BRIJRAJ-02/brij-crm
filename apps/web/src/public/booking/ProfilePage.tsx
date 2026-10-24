@@ -14,6 +14,7 @@ import {
   EmptyState,
   LinkList,
   LinkListToolbar,
+  LoadingNow,
   type LinkRow,
 } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -158,9 +159,25 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
       </BookingMessage>
     );
   }
-  // The card and the rows as skeletons, the shape BookingProfile draws for itself, so the page the visitor
-  // already sees while this module loads is the page it stays.
-  if (loaded.state === 'loading') return <BookingProfile />;
+  if (loaded.state === 'loading') {
+    // The person's card and the links' own rows as skeletons, so nothing moves when they arrive. The rows are
+    // drawn at once rather than after the loading delay: this is the page's first paint, so there is no content
+    // for a skeleton to flash in front of.
+    return (
+      <BookingProfile>
+        <LoadingNow>
+          <LinkList
+            label={strings.profileLinks}
+            searchLabel={strings.searchLinks}
+            isToolbarHidden
+            status="loading"
+            rows={[]}
+            onOpen={() => undefined}
+          />
+        </LoadingNow>
+      </BookingProfile>
+    );
+  }
 
   const { profile, links } = loaded;
   const current = profile.handle;

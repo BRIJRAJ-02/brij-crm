@@ -2,8 +2,6 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Avatar, AvatarStack, type AvatarStackPerson } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
-import { LinkList } from '../LinkList/LinkList.tsx';
-import { LoadingNow } from '../../provider/LoadingNow.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { poweredByHref, type PoweredByPage } from '../../lib/powered-by.ts';
@@ -306,23 +304,7 @@ export function BookingProfile({ person, children, claimHref }: BookingProfilePr
             </>
           )}
         </header>
-        {/* A profile with nothing yet to draw shows the links' own rows loading, so the page it becomes is the
-            page it already looks like, whether the profile's own module has arrived or not. */}
-        {children ??
-          (person === undefined ? (
-            /* Drawn at once rather than after the loading delay: this is the page's first paint, so there is
-               no content for a skeleton to flash in front of. */
-            <LoadingNow>
-              <LinkList
-                label={strings.links}
-                searchLabel={strings.searchLinks}
-                isToolbarHidden
-                status="loading"
-                rows={[]}
-                onOpen={() => undefined}
-              />
-            </LoadingNow>
-          ) : undefined)}
+        {children}
         <BookingFoot page="booking_profile" {...(claimHref === undefined ? {} : { claimHref })} />
       </div>
     </main>

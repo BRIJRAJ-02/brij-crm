@@ -18,6 +18,11 @@ const { js, css } = firstLoad(manifest);
 // The hosted form (spec 0023) draws with the library's own controls since 19 October 2026, so it loads React
 // and React Aria: 8.4 kB of JavaScript and 4.4 kB of CSS before, 197.8 kB and 12.2 kB after (gzipped, measured
 // on the built page). Its own budget leaves about 10% of room. The phone library loads later, on demand.
+// 24 October 2026: the hosted page draws its own loading shape before the form is read (the owner: the public
+// pages should "feel better to load. no flash no nothing"), which until then was a blank window for as long as
+// the read took. Drawing it costs the form's first load Skeleton: 0.6 kB of JavaScript and 0.7 kB of CSS
+// gzipped, measured, against 219.7 kB and 15.6 kB before. The budget had 0.3 kB of room left, so these two lines
+// go up by the measured amount and no more. Worth ratifying: raising a budget is a spec change.
 const form = firstLoad(manifest, 'form.html');
 // The booking pages (spec 0025) draw with the library too since 20 October 2026, through @crm/ui/public-booking:
 // 211.5 kB of JavaScript and 15.8 kB of CSS (gzipped, as size-limit measures it), with about 10% of room.
@@ -35,8 +40,8 @@ if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_RE
 export default [
   { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '250 kB', gzip: true, running: false },
   { name: 'First load CSS (gzipped)', path: inDist(css), limit: '40 kB', gzip: true, running: false },
-  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '220 kB', gzip: true, running: false },
-  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '16 kB', gzip: true, running: false },
+  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '221 kB', gzip: true, running: false },
+  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '17 kB', gzip: true, running: false },
   { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '230 kB', gzip: true, running: false },
   { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '18 kB', gzip: true, running: false },
 ];

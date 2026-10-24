@@ -64,35 +64,35 @@
     border-radius: var(--radius-full);
   }
 
-  /* The avatar scale, so a loading face is the size the face will be. */
-  .root[data-shape='circle'][data-size='xs'] {
-    inline-size: var(--avatar-xs);
-    block-size: var(--avatar-xs);
+  /* The avatar scale, so a loading face is the size the face will be. One
+     size named per step, so the square itself is set once. */
+  .root[data-shape='circle'][data-size] {
+    inline-size: var(--skeleton-circle);
+    block-size: var(--skeleton-circle);
   }
 
-  .root[data-shape='circle'][data-size='sm'] {
-    inline-size: var(--avatar-sm);
-    block-size: var(--avatar-sm);
+  .root[data-size='xs'] {
+    --skeleton-circle: var(--avatar-xs);
   }
 
-  .root[data-shape='circle'][data-size='md'] {
-    inline-size: var(--avatar-md);
-    block-size: var(--avatar-md);
+  .root[data-size='sm'] {
+    --skeleton-circle: var(--avatar-sm);
   }
 
-  .root[data-shape='circle'][data-size='lg'] {
-    inline-size: var(--avatar-lg);
-    block-size: var(--avatar-lg);
+  .root[data-size='md'] {
+    --skeleton-circle: var(--avatar-md);
   }
 
-  .root[data-shape='circle'][data-size='title'] {
-    inline-size: var(--avatar-title);
-    block-size: var(--avatar-title);
+  .root[data-size='lg'] {
+    --skeleton-circle: var(--avatar-lg);
   }
 
-  .root[data-shape='circle'][data-size='xl'] {
-    inline-size: var(--avatar-xl);
-    block-size: var(--avatar-xl);
+  .root[data-size='title'] {
+    --skeleton-circle: var(--avatar-title);
+  }
+
+  .root[data-size='xl'] {
+    --skeleton-circle: var(--avatar-xl);
   }
 
   .root[data-shape='tile'] {

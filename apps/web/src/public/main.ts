@@ -9,7 +9,6 @@
 // from (`context`); the address's own parameters prefill questions by key.
 import '@crm/ui/styles.css';
 import { createPublicFormClient, loadCaptcha } from '@crm/data/public-form';
-import { themeBarColor } from '@crm/ui/theme';
 import { mountFormLoading, mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
 import { contextFromFrame, contextOfPage, hiddenOf } from './context.ts';
 import { closeOnEscape, embedOf, framedUrl, isOwnBookingPath, reportHeight, type PostToHost } from './frame.ts';
@@ -100,10 +99,6 @@ async function start(): Promise<void> {
     document.title = form.headline;
     document.documentElement.lang = form.language;
     document.documentElement.dataset.theme = form.look.colour;
-    // The phone's browser bar takes the form's own colour too, so a dark form never sits inside a light bar.
-    for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
-      meta.setAttribute('content', themeBarColor(form.look.colour, meta.getAttribute('media')));
-    }
     // On the root too, so the lists that open outside the form (in a popover) square their corners with it.
     document.documentElement.dataset.corners = form.look.corners;
     const captcha = form.recaptchaSiteKey === undefined ? undefined : loadCaptcha(form.recaptchaSiteKey);
