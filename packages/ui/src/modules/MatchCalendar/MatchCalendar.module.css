@@ -1,0 +1,254 @@
+/* Match with your calendar: the booking page's call to action, and the dialog
+   behind it. The controls are the library's own Button, ButtonLink, Modal,
+   Avatar, Skeleton, Icon and SlotList; this holds the two faces side by side,
+   the dots that travel between them while the calendars are matched, and the
+   message block's own height, so the answer landing moves nothing. */
+@layer components {
+  /* The call to action above the card: the row's width, with one quiet line under it. */
+  .cta {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    align-items: center;
+    animation: match-fade var(--duration-popover) var(--ease-out) both;
+  }
+
+  /* The held box, the call to action's own height, so filling it moves nothing under it. */
+  .ctaHold {
+    display: block;
+    inline-size: 100%;
+    block-size: calc(var(--size-input) + var(--space-6));
+  }
+
+  .hintHold {
+    display: block;
+    inline-size: var(--size-column-narrow);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .hint {
+    margin: 0;
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  /* The host and the visitor, the same shape in every state. */
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: var(--space-12);
+    align-items: start;
+    justify-items: center;
+    padding-block: var(--space-8) var(--space-4);
+  }
+
+  /* Only the picture leans: tilting the name under it reads as jitter. */
+  .portrait {
+    display: block;
+  }
+
+  .face {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    align-items: center;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .name {
+    max-inline-size: 100%;
+    overflow: hidden;
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    color: var(--text-secondary);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The mark between them, centred on the faces rather than on their names. */
+  .middle {
+    display: flex;
+    block-size: var(--avatar-xl);
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--size-toolbar);
+    color: var(--text-tertiary);
+  }
+
+  .pair[data-step='matched'] .middle {
+    color: var(--success);
+  }
+
+  .pair[data-step='failed'] .middle {
+    color: var(--danger);
+  }
+
+  .pair:not([data-step='waiting']) .middle {
+    animation: match-middle-in var(--duration-popover) var(--ease-out) both;
+  }
+
+  /* While the two calendars are matched: three dots crossing the gap, one after another. */
+  .dots {
+    display: flex;
+    gap: var(--space-4);
+  }
+
+  .dot {
+    inline-size: var(--size-icon-xs);
+    block-size: var(--size-icon-xs);
+    background: var(--accent);
+    border-radius: var(--radius-full);
+    animation: match-dot var(--duration-pulse) var(--ease-in-out) infinite both;
+  }
+
+  /* A third of the cycle apart, so the three take their turn rather than travel together. */
+  .dot[data-dot='1'] {
+    animation-delay: calc(var(--duration-pulse) / -3);
+  }
+
+  .dot[data-dot='2'] {
+    animation-delay: calc(var(--duration-pulse) / -3 * 2);
+  }
+
+  /* The two of them leaning in while it works: the character the owner asked for, in a few degrees. */
+  .pair[data-step='waiting'] .portrait {
+    animation: match-lean var(--duration-pulse) var(--ease-in-out) infinite alternate both;
+  }
+
+  .face[data-side='visitor'] .portrait {
+    animation-name: match-lean-back;
+  }
+
+  /* The answer's words, in a block tall enough for the longest of them. */
+  .message {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    justify-content: center;
+    min-block-size: calc(5lh + var(--space-8));
+    text-align: center;
+  }
+
+  .lead {
+    margin: 0;
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+    color: var(--text);
+    text-wrap: pretty;
+  }
+
+  .count {
+    margin: 0;
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    color: var(--success);
+  }
+
+  .note {
+    margin: 0;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-secondary);
+    text-wrap: pretty;
+  }
+
+  /* The other matching times, once they are asked for. */
+  .others {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding-block-start: var(--space-12);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    animation: match-others-in var(--duration-popover) var(--ease-out) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .others,
+    .pair:not([data-step='waiting']) .middle {
+      animation-name: match-fade;
+    }
+
+    .dot {
+      animation-name: match-dot-still;
+    }
+
+    .pair[data-step='waiting'] .portrait,
+    .face[data-side='visitor'] .portrait {
+      animation: none;
+    }
+  }
+
+  @keyframes match-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes match-middle-in {
+    from {
+      opacity: 0;
+      scale: var(--scale-enter);
+    }
+  }
+
+  @keyframes match-others-in {
+    from {
+      opacity: 0;
+      translate: 0 calc(var(--space-4) * -1);
+    }
+  }
+
+  @keyframes match-dot {
+    0% {
+      opacity: 0;
+      translate: calc(var(--space-6) * -1) 0;
+    }
+
+    50% {
+      opacity: 1;
+      translate: 0 0;
+    }
+
+    100% {
+      opacity: 0;
+      translate: var(--space-6) 0;
+    }
+  }
+
+  /* Reduced motion: the dots still take their turn, in place. */
+  @keyframes match-dot-still {
+    0%,
+    100% {
+      opacity: 0;
+    }
+
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes match-lean {
+    from {
+      rotate: 0deg;
+    }
+
+    to {
+      rotate: 4deg;
+    }
+  }
+
+  @keyframes match-lean-back {
+    from {
+      rotate: 0deg;
+    }
+
+    to {
+      rotate: -4deg;
+    }
+  }
+}

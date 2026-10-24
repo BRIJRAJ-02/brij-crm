@@ -214,22 +214,29 @@ function previewLocation(value: unknown): PublicBookingPage['location'] | undefi
   return undefined;
 }
 
+/** A draft's opening view, when it is one of the three the page has. */
+const previewView = (value: unknown): PublicBookingPage['defaultView'] | undefined =>
+  value === 'month' || value === 'list' || value === 'chat' ? value : undefined;
+
 /**
  * The page with the editor's unsaved draft laid over it (spec 0025, AC-679),
- * from a preview message: only the title, description, durations and location,
- * each taken only when it has the right shape, so a stray message changes
- * nothing. Anything that isn't a preview message answers `undefined`.
+ * from a preview message: only the title, description, durations, location and
+ * the view it opens in, each taken only when it has the right shape, so a
+ * stray message changes nothing. Anything that isn't a preview message answers
+ * `undefined`.
  */
 export function withPreviewDraft(page: PublicBookingPage, message: unknown): PublicBookingPage | undefined {
   if (!isRecord(message) || message.type !== PREVIEW_MESSAGE || !isRecord(message.draft)) return undefined;
-  const { title, description, durations, location } = message.draft;
+  const { title, description, durations, location, defaultView } = message.draft;
   const lengths = Array.isArray(durations) ? durations.filter(isDuration) : [];
   const place = previewLocation(location);
+  const opensIn = previewView(defaultView);
   return {
     ...page,
     ...(typeof title === 'string' && title.trim() !== '' ? { title } : {}),
     ...(typeof description === 'string' ? { description } : {}),
     ...(lengths.length > 0 ? { durations: lengths } : {}),
     ...(place === undefined ? {} : { location: place }),
+    ...(opensIn === undefined ? {} : { defaultView: opensIn }),
   };
 }

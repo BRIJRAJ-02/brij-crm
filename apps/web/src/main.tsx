@@ -11,6 +11,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { localStore, writeSessionHint, type SessionHint } from './features/auth/hint.ts';
+import { hintPage, writeParentSessionHint } from './features/auth/parent-hint.ts';
 import { signInHref } from './features/auth/redirect.ts';
 import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
 import { PRELOAD_DELAY_MS, startIntentPreload } from './features/navigation/preload.ts';
@@ -87,11 +88,15 @@ const data = createDataLayer({
   onSessionChange: forgetPages,
   // Kept for the next load's first paint only (hint.ts): which place a page before the app holds while `me.get`
   // is out. Never read as proof of a session. Written only when it changes, so a cached answer costs no write.
+  // The same answer writes the parent domain hint (parent-hint.ts), so timefix.com's edge can send a signed in
+  // person to the app instead of the marketing site. Presence and an expiry, on the parent domain only, and
+  // never proof of anything either: `me.get` still decides.
   onSessionKnown: (isSignedIn) => {
     const hint = isSignedIn ? 'in' : 'out';
     if (hint === lastSessionHint) return;
     lastSessionHint = hint;
     writeSessionHint(localStore(window), hint);
+    writeParentSessionHint(hintPage(window), import.meta.env.VITE_BOOKING_PUBLIC_ORIGIN, isSignedIn);
   },
   currentPath: () => `${window.location.pathname}${window.location.search}`,
   ...(realtimeUrl === undefined || realtimeUrl === '' ? {} : { realtimeUrl }),

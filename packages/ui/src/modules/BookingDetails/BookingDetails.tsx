@@ -1,3 +1,4 @@
+import { HONEYPOT_IGNORE_ATTRIBUTES, HONEYPOT_INPUT_NAME } from '@crm/contracts/forms';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
@@ -299,9 +300,10 @@ export function BookingDetails({ needsPhone = false, prefill, maxGuests = 10, on
         <label htmlFor={trapId}>{strings.trap}</label>
         <input
           id={trapId}
-          name="company_url"
+          name={HONEYPOT_INPUT_NAME}
           tabIndex={-1}
           autoComplete="off"
+          {...HONEYPOT_IGNORE_ATTRIBUTES}
           value={trap}
           onChange={(event) => setTrap(event.target.value)}
         />

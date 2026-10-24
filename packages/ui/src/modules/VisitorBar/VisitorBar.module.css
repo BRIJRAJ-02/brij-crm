@@ -10,6 +10,12 @@
     animation: visitor-tag-in var(--duration-popover) var(--ease-out) both;
   }
 
+  /* With the call to action in its place, the row is the control's: it is the page's one ask. */
+  .root[data-cta] {
+    display: block;
+    min-block-size: 0;
+  }
+
   .root:focus {
     outline: none;
   }

@@ -4,6 +4,7 @@
 // paths. vercel.json can't import, so it holds these patterns as text: `public-paths.test.ts` fails until its
 // rewrites and headers say exactly what this file builds, and until every top level route is a reserved word.
 import { RESERVED_HANDLES } from '@crm/contracts/handles';
+import { SESSION_HINT_COOKIE, SESSION_HINT_PRESENT } from './src/features/auth/parent-hint.ts';
 
 /** The reserved words a handle could look like (3 characters and more), longest first, as one alternation. */
 const RESERVED = [...RESERVED_HANDLES]
@@ -72,11 +73,47 @@ const httpsUrl = (value: string | undefined): URL | undefined => {
 };
 
 /**
- * Where a request on the public booking origin's host goes instead (a 308): the marketing site,
- * `PUBLIC_HOST_HOME_URL` (https://www.timefix.com), for any path that doesn't belong there, `/` included. Undefined,
- * so nothing changes, for every other request, and whenever `PUBLIC_HOST_HOME_URL`, `BOOKING_PUBLIC_ORIGIN` or
- * `APP_URL` is unset or not https, or the public origin is the app's own or the marketing site's: the app's paths
- * then always stay where they are.
+ * The query the apex's home honours to stay on the marketing site, `https://timefix.com/?stay=1` (25 Oct 2026).
+ * Without it a browser holding the session hint is always sent to the app, so this is the way back for someone
+ * signed in who wants to read the marketing pages; `https://www.timefix.com/` is the other, since the marketing
+ * host is its own deployment and never passes through here.
+ */
+export const STAY_PARAM = 'stay';
+
+/**
+ * Where a request on the public booking origin's host goes, and whether that answer was read off the request's
+ * cookies, which decides how it may be cached: an answer that depends on a cookie is never cached for everyone.
+ */
+export type PublicHostMove = {
+  /** The address to move to. */
+  readonly location: string;
+  /** Whether the session hint cookie was read to decide it, so the answer is this browser's alone. */
+  readonly onCookie: boolean;
+};
+
+/** Whether a request's `cookie` header carries the parent domain session hint (`parent-hint.ts`). */
+export function hasSessionHint(cookie: string | undefined): boolean {
+  if (cookie === undefined || cookie === '') return false;
+  return cookie.split(';').some((pair) => {
+    const at = pair.indexOf('=');
+    if (at < 0) return false;
+    return pair.slice(0, at).trim() === SESSION_HINT_COOKIE && pair.slice(at + 1).trim() === SESSION_HINT_PRESENT;
+  });
+}
+
+/**
+ * Where a request on the public booking origin's host goes instead: the marketing site, `PUBLIC_HOST_HOME_URL`
+ * (https://www.timefix.com), for any path that doesn't belong there, `/` included. Undefined, so nothing changes,
+ * for every other request, and whenever `PUBLIC_HOST_HOME_URL`, `BOOKING_PUBLIC_ORIGIN` or `APP_URL` is unset or
+ * not https, or the public origin is the app's own or the marketing site's: the app's paths then always stay
+ * where they are.
+ *
+ * The apex's home alone is read against the session hint cookie (25 Oct 2026, the owner: "if I am already logged
+ * in and I go to timefix.com, it should just detect and take me to the dashboard"): with the hint the browser
+ * goes to the app, `APP_URL`, and without it to the marketing site as before. `?stay=1` (`STAY_PARAM`) skips the
+ * cookie and keeps the marketing site, so being signed in is never a one way door. Every other path is untouched:
+ * a handle address, `/b/`, `/f/`, `/embed/`, a built file and `/api/public/` all stay exactly where they are, so
+ * someone opening a booking page is never thrown into the app, signed in or not.
  */
 export function publicHostRedirect(
   url: URL,
@@ -85,7 +122,8 @@ export function publicHostRedirect(
     readonly BOOKING_PUBLIC_ORIGIN?: string | undefined;
     readonly APP_URL?: string | undefined;
   },
-): string | undefined {
+  cookie?: string,
+): PublicHostMove | undefined {
   const home = httpsUrl(env.PUBLIC_HOST_HOME_URL);
   const publicOrigin = httpsUrl(env.BOOKING_PUBLIC_ORIGIN);
   const app = httpsUrl(env.APP_URL);
@@ -93,7 +131,11 @@ export function publicHostRedirect(
   if (url.host !== publicOrigin.host || app.host === publicOrigin.host || home.host === publicOrigin.host) {
     return undefined;
   }
-  return servedOnPublicHost(url.pathname) ? undefined : home.href;
+  if (servedOnPublicHost(url.pathname)) return undefined;
+  if (url.pathname === '/' && !url.searchParams.has(STAY_PARAM)) {
+    return { location: hasSessionHint(cookie) ? new URL('/', app).href : home.href, onCookie: true };
+  }
+  return { location: home.href, onCookie: false };
 }
 
 /**

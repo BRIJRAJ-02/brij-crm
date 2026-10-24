@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { fitsAttribute, freeKey, keyFromLabel, slugFromName, FORM_SLUG } from './answer-types.ts';
+import {
+  fitsAttribute,
+  freeKey,
+  HONEYPOT_INPUT_NAME,
+  keyFromLabel,
+  QUESTION_KEY,
+  slugFromName,
+  FORM_SLUG,
+} from './answer-types.ts';
 import { checkAnswers, websiteOf, type CheckedForm } from './check.ts';
 import { DIAL_CODES, toE164 } from './dial-codes.ts';
 import { defaultQuestions, FormDocument, RedirectUrl } from './document.ts';
@@ -261,5 +269,15 @@ describe('a form owner from a rotation (spec 0029 milestone 3, AC-755, AC-1050)'
       reason: 'none_available',
     });
     expect(AuditAction.safeParse('form.owner_changed').success).toBe(true);
+  });
+});
+
+describe('the honeypot input', () => {
+  it('has a name autofill leaves alone and no question can take', () => {
+    // Chrome filled `company_url` despite autocomplete="off", and real bookings were refused as bots (25 Oct 2026).
+    expect(HONEYPOT_INPUT_NAME).not.toMatch(
+      /company|business|organi[sz]ation|url|website|name|mail|phone|tel|address|city|zip|postal/i,
+    );
+    expect(QUESTION_KEY.test(HONEYPOT_INPUT_NAME)).toBe(false);
   });
 });

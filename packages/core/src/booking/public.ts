@@ -215,6 +215,8 @@ export async function getPublicBookingPage(
       location: publicLocation(page),
       hostTimeZone: page.availability.timeZone,
       windowDays: page.windowDays,
+      // The view the host chose, beside the rest of the facts, so the page's first paint is already that view.
+      defaultView: page.defaultView,
       ...(team === undefined ? {} : { team: await teamAvatars(tx, team) }),
       // Once the owner has a handle, a plain `/b/<key>` visit moves to `/<handle>/<slug>`.
       ...(path.startsWith('/b/') ? {} : { path }),

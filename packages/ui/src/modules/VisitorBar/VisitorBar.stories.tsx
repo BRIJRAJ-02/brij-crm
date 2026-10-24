@@ -29,6 +29,67 @@ export const Invite: Story = {
   },
 };
 
+/** With a match: Match with your calendar takes the row, in place of the small link (25 Oct 2026). */
+export const Match: Story = {
+  render: function Render(args) {
+    const [isOpen, setIsOpen] = useState(false);
+    return (
+      <Stage width="fill">
+        <VisitorBar
+          {...args}
+          match={{
+            step: 'why',
+            isOpen,
+            onOpenChange: setIsOpen,
+            host: { name: 'Grace Hopper' },
+            connectHref: CONNECT,
+          }}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Match with your calendar' }));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(dialog).toBeVisible());
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
+/** A visitor we know reaches the same dialog from their own tag's menu. */
+export const MatchFromMenu: Story = {
+  args: { person: ADA, calendar: 'on', onNotYou: fn() },
+  render: function Render(args) {
+    const [isOpen, setIsOpen] = useState(false);
+    return (
+      <Stage width="fill">
+        <VisitorBar
+          {...args}
+          match={{
+            step: 'matched',
+            isOpen,
+            onOpenChange: setIsOpen,
+            host: { name: 'Grace Hopper' },
+            visitor: ADA,
+            result: {
+              count: 4,
+              best: { id: '2026-10-20T09:30:00.000Z', label: '9:30 AM', name: '9:30 AM, Tue 20 Oct, 30 minutes' },
+              when: '9:30 AM on Tue 20 Oct',
+            },
+            onBook: fn(),
+          }}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Ada Lovelace/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'See matching times' }));
+    await expect(await screen.findByRole('dialog')).toHaveTextContent('4 times matched.');
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
 /** Their calendar is on: the tag opens a menu with Show all times and Not you. */
 export const BothFree: Story = {
   args: { person: ADA, calendar: 'on', onNotYou: fn() },

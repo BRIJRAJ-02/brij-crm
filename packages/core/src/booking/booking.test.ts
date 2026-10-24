@@ -217,12 +217,44 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
       location: { type: 'video' },
       hostTimeZone: 'UTC',
       windowDays: 60,
+      defaultView: 'month',
     });
     expect(JSON.stringify(facts)).not.toContain('@');
     await updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'paused' } });
     expect(await refusalOf(getPublicBookingPage(entry))).toMatchObject({ code: 'BOOKING_CLOSED' });
     expect(await refusalOf(enterBookingPage({ db }, 'AAAAAAAAAAAAAAAA'))).toMatchObject({ code: 'NOT_FOUND' });
     expect(await refusalOf(enterBookingPage({ db }, 'not a key'))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('opens in the view its host chose, and in Month until one is chosen (owner, 25 Oct 2026)', async () => {
+    const w = await workspace();
+    const { page, entry } = await livePage(w);
+    // Every page, new or made before the setting existed, opens in Month.
+    expect(page.defaultView).toBe('month');
+    expect((await getPublicBookingPage(entry)).defaultView).toBe('month');
+    expect(await updateBookingPage(w.owner, { pageId: page.id, settings: { defaultView: 'chat' } })).toMatchObject({
+      defaultView: 'chat',
+    });
+    // It travels with the rest of the facts, in the one read the page's first paint waits for.
+    expect((await getPublicBookingPage(entry)).defaultView).toBe('chat');
+    // A page may also be created opening in one view.
+    const made = await createBookingPage(
+      w.owner,
+      { id: newId(), title: 'List first', timeZone: 'UTC', settings: { defaultView: 'list' } },
+      NOW,
+    );
+    expect(made.defaultView).toBe('list');
+    // Another member's page is not theirs to change: the same door as every other setting.
+    const bea = await w.addMember('Bea', 'member');
+    expect(
+      await refusalOf(updateBookingPage(bea, { pageId: page.id, settings: { defaultView: 'list' } })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    // Nothing else may be stored: the column's check refuses it.
+    await expect(
+      db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute(sql`update booking_pages set default_view = 'grid' where id = ${page.id}`),
+      ),
+    ).rejects.toThrow();
   });
 
   it('offers the hours minus busy times and bookings; a refused calendar offers nothing, a passing outage everything', async () => {

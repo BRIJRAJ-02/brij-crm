@@ -215,21 +215,15 @@ const WIDTHS = [
   { width: 390, height: 844 },
 ] as const;
 
-/** A visitor on the booking page, opening on `view` (the visitor's remembered choice), the page's reads `held` until let go. */
-async function visit(browser: Browser, publicKey: string, viewport: { width: number; height: number }, view: View) {
+/** A visitor in a fresh browser, so the page opens in its host's default view. */
+async function visit(browser: Browser, viewport: { width: number; height: number }) {
   const context = await browser.newContext({ viewport, timezoneId: 'UTC', locale: 'en-GB' });
-  await context.addInitScript((remembered) => {
-    try {
-      localStorage.setItem('crm.booking.view', remembered);
-    } catch {
-      // A browser without storage opens on Month, which the check then says.
-    }
-  }, view);
   return { context, page: await context.newPage() };
 }
 
 test.describe('a booking page', () => {
-  let publicKey: string | undefined;
+  /** One page per view its host can set it to open in (the owner's own page opens on chat). */
+  const keys: Partial<Record<View, string>> = {};
 
   test.beforeAll(async ({ browser }, info) => {
     if (info.project.name === '375' || workspace === undefined) return;
@@ -237,35 +231,42 @@ test.describe('a booking page', () => {
     const page = await context.newPage();
     await page.goto(`/w/${workspace.slug}/captures/links`);
     const origin = new URL(page.url()).origin;
-    const response = await page.request.post('/api/rpc/bookingPages/create', {
-      data: {
-        json: {
-          workspace: workspace.slug,
-          id: uuidv7(),
-          title: 'Views call',
-          timeZone: 'UTC',
-          mutationId: uuidv7(),
-          // Two lines on a phone, the two the loading rail draws: how many a host's own words take isn't knowable early.
-          settings: { description: 'A short chat about what you need and whether we can help. Bring questions.' },
+    for (const view of Object.keys(VIEWS) as View[]) {
+      const response = await page.request.post('/api/rpc/bookingPages/create', {
+        data: {
+          json: {
+            workspace: workspace.slug,
+            id: uuidv7(),
+            title: `Opens on ${view}`,
+            timeZone: 'UTC',
+            mutationId: uuidv7(),
+            settings: {
+              defaultView: view,
+              // Two lines on a phone, the two the loading rail draws: how many a host's own words take isn't
+              // knowable early.
+              description: 'A short chat about what you need and whether we can help. Bring questions.',
+            },
+          },
         },
-      },
-      headers: { origin },
-    });
-    expect(response.ok(), await response.text()).toBe(true);
-    publicKey = ((await response.json()) as { json: { publicKey: string } }).json.publicKey;
+        headers: { origin },
+      });
+      expect(response.ok(), await response.text()).toBe(true);
+      keys[view] = ((await response.json()) as { json: { publicKey: string } }).json.publicKey;
+    }
     await context.close();
   });
 
   test('switching between its views moves nothing, from whichever view it opens on', async ({ browser }, info) => {
     test.setTimeout(300_000);
     test.skip(info.project.name === '375', 'Both widths are measured here, at 1280 and 390.');
-    if (publicKey === undefined) throw new Error('No booking page.');
     const problems: string[] = [];
     for (const viewport of WIDTHS) {
       for (const start of Object.keys(VIEWS) as View[]) {
+        const publicKey = keys[start];
+        if (publicKey === undefined) throw new Error('No booking page.');
         for (const target of Object.keys(VIEWS) as View[]) {
           if (target === start) continue;
-          const { context, page } = await visit(browser, publicKey, viewport, start);
+          const { context, page } = await visit(browser, viewport);
           await page.goto(`/b/${publicKey}`);
           await expect(page.getByRole('radio', { name: VIEWS[start] })).toBeChecked();
           // Settled: the times are in, nothing is busy.
@@ -292,10 +293,11 @@ test.describe('a booking page', () => {
   test('opened on chat, its loading card stands where the loaded chat will', async ({ browser }, info) => {
     test.setTimeout(120_000);
     test.skip(info.project.name === '375', 'Both widths are measured here, at 1280 and 390.');
+    const publicKey = keys.chat;
     if (publicKey === undefined) throw new Error('No booking page.');
     const problems: string[] = [];
-    for (const viewport of WIDTHS) {
-      const { context, page } = await visit(browser, publicKey, viewport, 'chat');
+    /** Opens the page with its reads held; answers the loading regions, then the loaded ones. */
+    const open = async (page: Page) => {
       let release: () => void = () => undefined;
       const gate = new Promise<void>((resolve) => {
         release = resolve;
@@ -306,7 +308,7 @@ test.describe('a booking page', () => {
       };
       await page.route('**/api/public/**', hold);
       await page.goto(`/b/${publicKey}`);
-      await page.locator('main .ws-booking-frame-cover-body > [data-shape]').first().waitFor();
+      await page.locator('main [aria-busy="true"]').first().waitFor();
       await page.waitForTimeout(300);
       const loading = await bookingRegions(page);
       release();
@@ -315,9 +317,17 @@ test.describe('a booking page', () => {
       await page.waitForTimeout(1_000);
       const loaded = await bookingRegions(page);
       await page.unroute('**/api/public/**', hold);
-      // The rail fills in with the page's facts; the card, its body and the composer hold their places.
-      for (const difference of bookingDifferences(loading, loaded).filter((line) => !line.startsWith('rail.height')))
-        problems.push(`${String(viewport.width)} chat: ${difference}`);
+      // The rail fills in with the page's facts; everything else holds its place.
+      return bookingDifferences(loading, loaded).filter((line) => !line.startsWith('rail.height'));
+    };
+    for (const viewport of WIDTHS) {
+      const { context, page } = await visit(browser, viewport);
+      // A first visit can't know the host's default before the facts come, so it draws the month, which sets the
+      // card's size in every view: the chat arrives over it and moves nothing (it has no composer's place yet).
+      for (const difference of (await open(page)).filter((line) => !line.startsWith('composer')))
+        problems.push(`${String(viewport.width)} chat, first visit: ${difference}`);
+      // Back again, the page remembers it opened on chat: the composer's place is there from the first frame.
+      for (const difference of await open(page)) problems.push(`${String(viewport.width)} chat, again: ${difference}`);
       await context.close();
     }
     expect(problems).toEqual([]);
