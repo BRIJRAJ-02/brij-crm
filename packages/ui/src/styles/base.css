@@ -61,7 +61,8 @@
      - popover-panel-inset: a Popover dialog's inner edge (pickers, tips, view settings, filters, sorts); a row
        inside one pads up to popover-text-inset, so its text lines up with a menu's. */
   :root {
-    /* Only toasts take part in view transitions (below), never the page. */
+    /* Only toasts take part in same document view transitions (below), never the page; a public page takes part
+       whole in the cross document crossfade between public pages. */
     view-transition-name: none;
     --overlay-inset: var(--space-16);
     --popover-inset: var(--space-4);
@@ -90,10 +91,23 @@
      from below over duration-modal, a leaving one drops away faster, and the
      rest slide to their new places. Reduced motion skips the transition.
      Only the toasts take part: the page itself is never captured (its name is
-     none), and the transition's overlay lets every click and key through, so
+     none, but for the public pages' own crossfade below), and the transition's overlay lets every click and key through, so
      the page never freezes while a toast moves. */
   ::view-transition {
     pointer-events: none;
+  }
+
+  /* Between the public pages (a booking to its guest page, a form to its booking, a profile to a page) the whole
+     page crossfades where the browser can, over duration-move, instead of swapping at once. The public pages opt in
+     (`@view-transition` in BookingFrame's and FormParts' modules, which only they load) with the `page` type, and
+     only that type captures the page, so the app and the toasts' transitions never do. A browser without it simply
+     loads the next page. */
+  :root[data-public-page]:active-view-transition-type(page) {
+    view-transition-name: root;
+  }
+
+  ::view-transition-group(root) {
+    animation-duration: var(--duration-move);
   }
 
   ::view-transition-new(.toast):only-child {

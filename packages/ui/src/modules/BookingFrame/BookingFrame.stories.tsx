@@ -142,6 +142,55 @@ export const ChatLoadingOverMonth: Story = {
   },
 };
 
+/**
+ * Book, then Back (25 October 2026): the details step takes the whole card over the month, in from the end, and Back
+ * brings the month in from the start, the card one size throughout.
+ */
+export const StepToDetailsAndBack: Story = {
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas, canvasElement }) => {
+    const card = () => canvasElement.querySelector('section')?.getBoundingClientRect();
+    const atMonth = card();
+    await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' }));
+    // Focus is on the step's heading at once, while it slides in.
+    await expect(canvas.getByRole('heading', { name: 'Your details' })).toHaveFocus();
+    await expect(card()?.height).toBe(atMonth?.height);
+    await userEvent.click(canvas.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(document.getAnimations().filter((each) => each.playState === 'running')).toEqual([]));
+    await expect(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' })).toBeVisible();
+    await expect(card()?.height).toBe(atMonth?.height);
+  },
+};
+
+/** From the keyboard (25 October 2026): a view or a step chosen by key shows at once, and nothing replays after. */
+export const FromTheKeyboard: Story = {
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas, canvasElement }) => {
+    // The card's own moves: its heading row, the month under, and the view or step over it (not the times' own
+    // stagger, the switches' indicators or a button's colour).
+    const running = () => {
+      const card = canvasElement.querySelector('section');
+      const stage = card?.lastElementChild;
+      return [card?.firstElementChild, stage?.firstElementChild, stage?.children[1]]
+        .flatMap((part) => part?.getAnimations() ?? [])
+        .filter((each) => each.playState === 'running');
+    };
+    await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
+    canvas.getByRole('radio', { name: 'Month' }).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(canvas.getByRole('radio', { name: 'List' })).toBeChecked();
+    await expect(running()).toEqual([]);
+    // Book by key: the details show at once, focus on their heading.
+    canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' }).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(canvas.getByRole('heading', { name: 'Your details' })).toHaveFocus();
+    await expect(running()).toEqual([]);
+    await userEvent.tab();
+    await expect(running()).toEqual([]);
+  },
+};
+
 /** The second step: the rail with the picked time, the details in the card. */
 export const Details: Story = {
   args: {
@@ -322,8 +371,15 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
   const [day, setDay] = useState('2026-10-08');
   const [time, setTime] = useState<string | undefined>(undefined);
   const [view, setView] = useState('month');
+  const [step, setStep] = useState<'pick' | 'details' | 'back'>('pick');
   const bookBar = (
-    <Button variant="primary" size="lg" isFullWidth="center" isDisabled={time === undefined}>
+    <Button
+      variant="primary"
+      size="lg"
+      isFullWidth="center"
+      isDisabled={time === undefined}
+      onPress={() => setStep('details')}
+    >
       {time === undefined ? 'Book' : `Book Thu Oct 8 at ${time}`}
     </Button>
   );
@@ -333,8 +389,22 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
         {...args}
         heading="Choose a time"
         footer={bookBar}
-        view={view}
-        {...(view === 'list'
+        view={step === 'details' ? 'details' : view}
+        {...(step === 'details'
+          ? {
+              cover: (
+                <BookingDetails
+                  onBack={() => setStep('back')}
+                  onSubmit={fn(() => Promise.resolve({ kind: 'done' as const }))}
+                />
+              ),
+              coverPlace: 'card' as const,
+              enter: 'forward' as const,
+            }
+          : step === 'back'
+            ? { enter: 'back' as const }
+            : {})}
+        {...(step !== 'details' && view === 'list'
           ? {
               cover: (
                 <>
@@ -357,7 +427,11 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
           <SegmentedControl
             label="View"
             value={view}
-            onChange={setView}
+            onChange={(next) => {
+              setView(next);
+              // A switch is a fresh look, as the page's is: Back's slide doesn't replay.
+              setStep('pick');
+            }}
             segments={[
               { value: 'month', label: 'Month', icon: 'calendar', isIconOnly: true },
               { value: 'list', label: 'List', icon: 'list', isIconOnly: true },
