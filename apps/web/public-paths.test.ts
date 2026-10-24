@@ -146,40 +146,40 @@ describe('the public booking host', () => {
   });
 
   const env = {
-    PUBLIC_HOST_HOME_URL: 'https://timefix.ai',
+    PUBLIC_HOST_HOME_URL: 'https://www.timefix.com',
     BOOKING_PUBLIC_ORIGIN: 'https://timefix.com',
-    APP_URL: 'https://app.timefix.ai',
+    APP_URL: 'https://app.timefix.com',
   };
 
   it('moves anything else on that host to the marketing site, and nothing on another host', () => {
-    expect(publicHostRedirect(new URL('https://timefix.com/'), env)).toBe('https://timefix.ai/');
-    expect(publicHostRedirect(new URL('https://timefix.com/sign-in?next=/w'), env)).toBe('https://timefix.ai/');
+    expect(publicHostRedirect(new URL('https://timefix.com/'), env)).toBe('https://www.timefix.com/');
+    expect(publicHostRedirect(new URL('https://timefix.com/sign-in?next=/w'), env)).toBe('https://www.timefix.com/');
     expect(publicHostRedirect(new URL('https://timefix.com/ada/30min'), env)).toBeUndefined();
-    expect(publicHostRedirect(new URL('https://app.timefix.ai/'), env)).toBeUndefined();
+    expect(publicHostRedirect(new URL('https://app.timefix.com/'), env)).toBeUndefined();
   });
 
   it('does nothing unless both origins are set, https, and apart from the app’s', () => {
     const root = new URL('https://timefix.com/');
     expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: undefined })).toBeUndefined();
     expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: '' })).toBeUndefined();
-    expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: 'http://timefix.ai' })).toBeUndefined();
+    expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: 'http://www.timefix.com' })).toBeUndefined();
     expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: 'not a url' })).toBeUndefined();
     expect(publicHostRedirect(root, { ...env, BOOKING_PUBLIC_ORIGIN: undefined })).toBeUndefined();
     expect(publicHostRedirect(root, { ...env, APP_URL: 'https://timefix.com' })).toBeUndefined();
     expect(publicHostRedirect(root, { ...env, APP_URL: undefined })).toBeUndefined();
     // With no APP_URL the app's own host is never moved, even were it named the public origin.
-    const appRoot = new URL('https://app.timefix.ai/settings');
+    const appRoot = new URL('https://app.timefix.com/settings');
     expect(
-      publicHostRedirect(appRoot, { ...env, APP_URL: undefined, BOOKING_PUBLIC_ORIGIN: 'https://app.timefix.ai' }),
+      publicHostRedirect(appRoot, { ...env, APP_URL: undefined, BOOKING_PUBLIC_ORIGIN: 'https://app.timefix.com' }),
     ).toBeUndefined();
     expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: 'https://timefix.com/home' })).toBeUndefined();
   });
 
   it('moves a handle address off the app’s host to the booking origin, and nothing else there', () => {
-    expect(handleHostRedirect(new URL('https://app.timefix.ai/ada'), env)).toBe('https://timefix.com/ada');
-    expect(handleHostRedirect(new URL('https://app.timefix.ai/ada/30min'), env)).toBe('https://timefix.com/ada/30min');
-    expect(handleHostRedirect(new URL('https://app.timefix.ai/ada/'), env)).toBe('https://timefix.com/ada/');
-    expect(handleHostRedirect(new URL('https://app.timefix.ai/ada?month=2026-11'), env)).toBe(
+    expect(handleHostRedirect(new URL('https://app.timefix.com/ada'), env)).toBe('https://timefix.com/ada');
+    expect(handleHostRedirect(new URL('https://app.timefix.com/ada/30min'), env)).toBe('https://timefix.com/ada/30min');
+    expect(handleHostRedirect(new URL('https://app.timefix.com/ada/'), env)).toBe('https://timefix.com/ada/');
+    expect(handleHostRedirect(new URL('https://app.timefix.com/ada?month=2026-11'), env)).toBe(
       'https://timefix.com/ada?month=2026-11',
     );
     for (const pathname of [
@@ -197,19 +197,19 @@ describe('the public booking host', () => {
       '/brand/timefix-mark.svg',
       '/assets/app.js',
     ]) {
-      expect(handleHostRedirect(new URL(`https://app.timefix.ai${pathname}`), env), pathname).toBeUndefined();
+      expect(handleHostRedirect(new URL(`https://app.timefix.com${pathname}`), env), pathname).toBeUndefined();
     }
   });
 
   it('moves a handle address on no other host, and on none at all without both origins', () => {
     expect(handleHostRedirect(new URL('https://timefix.com/ada'), env)).toBeUndefined();
     expect(handleHostRedirect(new URL('https://brij-crm.vercel.app/ada'), env)).toBeUndefined();
-    const app = new URL('https://app.timefix.ai/ada');
+    const app = new URL('https://app.timefix.com/ada');
     expect(handleHostRedirect(app, { ...env, BOOKING_PUBLIC_ORIGIN: undefined })).toBeUndefined();
     expect(handleHostRedirect(app, { ...env, BOOKING_PUBLIC_ORIGIN: '' })).toBeUndefined();
     expect(handleHostRedirect(app, { ...env, BOOKING_PUBLIC_ORIGIN: 'http://timefix.com' })).toBeUndefined();
     expect(handleHostRedirect(app, { ...env, APP_URL: undefined })).toBeUndefined();
     // One host serving both, as a preview and local development do: nothing moves.
-    expect(handleHostRedirect(app, { ...env, BOOKING_PUBLIC_ORIGIN: 'https://app.timefix.ai' })).toBeUndefined();
+    expect(handleHostRedirect(app, { ...env, BOOKING_PUBLIC_ORIGIN: 'https://app.timefix.com' })).toBeUndefined();
   });
 });

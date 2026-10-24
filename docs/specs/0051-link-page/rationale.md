@@ -6,7 +6,7 @@ The owner, 24 October 2026: "let's plan this out and build it", forwarding Anish
 
 > our main page should become just like link tree: linktr.ee/lento.ae … like this one timefix.com/anish … not only meetings but other links as well.
 
-The use case Anish wrote out: a person turns on a QR code in their dashboard, the QR opens `timefix.ai/<handle>`, and that page has their contact details a visitor can save as a vCard, a way to set up a meeting, and a link to their website. He added that people at events swap these pages, that LinkedIn and a direct WhatsApp are strong, and that after an event people want some context to remember who they met. He said plainly that he would rather the link page stayed separate from the booking page's widgets. Kunal confirmed a customer use case. The references the owner sent are linktr.ee/lento.ae, cal.com/iamsridhar, 02ui.com/hi, linktw.in, The Link Repo template, DropFolio and modul.so, plus the Linktree editor with its Active links, Collections, Archived links, Appearance and per link analytics.
+The use case Anish wrote out: a person turns on a QR code in their dashboard, the QR opens `www.timefix.com/<handle>`, and that page has their contact details a visitor can save as a vCard, a way to set up a meeting, and a link to their website. He added that people at events swap these pages, that LinkedIn and a direct WhatsApp are strong, and that after an event people want some context to remember who they met. He said plainly that he would rather the link page stayed separate from the booking page's widgets. Kunal confirmed a customer use case. The references the owner sent are linktr.ee/lento.ae, cal.com/iamsridhar, 02ui.com/hi, linktw.in, The Link Repo template, DropFolio and modul.so, plus the Linktree editor with its Active links, Collections, Archived links, Appearance and per link analytics.
 
 ## Context
 
@@ -85,7 +85,7 @@ The owner delegates product and user experience calls (21 October 2026, "do it y
 
 Worth a word from the owner, though nothing waits on it:
 
-- **The address in the references is `timefix.com/anish`, and production is `timefix.ai`.** Whichever is the brand domain, the QR has to carry the one that is printed on a badge. This spec uses whatever `publicBookingOrigin()` already resolves.
+- **The address in the references is `timefix.com/anish`, and production is `www.timefix.com`.** Whichever is the brand domain, the QR has to carry the one that is printed on a badge. This spec uses whatever `publicBookingOrigin()` already resolves.
 - **Whether the link page should be plan limited** once billing exists (for example, a free plan capped at five links). Nothing in this spec assumes a plan.
 - **Whether a workspace admin should ever see a colleague's link page figures.** This spec says no, and the operator console gains nothing from it.
 

@@ -160,7 +160,7 @@ describe('the booking email', () => {
         '',
         'Need to change it?',
         '',
-        'Powered by Timefix: https://timefix.ai/?utm_source=timefix&utm_medium=email_booking&utm_campaign=powered_by&utm_content=footer_logo',
+        'Powered by Timefix: https://www.timefix.com/?utm_source=timefix&utm_medium=email_booking&utm_campaign=powered_by&utm_content=footer_logo',
         'You got this email because this address was used to book Intro call with Ada Host.',
       ].join('\n'),
     );

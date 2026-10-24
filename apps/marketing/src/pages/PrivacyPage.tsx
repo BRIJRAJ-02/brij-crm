@@ -20,7 +20,7 @@ export function PrivacyPage() {
       <LegalParagraph>
         Timefix (&ldquo;we&rdquo;, &ldquo;us&rdquo;) is a scheduling service: you share a link like
         timefix.com/yourname, and visitors book time with you - by picking a slot or by telling the page when works for
-        them. This policy explains what we collect on timefix.ai, app.timefix.ai and timefix.com, why, and the choices
+        them. This policy explains what we collect on www.timefix.com, app.timefix.com and timefix.com, why, and the choices
         you have. It applies to hosts (people with a Timefix account), guests (people who book time with a host), and
         anyone who sends an enquiry through a Timefix form that a business has put on their own website - the last of
         whom may never have seen a Timefix page at all, which is why they have a section of their own below.
@@ -200,7 +200,7 @@ export function PrivacyPage() {
       <LegalParagraph>Timefix sets cookies for three purposes:</LegalParagraph>
       <LegalList>
         <li>
-          <strong>Signing you in</strong> &mdash; a session cookie scoped to app.timefix.ai, set only for hosts with an
+          <strong>Signing you in</strong> &mdash; a session cookie scoped to app.timefix.com, set only for hosts with an
           account.
         </li>
         <li>
@@ -254,7 +254,7 @@ export function PrivacyPage() {
 
       <LegalHeading>Contact</LegalHeading>
       <LegalParagraph>
-        Questions or requests: <Link href="mailto:privacy@timefix.ai">privacy@timefix.ai</Link>.
+        Questions or requests: <Link href="mailto:privacy@timefix.com">privacy@timefix.com</Link>.
       </LegalParagraph>
     </LegalPage>
   );

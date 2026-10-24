@@ -6,7 +6,7 @@ Run with a test account that has a handle, two workspaces, and at least one Publ
 |---|---|---|
 | AC-5101, AC-5109 | Add a link, a heading, a booking page and a contact card, then open `/<handle>`: the items read in the editor's order, headings included | |
 | AC-5102 | The 41st link is refused with the limit sentence, and Add › Link is off with the same sentence | |
-| AC-5103 | `javascript:alert(1)` and a `data:` address are refused; `timefix.ai` is stored as `https://timefix.ai` | |
+| AC-5103 | `javascript:alert(1)` and a `data:` address are refused; `www.timefix.com` is stored as `https://www.timefix.com` | |
 | AC-5104 | Pause the booking page: its row leaves `/<handle>` and the item stays in the editor. Make it live again: it comes back in its old place | |
 | AC-5105 | A second heading called "sales" beside "Sales" is refused | |
 | AC-5106 | Archive a link: it leaves the page at once and sits under Archived with Restore. Delete asks first in a Modal | |

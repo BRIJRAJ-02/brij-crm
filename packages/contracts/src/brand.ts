@@ -4,7 +4,7 @@
 // alone. Plain TypeScript with no Zod, so the public pages' bundles stay small.
 
 /** The marketing site every Timefix link goes to. */
-export const TIMEFIX_SITE = 'https://timefix.ai';
+export const TIMEFIX_SITE = 'https://www.timefix.com';
 
 /**
  * The public pages a Timefix link sits on, sent as `utm_medium`: the booking page (one page at both of its
@@ -71,7 +71,7 @@ const WORKSPACE_ADDRESS = /^(?=.{3,40}$)[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
- * A Timefix link: `https://timefix.ai/` tagged `utm_source=timefix`, `utm_medium=<surface>`,
+ * A Timefix link: `https://www.timefix.com/` tagged `utm_source=timefix`, `utm_medium=<surface>`,
  * `utm_campaign=powered_by` and `utm_content=<placement>`, in that order, then `ref=<workspace address>` when the
  * surface knows one. Every value is a word from the lists above or a workspace address, so nothing personal can
  * ride in it; a surface or placement off those lists throws.

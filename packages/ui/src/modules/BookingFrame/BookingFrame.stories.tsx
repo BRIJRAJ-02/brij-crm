@@ -33,10 +33,10 @@ const TIMES = ['9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '2:00 P
 
 /** "Claim your free page" as the booking page passes it, `claimPageHref('booking_page')`. */
 const PAGE_CLAIM =
-  'https://timefix.ai/?utm_source=timefix&utm_medium=booking_page&utm_campaign=powered_by&utm_content=claim_link';
+  'https://www.timefix.com/?utm_source=timefix&utm_medium=booking_page&utm_campaign=powered_by&utm_content=claim_link';
 /** "Claim your free page" as a profile passes it, `claimPageHref('booking_profile')`. */
 const PROFILE_CLAIM =
-  'https://timefix.ai/?utm_source=timefix&utm_medium=booking_profile&utm_campaign=powered_by&utm_content=claim_link';
+  'https://www.timefix.com/?utm_source=timefix&utm_medium=booking_profile&utm_campaign=powered_by&utm_content=claim_link';
 
 const meta = {
   title: 'Modules/BookingFrame',

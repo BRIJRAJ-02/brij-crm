@@ -17,7 +17,7 @@ export const EMAIL_MEDIUMS = POWERED_BY_EMAILS;
 export type EmailMedium = PoweredByEmail;
 
 /**
- * "Powered by Timefix": timefix.ai tagged `utm_source=timefix`,
+ * "Powered by Timefix": www.timefix.com tagged `utm_source=timefix`,
  * `utm_medium=email_<kind>`, `utm_campaign=powered_by` and
  * `utm_content=footer_logo` by the one builder the public pages use. Nothing
  * else goes in: an email never sends the workspace as `ref`, nor a person or

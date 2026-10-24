@@ -37,19 +37,19 @@ export const SHOWCASE: readonly ShowcaseArea[] = [
     slides: [
       {
         id: 'crm-1',
-        address: 'app.timefix.ai/w/lumen/objects/people',
+        address: 'app.timefix.com/w/lumen/objects/people',
         caption: 'People',
         alt: 'The People table: avatars, companies, owners and tags.',
       },
       {
         id: 'crm-2',
-        address: 'app.timefix.ai/w/lumen/objects/people/jessica-moore',
+        address: 'app.timefix.com/w/lumen/objects/people/jessica-moore',
         caption: 'A record',
         alt: 'Jessica Moore’s record: her intro call, a note and the Vantafold deal in its activity.',
       },
       {
         id: 'crm-3',
-        address: 'app.timefix.ai/w/lumen/objects/deals',
+        address: 'app.timefix.com/w/lumen/objects/deals',
         caption: 'Deals board',
         alt: 'The Deals board: cards by stage with their values and owners.',
       },
@@ -75,7 +75,7 @@ export const SHOWCASE: readonly ShowcaseArea[] = [
       },
       {
         id: 'booking-3',
-        address: 'app.timefix.ai/w/lumen/captures/links',
+        address: 'app.timefix.com/w/lumen/captures/links',
         caption: 'Your pages',
         alt: 'Six booking pages in the app, each with its length and a Copy link button.',
       },
@@ -89,7 +89,7 @@ export const SHOWCASE: readonly ShowcaseArea[] = [
     slides: [
       {
         id: 'forms-1',
-        address: 'app.timefix.ai/w/lumen/captures/forms/strategy-call',
+        address: 'app.timefix.com/w/lumen/captures/forms/strategy-call',
         caption: 'The editor',
         alt: 'The form editor: ten questions on the left, the live dark preview on the right.',
       },
@@ -101,7 +101,7 @@ export const SHOWCASE: readonly ShowcaseArea[] = [
       },
       {
         id: 'forms-3',
-        address: 'app.timefix.ai/w/lumen/captures/forms/strategy-call?tab=submissions',
+        address: 'app.timefix.com/w/lumen/captures/forms/strategy-call?tab=submissions',
         caption: 'Submissions',
         alt: 'Eight submissions, each landed as a People record.',
       },
@@ -115,19 +115,19 @@ export const SHOWCASE: readonly ShowcaseArea[] = [
     slides: [
       {
         id: 'calendar-1',
-        address: 'app.timefix.ai/w/lumen/bookings/calendar',
+        address: 'app.timefix.com/w/lumen/bookings/calendar',
         caption: 'The week',
         alt: 'The Bookings week: bookings across five days beside Maya’s Google Calendar events.',
       },
       {
         id: 'calendar-2',
-        address: 'app.timefix.ai/w/lumen/bookings/calendar',
+        address: 'app.timefix.com/w/lumen/bookings/calendar',
         caption: 'A booking',
         alt: 'Jessica Moore’s booking open on the week: Meet, Join, Reschedule.',
       },
       {
         id: 'calendar-3',
-        address: 'app.timefix.ai/w/lumen/settings/scheduling/calendars',
+        address: 'app.timefix.com/w/lumen/settings/scheduling/calendars',
         caption: 'Google Calendar',
         alt: 'Settings: Google Calendar connected, conflict checks on.',
       },

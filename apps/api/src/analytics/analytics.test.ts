@@ -10,7 +10,7 @@ const CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.
 
 describe('visitor ids (AC-1626)', () => {
   it('are 32 hex digits, the same within a day and place, and new on the next day or elsewhere', () => {
-    const base = { day: '2026-10-23', ip: '10.0.0.1', userAgent: CHROME, place: 'timefix.ai' };
+    const base = { day: '2026-10-23', ip: '10.0.0.1', userAgent: CHROME, place: 'www.timefix.com' };
     const id = visitorId(KEY, base);
     expect(id).toMatch(/^[0-9a-f]{32}$/);
     expect(visitorId(KEY, base)).toBe(id);
@@ -53,9 +53,9 @@ describe("the beacon's cleaning (AC-1627)", () => {
   });
 
   it('keeps a referring host, never the site itself, and a plain source', () => {
-    expect(cleanReferrer('WWW.Google.com', 'timefix.ai')).toBe('google.com');
-    expect(cleanReferrer('timefix.ai', 'timefix.ai')).toBeUndefined();
-    expect(cleanReferrer('https://evil.example/path', 'timefix.ai')).toBeUndefined();
+    expect(cleanReferrer('WWW.Google.com', 'www.timefix.com')).toBe('google.com');
+    expect(cleanReferrer('www.timefix.com', 'www.timefix.com')).toBeUndefined();
+    expect(cleanReferrer('https://evil.example/path', 'www.timefix.com')).toBeUndefined();
     expect(cleanSource('News_Letter-1')).toBe('news_letter-1');
     expect(cleanSource('<script>')).toBeUndefined();
   });

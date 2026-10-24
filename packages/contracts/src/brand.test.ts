@@ -16,13 +16,13 @@ const tagsOf = (href: string) => Object.fromEntries(new URL(href).searchParams);
 describe('timefixUrl', () => {
   it('writes the four tags in a fixed order, as the emails always have', () => {
     expect(timefixUrl({ surface: 'email_booking' })).toBe(
-      'https://timefix.ai/?utm_source=timefix&utm_medium=email_booking&utm_campaign=powered_by&utm_content=footer_logo',
+      'https://www.timefix.com/?utm_source=timefix&utm_medium=email_booking&utm_campaign=powered_by&utm_content=footer_logo',
     );
   });
 
   it.each(POWERED_BY_PAGES)('tags the %s footer wordmark and its claim link with the page', (surface) => {
     const footer = new URL(timefixUrl({ surface }));
-    expect(footer.origin).toBe('https://timefix.ai');
+    expect(footer.origin).toBe('https://www.timefix.com');
     expect(footer.pathname).toBe('/');
     expect(tagsOf(footer.href)).toEqual({
       utm_source: 'timefix',

@@ -34,10 +34,36 @@ What to set to turn them on:
 - [ ] **For the Google sign in flow:** set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in production, if they aren't already.
 - [ ] **Sign up:** it stays invite only. Keep `SIGNUP_ALLOWLIST` current until invites ship (spec 0031).
 
+## Move to timefix.com (owner, 24 Oct 2026)
+
+The decision: timefix.com is the brand domain. timefix.ai only sends people to it.
+The code already says all of this; what is left is the hosting and DNS, which only you can do.
+
+- [ ] **Vercel, timefix-marketing:** add `www.timefix.com` as the production domain.
+- [ ] **Vercel, timefix-app:** add `app.timefix.com` as a production domain. Keep `timefix.com` on it too, because the apex serves the public pages (`timefix.com/<handle>`, `/b/<key>`, `/f/<key>`).
+- [ ] **Vercel, timefix-app environment (Production):**
+  - `APP_URL` = `https://app.timefix.com`
+  - `BOOKING_PUBLIC_ORIGIN` = `https://timefix.com` (unchanged)
+  - `PUBLIC_HOST_HOME_URL` = `https://www.timefix.com`
+- [ ] **The api's `SITE_ORIGINS`** = `https://www.timefix.com` (the marketing beacon's origin check).
+- [ ] **Google OAuth:** add the redirect URI on `https://app.timefix.com`, and keep the old one until nothing uses it.
+- [ ] **timefix.ai:** a 308 to the same path on `timefix.com`, for the apex and for `app.timefix.ai`, so old links and any printed QR keep working. Keep it running; do not let it lapse.
+- [ ] **Mail:** `privacy@timefix.com` has to exist, as a mailbox or an alias. timefix.com's mail records are in place; the address is not.
+
+What the addresses then are:
+
+| Address | What it serves |
+| --- | --- |
+| `www.timefix.com` | the marketing site |
+| `timefix.com/` | moves (308) to `www.timefix.com` |
+| `timefix.com/<handle>`, `/b/<key>`, `/f/<key>` | the public link, booking and form pages |
+| `app.timefix.com` | the app |
+| `timefix.ai/*` | moves (308) to `timefix.com/*` |
+
 ## Later, when the feature arrives
 
 - [ ] **reCAPTCHA keys:** only if you want the optional captcha on forms.
-- [ ] **Marketing site:** check that `https://timefix.ai` is the destination for every "Powered by Timefix" link and its UTM tags.
+- [ ] **Marketing site:** check that `https://www.timefix.com` is the destination for every "Powered by Timefix" link and its UTM tags.
 - [ ] **Microsoft Entra app registration and publisher verification:** for Outlook (spec 0024 milestone 4). You set this aside for now.
 - [ ] **Paddle or Lemon Squeezy account:** for billing in release 2. You set this aside for now.
 - [ ] **Google's security assessment:** for Gmail sync in release 3.

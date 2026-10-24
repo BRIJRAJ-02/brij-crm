@@ -286,9 +286,9 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
   const at = (url: string) => middleware(new Request(url));
 
   beforeEach(() => {
-    vi.stubEnv('APP_URL', 'https://app.timefix.ai');
+    vi.stubEnv('APP_URL', 'https://app.timefix.com');
     vi.stubEnv('BOOKING_PUBLIC_ORIGIN', 'https://timefix.com');
-    vi.stubEnv('PUBLIC_HOST_HOME_URL', 'https://timefix.ai');
+    vi.stubEnv('PUBLIC_HOST_HOME_URL', 'https://www.timefix.com');
     vi.stubEnv('API_ORIGIN_INTERNAL', API);
   });
 
@@ -297,7 +297,7 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
     (pathname) => {
       const response = at(`https://timefix.com${pathname}`);
       expect(response.status).toBe(308);
-      expect(response.headers.get('location')).toBe('https://timefix.ai/');
+      expect(response.headers.get('location')).toBe('https://www.timefix.com/');
       expect(response.headers.get('cache-control')).toBe('public, max-age=3600');
       expect(response.headers.get('vary')).toBe('host');
     },
@@ -319,7 +319,7 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
 
   it('leaves the app’s own routes, API and files alone', () => {
     for (const pathname of ['/', '/settings/profile', '/w/acme', '/api/rpc/system/status', '/favicon.ico']) {
-      expect(at(`https://app.timefix.ai${pathname}`).status, pathname).not.toBe(308);
+      expect(at(`https://app.timefix.com${pathname}`).status, pathname).not.toBe(308);
     }
   });
 
@@ -329,7 +329,7 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
       ['/ada/30min', 'https://timefix.com/ada/30min'],
       ['/ada?month=2026-11', 'https://timefix.com/ada?month=2026-11'],
     ]) {
-      const response = at(`https://app.timefix.ai${pathname}`);
+      const response = at(`https://app.timefix.com${pathname}`);
       expect(response.status, pathname).toBe(308);
       expect(response.headers.get('location'), pathname).toBe(location);
       expect(response.headers.get('cache-control')).toBe('public, max-age=3600');
@@ -338,21 +338,21 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
   });
 
   it('moves no handle address while one host serves both, as a preview does', () => {
-    vi.stubEnv('BOOKING_PUBLIC_ORIGIN', 'https://app.timefix.ai');
-    expect(at('https://app.timefix.ai/ada').status).not.toBe(308);
+    vi.stubEnv('BOOKING_PUBLIC_ORIGIN', 'https://app.timefix.com');
+    expect(at('https://app.timefix.com/ada').status).not.toBe(308);
     vi.stubEnv('BOOKING_PUBLIC_ORIGIN', '');
-    expect(at('https://app.timefix.ai/ada').status).not.toBe(308);
+    expect(at('https://app.timefix.com/ada').status).not.toBe(308);
   });
 
   it('changes nothing with PUBLIC_HOST_HOME_URL or APP_URL unset, or when the public origin is the app’s own', () => {
     vi.stubEnv('PUBLIC_HOST_HOME_URL', '');
     expect(at('https://timefix.com/').status).not.toBe(308);
-    vi.stubEnv('PUBLIC_HOST_HOME_URL', 'https://timefix.ai');
+    vi.stubEnv('PUBLIC_HOST_HOME_URL', 'https://www.timefix.com');
     vi.stubEnv('APP_URL', '');
     expect(at('https://timefix.com/').status).not.toBe(308);
-    vi.stubEnv('APP_URL', 'https://app.timefix.ai');
-    vi.stubEnv('BOOKING_PUBLIC_ORIGIN', 'https://app.timefix.ai');
-    expect(at('https://app.timefix.ai/').status).not.toBe(308);
+    vi.stubEnv('APP_URL', 'https://app.timefix.com');
+    vi.stubEnv('BOOKING_PUBLIC_ORIGIN', 'https://app.timefix.com');
+    expect(at('https://app.timefix.com/').status).not.toBe(308);
   });
 });
 
@@ -372,9 +372,9 @@ describe('the public host check written out in middleware.ts', () => {
 
   it('moves exactly what public-paths.ts moves', () => {
     const env = {
-      PUBLIC_HOST_HOME_URL: 'https://timefix.ai',
+      PUBLIC_HOST_HOME_URL: 'https://www.timefix.com',
       BOOKING_PUBLIC_ORIGIN: 'https://timefix.com',
-      APP_URL: 'https://app.timefix.ai',
+      APP_URL: 'https://app.timefix.com',
     };
     const urls = [
       'https://timefix.com/',
@@ -383,18 +383,18 @@ describe('the public host check written out in middleware.ts', () => {
       'https://timefix.com/ada/30min',
       'https://timefix.com/b/abcdefghijklmnop',
       'https://timefix.com/api/public/booking/x/slots',
-      'https://app.timefix.ai/w/ada/home',
-      'https://app.timefix.ai/ada',
-      'https://app.timefix.ai/ada/30min',
-      'https://app.timefix.ai/settings',
-      'https://app.timefix.ai/api/rpc/system/status',
+      'https://app.timefix.com/w/ada/home',
+      'https://app.timefix.com/ada',
+      'https://app.timefix.com/ada/30min',
+      'https://app.timefix.com/settings',
+      'https://app.timefix.com/api/rpc/system/status',
     ];
     for (const each of urls) {
       expect(publicHostRedirect(new URL(each), env), each).toBe(paths.publicHostRedirect(new URL(each), env));
       expect(handleHostRedirect(new URL(each), env), each).toBe(paths.handleHostRedirect(new URL(each), env));
     }
-    expect(publicHostRedirect(new URL('https://timefix.com/settings'), env)).toBe('https://timefix.ai/');
+    expect(publicHostRedirect(new URL('https://timefix.com/settings'), env)).toBe('https://www.timefix.com/');
     expect(publicHostRedirect(new URL('https://timefix.com/ada/30min'), env)).toBeUndefined();
-    expect(handleHostRedirect(new URL('https://app.timefix.ai/ada'), env)).toBe('https://timefix.com/ada');
+    expect(handleHostRedirect(new URL('https://app.timefix.com/ada'), env)).toBe('https://timefix.com/ada');
   });
 });

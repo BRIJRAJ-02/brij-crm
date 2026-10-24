@@ -7,7 +7,7 @@ describe('visitOf', () => {
   it('keeps the path, the referring site and the utm_source, and drops the query and the same site', () => {
     expect(
       visitOf(
-        'https://timefix.ai/privacy?email=ada@example.com&utm_source=newsletter',
+        'https://www.timefix.com/privacy?email=ada@example.com&utm_source=newsletter',
         'https://www.google.com/search?q=x',
       ),
     ).toEqual({
@@ -15,8 +15,8 @@ describe('visitOf', () => {
       referrer: 'www.google.com',
       source: 'newsletter',
     });
-    expect(visitOf('https://timefix.ai/', 'https://timefix.ai/terms')).toEqual({ path: '/' });
-    expect(visitOf('https://timefix.ai/', 'not a url')).toEqual({ path: '/' });
+    expect(visitOf('https://www.timefix.com/', 'https://www.timefix.com/terms')).toEqual({ path: '/' });
+    expect(visitOf('https://www.timefix.com/', 'not a url')).toEqual({ path: '/' });
   });
 });
 
@@ -24,7 +24,7 @@ describe('sendVisit', () => {
   it('sends plain text once, and nothing under automation or without an endpoint', async () => {
     const sent: { url: string; body: Blob }[] = [];
     const host = (isAutomated: boolean) => ({
-      href: 'https://timefix.ai/',
+      href: 'https://www.timefix.com/',
       referrer: '',
       isAutomated,
       send: (url: string, body: Blob) => {
@@ -32,8 +32,8 @@ describe('sendVisit', () => {
         return true;
       },
     });
-    expect(sendVisit('https://app.timefix.ai/api/public/site/hit', host(false))).toBe(true);
-    expect(sendVisit('https://app.timefix.ai/api/public/site/hit', host(true))).toBe(false);
+    expect(sendVisit('https://app.timefix.com/api/public/site/hit', host(false))).toBe(true);
+    expect(sendVisit('https://app.timefix.com/api/public/site/hit', host(true))).toBe(false);
     expect(sendVisit(undefined, host(false))).toBe(false);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.body.type).toBe('text/plain');

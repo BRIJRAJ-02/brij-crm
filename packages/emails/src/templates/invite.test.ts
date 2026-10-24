@@ -31,7 +31,7 @@ describe('the invitation email', () => {
         '',
         'The invitation works until 28 October, and only for this address. If you weren’t expecting it, you can ignore this email.',
         '',
-        'Powered by Timefix: https://timefix.ai/?utm_source=timefix&utm_medium=email_invite&utm_campaign=powered_by&utm_content=footer_logo',
+        'Powered by Timefix: https://www.timefix.com/?utm_source=timefix&utm_medium=email_invite&utm_campaign=powered_by&utm_content=footer_logo',
         'You got this email because Ada Lovelace invited this address to Acme.',
       ].join('\n'),
     );

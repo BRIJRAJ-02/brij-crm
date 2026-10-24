@@ -277,7 +277,7 @@ describe('the console in schema auth (spec 0047)', () => {
     ] as const;
     for (const [at, path, referrer, source, country, device, visitor] of visits) {
       await identitySql.query(
-        `insert into auth.site_visit (at, site, path, referrer, source, country, device, visitor) values ($1, 'timefix.ai', $2, $3, $4, $5, $6, $7)`,
+        `insert into auth.site_visit (at, site, path, referrer, source, country, device, visitor) values ($1, 'www.timefix.com', $2, $3, $4, $5, $6, $7)`,
         [at, path, referrer, source, country, device, visitor.repeat(32)],
       );
     }
@@ -303,7 +303,7 @@ describe('the console in schema auth (spec 0047)', () => {
     ).rejects.toBeDefined();
 
     await identitySql.query(
-      `insert into auth.site_visit (at, site, path, device, visitor) values ('1999-01-01T00:00:00Z', 'timefix.ai', '/', 'desktop', $1)`,
+      `insert into auth.site_visit (at, site, path, device, visitor) values ('1999-01-01T00:00:00Z', 'www.timefix.com', '/', 'desktop', $1)`,
       ['f'.repeat(32)],
     );
     // The console's own log is kept a year longer: one from 1999 stays at a 2000 cut, one from 1998 goes.

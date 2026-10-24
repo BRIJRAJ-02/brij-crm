@@ -4,7 +4,7 @@
 export const APP_SLOT = '<!--app-->';
 
 /** The site's own origin, for each page's canonical address. */
-export const SITE_ORIGIN = 'https://timefix.ai';
+export const SITE_ORIGIN = 'https://www.timefix.com';
 
 /** What a page's head says about it. */
 export interface PageHead {

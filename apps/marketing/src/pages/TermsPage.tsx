@@ -18,7 +18,7 @@ export function TermsPage() {
   return (
     <LegalPage title="Terms of Service" updated="August 14, 2026">
       <LegalParagraph>
-        These terms govern your use of Timefix - the scheduling service at timefix.ai, app.timefix.ai and timefix.com.
+        These terms govern your use of Timefix - the scheduling service at www.timefix.com, app.timefix.com and timefix.com.
         By creating an account or booking time through a Timefix page, you agree to them. If you do not agree, do not
         use the service.
       </LegalParagraph>
@@ -104,7 +104,7 @@ export function TermsPage() {
 
       <LegalHeading>Contact</LegalHeading>
       <LegalParagraph>
-        Questions about these terms: <Link href="mailto:privacy@timefix.ai">privacy@timefix.ai</Link>.
+        Questions about these terms: <Link href="mailto:privacy@timefix.com">privacy@timefix.com</Link>.
       </LegalParagraph>
     </LegalPage>
   );

@@ -73,7 +73,7 @@ const httpsUrl = (value: string | undefined): URL | undefined => {
 
 /**
  * Where a request on the public booking origin's host goes instead (a 308): the marketing site,
- * `PUBLIC_HOST_HOME_URL` (https://timefix.ai), for any path that doesn't belong there, `/` included. Undefined,
+ * `PUBLIC_HOST_HOME_URL` (https://www.timefix.com), for any path that doesn't belong there, `/` included. Undefined,
  * so nothing changes, for every other request, and whenever `PUBLIC_HOST_HOME_URL`, `BOOKING_PUBLIC_ORIGIN` or
  * `APP_URL` is unset or not https, or the public origin is the app's own or the marketing site's: the app's paths
  * then always stay where they are.

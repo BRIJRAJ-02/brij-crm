@@ -372,7 +372,7 @@ export const WithSuggestions: Story = {
 export const LongPrefix: Story = {
   render: () => (
     <Stage width="narrow">
-      <Field label="Web address" prefix="app.timefix.ai/ada-lovelace-consulting/" defaultValue="intro-call" />
+      <Field label="Web address" prefix="app.timefix.com/ada-lovelace-consulting/" defaultValue="intro-call" />
     </Stage>
   ),
   play: async ({ canvas }) => {

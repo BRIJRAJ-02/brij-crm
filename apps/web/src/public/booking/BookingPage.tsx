@@ -94,7 +94,7 @@ type Loaded =
 /** One slots read covers 62 days (two months of the month view). */
 const CHUNK_DAYS = 62;
 
-/** Where "Claim your free page" goes: timefix.ai, tagged as this page's claim link (the wordmark beside it tags itself). */
+/** Where "Claim your free page" goes: www.timefix.com, tagged as this page's claim link (the wordmark beside it tags itself). */
 const CLAIM_URL = claimPageHref('booking_page');
 
 /** How the location reads in the facts: "Video call", "Phone call", or the address or words the host gave. */

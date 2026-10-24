@@ -138,10 +138,10 @@ export const Large: Story = {
 export const ExtraLarge: Story = {
   render: () => (
     <Stage>
-      <ButtonLink size="xl" variant="primary" href="https://app.timefix.ai/sign-in" iconRight="arrow-right">
+      <ButtonLink size="xl" variant="primary" href="https://app.timefix.com/sign-in" iconRight="arrow-right">
         Get started
       </ButtonLink>
-      <ButtonLink size="xl" href="https://app.timefix.ai/">
+      <ButtonLink size="xl" href="https://app.timefix.com/">
         Open dashboard
       </ButtonLink>
     </Stage>

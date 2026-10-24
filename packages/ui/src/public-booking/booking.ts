@@ -8,7 +8,7 @@ import { UiProvider } from '../provider/UiProvider.tsx';
 import { createToasts } from '../provider/toasts.tsx';
 
 export { Avatar } from '../atoms/Avatar/Avatar.tsx';
-/** The tagged timefix.ai links on every public page: "Powered by Timefix" (shared with the hosted form) and "Claim your free page". */
+/** The tagged www.timefix.com links on every public page: "Powered by Timefix" (shared with the hosted form) and "Claim your free page". */
 export { claimPageHref, poweredByHref, type PoweredByPage } from '../lib/powered-by.ts';
 export { Button, ButtonLink } from '../atoms/Button/Button.tsx';
 export { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';

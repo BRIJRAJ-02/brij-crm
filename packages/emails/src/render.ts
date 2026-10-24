@@ -2,7 +2,7 @@
 // Email, every colour and size from the design tokens, inline) and as plain
 // text. A 600px column (a fixed width for Outlook, a fluid one up to 600px
 // for everyone else), a card on a quiet ground, and a shared footer: the
-// Timefix logo linking to timefix.ai, why the reader got the email, and for
+// Timefix logo linking to www.timefix.com, why the reader got the email, and for
 // an optional email the reader's preferences. Layout uses tables throughout,
 // since Outlook on Windows draws with Word and ignores most of CSS layout.
 import { createElement as h, Fragment, type CSSProperties, type ReactNode } from 'react';

@@ -5,8 +5,8 @@ const SHELL = `<!doctype html>
 <html><head>
   <title>Home</title>
   <meta name="description" content="Home page" />
-  <link rel="canonical" href="https://timefix.ai/" />
-  <meta property="og:url" content="https://timefix.ai/" />
+  <link rel="canonical" href="https://www.timefix.com/" />
+  <meta property="og:url" content="https://www.timefix.com/" />
   <meta property="og:title" content="Home" />
   <meta property="og:description" content="Home page" />
   <link rel="modulepreload" crossorigin href="/assets/vendor.js">
@@ -33,8 +33,8 @@ describe('prerenderPage', () => {
     const page = prerenderPage(SHELL, '<main></main>', PRIVACY);
     expect(page).toContain('<title>Privacy Policy · Timefix</title>');
     expect(page).toContain('<meta name="description" content="What we collect &amp; why." />');
-    expect(page).toContain('<link rel="canonical" href="https://timefix.ai/privacy" />');
-    expect(page).toContain('<meta property="og:url" content="https://timefix.ai/privacy" />');
+    expect(page).toContain('<link rel="canonical" href="https://www.timefix.com/privacy" />');
+    expect(page).toContain('<meta property="og:url" content="https://www.timefix.com/privacy" />');
     expect(page).toContain('<meta property="og:title" content="Privacy Policy · Timefix" />');
   });
 

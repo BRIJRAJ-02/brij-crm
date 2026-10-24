@@ -32,7 +32,7 @@ Until 19 October 2026 this was plain DOM, drawn to look like the library, to sta
 - The honeypot, the fill time and the idempotency round work as before: "Send another" starts a new round, which the page gives a new idempotency key.
 - The thank you replaces the form in place, with focus on its heading, in the booking confirmation's shape: a green tinted check, the heading, a muted line, then Send another.
 - The look maps onto tokens, with no CSS of its own for a control: `data-theme` (Colour) redefines the tokens for light or dark, and `data-corners='square'` (Corners) points the radius tokens at the smallest step, so every control inside squares its corners. On touch screens the form's body and input text is 16px and its inputs taller, so phones don't zoom into a field; until the design system has a touch type size token, that size is drawn from the spacing scale (pending owner confirmation).
-- The Timefix wordmark sits centred under the card (or under the form in an embed), quiet until pointed at, linking to timefix.ai with the footer campaign tags (`poweredByHref('form')` from `lib/powered-by.ts`, the same helper the booking guest pages use; in a new tab inside an embed). It defaults to the web app's own files in `public/brand`.
+- The Timefix wordmark sits centred under the card (or under the form in an embed), quiet until pointed at, linking to www.timefix.com with the footer campaign tags (`poweredByHref('form')` from `lib/powered-by.ts`, the same helper the booking guest pages use; in a new tab inside an embed). It defaults to the web app's own files in `public/brand`.
 - It never touches the network: the page's client sends the answers through `onSubmit`.
 
 ## States

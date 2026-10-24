@@ -8,7 +8,7 @@ const tagsOf = (href: string) => Object.fromEntries(new URL(href).searchParams);
 describe('poweredByHref', () => {
   it('tags the footer link with its page and the workspace', () => {
     const url = new URL(poweredByHref('booking_manage', 'acme'));
-    expect(url.origin).toBe('https://timefix.ai');
+    expect(url.origin).toBe('https://www.timefix.com');
     expect(Object.fromEntries(url.searchParams)).toEqual({
       utm_source: 'timefix',
       utm_medium: 'booking_manage',

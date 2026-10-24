@@ -15,9 +15,9 @@ import {
 } from './links.ts';
 
 describe('Powered by Timefix', () => {
-  it('tags timefix.ai with the footer’s campaign and the email’s kind, and nothing else', () => {
+  it('tags www.timefix.com with the footer’s campaign and the email’s kind, and nothing else', () => {
     const url = new URL(poweredByUrl('email_sign_in'));
-    expect(url.origin).toBe('https://timefix.ai');
+    expect(url.origin).toBe('https://www.timefix.com');
     expect(Object.fromEntries(url.searchParams)).toEqual({
       utm_source: 'timefix',
       utm_medium: 'email_sign_in',
@@ -41,7 +41,7 @@ describe('Powered by Timefix', () => {
   });
 
   it('is built by the one builder the public pages use, with no referrer', () => {
-    expect(TIMEFIX_SITE).toBe('https://timefix.ai');
+    expect(TIMEFIX_SITE).toBe('https://www.timefix.com');
     for (const medium of EMAIL_MEDIUMS) {
       expect(poweredByUrl(medium)).toBe(timefixUrl({ surface: medium }));
       expect(new URL(poweredByUrl(medium)).searchParams.has('ref')).toBe(false);

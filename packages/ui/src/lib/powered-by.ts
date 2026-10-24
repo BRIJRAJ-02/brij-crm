@@ -6,12 +6,12 @@ import { timefixUrl, type PoweredByPage } from '@crm/contracts/brand';
 /** Which public page a link sits on (`utm_medium`): the booking page, a profile, the guest's pages, or a hosted form. */
 export type { PoweredByPage } from '@crm/contracts/brand';
 
-/** "Powered by Timefix": timefix.ai tagged as the page's footer wordmark, and the workspace as `ref` when the page knows it. */
+/** "Powered by Timefix": www.timefix.com tagged as the page's footer wordmark, and the workspace as `ref` when the page knows it. */
 export function poweredByHref(page: PoweredByPage, workspaceSlug?: string): string {
   return timefixUrl({ surface: page, workspaceSlug });
 }
 
-/** "Claim your free page": timefix.ai tagged as the page's claim link. */
+/** "Claim your free page": www.timefix.com tagged as the page's claim link. */
 export function claimPageHref(page: PoweredByPage): string {
   return timefixUrl({ surface: page, placement: 'claim_link' });
 }

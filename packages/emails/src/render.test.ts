@@ -144,7 +144,7 @@ describe('the email layout', () => {
         '',
         'A quieter line.',
         '',
-        'Powered by Timefix: https://timefix.ai/?utm_source=timefix&utm_medium=email_sign_in&utm_campaign=powered_by&utm_content=footer_logo',
+        'Powered by Timefix: https://www.timefix.com/?utm_source=timefix&utm_medium=email_sign_in&utm_campaign=powered_by&utm_content=footer_logo',
         'You got this email because of a test.',
         `Email preferences: ${ORIGIN}/email-preferences#t=x`,
       ].join('\n'),

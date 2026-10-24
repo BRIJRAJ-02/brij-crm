@@ -118,7 +118,7 @@ MCP servers: neon (connected), sentry (connected), playwright (connected), story
 
 - [apps/web/AGENTS.md](apps/web/AGENTS.md): the single page app and the edge Worker in front of it
 - [apps/api/AGENTS.md](apps/api/AGENTS.md): the API and worker processes, one image with two entrypoints
-- [apps/marketing/AGENTS.md](apps/marketing/AGENTS.md): the marketing site (timefix.ai), prerendered from the design system, with the privacy and terms pages
+- [apps/marketing/AGENTS.md](apps/marketing/AGENTS.md): the marketing site (www.timefix.com), prerendered from the design system, with the privacy and terms pages
 - [packages/contracts/AGENTS.md](packages/contracts/AGENTS.md): the oRPC contract and Zod schemas shared by every app
 - [packages/core/AGENTS.md](packages/core/AGENTS.md): domain services and (later) the access door, with no HTTP
 - [packages/data/AGENTS.md](packages/data/AGENTS.md): the one client data layer every screen goes through

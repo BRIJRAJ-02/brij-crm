@@ -10,11 +10,11 @@ export function timefixTags(medium: string, content: string): TimefixTags {
 }
 
 /**
- * Every timefix.ai link in `root`, in page order, as its tags: a hidden foot's too, since the booking frame draws
+ * Every www.timefix.com link in `root`, in page order, as its tags: a hidden foot's too, since the booking frame draws
  * one foot for wide screens and one for phones.
  */
 export function timefixLinkTags(root: HTMLElement): readonly TimefixTags[] {
-  return [...root.querySelectorAll<HTMLAnchorElement>('a[href^="https://timefix.ai"]')].map((link) =>
+  return [...root.querySelectorAll<HTMLAnchorElement>('a[href^="https://www.timefix.com"]')].map((link) =>
     Object.fromEntries(new URL(link.href).searchParams),
   );
 }

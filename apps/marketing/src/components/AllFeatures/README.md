@@ -12,7 +12,7 @@ The owner wanted every feature on the page (22 October 2026), then the page down
 <AllFeatures groups={FEATURE_GROUPS} />
 ```
 
-The areas and features live in `src/features.ts`: only what is live on app.timefix.ai. The title bar's context counts them.
+The areas and features live in `src/features.ts`: only what is live on app.timefix.com. The title bar's context counts them.
 
 ## States
 
