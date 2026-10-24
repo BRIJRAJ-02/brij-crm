@@ -18,7 +18,7 @@
 // 4. After the commit, the calendar event (three tries); a booking whose event
 //    failed stays confirmed and is marked for the host.
 import { handoffSubmission, handoffVisitor } from '../forms/public.ts';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   bookingPicturePath,
@@ -283,10 +283,20 @@ function profileInitials(name: string, handle: string): string {
 }
 
 /**
+ * A profile link's `group` (owner ask, 24 Oct 2026): which of the person's workspaces it is from, as an opaque key.
+ * A hash of the person and the workspace, so it is the same on every read and every page of reads (a group continues
+ * on the next page), differs per workspace, and names neither the workspace nor, across two people, a shared one.
+ */
+function profileGroup(userId: string, workspaceId: string): string {
+  return createHash('sha256').update(`profile-group:${userId}:${workspaceId}`).digest('hex').slice(0, 16);
+}
+
+/**
  * A profile (22 Oct 2026): the person, and one page of their Public links as the door listed them, in its order
  * (read `PROFILE_PAGE_SIZE + 1` to know there is more). Each workspace's pages are read in one transaction under
- * the first of its entries, every entry checked first, and each page checked again there. The name is the
- * account's, else the handle; never an email.
+ * the first of its entries, every entry checked first, and each page checked again there; each link carries its
+ * workspace's opaque `group` (`profileGroup`), never the workspace. The name is the account's, else the handle;
+ * never an email.
  */
 export async function readBookingProfile(found: {
   readonly owner: HandleOwner;
@@ -337,6 +347,7 @@ export async function readBookingProfile(found: {
           durations: row.durations,
           isTeam: row.kind === 'round_robin',
           ...(row.section === null ? {} : { section: row.section }),
+          group: profileGroup(found.owner.userId, first.scope.workspaceId),
         });
       }
     });

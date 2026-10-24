@@ -199,10 +199,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         </EmptyState>
       ) : (
         sections.map((section) => (
-          <BookingProfileSection
-            key={section.title ?? ''}
-            {...(section.title === undefined ? {} : { title: section.title })}
-          >
+          <BookingProfileSection key={section.key} {...(section.title === undefined ? {} : { title: section.title })}>
             <LinkList
               label={section.title === undefined ? strings.profileLinks : strings.sectionLinks(section.title)}
               searchLabel={strings.searchLinks}

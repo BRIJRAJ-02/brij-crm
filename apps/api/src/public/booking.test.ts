@@ -3,6 +3,7 @@
 // calendar, a fixed clock and the real Postgres: facts without member emails,
 // slots, a booking and its records, a slot taken, the bot checks, the Origin
 // check, the rate limits and an unknown key.
+import { PublicProfile } from '@crm/contracts';
 import { newId, type BookingCalendar, type BookingEvent } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
@@ -12,7 +13,7 @@ import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
 import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts';
 import { createMailpitMailer } from '../mail/mailpit.ts';
 import { MAILPIT_URL, newIp, testConnections } from '../../test/sign-in.ts';
-import { failure, memberWithWorkspace } from '../../test/workspace.ts';
+import { failure, memberWithWorkspace, tag } from '../../test/workspace.ts';
 import { createMemoryLimiter } from './limits.ts';
 
 /** Sunday 1 November 2026, midnight UTC. */
@@ -167,6 +168,31 @@ describe('handle addresses (22 Oct 2026)', () => {
     expect((await handles(`${handle}/nothing-here`)).status).toBe(404);
     expect((await handles(`nobody-${newId().slice(-8)}`)).status).toBe(404);
     expect((await handles(`${handle}?after=nonsense`)).status).toBe(400);
+  });
+
+  it('marks each workspace’s links with an opaque group, never the workspace (owner ask, 24 Oct)', async () => {
+    const m = await memberWithWorkspace(app);
+    const handle = `split-${newId().slice(-8)}`;
+    await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
+    const { workspace: second } = await m.client.workspaces.create({
+      id: newId(),
+      name: 'Second shop',
+      slug: `second-${tag()}`,
+      memberName: 'Ada',
+    });
+    const make = (workspace: string, title: string) =>
+      m.client.bookingPages.create({ workspace, id: newId(), title, timeZone: 'UTC', mutationId: newId() });
+    await make(m.slug, 'Quick chat');
+    await make(second.slug, 'Brijraj');
+    const read = await handles(handle);
+    const text = await read.text();
+    for (const secret of [m.workspace.id, second.id, m.slug, second.slug, 'Second shop']) {
+      expect(text).not.toContain(secret);
+    }
+    const body = PublicProfile.parse(JSON.parse(text));
+    const groups = new Map(body.links.map((link) => [link.title, link.group]));
+    expect(groups.size).toBe(2);
+    expect(groups.get('Quick chat')).not.toBe(groups.get('Brijraj'));
   });
 
   it('lists the profile in the order Settings saved at once, never from a cache (owner ask A102)', async () => {
