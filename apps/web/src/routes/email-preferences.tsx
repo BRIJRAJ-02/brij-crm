@@ -20,8 +20,8 @@ export const Route = createFileRoute('/email-preferences')({
     const fragment = new URLSearchParams(location.hash);
     const unsubscribe = fragment.get('u');
     if (unsubscribe !== null)
-      return { kind: 'unsubscribe' as const, store: await context.data.emailUnsubscribe(unsubscribe) };
-    const store = await context.data.emailPreferences(fragment.get('t') ?? '');
+      return { kind: 'unsubscribe' as const, store: context.data.emailUnsubscribe(unsubscribe) };
+    const store = context.data.emailPreferences(fragment.get('t') ?? '');
     await store.load();
     return { kind: 'page' as const, store };
   },

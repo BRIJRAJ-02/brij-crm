@@ -133,9 +133,13 @@ import {
   type AccountSecurityView,
   type StepUpResult,
 } from './account/security.ts';
-import type { AccountSessionsView, SignOutOthersResult } from './account/sessions.ts';
-import { lazyAccountSessions } from './account/lazy-sessions.ts';
-import type { EmailPreferencesStore, EmailUnsubscribeStore } from './email-preferences.ts';
+import { createAccountSessionsStore, type AccountSessionsView, type SignOutOthersResult } from './account/sessions.ts';
+import {
+  createEmailPreferences,
+  createEmailUnsubscribe,
+  type EmailPreferencesStore,
+  type EmailUnsubscribeStore,
+} from './email-preferences.ts';
 import {
   connectUrl,
   createCalendarStore,
@@ -162,15 +166,14 @@ export type {
   WeekStart,
 } from './preferences/store.ts';
 import type { SchedulesView } from './schedules/store.ts';
-import type { PictureChoiceHeld } from './profile/picture.ts';
-import { lazyProfileStores } from './profile/lazy.ts';
+import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
 import type { LinkPageStore } from './link-page/store.ts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
 export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
-import type { SocialLinksHeld } from './profile/socials.ts';
+import { createSocialLinksStore, type SocialLinksHeld } from './profile/socials.ts';
 export type { SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
-import { lazyOperator } from './operator/lazy.ts';
+import { createOperatorStore } from './operator/store.ts';
 import {
   createCalendarsStore,
   type CalendarChange,
@@ -1040,11 +1043,26 @@ export function createDataLayer({
   let comments: Promise<CommentsStore> | undefined;
   // The inbox's lists and settings (spec 0038), loaded with the inbox or the notification settings.
   let inbox: Promise<InboxStore> | undefined;
-  // The operator console's reads (spec 0047), held per question for the app load. The store and its calls load
-  // with the console (only a super admin opens it), never with the app's first load.
-  const operatorStore = lazyOperator(() =>
-    import('./operator/store.ts').then(({ openOperator }) => openOperator({ operator: api.operator, call })),
-  );
+  // The operator console's reads (spec 0047), held per question for the app load.
+  const operatorStore = createOperatorStore({
+    overview: (period) => call((options) => api.operator.overview({ period }, options)),
+    users: (input) =>
+      call((options) =>
+        api.operator.users(
+          {
+            period: input.period,
+            ...(input.q === undefined || input.q.trim() === '' ? {} : { q: input.q.trim() }),
+            ...(input.after === undefined ? {} : { after: input.after }),
+          },
+          options,
+        ),
+      ),
+    user: (userId, period) => call((options) => api.operator.user({ userId, period }, options)),
+    pages: (period) => call((options) => api.operator.pages({ period }, options)),
+    page: (workspaceId, pageId, period) =>
+      call((options) => api.operator.page({ workspaceId, pageId, period }, options)),
+    site: (period) => call((options) => api.operator.site({ period }, options)),
+  });
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
@@ -1145,10 +1163,11 @@ export function createDataLayer({
     formLists.clear();
     schedules.clear();
     preferences.clear();
-    profileStores.clear();
+    pictureChoice.clear();
     void linkPage?.then((made) => {
       made.clear();
     });
+    socialLinks.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
   const reset = (isSignedIn: boolean) => {
@@ -1981,19 +2000,23 @@ export function createDataLayer({
   // rules load with the first screen that asks, never in the first load; the store builds its calls from the
   // profile procedures and the one call path, in its own chunk.
   let linkPage: Promise<LinkPageStore> | undefined;
-  // Settings › Account › Profile: whether the person's picture shows on their public pages, and their social links
-  // (booking socials, 25 Oct 2026), both read with the profile. The two stores load on first use, out of the first
-  // load (`profile/lazy.ts`); the profile's read goes through them, so an older read never undoes a change.
-  const profileStores = lazyProfileStores(() =>
-    import('./profile/stores.ts').then(({ openProfileStores }) =>
-      openProfileStores({
-        get: (input) => call((options) => api.profile.get(input, options)),
-        update: (input) => call((options) => api.profile.update(input, options)),
-        mintId,
-        notify,
-      }),
-    ),
-  );
+  // Settings › Account › Profile: whether the person's picture shows on their public pages, read with the profile.
+  const pictureChoice = createPictureChoiceStore({
+    api: {
+      get: (input) => call((options) => api.profile.get(input, options)),
+      update: (input) => call((options) => api.profile.update(input, options)),
+    },
+    mintId,
+    notify,
+  });
+  // The person's social links (booking socials, 25 Oct 2026), read with the profile: the profile's read goes through
+  // their store (which takes the picture store's read), so an older read never undoes a change that landed.
+  const socialLinks = createSocialLinksStore({
+    read: (workspace) => pictureChoice.read(workspace),
+    update: (input) => call((options) => api.profile.update(input, options)),
+    mintId,
+    notify,
+  });
   /**
    * The member's time zone in a workspace: their Preferences once read (the workspace's pages read them first),
    * else the browser's. Relative dates in filters, rules, bulk targets and exports resolve in it.
@@ -2011,13 +2034,15 @@ export function createDataLayer({
     verifyStepUp: (input) => call((options) => api.account.stepUp.verify(input, options)),
   });
 
-  // Account security (spec 0033): the person's own sessions, one list for the app load. The store and its calls load
-  // with Settings › Sign in and devices, never with the app's first load.
-  const accountSessions = lazyAccountSessions(() =>
-    import('./account/sessions.ts').then(({ openAccountSessions }) =>
-      openAccountSessions({ sessions: api.account.sessions, call, notify }),
-    ),
-  );
+  // Account security (spec 0033): the person's own sessions, one list for the app load.
+  const accountSessions = createAccountSessionsStore({
+    api: {
+      list: (input) => call((options) => api.account.sessions.list(input, options)),
+      revoke: (input) => call((options) => api.account.sessions.revoke(input, options)),
+      revokeOthers: () => call((options) => api.account.sessions.revokeOthers(undefined, options)),
+    },
+    notify,
+  });
 
   // Calendar sync (spec 0024): the member's connections, Settings › Calendar's one list per workspace.
   const calendar = createCalendarStore({
@@ -4036,24 +4061,23 @@ export function createDataLayer({
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {
       /** Reads the profile now (the route's loader); whether their picture shows comes with it, held below. */
-      get: (workspace: string): Promise<MyProfile> =>
-        profileStores.load().then((stores) => stores.socials.read(workspace)),
+      get: (workspace: string): Promise<MyProfile> => socialLinks.read(workspace),
       /** Whether their picture shows on their booking pages and profile (owner ask A124), as the screen holds it. */
-      picture: (workspace: string): PictureChoiceHeld => profileStores.picture(workspace),
+      picture: (workspace: string): PictureChoiceHeld => pictureChoice.of(workspace),
       /**
        * Keeps their picture off their public pages (`true`) or shows it again, the same in every workspace: shown
        * at once, put back with a toast and Try again if refused. Answers whether it landed.
        */
       setPictureHidden: (workspace: string, isHidden: boolean): Promise<boolean> =>
-        profileStores.load().then((stores) => stores.picture.change(workspace, isHidden)),
+        pictureChoice.change(workspace, isHidden),
       /** Their social links, in order (booking socials, 25 Oct 2026), the same in every workspace, as screens hold them. */
-      socials: (workspace: string): SocialLinksHeld => profileStores.socials(workspace),
+      socials: (workspace: string): SocialLinksHeld => socialLinks.of(workspace),
       /**
        * Replaces their whole set of social links (the booking editor's Edit social links): shown at once, put back
        * with a toast and Try again if refused. Answers whether it landed.
        */
       setSocials: (workspace: string, links: readonly SocialLink[]): Promise<boolean> =>
-        profileStores.load().then((stores) => stores.socials.change(workspace, links)),
+        socialLinks.change(workspace, links),
       /**
        * Changes their name or time zone (null follows the workspace's), or their handle and bio (the person's, in
        * every workspace). The member list is read again; a new handle changes every page's address, so the
@@ -4078,9 +4102,7 @@ export function createDataLayer({
           ),
         );
         // The answer holds the set as saved, for the booking editor's card and anything else holding it.
-        void profileStores.load().then((stores) => {
-          stores.socials.landed(workspace, updated);
-        });
+        socialLinks.landed(workspace, updated);
         members.delete(workspace);
         if (change.handle !== undefined) bookingPageLists.view(workspace).reload();
         return updated;
@@ -5631,11 +5653,9 @@ export function createDataLayer({
      * (the emails lane): one store per link's token, the page's one copy, its
      * changes shown at once and put back on a refusal.
      */
-    emailPreferences: async (token: string): Promise<EmailPreferencesStore> => {
+    emailPreferences: (token: string): EmailPreferencesStore => {
       const held = emailPreferenceStores.get(token);
       if (held !== undefined) return held;
-      // Loaded with the page (an email's link), never with the app's first load.
-      const { createEmailPreferences } = await import('./email-preferences.ts');
       const made = createEmailPreferences({ origin, fetch }, token);
       emailPreferenceStores.set(token, made);
       return made;
@@ -5644,10 +5664,9 @@ export function createDataLayer({
      * An optional email's one click unsubscribe opened in a browser (the
      * emails lane): one store per link's token, which asks before it posts.
      */
-    emailUnsubscribe: async (token: string): Promise<EmailUnsubscribeStore> => {
+    emailUnsubscribe: (token: string): EmailUnsubscribeStore => {
       const held = emailUnsubscribeStores.get(token);
       if (held !== undefined) return held;
-      const { createEmailUnsubscribe } = await import('./email-preferences.ts');
       const made = createEmailUnsubscribe({ origin, fetch }, token);
       emailUnsubscribeStores.set(token, made);
       return made;
