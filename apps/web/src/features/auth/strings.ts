@@ -20,6 +20,9 @@ export const strings = {
   retry: 'Try again',
   /** `/` while it works out where to send you. */
   openingTitle: 'Opening Timefix',
+  /** The app's own loading state when the session answer is unusually slow, so it never reads as a stuck spinner. */
+  stillOpeningTitle: 'Still opening Timefix',
+  stillOpeningText: 'This is taking longer than usual. Check your connection, or try again.',
   /** `/` when that check failed: the title says what failed, so the line under it only says what to do. */
   openFailedTitle: 'Can’t open Timefix',
   openFailedText: 'Check your connection, then try again.',

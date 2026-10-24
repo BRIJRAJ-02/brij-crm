@@ -1,6 +1,6 @@
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
+import { SessionError, SessionPending } from '../features/auth/AuthStates.tsx';
 import { strings } from '../features/auth/strings.ts';
 import { homeWorkspace } from '../features/workspace/home.ts';
 
@@ -15,11 +15,14 @@ export const Route = createFileRoute('/')({
     if (home === undefined) throw redirect({ to: '/welcome', replace: true });
     throw redirect({ to: '/w/$slug', params: { slug: home.slug }, replace: true });
   },
+  // Never sign in's screen for someone who turns out to be signed in: until `me.get` answers, the place held is
+  // the app's own, unless this browser's last visit ended signed out (SessionPending).
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.openingTitle} isSplit />
+      <SessionPending title={strings.openingTitle} />
     </LoadingNow>
   ),
-  errorComponent: () => <AuthError title={strings.openFailedTitle} text={strings.openFailedText} isSplit />,
+  // A failed check wears the same frame as the loading state it replaces, so it never reads as being signed out.
+  errorComponent: () => <SessionError title={strings.openFailedTitle} text={strings.openFailedText} />,
   component: () => null,
 });

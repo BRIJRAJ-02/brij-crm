@@ -10,6 +10,7 @@ import { createThemeController, safeLocalStorage } from '@crm/ui/theme';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { localStore, writeSessionHint, type SessionHint } from './features/auth/hint.ts';
 import { signInHref } from './features/auth/redirect.ts';
 import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
 import { PRELOAD_DELAY_MS, startIntentPreload } from './features/navigation/preload.ts';
@@ -44,6 +45,9 @@ installPlainErrors();
 
 // One toast queue for the app, shared by the screens and the data layer.
 const toasts = createToasts();
+
+// The last thing written to the session hint, so the same answer isn't written again (hint.ts).
+let lastSessionHint: SessionHint | undefined;
 
 // `router` is made after the data layer (it carries the layer in its
 // context); the layer reaches it only once a session starts or ends, long
@@ -81,6 +85,14 @@ const data = createDataLayer({
     goTo(signInHref(redirectTo, unsaved ? 'unsaved' : 'ended'));
   },
   onSessionChange: forgetPages,
+  // Kept for the next load's first paint only (hint.ts): which place a page before the app holds while `me.get`
+  // is out. Never read as proof of a session. Written only when it changes, so a cached answer costs no write.
+  onSessionKnown: (isSignedIn) => {
+    const hint = isSignedIn ? 'in' : 'out';
+    if (hint === lastSessionHint) return;
+    lastSessionHint = hint;
+    writeSessionHint(localStore(window), hint);
+  },
   currentPath: () => `${window.location.pathname}${window.location.search}`,
   ...(realtimeUrl === undefined || realtimeUrl === '' ? {} : { realtimeUrl }),
   onDefinitionsChange: reloadPages,
