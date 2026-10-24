@@ -360,6 +360,36 @@ describe('a profile', () => {
     expect(rest.next).toBeUndefined();
   });
 
+  it('marks each workspace’s links with their own opaque group, the same on every read (owner ask, 24 Oct)', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('split');
+    await updateMyMemberProfile(ada.scope, { handle });
+    const other = await person('Ada', ada.userId);
+    await page(ada.scope, 'Quick chat', { profilePosition: 0 });
+    await page(other.scope, 'Brijraj', { profilePosition: 0 });
+    await page(ada.scope, 'Pitch', { profilePosition: 1, profileSection: 'Sales' });
+    await page(other.scope, 'Demo', { profilePosition: 1, profileSection: 'Sales' });
+    const read = async (search?: string) =>
+      readBookingProfile(
+        await enterBookingProfile({ db }, handle, { ...(search === undefined ? {} : { search }), max: 21 }),
+      );
+    const profile = await read();
+    const groupOf = (title: string) => profile.links.find((link) => link.title === title)?.group;
+    expect(groupOf('Quick chat')).toMatch(/^[0-9a-f]{16}$/);
+    expect(groupOf('Pitch')).toBe(groupOf('Quick chat'));
+    expect(groupOf('Demo')).toBe(groupOf('Brijraj'));
+    expect(groupOf('Brijraj')).not.toBe(groupOf('Quick chat'));
+    // Never the workspace itself.
+    const body = JSON.stringify(profile);
+    for (const workspace of [ada, other]) {
+      expect(body).not.toContain(workspace.workspaceId);
+      expect(body).not.toContain(workspace.workspaceId.replaceAll('-', ''));
+    }
+    expect(body).not.toContain('Handles');
+    // Stable across reads, so a group read on a later page (or by a search) joins its cards.
+    expect((await read('demo')).links.map((link) => link.group)).toEqual([groupOf('Demo')]);
+  });
+
   it('is NOT_FOUND for a handle no one holds', async () => {
     expect(await refusalOf(enterBookingProfile({ db }, fresh('nobody'), { max: 5 }))).toBe('NOT_FOUND');
   });

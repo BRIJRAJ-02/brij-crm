@@ -103,6 +103,12 @@ export const PublicProfileLink = z.object({
   isTeam: z.boolean(),
   /** The small heading the owner put it under, if any. */
   section: z.string().optional(),
+  /**
+   * Which of the person's workspaces the page is from, as an opaque key (owner ask, 24 Oct 2026): the same on every
+   * read of this profile, different for each workspace, and never a workspace's id or name. Links with different
+   * groups never share a card, whatever their sections.
+   */
+  group: z.string().regex(/^[0-9a-f]{16}$/),
 });
 /** One booking page on a profile. */
 export type PublicProfileLink = z.infer<typeof PublicProfileLink>;
