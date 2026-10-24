@@ -28,17 +28,30 @@ export const BOOKING_LIMITS = {
 /** The least time a person takes from opening the page to booking. */
 export const MIN_FILL_MS = 2_000;
 
+/** Why a booking reads as a bot's: the honeypot filled, or sent faster than a person could. */
+export type BotReason = 'trap' | 'too_fast';
+
 /**
  * The bot checks a booking passes (AC-643): the honeypot left empty, and not
  * sent faster than a person could: by the server's clock when the page sent a
- * valid fill ticket (`ticketElapsedMs`), else by the page's `startedAt`.
+ * valid fill ticket (`ticketElapsedMs`), else by the page's `startedAt`. The
+ * reason goes in the refusal's log line, so a person refused can be traced.
  */
+export function botReason(
+  input: { readonly company_url?: string; readonly startedAt?: number },
+  now: number,
+  ticketElapsedMs?: number,
+): BotReason | undefined {
+  if (input.company_url !== undefined && input.company_url !== '') return 'trap';
+  if (ticketElapsedMs !== undefined) return ticketElapsedMs < MIN_FILL_MS ? 'too_fast' : undefined;
+  return input.startedAt !== undefined && now - input.startedAt < MIN_FILL_MS ? 'too_fast' : undefined;
+}
+
+/** Whether a booking reads as a bot's (`botReason` found one). */
 export function looksLikeBot(
   input: { readonly company_url?: string; readonly startedAt?: number },
   now: number,
   ticketElapsedMs?: number,
 ): boolean {
-  if (input.company_url !== undefined && input.company_url !== '') return true;
-  if (ticketElapsedMs !== undefined) return ticketElapsedMs < MIN_FILL_MS;
-  return input.startedAt !== undefined && now - input.startedAt < MIN_FILL_MS;
+  return botReason(input, now, ticketElapsedMs) !== undefined;
 }

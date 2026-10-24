@@ -30,6 +30,7 @@ import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { PreferencesHeld, PreferencesState } from './preferences/store.ts';
 import type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import type { LinkPageHeld, LinkPageState } from './link-page/store.ts';
+import type { SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { NavSnapshot, NavSource } from './navigation/store.ts';
 import type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
@@ -422,6 +423,11 @@ export function useLinkPage(held: LinkPageHeld): LinkPageState {
 
 /** Whether the person's picture shows on their public pages (Settings › Account › Profile), read when first held. */
 export function usePictureChoice(held: PictureChoiceHeld): PictureChoiceState {
+  return useRetained(held);
+}
+
+/** The person's own social links (booking socials, 25 Oct 2026), read when first held. */
+export function useSocialLinks(held: SocialLinksHeld): SocialLinksState {
   return useRetained(held);
 }
 

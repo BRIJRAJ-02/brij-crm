@@ -14,6 +14,7 @@ import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts'
 import { createMailpitMailer } from '../mail/mailpit.ts';
 import { MAILPIT_URL, newIp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace, tag } from '../../test/workspace.ts';
+import { BOT_REFUSED } from './booking.ts';
 import { createMemoryLimiter } from './limits.ts';
 
 /** Sunday 1 November 2026, midnight UTC. */
@@ -315,7 +316,9 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     const m = await memberWithWorkspace(app);
     const page = await pageOf(m);
     const path = `${page.publicKey}/book`;
-    expect((await visit(path, { method: 'POST', body: booking({ company_url: 'spam.example' }) })).status).toBe(400);
+    const trapped = await visit(path, { method: 'POST', body: booking({ company_url: 'spam.example' }) });
+    expect(trapped.status).toBe(400);
+    expect(await trapped.json()).toMatchObject({ code: 'INPUT_INVALID', message: BOT_REFUSED });
     expect((await visit(path, { method: 'POST', body: booking({ startedAt: NOW.getTime() - 500 }) })).status).toBe(400);
     const bad = await visit(path, { method: 'POST', body: booking({ email: 'not an email' }) });
     expect(bad.status).toBe(400);

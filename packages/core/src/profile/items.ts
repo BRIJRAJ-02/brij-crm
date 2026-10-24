@@ -1,5 +1,5 @@
 // The link page's blocks (spec 0051, built as blocks): a person's one ordered list at `/<handle>`, kept with their
-// account in schema auth (migration 0096), out of the app role's reach. These are its only ways there, each one of
+// account in schema auth (migration 0098), out of the app role's reach. These are its only ways there, each one of
 // crm_handle's definers, run inside the caller's workspace transaction with the session's own user id: no input names
 // the owner, so no role in any workspace reaches another person's page. A booking page block names a page by its
 // workspace and id; which of the person's pages it may name, and what the editor shows of one, comes through the

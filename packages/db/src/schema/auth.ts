@@ -8,7 +8,7 @@
 // Better Auth's Drizzle adapter addresses a column by its property name, so the
 // properties carry Better Auth's own field names (`emailVerified`) while the
 // columns are snake case (`email_verified`).
-import { SECURITY_EVENT_KINDS } from '@crm/contracts';
+import { SECURITY_EVENT_KINDS, SOCIAL_LINK_NETWORKS } from '@crm/contracts';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -350,8 +350,8 @@ export const publicProfiles = auth.table(
  * again by the definer, so a new kind is a schema and a renderer, and at most one line in `profile_items_kind`. A
  * `page` block names a booking page by its workspace and id, and nothing else: whether a visitor sees it is still the
  * booking lookup's call. `position` is null while archived, so only live blocks hold places; the deferred unique
- * `(user_id, position)` (hand written in migration 0096) lets a reorder set every place in one statement. Written and
- * read only through crm_handle's definers (migration 0096); crm_app holds no grant on it.
+ * `(user_id, position)` (hand written in migration 0098) lets a reorder set every place in one statement. Written and
+ * read only through crm_handle's definers (migration 0098); crm_app holds no grant on it.
  */
 export const profileItems = auth.table(
   'profile_items',
@@ -445,6 +445,36 @@ export const userPrefs = auth.table(
       columns: [t.lastWorkspaceId],
       foreignColumns: [workspaceDirectory.workspaceId],
     }),
+  ],
+);
+
+/**
+ * A person's own social links (booking socials, migration 0097): one per network, at most ten, in their order,
+ * shown on their booking pages and their `/<handle>` profile. The person's, like their handle and bio, so the same in
+ * every workspace. Written and read only through crm_handle's functions (`crm_save_social_links`,
+ * `crm_social_links_of`); the app's write path stores only the canonical link `checkSocialLink` made.
+ */
+export const socialLinks = auth.table(
+  'social_links',
+  {
+    userId: uuid('user_id').notNull(),
+    /** One of `SOCIAL_LINK_NETWORKS`. */
+    network: text('network').notNull(),
+    /** The canonical link: an http or https address of at most 2,048 characters. */
+    href: text('href').notNull(),
+    /** Its place in the person's order, 0 to 9. */
+    position: smallint('position').notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ name: 'social_links_pkey', columns: [t.userId, t.network] }),
+    foreignKey({ name: 'social_links_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    check(
+      'social_links_network',
+      sql.raw(`network in (${SOCIAL_LINK_NETWORKS.map((network) => `'${network}'`).join(', ')})`),
+    ),
+    check('social_links_href', sql`char_length(${t.href}) <= 2048 and ${t.href} ~ '^https?://'`),
+    check('social_links_position', sql`${t.position} between 0 and 9`),
   ],
 );
 

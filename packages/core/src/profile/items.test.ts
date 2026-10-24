@@ -1,7 +1,7 @@
 // The link page's blocks (spec 0051, built as blocks), against the real Postgres: adding, editing, ordering,
 // archiving and deleting through crm_handle's definers with the session's own id; the limits and the address rules;
 // a booking page block shown only while the door lists its page; the public read a page at a time and its search;
-// a kind this build doesn't know skipped; another person's id changing nothing; and the backfill of 0096.
+// a kind this build doesn't know skipped; another person's id changing nothing; and the backfill of 0098.
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
@@ -427,10 +427,10 @@ describe('a link page', () => {
   });
 });
 
-describe('the backfill (migration 0096, AC-5129)', () => {
+describe('the backfill (migration 0098, AC-5129)', () => {
   /** The migration's backfill, run for one person only, as the owner (as the migration runs). */
   async function backfill(userId: string) {
-    const text = readFileSync(new URL('../../../db/migrations/0096_profile_items.sql', import.meta.url), 'utf8');
+    const text = readFileSync(new URL('../../../db/migrations/0098_profile_items.sql', import.meta.url), 'utf8');
     const from = text.lastIndexOf('set local row_security = off;');
     const to = text.indexOf('-- Refuse to finish unless the new functions');
     const statements = text

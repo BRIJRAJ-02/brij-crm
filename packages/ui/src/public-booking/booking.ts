@@ -19,6 +19,8 @@ export { Callout } from '../molecules/Callout/Callout.tsx';
 /** A profile with no links, or none that match (22 Oct 2026). */
 export { EmptyState } from '../molecules/EmptyState/EmptyState.tsx';
 export { SegmentedControl } from '../molecules/SegmentedControl/SegmentedControl.tsx';
+/** A person's social links (booking socials, 25 Oct 2026): the rail and the profile draw them, a link page too. */
+export { SocialLinks, type SocialLinkItem } from '../molecules/SocialLinks/SocialLinks.tsx';
 export { Select, type SelectItem } from '../molecules/Select/Select.tsx';
 export {
   BookingDetails,
@@ -46,6 +48,12 @@ export { LinkPage, type LinkPageBlock, type LinkPagePerson } from '../modules/Li
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';
 export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';
+export type {
+  MatchCalendarDay,
+  MatchCalendarProps,
+  MatchCalendarResult,
+  MatchCalendarStep,
+} from '../modules/MatchCalendar/MatchCalendar.tsx';
 
 /** Props for BookingProvider. */
 export interface BookingProviderProps {

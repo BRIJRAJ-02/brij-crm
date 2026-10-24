@@ -31,6 +31,8 @@ export const strings = {
   timeName: (time: string, day: string, minutes: number) => `${time}, ${day}, ${String(minutes)} minutes`,
   book: 'Book',
   bookAt: (day: string, time: string) => `Book ${day} at ${time}`,
+  // The best match in words, for the dialog's question ("You’re both free at 9:30 AM on Tue 20 Oct").
+  matchWhen: (time: string, day: string) => `${time} on ${day}`,
   zoneSearch: 'Search city or GMT offset',
   zoneNone: (query: string) => `No time zone matches "${query}".`,
   changeZone: (zone: string) => `Show times in another time zone. Now ${zone}`,
@@ -70,6 +72,8 @@ export const strings = {
     tooMany: 'Too many attempts just now. Wait a moment and try again.',
     closed: 'This page isn’t taking bookings any more.',
     failed: 'That did not go through. Try again in a moment.',
+    /** A refusal naming no field (the bot checks): something the visitor can check, not a shrug. */
+    check: 'We couldn’t take that booking. Check your details and try again.',
     offline: 'That did not go through. Check your connection and try again.',
   },
   // States.
@@ -95,6 +99,8 @@ export const strings = {
   loading: 'Loading…',
   // A person's profile, /<handle> (22 Oct 2026).
   searchLinks: 'Search links',
+  /** The social icons row's name for screen readers. */
+  socials: (name: string) => `${name}’s social links`,
   team: 'Team',
   noLinksTitle: 'Nothing here yet',
   noLinksText: 'This person hasn’t added any links yet.',

@@ -100,7 +100,7 @@ import { errorFields, log } from '../log.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
 import type { TicketBook } from '../forms/ticket.ts';
 import { handoffForPage } from '../forms/handoff.ts';
-import { BOOKING_LIMITS, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
+import { BOOKING_LIMITS, botReason, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
 import { pictureResponse, type PictureFetch } from './picture.ts';
 import {
   findVisitor,
@@ -156,6 +156,8 @@ export interface PublicBookingServices {
   readonly views?: { readonly visitorKey: Buffer; readonly keepAlive: (work: Promise<unknown>) => void };
 }
 
+/** What a booking refused by the bot checks answers: it names something the visitor can do. */
+export const BOT_REFUSED = 'We couldn’t take that booking. Check your details and try again.';
 /** The guest state's version. */
 const GUEST_STATE_VERSION = 'gs1';
 /** How long a guest may take at Google's consent screen. */
@@ -841,9 +843,11 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (!input.success) return invalid(input.error.issues);
     const ticket = services.tickets?.check(`booking:${key}`, input.data.ticket);
     const elapsed = ticket?.kind === 'valid' ? ticket.elapsedMs : undefined;
-    if (looksLikeBot(input.data, (services.now?.() ?? new Date()).getTime(), elapsed)) {
-      log.warn('booking.bot_refused', { requestId: c.get('requestId') });
-      return answer('INPUT_INVALID', 'We couldn’t take that booking. Try again in a moment.');
+    const bot = botReason(input.data, (services.now?.() ?? new Date()).getTime(), elapsed);
+    if (bot !== undefined) {
+      // A person can land here too (autofill filled the honeypot, 25 Oct 2026): the reason says which check it was.
+      log.warn('booking.bot_refused', { requestId: c.get('requestId'), reason: bot, ticket: ticket?.kind ?? 'none' });
+      return answer('INPUT_INVALID', BOT_REFUSED);
     }
     try {
       const entry = await enterBookingPage({ db }, key);

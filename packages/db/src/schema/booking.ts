@@ -102,6 +102,17 @@ export const bookingPages = pgTable(
     /** A private page (spec 0027, AC-707, AC-708): it may book inside the host's holds, and waives its minimum notice. */
     isPrivate: boolean('is_private').notNull().default(false),
     /**
+     * Whether the page shows its owner's social links under their name (booking socials, migration 0097): on by
+     * default. Read only for a personal page; a team page names no host, so never shows them (AC-754).
+     */
+    showSocials: boolean('show_socials').notNull().default(true),
+    /**
+     * The view the page opens in for a visitor with no remembered choice of their own (owner, 25 Oct 2026): `month`,
+     * `list` or `chat` (spec 0042). It is the host's default, not an override: a visitor who has picked a view on
+     * that browser keeps it. Every page starts on `month`, which is what the page did before this was a setting.
+     */
+    defaultView: text('default_view').notNull().default('month'),
+    /**
      * Where this page's bookings go (spec 0024 milestone 5, AC-997): one of the owner's writable calendars, or null
      * for the owner's own "Add events to". Its foreign key (hand written in 0052) sets only this column to null when
      * the calendar goes.
@@ -151,6 +162,7 @@ export const bookingPages = pgTable(
     check('booking_pages_paused_reason', sql`${t.pausedReason} is null or ${t.pausedReason} = 'host_removed'`),
     check('booking_pages_hours_mode', sql`${t.hoursMode} in ('mine', 'own')`),
     check('booking_pages_reschedule_host', sql`${t.rescheduleHost} in ('same', 'rotation')`),
+    check('booking_pages_default_view', sql`${t.defaultView} in ('month', 'list', 'chat')`),
     check('booking_pages_destination_removed_name', sql`char_length(${t.destinationRemovedName}) <= 255`),
     check('booking_pages_title', sql`char_length(${t.title}) between 1 and 120`),
     check('booking_pages_description', sql`char_length(${t.description}) <= 2000`),

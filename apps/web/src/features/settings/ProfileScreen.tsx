@@ -19,7 +19,12 @@ import {
   SettingsRow,
   SettingsSection,
   Skeleton,
+  SocialLinksEditor,
+  socialLinksDraftOf,
+  socialLinksOfDraft,
+  isSocialLinksDraftChanged,
   type SaveBarStatus,
+  type SocialLinkDraft,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { handleProblem } from '@crm/contracts/handles';
@@ -94,6 +99,11 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
   const [handle, setHandle] = useState(profile.handle ?? profile.suggestedHandle ?? '');
   const [isClaiming, setClaiming] = useState(false);
   const [bio, setBio] = useState(profile.bio);
+  // Their social links (booking socials, 25 Oct 2026): a draft saved with the rest of the page; absent for a member
+  // with no sign in of their own.
+  const savedSocials = profile.socials;
+  const [socials, setSocials] = useState<readonly SocialLinkDraft[]>(() => socialLinksDraftOf(savedSocials ?? []));
+  const [socialsErrorFocus, setSocialsErrorFocus] = useState(0);
   const [isSaving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   // Why the last save failed, said in the bar.
@@ -104,7 +114,8 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
     profile.handle === undefined ? isClaiming && wantedHandle !== '' : wantedHandle !== profile.handle;
   const isBioDirty = bio.trim() !== profile.bio;
   const isNameDirty = name.trim() !== profile.name;
-  const isDirty = isNameDirty || isHandleDirty || isBioDirty;
+  const isSocialsDirty = savedSocials !== undefined && isSocialLinksDraftChanged(socials, savedSocials);
+  const isDirty = isNameDirty || isHandleDirty || isBioDirty || isSocialsDirty;
   // Leaving for Google would lose unsaved changes, so the button waits for them, and says so in the row.
   const pictureNote =
     profile.google !== undefined && isDirty
@@ -119,15 +130,18 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
   const isNameMissing = name.trim() === '';
   const handleError = isHandleDirty ? handleProblem(wantedHandle) : undefined;
   const isBioWithoutHandle = isBioDirty && profile.handle === undefined && !isHandleDirty;
+  const hasSocialsError = socials.some((row) => row.error !== undefined);
   const blockedReason = isNameMissing
     ? strings.yourNameMissing
     : handleError !== undefined
       ? strings.handleFix
       : isBioWithoutHandle
         ? strings.bioNeedsHandle
-        : undefined;
+        : hasSocialsError
+          ? strings.socialsFix
+          : undefined;
 
-  const send = (change: { readonly name?: string; readonly handle?: string; readonly bio?: string }) => {
+  const send = (change: Parameters<DataLayer['profile']['update']>[1]) => {
     setSaving(true);
     setFailure(undefined);
     data.profile
@@ -150,10 +164,18 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
   };
   const save = () => {
     if (!isDirty || isSaving || blockedReason !== undefined) return;
+    // Every link checked as the server will: one that won't save says why under its field, and nothing is sent.
+    const links = isSocialsDirty ? socialLinksOfDraft(socials) : undefined;
+    if (links !== undefined && !links.ok) {
+      setSocials(links.rows);
+      setSocialsErrorFocus((count) => count + 1);
+      return;
+    }
     send({
       ...(isNameDirty ? { name: name.trim() } : {}),
       ...(isHandleDirty ? { handle: wantedHandle } : {}),
       ...(isBioDirty ? { bio: bio.trim() } : {}),
+      ...(links === undefined ? {} : { socials: links.links }),
     });
   };
   // Claim takes the suggested handle at once, on its own.
@@ -187,6 +209,7 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
             setHandle(profile.handle ?? profile.suggestedHandle ?? '');
             setClaiming(false);
             setBio(profile.bio);
+            setSocials(socialLinksDraftOf(savedSocials ?? []));
             setFailure(undefined);
           }}
           onFocusAway={() => pageHeading(document)?.focus()}
@@ -331,6 +354,21 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
           )}
         </Card>
       </SettingsSection>
+      {/* Their social links (booking socials, 25 Oct 2026): the person's own, saved with the bar like the bio. */}
+      {savedSocials !== undefined && (
+        <SettingsSection title={strings.socialsSection} description={strings.socialsText}>
+          <SocialLinksEditor
+            rows={socials}
+            isDisabled={isSaving}
+            errorFocus={socialsErrorFocus}
+            onChange={(next) => {
+              setSocials(next);
+              setFailure(undefined);
+              setJustSaved(false);
+            }}
+          />
+        </SettingsSection>
+      )}
       {/* What the page at their handle holds (spec 0051) is edited on its own page, beside its phone preview. */}
       <SettingsSection title={linkPageCopy.profileSection} description={linkPageCopy.profileSectionText}>
         <Card>
@@ -382,6 +420,9 @@ export function ProfilePending() {
             <Skeleton shape="field" />
           </SettingsRow>
         </Card>
+      </SettingsSection>
+      <SettingsSection title={strings.socialsSection} description={strings.socialsText}>
+        <SocialLinksEditor rows={[]} onChange={() => undefined} isLoading />
       </SettingsSection>
       <SettingsSection title={linkPageCopy.profileSection} description={linkPageCopy.profileSectionText}>
         <Card isBusy>

@@ -1,5 +1,5 @@
 {
-  "id": "fa251d24-ae81-4b2d-8272-b221e3fb1a0d",
+  "id": "d61e7261-d8f4-4008-85f7-f7e05e305c5b",
   "prevId": "d7d5c81e-fb12-4972-be31-496bc06eb971",
   "version": "7",
   "dialect": "postgresql",
@@ -2074,6 +2074,13 @@
           "notNull": true,
           "default": false
         },
+        "default_view": {
+          "name": "default_view",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'month'"
+        },
         "destination_calendar_id": {
           "name": "destination_calendar_id",
           "type": "uuid",
@@ -2384,6 +2391,10 @@
         "booking_pages_reschedule_host": {
           "name": "booking_pages_reschedule_host",
           "value": "\"booking_pages\".\"reschedule_host\" in ('same', 'rotation')"
+        },
+        "booking_pages_default_view": {
+          "name": "booking_pages_default_view",
+          "value": "\"booking_pages\".\"default_view\" in ('month', 'list', 'chat')"
         },
         "booking_pages_destination_removed_name": {
           "name": "booking_pages_destination_removed_name",
@@ -18025,215 +18036,6 @@
         "passkey_name": {
           "name": "passkey_name",
           "value": "\"auth\".\"passkey\".\"name\" is null or char_length(\"auth\".\"passkey\".\"name\") between 1 and 60"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "auth.profile_items": {
-      "name": "profile_items",
-      "schema": "auth",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "position": {
-          "name": "position",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "data": {
-          "name": "data",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "page_id": {
-          "name": "page_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "archived_at": {
-          "name": "archived_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "profile_items_page_once": {
-          "name": "profile_items_page_once",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "page_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"auth\".\"profile_items\".\"kind\" = 'page' and \"auth\".\"profile_items\".\"archived_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "profile_items_contact_once": {
-          "name": "profile_items_contact_once",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"auth\".\"profile_items\".\"kind\" = 'contact' and \"auth\".\"profile_items\".\"archived_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "profile_items_heading_once": {
-          "name": "profile_items_heading_once",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "lower(btrim(\"data\" ->> 'title'))",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"auth\".\"profile_items\".\"kind\" = 'heading' and \"auth\".\"profile_items\".\"archived_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "profile_items_archived": {
-          "name": "profile_items_archived",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "archived_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"auth\".\"profile_items\".\"archived_at\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "profile_items_user_fk": {
-          "name": "profile_items_user_fk",
-          "tableFrom": "profile_items",
-          "tableTo": "user",
-          "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "profile_items_kind": {
-          "name": "profile_items_kind",
-          "value": "\"auth\".\"profile_items\".\"kind\" in ('link', 'page', 'heading', 'contact')"
-        },
-        "profile_items_position": {
-          "name": "profile_items_position",
-          "value": "\"auth\".\"profile_items\".\"position\" between 0 and 999"
-        },
-        "profile_items_placed": {
-          "name": "profile_items_placed",
-          "value": "(\"auth\".\"profile_items\".\"archived_at\" is null) = (\"auth\".\"profile_items\".\"position\" is not null)"
-        },
-        "profile_items_data": {
-          "name": "profile_items_data",
-          "value": "jsonb_typeof(\"auth\".\"profile_items\".\"data\") = 'object' and pg_column_size(\"auth\".\"profile_items\".\"data\") <= 4096"
-        },
-        "profile_items_target": {
-          "name": "profile_items_target",
-          "value": "(\"auth\".\"profile_items\".\"workspace_id\" is null) = (\"auth\".\"profile_items\".\"page_id\" is null)"
-        },
-        "profile_items_page": {
-          "name": "profile_items_page",
-          "value": "\"auth\".\"profile_items\".\"kind\" <> 'page' or \"auth\".\"profile_items\".\"page_id\" is not null"
-        },
-        "profile_items_plain": {
-          "name": "profile_items_plain",
-          "value": "\"auth\".\"profile_items\".\"kind\" not in ('link', 'heading', 'contact') or \"auth\".\"profile_items\".\"page_id\" is null"
         }
       },
       "isRLSEnabled": false

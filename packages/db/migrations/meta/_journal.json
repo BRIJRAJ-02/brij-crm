@@ -677,8 +677,22 @@
     {
       "idx": 96,
       "version": "7",
-      "when": 1792869287213,
-      "tag": "0096_profile_items",
+      "when": 1792867974498,
+      "tag": "0096_booking_default_view",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1792873421166,
+      "tag": "0097_social_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1792877134875,
+      "tag": "0098_profile_items",
       "breakpoints": true
     }
   ]

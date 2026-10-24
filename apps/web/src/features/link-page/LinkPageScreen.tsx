@@ -32,6 +32,7 @@ import {
   MenuTrigger,
   Modal,
   PreviewLayout,
+  SocialLinks,
   VisuallyHidden,
   type LinkPageBlock,
   type LinkRow,
@@ -321,6 +322,16 @@ function Blocks({
         ...(profile.image === undefined || profile.pictureHidden === true ? {} : { image: profile.image }),
       }}
       {...(state.status === 'ready' ? { blocks: previewBlocks } : {})}
+      // Their own set of networks (Settings › Profile's Social links), under the bio as visitors see it.
+      {...(profile.socials === undefined || profile.socials.length === 0
+        ? {}
+        : {
+            socials: (
+              <SocialLinks
+                links={profile.socials.map((link) => ({ ...link, label: link.href.replace(/^https?:\/\//, '') }))}
+              />
+            ),
+          })}
       empty={
         <EmptyState title={strings.empty} icon="link">
           {strings.emptyText}

@@ -5,6 +5,7 @@
 // booking's recheck under the host lock.
 import { and, asc, eq, gt, inArray, lt, ne } from 'drizzle-orm';
 import {
+  BookingDefaultView,
   BookingDuration,
   BookingLocation,
   isTimeZone,
@@ -112,6 +113,9 @@ export function pageOf(
     rescheduleHost: row.rescheduleHost === 'rotation' ? 'rotation' : 'same',
     isDeleted: row.deletedAt !== null,
     isPrivate: row.isPrivate,
+    showSocials: row.showSocials,
+    // A stored value the check somehow let through reads as Month, the view every page started on.
+    defaultView: BookingDefaultView.safeParse(row.defaultView).data ?? 'month',
     profileSection: row.profileSection,
     profilePosition: row.profilePosition,
     ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),

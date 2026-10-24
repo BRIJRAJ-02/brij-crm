@@ -2,3 +2,9 @@
 // (spec 0028), so the page loads it apart from its first paint's code: its
 // menu (Not you) is the largest part of it.
 export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';
+export type {
+  MatchCalendarDay,
+  MatchCalendarProps,
+  MatchCalendarResult,
+  MatchCalendarStep,
+} from '../modules/MatchCalendar/MatchCalendar.tsx';

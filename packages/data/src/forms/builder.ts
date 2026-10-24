@@ -14,6 +14,9 @@ export {
   FORM_SLUG,
   fitsAttribute,
   freeKey,
+  // The own form snippet's honeypot: a name autofill leaves alone, and the password managers' skip marks.
+  HONEYPOT_IGNORE_ATTRIBUTES,
+  HONEYPOT_INPUT_NAME,
   keyFromLabel,
   NO_PLACEHOLDER_TYPES,
   publishProblem,

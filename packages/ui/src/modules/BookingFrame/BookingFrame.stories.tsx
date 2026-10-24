@@ -71,6 +71,25 @@ export const ChooseATime: Story = {
   },
 };
 
+/** The host's social links (booking socials, 25 Oct 2026): the last line of their block, under the facts. */
+const SOCIALS = [
+  { network: 'linkedin', href: 'https://linkedin.com/in/ada-lovelace', label: 'ada-lovelace' },
+  { network: 'x', href: 'https://x.com/ada', label: '@ada' },
+  { network: 'github', href: 'https://github.com/ada', label: 'ada' },
+  { network: 'website', href: 'https://ada.dev', label: 'ada.dev' },
+] as const;
+
+/** A host who added social links: a row of marks closes their block, each a named link opening in a new tab. */
+export const WithSocials: Story = {
+  args: { host: { name: 'Ada Lovelace', socials: [...SOCIALS] } },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    const list = canvas.getByRole('list', { name: 'Ada Lovelace’s social links' });
+    await expect(list).toBeVisible();
+    await expect(canvas.getByRole('link', { name: 'LinkedIn, ada-lovelace' })).toHaveAttribute('target', '_blank');
+  },
+};
+
 /** The second step: the rail with the picked time, the details in the card. */
 export const Details: Story = {
   args: {
@@ -173,7 +192,12 @@ export const Profile: Story = {
   render: () => (
     <Stage width="fill" height="page">
       <BookingProfile
-        person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme. Happy to talk about anything.' }}
+        person={{
+          name: 'Ada Lovelace',
+          id: 'ada',
+          bio: 'Product at Acme. Happy to talk about anything.',
+          socials: [...SOCIALS],
+        }}
         claimHref={PROFILE_CLAIM}
       >
         <BookingProfileSection>

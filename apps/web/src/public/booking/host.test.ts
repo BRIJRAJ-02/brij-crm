@@ -13,6 +13,20 @@ describe('railHost', () => {
     expect(railHost({ hostName: 'Ada Lovelace', hostImage: image })).toStrictEqual({ name: 'Ada Lovelace', image });
   });
 
+  it('gives a personal page its host’s social links, in order, and none when the page has none', () => {
+    const socials = [
+      { network: 'linkedin', href: 'https://linkedin.com/in/ada', label: 'ada' },
+      { network: 'website', href: 'https://ada.dev', label: 'ada.dev' },
+    ] as const;
+    expect(railHost({ hostName: 'Ada Lovelace', socials: [...socials] }).socials).toStrictEqual(socials);
+    expect(railHost({ hostName: 'Ada Lovelace', socials: [] })).toStrictEqual({ name: 'Ada Lovelace' });
+  });
+
+  it('never puts social links on a team page’s host, whatever the page says', () => {
+    const socials = [{ network: 'x' as const, href: 'https://x.com/ada', label: '@ada' }];
+    expect(railHost({ hostName: 'Acme', socials, team: { avatars: [], more: 0 } }).socials).toBeUndefined();
+  });
+
   it('never puts a picture on a team page’s host: its faces stay as the server gave them', () => {
     const host = railHost({ hostName: 'Acme', hostImage: '/x.png', team: { avatars: [{ initials: 'SL' }], more: 0 } });
     expect(host.image).toBeUndefined();

@@ -8,7 +8,7 @@
 //   embedSnippet(script, target, mode)   the tag and the holder for inline, popup or floating
 //   ownFormHtml(form, script)            the full tagged form, with its script tag
 //   EMBED_MODES                          the three modes, in the order the tab offers them
-import { choiceKeysOf } from '@crm/data/forms';
+import { choiceKeysOf, HONEYPOT_IGNORE_ATTRIBUTES, HONEYPOT_INPUT_NAME } from '@crm/data/forms';
 import type { FormView } from '@crm/data';
 import { strings } from './strings.ts';
 
@@ -155,13 +155,16 @@ export function ownFormHtml(form: OwnForm, script: string): string {
     ];
   });
   const version = form.liveVersionNumber ?? 1;
+  const trapSkipMarks = Object.entries(HONEYPOT_IGNORE_ATTRIBUTES)
+    .map(([attribute, value]) => ` ${attribute}="${value}"`)
+    .join('');
   return [
     `<form id="timefix-${key}" data-timefix-form="${key}" data-timefix-workspace="${escapeHtml(form.workspaceKey)}" data-timefix-version="${String(version)}">`,
     ...fields,
     `  <!-- ${escapeHtml(strings.ownFormTrapNote)} -->`,
     `  <div hidden aria-hidden="true">`,
-    `    <label for="${idOf('company_url')}">${escapeHtml(strings.ownFormTrapLabel)}</label>`,
-    `    <input type="text" id="${idOf('company_url')}" name="company_url" tabindex="-1" autocomplete="off">`,
+    `    <label for="${idOf(HONEYPOT_INPUT_NAME)}">${escapeHtml(strings.ownFormTrapLabel)}</label>`,
+    `    <input type="text" id="${idOf(HONEYPOT_INPUT_NAME)}" name="${HONEYPOT_INPUT_NAME}" tabindex="-1" autocomplete="off"${trapSkipMarks}>`,
     '  </div>',
     `  <button type="submit">${escapeHtml(document.buttonText)}</button>`,
     `  <p role="status" data-timefix-success="${escapeHtml(document.after.kind === 'message' && document.after.message !== '' ? document.after.message : strings.ownFormThanks)}"></p>`,

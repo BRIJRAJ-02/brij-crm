@@ -49,7 +49,13 @@ const actor = (text: string): Sentence => ({ subject: 'actor', text });
 /** A signed count of a round robin adjustment: "+2", "−1" (a minus sign, not a dash). */
 const units = (value: number): string => (value > 0 ? `+${String(value)}` : `−${String(Math.abs(value))}`);
 
-const PROFILE_FIELDS = { name: 'name', timeZone: 'time zone', handle: 'public handle', bio: 'bio' } as const;
+const PROFILE_FIELDS = {
+  name: 'name',
+  timeZone: 'time zone',
+  handle: 'public handle',
+  bio: 'bio',
+  socials: 'social links',
+} as const;
 const WORKSPACE_FIELDS = { name: 'name', timeZone: 'time zone', address: 'address' } as const;
 const LINK_FIELDS = { role: 'role', expires: 'expiry', uses: 'number of uses' } as const;
 

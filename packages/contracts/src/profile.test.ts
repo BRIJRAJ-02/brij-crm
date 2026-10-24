@@ -41,3 +41,38 @@ describe('MyProfile', () => {
     expect(MyProfile.parse(profile)).not.toHaveProperty('pictureHidden');
   });
 });
+
+describe('SocialLinks (booking socials)', () => {
+  const parse = (socials: unknown) =>
+    UpdateMyProfileInput.safeParse({ workspace: 'acme', socials, mutationId: MUTATION });
+
+  it('takes handles and links, in order, as their canonical links', () => {
+    const parsed = parse([
+      { network: 'github', href: '@ada' },
+      { network: 'website', href: 'ada.dev' },
+    ]);
+    expect(parsed.success && parsed.data.socials).toEqual([
+      { network: 'github', href: 'https://github.com/ada' },
+      { network: 'website', href: 'https://ada.dev' },
+    ]);
+    expect(parse([]).success).toBe(true);
+  });
+
+  it('refuses a network twice, an eleventh, an unknown network and a bad link, in plain words on the row', () => {
+    const twice = parse([
+      { network: 'x', href: 'ada' },
+      { network: 'x', href: 'bea' },
+    ]);
+    expect(twice.success ? [] : twice.error.issues.map((issue) => [issue.path.join('.'), issue.message])).toEqual([
+      ['socials.1.network', 'Add X only once.'],
+    ]);
+    const wrong = parse([{ network: 'linkedin', href: 'https://instagram.com/ada' }]);
+    expect(wrong.success ? [] : wrong.error.issues.map((issue) => [issue.path.join('.'), issue.message])).toEqual([
+      ['socials.0.href', 'That’s a link to Instagram, not LinkedIn.'],
+    ]);
+    expect(parse([{ network: 'myspace', href: 'ada' }]).success).toBe(false);
+    expect(
+      parse(Array.from({ length: 11 }, (_x, index) => ({ network: 'x', href: `a${String(index)}` }))).success,
+    ).toBe(false);
+  });
+});

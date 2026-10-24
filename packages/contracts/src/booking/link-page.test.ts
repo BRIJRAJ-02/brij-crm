@@ -39,7 +39,7 @@ describe('checkProfileLink', () => {
   });
 
   it('answers only what the database’s own check stores (crm_check_profile_item)', () => {
-    // The definer's pattern, as written in migration 0096, and its refusal of whitespace and control characters.
+    // The definer's pattern, as written in migration 0098, and its refusal of whitespace and control characters.
     const stored = /^(https?:\/\/[^/?#@]+([/?#].*)?|mailto:.+|tel:.+|sms:.+)$/i;
     for (const typed of [
       'a b.com',

@@ -1,0 +1,2 @@
+ALTER TABLE "booking_pages" ADD COLUMN "default_view" text DEFAULT 'month' NOT NULL;--> statement-breakpoint
+ALTER TABLE "booking_pages" ADD CONSTRAINT "booking_pages_default_view" CHECK ("booking_pages"."default_view" in ('month', 'list', 'chat'));

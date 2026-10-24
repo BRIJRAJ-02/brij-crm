@@ -18,8 +18,9 @@ import {
   type MemberSummary,
   type ScheduleView,
   type SchedulesView,
+  type SocialLinksHeld,
 } from '@crm/data';
-import { useCalendar, useCaptureList, usePageDestination, useSchedules } from '@crm/data/react';
+import { useCalendar, useCaptureList, usePageDestination, useSchedules, useSocialLinks } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
@@ -36,6 +37,8 @@ import {
   PreviewFrame,
   PreviewLayout,
   Popover,
+  Radio,
+  RadioGroup,
   SaveBar,
   SegmentedControl,
   Select,
@@ -51,7 +54,7 @@ import {
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
-import { useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { calendarSettingsHref, linkPageHref, profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
@@ -88,6 +91,8 @@ import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
+import { previewSocials, SocialsCard } from './SocialsCard.tsx';
+import { strings as socialsStrings } from './socials-strings.ts';
 
 /** Props for the editor: the page its route loaded. */
 export interface PageEditorProps {
@@ -143,6 +148,8 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   profilePosition: 'page',
   description: 'page',
   isPrivate: 'page',
+  showSocials: 'page',
+  defaultView: 'page',
   title: 'meeting',
   durations: 'meeting',
   location: 'meeting',
@@ -167,6 +174,14 @@ const TIME_KEYS: readonly (keyof BookingPageSettings)[] = [
   'slotStep',
 ];
 
+/** What a page that shows no one's social links holds in their place: nothing, read never. */
+const NO_SOCIALS: SocialLinksHeld = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => ({ status: 'loading' }),
+  retain: () => () => undefined,
+  retry: () => undefined,
+};
+
 /** The settings the editor edits, from the page. */
 const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   title: page.title,
@@ -184,6 +199,8 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   scheduleId: page.scheduleId,
   rescheduleHost: page.rescheduleHost,
   isPrivate: page.isPrivate,
+  showSocials: page.showSocials,
+  defaultView: page.defaultView,
   profileSection: page.profileSection,
   profilePosition: page.profilePosition,
 });
@@ -224,7 +241,7 @@ export function PageEditor({
   // A page the reader can't change shows as it is, every control read only, with no Save.
   const isLocked = !page.canChange;
   // The link page is the viewer's own: only the page's owner places it there (an admin editing a teammate's page doesn't).
-  const isOwnPage = useMyAccess()?.memberId === page.ownerMemberId;
+  const isOwnPage = ownerMember === undefined;
   const saved = settingsOf(page);
   const [draft, setDraft] = useState(saved);
   // The address's shape is said once the person leaves the field, not at every key.
@@ -250,6 +267,11 @@ export function PageEditor({
   const dirty = changed(saved, draft);
   const isPageDirty = !isLocked && Object.keys(dirty).length > 0;
   const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember);
+  // The person's own social links, as the preview shows them while the page's switch is on (booking socials); held
+  // only on their own personal page, the one page that shows them.
+  const showsSocials = ownerMember === undefined && page.kind === 'personal';
+  const socials = useSocialLinks(showsSocials ? data.profile.socials(slug) : NO_SOCIALS);
+  const previewLinks = socials.status === 'ready' ? previewSocials(socials.links) : [];
   // The chosen schedule's week and days off, edited in place and saved by the same Save as the page's settings
   // (through the data layer: shown at once, put back if the server refuses).
   const week = useScheduleDraft({
@@ -547,6 +569,9 @@ export function PageEditor({
                         description: draft.description,
                         durations: draft.durations,
                         location: draft.location,
+                        // The owner's links as they are now, while the draft shows them (booking socials).
+                        ...(showsSocials ? { socials: draft.showSocials ? previewLinks : [] } : {}),
+                        defaultView: draft.defaultView,
                       }}
                     />
                   }
@@ -615,6 +640,27 @@ export function PageEditor({
                           isReadOnly={isLocked}
                           onChange={(description) => change({ description })}
                         />
+                        {/* The view the page opens in (the owner, 25 Oct 2026): the host's default, which a
+                          visitor's own remembered choice still wins over. A FieldGroup, as Who can book is, so the
+                          line under it is read with the choices; the phone beside this switches to the view at once. */}
+                        <FieldGroup label={strings.opensIn} hint={strings.opensInLine}>
+                          <RadioGroup
+                            label={strings.opensIn}
+                            isLabelHidden
+                            orientation="horizontal"
+                            value={draft.defaultView}
+                            isReadOnly={isLocked}
+                            onChange={(value) => {
+                              if (value === 'month' || value === 'list' || value === 'chat') {
+                                change({ defaultView: value });
+                              }
+                            }}
+                          >
+                            <Radio value="month">{strings.opensInViews.month}</Radio>
+                            <Radio value="list">{strings.opensInViews.list}</Radio>
+                            <Radio value="chat">{strings.opensInViews.chat}</Radio>
+                          </RadioGroup>
+                        </FieldGroup>
                       </Card>
                       <Card title={strings.sharing}>
                         {page.handle !== undefined && !draft.isPrivate ? (
@@ -692,6 +738,15 @@ export function PageEditor({
                           />
                         </FieldGroup>
                       </Card>
+                      <SocialsCard
+                        data={data}
+                        slug={slug}
+                        isTeam={page.kind !== 'personal'}
+                        isOwner={ownerMember === undefined}
+                        isShown={draft.showSocials}
+                        isLocked={isLocked}
+                        onShownChange={(showSocials) => change({ showSocials })}
+                      />
                       {page.handle !== undefined && !draft.isPrivate && isOwnPage && (
                         // Where it sits on the owner's link page at /<handle> (spec 0051): a Public page joins it by
                         // itself, and its place and heading are set on the link page, with the rest of the page.
@@ -1045,7 +1100,7 @@ export interface PageEditorPendingProps {
  * whether it has them; Hours draws a one on one page's, the usual kind.
  */
 const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
-  page: [strings.details, strings.sharing],
+  page: [strings.details, strings.sharing, socialsStrings.title],
   meeting: [strings.meeting, strings.location, strings.calendarSection],
   hosts: [rotationStrings.hosts, routingStrings.routing],
   hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff],

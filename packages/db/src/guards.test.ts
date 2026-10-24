@@ -194,8 +194,10 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
       { name: 'crm_save_profile_item', owner: 'crm_handle' },
       { name: 'crm_save_public_profile', owner: 'crm_handle' },
+      { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
+      { name: 'crm_social_links_of', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
       { name: 'crm_workspaces_by_domain', owner: 'crm_domain_lookup' },
@@ -258,12 +260,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises the unique violation a taken handle is refused with.
       { name: 'crm_save_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_save_social_links', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       {
         name: 'crm_search_similar',
         config: ['search_path=pg_catalog, pg_temp', 'pg_trgm.word_similarity_threshold=0.5'],
         atomic: true,
       },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_social_links_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspaces_by_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -403,7 +407,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_handle_owner',
         'crm_save_picture_hidden',
         'crm_pictures_hidden',
-        // The link page's (migration 0096); the last two, its data check and its packing, run only inside the
+        'crm_save_social_links',
+        'crm_social_links_of',
+        // The link page's (migration 0098); the last two, its data check and its packing, run only inside the
         // others and no one else may call them, so they have no signature below.
         'crm_profile_items',
         'crm_profile_items_archived',
@@ -422,6 +428,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_handle_owner(text)',
         'crm_save_picture_hidden(uuid, boolean)',
         'crm_pictures_hidden(uuid[])',
+        'crm_save_social_links(uuid, text[], text[])',
+        'crm_social_links_of(uuid[])',
         'crm_profile_items(uuid)',
         'crm_profile_items_archived(uuid)',
         'crm_profile_items_public(uuid, smallint, uuid, integer)',
@@ -431,7 +439,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_delete_profile_item(uuid, uuid)',
         'crm_place_profile_page(uuid, uuid, uuid)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -1779,6 +1787,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'security_event',
     'session',
     'site_visit',
+    'social_links',
     'two_factor',
     'user',
     'user_prefs',
@@ -1799,7 +1808,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     expect(tables.rows.map((row) => row.table)).toEqual(AUTH_TABLES);
-    // And a link page's block, which may name a booking page by its workspace and id (migration 0096): never read
+    // And a link page's block, which may name a booking page by its workspace and id (migration 0098): never read
     // for access, since whether a visitor sees the page is still the booking lookup's call.
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
       'profile_items',
@@ -1925,7 +1934,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
-      // The link page's blocks (migration 0096), through crm_handle's functions only.
+      // The link page's blocks (migration 0098), through crm_handle's functions only.
       'profile_items DELETE',
       'profile_items INSERT',
       'profile_items SELECT',
@@ -1934,6 +1943,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'public_handles SELECT',
       'public_profiles INSERT',
       'public_profiles SELECT',
+      'social_links DELETE',
+      'social_links INSERT',
+      'social_links SELECT',
       'workspace_addresses INSERT',
       'workspace_addresses SELECT',
       'workspace_directory DELETE',

@@ -173,6 +173,14 @@ export function slugFromTitle(title: string): string {
   return slug === '' ? 'meeting' : slug;
 }
 
+/**
+ * The way a booking page opens for a visitor: the month calendar, the list of times, or Book by chat (spec 0042).
+ * The host picks it; a visitor who has already chosen a view in their own browser keeps theirs.
+ */
+export const BookingDefaultView = z.enum(['month', 'list', 'chat']);
+/** Month, List or Chat. */
+export type BookingDefaultView = z.infer<typeof BookingDefaultView>;
+
 /** Live takes bookings; paused shows the page as not taking bookings. */
 export const BookingPageStatus = z.enum(['live', 'paused']);
 /** Live or paused. */
@@ -216,10 +224,20 @@ export const BookingPageSettings = z.object({
   rescheduleHost: z.enum(['same', 'rotation']),
   /** A private page (spec 0027, AC-708): reached by its link, it books inside its host's holds and waives notice. */
   isPrivate: z.boolean(),
+  /**
+   * The view the page opens in for a visitor with no remembered choice of their own (owner, 25 Oct 2026): Month,
+   * List or Chat. It is the default, never an override: a visitor who has picked a view on that browser keeps it.
+   */
+  defaultView: BookingDefaultView,
   /** The small heading a Public page sits under on its owner's profile (`/<handle>`); null for none. */
   profileSection: z.string().trim().min(1).max(40, 'Keep the section to 40 characters.').nullable(),
   /** Where a Public page sits on its owner's profile: lower first, then oldest first. */
   profilePosition: z.number().int().min(0, 'Use 0 to 999.').max(999, 'Use 0 to 999.'),
+  /**
+   * Whether a personal page shows its owner's social links under their name (booking socials, 25 Oct 2026): on by
+   * default. The owner's alone to change, as the address is; a team page never shows them (AC-754).
+   */
+  showSocials: z.boolean(),
 });
 /** Every setting a member edits. */
 export type BookingPageSettings = z.infer<typeof BookingPageSettings>;

@@ -2,8 +2,8 @@
 // Purpose: a person's link page at /<handle> (spec 0051, built as blocks): the one address they hand over at an event,
 // who they are, how to book them, and where else to find them.
 // Main task: a visitor presses one block (a booking page, a link) and lands where they meant to go.
-// Leaves out: Link only booking pages (never listed), booking itself (each page's own), the contact card, the socials
-// row and the press counter (later phases), and any count of blocks (read a page at a time, never all at once).
+// Leaves out: Link only booking pages (never listed), booking itself (each page's own), the contact card and the
+// press counter (later phases), and any count of blocks (read a page at a time, never all at once).
 import { createHandleClient, isDataError, type PublicProfile, type PublicProfileItem } from '@crm/data/booking';
 import {
   BookingMessage,
@@ -13,6 +13,7 @@ import {
   EmptyState,
   LinkListToolbar,
   LinkPage,
+  SocialLinks,
 } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { blocksOf } from './link-page.ts';
@@ -167,6 +168,10 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         // Our own origin's copy of their account picture; the initials show if it fails.
         ...(profile.image === undefined ? {} : { image: profile.image }),
       }}
+      // Their own set of networks, the row of icons under the bio (booking socials): never a block.
+      {...(profile.socials === undefined || profile.socials.length === 0
+        ? {}
+        : { socials: <SocialLinks links={profile.socials} label={strings.socials(profile.name)} /> })}
       blocks={blocks}
       {...(isSearching ? { summary: strings.matches(blocks.length) } : {})}
       claimHref={claimPageHref('booking_profile')}

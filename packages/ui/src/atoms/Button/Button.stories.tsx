@@ -98,6 +98,49 @@ export const IconOnly: Story = {
   },
 };
 
+/** A brand's mark alone, named by `label`: a host's social link (SocialLinks), ghost and large, at rest and disabled. */
+export const MarkOnly: Story = {
+  render: () => (
+    <Stage>
+      <ButtonLink
+        variant="ghost"
+        size="lg"
+        provider="github"
+        label="GitHub, ada"
+        href="https://github.com/ada"
+        isExternal
+      />
+      <ButtonLink
+        variant="ghost"
+        size="lg"
+        provider="linkedin"
+        label="LinkedIn, ada"
+        href="https://linkedin.com/in/ada"
+      />
+      <Button variant="ghost" size="lg" provider="x" label="X, @ada" isDisabled />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('link', { name: 'GitHub, ada' })).toHaveAttribute('data-icon-only', 'true');
+    await expect(canvas.getByRole('button', { name: 'X, @ada' })).toBeDisabled();
+  },
+};
+
+/** `isIconMark`: a Lucide icon among brand marks, at their size and in the text colour (a website among social links). */
+export const IconMark: Story = {
+  render: () => (
+    <Stage>
+      <ButtonLink variant="ghost" size="lg" provider="github" label="GitHub, ada" href="https://github.com/ada" />
+      <ButtonLink variant="ghost" size="lg" icon="link" isIconMark label="Website, ada.dev" href="https://ada.dev" />
+      <ButtonLink variant="ghost" size="lg" icon="link" label="Plain ghost icon" href="https://ada.dev" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('link', { name: 'Website, ada.dev' })).toHaveAttribute('data-icon-mark', 'true');
+    await expect(canvas.getByRole('link', { name: 'Plain ghost icon' })).not.toHaveAttribute('data-icon-mark');
+  },
+};
+
 /**
  * `isLabelCollapsible`: the words show in a wide bar, and in a narrow one (a phone) the icon stands alone, square,
  * its `label` still its name.

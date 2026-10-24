@@ -47,6 +47,7 @@ export const profileRouter = member.profile.router({
           ...(input.handle === undefined ? {} : { handle: input.handle }),
           ...(input.bio === undefined ? {} : { bio: input.bio }),
           ...(input.pictureHidden === undefined ? {} : { pictureHidden: input.pictureHidden }),
+          ...(input.socials === undefined ? {} : { socials: input.socials }),
         },
         extras,
         hooks,

@@ -75,11 +75,25 @@ interface IconOnlyFace {
   readonly children?: never;
   readonly icon: IconName;
   readonly provider?: never;
+  /**
+   * The icon stands as a mark among brand marks (a person's website among their social links): drawn at the marks'
+   * size (`size-icon`) and in the text colour, as the black marks are, rather than as a quiet control's glyph.
+   */
+  readonly isIconMark?: boolean;
   /** The accessible name, required because the icon is the only content. */
   readonly label: string;
 }
 
-type ButtonFace = LabelledFace | IconOnlyFace;
+/** A brand's mark alone (a host's LinkedIn on a booking page), named by `label`. */
+interface MarkOnlyFace {
+  readonly children?: never;
+  readonly icon?: never;
+  readonly provider: ProviderName;
+  /** The accessible name, required because the mark is the only content ("LinkedIn, @ada"). */
+  readonly label: string;
+}
+
+type ButtonFace = LabelledFace | IconOnlyFace | MarkOnlyFace;
 
 /** Props for Button: a label (with an optional icon and a fuller `label` name), or an icon with a `label` for its name. */
 export type ButtonProps = ButtonLook &
@@ -132,6 +146,7 @@ function lookAttributes(look: ButtonLook, face: ButtonFace) {
     'data-icon-only': face.children === undefined || undefined,
     'data-full-width': look.isFullWidth === 'center' ? 'center' : look.isFullWidth === true ? 'start' : undefined,
     'data-collapsible': look.isLabelCollapsible === true || undefined,
+    'data-icon-mark': ('isIconMark' in face && face.isIconMark === true) || undefined,
   };
 }
 
@@ -175,7 +190,10 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
       {isPending ? (
         <Spinner />
       ) : face.icon !== undefined ? (
-        <Icon name={face.icon} size={look.size === 'sm' ? 'xs' : 'sm'} />
+        <Icon
+          name={face.icon}
+          size={'isIconMark' in face && face.isIconMark === true ? 'md' : look.size === 'sm' ? 'xs' : 'sm'}
+        />
       ) : (
         face.provider !== undefined && <ProviderMark provider={face.provider} size={look.size === 'lg' ? 'md' : 'sm'} />
       )}
@@ -274,6 +292,11 @@ export type ButtonLinkProps = Omit<ButtonLook, 'kbd' | 'slot' | 'ref'> &
     readonly isExternal?: boolean;
     /** Saves the address as a file with this name (a calendar's .ics) instead of opening it. */
     readonly download?: string;
+    /**
+     * More link types for an external link, beside `noopener noreferrer`: `me` on a person's own profile, `nofollow`
+     * on a link a visitor didn't write and we don't vouch for (a host's social links).
+     */
+    readonly relations?: readonly ('me' | 'nofollow')[];
   };
 
 /**
@@ -282,7 +305,7 @@ export type ButtonLinkProps = Omit<ButtonLook, 'kbd' | 'slot' | 'ref'> &
  * opens in a new tab with the browser's own gestures.
  */
 export function ButtonLink(props: ButtonLinkProps) {
-  const { href, isExternal = false, download, isDisabled } = props;
+  const { href, isExternal = false, download, isDisabled, relations = [] } = props;
   const face: ButtonFace = props;
   const safe = safeHref(href);
   return (
@@ -290,7 +313,7 @@ export function ButtonLink(props: ButtonLinkProps) {
       className={styles.root}
       {...(safe === undefined ? {} : { href: safe })}
       isDisabled={(isDisabled ?? false) || safe === undefined}
-      {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      {...(isExternal ? { target: '_blank', rel: [...relations, 'noopener', 'noreferrer'].join(' ') } : {})}
       {...(download === undefined ? {} : { download })}
       {...(face.label === undefined ? {} : { 'aria-label': face.label })}
       {...lookAttributes(props, face)}
