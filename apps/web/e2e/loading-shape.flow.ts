@@ -239,7 +239,15 @@ test.describe('a booking page', () => {
     const origin = new URL(page.url()).origin;
     const response = await page.request.post('/api/rpc/bookingPages/create', {
       data: {
-        json: { workspace: workspace.slug, id: uuidv7(), title: 'Views call', timeZone: 'UTC', mutationId: uuidv7() },
+        json: {
+          workspace: workspace.slug,
+          id: uuidv7(),
+          title: 'Views call',
+          timeZone: 'UTC',
+          mutationId: uuidv7(),
+          // Two lines on a phone, the two the loading rail draws: how many a host's own words take isn't knowable early.
+          settings: { description: 'A short chat about what you need and whether we can help. Bring questions.' },
+        },
       },
       headers: { origin },
     });
@@ -269,7 +277,10 @@ test.describe('a booking page', () => {
           await expect(page.getByRole('radio', { name: VIEWS[target] })).toBeChecked();
           await page.waitForTimeout(600);
           const after = await bookingRegions(page);
-          for (const difference of bookingDifferences(before, after))
+          // Only the chat has a composer: every other region is held.
+          const { composer: _before, ...was } = before;
+          const { composer: _after, ...now } = after;
+          for (const difference of bookingDifferences(was, now))
             problems.push(`${String(viewport.width)} ${start} → ${target}: ${difference}`);
           await context.close();
         }
