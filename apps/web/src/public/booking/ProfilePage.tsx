@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { blocksOf } from './link-page.ts';
 import { strings, tabTitle } from './strings.ts';
 
-/** Past this many blocks, a search sits above them. */
+/** Past this many rows (headings aside), a search sits above them (AC-5133). */
 const SEARCH_FROM = 8;
 /** How long typing rests before the search reads. */
 const SEARCH_WAIT_MS = 250;
@@ -64,7 +64,9 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         (profile) => {
           if (ticket !== latest.current) return;
           if (profile.handle !== handle) onMoved(profile.handle);
-          if (search === '' && (profile.items.length > SEARCH_FROM || profile.next !== undefined)) setLong(true);
+          // Rows, not headings: a page of eight links under two headings needs no search.
+          const rows = profile.items.filter((item) => item.kind !== 'heading').length;
+          if (search === '' && (rows > SEARCH_FROM || profile.next !== undefined)) setLong(true);
           setMoreFailed(false);
           setSearchFailed(false);
           setLoaded({

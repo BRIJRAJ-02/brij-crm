@@ -44,8 +44,8 @@
     margin: 0;
     inline-size: 100%;
     color: var(--text);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-note-title);
+    letter-spacing: var(--tracking-note-title);
     overflow-wrap: anywhere;
   }
 
@@ -82,8 +82,8 @@
     margin: 0;
     padding-inline: var(--space-4);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
     overflow-wrap: anywhere;
   }
 
@@ -130,7 +130,7 @@
       background: var(--surface-hover);
     }
 
-    .block:not([data-loading]):hover .end {
+    .block:not([data-loading]):hover .end:not([data-end='book']) {
       color: var(--text-secondary);
     }
   }
@@ -225,8 +225,17 @@
   .end {
     display: inline-flex;
     flex: none;
+    align-items: center;
+    gap: var(--space-2);
     color: var(--text-tertiary);
     transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  /* A booking page's end says what pressing it does, in the one colour that marks the action to take. */
+  .end[data-end='book'] {
+    color: var(--accent);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
   }
 
   /* The blocks arrive with a short rise. Movement only where motion is welcome; the fade always. */

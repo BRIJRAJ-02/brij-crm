@@ -5,4 +5,6 @@ export const strings = {
   /** The blocks as one list, for screen readers, when no heading names them. */
   blocks: 'Links',
   loading: 'Loading…',
+  /** A booking page block's end: what pressing it does. */
+  book: 'Book',
 } as const;

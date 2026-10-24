@@ -15,6 +15,7 @@ export const strings = {
   heading: 'Heading',
   bookingPage: 'Booking page',
   paused: 'Paused',
+  pausedHidden: 'Paused, hidden from visitors',
   unavailable: 'Unavailable',
   unavailableText: 'This booking page is Link only, deleted, or in a workspace you left.',
   moreFor: (title: string) => `More for ${title}`,

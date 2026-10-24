@@ -9,6 +9,7 @@ import { Field } from '../../molecules/Field/Field.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { LinkPage } from '../LinkPage/LinkPage.tsx';
 import { HostedFormPreview } from '../HostedFormPreview/HostedFormPreview.tsx';
 import { EditorStatus, PreviewFrame, PreviewLayout } from './PreviewLayout.tsx';
 
@@ -410,4 +411,26 @@ export const LongPage: Story = {
       await expect(wheel(region, -100)).toBe(true);
     });
   },
+};
+
+/** The phone's column at two fifths of the width (`previewShare="wide"`), for an editor beside a sidebar. */
+export const WideShare: Story = {
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewLayout
+        previewShare="wide"
+        preview={
+          <LinkPage
+            isPreview
+            person={{ name: 'Anish Gupta', id: 'anish' }}
+            blocks={[{ kind: 'link', id: 'site', title: 'timefix.com', href: 'https://www.timefix.com', hue: 'sky' }]}
+          />
+        }
+      >
+        <Card title="Blocks">
+          <Field label="Title" value="timefix.com" />
+        </Card>
+      </PreviewLayout>
+    </Stage>
+  ),
 };

@@ -8,7 +8,7 @@ import { strings } from './strings.ts';
 export function LinkPagePending() {
   return (
     <SettingsPage title={strings.title} fillsView>
-      <PreviewLayout preview={<LinkPage isPreview />}>
+      <PreviewLayout preview={<LinkPage isPreview />} previewShare="wide">
         <Card title={strings.blocks} description={strings.blocksText} isBusy>
           <LinkList
             label={strings.blocks}

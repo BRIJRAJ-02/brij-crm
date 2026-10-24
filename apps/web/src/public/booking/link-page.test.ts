@@ -1,0 +1,54 @@
+// The public link page's blocks (spec 0051): each kind mapped onto the library's blocks in order, a booking page to
+// its handle address, and a kind this bundle doesn't know skipped rather than breaking the page.
+import { describe, expect, it } from 'vitest';
+import type { PublicProfileItem } from '@crm/data/booking';
+import { blocksOf } from './link-page.ts';
+
+describe('blocksOf', () => {
+  it('maps every kind in order, and skips one it doesn’t know', () => {
+    const later = {
+      kind: 'contact',
+      id: '00000000-0000-7000-8000-000000000009',
+      fullName: 'Ada',
+    } as unknown as PublicProfileItem;
+    const items: PublicProfileItem[] = [
+      {
+        kind: 'page',
+        id: '00000000-0000-7000-8000-000000000001',
+        slug: 'intro call',
+        title: 'Intro call',
+        description: '',
+        durations: [15, 30],
+        isTeam: true,
+      },
+      later,
+      { kind: 'heading', id: '00000000-0000-7000-8000-000000000002', title: 'Find me' },
+      {
+        kind: 'link',
+        id: '00000000-0000-7000-8000-000000000003',
+        title: 'LinkedIn',
+        url: 'https://www.linkedin.com/in/ada',
+        mark: 'linkedin',
+        hue: 'blue',
+      },
+    ];
+    expect(blocksOf('ada', items)).toEqual([
+      {
+        kind: 'page',
+        id: '00000000-0000-7000-8000-000000000001',
+        title: 'Intro call',
+        href: '/ada/intro%20call',
+        facts: '15 min · 30 min · Team',
+      },
+      { kind: 'heading', id: '00000000-0000-7000-8000-000000000002', title: 'Find me' },
+      {
+        kind: 'link',
+        id: '00000000-0000-7000-8000-000000000003',
+        title: 'LinkedIn',
+        href: 'https://www.linkedin.com/in/ada',
+        hue: 'blue',
+        mark: 'linkedin',
+      },
+    ]);
+  });
+});

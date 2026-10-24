@@ -88,18 +88,25 @@ function shownAddress(url: string): string {
   return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
 }
 
-/** How a block's row reads. */
-export function rowWords(item: ProfileItem): BlockRowWords {
+/** How a block's row reads; a booking page names its workspace only when the person's pages come from several. */
+export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWords {
   if (item.kind === 'link') return { title: item.title, address: shownAddress(item.url) };
   if (item.kind === 'heading') return { title: item.title, address: strings.heading };
   if (item.page === undefined) {
     return { title: strings.bookingPage, address: strings.unavailableText, badge: strings.unavailable, isOff: true };
   }
   const facts = pageFacts(item.page);
+  const isPaused = item.page.status === 'paused';
+  // Paused leads the line rather than standing as a badge at the row's end, so a phone keeps the title on one line.
   return {
     title: item.page.title,
-    address: [strings.bookingPage, item.page.workspaceName, ...(facts === '' ? [] : [facts])].join(' · '),
-    ...(item.page.status === 'paused' ? { badge: strings.paused, isOff: true } : {}),
+    address: [
+      ...(isPaused ? [strings.pausedHidden] : []),
+      strings.bookingPage,
+      ...(namesWorkspace ? [item.page.workspaceName] : []),
+      ...(facts === '' ? [] : [facts]),
+    ].join(' · '),
+    ...(isPaused ? { isOff: true } : {}),
   };
 }
 

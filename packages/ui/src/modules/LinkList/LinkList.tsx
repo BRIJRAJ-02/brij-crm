@@ -234,6 +234,7 @@ export function LinkList({
     'data-density': density,
     'data-placement': isCompact ? placement : undefined,
     'data-reorderable': moves === undefined ? undefined : '',
+    'data-leading': hasLeading ? '' : undefined,
   };
   const showSkeleton = useDelayedLoading(status === 'loading');
   if (status === 'no-access') {

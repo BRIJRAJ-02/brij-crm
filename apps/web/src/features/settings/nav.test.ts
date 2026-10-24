@@ -19,7 +19,7 @@ describe('settingsNav', () => {
     const groups = settingsNav('acme');
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Scheduling', 'Workspace', 'Super admin']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
-      ['Profile', 'Preferences', 'Sign in and devices', 'Notifications'],
+      ['Profile', 'Link page', 'Preferences', 'Sign in and devices', 'Notifications'],
       ['Calendars', 'Round robin'],
       ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'History', 'Trash'],
       ['Overview', 'Users', 'Booking pages', 'Website'],
@@ -30,6 +30,7 @@ describe('settingsNav', () => {
     const entries = settingsNav('acme').flatMap((group) => group.entries);
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
       profile: '/w/acme/settings/account/profile',
+      'link-page': '/w/acme/settings/account/link-page',
       preferences: '/w/acme/settings/account/preferences',
       calendars: '/w/acme/settings/scheduling/calendars',
       notifications: '/w/acme/settings/account/notifications',

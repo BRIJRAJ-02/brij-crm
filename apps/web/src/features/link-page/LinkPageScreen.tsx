@@ -219,8 +219,11 @@ function Blocks({
     // A paused or unavailable page still shows its calendar tile in the list.
     return { kind: 'page', id: item.id, title: rowWords(item).title, href: '', facts: '' };
   };
+  // A workspace is named beside a booking page only when the person's pages come from more than one.
+  const namesWorkspace =
+    new Set([...items, ...archived].flatMap((item) => (item.kind === 'page' ? [item.workspaceId] : []))).size > 1;
   const rows: LinkRow[] = items.map((item, index) => {
-    const words = rowWords(item);
+    const words = rowWords(item, namesWorkspace);
     const isPending = pending.has(item.id);
     return {
       id: item.id,
@@ -339,7 +342,7 @@ function Blocks({
 
   const Editor = editing === undefined ? undefined : BLOCK_KINDS[editing.kind].Editor;
   return (
-    <PreviewLayout preview={preview}>
+    <PreviewLayout preview={preview} previewShare="wide">
       <Card title={strings.blocks} description={strings.blocksText} actions={addMenu}>
         {list}
       </Card>
@@ -352,7 +355,7 @@ function Blocks({
             isToolbarHidden
             hasLeading
             rows={archived.map((item) => {
-              const words = rowWords(item);
+              const words = rowWords(item, namesWorkspace);
               return {
                 id: item.id,
                 title: words.title,

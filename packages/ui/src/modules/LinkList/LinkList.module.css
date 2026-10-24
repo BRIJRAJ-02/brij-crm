@@ -276,6 +276,38 @@
     .frame[data-reorderable]:not([data-density='compact']) .end {
       margin-inline-start: calc(var(--size-icon-sm) + 2 * var(--space-2) + var(--space-8));
     }
+
+    /* Rows with a tile stay on one line, the tile and the end beside the words, which wrap: the address goes
+       under the title. */
+    .frame[data-leading] .row {
+      flex-wrap: nowrap;
+      gap: var(--space-12);
+    }
+
+    .frame[data-leading]:not([data-density='compact']) .main {
+      flex-basis: auto;
+    }
+
+    .frame[data-leading] .titleLine {
+      flex-wrap: wrap;
+      row-gap: 0;
+    }
+
+    .frame[data-leading] .address {
+      flex-basis: 100%;
+      white-space: normal;
+    }
+
+    .frame[data-leading] .title {
+      flex: 1 1 auto;
+      max-inline-size: 100%;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    .frame[data-leading][data-reorderable]:not([data-density='compact']) .end {
+      margin-inline-start: 0;
+    }
   }
 
   /* Compact: the list is the container, so its rows can drop the facts when it is narrow. */

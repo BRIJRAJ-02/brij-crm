@@ -179,7 +179,8 @@ const RENDERERS: {
         <span className={styles.title}>{block.title}</span>
         {block.facts !== '' && <span className={styles.note}>{block.facts}</span>}
       </span>
-      <span className={styles.end}>
+      <span className={styles.end} data-end="book">
+        {strings.book}
         <Icon name="chevron-right" size="sm" />
       </span>
     </a>
