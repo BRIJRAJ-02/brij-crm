@@ -49,7 +49,7 @@ export type SocialLinkNetwork = z.infer<typeof SocialLinkNetwork>;
  * link checks as itself, so the stored shape parses through it unchanged.
  */
 export const SocialLink = z
-  .object({ network: SocialLinkNetwork, href: z.string().max(2_048, { error: 'Keep the link to 2,000 characters.' }) })
+  .object({ network: SocialLinkNetwork, href: z.string().max(2_048, { error: 'That link is too long.' }) })
   .transform((link, ctx) => {
     const checked = checkSocialLink(link.network, link.href);
     if (checked.ok) return { network: link.network, href: checked.value };

@@ -1996,14 +1996,10 @@ export function createDataLayer({
     mintId,
     notify,
   });
-  // The person's social links (booking socials, 25 Oct 2026), read with the profile: its read confirms them here.
-  const readProfile = (workspace: string): Promise<MyProfile> =>
-    pictureChoice.read(workspace).then((profile) => {
-      socialLinks.confirm(workspace, profile);
-      return profile;
-    });
+  // The person's social links (booking socials, 25 Oct 2026), read with the profile: the profile's read goes through
+  // their store (which takes the picture store's read), so an older read never undoes a change that landed.
   const socialLinks = createSocialLinksStore({
-    read: readProfile,
+    read: (workspace) => pictureChoice.read(workspace),
     update: (input) => call((options) => api.profile.update(input, options)),
     mintId,
     notify,
@@ -4059,7 +4055,7 @@ export function createDataLayer({
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {
       /** Reads the profile now (the route's loader); whether their picture shows comes with it, held below. */
-      get: (workspace: string): Promise<MyProfile> => readProfile(workspace),
+      get: (workspace: string): Promise<MyProfile> => socialLinks.read(workspace),
       /** Whether their picture shows on their booking pages and profile (owner ask A124), as the screen holds it. */
       picture: (workspace: string): PictureChoiceHeld => pictureChoice.of(workspace),
       /**

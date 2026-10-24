@@ -63,17 +63,33 @@ async function ready() {
 }
 
 describe('the social links store', () => {
-  it('serves a screen held right after the profile loader’s read from that read', () => {
+  it('serves a screen held right after the profile loader’s read from that read', async () => {
     const { calls, store, clock } = setup();
-    store.confirm('acme', PROFILE);
+    const loaded = store.read('acme');
+    calls[0]?.settle(true, PROFILE);
+    expect(await loaded).toEqual(PROFILE);
     const held = store.of('acme');
     held.retain();
-    expect(calls).toHaveLength(0);
+    expect(calls).toHaveLength(1);
     expect(held.getSnapshot()).toEqual({ status: 'ready', links: [ADA], isSaving: false, canChange: true });
     // Held again later, it reads again behind what it shows.
     clock.at = SOCIAL_LINKS_FRESH_MS;
     held.retain();
-    expect(calls.map((call) => call.kind)).toEqual(['read']);
+    expect(calls.map((call) => call.kind)).toEqual(['read', 'read']);
+  });
+
+  it('never lets the loader’s read, sent before a change landed, put the older set back', async () => {
+    const { calls, store, held } = await ready();
+    const loader = store.read('acme');
+    void store.change('acme', [SITE]);
+    await tick();
+    const update = calls.find((call) => call.kind === 'update');
+    update?.settle(true, withLinks([SITE]));
+    await tick();
+    // The loader's read answers late, with the set as it was.
+    calls[1]?.settle(true, PROFILE);
+    await loader;
+    expect(held.getSnapshot()).toMatchObject({ links: [SITE] });
   });
 
   it('shows a change at once, sends the whole set, and keeps the answer', async () => {
@@ -96,10 +112,24 @@ describe('the social links store', () => {
     expect(held.getSnapshot()).toMatchObject({ links: [ADA], isSaving: false });
     expect(notices).toHaveLength(1);
     expect(notices[0]).toMatchObject({ tone: 'danger', action: { label: 'Try again' } });
+    expect(notices[0]?.message).toMatch(/^Your social links weren’t saved\./);
     notices[0]?.action?.onAction();
     expect(held.getSnapshot()).toMatchObject({ links: [SITE], isSaving: true });
     await tick();
     expect(calls[2]?.input).toMatchObject({ socials: [SITE] });
+  });
+
+  it('lets Try again do nothing once a newer change was made', async () => {
+    const { calls, notices, store, held } = await ready();
+    void store.change('acme', [SITE]);
+    await tick();
+    calls[1]?.settle(false);
+    await tick();
+    void store.change('acme', []);
+    await tick();
+    notices[0]?.action?.onAction();
+    expect(held.getSnapshot()).toMatchObject({ links: [] });
+    expect(calls.filter((call) => call.kind === 'update')).toHaveLength(2);
   });
 
   it('sends changes one after another, showing the latest, and an older read never undoes them', async () => {

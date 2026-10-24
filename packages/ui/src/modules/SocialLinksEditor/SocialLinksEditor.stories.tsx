@@ -108,6 +108,8 @@ export const MoveAndRemove: Story = {
     if (remove === undefined) throw new Error('No Remove.');
     await userEvent.click(remove);
     await expect(canvas.getAllByRole('textbox')).toHaveLength(2);
+    // Focus goes to the row now last, never to the page.
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'LinkedIn' })).toHaveFocus());
   },
 };
 

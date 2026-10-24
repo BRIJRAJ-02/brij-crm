@@ -1,7 +1,7 @@
 // The signed in person's own social links (booking socials, 25 Oct 2026): LinkedIn, X, their website and the rest,
 // shown on their booking pages and their `/<handle>` profile. The person's, the same in every workspace, read with
-// their profile: `profile.get` (Settings › Profile's loader) confirms the set held here, so a screen held right after
-// it needs no read of its own. A change of the whole set shows at once and is sent, one after another; refused, it is
+// their profile: `profile.get` (Settings › Profile's loader) reads through here, so a screen held right after it
+// needs no read of its own, and a read sent before a change landed never puts its older answer over it. A change of the whole set shows at once and is sent, one after another; refused, it is
 // put back and a toast says why, with Try again. Settings › Profile's own Save sends the set with the rest of the
 // page and confirms it here when it lands. Only the person holds it, so no live event carries it: another device's
 // change shows when a screen next holds it.
@@ -35,7 +35,7 @@ export interface SocialLinksHeld {
 
 /** What the store is made with. */
 export interface SocialLinksDeps {
-  /** The caller's profile read (the profile loader's, which confirms this store too). */
+  /** The caller's profile read, as the API answers it. */
   readonly read: (workspace: string) => Promise<MyProfile>;
   readonly update: (input: UpdateMyProfileInput) => Promise<MyProfile>;
   readonly mintId: () => string;
@@ -49,6 +49,9 @@ export const SOCIAL_LINKS_FRESH_MS = 1_000;
 
 /** The refusal toast's action, which sends the refused set once more. */
 const TRY_AGAIN = 'Try again';
+
+/** What the refusal toast says first: what was put back. */
+const NOT_SAVED = 'Your social links weren’t saved.';
 
 /** The person's social links in each workspace's copy. */
 export function createSocialLinksStore(deps: SocialLinksDeps) {
@@ -64,7 +67,7 @@ export function createSocialLinksStore(deps: SocialLinksDeps) {
     let made = 0;
     // Changes landed so far: a read sent before one landed never puts its older answer over it.
     let landed = 0;
-    let reading = false;
+    let reading: Promise<MyProfile> | undefined;
     const listeners = new Set<() => void>();
     const set = (next: SocialLinksState) => {
       state = next;
@@ -84,23 +87,26 @@ export function createSocialLinksStore(deps: SocialLinksDeps) {
       readAt = now();
       show();
     };
-    const read = () => {
-      if (reading) return;
-      reading = true;
+    const read = (): Promise<MyProfile> => {
       const asOf = landed;
-      deps
+      reading ??= deps
         .read(workspace)
         .then(
           (profile) => {
+            // A change landed while this read was out: its answer is newer than this one.
             if (landed === asOf) confirm(profile);
+            return profile;
           },
           (error: unknown) => {
-            if (state.status !== 'ready') set({ status: 'error', message: toDataError(error).message });
+            const refusal = toDataError(error);
+            if (state.status !== 'ready') set({ status: 'error', message: refusal.message });
+            throw refusal;
           },
         )
         .finally(() => {
-          reading = false;
+          reading = undefined;
         });
+      return reading;
     };
     const change = (links: readonly SocialLink[]): Promise<boolean> => {
       if (state.status !== 'ready' || !state.canChange) return Promise.resolve(false);
@@ -118,8 +124,14 @@ export function createSocialLinksStore(deps: SocialLinksDeps) {
           // Put back below, as the change leaves the list; Try again sends it once more.
           deps.notify({
             tone: 'danger',
-            message: refusalSummary(toDataError(error)),
-            action: { label: TRY_AGAIN, onAction: () => void change(links) },
+            message: `${NOT_SAVED} ${refusalSummary(toDataError(error))}`,
+            // Only while no newer change was made since: it would put this older set back over that one.
+            action: {
+              label: TRY_AGAIN,
+              onAction: () => {
+                if (made === id) void change(links);
+              },
+            },
           });
           return false;
         } finally {
@@ -139,19 +151,19 @@ export function createSocialLinksStore(deps: SocialLinksDeps) {
       retain() {
         // Read again whenever a screen holds it, so another device's change shows on the next visit; a read that
         // just landed (the loader's, for the screen it opens) already is that visit's.
-        if (readAt === undefined || now() - readAt >= SOCIAL_LINKS_FRESH_MS) read();
+        if (readAt === undefined || now() - readAt >= SOCIAL_LINKS_FRESH_MS) void read().catch(() => undefined);
         return () => undefined;
       },
       retry() {
         if (state.status === 'error') set({ status: 'loading' });
-        read();
+        void read().catch(() => undefined);
       },
     };
     const landedElsewhere = (profile: MyProfile) => {
       landed += 1;
       confirm(profile);
     };
-    return { holder, change, confirm, landedElsewhere };
+    return { holder, change, read, landedElsewhere };
   }
 
   const of = (workspace: string) => {
@@ -170,10 +182,11 @@ export function createSocialLinksStore(deps: SocialLinksDeps) {
      * false, with nothing sent, while unread or for a member who can't keep links.
      */
     change: (workspace: string, links: readonly SocialLink[]): Promise<boolean> => of(workspace).change(links),
-    /** A profile read answered: the set it holds is the server's now. */
-    confirm: (workspace: string, profile: MyProfile): void => {
-      of(workspace).confirm(profile);
-    },
+    /**
+     * Reads the caller's profile now (the profile route's loader), the set with it, unless a change landed while the
+     * read was out; rejects with the refusal.
+     */
+    read: (workspace: string): Promise<MyProfile> => of(workspace).read(),
     /** A profile change landed (Settings › Profile's Save): its answer is the set now, over any older read. */
     landed: (workspace: string, profile: MyProfile): void => {
       of(workspace).landedElsewhere(profile);

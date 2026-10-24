@@ -647,12 +647,19 @@ export interface HandleOwner {
   /** Their account's name; empty for an email code account that never gave one. */
   readonly name: string;
   readonly image?: string;
-  /** Their social links ready to draw, in their order (booking socials, 25 Oct 2026); empty when none. */
+  /**
+   * Their social links ready to draw, in their order (booking socials, 25 Oct 2026); empty when none, and read only
+   * for their profile (a booking address or a picture never needs them).
+   */
   readonly socials: readonly PublicSocialLink[];
 }
 
 /** The person `handle` names, or undefined: a malformed or reserved handle reads nothing. */
-async function handleOwner(db: Database, handle: string): Promise<HandleOwner | undefined> {
+async function handleOwner(
+  db: Database,
+  handle: string,
+  { withSocials = false }: { readonly withSocials?: boolean } = {},
+): Promise<HandleOwner | undefined> {
   if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return undefined;
   return db.withWorkspace(NO_WORKSPACE, async (tx) => {
     const found = await tx.execute<HandleOwnerRow>(
@@ -667,7 +674,7 @@ async function handleOwner(db: Database, handle: string): Promise<HandleOwner | 
       name: row.name,
       ...(row.image === null ? {} : { image: row.image }),
       // The same read as their booking pages' (`publicSocialsOf`), in this one transaction.
-      socials: await publicSocialsOf(tx, row.user_id),
+      socials: withSocials ? await publicSocialsOf(tx, row.user_id) : [],
     };
   });
 }
@@ -744,7 +751,7 @@ export async function enterBookingProfile(
   handle: string,
   query: { readonly after?: ProfileCursor; readonly search?: string; readonly max: number },
 ): Promise<{ readonly owner: HandleOwner; readonly pages: readonly ProfilePageEntry[] }> {
-  const owner = await handleOwner(deps.db, handle);
+  const owner = await handleOwner(deps.db, handle, { withSocials: true });
   if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
   const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
   const search = query.search === undefined || query.search.trim() === '' ? null : query.search.trim().slice(0, 120);

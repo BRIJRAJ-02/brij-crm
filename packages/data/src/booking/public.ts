@@ -229,12 +229,15 @@ function previewSocial(value: unknown): PublicSocialLink | undefined {
   return { network: value.network, href, label };
 }
 
-/** A draft's social links, when it sends a list: each well formed one, at most ten. */
+/** A draft's social links, when it sends a list: each well formed one, a network once, at most ten. */
 function previewSocials(value: unknown): readonly PublicSocialLink[] | undefined {
   if (!Array.isArray(value)) return undefined;
+  const seen = new Set<string>();
   return value.slice(0, SOCIAL_LINKS_MAX).flatMap((each: unknown) => {
     const link = previewSocial(each);
-    return link === undefined ? [] : [link];
+    if (link === undefined || seen.has(link.network)) return [];
+    seen.add(link.network);
+    return [link];
   });
 }
 /** A draft's opening view, when it is one of the three the page has. */

@@ -102,6 +102,7 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
   // with no sign in of their own.
   const savedSocials = profile.socials;
   const [socials, setSocials] = useState<readonly SocialLinkDraft[]>(() => socialLinksDraftOf(savedSocials ?? []));
+  const [socialsErrorFocus, setSocialsErrorFocus] = useState(0);
   const [isSaving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   // Why the last save failed, said in the bar.
@@ -166,6 +167,7 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
     const links = isSocialsDirty ? socialLinksOfDraft(socials) : undefined;
     if (links !== undefined && !links.ok) {
       setSocials(links.rows);
+      setSocialsErrorFocus((count) => count + 1);
       return;
     }
     send({
@@ -357,6 +359,7 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
           <SocialLinksEditor
             rows={socials}
             isDisabled={isSaving}
+            errorFocus={socialsErrorFocus}
             onChange={(next) => {
               setSocials(next);
               setFailure(undefined);

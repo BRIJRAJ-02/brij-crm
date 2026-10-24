@@ -17,11 +17,12 @@ import {
   SocialLinks,
   SocialLinksEditor,
   Switch,
+  isSocialLinksDraftChanged,
   socialLinksDraftOf,
   socialLinksOfDraft,
   type SocialLinkDraft,
 } from '@crm/ui';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { strings } from './socials-strings.ts';
 
 /** The person's stored links as a public page draws them, labelled as the server labels them. */
@@ -56,15 +57,31 @@ function EditDialog({
   readonly onClose: () => void;
 }) {
   const [rows, setRows] = useState<readonly SocialLinkDraft[]>(() => socialLinksDraftOf(links));
+  const [errorFocus, setErrorFocus] = useState(0);
+  const [isLeaving, setLeaving] = useState(false);
+  // One save per dialog: a second press while it closes sends nothing more.
+  const isSent = useRef(false);
+  const isChanged = isSocialLinksDraftChanged(rows, links);
   const save = () => {
+    if (isSent.current) return;
     const checked = socialLinksOfDraft(rows);
     if (!checked.ok) {
       setRows(checked.rows);
+      setErrorFocus((count) => count + 1);
       return;
     }
-    // Shown at once on the card and the preview; a refusal puts the set back and says so with Try again.
-    void data.profile.setSocials(slug, checked.links);
+    isSent.current = true;
+    // Nothing changed: nothing to send.
+    if (isChanged) {
+      // Shown at once on the card and the preview; a refusal puts the set back and says so with Try again.
+      void data.profile.setSocials(slug, checked.links);
+    }
     onClose();
+  };
+  // Closing with changes asks first (the owner's rule for ending actions); with none, it just closes.
+  const leave = () => {
+    if (isChanged) setLeaving(true);
+    else onClose();
   };
   return (
     <Modal
@@ -73,11 +90,11 @@ function EditDialog({
       icon="link"
       isOpen
       onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
+        if (!isOpen) leave();
       }}
       actions={
         <>
-          <Button kbd="ESC" onPress={onClose}>
+          <Button kbd="ESC" onPress={leave}>
             {strings.cancel}
           </Button>
           <Button variant="primary" onPress={save}>
@@ -86,7 +103,33 @@ function EditDialog({
         </>
       }
     >
-      <SocialLinksEditor rows={rows} onChange={setRows} tone="bare" />
+      <SocialLinksEditor rows={rows} onChange={setRows} tone="bare" errorFocus={errorFocus} />
+      {isLeaving && (
+        <Modal
+          title={strings.discardTitle}
+          isOpen
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setLeaving(false);
+          }}
+          actions={
+            <>
+              <Button
+                kbd="ESC"
+                onPress={() => {
+                  setLeaving(false);
+                }}
+              >
+                {strings.keepEditing}
+              </Button>
+              <Button variant="danger-solid" onPress={onClose}>
+                {strings.discard}
+              </Button>
+            </>
+          }
+        >
+          {strings.discardText}
+        </Modal>
+      )}
     </Modal>
   );
 }
@@ -128,13 +171,17 @@ function OwnSocialsCard({
       <Skeleton width="short" />
     ) : state.status === 'error' ? undefined : links.length === 0 ? (
       strings.none
+    ) : !isShown ? (
+      // Off, the card says so rather than showing marks the page won't.
+      strings.hiddenHere
     ) : (
       <SocialLinks links={previewSocials(links)} isInline />
     );
+  // A member with no sign in of their own has no links to keep: no button, rather than one that never works.
   const edit =
-    state.status === 'error' ? undefined : (
+    state.status === 'error' || (state.status === 'ready' && !state.canChange) ? undefined : (
       <Button
-        isDisabled={state.status !== 'ready' || !state.canChange}
+        isDisabled={state.status !== 'ready'}
         onPress={() => {
           setEditing(true);
         }}

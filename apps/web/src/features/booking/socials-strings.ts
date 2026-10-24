@@ -2,7 +2,8 @@
 export const strings = {
   title: 'Social links',
   shown: 'Show on this page',
-  everywhere: 'Shown on all your booking pages and your profile.',
+  everywhere: 'Your links, set once for all your booking pages and your profile.',
+  hiddenHere: 'Not shown on this page.',
   none: 'You haven’t added any yet.',
   edit: 'Edit social links',
   add: 'Add social links',
@@ -13,4 +14,8 @@ export const strings = {
   dialogTitle: 'Social links',
   cancel: 'Cancel',
   save: 'Save',
+  discardTitle: 'Discard your changes?',
+  discardText: 'Your social links stay as they were.',
+  keepEditing: 'Keep editing',
+  discard: 'Discard',
 } as const;

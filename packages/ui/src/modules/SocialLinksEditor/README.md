@@ -22,14 +22,16 @@ else setRows(checked.rows); // every row that won't save now says why
 - A field is checked as it is left: a pasted profile link becomes its handle ("https://twitter.com/ada?s=20" reads "ada" after "x.com/"); a link to another network, a post, or another site is refused in plain words under the field ("That’s a link to Instagram, not LinkedIn."). A whole link shows without the prefix.
 - Remove takes a row out of the draft at once, with no confirm: nothing is saved until Save, and Discard brings it back.
 - One row per network, at most ten: Add social link offers only the networks not used, and goes away when every one is.
-- `tone="bare"` drops the card's frame, for a dialog that frames it already.
+- `tone="bare"` drops the card's frame and puts Add social link as the last row, for a dialog that frames it and has its own footer.
+- `errorFocus`: bump it when a save comes back with rows that won't save, and the first of them takes focus.
+- Focus follows the work: a row added takes focus, a row removed hands focus to the row now in its place (or the one before, or Add social link when none is left), each once the menu has gone.
 
 ## States
 
 - **Empty**: one row, "No social links yet", with Add social link.
 - **Loading** (`isLoading`): two rows' shapes, the card marked busy.
 - **Error**: a row's field shows why its text won't save, and the screen's save waits for it.
-- **Disabled** (`isDisabled`, while a save is out): everything stays, nothing takes input.
+- **Disabled** (`isDisabled`, while a save is out): the rows stay as typed and stay typeable (the screen's save sends what it had); Add and each row's menu wait.
 - **Read only** (`isReadOnly`): the fields read only, with `readOnlyReason`; no menus, no Add.
 
 ## Keyboard

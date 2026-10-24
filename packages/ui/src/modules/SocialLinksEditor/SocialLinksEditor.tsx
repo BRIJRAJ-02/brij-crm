@@ -3,10 +3,10 @@
 // booking page editor's Edit social links dialog, the same editor in both.
 // Main task: add a network from the fixed set, type a handle or paste a link once, and put the links in order.
 // Leaves out: saving (the screen's SaveBar or the dialog's Save), and the networks' own sign in or verification.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { SOCIAL_LINK_NAMES, SOCIAL_LINK_NETWORKS, type SocialLinkNetwork } from '@crm/contracts/social-networks';
 import { socialLinkPlaceholder, socialLinkPrefix } from '@crm/contracts/values';
-import { Button } from '../../atoms/Button/Button.tsx';
+import { Button, ButtonGroup } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -30,9 +30,17 @@ export interface SocialLinksEditorProps {
   readonly isDisabled?: boolean;
   /** While the links are read: two rows' shapes in the card. */
   readonly isLoading?: boolean;
-  /** `default` in its own Card (Settings › Profile); `bare` with no frame, in a dialog that frames it already. */
+  /**
+   * `default` in its own Card, Add social link in its footer (Settings › Profile); `bare` with no frame and Add as
+   * the last row, in a dialog that frames it and has a footer of its own.
+   */
   readonly tone?: 'default' | 'bare';
+  /** Bumped by the screen when a save found rows that won't save: the first of them takes focus. */
+  readonly errorFocus?: number;
 }
+
+/** Where focus goes once a menu has gone: a row's field, or Add social link (no rows left). */
+type FocusTarget = { readonly network: SocialLinkNetwork } | { readonly add: true };
 
 /** A network's mark: its brand's own, or Lucide’s link for a website. */
 function NetworkMark({ network }: { readonly network: SocialLinkNetwork }) {
@@ -95,14 +103,16 @@ function AddMenu({
   unused,
   isDisabled,
   onAdd,
+  buttonRef,
 }: {
   readonly unused: readonly SocialLinkNetwork[];
   readonly isDisabled: boolean;
   readonly onAdd: (network: SocialLinkNetwork) => void;
+  readonly buttonRef: RefObject<HTMLButtonElement | null>;
 }) {
   return (
     <MenuTrigger>
-      <Button variant="dashed" icon="plus" isDisabled={isDisabled}>
+      <Button variant="dashed" icon="plus" isDisabled={isDisabled} ref={buttonRef}>
         {strings.add}
       </Button>
       <Menu
@@ -137,29 +147,46 @@ export function SocialLinksEditor({
   isDisabled = false,
   isLoading = false,
   tone = 'default',
+  errorFocus,
 }: SocialLinksEditorProps) {
-  // The row just added takes focus, once the Add menu has gone (it hands focus back to its button as it leaves).
-  const [added, setAdded] = useState<SocialLinkNetwork | undefined>(undefined);
+  // After a menu action, focus goes where the person is working: the row just added, the row now in a removed one's
+  // place, or Add social link when none is left. It moves once that menu has gone, since a menu hands focus back to
+  // its own button as it leaves (`menuLabel` names which menu to wait for).
+  const [pending, setPending] = useState<{ readonly target: FocusTarget; readonly menuLabel: string } | undefined>(
+    undefined,
+  );
   const fields = useRef(new Map<SocialLinkNetwork, HTMLInputElement>());
+  const addButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (added === undefined) return;
+    if (pending === undefined) return;
     let frames = 0;
     let frame = 0;
     const focus = () => {
-      const menuOpen = document.querySelector('[role="menu"]') !== null;
-      if (menuOpen && frames < 60) {
+      const leaving = [...document.querySelectorAll('[role="menu"]')].some(
+        (menu) => menu.getAttribute('aria-label') === pending.menuLabel,
+      );
+      if (leaving && frames < 60) {
         frames += 1;
         frame = requestAnimationFrame(focus);
         return;
       }
-      fields.current.get(added)?.focus();
-      setAdded(undefined);
+      if ('add' in pending.target) addButton.current?.focus();
+      else fields.current.get(pending.target.network)?.focus();
+      setPending(undefined);
     };
     frame = requestAnimationFrame(focus);
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, [added]);
+  }, [pending]);
+  // A save that found rows that won't save: the first of them takes focus, so its reason is read and in view.
+  const lastErrorFocus = useRef(errorFocus);
+  useEffect(() => {
+    if (errorFocus === lastErrorFocus.current) return;
+    lastErrorFocus.current = errorFocus;
+    const wrong = rows.find((row) => row.error !== undefined);
+    if (wrong !== undefined) fields.current.get(wrong.network)?.focus();
+  }, [errorFocus, rows]);
   const used = new Set(rows.map((row) => row.network));
   const unused = SOCIAL_LINK_NETWORKS.filter((network) => !used.has(network));
   const replace = (index: number, row: SocialLinkDraft) => {
@@ -172,12 +199,24 @@ export function SocialLinksEditor({
     onChange([...rest.slice(0, to), row, ...rest.slice(to)]);
   };
   const add = (network: SocialLinkNetwork) => {
-    setAdded(network);
+    setPending({ target: { network }, menuLabel: strings.networks });
     onChange([...rows, { network, text: '' }]);
   };
+  const remove = (index: number) => {
+    const rest = rows.filter((_each, at) => at !== index);
+    const next = rest[index] ?? rest[index - 1];
+    const row = rows[index];
+    setPending({
+      target: next === undefined ? { add: true } : { network: next.network },
+      menuLabel: row === undefined ? '' : strings.rowMenu(SOCIAL_LINK_NAMES[row.network]),
+    });
+    onChange(rest);
+  };
   const canEdit = !isReadOnly;
-  const addButton =
-    canEdit && unused.length > 0 ? <AddMenu unused={unused} isDisabled={isDisabled} onAdd={add} /> : undefined;
+  const addControl =
+    canEdit && unused.length > 0 ? (
+      <AddMenu unused={unused} isDisabled={isDisabled} onAdd={add} buttonRef={addButton} />
+    ) : undefined;
   const body = isLoading ? (
     <>
       {[0, 1].map((index) => (
@@ -188,7 +227,7 @@ export function SocialLinksEditor({
     </>
   ) : rows.length === 0 ? (
     <SettingsRow title={strings.emptyTitle} description={strings.emptyText}>
-      {addButton}
+      {addControl}
     </SettingsRow>
   ) : (
     <>
@@ -234,7 +273,7 @@ export function SocialLinksEditor({
                           move(index, to);
                         }}
                         onRemove={() => {
-                          onChange(rows.filter((_each, at) => at !== index));
+                          remove(index);
                         }}
                       />
                     ),
@@ -246,10 +285,16 @@ export function SocialLinksEditor({
       })}
     </>
   );
-  const footer = !isLoading && rows.length > 0 ? addButton : undefined;
+  const trailing = !isLoading && rows.length > 0 ? addControl : undefined;
+  // In a dialog, Add is the last row rather than a second grey band over the dialog's own footer.
   return (
-    <Card tone={tone} isBusy={isLoading} {...(footer === undefined ? {} : { footer })}>
+    <Card tone={tone} isBusy={isLoading} {...(trailing === undefined || tone === 'bare' ? {} : { footer: trailing })}>
       {body}
+      {trailing !== undefined && tone === 'bare' && (
+        <ButtonGroup label={strings.add} layout="row">
+          {trailing}
+        </ButtonGroup>
+      )}
     </Card>
   );
 }

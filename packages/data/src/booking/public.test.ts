@@ -224,6 +224,7 @@ describe('withPreviewDraft', () => {
         { network: 'myspace', href: 'https://myspace.com/a', label: 'a' },
         { network: 'website', href: '//evil.example', label: 'evil' },
         { network: 'github', href: 'https://github.com/ada', label: 7 },
+        { network: 'x', href: 'https://x.com/eve', label: '@eve' },
       ],
     };
     expect(withPreviewDraft(page, { type: 'crm:preview', draft })?.socials).toEqual([ada]);

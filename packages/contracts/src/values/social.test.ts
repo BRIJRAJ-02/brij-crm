@@ -161,6 +161,9 @@ describe('checkSocialLink (a person’s own links, booking socials)', () => {
     expect(checkSocialLink('linkedin', 'https://linkedin.com/feed/')).toEqual({ ok: false, reason: 'not_profile' });
     expect(checkSocialLink('instagram', 'https://linktr.ee/ada')).toEqual({ ok: false, reason: 'not_profile' });
     expect(checkSocialLink('x', 'not a handle!')).toEqual({ ok: false, reason: 'invalid' });
+    // A pasted link's handle is held to the network's own pattern too.
+    expect(checkSocialLink('x', 'https://x.com/ada%20verified')).toEqual({ ok: false, reason: 'not_profile' });
+    expect(checkSocialLink('x', 'https://x.com/ada%E2%80%AE')).toEqual({ ok: false, reason: 'not_profile' });
     expect(checkSocialLink('x', '   ')).toEqual({ ok: false, reason: 'empty' });
   });
 
@@ -171,6 +174,10 @@ describe('checkSocialLink (a person’s own links, booking socials)', () => {
       expect(checkSocialLink('website', refused), refused).toMatchObject({ ok: false, reason: 'invalid' });
     }
     expect(checkSocialLink('website', 'https://ada:pw@ada.dev')).toEqual({ ok: false, reason: 'credentials' });
+    // A browser resolves these to https://evil.com, but no one writes a link so: refused, never stored as typed.
+    for (const odd of ['https:evil.com', 'https:\\\\evil.com', 'https:/evil.com']) {
+      expect(checkSocialLink('website', odd), odd).toMatchObject({ ok: false, reason: 'invalid' });
+    }
     expect(checkSocialLink('website', 'https://github.com/ada')).toEqual({
       ok: false,
       reason: 'other_network',

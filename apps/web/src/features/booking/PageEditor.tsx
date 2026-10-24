@@ -18,6 +18,7 @@ import {
   type MemberSummary,
   type ScheduleView,
   type SchedulesView,
+  type SocialLinksHeld,
 } from '@crm/data';
 import { useCalendar, useCaptureList, usePageDestination, useSchedules, useSocialLinks } from '@crm/data/react';
 import {
@@ -172,6 +173,14 @@ const TIME_KEYS: readonly (keyof BookingPageSettings)[] = [
   'slotStep',
 ];
 
+/** What a page that shows no one's social links holds in their place: nothing, read never. */
+const NO_SOCIALS: SocialLinksHeld = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => ({ status: 'loading' }),
+  retain: () => () => undefined,
+  retry: () => undefined,
+};
+
 /** The settings the editor edits, from the page. */
 const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   title: page.title,
@@ -255,8 +264,10 @@ export function PageEditor({
   const dirty = changed(saved, draft);
   const isPageDirty = !isLocked && Object.keys(dirty).length > 0;
   const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember);
-  // The person's own social links, as the preview shows them while the page's switch is on (booking socials).
-  const socials = useSocialLinks(data.profile.socials(slug));
+  // The person's own social links, as the preview shows them while the page's switch is on (booking socials); held
+  // only on their own personal page, the one page that shows them.
+  const showsSocials = ownerMember === undefined && page.kind === 'personal';
+  const socials = useSocialLinks(showsSocials ? data.profile.socials(slug) : NO_SOCIALS);
   const previewLinks = socials.status === 'ready' ? previewSocials(socials.links) : [];
   // The chosen schedule's week and days off, edited in place and saved by the same Save as the page's settings
   // (through the data layer: shown at once, put back if the server refuses).
@@ -570,9 +581,7 @@ export function PageEditor({
                         durations: draft.durations,
                         location: draft.location,
                         // The owner's links as they are now, while the draft shows them (booking socials).
-                        ...(ownerMember === undefined && page.kind === 'personal'
-                          ? { socials: draft.showSocials ? previewLinks : [] }
-                          : {}),
+                        ...(showsSocials ? { socials: draft.showSocials ? previewLinks : [] } : {}),
                         defaultView: draft.defaultView,
                       }}
                     />
@@ -743,7 +752,7 @@ export function PageEditor({
                       <SocialsCard
                         data={data}
                         slug={slug}
-                        isTeam={page.kind === 'round_robin'}
+                        isTeam={page.kind !== 'personal'}
                         isOwner={ownerMember === undefined}
                         isShown={draft.showSocials}
                         isLocked={isLocked}

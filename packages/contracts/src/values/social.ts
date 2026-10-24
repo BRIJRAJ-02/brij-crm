@@ -362,7 +362,10 @@ function checkWebsite(text: string): SocialLinkChecked {
   const link = checkWebLink(text);
   if (!link.ok) return { ok: false, reason: link.reason === 'too_long' ? 'too_long' : 'invalid' };
   const parsed = parse(link.value);
-  if (parsed === undefined || safeLink(link.value) === undefined) return { ok: false, reason: 'invalid' };
+  // `https:ada.dev` and `https:/ada.dev` parse, but aren't how a link is written: refused, never stored as typed.
+  if (parsed === undefined || !/^https?:\/\//i.test(link.value) || safeLink(link.value) === undefined) {
+    return { ok: false, reason: 'invalid' };
+  }
   if (parsed.username !== '' || parsed.password !== '') return { ok: false, reason: 'credentials' };
   const elsewhere = networkOfHost(parsed.hostname);
   if (elsewhere !== undefined) return { ok: false, reason: 'other_network', network: elsewhere };
@@ -385,7 +388,11 @@ export function checkSocialLink(network: SocialLinkNetwork, draft: string): Soci
   if (!checked.ok) return checked.reason === 'other_network' ? checked : { ok: false, reason: 'invalid' };
   const parsed = parse(checked.value);
   if (parsed === undefined || networkOfHost(parsed.hostname) !== network) return { ok: false, reason: 'not_profile' };
-  if (NETWORKS[network].profileOf(segmentsOf(parsed)) === undefined) return { ok: false, reason: 'not_profile' };
+  const profile = NETWORKS[network].profileOf(segmentsOf(parsed));
+  // A pasted link's handle must be one the network takes, as a typed one must: no spaces, no direction marks.
+  if (profile === undefined || !NETWORKS[network].handle.test(decoded(profile.handle).replace(/^@/, ''))) {
+    return { ok: false, reason: 'not_profile' };
+  }
   return { ok: true, value: checked.value };
 }
 

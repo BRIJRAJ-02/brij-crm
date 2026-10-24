@@ -47,13 +47,15 @@ set local role crm_handle;
 --> statement-breakpoint
 -- Replaces `owner`'s social links with `networks` and `hrefs`, paired in order, the first at position 0. A row that
 -- is already as given stays as it is; the set the same, nothing is written. More than ten breaks the position check,
--- a network twice the primary key, and lists of different lengths a not null column.
+-- a network twice the primary key, and lists of different lengths a not null column. Two saves for one person (two
+-- tabs, two workspaces) take turns on a transaction lock of theirs, so the last one wins whole, never a mix.
 create function crm_save_social_links(owner uuid, networks text[], hrefs text[])
   returns void
   language sql
   security definer
   set search_path = pg_catalog, pg_temp
 begin atomic
+  select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('crm_social_links:' || crm_save_social_links.owner::text, 0));
   delete from auth.social_links s
   where s.user_id = crm_save_social_links.owner
     and not exists (

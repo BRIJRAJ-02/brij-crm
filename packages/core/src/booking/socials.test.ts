@@ -215,6 +215,29 @@ describe('a person’s social links', () => {
     expect((await getMyProfile(ada.scope)).socials).toEqual([LINKS[0]]);
   });
 
+  it('takes two saves at once from two workspaces in turn: the last wins whole, never a mix or a failure', async () => {
+    const ada = await person('Ada Lovelace');
+    const second = await createWorkspace(db, {
+      name: 'Second',
+      slug: `socials-race-${String(Date.now())}-${String(count)}`,
+      firstMember: { name: 'Ada Lovelace', email: `${ada.userId}@example.com`, userId: ada.userId },
+    });
+    const there = testScope({
+      db,
+      workspaceId: second.workspaceId,
+      actor: { type: 'member', id: second.memberId },
+      userId: ada.userId,
+    });
+    const one = [LINKS[0], LINKS[1]];
+    const two = [LINKS[1], LINKS[2]];
+    await Promise.all([
+      updateMyMemberProfile(ada.scope, { socials: one }),
+      updateMyMemberProfile(there, { socials: two }),
+    ]);
+    const now = (await getMyProfile(ada.scope)).socials;
+    expect([JSON.stringify(one), JSON.stringify(two)]).toContain(JSON.stringify(now));
+  });
+
   it('is out of the app login’s own reach: no grant on the table, only the two functions', async () => {
     const ada = await person('Ada Lovelace');
     await expect(
@@ -313,7 +336,8 @@ describe('the links on the public pages', () => {
     await updateMyMemberProfile(ada.scope, { socials: [LINKS[2]] });
     const profile = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
     expect(profile.socials).toEqual([{ network: 'x', href: 'https://x.com/ada', label: '@ada' }]);
-    expect((await findHandleOwner({ db }, handle)).socials).toEqual(profile.socials);
+    // Only the profile reads them: the picture route's lookup never does.
+    expect((await findHandleOwner({ db }, handle)).socials).toEqual([]);
     // The one reusable read (a link page asks the same).
     const direct = await db.withWorkspace(ada.workspaceId, (tx) => publicSocialsOf(tx, ada.userId));
     expect(direct).toEqual(profile.socials);

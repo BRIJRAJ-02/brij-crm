@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
+import { SettingsRow } from '../../modules/SettingsLayout/SettingsLayout.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SocialLinks, type SocialLinkItem } from './SocialLinks.tsx';
 
@@ -45,6 +46,21 @@ export const Tooltip: Story = {
   play: async ({ canvas, userEvent }) => {
     await hoverFresh(userEvent, canvas.getByRole('link', { name: 'X, @ada' }));
     await expect(await shownTooltip()).toHaveTextContent('X · @ada');
+  },
+};
+
+/** Inside text: a SettingsRow's description (the booking editor's card) holds the list as phrasing elements. */
+export const Inline: Story = {
+  args: { isInline: true },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <SettingsRow title="Show on this page" description={<SocialLinks {...args} />} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const list = canvas.getByRole('list', { name: 'Ada Lovelace’s social links' });
+    await expect(list.tagName).toBe('SPAN');
+    await expect(canvas.getAllByRole('listitem')).toHaveLength(3);
   },
 };
 
