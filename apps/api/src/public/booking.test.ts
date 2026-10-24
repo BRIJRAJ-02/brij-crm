@@ -578,6 +578,7 @@ describe('page views for the operator console (spec 0047, AC-1625)', () => {
     await read({ 'user-agent': CHROME });
     // A later page and a search are the same view's reads; the owner, a crawler and no browser count nothing.
     await read({ 'user-agent': CHROME }, '?q=site');
+    await read({ 'user-agent': CHROME }, '?q=');
     await read({ 'user-agent': CHROME, cookie: m.cookie });
     await read({ 'user-agent': 'Googlebot/2.1' });
     await read({});

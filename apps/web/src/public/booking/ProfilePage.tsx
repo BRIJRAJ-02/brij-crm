@@ -70,7 +70,9 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   const load = useCallback(
     (search: string) => {
       const ticket = (latest.current += 1);
-      client.profile(handle, search === '' ? {} : { q: search }).then(
+      // The page's first read is its view (AC-5124); a cleared search reads it again as a search, never a view.
+      const isFirst = loadedRef.current !== 'ready';
+      client.profile(handle, search === '' && isFirst ? {} : { q: search }).then(
         (profile) => {
           if (ticket !== latest.current) return;
           if (profile.handle !== handle) onMoved(profile.handle);

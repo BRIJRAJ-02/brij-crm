@@ -446,9 +446,10 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
         max: search === undefined ? PROFILE_PAGE_SIZE + 1 : PROFILE_LIMITS.items + 1,
       });
       const page = await readLinkPage(found, search === undefined ? {} : { search });
-      // One view per page load (its first page, no search), never a machine's or the owner's own (AC-5124),
+      // One view per page load (its first page, with no `q` at all: a cleared search sends an empty one), never a
+      // machine's or the owner's own (AC-5124),
       // counted after the answer is made and never holding it up.
-      if (search === undefined && position === undefined) countView(c, found.owner.userId);
+      if (c.req.query('q') === undefined && position === undefined) countView(c, found.owner.userId);
       return ok(page);
     } catch (error) {
       return refusalAnswer(error);
