@@ -38,7 +38,16 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { railHost, railTitle } from './host.ts';
 import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
-import { saveHour12, savedHour12, savedView, saveView, type SlotView } from './prefs.ts';
+import {
+  openedBefore,
+  rememberOpened,
+  saveHour12,
+  savedHour12,
+  savedView,
+  saveView,
+  viewOf,
+  type SlotView,
+} from './prefs.ts';
 import { needsRead, pageEnded } from './reads.ts';
 import { refusalLine } from './refusal.ts';
 import { strings } from './strings.ts';
@@ -141,6 +150,12 @@ export function BookingPage({
     if (tidied !== undefined) globalThis.history.replaceState(globalThis.history.state, '', tidied);
   }, []);
   const isPreview = globalThis.parent !== globalThis.window;
+  // The editor's own preview, as against a site's embed: a frame whose address carries no embed marker (`frame.ts`).
+  // Only the editor's preview shows the host their setting over their own remembered choice.
+  const isEditorPreview = isPreview && new URLSearchParams(globalThis.location.search).get('embed') !== '1';
+  // The address this visit began at, read before the page's handle address replaces it: what the opening view is
+  // kept under, so the next visit to the same link draws the same shape.
+  const [addressPath] = useState(() => globalThis.location.pathname);
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
   // Who the visitor is (spec 0028), asked for as the page's own facts are, not after them: the two answers then
   // land together, so the card is drawn once with the visitor's bar or without it, and never with a held place
@@ -208,6 +223,8 @@ export function BookingPage({
           onEnded={ended}
           chosen={back.chosen}
           isPreview={isPreview}
+          isEditorPreview={isEditorPreview}
+          addressPath={addressPath}
           {...(viewer === undefined ? {} : { viewer })}
           {...(back.result === undefined ? {} : { connected: back.result })}
           {...(prefill === undefined ? {} : { prefill })}
@@ -259,7 +276,11 @@ export function LoadingBooking({
   readonly timeZone: string;
   readonly now: () => number;
 }) {
-  const [view, setView] = useState<SlotView>(savedView);
+  // The host's default comes with the facts, so this shape follows the visitor's own choice, then what this page
+  // opened in last time, then Month: the place it holds is the one the page that arrives takes.
+  const [view, setView] = useState<SlotView>(
+    () => savedView() ?? openedBefore(globalThis.location.pathname) ?? 'month',
+  );
   const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
   const today = dayKey(now(), timeZone);
   const times = (
@@ -367,14 +388,20 @@ function Booking({
   chosen,
   connected,
   isPreview,
+  isEditorPreview,
+  addressPath,
   viewer,
 }: {
   readonly handoff?: string;
   readonly chosen: Chosen;
   /** What a guest connect just answered. */
   readonly connected?: ConnectResult;
-  /** Inside the editor's preview: no visitor. */
+  /** Inside a frame of any kind: no visitor. */
   readonly isPreview: boolean;
+  /** Inside the editor's preview, so the host sees the view they set rather than the one they last picked. */
+  readonly isEditorPreview: boolean;
+  /** The address this visit began at, which the opening view is kept under. */
+  readonly addressPath: string;
   /** Who the visitor is (spec 0028), read beside the page's own facts so both land together; undefined while it loads. */
   readonly viewer?: PublicViewerAnswer;
   readonly client: Client;
@@ -390,7 +417,20 @@ function Booking({
 }) {
   const [zone, setZone] = useState(chosen.zone ?? detected);
   const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
-  const [view, setView] = useState<SlotView>(savedView);
+  // The view the host set the page to open in. The facts are read without a schema, so an API that doesn't send it
+  // yet reads as Month, the view every page had before this was a setting.
+  const opensIn = viewOf(page.defaultView) ?? 'month';
+  // The view this opens in (owner, 25 Oct 2026): what this browser chose before, else the host's own default, which
+  // came with the page's facts. Read once, as the card is first drawn, so the page never paints one view and swaps.
+  const [picked, setView] = useState<SlotView>(() => savedView() ?? opensIn);
+  // The editor's preview is inert, so nothing inside it switches the view: it reads the host's setting straight from
+  // the page, and the choice they haven't saved yet shows the moment they pick it. A visitor keeps their own.
+  const view = isEditorPreview ? opensIn : picked;
+  // The view this page opens in, kept under the address the visit began at, so a later visit's loading shape holds
+  // the place the page will take.
+  useEffect(() => {
+    if (!isEditorPreview) rememberOpened(addressPath, opensIn);
+  }, [isEditorPreview, addressPath, opensIn]);
   const [length, setDuration] = useState<number>(chosen.duration ?? page.durations[0] ?? 30);
   // A length the page no longer offers (the editor's preview changed them) falls back to its first.
   const duration = page.durations.some((minutes) => minutes === length) ? length : (page.durations[0] ?? 30);
