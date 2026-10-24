@@ -1,12 +1,12 @@
 # The link page editor (spec 0051, built as blocks)
 
-## Settings › Account › Link page (`/w/$slug/settings/account/link-page`, LinkPageScreen)
+## Settings › Account › Profile › Link page (`/w/$slug/settings/account/profile?view=link-page`, LinkPageLoader, LinkPageScreen)
 
 - **Purpose**: what the person's page at `/<handle>` holds, in order, beside a phone that shows it as a visitor will.
 - **Main task**: add a booking page, a link or a heading, edit it, move it, archive or delete it; every change shows at once, on the list and in the phone, and is saved as it is made.
 - **Leaves out**: the contact card, the QR and the socials row (later phases), themes and appearance, and the handle (Settings › Profile).
 
-A settings page that fills the view (`fillsView`) with PreviewLayout under its bar: the blocks in a Card beside the phone, whose page is the library's LinkPage drawn from the editor's own list (`isPreview`: never a frame, never the public origin); under the layout's width, Preview opens it in a sheet. The bar holds View page (the public page in a new tab).
+A view of Profile's (its trail reads Settings › Account › Profile › Link page; Profile stays the current place in the settings sidebar), opened from Profile's Your link page row and the booking editor's Link page card. Why a view and not a route of its own: a route's loader and chunk list sit in the app's first load, which had 300 B less room than a route needs (250 kB budget); the view's store, screen and copy all load with Profile's own chunk and `data.linkPage.load()`. It is a settings page that fills the view (`fillsView`) with PreviewLayout under its bar: the blocks in a Card beside the phone, whose page is the library's LinkPage drawn from the editor's own list (`isPreview`: never a frame, never the public origin); under the layout's width, Preview opens it in a sheet. The bar holds View page (the public page in a new tab).
 
 - **Blocks**: a LinkList with `leadingLoading` (each row's tile is the page's own, `LinkPageTile`), grips (drag, and the keyboard on the grip: Enter, the arrows, Enter), and a menu per row: Edit (links and headings), Copy link (a link's address, a booking page's `/<handle>/<slug>`), Move up and Move down (only the moves there is room for, announced in a status region), Archive (one press: it can be restored), and Delete, which asks first (`tone="danger"`, "Delete block") and waits there for the server. Pressing a row opens its editor. A paused page shows Paused; a page made Link only, deleted, or in a workspace the person left shows Unavailable, kept until they delete it.
 - **Add**: a Menu of the registry's kinds (`registry.tsx`): Booking page, Link, Heading, each with its line, and a full kind disabled with the limit's sentence (60 blocks, 40 links, 12 headings).

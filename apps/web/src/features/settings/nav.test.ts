@@ -19,7 +19,7 @@ describe('settingsNav', () => {
     const groups = settingsNav('acme');
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Scheduling', 'Workspace', 'Super admin']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
-      ['Profile', 'Link page', 'Preferences', 'Sign in and devices', 'Notifications'],
+      ['Profile', 'Preferences', 'Sign in and devices', 'Notifications'],
       ['Calendars', 'Round robin'],
       ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'History', 'Trash'],
       ['Overview', 'Users', 'Booking pages', 'Website'],
@@ -30,7 +30,6 @@ describe('settingsNav', () => {
     const entries = settingsNav('acme').flatMap((group) => group.entries);
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
       profile: '/w/acme/settings/account/profile',
-      'link-page': '/w/acme/settings/account/link-page',
       preferences: '/w/acme/settings/account/preferences',
       calendars: '/w/acme/settings/scheduling/calendars',
       notifications: '/w/acme/settings/account/notifications',
@@ -86,7 +85,7 @@ describe('visibleSettingsNav', () => {
     expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'])).toEqual(workspaceGroups);
     // Without it, Scheduling keeps Calendars and loses only Round robin.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
-      ['profile', 'link-page', 'preferences', 'security', 'notifications'],
+      ['profile', 'preferences', 'security', 'notifications'],
       ['calendars'],
       ['general', 'members', 'objects', 'jobs', 'history', 'trash'],
     ]);
@@ -135,7 +134,6 @@ describe('settingsPageOf', () => {
   it('marks the page each address shows', () => {
     expect(settingsPageOf('/w/acme/settings/account/preferences')).toBe('preferences');
     expect(settingsPageOf('/w/acme/settings/account/profile')).toBe('profile');
-    expect(settingsPageOf('/w/acme/settings/account/link-page')).toBe('link-page');
     expect(settingsPageOf('/w/acme/settings/general')).toBe('general');
     expect(settingsPageOf('/w/acme/settings/scheduling/calendars')).toBe('calendars');
     expect(settingsPageOf('/w/acme/settings/account/calendars')).toBe('calendars');

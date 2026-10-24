@@ -68,7 +68,6 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
   it('lists the Settings pages the member may open, by their place in Settings', () => {
     expect(settingsCommands('acme', []).map((command) => command.name)).toEqual([
       'Settings › Profile',
-      'Settings › Link page',
       'Settings › Preferences',
       'Settings › Sign in and devices',
       'Settings › Notifications',
@@ -98,7 +97,6 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
     expect(names('set')).toEqual([
       'Settings',
       'Settings › Profile',
-      'Settings › Link page',
       'Settings › Preferences',
       'Settings › Sign in and devices',
       'Settings › Notifications',

@@ -1167,7 +1167,9 @@ export function createDataLayer({
     schedules.clear();
     preferences.clear();
     pictureChoice.clear();
-    linkPageMade?.clear();
+    void linkPage?.then((made) => {
+      made.clear();
+    });
     socialLinks.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
@@ -1998,25 +2000,9 @@ export function createDataLayer({
     notify,
   });
   // Settings › Account › Link page (spec 0051): the person's own blocks, the same in every workspace. Its store and
-  // rules load with the first screen that asks, never in the first load.
+  // rules load with the first screen that asks, never in the first load; the store builds its calls from the
+  // profile procedures and the one call path, in its own chunk.
   let linkPage: Promise<LinkPageStore> | undefined;
-  let linkPageMade: LinkPageStore | undefined;
-  const loadLinkPage = (): Promise<LinkPageStore> =>
-    (linkPage ??= import('./link-page/store.ts').then(({ openLinkPage }) => {
-      linkPageMade = openLinkPage({
-        api: {
-          items: (input) => call((options) => api.profile.items(input, options)),
-          pageChoices: (input) => call((options) => api.profile.pageChoices(input, options)),
-          saveItem: (input) => call((options) => api.profile.saveItem(input, options)),
-          orderItems: (input) => call((options) => api.profile.orderItems({ ...input, ids: [...input.ids] }, options)),
-          archiveItem: (input) => call((options) => api.profile.archiveItem(input, options)),
-          deleteItem: (input) => call((options) => api.profile.deleteItem(input, options)),
-        },
-        mintId,
-        notify,
-      });
-      return linkPageMade;
-    }));
   // Settings › Account › Profile: whether the person's picture shows on their public pages, read with the profile.
   const pictureChoice = createPictureChoiceStore({
     api: {
@@ -4088,7 +4074,10 @@ export function createDataLayer({
      * ones before it; refused, it is put back and a toast says why, with Try again.
      */
     linkPage: {
-      load: (): Promise<LinkPageStore> => loadLinkPage(),
+      load: (): Promise<LinkPageStore> =>
+        (linkPage ??= import('./link-page/store.ts').then(({ openLinkPage }) =>
+          openLinkPage({ profile: api.profile, call, mintId, notify }),
+        )),
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {

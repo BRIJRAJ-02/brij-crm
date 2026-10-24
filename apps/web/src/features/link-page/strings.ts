@@ -1,6 +1,10 @@
 // Settings › Account › Link page's copy (spec 0051).
+import { navStrings } from './nav-strings.ts';
+
 export const strings = {
-  title: 'Link page',
+  title: navStrings.title,
+  /** The page's place in Settings: a page of Profile's. */
+  profile: 'Profile',
   blocks: 'Blocks',
   blocksText: 'In the order visitors see them.',
   add: 'Add',

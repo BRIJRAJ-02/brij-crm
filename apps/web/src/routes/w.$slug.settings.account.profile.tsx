@@ -1,6 +1,8 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
-import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { createFileRoute, useLocation, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { LinkPageLoader } from '../features/link-page/LinkPageLoader.tsx';
+import { LinkPagePending } from '../features/link-page/LinkPagePending.tsx';
 import { ProfilePending, ProfileScreen } from '../features/settings/ProfileScreen.tsx';
 import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
 import { isGooglePhotoResult, strings, type GooglePhotoResult } from '../features/settings/workspace-strings.ts';
@@ -27,11 +29,7 @@ export const Route = createFileRoute('/w/$slug/settings/account/profile')({
       throw error;
     }
   },
-  pendingComponent: () => (
-    <LoadingNow>
-      <ProfilePending />
-    </LoadingNow>
-  ),
+  pendingComponent: ProfileRoutePending,
   errorComponent: ProfileError,
   component: ProfileRoute,
 });
@@ -41,9 +39,11 @@ function ProfileRoute() {
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
   const { 'google-photo': photoResult } = Route.useSearch();
+  const view = useLinkPageView();
   const router = useRouter();
   const navigate = useNavigate();
   if (profile === undefined) return <SettingsMissing backTo="home" />;
+  if (view) return <LinkPageLoader data={data} slug={slug} profile={profile} />;
   return (
     <ProfileScreen
       key={profile.memberId}
@@ -57,6 +57,20 @@ function ProfileRoute() {
       }
     />
   );
+}
+
+/**
+ * Whether the address asks for the link page's editor (`?view=link-page`, spec 0051), read off the address in the
+ * page's own chunk rather than validated up front, so the app's first load carries none of it.
+ */
+function useLinkPageView(): boolean {
+  return useLocation({ select: (location) => new URLSearchParams(location.searchStr).get('view') === 'link-page' });
+}
+
+/** While the profile loads: the link page's own shape for its view, else Profile's. */
+function ProfileRoutePending() {
+  const view = useLinkPageView();
+  return <LoadingNow>{view ? <LinkPagePending /> : <ProfilePending />}</LoadingNow>;
 }
 
 function ProfileError({ error }: ErrorComponentProps) {

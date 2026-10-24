@@ -51,7 +51,6 @@ import { Route as WSlugCapturesLinksPageIdRouteImport } from './routes/w.$slug.c
 import { Route as WSlugObjectsObjectImportRouteImport } from './routes/w.$slug.objects.$object_.import.tsx'
 import { Route as WSlugSettingsAccountIndexRouteImport } from './routes/w.$slug.settings.account.index.tsx'
 import { Route as WSlugSettingsAccountCalendarsRouteImport } from './routes/w.$slug.settings.account.calendars.tsx'
-import { Route as WSlugSettingsAccountLinkPageRouteImport } from './routes/w.$slug.settings.account.link-page.tsx'
 import { Route as WSlugSettingsAccountNotificationsRouteImport } from './routes/w.$slug.settings.account.notifications.tsx'
 import { Route as WSlugSettingsAccountPreferencesRouteImport } from './routes/w.$slug.settings.account.preferences.tsx'
 import { Route as WSlugSettingsAccountProfileRouteImport } from './routes/w.$slug.settings.account.profile.tsx'
@@ -299,12 +298,6 @@ const WSlugSettingsAccountCalendarsRoute =
     path: '/account/calendars',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
-const WSlugSettingsAccountLinkPageRoute =
-  WSlugSettingsAccountLinkPageRouteImport.update({
-    id: '/account/link-page',
-    path: '/account/link-page',
-    getParentRoute: () => WSlugSettingsRoute,
-  } as any)
 const WSlugSettingsAccountNotificationsRoute =
   WSlugSettingsAccountNotificationsRouteImport.update({
     id: '/account/notifications',
@@ -518,7 +511,6 @@ export interface FileRoutesByFullPath {
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/objects/$object/import': typeof WSlugObjectsObjectImportRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
-  '/w/$slug/settings/account/link-page': typeof WSlugSettingsAccountLinkPageRoute
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
@@ -588,7 +580,6 @@ export interface FileRoutesByTo {
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/objects/$object/import': typeof WSlugObjectsObjectImportRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
-  '/w/$slug/settings/account/link-page': typeof WSlugSettingsAccountLinkPageRoute
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
@@ -663,7 +654,6 @@ export interface FileRoutesById {
   '/w/$slug/captures_/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/objects/$object_/import': typeof WSlugObjectsObjectImportRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
-  '/w/$slug/settings/account/link-page': typeof WSlugSettingsAccountLinkPageRoute
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
@@ -739,7 +729,6 @@ export interface FileRouteTypes {
     | '/w/$slug/captures/links/$pageId'
     | '/w/$slug/objects/$object/import'
     | '/w/$slug/settings/account/calendars'
-    | '/w/$slug/settings/account/link-page'
     | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
@@ -809,7 +798,6 @@ export interface FileRouteTypes {
     | '/w/$slug/captures/links/$pageId'
     | '/w/$slug/objects/$object/import'
     | '/w/$slug/settings/account/calendars'
-    | '/w/$slug/settings/account/link-page'
     | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
@@ -883,7 +871,6 @@ export interface FileRouteTypes {
     | '/w/$slug/captures_/links/$pageId'
     | '/w/$slug/objects/$object_/import'
     | '/w/$slug/settings/account/calendars'
-    | '/w/$slug/settings/account/link-page'
     | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
@@ -1227,13 +1214,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsAccountCalendarsRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
-    '/w/$slug/settings/account/link-page': {
-      id: '/w/$slug/settings/account/link-page'
-      path: '/account/link-page'
-      fullPath: '/w/$slug/settings/account/link-page'
-      preLoaderRoute: typeof WSlugSettingsAccountLinkPageRouteImport
-      parentRoute: typeof WSlugSettingsRoute
-    }
     '/w/$slug/settings/account/notifications': {
       id: '/w/$slug/settings/account/notifications'
       path: '/account/notifications'
@@ -1483,7 +1463,6 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsTrashRoute: typeof WSlugSettingsTrashRoute
   WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
   WSlugSettingsAccountCalendarsRoute: typeof WSlugSettingsAccountCalendarsRoute
-  WSlugSettingsAccountLinkPageRoute: typeof WSlugSettingsAccountLinkPageRoute
   WSlugSettingsAccountNotificationsRoute: typeof WSlugSettingsAccountNotificationsRoute
   WSlugSettingsAccountPreferencesRoute: typeof WSlugSettingsAccountPreferencesRoute
   WSlugSettingsAccountProfileRoute: typeof WSlugSettingsAccountProfileRoute
@@ -1520,7 +1499,6 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsTrashRoute: WSlugSettingsTrashRoute,
   WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
   WSlugSettingsAccountCalendarsRoute: WSlugSettingsAccountCalendarsRoute,
-  WSlugSettingsAccountLinkPageRoute: WSlugSettingsAccountLinkPageRoute,
   WSlugSettingsAccountNotificationsRoute:
     WSlugSettingsAccountNotificationsRoute,
   WSlugSettingsAccountPreferencesRoute: WSlugSettingsAccountPreferencesRoute,

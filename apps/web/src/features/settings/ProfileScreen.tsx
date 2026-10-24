@@ -35,7 +35,7 @@ import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { DeleteAccountSection } from './DeleteAccountSection.tsx';
 import { PhotoSwitch, PhotoSwitchPending } from './PhotoSwitch.tsx';
 import { strings as linkPageCopy } from '../link-page/strings.ts';
-import { linkPageHref } from './nav.ts';
+import { linkPageHref } from '../link-page/nav-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings as securityCopy } from './security-strings.ts';
 import { strings, type GooglePhotoResult } from './workspace-strings.ts';

@@ -14,7 +14,6 @@ import type {
   ProfileItem,
   ProfilePageFacts,
 } from '@crm/data';
-import { useLinkPage } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
@@ -37,6 +36,7 @@ import {
   type LinkPageBlock,
   type LinkRow,
 } from '@crm/ui';
+import { useLinkPage } from '@crm/data/react';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
@@ -81,6 +81,7 @@ export function LinkPageScreen({ linkPage, slug, profile }: LinkPageScreenProps)
   return (
     <SettingsPage
       title={strings.title}
+      crumbs={[{ id: 'profile', label: strings.profile, href: profileHref(slug) }]}
       fillsView
       {...(handle === undefined
         ? {}

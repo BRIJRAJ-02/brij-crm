@@ -86,6 +86,31 @@ export interface LinkPageDeps {
   readonly now?: () => number;
 }
 
+/** The profile procedures the store calls, as the data layer's oRPC client answers them. */
+interface ProfileProcedures {
+  readonly items: (input: { workspace: string }, options: { signal?: AbortSignal }) => Promise<ProfileItems>;
+  readonly pageChoices: (
+    input: { workspace: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<readonly ProfilePageChoice[]>;
+  readonly saveItem: (
+    input: { workspace: string; id: string; block: ProfileBlock; isEdit?: boolean; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<ProfileItem>;
+  readonly orderItems: (
+    input: { workspace: string; ids: string[]; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<ProfileItems>;
+  readonly archiveItem: (
+    input: { workspace: string; id: string; archived: boolean; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<ProfileItems>;
+  readonly deleteItem: (
+    input: { workspace: string; id: string; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<{ readonly id: string }>;
+}
+
 /** A read this recent serves a new holder as it is: the route's loader and the screen it opens hold it together. */
 export const LINK_PAGE_FRESH_MS = 1_000;
 
@@ -464,7 +489,27 @@ export function createLinkPageStore(deps: LinkPageDeps) {
  * The link page's store and its rules as the editor uses them, made once by the data layer the first time a screen
  * asks (`data.linkPage.load()`), so none of it rides in the app's first load.
  */
-export function openLinkPage(deps: LinkPageDeps) {
+export function openLinkPage(given: {
+  /** The profile procedures of the data layer's client. */
+  readonly profile: ProfileProcedures;
+  /** The data layer's one call path (retries, the session's end, refusals as DataError). */
+  readonly call: <T>(run: (options: { readonly signal?: AbortSignal }) => Promise<T>) => Promise<T>;
+  readonly mintId: () => string;
+  readonly notify: (notice: Notice) => void;
+}) {
+  const { profile, call } = given;
+  const deps: LinkPageDeps = {
+    api: {
+      items: (input) => call((options) => profile.items(input, options)),
+      pageChoices: (input) => call((options) => profile.pageChoices(input, options)),
+      saveItem: (input) => call((options) => profile.saveItem(input, options)),
+      orderItems: (input) => call((options) => profile.orderItems({ ...input, ids: [...input.ids] }, options)),
+      archiveItem: (input) => call((options) => profile.archiveItem(input, options)),
+      deleteItem: (input) => call((options) => profile.deleteItem(input, options)),
+    },
+    mintId: given.mintId,
+    notify: given.notify,
+  };
   const store = createLinkPageStore(deps);
   return {
     /** The blocks, held while a screen shows them (`useLinkPage`). */
