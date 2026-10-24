@@ -11,7 +11,7 @@ import { testQuery } from '@crm/db/testing';
 import type { ProfileBlock } from '@crm/contracts';
 import { enterLinkPage } from '../access/door.ts';
 import { readLinkPage } from '../booking/public.ts';
-import { createBookingPage } from '../booking/pages.ts';
+import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -99,13 +99,19 @@ describe('a link page', () => {
     const ada = await person('Ada Lovelace');
     const handle = fresh('ada');
     await updateMyMemberProfile(ada.scope, { handle, bio: 'Product at Acme.' });
+    // A new Public page joins the link page by itself, at the end; here it then moves after the heading.
     const intro = await page(ada.scope, 'Intro call');
     const site = await add(ada.scope, link('My site', 'www.timefix.com'));
     expect(site).toMatchObject({ kind: 'link', url: 'https://www.timefix.com' });
     expect(site.kind === 'link' && site.hue).toEqual(expect.stringMatching(/^[a-z]+$/));
-    await add(ada.scope, { kind: 'heading', title: 'Meet me' });
-    await add(ada.scope, { kind: 'page', workspaceId: ada.workspaceId, pageId: intro.id });
-    await add(ada.scope, link('LinkedIn', 'https://www.linkedin.com/in/ada-lovelace', { note: 'Say hi' }));
+    const heading = await add(ada.scope, { kind: 'heading', title: 'Meet me' });
+    const linkedin = await add(
+      ada.scope,
+      link('LinkedIn', 'https://www.linkedin.com/in/ada-lovelace', { note: 'Say hi' }),
+    );
+    const placed = (await readProfileItems(ada.scope)).items[0];
+    expect(placed).toMatchObject({ kind: 'page', pageId: intro.id });
+    await orderProfileItems(ada.scope, [site.id, heading.id, placed?.id ?? '', linkedin.id]);
     const mine = await readProfileItems(ada.scope);
     expect(mine.items.map((item) => item.kind)).toEqual(['link', 'heading', 'page', 'link']);
     expect(mine.items[2]).toMatchObject({
@@ -232,7 +238,6 @@ describe('a link page', () => {
     await updateMyMemberProfile(ada.scope, { handle });
     const intro = await page(ada.scope, 'Intro');
     const hidden = await page(ada.scope, 'Secret', { isPrivate: true });
-    await add(ada.scope, { kind: 'page', workspaceId: ada.workspaceId, pageId: intro.id });
     await add(ada.scope, link('Site', 'https://ada.dev'));
     // A Link only page can't be placed: its address can't be guessed.
     expect(
@@ -253,12 +258,41 @@ describe('a link page', () => {
     expect((await visitorRead(handle)).items.map((item) => item.kind)).toEqual(['page', 'link']);
   });
 
+  it('puts a page made Public at the end once, as the profile always did, and never one archived', async () => {
+    const ada = await person('Ada');
+    await add(ada.scope, link('Site', 'https://ada.dev'));
+    const intro = await page(ada.scope, 'Intro');
+    const secret = await page(ada.scope, 'Secret', { isPrivate: true });
+    const kinds = async () =>
+      (await readProfileItems(ada.scope)).items.map((item) => (item.kind === 'page' ? item.pageId : item.kind));
+    expect(await kinds()).toEqual(['link', intro.id]);
+    await updateBookingPage(ada.scope, { pageId: secret.id, settings: { isPrivate: false } });
+    expect(await kinds()).toEqual(['link', intro.id, secret.id]);
+    // Archived on purpose, it stays off when the page goes Link only and Public again.
+    const placed = (await readProfileItems(ada.scope)).items.find(
+      (item) => item.kind === 'page' && item.pageId === secret.id,
+    );
+    await archiveProfileItem(ada.scope, { id: placed?.id ?? '', archived: true });
+    await updateBookingPage(ada.scope, { pageId: secret.id, settings: { isPrivate: true } });
+    await updateBookingPage(ada.scope, { pageId: secret.id, settings: { isPrivate: false } });
+    expect(await kinds()).toEqual(['link', intro.id]);
+    // An edit that leaves a Public page Public places nothing.
+    const intros = (await readProfileItems(ada.scope)).items.find(
+      (item) => item.kind === 'page' && item.pageId === intro.id,
+    );
+    await deleteProfileItem(ada.scope, intros?.id ?? '');
+    await updateBookingPage(ada.scope, { pageId: intro.id, settings: { title: 'Intro, longer' } });
+    expect(await kinds()).toEqual(['link']);
+  });
+
   it('offers the person’s Public pages from every workspace, without the ones placed', async () => {
     const ada = await person('Ada', randomUUID(), 'Acme');
     const other = await person('Ada', ada.userId, 'Personal');
     const intro = await page(ada.scope, 'Intro');
     const coffee = await page(other.scope, 'Coffee');
     await page(ada.scope, 'Secret', { isPrivate: true });
+    // Each joined the link page as it was made: take them off, so both are offered again.
+    for (const item of (await readProfileItems(ada.scope)).items) await deleteProfileItem(ada.scope, item.id);
     const before = await listProfilePageChoices(ada.scope);
     expect(before.map((choice) => [choice.facts.workspaceName, choice.facts.title])).toEqual([
       ['Acme', 'Intro'],
@@ -344,6 +378,8 @@ describe('the backfill (migration 0096, AC-5129)', () => {
       .filter((each) => each.trim() !== '')
       .map((each) => each.replace('and p.owner_user_id is not null', `and p.owner_user_id = '${userId}'::uuid`));
     expect(statements).toHaveLength(3);
+    // The pages joined the link page as they were made: start from none, as before the migration.
+    await testQuery(ownerUrl, `delete from auth.profile_items where user_id = $1`, [userId]);
     await testQuery(ownerUrl, `begin;\n${statements.join(';\n')};\ncommit;`.replaceAll(';;', ';'));
   }
 

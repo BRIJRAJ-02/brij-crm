@@ -1,5 +1,16 @@
 import { myPicturePath } from '@crm/contracts';
-import { getMyProfile, servedPicture, updateMyMemberProfile, type ProfileExtras } from '@crm/core';
+import {
+  archiveProfileItem,
+  deleteProfileItem,
+  getMyProfile,
+  listProfilePageChoices,
+  orderProfileItems,
+  readProfileItems,
+  saveProfileItem,
+  servedPicture,
+  updateMyMemberProfile,
+  type ProfileExtras,
+} from '@crm/core';
 import { commitWrite } from '../../hooks.ts';
 import { member, type RequestContext, type SessionContext } from '../../orpc.ts';
 import { sourceOf } from '../../source.ts';
@@ -43,4 +54,25 @@ export const profileRouter = member.profile.router({
       ),
     );
   }),
+  // The link page (spec 0051): the caller's own blocks, in every workspace the same, never another person's.
+  items: member.profile.items.handler(({ context }) => readProfileItems(context.scope)),
+  pageChoices: member.profile.pageChoices.handler(async ({ context }) => [
+    ...(await listProfilePageChoices(context.scope)),
+  ]),
+  saveItem: member.profile.saveItem.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      saveProfileItem(context.scope, { id: input.id, block: input.block }),
+    ),
+  ),
+  orderItems: member.profile.orderItems.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () => orderProfileItems(context.scope, input.ids)),
+  ),
+  archiveItem: member.profile.archiveItem.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      archiveProfileItem(context.scope, { id: input.id, archived: input.archived }),
+    ),
+  ),
+  deleteItem: member.profile.deleteItem.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () => deleteProfileItem(context.scope, input.id)),
+  ),
 });

@@ -57,6 +57,9 @@ const READS: ReadonlySet<string> = new Set([
   // Slice 7: Workspace › General, Account › Profile, and a deleted workspace as its owner sees it.
   'workspace.get',
   'profile.get',
+  // The link page (spec 0051): the caller's own blocks, and the booking pages they may place.
+  'profile.items',
+  'profile.pageChoices',
   'deletedWorkspace.deleted',
   'access.mine',
   // Settings › History's Workspace changes (spec 0046).
@@ -555,6 +558,34 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'profile.update': async (m, mutationId) => {
     const me = await m.client.profile.update({ workspace: m.slug, name: 'Renamed', mutationId });
     return [{ kind: 'members', item_ids: [me.memberId], mutation_id: mutationId }];
+  },
+  // The link page's blocks (spec 0051) live in schema auth: no tenant change, so no outbox row.
+  'profile.saveItem': async (m, mutationId) => {
+    await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'link', title: 'Site', url: 'https://example.com' },
+      mutationId,
+    });
+    return [];
+  },
+  'profile.orderItems': async (m, mutationId) => {
+    const block = { kind: 'heading', title: 'Work' } as const;
+    const item = await m.client.profile.saveItem({ workspace: m.slug, id: newId(), block, mutationId: newId() });
+    await m.client.profile.orderItems({ workspace: m.slug, ids: [item.id], mutationId });
+    return [];
+  },
+  'profile.archiveItem': async (m, mutationId) => {
+    const block = { kind: 'heading', title: 'Work' } as const;
+    const item = await m.client.profile.saveItem({ workspace: m.slug, id: newId(), block, mutationId: newId() });
+    await m.client.profile.archiveItem({ workspace: m.slug, id: item.id, archived: true, mutationId });
+    return [];
+  },
+  'profile.deleteItem': async (m, mutationId) => {
+    const block = { kind: 'heading', title: 'Work' } as const;
+    const item = await m.client.profile.saveItem({ workspace: m.slug, id: newId(), block, mutationId: newId() });
+    await m.client.profile.deleteItem({ workspace: m.slug, id: item.id, mutationId });
+    return [];
   },
   'invitations.accept': async (m) => {
     const invitee = await signIn(app);
@@ -2061,6 +2092,9 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'rotations.delete': 2,
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
+  'profile.orderItems': 2,
+  'profile.archiveItem': 2,
+  'profile.deleteItem': 2,
   'bookings.blocks.remove': 2,
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,

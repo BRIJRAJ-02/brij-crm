@@ -19,7 +19,7 @@
 //   GET  /api/public/booking/:publicKey/connect  ?return: a guest connects Google for this visit
 //   GET  /api/public/booking/connect/callback    Google's answer: the guest's sealed cookie
 //   POST /api/public/booking/connect/forget      drops the guest's calendar
-//   GET  /api/public/handles/:handle             ?after&q: a profile and a page of its Public links (22 Oct 2026)
+//   GET  /api/public/handles/:handle             ?after&q: a link page and a page of its blocks (spec 0051)
 //   GET  /api/public/handles/:handle/:slug       the page a handle address names, by its public key
 //   GET  /api/public/booking/:publicKey/picture  a personal page's host picture, from our origin (23 Oct 2026)
 //   GET  /api/public/profiles/:handle/picture    a profile's picture, likewise (`picture.ts` fetches both)
@@ -38,6 +38,7 @@ import {
   PublicGuestsInput,
   PublicMoveInput,
   PublicMoveSlotsQuery,
+  PROFILE_LIMITS,
   PROFILE_PAGE_SIZE,
   PublicProfileQuery,
   PublicRemoveGuestInput,
@@ -73,11 +74,11 @@ import {
   removeGuest,
   enterBookingAddress,
   enterBookingPage,
-  enterBookingProfile,
+  enterLinkPage,
   findHandleOwner,
   getPublicBookingPage,
   readAddressedPage,
-  readBookingProfile,
+  readLinkPage,
   readPagePicture,
   readProfilePicture,
   isPageHost,
@@ -340,7 +341,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   });
 
-  // A handle address (22 Oct 2026): the person by a current or old handle, through the door's definers only.
+  // A handle address (22 Oct 2026): the person by a current or old handle, and their link page's blocks (spec 0051),
+  // through the door's definers only. A search reads every live block (at most 60) and answers the matches flat.
   app.get('/public/handles/:handle', async (c) => {
     const refused = limited([[`booking:read:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]]);
     if (refused !== undefined) return refused;
@@ -348,16 +350,18 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       after: c.req.query('after'),
       q: c.req.query('q'),
     });
-    if (!query.success) return answer('INPUT_INVALID', 'That page of links isn’t right.');
+    if (!query.success) return answer('INPUT_INVALID', 'That page of blocks isn’t right.');
     const [position, id] = query.data.after?.split('.') ?? [];
+    const search = query.data.q === undefined || query.data.q === '' ? undefined : query.data.q;
     try {
-      const found = await enterBookingProfile({ db }, c.req.param('handle'), {
-        ...(position === undefined || id === undefined ? {} : { after: { position: Number(position), id } }),
-        ...(query.data.q === undefined ? {} : { search: query.data.q }),
-        // One more than a page, so the answer knows there is more.
-        max: PROFILE_PAGE_SIZE + 1,
+      const found = await enterLinkPage({ db }, c.req.param('handle'), {
+        ...(search !== undefined || position === undefined || id === undefined
+          ? {}
+          : { after: { position: Number(position), id } }),
+        // One more than a page, so the answer knows there is more; every live block for a search.
+        max: search === undefined ? PROFILE_PAGE_SIZE + 1 : PROFILE_LIMITS.items + 1,
       });
-      return ok(await readBookingProfile(found));
+      return ok(await readLinkPage(found, search === undefined ? {} : { search }));
     } catch (error) {
       return refusalAnswer(error);
     }

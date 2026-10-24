@@ -41,6 +41,7 @@ import { NONE_UNSEEN, rulesSeen, unseenRules, withUnseenRules, type UnseenRule }
 import { actorRow } from '../engine/scope.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 import { ownerSlugs, publicProfilesOf } from './handles.ts';
+import { placeNewPage } from '../profile/items.ts';
 import { linksOf, seenLinks } from './links.ts';
 import { lockKey } from './locks.ts';
 import { ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
@@ -522,6 +523,8 @@ export async function createBookingPage(
         })
         .returning();
       if (row === undefined) throw new Error('The booking page was not created.');
+      // A Public page joins the end of its owner's link page (spec 0051), as the profile always listed new pages.
+      if (!row.isPrivate) await placeNewPage(tx, scope, row);
       if (kind === 'round_robin' && input.hosts !== undefined) {
         await setPageHosts(tx, scope.workspaceId, row.id, input.hosts);
         const [team] = await pagesOf(tx, [row]);
@@ -638,6 +641,8 @@ export async function updateBookingPage(
         .returning();
       const [changed] = row === undefined ? [] : await pagesOf(tx, [row]);
       if (changed === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+      // Link only made Public: the page joins the end of its owner's link page, once (spec 0051).
+      if (row !== undefined && page.isPrivate && !row.isPrivate) await placeNewPage(tx, scope, row);
       return await viewWithCounts(tx, scope, changed, now);
     } catch (error) {
       throw slugRefusal(error) ?? error;

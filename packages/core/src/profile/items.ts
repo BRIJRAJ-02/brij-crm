@@ -351,3 +351,22 @@ export async function deleteProfileItem(scope: EngineScope, id: string): Promise
   if (!found) throw refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
   return { id };
 }
+
+/**
+ * Puts a booking page at the end of its owner's link page as it is made Public (created so, or changed from Link
+ * only), as the profile always did with a new page (`crm_place_profile_page`): once, never when a block of theirs
+ * already names it (they took it off on purpose), and silently not past a limit. Only for the caller's own page, in
+ * the page write's own transaction; a member made without a sign in has no link page.
+ */
+export async function placeNewPage(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  page: { readonly id: string; readonly ownerMemberId: string },
+): Promise<void> {
+  const { principal } = scope.access;
+  if (principal.kind !== 'member' || principal.userId === undefined) return;
+  if (principal.memberId !== page.ownerMemberId) return;
+  await tx.execute(
+    sql`select crm_place_profile_page(${principal.userId}::uuid, ${scope.workspaceId}::uuid, ${page.id}::uuid)`,
+  );
+}

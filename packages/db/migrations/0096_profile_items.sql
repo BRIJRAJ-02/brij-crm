@@ -18,7 +18,8 @@
 -- * crm_order_profile_items(owner, ids): the whole order at once, 22023 PROFILE_ORDER_STALE unless it names exactly
 --   the live blocks;
 -- * crm_archive_profile_item(owner, item, archived): archives one block, or restores it to the end;
--- * crm_delete_profile_item(owner, item): deletes one block.
+-- * crm_delete_profile_item(owner, item): deletes one block;
+-- * crm_place_profile_page(owner, workspace, page): puts a page made Public at the end, once, never refusing.
 -- And crm_booking_lookup (0041's) gains crm_booking_owner_pages(owner, pages): which of the person's booking pages may
 -- sit on their link page (Public, not deleted, theirs in a workspace that exists where they are still an active
 -- member) and which of those are live, ids only. The services then read each page inside withWorkspace() as its
@@ -323,6 +324,30 @@ begin
 end;
 $$;
 --> statement-breakpoint
+-- Puts one booking page at the end of `owner`'s link page, once, as it is made Public (created so, or changed from
+-- Link only): what the profile always did with a new page. Nothing when any block of theirs, live or archived, names
+-- it already (they took it off on purpose), or past a limit: a booking page is never refused for its link page.
+create function crm_place_profile_page(owner uuid, workspace uuid, page uuid)
+  returns void
+  language plpgsql
+  security definer
+  set search_path = pg_catalog, pg_temp
+as $$
+begin
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('crm_profile_items:' || owner::text, 0));
+  if workspace is null or page is null
+    or exists (select 1 from auth.profile_items i where i.user_id = owner and i.page_id = page)
+    or (select count(*) from auth.profile_items i where i.user_id = owner and i.archived_at is null) >= 60
+    or (select count(*) from auth.profile_items i where i.user_id = owner) >= 200 then
+    return;
+  end if;
+  insert into auth.profile_items (id, user_id, kind, position, data, workspace_id, page_id)
+  values (pg_catalog.uuidv7(), owner, 'page',
+    (select coalesce(max(i.position) + 1, 0) from auth.profile_items i where i.user_id = owner and i.archived_at is null),
+    '{}'::jsonb, workspace, page);
+end;
+$$;
+--> statement-breakpoint
 revoke all on function crm_profile_items(uuid) from public;
 --> statement-breakpoint
 revoke all on function crm_profile_items_archived(uuid) from public;
@@ -341,6 +366,8 @@ revoke all on function crm_archive_profile_item(uuid, uuid, boolean) from public
 --> statement-breakpoint
 revoke all on function crm_delete_profile_item(uuid, uuid) from public;
 --> statement-breakpoint
+revoke all on function crm_place_profile_page(uuid, uuid, uuid) from public;
+--> statement-breakpoint
 grant execute on function crm_profile_items(uuid) to crm_app;
 --> statement-breakpoint
 grant execute on function crm_profile_items_archived(uuid) to crm_app;
@@ -354,6 +381,8 @@ grant execute on function crm_order_profile_items(uuid, uuid[]) to crm_app;
 grant execute on function crm_archive_profile_item(uuid, uuid, boolean) to crm_app;
 --> statement-breakpoint
 grant execute on function crm_delete_profile_item(uuid, uuid) to crm_app;
+--> statement-breakpoint
+grant execute on function crm_place_profile_page(uuid, uuid, uuid) to crm_app;
 --> statement-breakpoint
 grant crm_handle to current_user with inherit false, set true;
 --> statement-breakpoint
@@ -376,6 +405,8 @@ alter function crm_pack_profile_items(uuid) owner to crm_handle;
 alter function crm_archive_profile_item(uuid, uuid, boolean) owner to crm_handle;
 --> statement-breakpoint
 alter function crm_delete_profile_item(uuid, uuid) owner to crm_handle;
+--> statement-breakpoint
+alter function crm_place_profile_page(uuid, uuid, uuid) owner to crm_handle;
 --> statement-breakpoint
 revoke create on schema public from crm_handle;
 --> statement-breakpoint
@@ -494,7 +525,8 @@ begin
     'public.crm_save_profile_item(uuid, uuid, text, jsonb, uuid, uuid)'::regprocedure,
     'public.crm_order_profile_items(uuid, uuid[])'::regprocedure,
     'public.crm_archive_profile_item(uuid, uuid, boolean)'::regprocedure,
-    'public.crm_delete_profile_item(uuid, uuid)'::regprocedure
+    'public.crm_delete_profile_item(uuid, uuid)'::regprocedure,
+    'public.crm_place_profile_page(uuid, uuid, uuid)'::regprocedure
   ] loop
     if (select pg_get_userbyid(p.proowner) from pg_proc p where p.oid = fn) <> 'crm_handle'
       or not (select p.prosecdef from pg_proc p where p.oid = fn)
