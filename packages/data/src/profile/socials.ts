@@ -4,10 +4,11 @@
 // needs no read of its own, and a read sent before a change landed never puts its older answer over it. A change of the whole set shows at once and is sent, one after another; refused, it is
 // put back and a toast says why, with Try again. Settings › Profile's own Save sends the set with the rest of the
 // page and confirms it here when it lands. Only the person holds it, so no live event carries it: another device's
-// change shows when a screen next holds it.
+// change shows when a screen next holds it. Loaded with `import()` on first use (`data.profile.loadSocials()`), so it
+// rides in no first load: only the screens that edit or show a person's own links reach it.
 import type { MyProfile, SocialLink, UpdateMyProfileInput } from '@crm/contracts';
 import { toDataError } from '../errors.ts';
-import { refusalSummary } from '../refusals.ts';
+import type { RefusalWords } from '../refusals.ts';
 import type { Notice } from '../notice.ts';
 
 /** The person's social links as a screen holds them. */
@@ -40,9 +41,25 @@ export interface SocialLinksDeps {
   readonly update: (input: UpdateMyProfileInput) => Promise<MyProfile>;
   readonly mintId: () => string;
   readonly notify: (notice: Notice) => void;
+  /** The refusal's wording, handed in so the sentences stay in the first load's chunk (as the records layer's do). */
+  readonly refusals: Pick<RefusalWords, 'refusalSummary'>;
   /** The clock, in milliseconds; tests pass their own. */
   readonly now?: () => number;
 }
+
+/** What a screen reaches the store by, once loaded (`data.profile.loadSocials()`): the set as held, and a change. */
+export interface SocialLinksAccess {
+  /** The set in a workspace, read when a screen first holds it. */
+  readonly of: (workspace: string) => SocialLinksHeld;
+  /**
+   * Replaces the whole set, at once; put back with a toast and Try again if refused. Answers whether it landed;
+   * false, with nothing sent, while unread or for a member who can't keep links.
+   */
+  readonly change: (workspace: string, links: readonly SocialLink[]) => Promise<boolean>;
+}
+
+/** The store itself, as the data layer holds it once loaded. */
+export type SocialLinksStore = ReturnType<typeof createSocialLinksStore>;
 
 /** A read this recent serves a new holder as it is: the route's loader and the screen it opens hold it together. */
 export const SOCIAL_LINKS_FRESH_MS = 1_000;
@@ -124,7 +141,7 @@ export function createSocialLinksStore(deps: SocialLinksDeps) {
           // Put back below, as the change leaves the list; Try again sends it once more.
           deps.notify({
             tone: 'danger',
-            message: `${NOT_SAVED} ${refusalSummary(toDataError(error))}`,
+            message: `${NOT_SAVED} ${deps.refusals.refusalSummary(toDataError(error))}`,
             // Only while no newer change was made since: it would put this older set back over that one.
             action: {
               label: TRY_AGAIN,

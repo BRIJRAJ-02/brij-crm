@@ -5,7 +5,7 @@
 // Leaves out: saving (the screen's SaveBar or the dialog's Save), and the networks' own sign in or verification.
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { SOCIAL_LINK_NAMES, SOCIAL_LINK_NETWORKS, type SocialLinkNetwork } from '@crm/contracts/social-networks';
-import { socialLinkPlaceholder, socialLinkPrefix } from '@crm/contracts/values';
+import { socialLinkPlaceholder, socialLinkPrefix } from '@crm/contracts/social';
 import { Button, ButtonGroup } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';

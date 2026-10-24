@@ -4,8 +4,9 @@
 // Main task: turn the page's links on or off, and open Edit social links to change the person's set.
 // Leaves out: the set's own editing rules (SocialLinksEditor, the same as Settings › Profile's) and team pages,
 // which name no host before booking (AC-754).
-import { describeLink } from '@crm/contracts/values';
-import type { DataLayer, PublicSocialLink, SocialLink } from '@crm/data';
+// Loaded on its own (socials-slot.tsx), with the editor it opens, so neither rides in the editor's first paint.
+import { describeLink } from '@crm/contracts/social';
+import type { DataLayer, PublicSocialLink, SocialLink, SocialLinksAccess, SocialLinksHeld } from '@crm/data';
 import { useSocialLinks } from '@crm/data/react';
 import {
   Button,
@@ -22,7 +23,7 @@ import {
   socialLinksOfDraft,
   type SocialLinkDraft,
 } from '@crm/ui';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { strings } from './socials-strings.ts';
 
 /** The person's stored links as a public page draws them, labelled as the server labels them. */
@@ -30,10 +31,35 @@ export function previewSocials(links: readonly SocialLink[]): readonly PublicSoc
   return links.map((link) => ({ network: link.network, href: link.href, label: describeLink(link.href).label }));
 }
 
+/** What stands in for the person's links until their store is here: loading, read never. */
+const NO_SOCIALS: SocialLinksHeld = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => ({ status: 'loading' }),
+  retain: () => () => undefined,
+  retry: () => undefined,
+};
+
+/** The person's links store, loaded on first use; undefined until it is here. */
+function useSocialsAccess(data: DataLayer): SocialLinksAccess | undefined {
+  const [access, setAccess] = useState<SocialLinksAccess | undefined>(undefined);
+  useEffect(() => {
+    let isCurrent = true;
+    void data.profile.loadSocials().then((loaded) => {
+      if (isCurrent) setAccess(loaded);
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [data]);
+  return access;
+}
+
 /** Props for SocialsCard. */
 export interface SocialsCardProps {
   readonly data: DataLayer;
   readonly slug: string;
+  /** The person's links as the phone preview draws them, each time they change (their own personal page only). */
+  readonly onPreviewLinks: (links: readonly PublicSocialLink[]) => void;
   /** A team page shows no one's links, and says why. */
   readonly isTeam: boolean;
   /** The reader owns the page: only they turn its links on or off, and only their own set is theirs to change. */
@@ -44,14 +70,17 @@ export interface SocialsCardProps {
   readonly onShownChange: (isShown: boolean) => void;
 }
 
+/** No links, one array, so an effect keyed on it doesn't run again for nothing. */
+const NO_LINKS: readonly SocialLink[] = [];
+
 /** Edit social links: the same editor as Settings › Profile's, in a dialog; Save replaces the person's set. */
 function EditDialog({
-  data,
+  access,
   slug,
   links,
   onClose,
 }: {
-  readonly data: DataLayer;
+  readonly access: SocialLinksAccess;
   readonly slug: string;
   readonly links: readonly SocialLink[];
   readonly onClose: () => void;
@@ -74,7 +103,7 @@ function EditDialog({
     // Nothing changed: nothing to send.
     if (isChanged) {
       // Shown at once on the card and the preview; a refusal puts the set back and says so with Try again.
-      void data.profile.setSocials(slug, checked.links);
+      void access.change(slug, checked.links);
     }
     onClose();
   };
@@ -139,7 +168,16 @@ function EditDialog({
  * will show them, and Edit social links. A colleague's page shows its switch read only; a team page says why it has
  * none.
  */
-export function SocialsCard({ data, slug, isTeam, isOwner, isShown, isLocked, onShownChange }: SocialsCardProps) {
+export function SocialsCard({
+  data,
+  slug,
+  isTeam,
+  isOwner,
+  isShown,
+  isLocked,
+  onShownChange,
+  onPreviewLinks,
+}: SocialsCardProps) {
   if (isTeam) {
     return <Card title={strings.title} description={strings.team} />;
   }
@@ -152,7 +190,16 @@ export function SocialsCard({ data, slug, isTeam, isOwner, isShown, isLocked, on
       </Card>
     );
   }
-  return <OwnSocialsCard data={data} slug={slug} isShown={isShown} isLocked={isLocked} onShownChange={onShownChange} />;
+  return (
+    <OwnSocialsCard
+      data={data}
+      onPreviewLinks={onPreviewLinks}
+      slug={slug}
+      isShown={isShown}
+      isLocked={isLocked}
+      onShownChange={onShownChange}
+    />
+  );
 }
 
 function OwnSocialsCard({
@@ -161,11 +208,18 @@ function OwnSocialsCard({
   isShown,
   isLocked,
   onShownChange,
-}: Pick<SocialsCardProps, 'data' | 'slug' | 'isShown' | 'isLocked' | 'onShownChange'>) {
-  const held = data.profile.socials(slug);
+  onPreviewLinks,
+}: Pick<SocialsCardProps, 'data' | 'slug' | 'isShown' | 'isLocked' | 'onShownChange' | 'onPreviewLinks'>) {
+  // Their store loads on first use, out of the app's first load, and only on their own personal page.
+  const access = useSocialsAccess(data);
+  const held = access?.of(slug) ?? NO_SOCIALS;
   const state = useSocialLinks(held);
   const [isEditing, setEditing] = useState(false);
-  const links = state.status === 'ready' ? state.links : [];
+  const links = state.status === 'ready' ? state.links : NO_LINKS;
+  // The phone preview draws them as they are now.
+  useEffect(() => {
+    onPreviewLinks(previewSocials(links));
+  }, [links, onPreviewLinks]);
   const marks =
     state.status === 'loading' ? (
       <Skeleton width="short" />
@@ -209,9 +263,9 @@ function OwnSocialsCard({
           {state.message}
         </Callout>
       )}
-      {isEditing && state.status === 'ready' && (
+      {isEditing && state.status === 'ready' && access !== undefined && (
         <EditDialog
-          data={data}
+          access={access}
           slug={slug}
           links={links}
           onClose={() => {

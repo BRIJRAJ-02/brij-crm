@@ -3,7 +3,7 @@
 // editor shows, the rows back to links (each made canonical by the one `checkSocialLink` the server runs too), and
 // whether a draft changed anything. Imported by the editor and by the screens that hold its draft.
 import type { SocialLinkNetwork } from '@crm/contracts/social-networks';
-import { checkSocialLink, socialLinkFieldValue, socialLinkProblem } from '@crm/contracts/values';
+import { checkSocialLink, socialLinkFieldValue, socialLinkProblem } from '@crm/contracts/social';
 
 /** One stored link: its network and its canonical link. */
 export interface StoredSocialLink {
