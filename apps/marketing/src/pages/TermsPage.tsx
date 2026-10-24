@@ -18,13 +18,14 @@ export function TermsPage() {
   return (
     <LegalPage title="Terms of Service" updated="August 14, 2026">
       <LegalParagraph>
-        These terms govern your use of Timefix - the scheduling service at timefix.ai and app.timefix.ai. By creating an
-        account or booking time through a Timefix page, you agree to them. If you do not agree, do not use the service.
+        These terms govern your use of Timefix - the scheduling service at timefix.ai, app.timefix.ai and timefix.com.
+        By creating an account or booking time through a Timefix page, you agree to them. If you do not agree, do not
+        use the service.
       </LegalParagraph>
 
       <LegalHeading>The service</LegalHeading>
       <LegalParagraph>
-        Timefix gives hosts a personal booking page (timefix.ai/yourname) that offers times computed from their
+        Timefix gives hosts a personal booking page (timefix.com/yourname) that offers times computed from their
         availability rules and Google Calendar, lets guests book by picking a slot or describing a time in plain words,
         and puts confirmed bookings on both sides&rsquo; calendars.
       </LegalParagraph>

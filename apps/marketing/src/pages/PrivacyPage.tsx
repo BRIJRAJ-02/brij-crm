@@ -18,12 +18,12 @@ export function PrivacyPage() {
   return (
     <LegalPage title="Privacy Policy" updated="August 24, 2026">
       <LegalParagraph>
-        Timefix (&ldquo;we&rdquo;, &ldquo;us&rdquo;) is a scheduling service: you share a link like timefix.ai/yourname,
-        and visitors book time with you - by picking a slot or by telling the page when works for them. This policy
-        explains what we collect on timefix.ai and app.timefix.ai, why, and the choices you have. It applies to hosts
-        (people with a Timefix account), guests (people who book time with a host), and anyone who sends an enquiry
-        through a Timefix form that a business has put on their own website - the last of whom may never have seen a
-        Timefix page at all, which is why they have a section of their own below.
+        Timefix (&ldquo;we&rdquo;, &ldquo;us&rdquo;) is a scheduling service: you share a link like
+        timefix.com/yourname, and visitors book time with you - by picking a slot or by telling the page when works for
+        them. This policy explains what we collect on timefix.ai, app.timefix.ai and timefix.com, why, and the choices
+        you have. It applies to hosts (people with a Timefix account), guests (people who book time with a host), and
+        anyone who sends an enquiry through a Timefix form that a business has put on their own website - the last of
+        whom may never have seen a Timefix page at all, which is why they have a section of their own below.
       </LegalParagraph>
 
       <LegalHeading>What we collect</LegalHeading>

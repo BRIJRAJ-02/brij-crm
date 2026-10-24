@@ -95,3 +95,25 @@ export function publicHostRedirect(
   }
   return servedOnPublicHost(url.pathname) ? undefined : home.href;
 }
+
+/**
+ * Where a handle address asked for on the app's own host goes instead (a 308): the same path on the public
+ * booking origin (24 Oct 2026), so a person's profile and booking pages read one address, not two. Only a handle
+ * address moves, so the API, the built files and the app's own routes (a handle is never a reserved word) stay
+ * where they are. Undefined, so nothing changes, on any other host, and whenever `APP_URL` or
+ * `BOOKING_PUBLIC_ORIGIN` is unset, not https, or the two name the same host: a preview and local development,
+ * which have no booking origin of their own, go on serving the handle addresses themselves.
+ */
+export function handleHostRedirect(
+  url: URL,
+  env: {
+    readonly BOOKING_PUBLIC_ORIGIN?: string | undefined;
+    readonly APP_URL?: string | undefined;
+  },
+): string | undefined {
+  const app = httpsUrl(env.APP_URL);
+  const publicOrigin = httpsUrl(env.BOOKING_PUBLIC_ORIGIN);
+  if (app === undefined || publicOrigin === undefined) return undefined;
+  if (url.host !== app.host || app.host === publicOrigin.host) return undefined;
+  return HANDLE_PATH.test(url.pathname) ? `${publicOrigin.origin}${url.pathname}${url.search}` : undefined;
+}

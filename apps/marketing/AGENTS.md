@@ -42,7 +42,7 @@ pnpm --filter @crm/marketing test       # the prerender's page rewriting
 
 ## Deploy
 
-Its own Vercel project, root directory `apps/marketing`, framework none, build `pnpm --filter @crm/marketing build`, output `apps/marketing/dist`, attached to timefix.ai. Not yet created (23 Oct 2026); until then nothing serves the site.
+Its own Vercel project, root directory `apps/marketing`, framework none, build `pnpm --filter @crm/marketing build`, output `apps/marketing/dist`, attached to timefix.ai, which serves the site (24 Oct 2026); `www.timefix.ai` moves there.
 
 ## Gotchas
 

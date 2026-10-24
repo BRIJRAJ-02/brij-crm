@@ -10,6 +10,7 @@ import {
   APP_HEADER_SOURCE,
   HANDLE_HEADER_SOURCE,
   HANDLE_PATH,
+  handleHostRedirect,
   PAGE_SOURCE,
   PROFILE_SOURCE,
   publicHostRedirect,
@@ -172,5 +173,43 @@ describe('the public booking host', () => {
       publicHostRedirect(appRoot, { ...env, APP_URL: undefined, BOOKING_PUBLIC_ORIGIN: 'https://app.timefix.ai' }),
     ).toBeUndefined();
     expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: 'https://timefix.com/home' })).toBeUndefined();
+  });
+
+  it('moves a handle address off the app’s host to the booking origin, and nothing else there', () => {
+    expect(handleHostRedirect(new URL('https://app.timefix.ai/ada'), env)).toBe('https://timefix.com/ada');
+    expect(handleHostRedirect(new URL('https://app.timefix.ai/ada/30min'), env)).toBe('https://timefix.com/ada/30min');
+    expect(handleHostRedirect(new URL('https://app.timefix.ai/ada/'), env)).toBe('https://timefix.com/ada/');
+    expect(handleHostRedirect(new URL('https://app.timefix.ai/ada?month=2026-11'), env)).toBe(
+      'https://timefix.com/ada?month=2026-11',
+    );
+    for (const pathname of [
+      '/',
+      '/sign-in',
+      '/settings/profile',
+      '/w/acme',
+      '/api/public/handles/ada',
+      '/api/rpc/system/status',
+      '/b/AbCdEfGhIjKlMnOp',
+      '/f/contact',
+      '/embed/v1.js',
+      '/embed.js',
+      '/favicon.ico',
+      '/brand/timefix-mark.svg',
+      '/assets/app.js',
+    ]) {
+      expect(handleHostRedirect(new URL(`https://app.timefix.ai${pathname}`), env), pathname).toBeUndefined();
+    }
+  });
+
+  it('moves a handle address on no other host, and on none at all without both origins', () => {
+    expect(handleHostRedirect(new URL('https://timefix.com/ada'), env)).toBeUndefined();
+    expect(handleHostRedirect(new URL('https://brij-crm.vercel.app/ada'), env)).toBeUndefined();
+    const app = new URL('https://app.timefix.ai/ada');
+    expect(handleHostRedirect(app, { ...env, BOOKING_PUBLIC_ORIGIN: undefined })).toBeUndefined();
+    expect(handleHostRedirect(app, { ...env, BOOKING_PUBLIC_ORIGIN: '' })).toBeUndefined();
+    expect(handleHostRedirect(app, { ...env, BOOKING_PUBLIC_ORIGIN: 'http://timefix.com' })).toBeUndefined();
+    expect(handleHostRedirect(app, { ...env, APP_URL: undefined })).toBeUndefined();
+    // One host serving both, as a preview and local development do: nothing moves.
+    expect(handleHostRedirect(app, { ...env, BOOKING_PUBLIC_ORIGIN: 'https://app.timefix.ai' })).toBeUndefined();
   });
 });

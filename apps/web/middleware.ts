@@ -8,8 +8,10 @@
 //
 // It also keeps the public booking origin's host (BOOKING_PUBLIC_ORIGIN, timefix.com, served by this same
 // deployment) to what belongs there: with PUBLIC_HOST_HOME_URL set, any other path on that host, `/` included,
-// moves (308) to the marketing site. So it runs for every path but the built files; any other request passes on
-// untouched. The move may be cached for an hour, so a path that later joins the public host is reachable soon.
+// moves (308) to the marketing site. The other way round too (24 Oct 2026): a handle address asked for on the
+// app's own host (APP_URL) moves (308) to the same path on the booking origin, so a profile and a booking page
+// read one address, not two. So it runs for every path but the built files; any other request passes on
+// untouched. A move may be cached for an hour, so a path that later joins the public host is reachable soon.
 import { geolocation, ipAddress, next, rewrite } from '@vercel/functions';
 
 // What the public booking origin's host serves, written out from public-paths.ts. Vercel compiles this file on its
@@ -24,6 +26,9 @@ export const RESERVED_WORDS =
 /** A handle's path segment, never a reserved word, and a booking page's slug segment (public-paths.ts). */
 const HANDLE = `(?!(?:${RESERVED_WORDS})(?:/|$))[a-z0-9][a-z0-9-]{1,38}[a-z0-9]`;
 const SLUG = '[a-z0-9][a-z0-9-]{0,59}';
+
+/** public-paths.ts's HANDLE_PATH: a handle address, `/<handle>` or `/<handle>/<slug>`, as Vercel anchors it. */
+export const HANDLE_PATH = new RegExp(`^/${HANDLE}(?:/${SLUG})?/?$`);
 
 /** public-paths.ts's PUBLIC_HOST_PATH: the handle addresses, /b/, /f/, /embed/, the built files and /api/public/. */
 export const PUBLIC_HOST_PATH = new RegExp(
@@ -59,6 +64,26 @@ export function publicHostRedirect(
     return undefined;
   }
   return PUBLIC_HOST_PATH.test(url.pathname) ? undefined : home.href;
+}
+
+/**
+ * public-paths.ts's handleHostRedirect: where a handle address asked for on the app's own host goes instead
+ * (a 308), the same path on the public booking origin, so a profile and a booking page read one address, not
+ * two; undefined for every other path and host, and whenever a setting is missing, not https, or the app's host
+ * is the public origin's.
+ */
+export function handleHostRedirect(
+  url: URL,
+  env: {
+    readonly BOOKING_PUBLIC_ORIGIN?: string | undefined;
+    readonly APP_URL?: string | undefined;
+  },
+): string | undefined {
+  const app = httpsUrl(env.APP_URL);
+  const publicOrigin = httpsUrl(env.BOOKING_PUBLIC_ORIGIN);
+  if (app === undefined || publicOrigin === undefined) return undefined;
+  if (url.host !== app.host || app.host === publicOrigin.host) return undefined;
+  return HANDLE_PATH.test(url.pathname) ? `${publicOrigin.origin}${url.pathname}${url.search}` : undefined;
 }
 
 /** Every path but the built files, which belong on every host: public-paths.ts's MIDDLEWARE_MATCHER, written out. */
@@ -116,6 +141,10 @@ export default function middleware(request: Request): Response {
   const home = publicHostRedirect(url, process.env);
   if (home !== undefined) {
     return new Response(null, { status: 308, headers: { location: home, 'cache-control': 'public, max-age=3600' } });
+  }
+  const booking = handleHostRedirect(url, process.env);
+  if (booking !== undefined) {
+    return new Response(null, { status: 308, headers: { location: booking, 'cache-control': 'public, max-age=3600' } });
   }
   if (!isApiPath(url.pathname)) return next();
 
