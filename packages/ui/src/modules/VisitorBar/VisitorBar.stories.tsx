@@ -25,7 +25,7 @@ type Story = StoryObj<typeof meta>;
 export const Invite: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('link', { name: 'Connect calendar' })).toHaveAttribute('href', CONNECT);
+    await expect(canvas.getByRole('link', { name: 'Connect your calendar' })).toHaveAttribute('href', CONNECT);
   },
 };
 
@@ -65,7 +65,7 @@ export const Unreachable: Story = {
   args: { person: ADA, calendar: 'unreachable', onNotYou: fn() },
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: /Calendar unavailable/ }));
-    const again = await screen.findByRole('menuitem', { name: 'Connect again' });
+    const again = await screen.findByRole('menuitem', { name: 'Connect your calendar again' });
     await waitFor(() => expect(again).toBeVisible());
     await userEvent.keyboard('{Escape}');
   },

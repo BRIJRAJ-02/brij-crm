@@ -3,8 +3,9 @@ export const strings = {
   label: 'Your calendar',
   invite: 'See when you’re both free.',
   readsOnly: 'See when you’re both free. Only free or busy is read, never what’s on it.',
-  connect: 'Connect calendar',
-  connectAgain: 'Connect again',
+  // Whose calendar it is, said outright (owner, 25 Oct 2026): a visitor read it as connecting the host's.
+  connect: 'Connect your calendar',
+  connectAgain: 'Connect your calendar again',
   tag: (name: string, state: string) => `${name} · ${state}`,
   tagBothFree: 'Both free',
   tagAll: 'All times',

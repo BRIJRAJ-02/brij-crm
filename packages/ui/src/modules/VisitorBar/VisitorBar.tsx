@@ -69,9 +69,9 @@ function headline(calendar: VisitorBarCalendar, showAll: boolean, name: string):
 /**
  * The visitor's tag on top of a booking page (spec 0028, AC-720 to AC-726),
  * small, at the end of the row above the card. A visitor we don't know gets
- * Connect calendar (Google's mark; what it reads in its tooltip). A visitor we
+ * Connect your calendar (Google's mark; what it reads in its tooltip). A visitor we
  * know gets their name and their calendar's state, opening a menu with who
- * they're booking as, Show all times, Connect again and Not you.
+ * they're booking as, Show all times, Connect your calendar again and Not you.
  */
 export function VisitorBar({
   person,

@@ -16,6 +16,7 @@
   "dependencies": {
     "@crm/contracts": "workspace:*",
     "@crm/tokens": "workspace:*",
+    "@react-email/render": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-email": "catalog:",

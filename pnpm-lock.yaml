@@ -39,6 +39,9 @@ catalogs:
     '@react-aria/live-announcer':
       specifier: 3.5.1
       version: 3.5.1
+    '@react-email/render':
+      specifier: 2.1.0
+      version: 2.1.0
     '@sentry/node':
       specifier: 11.5.0
       version: 11.5.0
@@ -712,6 +715,9 @@ importers:
       '@crm/tokens':
         specifier: workspace:*
         version: link:../tokens
+      '@react-email/render':
+        specifier: 'catalog:'
+        version: 2.1.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react:
         specifier: 'catalog:'
         version: 19.3.0
