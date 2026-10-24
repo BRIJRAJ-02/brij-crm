@@ -261,6 +261,16 @@ export { Pagination, type PaginationProps } from './molecules/Pagination/Paginat
 export { RecordStats, type RecordStat, type RecordStatsProps } from './molecules/RecordStats/RecordStats.tsx';
 export { SpanCard, type SpanCardChoice, type SpanCardProps } from './modules/SpanCard/SpanCard.tsx';
 export {
+  MatchCalendar,
+  MatchCalendarCta,
+  type MatchCalendarCtaProps,
+  type MatchCalendarDay,
+  type MatchCalendarParty,
+  type MatchCalendarProps,
+  type MatchCalendarResult,
+  type MatchCalendarStep,
+} from './modules/MatchCalendar/MatchCalendar.tsx';
+export {
   MeetingCard,
   type MeetingCardPerson,
   type MeetingCardProps,

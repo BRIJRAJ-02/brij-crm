@@ -1,6 +1,6 @@
 // A person's own social links (booking socials, 25 Oct 2026): LinkedIn, X, their website and the rest, shown on
 // their booking pages and their `/<handle>` profile. The person's, like their handle and bio, the same in every
-// workspace, kept in schema auth (`auth.social_links`, migration 0096) and reached only through crm_handle's two
+// workspace, kept in schema auth (`auth.social_links`, migration 0097) and reached only through crm_handle's two
 // definer functions, inside the caller's workspace transaction. What a public page draws is made here
 // (`publicSocialsOf`), ready to draw, so the public bundles carry no link parsing.
 import {

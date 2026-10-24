@@ -3058,6 +3058,7 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     rescheduleHost: 'same',
     isPrivate: false,
     showSocials: true,
+    defaultView: 'month',
     profileSection: null,
     profilePosition: 0,
     publicKey: 'demo-key',

@@ -125,6 +125,7 @@ function teamPage(over: Partial<PageRecord> = {}): PageRecord {
     slotStep: null,
     status: 'live',
     rescheduleHost: 'same',
+    defaultView: 'month',
     scheduleId: null,
     scheduleName: 'Working hours',
     fallbackZone: 'UTC',

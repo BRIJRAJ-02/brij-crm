@@ -36,6 +36,8 @@ import {
   PreviewFrame,
   PreviewLayout,
   Popover,
+  Radio,
+  RadioGroup,
   SaveBar,
   SegmentedControl,
   Select,
@@ -145,6 +147,7 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   description: 'page',
   isPrivate: 'page',
   showSocials: 'page',
+  defaultView: 'page',
   title: 'meeting',
   durations: 'meeting',
   location: 'meeting',
@@ -187,6 +190,7 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   rescheduleHost: page.rescheduleHost,
   isPrivate: page.isPrivate,
   showSocials: page.showSocials,
+  defaultView: page.defaultView,
   profileSection: page.profileSection,
   profilePosition: page.profilePosition,
 });
@@ -569,6 +573,7 @@ export function PageEditor({
                         ...(ownerMember === undefined && page.kind === 'personal'
                           ? { socials: draft.showSocials ? previewLinks : [] }
                           : {}),
+                        defaultView: draft.defaultView,
                       }}
                     />
                   }
@@ -637,6 +642,27 @@ export function PageEditor({
                           isReadOnly={isLocked}
                           onChange={(description) => change({ description })}
                         />
+                        {/* The view the page opens in (the owner, 25 Oct 2026): the host's default, which a
+                          visitor's own remembered choice still wins over. A FieldGroup, as Who can book is, so the
+                          line under it is read with the choices; the phone beside this switches to the view at once. */}
+                        <FieldGroup label={strings.opensIn} hint={strings.opensInLine}>
+                          <RadioGroup
+                            label={strings.opensIn}
+                            isLabelHidden
+                            orientation="horizontal"
+                            value={draft.defaultView}
+                            isReadOnly={isLocked}
+                            onChange={(value) => {
+                              if (value === 'month' || value === 'list' || value === 'chat') {
+                                change({ defaultView: value });
+                              }
+                            }}
+                          >
+                            <Radio value="month">{strings.opensInViews.month}</Radio>
+                            <Radio value="list">{strings.opensInViews.list}</Radio>
+                            <Radio value="chat">{strings.opensInViews.chat}</Radio>
+                          </RadioGroup>
+                        </FieldGroup>
                       </Card>
                       <Card title={strings.sharing}>
                         {page.handle !== undefined && !draft.isPrivate ? (

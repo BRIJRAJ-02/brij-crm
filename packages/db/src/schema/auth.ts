@@ -399,7 +399,7 @@ export const userPrefs = auth.table(
 );
 
 /**
- * A person's own social links (booking socials, migration 0096): one per network, at most ten, in their order,
+ * A person's own social links (booking socials, migration 0097): one per network, at most ten, in their order,
  * shown on their booking pages and their `/<handle>` profile. The person's, like their handle and bio, so the same in
  * every workspace. Written and read only through crm_handle's functions (`crm_save_social_links`,
  * `crm_social_links_of`); the app's write path stores only the canonical link `checkSocialLink` made.

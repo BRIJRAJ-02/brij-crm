@@ -6,6 +6,7 @@ import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
+import { MatchCalendar, MatchCalendarCta, type MatchCalendarProps } from '../MatchCalendar/MatchCalendar.tsx';
 import styles from './VisitorBar.module.css';
 import { strings } from './strings.ts';
 
@@ -36,6 +37,18 @@ export interface VisitorBarProps {
   readonly onNotYou?: () => void;
   /** While the page asks who the visitor is: the tag's space held, so nothing jumps when it fills. */
   readonly isLoading?: boolean;
+  /**
+   * Match with your calendar (the owner, 25 October 2026): the page's own call
+   * to action in place of the small Connect your calendar link, and the dialog
+   * behind it, which the page drives. Left off, the small link stands alone.
+   */
+  readonly match?: MatchCalendarProps;
+  /**
+   * While loading, hold Match with your calendar's space rather than the small
+   * tag's, on a page whose visitor will be offered it: the card under the row
+   * never moves when the answer lands.
+   */
+  readonly holdsMatch?: boolean;
 }
 
 /** What the tag says after the visitor's name. */
@@ -81,10 +94,16 @@ export function VisitorBar({
   onShowAllChange,
   onNotYou,
   isLoading = false,
+  match,
+  holdsMatch = false,
 }: VisitorBarProps) {
   const root = useRef<HTMLDivElement>(null);
   if (isLoading) {
-    return (
+    return holdsMatch ? (
+      <div className={styles.root} data-cta="">
+        <MatchCalendarCta isLoading onPress={() => undefined} />
+      </div>
+    ) : (
       <div className={styles.root} aria-busy="true">
         <span className={styles.placeholder}>
           <Skeleton width="short" />
@@ -93,6 +112,19 @@ export function VisitorBar({
     );
   }
   if (person === undefined) {
+    if (match !== undefined) {
+      return (
+        // The call to action takes the whole row: it is the page's one ask of a visitor we don't know.
+        <div className={styles.root} data-cta="">
+          <MatchCalendarCta
+            onPress={() => {
+              match.onOpenChange(true);
+            }}
+          />
+          <MatchCalendar {...match} />
+        </div>
+      );
+    }
     if (connectHref === undefined) return null;
     return (
       <div ref={root} className={styles.root} tabIndex={-1}>
@@ -117,7 +149,7 @@ export function VisitorBar({
     <div ref={root} className={styles.root} tabIndex={-1}>
       {/* Only the state is live: turning Show all times on says what changed, not who you are again. */}
       <VisuallyHidden>
-        <span role="status">{headline(calendar, showAll, name)}</span>
+        <span role="status">{match?.isOpen === true ? '' : headline(calendar, showAll, name)}</span>
       </VisuallyHidden>
       <MenuTrigger>
         <Button icon={calendar === 'on' ? 'calendar-check' : 'calendar-days'} iconRight="chevron-down">
@@ -133,12 +165,23 @@ export function VisitorBar({
             {strings.bookingAs(name)}
           </MenuItem>
           <MenuSeparator />
+          {match !== undefined ? (
+            <MenuItem
+              id="match"
+              icon="calendar-check"
+              onAction={() => {
+                match.onOpenChange(true);
+              }}
+            >
+              {calendar === 'on' ? strings.matchAgain : strings.match}
+            </MenuItem>
+          ) : null}
           {calendar === 'on' && onShowAllChange !== undefined ? (
             <MenuItem id="all" icon="calendar-days" isChecked={showAll} onAction={() => onShowAllChange(!showAll)}>
               {strings.showAll}
             </MenuItem>
           ) : null}
-          {canConnectAgain ? (
+          {canConnectAgain && match === undefined ? (
             <MenuItem id="again" icon="refresh-cw" href={connectHref}>
               {strings.connectAgain}
             </MenuItem>
@@ -150,6 +193,7 @@ export function VisitorBar({
           )}
         </Menu>
       </MenuTrigger>
+      {match !== undefined && <MatchCalendar {...match} />}
     </div>
   );
 }

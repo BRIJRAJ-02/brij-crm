@@ -5,7 +5,7 @@
 // (AC-644).
 import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
-import { BookingDuration, TimeZoneName } from './settings.ts';
+import { BookingDefaultView, BookingDuration, TimeZoneName } from './settings.ts';
 import { Uuid } from '../values/ids.ts';
 import { SOCIAL_LINK_NETWORKS } from '../values/social-networks.ts';
 
@@ -55,6 +55,11 @@ export const PublicBookingPage = z.object({
   hostTimeZone: z.string(),
   /** How many days ahead a slot may start. */
   windowDays: z.number().int(),
+  /**
+   * The view the page opens in (owner, 25 Oct 2026), travelling with the page's other facts so the first paint is
+   * already the right one. A visitor's own remembered choice on this browser wins over it.
+   */
+  defaultView: BookingDefaultView,
   /**
    * A team page's members as the rail stacks them (spec 0029, AC-733): up to
    * 4 initials (a picture when one is served from our origin) and how many

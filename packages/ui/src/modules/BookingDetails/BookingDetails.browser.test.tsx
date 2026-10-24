@@ -131,3 +131,19 @@ describe('a refusal on a field the form shows (unchanged)', () => {
     await expect.poll(() => line().element().textContent).toBe('');
   });
 });
+
+describe('the honeypot', () => {
+  it('carries no name autofill knows, keeps password managers out, and sends empty', async () => {
+    const onSubmit = details({ kind: 'done' });
+    await expect.element(nameBox()).toBeVisible();
+    const trap = document.querySelector<HTMLInputElement>('[aria-hidden="true"] input');
+    expect(trap?.name).toBe('tf-trap');
+    expect(trap?.getAttribute('autocomplete')).toBe('off');
+    expect(trap?.getAttribute('data-1p-ignore')).toBe('true');
+    expect(trap?.getAttribute('data-lpignore')).toBe('true');
+    expect(trap?.getAttribute('data-bwignore')).toBe('true');
+    await fillAndSend();
+    await expect.poll(() => onSubmit.mock.calls.length).toBe(1);
+    expect((onSubmit.mock.calls[0] as readonly unknown[] | undefined)?.[0]).toMatchObject({ trap: '' });
+  });
+});

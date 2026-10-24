@@ -200,6 +200,7 @@ function viewOf(
     rescheduleHost: page.rescheduleHost,
     isPrivate: page.isPrivate,
     showSocials: page.showSocials,
+    defaultView: page.defaultView,
     profileSection: page.profileSection,
     profilePosition: page.profilePosition,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
@@ -480,6 +481,8 @@ export async function createBookingPage(
       rescheduleHost: given.rescheduleHost ?? 'same',
       isPrivate: given.isPrivate ?? false,
       showSocials: given.showSocials ?? true,
+      // Every new page opens in Month, the one view the page had before the host could choose.
+      defaultView: given.defaultView ?? 'month',
       profileSection: given.profileSection ?? null,
       profilePosition: given.profilePosition ?? (await nextProfilePosition(tx, owner)),
     };
@@ -514,6 +517,7 @@ export async function createBookingPage(
           rescheduleHost: settings.rescheduleHost,
           isPrivate: settings.isPrivate,
           showSocials: settings.showSocials,
+          defaultView: settings.defaultView,
           profileSection: settings.profileSection,
           profilePosition: settings.profilePosition,
           createdByType: by.type,
@@ -633,6 +637,7 @@ export async function updateBookingPage(
           ...(settings.rescheduleHost === undefined ? {} : { rescheduleHost: settings.rescheduleHost }),
           ...(settings.isPrivate === undefined ? {} : { isPrivate: settings.isPrivate }),
           ...(settings.showSocials === undefined ? {} : { showSocials: settings.showSocials }),
+          ...(settings.defaultView === undefined ? {} : { defaultView: settings.defaultView }),
           ...(settings.profileSection === undefined ? {} : { profileSection: settings.profileSection }),
           ...(settings.profilePosition === undefined ? {} : { profilePosition: settings.profilePosition }),
           ...(routing === undefined ? {} : { routing }),

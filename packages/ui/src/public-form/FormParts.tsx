@@ -1,4 +1,10 @@
-import { HONEYPOT_KEY, type FormStrings, type PublicForm, type PublicQuestion } from '@crm/contracts/forms';
+import {
+  HONEYPOT_IGNORE_ATTRIBUTES,
+  HONEYPOT_INPUT_NAME,
+  type FormStrings,
+  type PublicForm,
+  type PublicQuestion,
+} from '@crm/contracts/forms';
 import type { ReactNode, Ref } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
@@ -289,7 +295,7 @@ export function FormAlert({ state }: { readonly state: HostedFormState }) {
 
 /** The honeypot: a field people never see or reach, which bots fill. */
 export function FormTrap({ form, state }: { readonly form: PublicForm; readonly state: HostedFormState }) {
-  const id = `hf-${form.key}-${HONEYPOT_KEY}`;
+  const id = `hf-${form.key}-${HONEYPOT_INPUT_NAME}`;
   return (
     <div aria-hidden="true">
       <VisuallyHidden>
@@ -297,9 +303,10 @@ export function FormTrap({ form, state }: { readonly form: PublicForm; readonly 
         <input
           id={id}
           type="text"
-          name={HONEYPOT_KEY}
+          name={HONEYPOT_INPUT_NAME}
           tabIndex={-1}
           autoComplete="off"
+          {...HONEYPOT_IGNORE_ATTRIBUTES}
           value={state.trap}
           onChange={(event) => state.setTrap(event.target.value)}
         />

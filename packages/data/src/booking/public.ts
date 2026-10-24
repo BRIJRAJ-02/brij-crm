@@ -237,20 +237,25 @@ function previewSocials(value: unknown): readonly PublicSocialLink[] | undefined
     return link === undefined ? [] : [link];
   });
 }
+/** A draft's opening view, when it is one of the three the page has. */
+const previewView = (value: unknown): PublicBookingPage['defaultView'] | undefined =>
+  value === 'month' || value === 'list' || value === 'chat' ? value : undefined;
 
 /**
  * The page with the editor's unsaved draft laid over it (spec 0025, AC-679),
  * from a preview message: only the title, description, durations, location and
- * the host's social links as the editor shows them (booking socials), each
- * taken only when it has the right shape, so a stray message changes nothing.
- * Anything that isn't a preview message answers `undefined`.
+ * the host's social links as the editor shows them (booking socials), and the
+ * view it opens in, each taken only when it has the right shape, so a stray
+ * message changes nothing. Anything that isn't a preview message answers
+ * `undefined`.
  */
 export function withPreviewDraft(page: PublicBookingPage, message: unknown): PublicBookingPage | undefined {
   if (!isRecord(message) || message.type !== PREVIEW_MESSAGE || !isRecord(message.draft)) return undefined;
-  const { title, description, durations, location, socials } = message.draft;
+  const { title, description, durations, location, socials, defaultView } = message.draft;
   const lengths = Array.isArray(durations) ? durations.filter(isDuration) : [];
   const place = previewLocation(location);
   const links = previewSocials(socials);
+  const opensIn = previewView(defaultView);
   // A team page never shows anyone's links (AC-754), whatever a message says.
   const { socials: _saved, ...rest } = page;
   return {
@@ -260,5 +265,6 @@ export function withPreviewDraft(page: PublicBookingPage, message: unknown): Pub
     ...(lengths.length > 0 ? { durations: lengths } : {}),
     ...(place === undefined ? {} : { location: place }),
     ...(links === undefined || links.length === 0 || page.team !== undefined ? {} : { socials: [...links] }),
+    ...(opensIn === undefined ? {} : { defaultView: opensIn }),
   };
 }

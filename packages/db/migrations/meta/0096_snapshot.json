@@ -1,5 +1,5 @@
 {
-  "id": "a4076d21-6b0b-43e9-aeac-17656afdd89f",
+  "id": "d61e7261-d8f4-4008-85f7-f7e05e305c5b",
   "prevId": "d7d5c81e-fb12-4972-be31-496bc06eb971",
   "version": "7",
   "dialect": "postgresql",
@@ -2074,12 +2074,12 @@
           "notNull": true,
           "default": false
         },
-        "show_socials": {
-          "name": "show_socials",
-          "type": "boolean",
+        "default_view": {
+          "name": "default_view",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": true
+          "default": "'month'"
         },
         "destination_calendar_id": {
           "name": "destination_calendar_id",
@@ -2391,6 +2391,10 @@
         "booking_pages_reschedule_host": {
           "name": "booking_pages_reschedule_host",
           "value": "\"booking_pages\".\"reschedule_host\" in ('same', 'rotation')"
+        },
+        "booking_pages_default_view": {
+          "name": "booking_pages_default_view",
+          "value": "\"booking_pages\".\"default_view\" in ('month', 'list', 'chat')"
         },
         "booking_pages_destination_removed_name": {
           "name": "booking_pages_destination_removed_name",
@@ -18643,86 +18647,6 @@
         "site_visit_visitor": {
           "name": "site_visit_visitor",
           "value": "\"auth\".\"site_visit\".\"visitor\" ~ '^[0-9a-f]{32}$'"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "auth.social_links": {
-      "name": "social_links",
-      "schema": "auth",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "network": {
-          "name": "network",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "href": {
-          "name": "href",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "position": {
-          "name": "position",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "social_links_user_fk": {
-          "name": "social_links_user_fk",
-          "tableFrom": "social_links",
-          "tableTo": "user",
-          "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "social_links_pkey": {
-          "name": "social_links_pkey",
-          "columns": [
-            "user_id",
-            "network"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "social_links_network": {
-          "name": "social_links_network",
-          "value": "network in ('linkedin', 'x', 'instagram', 'github', 'facebook', 'youtube', 'tiktok', 'threads', 'angellist', 'website')"
-        },
-        "social_links_href": {
-          "name": "social_links_href",
-          "value": "char_length(\"auth\".\"social_links\".\"href\") <= 2048 and \"auth\".\"social_links\".\"href\" ~ '^https?://'"
-        },
-        "social_links_position": {
-          "name": "social_links_position",
-          "value": "\"auth\".\"social_links\".\"position\" between 0 and 9"
         }
       },
       "isRLSEnabled": false
