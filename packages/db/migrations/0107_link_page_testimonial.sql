@@ -26,6 +26,14 @@ alter table "auth"."profile_items" drop constraint "profile_items_plain";
 alter table "auth"."profile_items" add constraint "profile_items_plain" CHECK ("auth"."profile_items"."kind" not in ('link', 'heading', 'contact', 'text', 'faq', 'testimonial') or ("auth"."profile_items"."page_id" is null and "auth"."profile_items"."form_id" is null));
 
 --> statement-breakpoint
+-- The definers are owned by crm_handle, so a replace has to run as that role: the migration's own role is not
+-- the owner and Postgres refuses it ("must be owner of function"). Same block 0104 uses, entered and left here.
+grant crm_handle to current_user with inherit false, set true;
+--> statement-breakpoint
+grant create on schema public to crm_handle;
+--> statement-breakpoint
+set local role crm_handle;
+--> statement-breakpoint
 create or replace function crm_check_profile_item(wanted_kind text, given jsonb, workspace uuid, page uuid, form uuid)
   returns void
   language plpgsql
@@ -285,6 +293,13 @@ begin
   return true;
 end;
 $$;
+
+--> statement-breakpoint
+reset role;
+--> statement-breakpoint
+revoke create on schema public from crm_handle;
+--> statement-breakpoint
+revoke crm_handle from current_user;
 
 --> statement-breakpoint
 do $$

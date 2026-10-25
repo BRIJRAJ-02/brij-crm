@@ -14,6 +14,14 @@
 -- The signature does not change and the function still returns void, so this is a replace in place: no grant is
 -- remade, no dependent function is dropped, and crm_save_profile_item calls the same function it always called.
 
+-- The definers are owned by crm_handle, so a replace has to run as that role: the migration's own role is not
+-- the owner and Postgres refuses it ("must be owner of function"). Same block 0104 uses, entered and left here.
+grant crm_handle to current_user with inherit false, set true;
+--> statement-breakpoint
+grant create on schema public to crm_handle;
+--> statement-breakpoint
+set local role crm_handle;
+--> statement-breakpoint
 create or replace function crm_check_profile_item(wanted_kind text, given jsonb, workspace uuid, page uuid, form uuid)
   returns void
   language plpgsql
@@ -158,6 +166,13 @@ begin
   end if;
 end;
 $$;
+
+--> statement-breakpoint
+reset role;
+--> statement-breakpoint
+revoke create on schema public from crm_handle;
+--> statement-breakpoint
+revoke crm_handle from current_user;
 
 --> statement-breakpoint
 do $$

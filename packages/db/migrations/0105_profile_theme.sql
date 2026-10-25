@@ -88,7 +88,13 @@ revoke all on function crm_public_profiles_of(uuid[]) from public;
 grant execute on function crm_public_profiles_of(uuid[]) to crm_app;
 --> statement-breakpoint
 -- The public read, now answering the look beside the person. One statement, as before.
-create or replace function crm_handle_owner(wanted text)
+--
+-- Dropped and made again rather than replaced: `create or replace` cannot change a `returns table` row type
+-- ("Row type defined by OUT parameters is different"), which is the same reason 0104 drops its three readers.
+-- The grants go with the old function, so they are made again below.
+drop function crm_handle_owner(text);
+--> statement-breakpoint
+create function crm_handle_owner(wanted text)
   returns table (user_id uuid, handle text, bio text, name text, image text, theme jsonb)
   language sql
   stable
@@ -106,6 +112,10 @@ begin atomic
   where h.handle = crm_handle_owner.wanted
   limit 1;
 end;
+--> statement-breakpoint
+revoke all on function crm_handle_owner(text) from public;
+--> statement-breakpoint
+grant execute on function crm_handle_owner(text) to crm_app;
 --> statement-breakpoint
 revoke all on function crm_save_profile_theme(uuid, jsonb) from public;
 --> statement-breakpoint
