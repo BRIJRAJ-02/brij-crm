@@ -39,6 +39,16 @@ It sits in a raised card like the rows beside it, because on this page anything 
 
 A `form` block is a row like a booking page's, with the owner's own words and a quiet chevron, that opens `/f/:key` in the same tab (spec 0052, AC-5215). It is our own origin, so it is an ordinary navigation: no `target`, no `rel`, no frame and no script from anywhere else. Its press is counted exactly as any other row's is.
 
+## The owner's look
+
+`theme` is six names (spec 0054): `ground`, `hue`, `mode`, `shape`, `fill` and `font`. They become six data attributes on this module's root, and this module's stylesheet has one block per value, each setting the page's own custom properties from token variables. Nothing is styled inline, no CSS is made at run time and no value is ever passed in, so a thousand pages are still one stylesheet and one contrast test.
+
+Everything the page draws reads those properties rather than token variables directly, which is what lets a later block kind take the look by doing the same. `PageLook` repeats `PageTheme`'s keys because the library never imports the contracts; `page-theme.test.ts` fails when the two drift apart, when a value has no stylesheet block, or when a block holds a raw value instead of a token.
+
+Two rules worth knowing. `data-theme` is set to the owner's mode on this root, so the token layer's system preference, which only applies where no `data-theme` is set, never decides somebody else's page. And a filled, tinted or outlined row moves its second line and its chevron onto the card's own colour: the quiet greys have no checked pair against the accent (`text-secondary` on `accent` measures 1.19:1). Ink means a dark page, so its override applies in light mode only; a page already in dark is ink.
+
+`layout="blocks"` ignores the look: an editor's "How it looks" shows the one block being typed, in the app's own colours, not a page in miniature.
+
 ## Use
 
 ```tsx

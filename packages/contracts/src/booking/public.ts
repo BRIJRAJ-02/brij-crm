@@ -7,6 +7,7 @@ import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
 import { BookingDefaultView, BookingDuration, TimeZoneName } from './settings.ts';
 import { Uuid } from '../values/ids.ts';
+import { PageTheme } from './page-theme.ts';
 import { PublicProfileItem } from './link-page.ts';
 import { SOCIAL_LINK_NETWORKS } from '../values/social-networks.ts';
 
@@ -137,6 +138,8 @@ export const PublicProfile = z.object({
   /** Their social links, in their order, absent when there are none (booking socials, 25 Oct 2026). */
   socials: z.array(PublicSocialLink).optional(),
   items: z.array(PublicProfileItem),
+  /** The look its owner picked (spec 0054, AC-5404): the six names, and no colour value of any kind. */
+  theme: PageTheme,
   /** The cursor of the next page, while there is one. */
   next: z.string().optional(),
 });

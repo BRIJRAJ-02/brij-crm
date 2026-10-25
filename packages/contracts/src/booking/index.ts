@@ -2,5 +2,6 @@
 // oRPC, for the public bundle, the builder and the API's public routes.
 export * from './handles.ts';
 export * from './link-page.ts';
+export * from './page-theme.ts';
 export * from './public.ts';
 export * from './settings.ts';

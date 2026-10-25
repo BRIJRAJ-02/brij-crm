@@ -200,6 +200,36 @@ export const FormBlock: Story = {
   },
 };
 
+/** The owner's own look (spec 0054): six names, six data attributes, and one stylesheet block each. */
+export const Themed: Story = {
+  args: {
+    person: { name: 'Ada Lovelace', id: 'ada', bio: 'Numbers, engines and the odd poem.' },
+    theme: { ground: 'tint', hue: 'purple', mode: 'light', shape: 'pill', fill: 'solid', font: 'mono' },
+    blocks: [
+      { kind: 'page', id: 'chat', title: 'Quick chat', href: '/ada/quick-chat', facts: '30 min' },
+      { kind: 'link', id: 'site', title: 'ada.dev', href: 'https://ada.dev', hue: 'purple' },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const root = canvasElement.querySelector('[data-page-ground]');
+    // The look is attributes only: no inline style reaches the page, in any theme.
+    await expect(root).toHaveAttribute('data-page-ground', 'tint');
+    await expect(root).toHaveAttribute('data-page-fill', 'solid');
+    // Light or dark is the owner's call, pinned here so a visitor's own setting never decides it.
+    await expect(root).toHaveAttribute('data-theme', 'light');
+    await expect(root?.getAttribute('style')).toBeNull();
+  },
+};
+
+/** The same page in the owner's dark, which a visitor sees whatever their phone is set to. */
+export const ThemedDark: Story = {
+  args: {
+    person: { name: 'Ada Lovelace', id: 'ada', bio: 'Numbers, engines and the odd poem.' },
+    theme: { ground: 'ink', hue: 'blue', mode: 'dark', shape: 'square', fill: 'outline', font: 'sans' },
+    blocks: [{ kind: 'link', id: 'site', title: 'ada.dev', href: 'https://ada.dev', hue: 'blue' }],
+  },
+};
+
 /** Long words wrap inside their card rather than pushing the page sideways at 390 wide. */
 export const LongWords: Story = {
   args: {

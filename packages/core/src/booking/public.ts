@@ -525,6 +525,7 @@ export async function readLinkPage(
   const name = found.owner.name.trim() || found.owner.handle;
   return {
     handle: found.owner.handle,
+    theme: found.owner.theme,
     name,
     initials: profileInitials(name, found.owner.handle),
     // The account's picture is Google's, which the public pages' policy (img-src 'self') never loads: our own

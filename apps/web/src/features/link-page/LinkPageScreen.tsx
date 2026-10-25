@@ -5,7 +5,17 @@
 // once, on the list and in the phone, and is saved as it is made.
 // Leaves out: the contact card, the QR, the socials row (they come in later phases), themes and appearance, and the
 // handle itself (Settings › Profile).
-import type { BlockDraft, LinkPageStore, MyProfile, ProfileBlock, ProfileBlockKind, ProfileItem } from '@crm/data';
+import {
+  DEFAULT_PAGE_THEME,
+  type BlockDraft,
+  type DataError,
+  type LinkPageStore,
+  type MyProfile,
+  type PageTheme,
+  type ProfileBlock,
+  type ProfileBlockKind,
+  type ProfileItem,
+} from '@crm/data';
 import {
   Button,
   ButtonLink,
@@ -35,6 +45,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
+import { AppearanceCard } from './AppearanceCard.tsx';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import {
   ADDABLE,
@@ -166,6 +177,25 @@ function Blocks({
   const [isDeleting, setIsDeleting] = useState(false);
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
+  // The look, shown the moment it is picked and saved behind it (AC-5421). A refusal puts back what was there and
+  // says why on the card, where the control that changed is.
+  const [picked, setPicked] = useState<PageTheme | undefined>(undefined);
+  const [themeRefusal, setThemeRefusal] = useState<DataError | undefined>(undefined);
+  const theme = picked ?? profile.theme ?? DEFAULT_PAGE_THEME;
+  const chooseTheme = (next: PageTheme) => {
+    const was = theme;
+    setPicked(next);
+    setThemeRefusal(undefined);
+    void linkPage.saveTheme(slug, next).then(
+      (saved) => {
+        setPicked(saved);
+      },
+      (error: unknown) => {
+        setPicked(was);
+        setThemeRefusal(error instanceof Error ? (error as DataError) : undefined);
+      },
+    );
+  };
   const items = useMemo(() => (state.status === 'ready' ? state.items : []), [state]);
   const counts = state.status === 'ready' ? state.counts : undefined;
   const socialNetworks = useMemo(() => (profile.socials ?? []).map((link) => link.network), [profile.socials]);
@@ -424,6 +454,7 @@ function Blocks({
         ...(profile.image === undefined || profile.pictureHidden === true ? {} : { image: profile.image }),
       }}
       {...(state.status === 'ready' ? { blocks: previewBlocks } : {})}
+      theme={theme}
       // Their own set of networks (Settings › Profile's Social links), under the bio as visitors see it.
       {...(profile.socials === undefined || profile.socials.length === 0
         ? {}
@@ -505,6 +536,12 @@ function Blocks({
   const Editor = editing === undefined ? undefined : BLOCK_KINDS[editing.kind].Editor;
   return (
     <PreviewLayout preview={preview} previewShare="wide">
+      {/* Only where there is a page to dress: the screen already sends a person with no handle to Profile. */}
+      <AppearanceCard
+        theme={theme}
+        onChange={chooseTheme}
+        {...(themeRefusal === undefined ? {} : { refusal: themeRefusal })}
+      />
       <Card
         title={strings.blocks}
         description={

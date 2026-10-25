@@ -1,7 +1,7 @@
 // Handles (owner decision, 22 Oct 2026): a person's public profile at `/<handle>` and each booking page at
 // `/<handle>/<slug>`. Handles live in schema auth (migration 0086), out of the app role's reach; these are its only
 // ways there, each one of crm_handle's definer functions, run inside the caller's workspace transaction.
-import { bookingPagePath, handleFromName, HANDLE_MAX } from '@crm/contracts';
+import { bookingPagePath, DEFAULT_PAGE_THEME, handleFromName, HANDLE_MAX, PageTheme } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { sql } from 'drizzle-orm';
 import { isUuid } from '../engine/ids.ts';
@@ -11,15 +11,18 @@ import { postgresError, refuseOn } from '../engine/refusals.ts';
 export interface PublicProfileRow {
   readonly handle: string;
   readonly bio: string;
+  /** The look they picked for their link page (spec 0054); the default until they touch it. */
+  readonly theme: PageTheme;
 }
 
 interface ProfileRow extends Record<string, unknown> {
   readonly user_id: string;
   readonly handle: string;
   readonly bio: string;
+  readonly theme: unknown;
 }
 
-/** The handle and bio of each person named who has a handle (`crm_public_profiles_of`), by their user id. */
+/** The handle, bio and look of each person named who has a handle (`crm_public_profiles_of`), by their user id. */
 export async function publicProfilesOf(
   tx: WorkspaceTx,
   userIds: readonly (string | null | undefined)[],
@@ -27,9 +30,14 @@ export async function publicProfilesOf(
   const ids = [...new Set(userIds.filter((id): id is string => id !== null && id !== undefined && isUuid(id)))];
   if (ids.length === 0) return new Map();
   const found = await tx.execute<ProfileRow>(
-    sql`select user_id::text as user_id, handle, bio from crm_public_profiles_of(${`{${ids.join(',')}}`}::uuid[])`,
+    sql`select user_id::text as user_id, handle, bio, theme from crm_public_profiles_of(${`{${ids.join(',')}}`}::uuid[])`,
   );
-  return new Map(found.rows.map((row) => [row.user_id, { handle: row.handle, bio: row.bio }]));
+  return new Map(
+    found.rows.map((row) => [
+      row.user_id,
+      { handle: row.handle, bio: row.bio, theme: PageTheme.safeParse(row.theme).data ?? DEFAULT_PAGE_THEME },
+    ]),
+  );
 }
 
 /** The constraint a handle another person holds (or held) is refused on. */

@@ -142,6 +142,45 @@ export interface LinkPageProps {
   readonly caption?: string;
   /** A visitor pressed a block (a press counter's beacon). Never holds up the navigation. */
   readonly onPress?: (id: string) => void;
+  /**
+   * The look its owner picked (spec 0054): six names, which become six data attributes on this root, and one block
+   * of this module's stylesheet each. No value is passed, nothing is styled inline and no CSS is made at run time.
+   * Missing while the page loads, so the loading state draws on the plain ground in the visitor's own light or dark
+   * and the look lands with the content, in one step (AC-5413). `layout="blocks"` ignores it: an editor's "How it
+   * looks" shows the one block being typed, in the app's own colours, not a page in miniature.
+   */
+  readonly theme?: PageLook;
+}
+
+/**
+ * A page's look as this module takes it: the six names of `PageTheme` in `@crm/contracts`, repeated here because
+ * the library never imports the contracts (its own rule). `page-theme.test.ts` fails if the two drift apart.
+ */
+export interface PageLook {
+  readonly ground: 'plain' | 'paper' | 'tint' | 'ink';
+  readonly hue: Hue;
+  readonly mode: 'light' | 'dark';
+  readonly shape: 'soft' | 'pill' | 'square';
+  readonly fill: 'plain' | 'soft' | 'outline' | 'solid';
+  readonly font: 'sans' | 'mono';
+}
+
+/**
+ * The six attributes a look becomes, and `data-theme`, which pins light or dark for everything inside this root:
+ * the token layer only follows the system where no `data-theme` is set, so a visitor's own phone or app choice
+ * never decides somebody else's page (AC-5406).
+ */
+function lookAttributes(look: PageLook | undefined) {
+  if (look === undefined) return {};
+  return {
+    'data-theme': look.mode,
+    'data-page-ground': look.ground,
+    'data-page-hue': look.hue,
+    'data-page-mode': look.mode,
+    'data-page-shape': look.shape,
+    'data-page-fill': look.fill,
+    'data-page-font': look.font,
+  };
 }
 
 /** How many skeleton blocks stand in while the page loads. */
@@ -561,6 +600,7 @@ export function LinkPage({
   layout = 'page',
   caption,
   onPress,
+  theme,
 }: LinkPageProps) {
   const captionId = useId();
   const contact = contactOf(blocks);
@@ -597,7 +637,12 @@ export function LinkPage({
   }
   const Root = isPreview ? 'div' : 'main';
   return (
-    <Root className={styles.root} data-preview={isPreview || undefined} {...(isPreview ? { inert: true } : {})}>
+    <Root
+      className={styles.root}
+      data-preview={isPreview || undefined}
+      {...lookAttributes(theme)}
+      {...(isPreview ? { inert: true } : {})}
+    >
       <div className={styles.column}>
         <header className={styles.hero} aria-busy={person === undefined || undefined}>
           {person === undefined ? (

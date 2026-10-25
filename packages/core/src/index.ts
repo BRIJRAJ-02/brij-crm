@@ -137,6 +137,7 @@ export {
   archiveProfileItem,
   deleteProfileItem,
   listProfileFormChoices,
+  saveProfileTheme,
   listProfilePageChoices,
   orderProfileItems,
   readProfileCounts,

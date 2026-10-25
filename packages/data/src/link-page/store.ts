@@ -6,6 +6,7 @@
 // live event carries it; another tab's change shows when a screen next holds it, and an order made from a stale
 // list is refused by the server and read again.
 import type {
+  PageTheme,
   ProfileBlock,
   ProfileCounts,
   ProfileFormChoice,
@@ -76,6 +77,11 @@ export interface LinkPageApi {
   readonly counts: (input: { readonly workspace: string }) => Promise<ProfileCounts>;
   readonly pageChoices: (input: { readonly workspace: string }) => Promise<readonly ProfilePageChoice[]>;
   readonly formChoices: (input: { readonly workspace: string }) => Promise<readonly ProfileFormChoice[]>;
+  readonly saveTheme: (input: {
+    readonly workspace: string;
+    readonly theme: PageTheme;
+    readonly mutationId: string;
+  }) => Promise<PageTheme>;
   readonly saveItem: (input: {
     readonly workspace: string;
     readonly id: string;
@@ -127,6 +133,10 @@ interface ProfileProcedures {
     input: { workspace: string },
     options: { signal?: AbortSignal },
   ) => Promise<readonly ProfileFormChoice[]>;
+  readonly saveTheme: (
+    input: { workspace: string; theme: PageTheme; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<PageTheme>;
   readonly saveItem: (
     input: { workspace: string; id: string; block: ProfileBlock; isEdit?: boolean; mutationId: string },
     options: { signal?: AbortSignal },
@@ -641,6 +651,15 @@ export function createLinkPageStore(deps: LinkPageDeps) {
       deps.api.formChoices({ workspace }).catch((error: unknown) => {
         throw toDataError(error);
       }),
+    /**
+     * Saves the page's look (spec 0054, AC-5421), whole and at once, the way a reorder saves. The caller shows the
+     * pick before this answers and puts it back on a refusal, which is why the refusal comes back rather than a
+     * toast: the control that changed is where the reason belongs.
+     */
+    saveTheme: (workspace: string, theme: PageTheme): Promise<PageTheme> =>
+      deps.api.saveTheme({ workspace, theme, mutationId: deps.mintId() }).catch((error: unknown) => {
+        throw toDataError(error);
+      }),
     /** Signed out: forgets the copy. */
     clear: (): void => {
       held = undefined;
@@ -668,6 +687,7 @@ export function openLinkPage(given: {
       counts: (input) => call((options) => profile.counts(input, options)),
       pageChoices: (input) => call((options) => profile.pageChoices(input, options)),
       formChoices: (input) => call((options) => profile.formChoices(input, options)),
+      saveTheme: (input) => call((options) => profile.saveTheme(input, options)),
       saveItem: (input) => call((options) => profile.saveItem(input, options)),
       orderItems: (input) => call((options) => profile.orderItems({ ...input, ids: [...input.ids] }, options)),
       archiveItem: (input) => call((options) => profile.archiveItem(input, options)),
@@ -706,6 +726,15 @@ export function openLinkPage(given: {
     /** The forms the person may still place, from every workspace, read fresh each time it is asked. */
     formChoices: (workspace: string): Promise<readonly ProfileFormChoice[]> =>
       deps.api.formChoices({ workspace }).catch((error: unknown) => {
+        throw toDataError(error);
+      }),
+    /**
+     * Saves the page's look (spec 0054, AC-5421), whole and at once, the way a reorder saves. The caller shows the
+     * pick before this answers and puts it back on a refusal, which is why the refusal comes back rather than a
+     * toast: the control that changed is where the reason belongs.
+     */
+    saveTheme: (workspace: string, theme: PageTheme): Promise<PageTheme> =>
+      deps.api.saveTheme({ workspace, theme, mutationId: deps.mintId() }).catch((error: unknown) => {
         throw toDataError(error);
       }),
     /** Signed out: forgets the copy. */

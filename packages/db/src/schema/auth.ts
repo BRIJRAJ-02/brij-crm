@@ -328,12 +328,29 @@ export const publicProfiles = auth.table(
     userId: uuid('user_id').notNull(),
     handle: text('handle').notNull(),
     bio: text('bio').notNull().default(''),
+    /** The link page's look (spec 0054): six names from closed sets, never a colour or a size. */
+    theme: jsonb('theme')
+      .notNull()
+      .default(
+        sql`'{"ground":"plain","hue":"blue","mode":"light","shape":"soft","fill":"plain","font":"sans"}'::jsonb`,
+      ),
     updatedAt: updatedAt(),
   },
   (t) => [
     primaryKey({ name: 'public_profiles_pkey', columns: [t.userId] }),
     uniqueIndex('public_profiles_handle').on(t.handle),
     check('public_profiles_bio', sql`char_length(${t.bio}) <= 160`),
+    check(
+      'public_profiles_theme',
+      sql`jsonb_typeof(${t.theme}) = 'object'
+        and (select count(*) from jsonb_object_keys(${t.theme})) = 6
+        and ${t.theme} ->> 'ground' in ('plain', 'paper', 'tint', 'ink')
+        and ${t.theme} ->> 'hue' in ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')
+        and ${t.theme} ->> 'mode' in ('light', 'dark')
+        and ${t.theme} ->> 'shape' in ('soft', 'pill', 'square')
+        and ${t.theme} ->> 'fill' in ('plain', 'soft', 'outline', 'solid')
+        and ${t.theme} ->> 'font' in ('sans', 'mono')`,
+    ),
     foreignKey({ name: 'public_profiles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     foreignKey({
       name: 'public_profiles_handle_fk',

@@ -9,6 +9,8 @@
 // (The identity login keeps the default grant every auth table gets; the app reaches the table only through here.)
 import {
   HUES,
+  PAGE_THEME_REFUSAL,
+  PageTheme,
   ProfileBlock,
   ProfileItem,
   profileLimitSentence,
@@ -303,6 +305,31 @@ export async function listProfileFormChoices(scope: EngineScope): Promise<readon
         left.facts.name.localeCompare(right.facts.name) ||
         (left.formId < right.formId ? -1 : 1),
     );
+}
+
+/**
+ * Replaces the look of the caller's own link page (spec 0054, AC-5401), whole. The six names are checked here too,
+ * so a caller in core gets the contract's refusal, and the column's own check constraint refuses anything that got
+ * past both. A person with no profile row has no handle either, so there is nothing to theme.
+ */
+export async function saveProfileTheme(scope: EngineScope, theme: PageTheme): Promise<PageTheme> {
+  const owner = ownerOf(scope);
+  const parsed = PageTheme.safeParse(theme);
+  if (!parsed.success) throw refuse('CONFIG_INVALID', PAGE_THEME_REFUSAL);
+  const saved = await inWorkspace(scope, async (tx) => {
+    try {
+      const answered = await tx.execute<{ theme: unknown }>(
+        sql`select theme from crm_save_profile_theme(${owner}::uuid, ${JSON.stringify(parsed.data)}::jsonb) as theme`,
+      );
+      return answered.rows[0]?.theme;
+    } catch (error) {
+      const pg = postgresError(error);
+      if (pg?.code === 'P0002') throw refuse('NOT_FOUND', 'Pick a handle before you choose a look.');
+      if (pg?.code === '23514') throw refuse('CONFIG_INVALID', PAGE_THEME_REFUSAL);
+      throw error;
+    }
+  });
+  return PageTheme.safeParse(saved).data ?? parsed.data;
 }
 
 /** A refusal for what a definer raised, or the error itself. */

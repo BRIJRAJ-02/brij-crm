@@ -261,6 +261,8 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
             socials: <SocialLinks variant="round" links={profile.socials} label={strings.socials(profile.name)} />,
           })}
       blocks={blocks}
+      // The look its owner picked (spec 0054), which lands with the content, in one step.
+      theme={profile.theme}
       {...(isSearching ? { summary: strings.matches(blocks.length) } : {})}
       foot={foot}
       // A press is counted by a beacon (AC-5125): the navigation never waits for it.

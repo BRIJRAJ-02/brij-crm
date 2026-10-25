@@ -11,6 +11,7 @@ import {
   ProfileItems,
   ProfilePageChoice,
 } from './booking/link-page.ts';
+import { PageTheme } from './booking/page-theme.ts';
 import { TimeZoneName } from './booking/settings.ts';
 import { Uuid } from './values/ids.ts';
 import { checkSocialLink, socialLinkProblem } from './values/social.ts';
@@ -124,6 +125,8 @@ export const MyProfile = z.object({
    * booking pages and profile. Absent for a member with no sign in of their own.
    */
   socials: z.array(z.object({ network: SocialLinkNetwork, href: z.string() })).optional(),
+  /** The look of their link page (spec 0054); the default until they pick one, and absent with no handle. */
+  theme: PageTheme.optional(),
 });
 /** The caller's profile in this workspace. */
 export type MyProfile = z.infer<typeof MyProfile>;
@@ -197,6 +200,8 @@ export const profileContract = {
   pageChoices: oc.input(WorkspaceScoped).output(z.array(ProfilePageChoice)),
   /** The forms the caller may place on their link page (spec 0052, AC-5213), their own and not placed yet. */
   formChoices: oc.input(WorkspaceScoped).output(z.array(ProfileFormChoice)),
+  /** The look of the caller's own link page (spec 0054): read with the profile, saved whole. */
+  saveTheme: oc.input(WorkspaceScoped.extend({ theme: PageTheme, mutationId: Uuid })).output(PageTheme),
   saveItem: oc.input(SaveProfileItemInput).output(ProfileItem),
   orderItems: oc.input(OrderProfileItemsInput).output(ProfileItems),
   archiveItem: oc.input(ArchiveProfileItemInput).output(ProfileItems),

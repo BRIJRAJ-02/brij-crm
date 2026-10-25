@@ -4,6 +4,7 @@ import {
   deleteProfileItem,
   getMyProfile,
   listProfileFormChoices,
+  saveProfileTheme,
   listProfilePageChoices,
   orderProfileItems,
   readProfileCounts,
@@ -69,6 +70,9 @@ export const profileRouter = member.profile.router({
   formChoices: member.profile.formChoices.handler(async ({ context }) => [
     ...(await listProfileFormChoices(context.scope)),
   ]),
+  saveTheme: member.profile.saveTheme.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () => saveProfileTheme(context.scope, input.theme)),
+  ),
   saveItem: member.profile.saveItem.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       saveProfileItem(context.scope, {

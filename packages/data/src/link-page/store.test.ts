@@ -59,6 +59,7 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
     counts: () => Promise.resolve(COUNTS),
     pageChoices: () => wait('pageChoices'),
     formChoices: () => wait('formChoices'),
+    saveTheme: ({ theme }) => Promise.resolve(theme),
     saveItem: (input) => {
       for (const listen of saveListeners) listen(input);
       return wait(`save:${input.id}`);

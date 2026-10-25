@@ -17,11 +17,13 @@ import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
 import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
 import {
+  DEFAULT_PAGE_THEME,
   FORM_SLUG,
   HANDLE_PATTERN,
   type HandleOffer,
   INVITE_INVALID_MESSAGE,
   isReservedHandle,
+  PageTheme,
   PROFILE_LIMITS,
   SIGN_IN_AGAIN_MESSAGE,
   SLUG_PATTERN,
@@ -639,6 +641,7 @@ interface HandleOwnerRow extends Record<string, unknown> {
   readonly bio: string;
   readonly name: string;
   readonly image: string | null;
+  readonly theme: unknown;
 }
 
 /** The person a handle names (current or old): their identity, current handle, and what their profile shows. */
@@ -655,6 +658,11 @@ export interface HandleOwner {
    * for their profile (a booking address or a picture never needs them).
    */
   readonly socials: readonly PublicSocialLink[];
+  /**
+   * The look they picked for their link page (spec 0054). Parsed here, so a row an older build wrote, or one a
+   * later build widened, draws as the default rather than as nothing.
+   */
+  readonly theme: PageTheme;
 }
 
 /** The person `handle` names, or undefined: a malformed or reserved handle reads nothing. */
@@ -666,7 +674,7 @@ async function handleOwner(
   if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return undefined;
   return db.withWorkspace(NO_WORKSPACE, async (tx) => {
     const found = await tx.execute<HandleOwnerRow>(
-      sql`select user_id::text as user_id, handle, bio, name, image from crm_handle_owner(${handle})`,
+      sql`select user_id::text as user_id, handle, bio, name, image, theme from crm_handle_owner(${handle})`,
     );
     const [row] = found.rows;
     if (row === undefined) return undefined;
@@ -678,6 +686,7 @@ async function handleOwner(
       ...(row.image === null ? {} : { image: row.image }),
       // The same read as their booking pages' (`publicSocialsOf`), in this one transaction.
       socials: withSocials ? await publicSocialsOf(tx, row.user_id) : [],
+      theme: PageTheme.safeParse(row.theme).data ?? DEFAULT_PAGE_THEME,
     };
   });
 }

@@ -426,6 +426,7 @@ export type {
   ProfileBlockKind,
   ProfileItem,
   ProfileLinkIcon,
+  PageTheme,
   ProfileFormChoice,
   ProfileFormFacts,
   ProfilePageChoice,
@@ -448,6 +449,9 @@ export type {
 export type { LinkSection, LinkSectionState, LinkSectionStatus, SectionKey } from './links/sections.ts';
 /** How many related records an Overview card shows per side (spec 0017, AC-383). */
 export { RELATED_PREVIEW } from '@crm/contracts/activity-keys';
+// The link page's look (spec 0054): the default and the named starting points are values the editor presses, not
+// only types, so they come through the one data layer like every other shape a screen uses.
+export { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme } from '@crm/contracts';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 export type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 export type {
