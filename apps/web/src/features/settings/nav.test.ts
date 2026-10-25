@@ -4,7 +4,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Permission } from '@crm/data';
 import {
-  calendarSettingsHref,
   historyHref,
   preferencesHref,
   settingsGroupOf,
@@ -15,23 +14,22 @@ import {
 } from './nav.ts';
 
 describe('settingsNav', () => {
-  it('lists Account, Scheduling, Workspace and Super admin, in order, with their pages', () => {
+  it('lists Account, Workspace and Super admin, in order, with their pages', () => {
     const groups = settingsNav('acme');
-    expect(groups.map((group) => group.label)).toEqual(['Account', 'Scheduling', 'Workspace', 'Super admin']);
+    // Scheduling is gone: Calendars and Round robin are tabs of Bookings (25 October 2026).
+    expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace', 'Super admin']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Sign in and devices', 'Notifications'],
-      ['Calendars', 'Round robin'],
       ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'History', 'Trash'],
       ['Overview', 'Users', 'Booking pages', 'Website'],
     ]);
   });
 
-  it('puts Calendars under Scheduling, and every entry opens a page in Settings', () => {
+  it('keeps Scheduling out of Settings, and every entry opens a page in Settings', () => {
     const entries = settingsNav('acme').flatMap((group) => group.entries);
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
       profile: '/w/acme/settings/account/profile',
       preferences: '/w/acme/settings/account/preferences',
-      calendars: '/w/acme/settings/scheduling/calendars',
       notifications: '/w/acme/settings/account/notifications',
       general: '/w/acme/settings/general',
       security: '/w/acme/settings/account/sign-in',
@@ -40,7 +38,6 @@ describe('settingsNav', () => {
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
       history: '/w/acme/settings/history',
-      rotations: '/w/acme/settings/scheduling/round-robin',
       // The trash opens inside Settings, its sidebar and trail kept (A120, 23 October 2026).
       trash: '/w/acme/settings/trash',
       // The operator console (spec 0047).
@@ -52,7 +49,6 @@ describe('settingsNav', () => {
     expect(entries.every((entry) => entry.href.startsWith('/w/acme/settings/'))).toBe(true);
     expect(entries.filter((entry) => entry.meta !== undefined)).toEqual([]);
     expect(preferencesHref('acme')).toBe('/w/acme/settings/account/preferences');
-    expect(calendarSettingsHref('acme')).toBe('/w/acme/settings/scheduling/calendars');
   });
 });
 
@@ -83,10 +79,9 @@ describe('visibleSettingsNav', () => {
     );
     // Workspace › Security only for those who change sign in rules (spec 0033).
     expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'])).toEqual(workspaceGroups);
-    // Without it, Scheduling keeps Calendars and loses only Round robin.
+    // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications'],
-      ['calendars'],
       ['general', 'members', 'objects', 'jobs', 'history', 'trash'],
     ]);
   });
@@ -96,8 +91,8 @@ describe('visibleSettingsNav', () => {
       visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'], isOperator).map(
         (group) => group.id,
       );
-    expect(ids(false)).toEqual(['account', 'scheduling', 'workspace']);
-    expect(ids(true)).toEqual(['account', 'scheduling', 'workspace', 'admin']);
+    expect(ids(false)).toEqual(['account', 'workspace']);
+    expect(ids(true)).toEqual(['account', 'workspace', 'admin']);
   });
 
   // History (spec 0046, AC-4600): one entry for every member, its Workspace changes tab checked on the page itself.
@@ -135,8 +130,6 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/account/preferences')).toBe('preferences');
     expect(settingsPageOf('/w/acme/settings/account/profile')).toBe('profile');
     expect(settingsPageOf('/w/acme/settings/general')).toBe('general');
-    expect(settingsPageOf('/w/acme/settings/scheduling/calendars')).toBe('calendars');
-    expect(settingsPageOf('/w/acme/settings/account/calendars')).toBe('calendars');
     expect(settingsPageOf('/w/acme/settings/account/sign-in')).toBe('security');
     // The old address still marks the page while it redirects.
     expect(settingsPageOf('/w/acme/settings/account/security')).toBe('security');
@@ -147,17 +140,24 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/history/changes')).toBe('history');
     expect(settingsPageOf('/w/acme/settings/history/sign-ins')).toBe('history');
     expect(settingsPageOf('/w/acme/settings/members')).toBe('members');
-    expect(settingsPageOf('/w/acme/settings/scheduling/round-robin')).toBe('rotations');
     expect(settingsPageOf('/w/acme/settings/admin')).toBe('admin-overview');
     expect(settingsPageOf('/w/acme/settings/admin/users/0199a6f2-0000-7000-8000-000000000001')).toBe('admin-users');
     expect(settingsPageOf('/w/acme/settings/admin/booking-pages')).toBe('admin-pages');
     expect(settingsPageOf('/w/acme/settings/admin/website')).toBe('admin-website');
-    expect(settingsPageOf('/w/acme/settings/scheduling/rotations')).toBe('rotations');
     expect(settingsPageOf('/w/acme/settings/trash')).toBe('trash');
   });
 
-  it('keeps the old Calendar address current on Calendars while it redirects', () => {
-    expect(settingsPageOf('/w/acme/settings/calendar')).toBe('calendars');
+  it('marks nothing on the scheduling addresses, which now leave Settings for Bookings', () => {
+    // Each of these redirects to a tab of Bookings; none is a settings page any more, so none is marked.
+    for (const path of [
+      '/w/acme/settings/calendar',
+      '/w/acme/settings/scheduling/calendars',
+      '/w/acme/settings/account/calendars',
+      '/w/acme/settings/scheduling/round-robin',
+      '/w/acme/settings/scheduling/rotations',
+    ]) {
+      expect(settingsPageOf(path)).toBeUndefined();
+    }
   });
 
   it('marks nothing on an address that names no page, or outside settings', () => {
@@ -172,9 +172,7 @@ describe('settingsPageOf', () => {
   it('finds the group a page sits in, for its trail', () => {
     const groups = settingsNav('acme');
     expect(settingsGroupOf(groups, 'preferences')?.label).toBe('Account');
-    expect(settingsGroupOf(groups, 'calendars')?.label).toBe('Scheduling');
     expect(settingsGroupOf(groups, 'jobs')?.label).toBe('Workspace');
-    expect(settingsGroupOf(groups, 'rotations')?.label).toBe('Scheduling');
     // Settings › Workspace › Trash.
     expect(settingsGroupOf(groups, 'trash')?.label).toBe('Workspace');
     expect(settingsGroupOf(groups, undefined)).toBeUndefined();

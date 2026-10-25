@@ -6,7 +6,6 @@ export const strings = {
   leaveSettings: 'Leave settings',
   account: 'Account',
   workspace: 'Workspace',
-  scheduling: 'Scheduling',
   preferences: 'Preferences',
   /** The settings navigation's entries. */
   objects: 'Objects',

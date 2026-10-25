@@ -19,7 +19,7 @@ import {
   RecordChip,
 } from '@crm/ui';
 import { useState } from 'react';
-import { rotationsSettingsHref } from '../settings/nav.ts';
+import { roundRobinHref } from '../bookings/tabs.ts';
 import { strings } from './rotation-strings.ts';
 
 /** The most fixed hosts, rotations, and hosts in all (spec 0037's numbers; the server checks them too). */
@@ -131,7 +131,7 @@ export function HostsCard({
     <Card
       title={strings.hosts}
       description={strings.hostsLine(fixed.map(nameOf), linked.map(rotationName))}
-      actions={<Link href={rotationsSettingsHref(slug)}>{strings.manageRotations}</Link>}
+      actions={<Link href={roundRobinHref(slug)}>{strings.manageRotations}</Link>}
     >
       <SettingsStack>
         {failure !== undefined && <Callout tone="danger">{failure}</Callout>}

@@ -7,7 +7,7 @@ import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList, useSchedules } from '@crm/data/react';
 import { Button, Callout, Field, InfoTip, Link, Modal, Radio, RadioGroup, SegmentedControl, Select } from '@crm/ui';
 import { useState } from 'react';
-import { rotationsSettingsHref } from '../settings/nav.ts';
+import { roundRobinHref } from '../bookings/tabs.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { lengthOf } from './durations.ts';
 import { memberZone } from './zone.ts';
@@ -217,10 +217,7 @@ export function NewPageDialog({
       )}
       {isTeam &&
         (rotationItems.length === 0 && rotations.status === 'ready' ? (
-          <Callout
-            tone="info"
-            actions={<Link href={rotationsSettingsHref(slug)}>{rotationStrings.manageRotations}</Link>}
-          >
+          <Callout tone="info" actions={<Link href={roundRobinHref(slug)}>{rotationStrings.manageRotations}</Link>}>
             {rotationStrings.noRotations}
           </Callout>
         ) : (

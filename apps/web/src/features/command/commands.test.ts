@@ -3,7 +3,7 @@
 // and that every address it lists is a route the app has (AC-1104).
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
-import type { ObjectSummary, RecordHit } from '@crm/data';
+import type { ObjectSummary, Permission, RecordHit } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import {
   actionCommands,
@@ -45,11 +45,21 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
       'Tasks',
       'Bookings',
       'Availability',
+      'Calendars',
       'Booking pages',
       'Forms',
       'Open trash',
       'Settings',
     ]);
+  });
+
+  // Round robin is for someone who makes booking pages, as its own page is: hidden means absent (25 October 2026).
+  it('offers Round robin beside Calendars only to a member who may make booking pages', () => {
+    const names = (permissions: Permission[]) => pageCommands('acme', OBJECTS, permissions).map((each) => each.name);
+    expect(names([])).not.toContain('Round robin');
+    expect(names(['booking.manage'])).toContain('Round robin');
+    const listed = names(['booking.manage']);
+    expect(listed.indexOf('Round robin')).toBe(listed.indexOf('Calendars') + 1);
   });
 
   it('creates a record only of objects the member may write, then the three themes', () => {
@@ -71,7 +81,6 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
       'Settings › Preferences',
       'Settings › Sign in and devices',
       'Settings › Notifications',
-      'Settings › Calendars',
       'Settings › General',
       'Settings › Members',
       'Settings › Objects',
@@ -100,7 +109,6 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
       'Settings › Preferences',
       'Settings › Sign in and devices',
       'Settings › Notifications',
-      'Settings › Calendars',
       'Settings › General',
       'Settings › Members',
       'Settings › Objects',

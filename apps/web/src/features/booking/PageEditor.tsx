@@ -56,7 +56,8 @@ import { useRef, useState, type ReactNode } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { linkPageHref } from '../link-page/nav-strings.ts';
-import { calendarSettingsHref, profileHref } from '../settings/nav.ts';
+import { profileHref } from '../settings/nav.ts';
+import { calendarsHref } from '../bookings/tabs.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { noVideoLinkReason } from './destination.ts';
@@ -882,7 +883,7 @@ export function PageEditor({
                         calendars={data.calendar.calendars(slug)}
                         isReadOnly={isLocked}
                         onChange={(calendarId) => void data.calendar.setPageDestination(slug, page.id, calendarId)}
-                        settingsHref={calendarSettingsHref(slug)}
+                        settingsHref={calendarsHref(slug)}
                       />
                     </>
                   )}
@@ -1017,7 +1018,7 @@ export function PageEditor({
                       <PageConflicts
                         destination={data.calendar.pageDestination(slug, page.id)}
                         calendars={data.calendar.calendars(slug)}
-                        settingsHref={calendarSettingsHref(slug)}
+                        settingsHref={calendarsHref(slug)}
                       />
                     </>
                   )}

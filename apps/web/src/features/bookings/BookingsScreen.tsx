@@ -76,7 +76,7 @@ import {
   type CalendarsPanel,
 } from './CalendarsAside.tsx';
 import { ALL_CALENDARS, CalendarSwitch, showsOf, switchCalendars, useCalendarChoice } from './CalendarSwitch.tsx';
-import { calendarSettingsHref } from '../settings/nav.ts';
+import { calendarsHref } from '../bookings/tabs.ts';
 import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
@@ -1847,7 +1847,7 @@ export function BookingsListScreen({
                         {strings.shareBookingPage}
                       </ButtonLink>
                       {calendarList.status === 'ready' && !hasCalendar && (
-                        <Link href={calendarSettingsHref(slug)}>{strings.connectCalendar}</Link>
+                        <Link href={calendarsHref(slug)}>{strings.connectCalendar}</Link>
                       )}
                     </>
                   ) : undefined

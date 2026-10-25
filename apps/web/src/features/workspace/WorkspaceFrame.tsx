@@ -30,9 +30,10 @@ import {
   Sidebar,
   type Toasts,
 } from '@crm/ui';
-import { useNavigate } from '@tanstack/react-router';
+import { useLocation, useNavigate } from '@tanstack/react-router';
 import { LazyCustomiseSidebarDialog } from './LazyCustomiseSidebarDialog.tsx';
 import { Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { bookingsTabOf } from '../bookings/tabs.ts';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
 import { useToday } from '../tasks/day.ts';
 import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
@@ -193,6 +194,10 @@ export function WorkspaceFrame({
   useUndoShortcut(data, toasts, slug, openHelp, openSettings);
   // The member's own sidebar (spec 0034): read with the workspace (AC-936), each change shown at once (AC-937). While
   // it loads, Records alone shows loading; read and failed, the defaults show, and the data layer says so.
+  // Whether this is Bookings › Calendars, the one page the stopped calendar banner stays off (see `banner` below).
+  const isOnCalendars = useLocation({
+    select: (location) => currentPage === 'bookings' && bookingsTabOf(location.pathname) === 'calendars',
+  });
   const snapshot = useNav(isMissing ? NO_NAV : data.nav.source(slug));
   const nav = snapshot.status === 'ready' ? snapshot.nav : snapshot.status === 'error' ? DEFAULT_NAV : undefined;
   const universe = useMemo(() => universeOf(objects, nav ?? DEFAULT_NAV), [objects, nav]);
@@ -382,8 +387,9 @@ export function WorkspaceFrame({
       toolbar={toolbar}
       {...(viewKey === undefined ? {} : { viewKey })}
       // A calendar that stopped syncing says so on every page (spec 0024, AC-619).
-      // Not on Settings › Calendars, where the stopped calendar's own row offers Reconnect (the owner, 21 Oct).
-      banner={isMissing || settings?.current === 'calendars' ? undefined : <CalendarBanner data={data} slug={slug} />}
+      // Not on Calendars itself, where the stopped calendar's own row offers Reconnect (the owner, 21 Oct); that
+      // page is a tab of Bookings since 25 October 2026, so the tab is what the check reads.
+      banner={isMissing || isOnCalendars ? undefined : <CalendarBanner data={data} slug={slug} />}
       sidebar={sidebar}
     >
       {children}

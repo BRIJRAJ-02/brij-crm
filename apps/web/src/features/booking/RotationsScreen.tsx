@@ -28,6 +28,8 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useBookingsActionSlot } from '../bookings/toolbarSlot.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
 import { membersSettingsHref } from '../settings/nav.ts';
@@ -45,6 +47,11 @@ export interface RotationsScreenProps {
   readonly people: readonly MemberSummary[];
   /** The reader holds `booking.admin`: they make, change and delete rotations. */
   readonly canManage: boolean;
+  /**
+   * Drawn as a tab of Bookings rather than a page of Settings (25 October 2026): the body alone, with New group
+   * in the frame's own TopBar where Availability puts New schedule, one primary per screen.
+   */
+  readonly inFrame?: boolean;
 }
 
 const COLUMNS: readonly TableColumn[] = [
@@ -124,10 +131,10 @@ function RoundRobinHelp({ slug }: { readonly slug: string }) {
   );
 }
 
-/** The screen's body while it loads. */
-export function RotationsPending() {
+/** The screen's body while it loads, in whichever frame it is drawn. */
+export function RotationsPending({ inFrame = false }: { readonly inFrame?: boolean } = {}) {
   return (
-    <SettingsPage title={strings.title} isLoading>
+    <SettingsPage title={strings.title} isLoading inFrame={inFrame}>
       <Card isBusy>
         <Skeleton width="long" />
         <Skeleton width="medium" />
@@ -137,7 +144,7 @@ export function RotationsPending() {
 }
 
 /** The screen. */
-export function RotationsScreen({ data, slug, people, canManage }: RotationsScreenProps) {
+export function RotationsScreen({ data, slug, people, canManage, inFrame = false }: RotationsScreenProps) {
   const state = useCaptureList(data.rotations.view(slug));
   const { toasts } = useRouteContext({ from: '__root__' });
   const [editing, setEditing] = useState<RotationView | 'new' | undefined>(undefined);
@@ -149,6 +156,8 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
   // Invite teammates opens the one Invite dialog in place for someone who may invite; anyone else is sent to
   // Settings › Members, which says who can.
   const canInvite = useCan('members.invite');
+  // Where the frame wants this tab's one primary action, when the frame is Bookings rather than Settings.
+  const actionSlot = useBookingsActionSlot();
   const [isInviting, setInviting] = useState(false);
   // Members whose upcoming bookings an admin may hand on, one prompt at a time (every member a save removed).
   const [queue, setQueue] = useState<readonly Handing[]>([]);
@@ -222,14 +231,19 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
 
   const isEmpty = state.status === 'ready' && state.items.length === 0;
   const isAloneEmpty = canManage && people.length < 2 && isEmpty;
+  // The one New group, in whichever bar this frame has: Settings' own TopBar takes it as an action, and the
+  // Bookings frame takes it through the slot its layout lends the chosen tab.
+  const action = newButton === undefined || isEmpty ? undefined : newButton;
   return (
     <SettingsPage
       title={strings.title}
       meta={<RoundRobinHelp slug={slug} />}
+      inFrame={inFrame}
       // One New group at a time: the empty state's while there are no groups (or Invite teammates, alone), then the
       // bar's once a group exists (SS-R2).
-      {...(newButton === undefined || isEmpty ? {} : { actions: newButton })}
+      {...(inFrame || action === undefined ? {} : { actions: action })}
     >
+      {inFrame && action !== undefined && actionSlot !== null && createPortal(action, actionSlot)}
       {state.status === 'loading' ? (
         <Card isBusy>
           <Skeleton width="long" />

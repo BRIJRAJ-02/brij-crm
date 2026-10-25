@@ -3,7 +3,7 @@
 // Main task: say that without a calendar a page offers the member's hours minus bookings only, with the way to connect one or Not now.
 // Leaves out: connecting a calendar (Settings › Calendars) and the editor itself.
 import { Button, Callout, Link } from '@crm/ui';
-import { calendarSettingsHref } from '../settings/nav.ts';
+import { calendarsHref } from '../bookings/tabs.ts';
 import { strings } from './strings.ts';
 
 /** Where the calendar note's "Not now" is kept, for this tab's session. */
@@ -44,7 +44,7 @@ export function CalendarNote({ slug, canConnect, onDismiss }: CalendarNoteProps)
       title={strings.noCalendarTitle}
       actions={
         <>
-          {canConnect && <Link href={calendarSettingsHref(slug)}>{strings.connectCalendar}</Link>}
+          {canConnect && <Link href={calendarsHref(slug)}>{strings.connectCalendar}</Link>}
           <Button
             variant="ghost"
             isDisabled={onDismiss === undefined}

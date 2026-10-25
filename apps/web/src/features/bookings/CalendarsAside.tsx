@@ -16,7 +16,7 @@ import {
   type CalendarListAccount,
 } from '@crm/ui';
 import { useState, type ReactNode } from 'react';
-import { calendarSettingsHref } from '../settings/nav.ts';
+import { calendarsHref } from '../bookings/tabs.ts';
 import type { BookingsSearch } from './search.ts';
 import { strings } from './strings.ts';
 
@@ -91,12 +91,7 @@ export function CalendarsToggle({
   if (hasNoCalendar)
     return (
       // Its label stays on a phone too: the icon alone, under New, would read as a new event.
-      <ButtonLink
-        variant="ghost"
-        icon="calendar-plus"
-        label={strings.connectCalendar}
-        href={calendarSettingsHref(slug)}
-      >
+      <ButtonLink variant="ghost" icon="calendar-plus" label={strings.connectCalendar} href={calendarsHref(slug)}>
         {strings.connectCalendarShort}
       </ButtonLink>
     );
@@ -191,7 +186,7 @@ export function CalendarsFrame({
     ) : state.status === 'error' ? (
       <Callout tone="danger">{state.message === '' ? strings.calendarsFailed : state.message}</Callout>
     ) : state.accounts.length === 0 ? (
-      <Callout tone="info" actions={<Link href={calendarSettingsHref(slug)}>{strings.connectCalendar}</Link>}>
+      <Callout tone="info" actions={<Link href={calendarsHref(slug)}>{strings.connectCalendar}</Link>}>
         {strings.noCalendarConnected}
       </Callout>
     ) : (

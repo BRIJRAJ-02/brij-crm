@@ -22,6 +22,8 @@ export const strings = {
   bookings: 'Bookings',
   availability: 'Availability',
   bookingPages: 'Booking pages',
+  calendars: 'Calendars',
+  roundRobin: 'Round robin',
   forms: 'Forms',
   /** The trash, a quick action now it left the sidebar (the owner, 22 October 2026). */
   trash: 'Open trash',
@@ -38,6 +40,7 @@ export const strings = {
   settingsTerms: ['preferences', 'options'],
   preferencesTerms: ['theme', 'appearance', 'dark', 'light'],
   calendarsTerms: ['google', 'outlook', 'sync', 'connect'],
+  roundRobinTerms: ['rotation', 'rotations', 'team', 'share out', 'distribution'],
   objectsTerms: ['attributes', 'fields', 'columns', 'schema'],
   jobsTerms: ['background', 'imports', 'exports', 'progress'],
   /** Account › Sign in and devices answers to what people call it elsewhere (it was Security). */

@@ -9,6 +9,7 @@ import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
 import { availabilityHref, linksHref } from '../booking/links.ts';
+import { calendarsHref, roundRobinHref } from '../bookings/tabs.ts';
 import { formsHref } from '../forms/paths.ts';
 import { bookingsHref, homeHref, navObjects, objectHref, tasksHref, trashHref } from '../workspace/objects.ts';
 import { strings } from './strings.ts';
@@ -40,7 +41,11 @@ export type CommandMode = 'commands' | 'search';
  * then Tasks and Scheduling's pages as the sidebar has them (spec 0034:
  * Bookings, Availability, Booking pages, Forms), Trash and Settings.
  */
-export function pageCommands(slug: string, objects: readonly ObjectSummary[]): readonly Command[] {
+export function pageCommands(
+  slug: string,
+  objects: readonly ObjectSummary[],
+  permissions?: readonly Permission[],
+): readonly Command[] {
   return [
     { id: 'page:home', name: strings.home, icon: 'house', terms: strings.homeTerms, run: go(homeHref(slug)) },
     ...navObjects(objects).map((object): Command => ({
@@ -71,6 +76,27 @@ export function pageCommands(slug: string, objects: readonly ObjectSummary[]): r
       terms: strings.availabilityTerms,
       run: go(availabilityHref(slug)),
     },
+    // Calendars and Round robin came up out of Settings into Bookings (25 October 2026), so the menu finds them
+    // where it finds Availability rather than under Settings, where they no longer are.
+    {
+      id: 'page:calendars',
+      name: strings.calendars,
+      icon: 'calendar',
+      terms: strings.calendarsTerms,
+      run: go(calendarsHref(slug)),
+    },
+    // Only for someone who makes booking pages: hidden means absent, and the page itself says nothing either.
+    ...(permissions?.includes('booking.manage') === true
+      ? [
+          {
+            id: 'page:round-robin',
+            name: strings.roundRobin,
+            icon: 'users-round',
+            terms: strings.roundRobinTerms,
+            run: go(roundRobinHref(slug)),
+          } satisfies Command,
+        ]
+      : []),
     {
       id: 'page:booking-pages',
       name: strings.bookingPages,
@@ -100,7 +126,6 @@ export function pageCommands(slug: string, objects: readonly ObjectSummary[]): r
 /** Each Settings page's other words (AC-1082). */
 const SETTINGS_TERMS: Readonly<Record<string, readonly string[]>> = {
   preferences: strings.preferencesTerms,
-  calendars: strings.calendarsTerms,
   objects: strings.objectsTerms,
   jobs: strings.jobsTerms,
   security: strings.signInTerms,

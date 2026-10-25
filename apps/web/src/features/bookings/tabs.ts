@@ -1,8 +1,14 @@
-// The Bookings page's three tabs and their addresses, kept apart from the tab
-// strip so routes and other screens can link to a tab without loading it.
+// The Bookings page's tabs and their addresses, kept apart from the tab strip so routes and other screens can
+// link to a tab without loading it.
 
-/** Bookings' tabs, in their order: the week calendar, the list, then the member's own hours. */
-export const BOOKINGS_TABS = ['calendar', 'list', 'availability'] as const;
+/**
+ * Bookings' tabs, in their order: the week calendar, the list, the member's own hours, the groups a booking is
+ * shared out between, and the calendars it reads. The last two came up out of Settings › Scheduling (25 October
+ * 2026): they are what somebody setting up bookings does next, not workspace housekeeping, and a person who had
+ * not connected a calendar had no reason to go looking three levels into Settings for the one thing that makes
+ * every other tab work.
+ */
+export const BOOKINGS_TABS = ['calendar', 'list', 'availability', 'round-robin', 'calendars'] as const;
 
 /** One of Bookings' tabs. */
 export type BookingsPageTab = (typeof BOOKINGS_TABS)[number];
@@ -13,6 +19,12 @@ export const isBookingsPageTab = (value: string): value is BookingsPageTab =>
 
 /** A Bookings tab's address. */
 export const bookingsTabHref = (slug: string, tab: BookingsPageTab) => `/w/${slug}/bookings/${tab}`;
+
+/** Bookings › Round robin: the groups a booking is shared out between (spec 0029). */
+export const roundRobinHref = (slug: string) => bookingsTabHref(slug, 'round-robin');
+
+/** Bookings › Calendars: a member's own calendar connections (specs 0024 and 0026). */
+export const calendarsHref = (slug: string) => bookingsTabHref(slug, 'calendars');
 
 /** The tab an address under Bookings shows: its last segment when that names a tab, else Calendar. */
 export function bookingsTabOf(pathname: string): BookingsPageTab {

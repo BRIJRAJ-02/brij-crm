@@ -3,7 +3,14 @@ export const strings = {
   title: 'Bookings',
   /** The page's tab strip, as Captures has: its name, read by screen readers, and each tab. */
   pageTabsLabel: 'Bookings',
-  pageTabs: { calendar: 'Calendar', list: 'List', availability: 'Availability' },
+  pageTabs: {
+    calendar: 'Calendar',
+    list: 'List',
+    availability: 'Availability',
+    // "Round robin" is what the feature is called everywhere else in the product, so the tab says it too.
+    'round-robin': 'Round robin',
+    calendars: 'Calendars',
+  },
   tabsLabel: 'Which bookings',
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Cancelled' },
   listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Cancelled meetings' },

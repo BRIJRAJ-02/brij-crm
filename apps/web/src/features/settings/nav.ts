@@ -6,11 +6,9 @@
 // settings route does with object-tabs.ts.
 import type { ObjectSummary, Permission } from '@crm/data';
 import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
-import { strings as calendar } from './calendar-strings.ts';
 import { historyHref } from './history-href.ts';
 import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
-import { strings as rotations } from '../booking/rotation-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
 import { strings as security } from './security-strings.ts';
@@ -36,12 +34,6 @@ export const objectSettingsHref = (
 /** Settings › Account › Preferences (spec 0026): the interface theme. Where Settings opens. */
 export const preferencesHref = settingsHomeHref;
 
-/**
- * Settings › Scheduling › Calendars (specs 0024 and 0026): the member's own calendar connections. Its older
- * addresses (`account/calendars`, `calendar`) send here.
- */
-export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/calendars`;
-
 /** Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and public profile. */
 export const profileHref = (slug: string) => `/w/${slug}/settings/account/profile`;
 
@@ -50,9 +42,6 @@ export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/genera
 
 /** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
-
-/** Settings › Scheduling › Round robin (spec 0029; spec 0037, AC-1433): the groups round robin pages book from. */
-export const rotationsSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/round-robin`;
 
 /** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
 export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
@@ -65,7 +54,6 @@ export type SettingsPageId =
   | 'profile'
   | 'preferences'
   | 'security'
-  | 'calendars'
   | 'notifications'
   | 'general'
   | 'members'
@@ -74,7 +62,6 @@ export type SettingsPageId =
   | 'jobs'
   | 'history'
   | 'trash'
-  | 'rotations'
   | 'admin-overview'
   | 'admin-users'
   | 'admin-pages'
@@ -84,11 +71,11 @@ export type SettingsPageId =
 export const workspaceSecurityHref = (slug: string) => `/w/${slug}/settings/security`;
 
 /**
- * The settings navigation's groups, in order (spec 0026, AC-682). Scheduling
- * holds workspace wide scheduling settings (spam protection, defaults) once
- * there are some; one booking page's or one form's settings stay in its editor.
+ * The settings navigation's groups, in order (spec 0026, AC-682). Scheduling is gone from here (25 October 2026):
+ * Calendars and Round robin are tabs of Bookings, where the work is, and one booking page's or one form's
+ * settings stay in its editor. What is left is a member's own account and the workspace itself.
  */
-export type SettingsGroupId = 'account' | 'workspace' | 'scheduling' | 'admin';
+export type SettingsGroupId = 'account' | 'workspace' | 'admin';
 
 /** One entry in the settings navigation. */
 export interface SettingsNavEntry {
@@ -151,21 +138,6 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
         { id: 'security', label: security.title, href: securitySettingsHref(slug), icon: 'shield-check' },
         { id: 'notifications', label: notifications.title, href: notificationSettingsHref(slug), icon: 'bell' },
-      ],
-    },
-    {
-      id: 'scheduling',
-      label: strings.scheduling,
-      entries: [
-        { id: 'calendars', label: calendar.title, href: calendarSettingsHref(slug), icon: 'calendar' },
-        // Anyone who makes booking pages sees the rotations they're in; admins make and change them.
-        {
-          id: 'rotations',
-          label: rotations.title,
-          href: rotationsSettingsHref(slug),
-          icon: 'users-round',
-          requires: 'booking.manage',
-        },
       ],
     },
     {
@@ -253,14 +225,12 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/profile') return 'profile';
   if (rest === 'account/preferences') return 'preferences';
   if (rest === 'general') return 'general';
-  if (rest === 'scheduling/calendars' || rest === 'account/calendars' || rest === 'calendar') return 'calendars';
   if (rest === 'account/notifications') return 'notifications';
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
   if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';
-  if (rest === 'scheduling/round-robin' || rest === 'scheduling/rotations') return 'rotations';
   if (rest === 'security') return 'workspace-security';
   if (rest === 'trash') return 'trash';
   if (rest === 'admin') return 'admin-overview';

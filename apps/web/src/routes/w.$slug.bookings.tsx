@@ -12,6 +12,9 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 // chosen panel. A tab's own WorkspacePage draws only its body inside this frame. The layout owns New, so it never
 // moves or remounts as the tabs change. Bare `/bookings` goes to Calendar, or List for an old `?view=list` link
 // (`bookings.index`).
+/** The tabs that put their own primary action where New meeting sits, rather than letting the TopBar keep it. */
+const OWN_ACTION = new Set<string>(['availability', 'round-robin', 'calendars']);
+
 export const Route = createFileRoute('/w/$slug/bookings')({
   component: BookingsRoute,
 });
@@ -19,14 +22,16 @@ export const Route = createFileRoute('/w/$slug/bookings')({
 function BookingsRoute() {
   const { slug } = Route.useParams();
   const tab = useLocation({ select: (location) => bookingsTabOf(location.pathname) });
-  // Availability's New schedule takes the TopBar's end in place of New meeting (one primary per screen).
+  // A tab whose primary action is its own takes the TopBar's end in place of New meeting (one primary per
+  // screen): Availability's New schedule, Round robin's New group, Calendars' Connect.
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
+  const ownsAction = OWN_ACTION.has(tab);
   return (
-    <BookingsActionSlot value={tab === 'availability' ? actionSlot : null}>
+    <BookingsActionSlot value={ownsAction ? actionSlot : null}>
       <WorkspacePage
         currentPage="bookings"
         page={{
-          topBar: <BookingsTopBar slug={slug} actionSlot={tab === 'availability' ? setActionSlot : undefined} />,
+          topBar: <BookingsTopBar slug={slug} actionSlot={ownsAction ? setActionSlot : undefined} />,
           body: (
             <BookingsTabs slug={slug} tab={tab}>
               <Outlet />

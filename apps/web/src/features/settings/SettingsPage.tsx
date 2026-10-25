@@ -26,6 +26,13 @@ interface SettingsPageBase {
   readonly actions?: ReactNode;
   /** The visible title, for a page that moves focus to it itself (a cancelled job's Cancel goes away). */
   readonly titleRef?: Ref<HTMLHeadingElement>;
+  /**
+   * The page is drawn inside a frame somebody else owns: a tab of Bookings rather than a page of Settings (25
+   * October 2026). Then it is the body alone, with no second WorkspacePage and no TopBar of its own, since the
+   * frame around it has both already. A screen that is both a setting and a tab passes this through rather than
+   * being written twice, so Round robin and Calendars look and behave the same wherever they are opened.
+   */
+  readonly inFrame?: boolean;
   readonly children: ReactNode;
 }
 
@@ -77,6 +84,7 @@ export function SettingsPage({
   hasTabs = false,
   footer,
   fillsView = false,
+  inFrame = false,
   children,
 }: SettingsPageProps) {
   const { slug = '' } = useParams({ strict: false });
@@ -90,6 +98,23 @@ export function SettingsPage({
     ...crumbs,
   ];
   const slot = useSettingsTopBarSlot();
+  // Inside somebody else's frame the body is the whole of it. `header="bar"` is already the layout with no header
+  // of its own, which is exactly what a tab under a TopBar and a tab strip wants.
+  if (inFrame) {
+    if (fillsView) return children;
+    return (
+      <SettingsLayout
+        header="bar"
+        hasTabs={hasTabs}
+        title={title}
+        isLoading={isLoading}
+        hasTile={hasTile}
+        footer={footer}
+      >
+        {children}
+      </SettingsLayout>
+    );
+  }
   return (
     <WorkspacePage
       page={{

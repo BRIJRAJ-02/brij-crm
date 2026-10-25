@@ -61,7 +61,7 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
   );
 
   const byObject = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
-  const pages = useMemo(() => pageCommands(slug, objects), [slug, objects]);
+  const pages = useMemo(() => pageCommands(slug, objects, permissions), [slug, objects, permissions]);
   const settings = useMemo(() => settingsCommands(slug, permissions), [slug, permissions]);
   const actions = useMemo(() => (mode === 'commands' ? actionCommands(slug, objects) : []), [mode, slug, objects]);
   const commands = useMemo(
