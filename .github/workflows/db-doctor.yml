@@ -34,7 +34,7 @@ jobs:
           report() {
             name="$1"; url="$2"
             if [ -z "$url" ]; then echo "== $name: no secret set, skipped"; return; fi
-            case "$url" in *sslrootcert=*) ;; *\?*) url="$url&sslrootcert=system" ;; *) url="$url?sslrootcert=system" ;; esac
+            case "$url" in *verify-full*) url="${url}&sslrootcert=system" ;; esac
             echo "== $name"
             psql "$url" -tAc "select 'server: ' || version();"
             psql "$url" -tAc "select 'journal: ' || count(*) || ' applied, newest ' || to_char(to_timestamp(max(created_at)/1000) at time zone 'UTC','YYYY-MM-DD HH24:MI') from drizzle.__drizzle_migrations;"
