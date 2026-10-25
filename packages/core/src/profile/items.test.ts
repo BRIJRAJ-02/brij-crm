@@ -201,6 +201,31 @@ describe('a link page', () => {
     });
   });
 
+  it('refuses the 6th piece of writing and the 3rd set of questions (spec 0052)', async () => {
+    const ada = await person('Ada');
+    const firstId = newId();
+    await add(ada.scope, { kind: 'text', body: 'Words 0' }, firstId);
+    for (let n = 1; n < 5; n += 1) await add(ada.scope, { kind: 'text', body: `Words ${String(n)}` });
+    expect(await refusalOf(add(ada.scope, { kind: 'text', body: 'One more' }))).toEqual({
+      code: 'LIMIT_REACHED',
+      message: 'A link page holds up to 5 pieces of writing.',
+    });
+    const asked = (question: string) => ({ kind: 'faq' as const, items: [{ question, answer: 'Yes.' }] });
+    await add(ada.scope, asked('First?'));
+    await add(ada.scope, asked('Second?'));
+    expect(await refusalOf(add(ada.scope, asked('Third?')))).toEqual({
+      code: 'LIMIT_REACHED',
+      message: 'A link page holds up to 2 sets of questions.',
+    });
+    // A restore is an add: one archived to make room, replaced, then put back is over the limit again.
+    await archiveProfileItem(ada.scope, { id: firstId, archived: true });
+    await add(ada.scope, { kind: 'text', body: 'In its place' });
+    expect(await refusalOf(archiveProfileItem(ada.scope, { id: firstId, archived: false }))).toEqual({
+      code: 'LIMIT_REACHED',
+      message: 'A link page holds up to 5 pieces of writing.',
+    });
+  });
+
   it('sets the whole order at once, and refuses an order that missed a change', async () => {
     const ada = await person('Ada');
     const a = await add(ada.scope, link('A', 'https://a.dev'));

@@ -722,6 +722,13 @@
       "when": 1792916638252,
       "tag": "0102_link_page_faq",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1792918243719,
+      "tag": "0103_link_page_kind_limits",
+      "breakpoints": true
     }
   ]
 }
