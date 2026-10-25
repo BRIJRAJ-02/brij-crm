@@ -8,6 +8,7 @@ import {
   Button,
   ButtonLink,
   Callout,
+  ChoiceChips,
   EmptyState,
   Field,
   Form,
@@ -224,14 +225,17 @@ export function HeadingEditor({ item, items, linkPage, chrome, onSubmit, onClose
   const formId = useId();
   const editing = item?.kind === 'heading' ? item : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
+  // A heading written before folders has no group, which is the open heading the page already drew (AC-5415).
+  const [group, setGroup] = useState<'open' | 'folder'>(editing?.group ?? 'open');
   const [problem, setProblem] = useState<string | undefined>(undefined);
+  const draft = () => ({ kind: 'heading' as const, title, group });
   const submit = () => {
-    const checked = linkPage.check({ kind: 'heading', title }, items, editing?.id);
+    const checked = linkPage.check(draft(), items, editing?.id);
     if (!checked.ok) {
       setProblem(checked.problems.title);
       return;
     }
-    onSubmit({ kind: 'heading', title });
+    onSubmit(draft());
   };
   return (
     <EditorModal
@@ -249,7 +253,11 @@ export function HeadingEditor({ item, items, linkPage, chrome, onSubmit, onClose
               kind: 'heading',
               id: editing?.id ?? 'draft',
               title: title.trim() === '' ? strings.headingPlaceholder : title.trim(),
+              group,
             },
+            // A folder with nothing under it draws as a plain heading (AC-5419), so the preview puts one block
+            // there: without it, picking Folds shut would change nothing on screen.
+            { kind: 'text', id: 'draft-under', body: strings.headingUnder },
           ]}
         />
       }
@@ -274,6 +282,18 @@ export function HeadingEditor({ item, items, linkPage, chrome, onSubmit, onClose
             setProblem(undefined);
           }}
           {...(problem === undefined ? {} : { error: problem })}
+        />
+        <ChoiceChips
+          isSingle
+          label={strings.headingGroup}
+          choices={[
+            { id: 'open', label: strings.headingOpen },
+            { id: 'folder', label: strings.headingFolder },
+          ]}
+          selected={[group]}
+          onChange={(picked) => {
+            if (picked[0] === 'folder' || picked[0] === 'open') setGroup(picked[0]);
+          }}
         />
       </Form>
     </EditorModal>

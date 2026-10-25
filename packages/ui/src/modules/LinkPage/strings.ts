@@ -13,4 +13,9 @@ export const strings = {
   copyAddress: (address: string) => `${address}, copy link`,
   /** The toast the address pill raises once it has copied. */
   addressCopied: 'Link copied',
+  /**
+   * Read on a folded section's row after its words (AC-5416): the number beside the chevron is shown, and this
+   * says what it counts, so the row reads as "Work, 3 links inside, collapsed" rather than as a bare number.
+   */
+  inside: (count: number) => (count === 1 ? '1 link inside' : `${String(count)} links inside`),
 } as const;

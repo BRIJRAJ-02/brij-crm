@@ -45,6 +45,27 @@ describe('the block registry', () => {
       address: 'Unavailable, hidden from visitors · Link only, deleted, or in a workspace you left',
       isOff: true,
     });
+    // A heading says what it does with the blocks under it, so the list shows a folder without opening it.
+    expect(rowWords({ kind: 'heading', id: 'h', title: 'Find me', updatedAt: '' })).toEqual({
+      title: 'Find me',
+      address: 'Section',
+    });
+    expect(rowWords({ kind: 'heading', id: 'h', title: 'Find me', group: 'folder', updatedAt: '' })).toEqual({
+      title: 'Find me',
+      address: 'Section, folds shut',
+    });
+  });
+
+  it('carries a folding heading into the phone, and leaves an open one as it was (AC-5415)', () => {
+    const mark = () => undefined;
+    expect(
+      previewBlock({ kind: 'heading', id: 'h', title: 'Find me', group: 'folder', updatedAt: '' }, 'ada', mark),
+    ).toEqual({ kind: 'heading', id: 'h', title: 'Find me', group: 'folder' });
+    expect(previewBlock({ kind: 'heading', id: 'h', title: 'Find me', updatedAt: '' }, 'ada', mark)).toEqual({
+      kind: 'heading',
+      id: 'h',
+      title: 'Find me',
+    });
   });
 
   it('draws in the phone only what a visitor sees', () => {

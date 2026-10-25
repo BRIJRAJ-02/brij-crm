@@ -3,9 +3,18 @@
 // Main task: choose a starting point, then change the ground, hue, light or dark, buttons and typeface.
 // Leaves out: any colour, size or font of its own; every pick is a name from a closed set, and the stylesheet in
 // `packages/ui` is the only place a value lives.
-import type { DataError, PageTheme } from '@crm/data';
+import { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme, type DataError, type PageTheme } from '@crm/data';
 import { Button, Card, ChoiceChips, HuePicker, type Hue } from '@crm/ui';
 import { strings } from './strings.ts';
+
+/** What each starting point is called. The list's order is the contracts' own, so the two can't fall apart. */
+const PRESET_NAMES: Record<(typeof PAGE_THEME_PRESETS)[number]['id'], string> = {
+  plain: strings.presetPlain,
+  paper: strings.presetPaper,
+  bold: strings.presetBold,
+  ink: strings.presetInk,
+  quiet: strings.presetQuiet,
+};
 
 /** What the card shows for each key: the word stored, and what a person reads. */
 const GROUNDS = [
@@ -72,13 +81,26 @@ export function AppearanceCard({ theme, onChange, refusal }: AppearanceCardProps
       }}
     />
   );
+  // The starting point a person is standing on, or none once they have changed a key under it. Worked out from
+  // the six keys rather than remembered, since the name is never stored (AC-5420).
+  const standing = PAGE_THEME_PRESETS.find((preset) => sameTheme(preset.theme, theme));
   return (
     <Card
       title={strings.appearance}
       description={strings.appearanceText}
-      actions={<Button onPress={() => pick(DEFAULT)}>{strings.reset}</Button>}
+      actions={<Button onPress={() => pick(DEFAULT_PAGE_THEME)}>{strings.reset}</Button>}
       {...(refusal === undefined ? {} : { footerNote: refusal.message })}
     >
+      <ChoiceChips
+        isSingle
+        label={strings.startingPoint}
+        choices={PAGE_THEME_PRESETS.map((preset) => ({ id: preset.id, label: PRESET_NAMES[preset.id] }))}
+        selected={standing === undefined ? [] : [standing.id]}
+        onChange={(picked) => {
+          const found = PAGE_THEME_PRESETS.find((preset) => preset.id === picked[0]);
+          if (found !== undefined) pick(found.theme);
+        }}
+      />
       {chips(strings.ground, 'ground', GROUNDS)}
       <HuePicker
         isLabelShown
@@ -95,13 +117,3 @@ export function AppearanceCard({ theme, onChange, refusal }: AppearanceCardProps
     </Card>
   );
 }
-
-/** The look a Reset goes back to: the page spec 0051 ships (AC-5423). Nothing is lost that isn't a press away. */
-const DEFAULT: PageTheme = {
-  ground: 'plain',
-  hue: 'blue',
-  mode: 'light',
-  shape: 'soft',
-  fill: 'plain',
-  font: 'sans',
-};

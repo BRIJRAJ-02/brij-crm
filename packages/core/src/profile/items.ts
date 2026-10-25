@@ -380,8 +380,17 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
       formId: block.formId,
     };
   }
-  if (block.kind === 'heading')
-    return { kind: block.kind, data: { title: block.title }, workspaceId: null, pageId: null, formId: null };
+  if (block.kind === 'heading') {
+    // `open` is the page's own heading, so it is left out rather than stored: one shape for every heading written
+    // before folders and every one written since (AC-5415).
+    return {
+      kind: block.kind,
+      data: { title: block.title, ...(block.group === 'folder' ? { group: 'folder' } : {}) },
+      workspaceId: null,
+      pageId: null,
+      formId: null,
+    };
+  }
   if (block.kind === 'contact') {
     // The card's fields as the schema kept them: an empty one was refused there, never stored.
     const { kind, ...data } = block;

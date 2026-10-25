@@ -8,7 +8,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import type { ProfileBlock } from '@crm/contracts';
+import { ProfileBlock } from '@crm/contracts';
 import { countItemPress, countProfileView, enterLinkPage } from '../access/door.ts';
 import { readLinkPage } from '../booking/public.ts';
 import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
@@ -224,6 +224,36 @@ describe('a link page', () => {
       code: 'LIMIT_REACHED',
       message: 'A link page holds up to 5 pieces of writing.',
     });
+  });
+
+  it('keeps a heading’s group, stores nothing for an open one, and refuses a word that is neither', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('ada');
+    await updateMyMemberProfile(ada.scope, { handle });
+    const open = await add(ada.scope, { kind: 'heading', title: 'Find me' });
+    const folded = await add(ada.scope, { kind: 'heading', title: 'Read', group: 'folder' });
+    const held = (await readProfileItems(ada.scope)).items;
+    expect(held.find((item) => item.id === open.id)).toMatchObject({ kind: 'heading', title: 'Find me' });
+    expect(held.find((item) => item.id === open.id)).not.toHaveProperty('group');
+    expect(held.find((item) => item.id === folded.id)).toMatchObject({ group: 'folder' });
+    // The visitor's read says the same, and an open heading is not rewritten on its way out.
+    const seen = (await visitorRead(handle)).items;
+    expect(seen.find((item) => item.id === folded.id)).toMatchObject({ kind: 'heading', group: 'folder' });
+    expect(seen.find((item) => item.id === open.id)).toMatchObject({ kind: 'heading', group: 'open' });
+    // The schema refuses a third word, and so does the database for a caller that skipped it (AC-5415).
+    expect(ProfileBlock.safeParse({ kind: 'heading', title: 'Tabs', group: 'tabs' }).success).toBe(false);
+    await expect(
+      testQuery(
+        ownerUrl,
+        `select crm_check_profile_item('heading', '{"title":"Tabs","group":"tabs"}'::jsonb, null, null, null)`,
+      ),
+    ).rejects.toThrow(/PROFILE_ITEM_DATA/);
+    // And the two it allows pass it, so the function and the schema agree on the whole set.
+    for (const group of ['open', 'folder']) {
+      await testQuery(ownerUrl, `select crm_check_profile_item('heading', $1::jsonb, null, null, null)`, [
+        JSON.stringify({ title: 'Read', group }),
+      ]);
+    }
   });
 
   it('sets the whole order at once, and refuses an order that missed a change', async () => {

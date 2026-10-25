@@ -390,3 +390,53 @@ export const WithoutContactCard: Story = {
     await expect(canvas.queryByText('Not ours')).toBeNull();
   },
 };
+
+/**
+ * A heading set to fold (spec 0054, AC-5416): one row in the page's own shape, carrying its words, how many blocks
+ * are under it and the quiet chevron. It is a real button, so the state is announced and the keyboard reaches it.
+ * The second heading has nothing under it, so it draws as the plain heading it was (AC-5419).
+ */
+export const Folders: Story = {
+  args: { person: PERSON },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage
+        {...args}
+        blocks={[
+          { kind: 'page', id: 'intro', title: 'Intro call', href: '/anish/intro-call', facts: '15 min · 30 min' },
+          { kind: 'heading', id: 'find', title: 'Find me', group: 'folder' },
+          { kind: 'link', id: 'x', title: 'X', href: 'https://x.com/anish', mark: 'x', hue: 'gray' },
+          {
+            kind: 'link',
+            id: 'site',
+            title: 'timefix.com',
+            href: 'https://www.timefix.com',
+            icon: 'globe',
+            hue: 'sky',
+          },
+          { kind: 'heading', id: 'empty-fold', title: 'Coming soon', group: 'folder' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    const fold = canvas.getByRole('button', { name: /Find me/ });
+    // The count is read as words, so the row never reads as a bare number.
+    await expect(fold).toHaveAccessibleName(/2 links inside/);
+    await expect(fold).toHaveAttribute('aria-expanded', 'false');
+    // Closed, the blocks under it are out of the page: not hidden by a colour, gone from the tree.
+    await expect(canvas.queryByRole('link', { name: /timefix\.com/ })).toBeNull();
+    await userEvent.click(fold);
+    await expect(fold).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByRole('link', { name: /timefix\.com/ })).toBeVisible();
+    // The heading keeps the page's outline: the row is a button inside the h2 it names.
+    await expect(canvas.getByRole('heading', { level: 2, name: /Find me/ })).toBeVisible();
+    // A folder with nothing under it is a plain heading, never a row that opens onto nothing.
+    await expect(canvas.queryByRole('button', { name: /Coming soon/ })).toBeNull();
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Coming soon' })).toBeVisible();
+    // Pressing it again closes it, and one at a time: the page holds exactly one open.
+    await userEvent.click(fold);
+    await expect(fold).toHaveAttribute('aria-expanded', 'false');
+  },
+};

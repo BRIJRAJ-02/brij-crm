@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
@@ -37,7 +37,17 @@ export type LinkPageBlock =
       /** Else the title's first letter, on this hue. */
       readonly hue: Hue;
     }
-  | { readonly kind: 'heading'; readonly id: string; readonly title: string }
+  | {
+      readonly kind: 'heading';
+      readonly id: string;
+      readonly title: string;
+      /**
+       * What the heading does with the blocks under it (spec 0054, AC-5415): `open` is the small heading above
+       * them, `folder` is one row a visitor presses to open them. Absent is `open`, and so is a word this build
+       * does not know, so a page written by a later build still draws.
+       */
+      readonly group?: 'open' | 'folder';
+    }
   | {
       readonly kind: 'text';
       readonly id: string;
@@ -120,6 +130,17 @@ export interface LinkPageProps {
   readonly summary?: string;
   /** In place of the blocks when there are none: an EmptyState. */
   readonly empty?: ReactNode;
+  /**
+   * The folded section a visitor has open, by its heading's id (AC-5417). One at a time: the address holds exactly
+   * one, so the back button closes the section it opened and a shared link opens the section it names. Left out,
+   * the page keeps the open one itself, which is what the editor's preview and the stories want.
+   */
+  readonly openFolder?: string;
+  /**
+   * Said when a folded section opens or closes, with the open one's id or nothing. Passing it makes the caller the
+   * keeper of that state, which is how the public page puts it in the address.
+   */
+  readonly onOpenFolder?: (id: string | undefined) => void;
   /** After the blocks: a refusal's Callout, Show more. */
   readonly after?: ReactNode;
   /**
@@ -541,17 +562,127 @@ function FaqBlock({
   );
 }
 
-/** One group of blocks, under its heading when it has one. */
+/**
+ * A group's rows, in order: each run of pressable rows as one list, and each block that stands apart between them.
+ * Shared by an open group and a folded one, so a block draws the same either side of a fold.
+ */
+function GroupRows({
+  rows,
+  level,
+  isNamed,
+  onPress,
+}: {
+  readonly rows: readonly LinkPageBlock[];
+  readonly level: 2 | 3;
+  readonly isNamed: boolean;
+  readonly onPress: ((id: string) => void) | undefined;
+}) {
+  // Writing is not a row, so it breaks out of the list rather than sitting in one: a run of rows is a list, and a
+  // text block is the person's words between the lists.
+  return runsOf(rows).map((run) =>
+    run.kind === 'rows' ? (
+      <ul key={run.key} className={styles.list} {...(!isNamed && run.isFirst ? { 'aria-label': strings.blocks } : {})}>
+        {run.rows.map((block) => (
+          <BlockRow key={block.id} block={block} onPress={onPress} />
+        ))}
+      </ul>
+    ) : (
+      <ApartBlockView key={run.key} block={run.block} level={level} />
+    ),
+  );
+}
+
+/** How many blocks a folded section opens onto: what the page would draw, so the number on the row is never a lie. */
+function shownCount(rows: readonly LinkPageBlock[]): number {
+  return rows.filter((block) => block.kind !== 'contact').length;
+}
+
+/**
+ * A folded section (AC-5416): one row in the page's own shape, carrying the heading's words, how many blocks are
+ * under it and the quiet chevron every staying row ends in. The row is a real button inside the heading it names,
+ * which is the disclosure pattern: the heading keeps the page's outline, and the button carries `aria-expanded`
+ * and `aria-controls` so the state is announced.
+ */
+function Folder({
+  heading,
+  rows,
+  isOpen,
+  onToggle,
+  onPress,
+}: {
+  readonly heading: Extract<LinkPageBlock, { kind: 'heading' }>;
+  readonly rows: readonly LinkPageBlock[];
+  readonly isOpen: boolean;
+  readonly onToggle: (id: string) => void;
+  readonly onPress: ((id: string) => void) | undefined;
+}) {
+  const panelId = useId();
+  const count = shownCount(rows);
+  return (
+    <section className={styles.group} data-folder="">
+      <h2 className={styles.folderTitle}>
+        {/* The id is the heading's own, so `#<block id>` in the address finds this row (AC-5417). */}
+        <button
+          type="button"
+          id={heading.id}
+          className={styles.block}
+          data-folder-row=""
+          aria-expanded={isOpen}
+          aria-controls={panelId}
+          onClick={() => {
+            onToggle(heading.id);
+          }}
+        >
+          <LinkPageTile block={heading} />
+          <BlockText title={heading.title} />
+          <span className={styles.end}>
+            <span className={styles.count} aria-hidden="true">
+              {count}
+            </span>
+            <VisuallyHidden>{strings.inside(count)}</VisuallyHidden>
+            <span className={styles.chevron} data-open={isOpen || undefined}>
+              <Icon name="chevron-right" size="sm" />
+            </span>
+          </span>
+        </button>
+      </h2>
+      <div id={panelId} className={styles.panel} hidden={!isOpen}>
+        <GroupRows rows={rows} level={3} isNamed onPress={onPress} />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * One group of blocks, under its heading when it has one. A heading set to fold, with something to open onto,
+ * draws as a folder instead; one with nothing under it draws as the plain heading it was, never as a folder a
+ * visitor can open onto nothing (AC-5419).
+ */
 function Group({
   heading,
   rows,
+  openFolder,
+  onToggleFolder,
   onPress,
 }: {
   readonly heading?: Extract<LinkPageBlock, { kind: 'heading' }>;
   readonly rows: readonly LinkPageBlock[];
+  readonly openFolder?: string;
+  readonly onToggleFolder: (id: string) => void;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
   const headingId = useId();
+  if (heading !== undefined && heading.group === 'folder' && shownCount(rows) > 0) {
+    return (
+      <Folder
+        heading={heading}
+        rows={rows}
+        isOpen={openFolder === heading.id}
+        onToggle={onToggleFolder}
+        onPress={onPress}
+      />
+    );
+  }
   return (
     <section className={styles.group} {...(heading === undefined ? {} : { 'aria-labelledby': headingId })}>
       {heading !== undefined && (
@@ -559,23 +690,7 @@ function Group({
           {heading.title}
         </h2>
       )}
-      {/* Writing is not a row, so it breaks out of the list rather than sitting in one: a run of rows is a list,
-          and a text block is the person's words between the lists. */}
-      {runsOf(rows).map((run) =>
-        run.kind === 'rows' ? (
-          <ul
-            key={run.key}
-            className={styles.list}
-            {...(heading === undefined && run.isFirst ? { 'aria-label': strings.blocks } : {})}
-          >
-            {run.rows.map((block) => (
-              <BlockRow key={block.id} block={block} onPress={onPress} />
-            ))}
-          </ul>
-        ) : (
-          <ApartBlockView key={run.key} block={run.block} level={heading === undefined ? 2 : 3} />
-        ),
-      )}
+      <GroupRows rows={rows} level={heading === undefined ? 2 : 3} isNamed={heading !== undefined} onPress={onPress} />
     </section>
   );
 }
@@ -601,8 +716,19 @@ export function LinkPage({
   caption,
   onPress,
   theme,
+  openFolder,
+  onOpenFolder,
 }: LinkPageProps) {
   const captionId = useId();
+  // Controlled where a caller keeps the open section (the public page, which puts it in the address), held here
+  // where none does (the editor's preview, the stories). One at a time, so the address never names two.
+  const [heldFolder, setHeldFolder] = useState<string | undefined>(openFolder);
+  const shownFolder = onOpenFolder === undefined ? heldFolder : openFolder;
+  const toggleFolder = (id: string) => {
+    const next = shownFolder === id ? undefined : id;
+    setHeldFolder(next);
+    onOpenFolder?.(next);
+  };
   const contact = contactOf(blocks);
   // A page whose only block is the contact card has no rows: its card is the header's Save contact, so the list
   // draws its empty state rather than an empty group.
@@ -628,6 +754,8 @@ export function LinkPage({
               key={group.heading?.id ?? `top-${String(index)}`}
               rows={group.rows}
               onPress={undefined}
+              onToggleFolder={toggleFolder}
+              {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
               {...(group.heading === undefined ? {} : { heading: group.heading })}
             />
           ))}
@@ -721,6 +849,8 @@ export function LinkPage({
                 key={group.heading?.id ?? `top-${String(index)}`}
                 rows={group.rows}
                 onPress={onPress}
+                onToggleFolder={toggleFolder}
+                {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
                 {...(group.heading === undefined ? {} : { heading: group.heading })}
               />
             ))}

@@ -92,6 +92,16 @@ type Loaded =
       readonly next?: string;
     };
 
+/**
+ * The folded section the address names (spec 0054, AC-5417): `#<block id>`, and nothing else. A hash that isn't a
+ * block's id is dropped here rather than handed on, and an id naming no live folded heading simply opens nothing,
+ * so the page draws as it would with no hash at all.
+ */
+function folderInAddress(): string | undefined {
+  const named = globalThis.location.hash.slice(1);
+  return /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(named) ? named : undefined;
+}
+
 /** The page's foot: "Powered by Timefix", tagged as the profile, and Claim your free page. */
 const foot = <BookingFoot page="booking_profile" claimHref={claimPageHref('booking_profile')} />;
 
@@ -111,6 +121,10 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   const latest = useRef(0);
   // Whether the page has drawn once, read by a failed search without a state updater's side effect.
   const loadedRef = useRef<Loaded['state']>('loading');
+  // The open folded section lives in the address, so a link opens one and the back button closes it (AC-5417).
+  const [openFolder, setOpenFolder] = useState(folderInAddress);
+  // Only the section the page was opened at is scrolled to; one a visitor presses is already under their thumb.
+  const scrollTo = useRef(folderInAddress());
   useEffect(() => {
     loadedRef.current = loaded.state;
   }, [loaded.state]);
@@ -179,6 +193,25 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
       isLive = false;
     };
   }, [client, handle, loaded.state]);
+  // The back and forward buttons move between open sections, so the page follows the address rather than owning it.
+  useEffect(() => {
+    const follow = () => {
+      setOpenFolder(folderInAddress());
+    };
+    globalThis.addEventListener('hashchange', follow);
+    return () => {
+      globalThis.removeEventListener('hashchange', follow);
+    };
+  }, []);
+  // A page opened at `#<block id>` scrolls that section into view once its row has drawn (AC-5417).
+  useEffect(() => {
+    const wanted = scrollTo.current;
+    if (wanted === undefined || loaded.state !== 'ready') return;
+    const row = document.getElementById(wanted);
+    if (row === null) return;
+    scrollTo.current = undefined;
+    row.scrollIntoView({ block: 'center' });
+  }, [loaded.state]);
   useEffect(() => {
     // The tab says what the heading says, with the product, as the booking pages' tabs do (QA Q76).
     if (loaded.state === 'ready') document.title = tabTitle(loaded.profile.name);
@@ -263,6 +296,17 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
       blocks={blocks}
       // The look its owner picked (spec 0054), which lands with the content, in one step.
       theme={profile.theme}
+      // The open section, and the address it is kept in. `pushState` so the back button closes it (AC-5417).
+      {...(openFolder === undefined ? {} : { openFolder })}
+      onOpenFolder={(id) => {
+        setOpenFolder(id);
+        const { pathname, search } = globalThis.location;
+        globalThis.history.pushState(
+          null,
+          '',
+          id === undefined ? `${pathname}${search}` : `${pathname}${search}#${id}`,
+        );
+      }}
       {...(isSearching ? { summary: strings.matches(blocks.length) } : {})}
       foot={foot}
       // A press is counted by a beacon (AC-5125): the navigation never waits for it.

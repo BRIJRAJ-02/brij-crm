@@ -55,6 +55,16 @@ export const strings = {
   text: 'Writing',
   appearance: 'Appearance',
   appearanceText: 'How your page looks. Every change shows in the preview and saves at once.',
+  /**
+   * The five named starting points (spec 0054, AC-5420). The name is never stored: picking one writes the six
+   * keys behind it, so a look can never drift out of step with the word that named it.
+   */
+  startingPoint: 'Start from',
+  presetPlain: 'Plain',
+  presetPaper: 'Paper',
+  presetBold: 'Bold',
+  presetInk: 'Ink',
+  presetQuiet: 'Quiet',
   reset: 'Reset',
   ground: 'Background',
   groundPlain: 'Plain',
@@ -188,6 +198,14 @@ export const strings = {
   newHeading: 'Add a section',
   editHeading: 'Edit section',
   headingTitle: 'Section name',
+  /** The heading editor's one choice (spec 0054, AC-5415): the section stays open, or folds behind its own row. */
+  /** A folding heading's row in the editor's list, where an open one says "Section". */
+  headingFolds: 'Section, folds shut',
+  headingGroup: 'The blocks under it',
+  headingOpen: 'Always shown',
+  headingFolder: 'Folds shut',
+  /** Stands under the heading in the editor's preview, so a folder has something to open onto. */
+  headingUnder: 'What sits under this heading.',
   headingPlaceholder: 'Work',
   newPage: 'Add a booking page',
   page: 'Booking page',

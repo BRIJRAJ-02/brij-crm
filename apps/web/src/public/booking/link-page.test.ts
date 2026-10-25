@@ -72,4 +72,15 @@ describe('blocksOf', () => {
       },
     ]);
   });
+
+  it('carries a heading’s group through, and leaves an open one without the key (AC-5415)', () => {
+    const id = '00000000-0000-7000-8000-00000000000a';
+    expect(blocksOf('ada', [{ kind: 'heading', id, title: 'Read', group: 'folder' }])).toEqual([
+      { kind: 'heading', id, title: 'Read', group: 'folder' },
+    ]);
+    expect(blocksOf('ada', [{ kind: 'heading', id, title: 'Read', group: 'open' }])).toEqual([
+      { kind: 'heading', id, title: 'Read', group: 'open' },
+    ]);
+    expect(blocksOf('ada', [{ kind: 'heading', id, title: 'Read' }])).toEqual([{ kind: 'heading', id, title: 'Read' }]);
+  });
 });

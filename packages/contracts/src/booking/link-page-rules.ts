@@ -32,6 +32,23 @@ export function profileLimitSentence(kind: ProfileBlockKind | 'items'): string {
   return `A link page holds up to ${String(PROFILE_LIMITS.page)} booking pages.`;
 }
 
+/**
+ * What a heading does with the blocks under it (spec 0054, AC-5415): `open` is the small heading the page draws
+ * today, and `folder` folds them behind one row a visitor presses. It is a word, never a level above the list: the
+ * blocks under a heading are still the blocks after it, and the order stays one flat sequence.
+ */
+export const PROFILE_HEADING_GROUPS = ['open', 'folder'] as const;
+/** What a heading does with the blocks under it. */
+export type ProfileHeadingGroup = (typeof PROFILE_HEADING_GROUPS)[number];
+
+/** A heading's group outside the two words, refused in the owner's own terms. */
+export const PROFILE_HEADING_GROUP_REFUSAL = 'Pick whether the section stays open or folds.';
+
+/** A read that meets a group this build does not know draws it open, so an older page never breaks on a newer one. */
+export function headingGroupOf(given: string | undefined): ProfileHeadingGroup {
+  return given === 'folder' ? 'folder' : 'open';
+}
+
 /** The longest address a link keeps. */
 export const PROFILE_LINK_MAX = 2_000;
 

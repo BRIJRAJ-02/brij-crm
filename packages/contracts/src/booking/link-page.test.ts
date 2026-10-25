@@ -2,8 +2,14 @@
 // answer exactly what `values/social.ts` answers for the url field.
 import { describe, expect, it } from 'vitest';
 import { describeLink, SOCIAL_NETWORKS } from '../values/social.ts';
-import { checkContactCard, checkProfileLink, linkMarkOf, PUBLIC_LINK_MARKS } from './link-page-rules.ts';
-import { ProfileBlock } from './link-page.ts';
+import {
+  checkContactCard,
+  checkProfileLink,
+  headingGroupOf,
+  linkMarkOf,
+  PUBLIC_LINK_MARKS,
+} from './link-page-rules.ts';
+import { ProfileBlock, PublicProfileItem } from './link-page.ts';
 
 describe('checkProfileLink', () => {
   it('keeps the schemes the spec allows, and puts https before a bare address', () => {
@@ -117,6 +123,14 @@ describe('ProfileBlock', () => {
       url: 'https://ada.dev',
     });
     expect(ProfileBlock.safeParse({ kind: 'heading', title: 'x'.repeat(41) }).success).toBe(false);
+    // A heading's group is one of two words, and absent is the open heading the page already drew (AC-5415).
+    expect(ProfileBlock.parse({ kind: 'heading', title: 'Find me' })).toEqual({ kind: 'heading', title: 'Find me' });
+    expect(ProfileBlock.parse({ kind: 'heading', title: 'Find me', group: 'folder' })).toEqual({
+      kind: 'heading',
+      title: 'Find me',
+      group: 'folder',
+    });
+    expect(ProfileBlock.safeParse({ kind: 'heading', title: 'Find me', group: 'tabs' }).success).toBe(false);
     expect(ProfileBlock.safeParse({ kind: 'link', title: 'A', url: 'https://a.dev', icon: 'bomb' }).success).toBe(
       false,
     );
@@ -231,5 +245,37 @@ describe('checkContactCard', () => {
     }
     const site = checkContactCard({ fullName: 'Ada', website: 'acme.dev/about us' });
     expect(site.ok && site.card.website).toBe('https://acme.dev/about%20us');
+  });
+});
+
+describe('a heading’s group as a visitor’s bundle reads it', () => {
+  it('draws a group it does not know open, so an older bundle never breaks on a newer page (AC-5415)', () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    expect(PublicProfileItem.parse({ kind: 'heading', id, title: 'Find me', group: 'folder' })).toEqual({
+      kind: 'heading',
+      id,
+      title: 'Find me',
+      group: 'folder',
+    });
+    // A word a later build adds reads as the open heading every build already draws, rather than failing the page.
+    expect(PublicProfileItem.parse({ kind: 'heading', id, title: 'Find me', group: 'tabs' })).toEqual({
+      kind: 'heading',
+      id,
+      title: 'Find me',
+      group: 'open',
+    });
+    // Absent stays absent: a heading stored before folders is not rewritten on its way out.
+    expect(PublicProfileItem.parse({ kind: 'heading', id, title: 'Find me' })).toEqual({
+      kind: 'heading',
+      id,
+      title: 'Find me',
+    });
+  });
+
+  it('reads any other word as open, the one rule the server and the page share', () => {
+    expect(headingGroupOf('folder')).toBe('folder');
+    expect(headingGroupOf('open')).toBe('open');
+    expect(headingGroupOf('tabs')).toBe('open');
+    expect(headingGroupOf(undefined)).toBe('open');
   });
 });

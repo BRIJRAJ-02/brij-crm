@@ -165,7 +165,8 @@ function shownAddress(url: string): string {
 /** How a block's row reads; a booking page names its workspace only when the person's pages come from several. */
 export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWords {
   if (item.kind === 'link') return { title: item.title, address: shownAddress(item.url) };
-  if (item.kind === 'heading') return { title: item.title, address: strings.heading };
+  if (item.kind === 'heading')
+    return { title: item.title, address: item.group === 'folder' ? strings.headingFolds : strings.heading };
   // Writing has nowhere to go, so its row reads as what it is, with its first line after it.
   if (item.kind === 'text') return { title: item.title ?? strings.text, address: item.body.split('\n')[0] ?? '' };
   // A set of questions has nowhere to go either: its row says how many it holds.
@@ -224,7 +225,13 @@ export function previewBlock(
   handle: string,
   markOf: (url: string) => LinkPageMark | undefined,
 ): LinkPageBlock | undefined {
-  if (item.kind === 'heading') return { kind: 'heading', id: item.id, title: item.title };
+  if (item.kind === 'heading')
+    return {
+      kind: 'heading',
+      id: item.id,
+      title: item.title,
+      ...(item.group === undefined ? {} : { group: item.group }),
+    };
   if (item.kind === 'text') {
     return { kind: 'text', id: item.id, body: item.body, ...(item.title === undefined ? {} : { title: item.title }) };
   }

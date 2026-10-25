@@ -25,6 +25,7 @@ import {
   PROFILE_PAGE_SIZE,
   profilePicturePath,
   checkProfileLink,
+  headingGroupOf,
   linkMarkOf,
   ProfileContactBlock,
   ProfileFaqBlock,
@@ -385,7 +386,12 @@ function publicItemOf(
       ...(typeof data.icon === 'string' ? { icon: data.icon } : {}),
     };
   } else if (row.kind === 'heading') {
-    candidate = { kind: 'heading', id: row.id, title: data.title };
+    candidate = {
+      kind: 'heading',
+      id: row.id,
+      title: data.title,
+      group: headingGroupOf(typeof data.group === 'string' ? data.group : undefined),
+    };
   } else if (row.kind === 'text') {
     // Checked by its own schema before it goes out, so a row stored by an older build that fails the rule is
     // skipped rather than drawn. The words go as text; nothing here ever becomes markup.

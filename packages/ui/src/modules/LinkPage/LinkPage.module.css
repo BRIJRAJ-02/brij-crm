@@ -274,6 +274,53 @@
     overflow-wrap: anywhere;
   }
 
+  /* A folded section (spec 0054, AC-5416): the heading becomes the row, so it carries no heading styling of its
+     own; the button inside it is the page's own `.block`, which is what makes a folder look like every other row. */
+  .folderTitle {
+    display: flex;
+    margin: 0;
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  .block[data-folder-row] {
+    inline-size: 100%;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: start;
+  }
+
+  /* How many blocks the fold opens onto, beside the chevron. Shown as a number and read as a sentence. */
+  .count {
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The quiet mark every staying row ends in, turned a quarter when the section is open. */
+  .chevron {
+    display: inline-flex;
+    transition: rotate var(--duration-move) var(--ease-out);
+  }
+
+  .chevron[data-open] {
+    rotate: 90deg;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chevron {
+      transition: none;
+    }
+  }
+
+  /* What the fold opens onto, inset under its row so the blocks read as belonging to it. */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding-inline-start: var(--space-12);
+  }
+
   /* Writing: the person's own words, not a row. No frame and nothing to press, so it reads as the page talking
      rather than as one more thing to tap, and its line breaks are kept as typed. */
   .writing {

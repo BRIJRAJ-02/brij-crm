@@ -17,6 +17,8 @@ import {
   PROFILE_FAQ_BREAKS,
   PROFILE_FAQ_ITEMS,
   PROFILE_FAQ_QUESTION_MAX,
+  PROFILE_HEADING_GROUPS,
+  PROFILE_HEADING_GROUP_REFUSAL,
   PROFILE_TEXT_BREAKS,
   PROFILE_TEXT_MAX,
   sameQuestion,
@@ -78,6 +80,11 @@ export type ProfileLinkBlock = z.infer<typeof ProfileLinkBlock>;
 export const ProfileHeadingBlock = z.object({
   kind: z.literal('heading'),
   title: oneLine(1, PROFILE_TITLE_MAX.heading, 'Give the heading a title.', 'Keep the heading to 40 characters.'),
+  /**
+   * Whether the blocks under it stay shown or fold behind one row a visitor presses (spec 0054, AC-5415). Absent
+   * means `open`, so every heading stored before this field reads as the heading the page already drew.
+   */
+  group: z.enum(PROFILE_HEADING_GROUPS, { error: PROFILE_HEADING_GROUP_REFUSAL }).optional(),
 });
 /** A heading block. */
 export type ProfileHeadingBlock = z.infer<typeof ProfileHeadingBlock>;
@@ -303,7 +310,16 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
     icon: z.enum(PROFILE_LINK_ICONS).optional(),
     hue: z.enum(HUES),
   }),
-  z.object({ kind: z.literal('heading'), id: Uuid, title: z.string() }),
+  /**
+   * A heading, and what it does with the blocks under it. `catch` draws an unfamiliar group open, so a bundle built
+   * before a later group still reads a page that uses one (AC-5415).
+   */
+  z.object({
+    kind: z.literal('heading'),
+    id: Uuid,
+    title: z.string(),
+    group: z.enum(PROFILE_HEADING_GROUPS).catch('open').optional(),
+  }),
   z.object({
     kind: z.literal('page'),
     id: Uuid,
