@@ -27,8 +27,9 @@ export interface QrCodeProps {
 const QUIET_ZONE = 4;
 
 /**
- * A QR code, drawn as one SVG path: dark modules on a light ground in both
- * themes, since not every scanner reads an inverted code. `uqr` is imported
+ * A QR code, drawn as one SVG path: dark modules on a white ground in both
+ * themes (the light theme's tokens, scoped to the code), since not every
+ * scanner reads an inverted code. `uqr` is imported
  * only here. With `children`, a column beside it.
  */
 export function QrCode({ value, label, children, size: width = 'md', ref }: QrCodeProps) {
@@ -46,6 +47,9 @@ export function QrCode({ value, label, children, size: width = 'md', ref }: QrCo
     <svg
       ref={ref}
       className={styles.root}
+      // The light theme's tokens inside the code in either theme: a white ground and dark modules, on screen and in
+      // a saved PNG (AC-5122), since not every scanner reads an inverted or grey grounded code.
+      data-theme="light"
       data-size={width}
       role="img"
       aria-label={label}
