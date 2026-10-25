@@ -23,11 +23,70 @@ import {
   type SelectItem,
 } from '@crm/ui';
 import { countryOfE164, DIAL_CODES, toE164 } from '@crm/contracts/forms';
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { formsHref } from '../captures/tabs.ts';
 import { linksHref } from '../booking/links.ts';
 import { contactHref, contactWords, pageFacts, type BlockEditorProps, type EditorChrome } from './registry.tsx';
 import { ICON_WORDS, strings } from './strings.ts';
+
+/**
+ * The one Add modal's own places, while an editor is drawn inside it. Adding used to mount a Modal per kind, so
+ * every press of the kind picker unmounted one dialog and mounted another: the whole popup flashed open again,
+ * and focus left the picker (the owner, 25 October 2026). Now the dialog, its title, its picker and Cancel are
+ * the frame's and stay put; only the fields under the picker change, and the editor's submit button travels to
+ * the place beside Cancel that the frame keeps for it.
+ */
+interface EditorFrame {
+  /** Beside Cancel, where this editor's submit goes. */
+  readonly action: HTMLElement | null;
+}
+const EditorFrameContext = createContext<EditorFrame | undefined>(undefined);
+
+/**
+ * The Add modal: the dialog itself, its title and hint, the kind picker and Cancel, all of which outlive the kind
+ * being changed. The chosen kind's editor is drawn inside it and brings only its fields.
+ */
+export function BlockEditorFrame({
+  title,
+  hint,
+  leading,
+  onClose,
+  children,
+}: {
+  readonly title: string;
+  readonly hint?: ReactNode;
+  /** The kind picker, above the fields. */
+  readonly leading?: ReactNode;
+  readonly onClose: () => void;
+  readonly children: ReactNode;
+}) {
+  const [action, setAction] = useState<HTMLElement | null>(null);
+  const frame = useMemo(() => ({ action }), [action]);
+  return (
+    <Modal
+      title={title}
+      {...(hint === undefined ? {} : { hint })}
+      isOpen
+      // Something typed is kept from a stray click outside: only Cancel or Esc throws it away.
+      isDismissable={false}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close" kbd="ESC">
+            {strings.cancel}
+          </Button>
+          <div ref={setAction} />
+        </>
+      }
+    >
+      {leading}
+      <EditorFrameContext value={frame}>{children}</EditorFrameContext>
+    </Modal>
+  );
+}
 
 /** The Modal every block editor sits in: its title, Cancel and the submit, and "How it looks" under the fields. */
 function EditorModal({
@@ -50,10 +109,25 @@ function EditorModal({
   readonly chrome?: EditorChrome;
   readonly children: ReactNode;
 }) {
+  const frame = useContext(EditorFrameContext);
+  const submit = canSubmit ? (
+    <Button variant="primary" type="submit" form={formId} kbd="⌘↵">
+      {chrome?.submitLabel ?? submitLabel}
+    </Button>
+  ) : undefined;
+  // Inside the Add modal the dialog is the frame's, so this is the fields alone and a submit that travels.
+  if (frame !== undefined) {
+    return (
+      <>
+        {children}
+        {preview}
+        {submit !== undefined && frame.action !== null && createPortal(submit, frame.action)}
+      </>
+    );
+  }
   return (
     <Modal
-      title={chrome?.title ?? title}
-      {...(chrome?.hint === undefined ? {} : { hint: chrome.hint })}
+      title={title}
       isOpen
       // Something typed is kept from a stray click outside: only Cancel or Esc throws it away.
       isDismissable={false}
@@ -65,15 +139,10 @@ function EditorModal({
           <Button slot="close" kbd="ESC">
             {strings.cancel}
           </Button>
-          {canSubmit && (
-            <Button variant="primary" type="submit" form={formId} kbd="⌘↵">
-              {chrome?.submitLabel ?? submitLabel}
-            </Button>
-          )}
+          {submit}
         </>
       }
     >
-      {chrome?.leading}
       {children}
       {preview}
     </Modal>

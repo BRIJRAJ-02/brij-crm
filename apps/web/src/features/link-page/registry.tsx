@@ -14,7 +14,7 @@ import type {
   ProfilePageFacts,
 } from '@crm/data';
 import type { Hue, IconName, LinkPageBlock, LinkPageMark } from '@crm/ui';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import {
   ContactEditor,
   FaqEditor,
@@ -30,13 +30,12 @@ import { strings } from './strings.ts';
 
 /**
  * What the one Add modal lends an editor, so every kind is added in the same dialog rather than one dialog per
- * kind (the owner's Add item design): its title, the kind picker above the fields, the footer's quiet line and
- * the primary button's word. An edit opens the kind's own editor with none of it, as before.
+ * kind (the owner's Add item design). The dialog, its title, the kind picker and the footer's quiet line are the
+ * frame's own and outlive the kind being changed (`BlockEditorFrame`, 25 October 2026); all the editor needs from
+ * it is the word on the primary button, which says Add rather than Save. An edit opens the kind's own editor,
+ * which brings its Modal with it, since nothing swaps under that one.
  */
 export interface EditorChrome {
-  readonly title?: string;
-  readonly leading?: ReactNode;
-  readonly hint?: ReactNode;
   readonly submitLabel?: string;
 }
 

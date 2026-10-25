@@ -43,10 +43,11 @@ import {
 } from '@crm/ui';
 import { useLinkPage } from '@crm/data/react';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
 import { AppearanceCard } from './AppearanceCard.tsx';
+import { BlockEditorFrame } from './editors.tsx';
 import { SharingCard } from './SharingCard.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import {
@@ -81,6 +82,28 @@ export interface LinkPageScreenProps {
 type Editing = { readonly kind: AddableKind; readonly item?: ProfileItem; readonly id: string };
 
 /** A new link's letter colour: the next of the hues after the links so far, gray last, as the server would pick. */
+/**
+ * The editor's dialog, or the editor alone. Adding draws the chosen kind inside one Add modal that outlives the
+ * kind being changed (`BlockEditorFrame`); editing draws the kind's own editor, which brings its Modal with it,
+ * since nothing swaps under it.
+ */
+function EditorOrFrame({
+  frame,
+  onClose,
+  children,
+}: {
+  readonly frame?: { readonly leading: ReactNode };
+  readonly onClose: () => void;
+  readonly children: ReactNode;
+}) {
+  if (frame === undefined) return children;
+  return (
+    <BlockEditorFrame title={strings.addTitle} hint={strings.addHint} leading={frame.leading} onClose={onClose}>
+      {children}
+    </BlockEditorFrame>
+  );
+}
+
 /** How long after the last look is picked the one save goes out. Long enough to cover a run of choices, short
  * enough that nobody leaves before it fires; leaving sends it anyway. */
 const THEME_SAVE_DELAY = 500;
@@ -694,28 +717,25 @@ function Blocks({
         </Card>
       )}
       {Editor !== undefined && editing !== undefined && (
-        <Editor
-          {...(editing.item === undefined ? {} : { item: editing.item })}
-          {...(kindPicker === undefined
-            ? {}
-            : {
-                chrome: {
-                  title: strings.addTitle,
-                  leading: kindPicker,
-                  hint: strings.addHint,
-                  submitLabel: strings.addItem,
-                },
-              })}
-          items={items}
-          slug={slug}
-          handle={handle}
-          newHue={nextHue(items)}
-          linkPage={linkPage}
-          socialNetworks={socialNetworks}
-          ownerName={profile.name}
-          onSubmit={submit}
+        <EditorOrFrame
+          // Adding keeps one dialog across the kinds (the frame owns it); editing opens the kind's own, as before.
+          {...(kindPicker === undefined ? {} : { frame: { leading: kindPicker } })}
           onClose={() => setEditing(undefined)}
-        />
+        >
+          <Editor
+            {...(editing.item === undefined ? {} : { item: editing.item })}
+            {...(kindPicker === undefined ? {} : { chrome: { submitLabel: strings.addItem } })}
+            items={items}
+            slug={slug}
+            handle={handle}
+            newHue={nextHue(items)}
+            linkPage={linkPage}
+            socialNetworks={socialNetworks}
+            ownerName={profile.name}
+            onSubmit={submit}
+            onClose={() => setEditing(undefined)}
+          />
+        </EditorOrFrame>
       )}
       {deleting !== undefined && (
         <Modal
