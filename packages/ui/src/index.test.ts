@@ -64,6 +64,7 @@ describe('@crm/ui', () => {
       'DatePicker',
       'DateRangePicker',
       'DayStrip',
+      'DeferredSelect',
       'DescriptionList',
       'Disclosure',
       'DisclosureGroup',
