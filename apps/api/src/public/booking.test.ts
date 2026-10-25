@@ -103,6 +103,11 @@ async function pageOf(m: Awaited<ReturnType<typeof memberWithWorkspace>>) {
   });
 }
 
+/** What a public block is called in a list: its title, a testimonial's author, or nothing. */
+function nameOf(item: { readonly title?: string; readonly author?: string }): string {
+  return item.title ?? item.author ?? '';
+}
+
 describe('the member procedures (AC-623, AC-645)', () => {
   it('makes, changes, lists and deletes a page; another member’s page is absent', async () => {
     const m = await memberWithWorkspace(app);
@@ -214,7 +219,7 @@ describe('handle addresses (22 Oct 2026)', () => {
       expect(text).not.toContain(secret);
     }
     const body = PublicProfile.parse(JSON.parse(text));
-    expect(body.items.map((item) => [item.kind, 'fullName' in item ? item.fullName : (item.title ?? '')])).toEqual([
+    expect(body.items.map((item) => [item.kind, 'fullName' in item ? item.fullName : nameOf(item)])).toEqual([
       ['link', 'LinkedIn'],
       ['heading', 'Meet me'],
       ['page', 'Quick chat'],
@@ -223,9 +228,7 @@ describe('handle addresses (22 Oct 2026)', () => {
     expect(body.items[0]).toMatchObject({ url: 'https://linkedin.com/in/ada', mark: 'linkedin' });
     // A search answers the matches flat.
     const found = PublicProfile.parse(await (await handles(`${handle}?q=chat`)).json());
-    expect(found.items.map((item) => ('fullName' in item ? item.fullName : (item.title ?? '')))).toEqual([
-      'Quick chat',
-    ]);
+    expect(found.items.map((item) => ('fullName' in item ? item.fullName : nameOf(item)))).toEqual(['Quick chat']);
   });
 
   it('answers the contact card as a vCard to download, and 404 with none, archived, or no such person (AC-5114)', async () => {

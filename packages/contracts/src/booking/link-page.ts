@@ -17,8 +17,11 @@ import {
   PROFILE_FAQ_BREAKS,
   PROFILE_FAQ_ITEMS,
   PROFILE_FAQ_QUESTION_MAX,
+  PROFILE_AUTHOR_MAX,
   PROFILE_HEADING_GROUPS,
   PROFILE_HEADING_GROUP_REFUSAL,
+  PROFILE_QUOTE_BREAKS,
+  PROFILE_QUOTE_MAX,
   PROFILE_TEXT_BREAKS,
   PROFILE_TEXT_MAX,
   sameQuestion,
@@ -146,6 +149,27 @@ export const ProfileTextBlock = z.object({
 /** A text block. */
 export type ProfileTextBlock = z.infer<typeof ProfileTextBlock>;
 
+/**
+ * Something a customer said (spec 0052, AC-5219): the words, who said them, and what they do. No photo and no logo
+ * — the page loads no picture from another origin, and a face would need the file storage that is not built yet.
+ * Plain text throughout, like a piece of writing, so there is nothing to sanitise on the way out.
+ */
+export const ProfileTestimonialBlock = z.object({
+  kind: z.literal('testimonial'),
+  quote: manyLines(
+    PROFILE_QUOTE_MAX,
+    PROFILE_QUOTE_BREAKS,
+    'Write what they said.',
+    'Keep the quote to 400 characters.',
+    'Keep the quote to 6 line breaks.',
+  ),
+  author: oneLine(1, PROFILE_AUTHOR_MAX, 'Say who said it.', 'Keep the name to 80 characters.'),
+  /** What they do, under their name: absent where it adds nothing. */
+  role: oneLine(0, PROFILE_AUTHOR_MAX, '', 'Keep the role to 80 characters.').optional(),
+});
+/** Something a customer said. */
+export type ProfileTestimonialBlock = z.infer<typeof ProfileTestimonialBlock>;
+
 /** One question and its answer (AC-5209). The question is one line; the answer keeps its breaks, like a piece of writing. */
 export const ProfileFaqItem = z.object({
   question: oneLine(1, PROFILE_FAQ_QUESTION_MAX, 'Write the question.', 'Keep the question to 120 characters.'),
@@ -205,6 +229,7 @@ export const ProfileBlock = z.discriminatedUnion('kind', [
   ProfileTextBlock,
   ProfileFaqBlock,
   ProfileFormBlock,
+  ProfileTestimonialBlock,
 ]);
 /** One block's fields. */
 export type ProfileBlock = z.infer<typeof ProfileBlock>;
@@ -264,6 +289,7 @@ export const ProfileItem = z.discriminatedUnion('kind', [
   ProfileTextBlock.extend(Stored),
   ProfileFaqBlock.extend(Stored),
   ProfileFormBlock.extend({ ...Stored, form: ProfileFormFacts.optional() }),
+  ProfileTestimonialBlock.extend(Stored),
 ]);
 /** One block as the editor reads it. */
 export type ProfileItem = z.infer<typeof ProfileItem>;
@@ -352,6 +378,14 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
    * id, no form id, no question and no count: the same rule a booking page block follows.
    */
   z.object({ kind: z.literal('form'), id: Uuid, title: z.string().min(1), key: z.string().min(1) }),
+  /** Something a customer said: words only, with nothing to press and nothing to count (AC-5220). */
+  z.object({
+    kind: z.literal('testimonial'),
+    id: Uuid,
+    quote: z.string().min(1),
+    author: z.string().min(1),
+    role: z.string().optional(),
+  }),
 ]);
 /** One block as a visitor reads it. */
 export type PublicProfileItem = z.infer<typeof PublicProfileItem>;

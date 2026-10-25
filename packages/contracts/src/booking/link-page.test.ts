@@ -123,6 +123,17 @@ describe('ProfileBlock', () => {
       url: 'https://ada.dev',
     });
     expect(ProfileBlock.safeParse({ kind: 'heading', title: 'x'.repeat(41) }).success).toBe(false);
+    // A testimonial keeps its line breaks and drops an empty role, as writing drops an empty title (AC-5219).
+    expect(ProfileBlock.parse({ kind: 'testimonial', quote: ' It books itself. ', author: ' Sam ' })).toEqual({
+      kind: 'testimonial',
+      quote: 'It books itself.',
+      author: 'Sam',
+    });
+    expect(ProfileBlock.safeParse({ kind: 'testimonial', quote: 'x'.repeat(401), author: 'Sam' }).success).toBe(false);
+    expect(ProfileBlock.safeParse({ kind: 'testimonial', quote: 'Good.', author: '' }).success).toBe(false);
+    expect(ProfileBlock.safeParse({ kind: 'testimonial', quote: `a${'\n'.repeat(7)}b`, author: 'Sam' }).success).toBe(
+      false,
+    );
     // A heading's group is one of two words, and absent is the open heading the page already drew (AC-5415).
     expect(ProfileBlock.parse({ kind: 'heading', title: 'Find me' })).toEqual({ kind: 'heading', title: 'Find me' });
     expect(ProfileBlock.parse({ kind: 'heading', title: 'Find me', group: 'folder' })).toEqual({

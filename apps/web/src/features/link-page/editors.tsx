@@ -300,6 +300,229 @@ export function HeadingEditor({ item, items, linkPage, chrome, onSubmit, onClose
   );
 }
 
+/**
+ * Email signup (spec 0052, AC-5217). Not a kind of its own: it makes a hosted form that asks one thing, an
+ * address, publishes it, and then hands back an ordinary form block pointing at it. So the addresses land in that
+ * form's responses, where every other capture on Timefix already lands, and the person's existing routing,
+ * notifications and export work on them unchanged. The modal says where they will go before it makes anything.
+ */
+export function SignupEditor({ slug, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const formId = useId();
+  const [workspaces, setWorkspaces] = useState<readonly { id: string; slug: string; name: string }[]>([]);
+  const [where, setWhere] = useState<string | null>(slug);
+  const [words, setWords] = useState('');
+  const [button, setButton] = useState('');
+  const [label, setLabel] = useState('');
+  const [isMaking, setMaking] = useState(false);
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const [problems, setProblems] = useState<BlockProblems>({});
+  useEffect(() => {
+    let isCurrent = true;
+    linkPage.signup.workspaces().then(
+      (found) => {
+        if (isCurrent) setWorkspaces(found);
+      },
+      () => {
+        // The list only names where it goes; without it the one the editor is in still works.
+        if (isCurrent) setWorkspaces([]);
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [linkPage]);
+
+  const chosen = where ?? slug;
+  const rowLabel = label.trim() === '' ? strings.signupLabelPlaceholder : label.trim();
+  const headline = words.trim() === '' ? strings.signupWordsPlaceholder : words.trim();
+  const buttonText = button.trim() === '' ? strings.signupButtonPlaceholder : button.trim();
+  const submit = () => {
+    // The row's own words are checked before anything is made, so a refusal never leaves a stray form behind.
+    const checked = linkPage.check({ kind: 'form', workspaceId: 'x', formId: 'x', label: rowLabel }, items);
+    if (!checked.ok) {
+      setProblems(checked.problems);
+      return;
+    }
+    setFailed(undefined);
+    setMaking(true);
+    linkPage.signup.make(chosen, { name: rowLabel, headline, buttonText }).then(
+      (made) => {
+        setMaking(false);
+        onSubmit(
+          { kind: 'form', workspaceId: made.workspaceId, formId: made.formId, label: rowLabel },
+          { form: made.facts },
+        );
+      },
+      (error: unknown) => {
+        setMaking(false);
+        setFailed(error instanceof Error && error.message !== '' ? error.message : strings.signupFailed);
+      },
+    );
+  };
+  return (
+    <EditorModal
+      title={strings.newSignup}
+      formId={formId}
+      submitLabel={isMaking ? strings.signupMaking : strings.add}
+      onClose={onClose}
+      {...(chrome === undefined ? {} : { chrome })}
+      preview={
+        <LinkPage
+          layout="blocks"
+          caption={strings.howItLooks}
+          blocks={[{ kind: 'form', id: 'draft', title: rowLabel, href: '/f/draft' }]}
+        />
+      }
+    >
+      <Form id={formId} onSubmit={submit} label={strings.newSignup} focusesFirstField>
+        {failed !== undefined && <Callout tone="danger">{failed}</Callout>}
+        <Field
+          label={strings.signupLabel}
+          name="label"
+          autoComplete="off"
+          isRequired
+          maxLength={60}
+          placeholder={strings.signupLabelPlaceholder}
+          value={label}
+          onChange={(next) => {
+            setLabel(next);
+            setProblems((held) => ({ ...held, title: undefined }));
+          }}
+          {...(problems.title === undefined ? {} : { error: problems.title })}
+        />
+        <Field
+          label={strings.signupWords}
+          name="words"
+          autoComplete="off"
+          maxLength={120}
+          placeholder={strings.signupWordsPlaceholder}
+          hint={strings.signupWordsHint}
+          value={words}
+          onChange={setWords}
+        />
+        <Field
+          label={strings.signupButton}
+          name="button"
+          autoComplete="off"
+          maxLength={40}
+          placeholder={strings.signupButtonPlaceholder}
+          value={button}
+          onChange={setButton}
+        />
+        {workspaces.length > 1 && (
+          <Select
+            label={strings.signupWorkspace}
+            hint={strings.signupWorkspaceHint}
+            items={workspaces.map((each): SelectItem => ({ id: each.slug, label: each.name }))}
+            value={chosen}
+            onChange={(next) => {
+              setWhere(next ?? slug);
+            }}
+          />
+        )}
+      </Form>
+    </EditorModal>
+  );
+}
+
+/** Add or edit something a customer said: the words, who said them, and what they do. No photo: the page loads none. */
+export function TestimonialEditor({ item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const formId = useId();
+  const editing = item?.kind === 'testimonial' ? item : undefined;
+  const [quote, setQuote] = useState(editing?.quote ?? '');
+  const [author, setAuthor] = useState(editing?.author ?? '');
+  const [role, setRole] = useState(editing?.role ?? '');
+  const [problems, setProblems] = useState<BlockProblems>({});
+  const draft = () => {
+    const kept = role.trim();
+    return { kind: 'testimonial' as const, quote, author, ...(kept === '' ? {} : { role: kept }) };
+  };
+  const submit = () => {
+    const checked = linkPage.check(draft(), items, editing?.id);
+    if (!checked.ok) {
+      setProblems(checked.problems);
+      return;
+    }
+    onSubmit(draft());
+  };
+  return (
+    <EditorModal
+      title={editing === undefined ? strings.newTestimonial : strings.editTestimonial}
+      formId={formId}
+      submitLabel={editing === undefined ? strings.add : strings.save}
+      onClose={onClose}
+      {...(chrome === undefined ? {} : { chrome })}
+      preview={
+        <LinkPage
+          layout="blocks"
+          caption={strings.howItLooks}
+          blocks={[
+            {
+              kind: 'testimonial',
+              id: editing?.id ?? 'draft',
+              quote: quote.trim() === '' ? strings.quotePlaceholder : quote,
+              author: author.trim() === '' ? strings.authorPlaceholder : author.trim(),
+              ...(role.trim() === '' ? {} : { role: role.trim() }),
+            },
+          ]}
+        />
+      }
+    >
+      <Form
+        id={formId}
+        onSubmit={submit}
+        label={editing === undefined ? strings.newTestimonial : strings.editTestimonial}
+        focusesFirstField
+      >
+        <Field
+          label={strings.quote}
+          name="quote"
+          isMultiline
+          isRequired
+          maxLength={400}
+          showCounter
+          placeholder={strings.quotePlaceholder}
+          hint={strings.quoteHint}
+          value={quote}
+          onChange={(next) => {
+            setQuote(next);
+            setProblems((held) => ({ ...held, quote: undefined }));
+          }}
+          {...(problems.quote === undefined ? {} : { error: problems.quote })}
+        />
+        <Field
+          label={strings.author}
+          name="author"
+          autoComplete="off"
+          isRequired
+          maxLength={80}
+          placeholder={strings.authorPlaceholder}
+          value={author}
+          onChange={(next) => {
+            setAuthor(next);
+            setProblems((held) => ({ ...held, author: undefined }));
+          }}
+          {...(problems.author === undefined ? {} : { error: problems.author })}
+        />
+        <Field
+          label={strings.role}
+          name="role"
+          autoComplete="off"
+          maxLength={80}
+          placeholder={strings.rolePlaceholder}
+          hint={strings.roleHint}
+          value={role}
+          onChange={(next) => {
+            setRole(next);
+            setProblems((held) => ({ ...held, role: undefined }));
+          }}
+          {...(problems.role === undefined ? {} : { error: problems.role })}
+        />
+      </Form>
+    </EditorModal>
+  );
+}
+
 /** Add or edit a piece of writing: a title nobody has to give, and the words, with the page drawn as typed. */
 export function TextEditor({ item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
   const formId = useId();

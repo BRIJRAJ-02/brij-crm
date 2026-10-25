@@ -22,6 +22,8 @@ import {
   HeadingEditor,
   LinkEditor,
   PageChooser,
+  SignupEditor,
+  TestimonialEditor,
   TextEditor,
 } from './editors.tsx';
 import { strings } from './strings.ts';
@@ -91,8 +93,20 @@ export interface BlockKind {
   readonly isEditable: boolean;
 }
 
+/**
+ * What the Add modal offers (spec 0052, AC-5217): every block kind, and `signup`, which is not a kind. Email
+ * signup makes a hosted form with one email field and then adds an ordinary `form` block for it, so it is an entry
+ * in this picker and nothing else: no kind word, no column, no renderer and nothing new on the public page.
+ */
+export type AddableKind = ProfileBlockKind | 'signup';
+
+/** Whether an entry makes a block of its own kind, or one of another kind (Email signup makes a form). */
+export function blockKindOf(kind: AddableKind): ProfileBlockKind {
+  return kind === 'signup' ? 'form' : kind;
+}
+
 /** The kinds this editor knows, in the Add menu's order. */
-export const BLOCK_KINDS: Readonly<Record<ProfileBlockKind, BlockKind>> = {
+export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
   page: {
     label: strings.addPage,
     description: strings.addPageText,
@@ -136,6 +150,20 @@ export const BLOCK_KINDS: Readonly<Record<ProfileBlockKind, BlockKind>> = {
     Editor: FaqEditor,
     isEditable: true,
   },
+  signup: {
+    label: strings.addSignup,
+    description: strings.addSignupText,
+    icon: 'mail',
+    Editor: SignupEditor,
+    isEditable: false,
+  },
+  testimonial: {
+    label: strings.addTestimonial,
+    description: strings.addTestimonialText,
+    icon: 'quote',
+    Editor: TestimonialEditor,
+    isEditable: true,
+  },
   heading: {
     label: strings.addHeading,
     description: strings.addHeadingText,
@@ -148,7 +176,17 @@ export const BLOCK_KINDS: Readonly<Record<ProfileBlockKind, BlockKind>> = {
 /** The Add menu's kinds, in order. */
 // The order the picker draws them in, from the owner's Add item board: the commonest first, the section last,
 // and the one Add item opens on.
-export const ADDABLE: readonly ProfileBlockKind[] = ['link', 'page', 'form', 'text', 'faq', 'contact', 'heading'];
+export const ADDABLE: readonly AddableKind[] = [
+  'link',
+  'page',
+  'form',
+  'signup',
+  'text',
+  'faq',
+  'testimonial',
+  'contact',
+  'heading',
+];
 
 /** A booking page's lengths and kind, said once: "30 min · 60 min · Team". */
 export function pageFacts(page: { readonly durations: readonly number[]; readonly isTeam: boolean }): string {
@@ -169,6 +207,8 @@ export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWor
     return { title: item.title, address: item.group === 'folder' ? strings.headingFolds : strings.heading };
   // Writing has nowhere to go, so its row reads as what it is, with its first line after it.
   if (item.kind === 'text') return { title: item.title ?? strings.text, address: item.body.split('\n')[0] ?? '' };
+  // A testimonial has nowhere to go either: its row says who said it, with the words after.
+  if (item.kind === 'testimonial') return { title: item.author, address: item.quote.split('\n')[0] ?? '' };
   // A set of questions has nowhere to go either: its row says how many it holds.
   if (item.kind === 'faq') return { title: item.title ?? strings.faq, address: strings.faqCount(item.items.length) };
   if (item.kind === 'form') {
@@ -234,6 +274,15 @@ export function previewBlock(
     };
   if (item.kind === 'text') {
     return { kind: 'text', id: item.id, body: item.body, ...(item.title === undefined ? {} : { title: item.title }) };
+  }
+  if (item.kind === 'testimonial') {
+    return {
+      kind: 'testimonial',
+      id: item.id,
+      quote: item.quote,
+      author: item.author,
+      ...(item.role === undefined ? {} : { role: item.role }),
+    };
   }
   if (item.kind === 'form') {
     // A form a visitor can't open now is left out of the phone, as a paused booking page is.
@@ -309,7 +358,15 @@ export function pressesChip(item: ProfileItem, counts: ProfileCounts | undefined
   // A heading, a piece of writing and a set of questions have nowhere to go, so none of them counts a press
   // (AC-5207, AC-5211): a chip saying "No clicks yet" on one would read as a block nobody presses, not one
   // that cannot be pressed.
-  if (counts === undefined || item.kind === 'heading' || item.kind === 'text' || item.kind === 'faq') return [];
+  if (
+    counts === undefined ||
+    item.kind === 'heading' ||
+    item.kind === 'text' ||
+    item.kind === 'faq' ||
+    item.kind === 'testimonial'
+  ) {
+    return [];
+  }
   const presses = counts.presses.find((each) => each.id === item.id)?.presses ?? 0;
   return [presses === 0 ? strings.noPresses : strings.presses(presses)];
 }

@@ -390,7 +390,10 @@ export const profileItems = auth.table(
   },
   (t) => [
     foreignKey({ name: 'profile_items_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
-    check('profile_items_kind', sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form')`),
+    check(
+      'profile_items_kind',
+      sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial')`,
+    ),
     check('profile_items_position', sql`${t.position} between 0 and 999`),
     check('profile_items_placed', sql`(${t.archivedAt} is null) = (${t.position} is not null)`),
     check('profile_items_data', sql`jsonb_typeof(${t.data}) = 'object' and pg_column_size(${t.data}) <= 16384`),
@@ -399,7 +402,7 @@ export const profileItems = auth.table(
     check('profile_items_page', sql`${t.kind} <> 'page' or ${t.pageId} is not null`),
     check(
       'profile_items_plain',
-      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq') or (${t.pageId} is null and ${t.formId} is null)`,
+      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq', 'testimonial') or (${t.pageId} is null and ${t.formId} is null)`,
     ),
     uniqueIndex('profile_items_page_once')
       .on(t.userId, t.workspaceId, t.pageId)

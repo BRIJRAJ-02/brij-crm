@@ -337,7 +337,7 @@ function refusalOf(error: unknown): unknown {
   const pg = postgresError(error);
   if (pg === undefined) return error;
   if (pg.code === '54000') {
-    const kind = (['link', 'heading', 'page', 'contact', 'text', 'faq', 'form'] as const).find(
+    const kind = (['link', 'heading', 'page', 'contact', 'text', 'faq', 'form', 'testimonial'] as const).find(
       (each) => each === pg.detail,
     );
     return refuse('LIMIT_REACHED', profileLimitSentence(kind ?? 'items'));
@@ -395,6 +395,19 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
     // The card's fields as the schema kept them: an empty one was refused there, never stored.
     const { kind, ...data } = block;
     return { kind, data, workspaceId: null, pageId: null, formId: null };
+  }
+  if (block.kind === 'testimonial') {
+    return {
+      kind: block.kind,
+      data: {
+        quote: block.quote,
+        author: block.author,
+        ...(block.role === undefined || block.role === '' ? {} : { role: block.role }),
+      },
+      workspaceId: null,
+      pageId: null,
+      formId: null,
+    };
   }
   if (block.kind === 'faq') {
     return {

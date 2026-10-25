@@ -23,6 +23,16 @@ export function blocksOf(handle: string, items: readonly PublicProfileItem[]): r
             ...(item.icon === undefined ? {} : { icon: item.icon }),
           },
         ];
+      case 'testimonial':
+        return [
+          {
+            kind: 'testimonial',
+            id: item.id,
+            quote: item.quote,
+            author: item.author,
+            ...(item.role === undefined ? {} : { role: item.role }),
+          },
+        ];
       case 'heading':
         return [
           {

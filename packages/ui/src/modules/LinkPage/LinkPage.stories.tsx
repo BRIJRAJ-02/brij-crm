@@ -440,3 +440,40 @@ export const Folders: Story = {
     await expect(fold).toHaveAttribute('aria-expanded', 'false');
   },
 };
+
+/**
+ * Something a customer said (spec 0052, AC-5220): a quiet quote in the reading measure, who said it under it. No
+ * border, no quotation mark graphic and nothing to press — it is the page talking, not one more thing to tap.
+ */
+export const Testimonials: Story = {
+  args: { person: PERSON },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage
+        {...args}
+        blocks={[
+          { kind: 'page', id: 'intro', title: 'Intro call', href: '/anish/intro-call', facts: '15 min · 30 min' },
+          {
+            kind: 'testimonial',
+            id: 'priya',
+            quote: 'Booking went from three emails to one link.\nOur reps stopped chasing times.',
+            author: 'Priya Raman',
+            role: 'Head of Sales, Northwind',
+          },
+          { kind: 'testimonial', id: 'sam', quote: 'It just books itself.', author: 'Sam Oyelaran' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    // The words keep their line breaks, as a piece of writing does.
+    await expect(canvas.getByText(/Booking went from three emails/)).toBeVisible();
+    await expect(canvas.getByText('Priya Raman')).toBeVisible();
+    await expect(canvas.getByText('Head of Sales, Northwind')).toBeVisible();
+    // A testimonial without a role says only the name, and neither is a thing to press.
+    await expect(canvas.getByText('Sam Oyelaran')).toBeVisible();
+    await expect(canvas.queryByRole('link', { name: /Sam Oyelaran/ })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: /Priya Raman/ })).toBeNull();
+  },
+};

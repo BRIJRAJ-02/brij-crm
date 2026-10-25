@@ -29,6 +29,7 @@ import {
   linkMarkOf,
   ProfileContactBlock,
   ProfileFaqBlock,
+  ProfileTestimonialBlock,
   ProfileTextBlock,
   PublicProfileItem,
   type ProfileContactCard,
@@ -350,13 +351,15 @@ function matches(item: PublicProfileItem, words: string): boolean {
   const said =
     item.kind === 'contact'
       ? [item.fullName, item.jobTitle ?? '', item.company ?? '']
-      : item.kind === 'form'
-        ? [item.title]
-        : item.kind === 'text'
-          ? [item.title ?? '']
-          : item.kind === 'faq'
-            ? [item.title ?? '', ...item.items.map((asked) => asked.question)]
-            : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
+      : item.kind === 'testimonial'
+        ? [item.author, item.role ?? '']
+        : item.kind === 'form'
+          ? [item.title]
+          : item.kind === 'text'
+            ? [item.title ?? '']
+            : item.kind === 'faq'
+              ? [item.title ?? '', ...item.items.map((asked) => asked.question)]
+              : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
   return said.some((text) => text.toLowerCase().includes(words));
 }
 
@@ -402,6 +405,18 @@ function publicItemOf(
       id: row.id,
       body: written.data.body,
       ...(written.data.title === undefined ? {} : { title: written.data.title }),
+    };
+  } else if (row.kind === 'testimonial') {
+    // Checked again on the way out, as a piece of writing is: a row an older build stored badly is skipped rather
+    // than half drawn. The words go as text, and there is no picture in it to fetch.
+    const said = ProfileTestimonialBlock.safeParse({ ...data, kind: 'testimonial' });
+    if (!said.success) return undefined;
+    candidate = {
+      kind: 'testimonial',
+      id: row.id,
+      quote: said.data.quote,
+      author: said.data.author,
+      ...(said.data.role === undefined ? {} : { role: said.data.role }),
     };
   } else if (row.kind === 'faq') {
     // Same rule as a piece of writing: parsed again on the way out, and a row an older build stored badly is

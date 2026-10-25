@@ -90,6 +90,7 @@ import type {
 import type { GlobalSearch } from './search/global.ts';
 import type { RecordRefDisplay as LinkedRecordDisplay } from '@crm/contracts/values';
 import type { InviteLinkDays } from '@crm/contracts/team-limits';
+import type { ProfileFormChoice } from '@crm/contracts';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -3026,6 +3027,114 @@ export function createDataLayer({
     return records;
   };
 
+  /**
+   * Email signup (spec 0052, AC-5217): makes a hosted form that asks one thing, an address, and publishes it, so
+   * the link page editor can add an ordinary form block pointing at it. It is not a kind of its own, and the
+   * addresses land in that form's responses, where every other capture on Timefix already lands, so the person's
+   * routing, notifications and export work on them unchanged.
+   *
+   * The form keeps its submissions only (`targets: {}`), which is what lets it be made in any workspace without
+   * asking which object to file against. Three calls, in order: make it, write its one question, publish it. Each
+   * goes through the same write path Captures uses, so the forms list learns about it without being read again.
+   */
+  const makeSignupForm = async (
+    workspace: string,
+    input: { readonly name: string; readonly headline: string; readonly buttonText: string },
+  ): Promise<ProfileFormChoice> => {
+    const made = await formLists.write(workspace, {
+      send: () =>
+        call((options) =>
+          api.forms.create(
+            { workspace, id: mintId(), name: input.name, mainObjectId: null, mutationId: mintId() },
+            options,
+          ),
+        ),
+      land: (items, form) => landForm(form.id)(items, form),
+    });
+    const saved = await formLists.write(workspace, {
+      send: () =>
+        call((options) =>
+          api.forms.saveDraft(
+            {
+              workspace,
+              formId: made.id,
+              document: {
+                ...made.draft,
+                // The one question a signup form asks. Written here rather than imported from the contracts:
+                // that module builds the document's Zod schema, and this file is in the first load, where Zod
+                // must not be (`apps/web/build.test.ts` fails on it).
+                questions: [
+                  {
+                    id: 'email',
+                    key: 'email',
+                    label: 'Email',
+                    answerType: 'email',
+                    placeholder: 'you@example.com',
+                    required: true,
+                    update: 'fill',
+                  },
+                ],
+                targets: {},
+                headline: input.headline,
+                buttonText: input.buttonText,
+              },
+              expectedRevision: made.revision,
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        ),
+      land: landForm(made.id),
+    });
+    const live = await formLists.write(workspace, {
+      send: () =>
+        call((options) =>
+          api.forms.publish(
+            { workspace, formId: made.id, expectedRevision: saved.revision, name: input.name, mutationId: mintId() },
+            options,
+          ),
+        ),
+      land: landForm(made.id),
+    });
+    const held = await (me ?? Promise.resolve(undefined)).catch(() => undefined);
+    const inside = held?.workspaces.find((each) => each.slug === workspace);
+    return {
+      workspaceId: inside?.id ?? live.id,
+      formId: live.id,
+      facts: {
+        name: live.name,
+        key: live.publicKey,
+        workspaceName: inside?.name ?? workspace,
+        workspaceSlug: workspace,
+        status: live.status === 'live' ? 'live' : 'paused',
+      },
+    };
+  };
+
+  const readMe = (): Promise<Me | undefined> => {
+    me ??= attempt((options) => api.me.get(undefined, options)).then(
+      (answer) => {
+        // Someone is signed in again (in another tab, say): the next 401 ends their session too.
+        ended = false;
+        seenPerson = true;
+        // Now known for certain: the app keeps it as the next load's hint for which screen to hold a place for.
+        sessionKnown(true);
+        return answer;
+      },
+      (error: unknown) => {
+        const failure = toDataError(error);
+        // A 401 here is an answer, not a failure: nobody is signed in, and the app may keep that as its hint.
+        if (failure.code === 'UNAUTHENTICATED') {
+          sessionKnown(false);
+          return undefined;
+        }
+        me = undefined;
+        throw failure;
+      },
+    );
+    return me;
+  };
+
   return {
     me: {
       /**
@@ -3034,29 +3143,7 @@ export function createDataLayer({
        * sign out or a new workspace changes it. A 401 here is an answer
        * ("nobody"), so it never runs `onSignedOut`.
        */
-      get(): Promise<Me | undefined> {
-        me ??= attempt((options) => api.me.get(undefined, options)).then(
-          (answer) => {
-            // Someone is signed in again (in another tab, say): the next 401 ends their session too.
-            ended = false;
-            seenPerson = true;
-            // Now known for certain: the app keeps it as the next load's hint for which screen to hold a place for.
-            sessionKnown(true);
-            return answer;
-          },
-          (error: unknown) => {
-            const failure = toDataError(error);
-            // A 401 here is an answer, not a failure: nobody is signed in, and the app may keep that as its hint.
-            if (failure.code === 'UNAUTHENTICATED') {
-              sessionKnown(false);
-              return undefined;
-            }
-            me = undefined;
-            throw failure;
-          },
-        );
-        return me;
-      },
+      get: readMe,
       /**
        * Remembers `workspace` (its address) as the one the person last opened
        * (spec 0031, AC-802), so `/` and sign in bring them back to it on any
@@ -4071,7 +4158,18 @@ export function createDataLayer({
     linkPage: {
       load: (): Promise<LinkPageStore> =>
         (linkPage ??= import('./link-page/store.ts').then(({ openLinkPage }) =>
-          openLinkPage({ profile: api.profile, call, mintId, notify, summary: refusalSummary }),
+          openLinkPage({
+            profile: api.profile,
+            call,
+            mintId,
+            notify,
+            summary: refusalSummary,
+            signup: {
+              /** The workspaces an Email signup form may be made in: the person's own, oldest first (AC-5217). */
+              workspaces: () => readMe().then((who) => who?.workspaces ?? []),
+              make: (workspace, input) => makeSignupForm(workspace, input),
+            },
+          }),
         )),
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */

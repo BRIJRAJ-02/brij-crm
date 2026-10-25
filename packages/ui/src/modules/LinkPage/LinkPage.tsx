@@ -49,6 +49,15 @@ export type LinkPageBlock =
       readonly group?: 'open' | 'folder';
     }
   | {
+      readonly kind: 'testimonial';
+      readonly id: string;
+      /** What they said, with its line breaks kept. Never markup: nothing in it is parsed. */
+      readonly quote: string;
+      readonly author: string;
+      /** What they do, under their name, when the owner gave one. */
+      readonly role?: string;
+    }
+  | {
       readonly kind: 'text';
       readonly id: string;
       /** A small heading over the words, when the person gave one. */
@@ -291,10 +300,12 @@ const SCHEME_ICONS = { mail: 'mail', phone: 'phone', text: 'message-square' } as
  * heading's type mark (the editor only). With no block, the tile's place while it loads.
  */
 /** The mark the editor's row shows for a block that draws as words on the page rather than as a row. */
-const TILE_ICONS = { heading: 'type', text: 'file-text', faq: 'circle-question-mark' } as const satisfies Record<
-  'heading' | 'text' | 'faq',
-  IconName
->;
+const TILE_ICONS = {
+  heading: 'type',
+  text: 'file-text',
+  faq: 'circle-question-mark',
+  testimonial: 'quote',
+} as const satisfies Record<'heading' | 'text' | 'faq' | 'testimonial', IconName>;
 
 export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
   if (block === undefined) {
@@ -320,7 +331,7 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
       </span>
     );
   }
-  if (block.kind === 'heading' || block.kind === 'text' || block.kind === 'faq') {
+  if (block.kind === 'heading' || block.kind === 'text' || block.kind === 'faq' || block.kind === 'testimonial') {
     return (
       <span className={styles.tile} data-tile="icon">
         <Icon name={TILE_ICONS[block.kind]} />
@@ -371,7 +382,7 @@ function BlockText({ title, line }: { readonly title: string; readonly line?: st
 
 /** Each kind's one renderer. A block of a kind with none never reaches here: callers skip what they can't map. */
 const RENDERERS: {
-  readonly [Kind in Exclude<LinkPageBlock['kind'], 'heading' | 'contact' | 'text' | 'faq'>]: (
+  readonly [Kind in Exclude<LinkPageBlock['kind'], 'heading' | 'contact' | 'text' | 'faq' | 'testimonial'>]: (
     block: Extract<LinkPageBlock, { kind: Kind }>,
     onPress: (() => void) | undefined,
   ) => ReactNode;
@@ -488,18 +499,21 @@ type Run =
   | { readonly kind: 'rows'; readonly key: string; readonly isFirst: boolean; readonly rows: BlockRowBlock[] }
   | { readonly kind: 'apart'; readonly key: string; readonly block: ApartBlock };
 
-/** A block a row draws: everything but a heading, a contact card, a piece of writing and a set of questions. */
-type BlockRowBlock = Exclude<LinkPageBlock, { kind: 'heading' | 'contact' | 'text' | 'faq' }>;
+/** A block a row draws: everything but a heading, a contact card, writing, questions and a testimonial. */
+type BlockRowBlock = Exclude<LinkPageBlock, { kind: 'heading' | 'contact' | 'text' | 'faq' | 'testimonial' }>;
 
-/** A block that is not a row: the person's own words, and the questions they answer. Neither records a press. */
-type ApartBlock = Extract<LinkPageBlock, { kind: 'text' | 'faq' }>;
+/**
+ * A block that is not a row: the person's own words, the questions they answer, and something a customer said.
+ * None of them records a press, because none of them is a thing to press.
+ */
+type ApartBlock = Extract<LinkPageBlock, { kind: 'text' | 'faq' | 'testimonial' }>;
 
 function runsOf(blocks: readonly LinkPageBlock[]): Run[] {
   const runs: Run[] = [];
   let isFirst = true;
   for (const block of blocks) {
     if (block.kind === 'heading' || block.kind === 'contact') continue;
-    if (block.kind === 'text' || block.kind === 'faq') {
+    if (block.kind === 'text' || block.kind === 'faq' || block.kind === 'testimonial') {
       runs.push({ kind: 'apart', key: block.id, block });
       continue;
     }
@@ -520,6 +534,19 @@ function runsOf(blocks: readonly LinkPageBlock[]): Run[] {
  */
 function ApartBlockView({ block, level }: { readonly block: ApartBlock; readonly level: 2 | 3 }) {
   if (block.kind === 'faq') return <FaqBlock block={block} level={level} />;
+  // A quiet quote (AC-5220): the words in the reading measure, who said them under it. No frame, no quotation
+  // mark graphic and nothing to press — a testimonial is the page talking, not one more thing to tap.
+  if (block.kind === 'testimonial') {
+    return (
+      <figure className={styles.said}>
+        <blockquote className={styles.quote}>{block.quote}</blockquote>
+        <figcaption className={styles.author}>
+          {block.author}
+          {block.role !== undefined && block.role !== '' && <span className={styles.role}>{block.role}</span>}
+        </figcaption>
+      </figure>
+    );
+  }
   const Title = level === 2 ? 'h2' : 'h3';
   return (
     <div className={styles.writing}>

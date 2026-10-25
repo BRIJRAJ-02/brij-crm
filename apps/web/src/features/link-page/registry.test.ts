@@ -2,7 +2,16 @@
 // Add menu offers.
 import { describe, expect, it } from 'vitest';
 import type { ProfileItem } from '@crm/data';
-import { ADDABLE, BLOCK_KINDS, figuresLine, pageFacts, pressesChip, previewBlock, rowWords } from './registry.tsx';
+import {
+  ADDABLE,
+  BLOCK_KINDS,
+  blockKindOf,
+  figuresLine,
+  pageFacts,
+  pressesChip,
+  previewBlock,
+  rowWords,
+} from './registry.tsx';
 
 const page = (status: 'live' | 'paused'): ProfileItem => ({
   kind: 'page',
@@ -23,7 +32,12 @@ const page = (status: 'live' | 'paused'): ProfileItem => ({
 
 describe('the block registry', () => {
   it('offers every kind it has an editor for, in the Add menu’s order', () => {
-    expect(ADDABLE).toEqual(['link', 'page', 'form', 'text', 'faq', 'contact', 'heading']);
+    expect(ADDABLE).toEqual(['link', 'page', 'form', 'signup', 'text', 'faq', 'testimonial', 'contact', 'heading']);
+    // Email signup is an entry, not a kind: what it makes, and so what it needs room for, is a form (AC-5217).
+    expect(blockKindOf('signup')).toBe('form');
+    for (const kind of ADDABLE) {
+      if (kind !== 'signup') expect(blockKindOf(kind)).toBe(kind);
+    }
     expect(ADDABLE.every((kind) => BLOCK_KINDS[kind].label !== '')).toBe(true);
   });
 
@@ -45,6 +59,10 @@ describe('the block registry', () => {
       address: 'Unavailable, hidden from visitors · Link only, deleted, or in a workspace you left',
       isOff: true,
     });
+    // A testimonial has nowhere to go: its row is who said it, with their words after.
+    expect(
+      rowWords({ kind: 'testimonial', id: 't', quote: 'It books itself.\nTruly.', author: 'Sam', updatedAt: '' }),
+    ).toEqual({ title: 'Sam', address: 'It books itself.' });
     // A heading says what it does with the blocks under it, so the list shows a folder without opening it.
     expect(rowWords({ kind: 'heading', id: 'h', title: 'Find me', updatedAt: '' })).toEqual({
       title: 'Find me',
@@ -216,6 +234,10 @@ describe('the block registry', () => {
     expect(pressesChip(link, counts(1, 1, 0))).toEqual(['3\u00a0clicks']);
     expect(pressesChip({ ...link, id: 'other' }, counts(1, 1, 0))).toEqual(['No clicks yet']);
     expect(pressesChip({ kind: 'heading', id: 'h', title: 'H', updatedAt: '' }, counts(1, 1, 0))).toEqual([]);
+    // A testimonial has nothing to press either, so it never shows a clicks chip.
+    expect(
+      pressesChip({ kind: 'testimonial', id: 't', quote: 'Good.', author: 'Sam', updatedAt: '' }, counts(1, 1, 0)),
+    ).toEqual([]);
     // Neither writing nor a set of questions has anywhere to go, so neither shows a chip (AC-5207, AC-5211).
     expect(pressesChip({ kind: 'text', id: 't', body: 'Words', updatedAt: '' }, counts(1, 1, 0))).toEqual([]);
     expect(

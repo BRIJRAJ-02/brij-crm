@@ -13,7 +13,6 @@ import {
   type MyProfile,
   type PageTheme,
   type ProfileBlock,
-  type ProfileBlockKind,
   type ProfileItem,
 } from '@crm/data';
 import {
@@ -49,12 +48,14 @@ import { AppearanceCard } from './AppearanceCard.tsx';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import {
   ADDABLE,
+  blockKindOf,
   BLOCK_KINDS,
   contactHref,
   figuresLine,
   pressesChip,
   previewBlock,
   rowWords,
+  type AddableKind,
   type ChosenFacts,
 } from './registry.tsx';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
@@ -73,7 +74,7 @@ export interface LinkPageScreenProps {
  * The Modal open: its kind, the block being edited (none for an add), and the id its save goes under, minted as it
  * opens, so a second press of Add before the Modal closes saves the same block again rather than a second one.
  */
-type Editing = { readonly kind: ProfileBlockKind; readonly item?: ProfileItem; readonly id: string };
+type Editing = { readonly kind: AddableKind; readonly item?: ProfileItem; readonly id: string };
 
 /** A new link's letter colour: the next of the hues after the links so far, gray last, as the server would pick. */
 function nextHue(items: readonly ProfileItem[]) {
@@ -94,7 +95,9 @@ function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined
     return { ...block, id, ...(form === undefined ? {} : { form }), updatedAt };
   }
   if (block.kind === 'contact') return { ...block, id, updatedAt };
-  if (block.kind === 'text' || block.kind === 'faq') return { ...block, id, updatedAt };
+  if (block.kind === 'text' || block.kind === 'faq' || block.kind === 'testimonial') {
+    return { ...block, id, updatedAt };
+  }
   return { ...block, id, hue: block.hue ?? (was?.kind === 'link' ? was.hue : 'blue'), updatedAt };
 }
 
@@ -385,8 +388,9 @@ function Blocks({
   // kind swaps in place rather than closing one dialog to open another. An edit opens its kind's editor alone.
   // A button opens the modal on the kind it names, unless that kind is full: then it opens on the first kind that
   // isn't, so the picker never opens on a choice that can't be taken. Every kind full disables the button.
-  const roomFor = (kind: ProfileBlockKind) => linkPage.limit(items, kind) === undefined;
-  const openAdd = (kind: ProfileBlockKind) => {
+  // Email signup makes a form block, so what it needs room for is a form (`blockKindOf`), not a kind of its own.
+  const roomFor = (kind: AddableKind) => linkPage.limit(items, blockKindOf(kind)) === undefined;
+  const openAdd = (kind: AddableKind) => {
     const open = roomFor(kind) ? kind : ADDABLE.find(roomFor);
     if (open !== undefined) setEditing({ kind: open, id: linkPage.newId() });
   };
@@ -424,7 +428,7 @@ function Blocks({
       >
         {ADDABLE.map((kind) => {
           const entry = BLOCK_KINDS[kind];
-          const full = linkPage.limit(items, kind);
+          const full = linkPage.limit(items, blockKindOf(kind));
           return (
             <Radio
               key={kind}

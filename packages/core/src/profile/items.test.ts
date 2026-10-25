@@ -226,6 +226,31 @@ describe('a link page', () => {
     });
   });
 
+  it('refuses the 7th testimonial, on an add and on a restore alike (spec 0052)', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('ada');
+    await updateMyMemberProfile(ada.scope, { handle });
+    const said = (author: string) => ({ kind: 'testimonial' as const, quote: 'It books itself.', author });
+    const firstId = newId();
+    await add(ada.scope, said('Sam'), firstId);
+    for (let n = 1; n < 6; n += 1) await add(ada.scope, said(`Friend ${String(n)}`));
+    expect(await refusalOf(add(ada.scope, said('One more')))).toEqual({
+      code: 'LIMIT_REACHED',
+      message: 'A link page holds up to 6 testimonials.',
+    });
+    // A restore is an add: one archived to make room, replaced, then put back is over the limit again.
+    await archiveProfileItem(ada.scope, { id: firstId, archived: true });
+    await add(ada.scope, said('In its place'));
+    expect(await refusalOf(archiveProfileItem(ada.scope, { id: firstId, archived: false }))).toEqual({
+      code: 'LIMIT_REACHED',
+      message: 'A link page holds up to 6 testimonials.',
+    });
+    // A visitor reads the words, the name and the role, and nothing else about it.
+    const seen = (await visitorRead(handle)).items.find((item) => item.kind === 'testimonial');
+    expect(seen).toMatchObject({ kind: 'testimonial', quote: 'It books itself.' });
+    expect(seen).not.toHaveProperty('role');
+  });
+
   it('keeps a heading’s group, stores nothing for an open one, and refuses a word that is neither', async () => {
     const ada = await person('Ada');
     const handle = fresh('ada');

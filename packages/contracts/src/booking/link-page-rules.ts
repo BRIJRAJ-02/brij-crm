@@ -4,7 +4,16 @@
 import { HUES } from '../values/hue-list.ts';
 
 /** The kinds this build draws. A read that meets any other kind skips it. */
-export const PROFILE_BLOCK_KINDS = ['link', 'page', 'heading', 'contact', 'text', 'faq', 'form'] as const;
+export const PROFILE_BLOCK_KINDS = [
+  'link',
+  'page',
+  'heading',
+  'contact',
+  'text',
+  'faq',
+  'form',
+  'testimonial',
+] as const;
 /** One of the kinds this build draws. */
 export type ProfileBlockKind = (typeof PROFILE_BLOCK_KINDS)[number];
 
@@ -18,6 +27,7 @@ export const PROFILE_LIMITS = {
   text: 5,
   faq: 2,
   form: 3,
+  testimonial: 6,
 } as const;
 
 /** The sentence a full kind is refused and disabled with (AC-5102), the server's and the editor's alike. */
@@ -29,6 +39,7 @@ export function profileLimitSentence(kind: ProfileBlockKind | 'items'): string {
   if (kind === 'text') return `A link page holds up to ${String(PROFILE_LIMITS.text)} pieces of writing.`;
   if (kind === 'faq') return `A link page holds up to ${String(PROFILE_LIMITS.faq)} sets of questions.`;
   if (kind === 'form') return `A link page holds up to ${String(PROFILE_LIMITS.form)} forms.`;
+  if (kind === 'testimonial') return `A link page holds up to ${String(PROFILE_LIMITS.testimonial)} testimonials.`;
   return `A link page holds up to ${String(PROFILE_LIMITS.page)} booking pages.`;
 }
 
@@ -48,6 +59,13 @@ export const PROFILE_HEADING_GROUP_REFUSAL = 'Pick whether the section stays ope
 export function headingGroupOf(given: string | undefined): ProfileHeadingGroup {
   return given === 'folder' ? 'folder' : 'open';
 }
+
+/** What a testimonial's parts may run to (spec 0052, AC-5219): no photo and no logo, so these are all of it. */
+export const PROFILE_QUOTE_MAX = 400;
+/** How many line breaks a quote keeps. */
+export const PROFILE_QUOTE_BREAKS = 6;
+/** The longest an author's name, and their role, may be. */
+export const PROFILE_AUTHOR_MAX = 80;
 
 /** The longest address a link keeps. */
 export const PROFILE_LINK_MAX = 2_000;

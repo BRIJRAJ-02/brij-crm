@@ -20,7 +20,10 @@ import {
   linkMarkOf,
   PROFILE_LIMITS,
   PROFILE_LINK_ICONS,
+  PROFILE_AUTHOR_MAX,
   PROFILE_NOTE_MAX,
+  PROFILE_QUOTE_BREAKS,
+  PROFILE_QUOTE_MAX,
   PROFILE_FAQ_ANSWER_MAX,
   PROFILE_FAQ_BREAKS,
   PROFILE_FAQ_ITEMS,
@@ -182,6 +185,9 @@ export type BlockProblems = Readonly<
       | 'page'
       | 'form'
       | 'body'
+      | 'quote'
+      | 'author'
+      | 'role'
       | 'items'
       // One question's own two problems, by its place in the list: `question:0`, `answer:0`.
       | `question:${number}`
@@ -266,8 +272,9 @@ export type BlockDraft =
       readonly icon?: string;
       readonly hue?: (typeof PROFILE_HUES)[number];
     }
-  | { readonly kind: 'heading'; readonly title: string }
+  | { readonly kind: 'heading'; readonly title: string; readonly group?: 'open' | 'folder' }
   | { readonly kind: 'text'; readonly title?: string; readonly body: string }
+  | { readonly kind: 'testimonial'; readonly quote: string; readonly author: string; readonly role?: string }
   | {
       readonly kind: 'faq';
       readonly title?: string;
@@ -372,6 +379,25 @@ export function checkBlock(
     if (Object.keys(asked).length > 0) return { ok: false, problems: asked };
     return { ok: true, block: { kind: 'faq', items, ...(kept === '' ? {} : { title: kept }) } };
   }
+  if (draft.kind === 'testimonial') {
+    const said: Partial<Record<'quote' | 'author' | 'role', string>> = {};
+    // A Windows paste arrives with \r\n; it is one break, not two, here and on the server alike.
+    const quote = draft.quote.replaceAll('\r\n', '\n').trim();
+    if (quote === '') said.quote = 'Write what they said.';
+    else if (quote.length > PROFILE_QUOTE_MAX) said.quote = 'Keep the quote to 400 characters.';
+    else if ((quote.match(/\n/g) ?? []).length > PROFILE_QUOTE_BREAKS) {
+      said.quote = 'Keep the quote to 6 line breaks.';
+    }
+    const author = draft.author.trim();
+    if (author === '') said.author = 'Say who said it.';
+    else if (/[\r\n]/.test(author)) said.author = 'Keep it to one line.';
+    else if (author.length > PROFILE_AUTHOR_MAX) said.author = 'Keep the name to 80 characters.';
+    const role = draft.role?.trim() ?? '';
+    if (/[\r\n]/.test(role)) said.role = 'Keep it to one line.';
+    else if (role.length > PROFILE_AUTHOR_MAX) said.role = 'Keep the role to 80 characters.';
+    if (Object.keys(said).length > 0) return { ok: false, problems: said };
+    return { ok: true, block: { kind: 'testimonial', quote, author, ...(role === '' ? {} : { role }) } };
+  }
   const problems: Partial<Record<'title' | 'url' | 'note' | 'icon' | 'page', string>> = {};
   const title = titleProblem(draft.title, draft.kind);
   if (title !== undefined) problems.title = title;
@@ -382,7 +408,11 @@ export function checkBlock(
     );
     if (problems.title === undefined && twin) problems.title = 'You already have a heading called that.';
     if (problems.title !== undefined) return { ok: false, problems };
-    return { ok: true, block: { kind: 'heading', title: draft.title.trim() } };
+    // `open` is left out rather than sent: the server stores the key only for a folder (spec 0054, AC-5415).
+    return {
+      ok: true,
+      block: { kind: 'heading', title: draft.title.trim(), ...(draft.group === 'folder' ? { group: 'folder' } : {}) },
+    };
   }
   const checked = checkProfileLink(draft.url);
   if (!checked.ok) problems.url = profileLinkProblem(checked.reason);
@@ -679,6 +709,16 @@ export function openLinkPage(given: {
   readonly mintId: () => string;
   readonly notify: (notice: Notice) => void;
   readonly summary: (error: DataError) => string;
+  /** Email signup (spec 0052, AC-5217): the workspaces one may be made in, and the one call that makes it. */
+  readonly signup: {
+    readonly workspaces: () => Promise<
+      readonly { readonly id: string; readonly slug: string; readonly name: string }[]
+    >;
+    readonly make: (
+      workspace: string,
+      input: { readonly name: string; readonly headline: string; readonly buttonText: string },
+    ) => Promise<ProfileFormChoice>;
+  };
 }) {
   const { profile, call } = given;
   const deps: LinkPageDeps = {
@@ -701,6 +741,11 @@ export function openLinkPage(given: {
   return {
     /** The blocks, held while a screen shows them (`useLinkPage`). */
     view: (workspace: string): LinkPageHeld => store.of(workspace),
+    /**
+     * Email signup (AC-5217): the workspaces a new one may be made in, and the call that makes and publishes it.
+     * The editor then adds an ordinary form block for what comes back, so nothing here is a new kind of block.
+     */
+    signup: given.signup,
     /** Reads them now (the route's loader); rejects with the refusal. */
     read: (workspace: string): Promise<void> => store.read(workspace).then(() => undefined),
     /** Adds or edits a block: `shown` at once, idempotent on `id`. Answers whether it landed. */

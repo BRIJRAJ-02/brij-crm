@@ -347,6 +347,48 @@
     overflow-wrap: anywhere;
   }
 
+  /* Something a customer said (spec 0052, AC-5220): a quiet quote in the reading measure, who said it under it in
+     the muted colour. No border, no quotation mark graphic and nothing to press — it is the page talking, not one
+     more thing to tap, so it sits in the prose inset the writing block uses rather than in a card. */
+  .said {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding-inline: var(--space-4);
+  }
+
+  .quote {
+    margin: 0;
+    color: var(--page-text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .author {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    color: var(--page-text-quiet);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    overflow-wrap: anywhere;
+  }
+
+  /* The role sits after the name, parted by a middot drawn here rather than typed into the markup. */
+  .role {
+    display: inline-flex;
+    gap: var(--space-6);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .role::before {
+    content: '·';
+  }
+
   /* The questions, answered: a raised card like the rows beside it, since on this page anything that isn't the
      person's own prose is a card. The folds inside it are the library's Disclosure, unchanged. */
   .questions {

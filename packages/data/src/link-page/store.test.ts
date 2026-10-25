@@ -239,6 +239,40 @@ describe('checkBlock', () => {
     });
   });
 
+  it('carries a heading’s group through, and leaves an open one without the key (spec 0054, AC-5415)', () => {
+    // The editor builds every block here, so a field dropped on this path is a field the server never sees.
+    expect(checkBlock({ kind: 'heading', title: 'Read', group: 'folder' }, items)).toEqual({
+      ok: true,
+      block: { kind: 'heading', title: 'Read', group: 'folder' },
+    });
+    expect(checkBlock({ kind: 'heading', title: 'Read', group: 'open' }, items)).toEqual({
+      ok: true,
+      block: { kind: 'heading', title: 'Read' },
+    });
+    expect(checkBlock({ kind: 'heading', title: 'Read' }, items)).toEqual({
+      ok: true,
+      block: { kind: 'heading', title: 'Read' },
+    });
+  });
+
+  it('checks a testimonial’s three parts and drops an empty role (spec 0052, AC-5219)', () => {
+    expect(
+      checkBlock({ kind: 'testimonial', quote: ' It books itself. ', author: ' Sam ', role: '  ' }, items),
+    ).toEqual({ ok: true, block: { kind: 'testimonial', quote: 'It books itself.', author: 'Sam' } });
+    expect(checkBlock({ kind: 'testimonial', quote: '', author: 'Sam' }, items)).toEqual({
+      ok: false,
+      problems: { quote: 'Write what they said.' },
+    });
+    expect(checkBlock({ kind: 'testimonial', quote: 'Good.', author: '' }, items)).toEqual({
+      ok: false,
+      problems: { author: 'Say who said it.' },
+    });
+    expect(checkBlock({ kind: 'testimonial', quote: 'x'.repeat(401), author: 'Sam' }, items)).toEqual({
+      ok: false,
+      problems: { quote: 'Keep the quote to 400 characters.' },
+    });
+  });
+
   it('says what is wrong, field by field, before anything is sent', () => {
     expect(checkBlock({ kind: 'link', title: '', url: 'javascript:alert(1)', note: 'x'.repeat(121) }, items)).toEqual({
       ok: false,

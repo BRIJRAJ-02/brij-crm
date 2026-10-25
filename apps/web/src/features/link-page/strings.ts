@@ -53,6 +53,39 @@ export const strings = {
   textBodyPlaceholder: 'What people should know before they book.',
   textBodyHint: 'Plain words only. For a link, add a link block.',
   text: 'Writing',
+  /** Something a customer said (spec 0052, AC-5219): words, a name and what they do. No photo and no logo. */
+  /**
+   * Email signup (spec 0052, AC-5217): not a kind of its own. It makes a hosted form that asks one thing, and
+   * adds a form block for it, so the addresses land where every other capture on Timefix lands.
+   */
+  addSignup: 'Email signup',
+  addSignupText: 'Collect addresses, straight into Captures',
+  newSignup: 'Collect email addresses',
+  signupWorkspace: 'Where the addresses go',
+  signupWorkspaceHint: 'They land in this workspace’s Captures, under the form this makes.',
+  signupWords: 'What the page says',
+  signupWordsPlaceholder: 'Get the occasional note from me',
+  signupWordsHint: 'It sits above the field on the signup page.',
+  signupButton: 'Button',
+  signupButtonPlaceholder: 'Sign me up',
+  signupLabel: 'The row on your page',
+  signupLabelPlaceholder: 'Join the list',
+  signupMaking: 'Making the form…',
+  signupFailed: 'The form could not be made. Try again.',
+  addTestimonial: 'Testimonial',
+  addTestimonialText: 'Something a customer said, in their words',
+  newTestimonial: 'Add a testimonial',
+  editTestimonial: 'Edit the testimonial',
+  quote: 'What they said',
+  quotePlaceholder: 'Booking went from three emails to one link.',
+  quoteHint: 'Their words, as they said them. Plain words only.',
+  author: 'Who said it',
+  authorPlaceholder: 'Priya Raman',
+  role: 'What they do',
+  rolePlaceholder: 'Head of Sales, Northwind',
+  roleHint: 'Optional. It sits under their name.',
+  /** A testimonial's row in the editor's list, where it has nowhere to go. */
+  testimonial: 'Testimonial',
   appearance: 'Appearance',
   appearanceText: 'How your page looks. Every change shows in the preview and saves at once.',
   /**
