@@ -5,9 +5,9 @@
 // Leaves out: choosing which rows to bring before they land. Everything lands hidden, so the choosing happens on
 // the page itself with the switch that was already there, and a person who imports and walks away publishes
 // nothing. Loaded with the editor's chunk, never the first load.
-import { Button, EmptyState, Field, Modal } from '@crm/ui';
+import { Button, Callout, DescriptionList, Field, focusLater, Modal } from '@crm/ui';
 import type { DataError, ProfileLinkImport, SkippedImportRow } from '@crm/data';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { importStrings as strings } from './import-strings.ts';
 
 /** Props for the import modal. */
@@ -15,33 +15,52 @@ export interface ImportLinksModalProps {
   /** Kept mounted while it closes, so the Modal's own exit plays. */
   readonly isOpen: boolean;
   readonly onClose: () => void;
+  /** A fresh import id. One import is one id, so a retry of the same address adds nothing twice (AC-5528). */
+  readonly newId: () => string;
   /** Reads the page and lands its rows hidden. Rejects with the refusal, which is shown on the field. */
-  readonly onImport: (url: string) => Promise<ProfileLinkImport>;
+  readonly onImport: (id: string, url: string) => Promise<ProfileLinkImport>;
 }
 
-/** A row we can word: the row itself and why it stayed behind, in a sentence. */
-interface SkippedShown {
-  readonly title?: string;
-  readonly url?: string;
-  readonly reason: string;
+/** The refusals that are about the address itself, which belong under the field. Anything else is not. */
+const ABOUT_THE_ADDRESS: readonly string[] = ['CONFIG_INVALID', 'INPUT_INVALID'];
+
+/**
+ * Why a row stayed behind, in a sentence. Every reason the contract has is worded here, and typecheck fails if
+ * one is added without words, so no row can ever be dropped from this list for want of a sentence.
+ */
+function reasonOf(row: SkippedImportRow): string {
+  return strings.reasons[row.reason];
 }
 
 /**
  * Bring a page across: one address in, and a plain account of what happened. Two steps in one modal, because
  * the second is the answer to the first and a person reading it has nothing left to decide.
  */
-export function ImportLinksModal({ isOpen, onClose, onImport }: ImportLinksModalProps) {
+export function ImportLinksModal({ isOpen, newId, onClose, onImport }: ImportLinksModalProps) {
   const [url, setUrl] = useState('');
   const [isReading, setReading] = useState(false);
   const [refusal, setRefusal] = useState<DataError | undefined>(undefined);
   const [made, setMade] = useState<ProfileLinkImport | undefined>(undefined);
+  const doneRef = useRef<HTMLButtonElement>(null);
+  // The id of the import on its way, with the address it was minted for. A send that failed on the way back (the
+  // rows landed, the answer didn't) is tried again under the same id, so it adds nothing twice; a corrected
+  // address is a different import and takes a new one, or the server would answer about a page it never read.
+  const sent = useRef<{ readonly url: string; readonly id: string } | undefined>(undefined);
 
   const bring = () => {
-    if (isReading || url.trim() === '') return;
+    const wanted = url.trim();
+    if (isReading || wanted === '') return;
+    const id = sent.current?.url === wanted ? sent.current.id : newId();
+    sent.current = { url: wanted, id };
     setReading(true);
     setRefusal(undefined);
-    onImport(url.trim())
-      .then(setMade)
+    onImport(id, wanted)
+      .then((answer) => {
+        setMade(answer);
+        // The button that was pressed goes with the step it belonged to, so focus is moved deliberately rather
+        // than left to land wherever the dialog's containment drops it.
+        focusLater(() => doneRef.current);
+      })
       .catch((error: unknown) => setRefusal(error as DataError))
       .finally(() => setReading(false));
   };
@@ -49,13 +68,8 @@ export function ImportLinksModal({ isOpen, onClose, onImport }: ImportLinksModal
     if (isReading) return;
     onClose();
   };
-  // A reason this version has no words for is left out rather than shown raw: the count below says how many
-  // rows stayed behind either way.
-  const skipped: readonly SkippedShown[] =
-    made?.skipped.flatMap((row: SkippedImportRow) => {
-      const reason = strings.reasons[row.reason] as string | undefined;
-      return reason === undefined ? [] : [{ ...row, reason }];
-    }) ?? [];
+  const onTheField = refusal !== undefined && ABOUT_THE_ADDRESS.includes(refusal.code);
+  const skipped = made?.skipped ?? [];
 
   return (
     <Modal
@@ -68,13 +82,15 @@ export function ImportLinksModal({ isOpen, onClose, onImport }: ImportLinksModal
       actions={
         made === undefined ? (
           <>
-            <Button onPress={close}>{strings.cancel}</Button>
+            <Button slot="close" kbd="ESC" isDisabled={isReading}>
+              {strings.cancel}
+            </Button>
             <Button variant="primary" icon="download" isPending={isReading} onPress={bring}>
               {strings.bring}
             </Button>
           </>
         ) : (
-          <Button variant="primary" onPress={close}>
+          <Button ref={doneRef} variant="primary" onPress={close}>
             {strings.done}
           </Button>
         )
@@ -82,38 +98,53 @@ export function ImportLinksModal({ isOpen, onClose, onImport }: ImportLinksModal
     >
       {made === undefined ? (
         <>
+          {/* A refusal that isn't about what was typed (the page wouldn't answer, the hourly limit) belongs over
+              the field rather than under it, where it would read as a mistake in the address. */}
+          {refusal !== undefined && !onTheField && (
+            <Callout tone="danger" isPolite>
+              {refusal.message}
+            </Callout>
+          )}
           <p>{strings.lead}</p>
           <Field
             label={strings.address}
             placeholder={strings.example}
             hint={strings.services}
             value={url}
+            isDisabled={isReading}
             // The modal opens to be given one address: its only field is what the press asked for.
             // eslint-disable-next-line jsx-a11y-x/no-autofocus
             autoFocus
-            onChange={setUrl}
+            onChange={(typed) => {
+              setUrl(typed);
+              // The reason stops applying the moment the address changes, so it goes rather than sitting under a
+              // field whose contents it is no longer about.
+              setRefusal(undefined);
+            }}
             onSubmit={bring}
-            {...(refusal === undefined ? {} : { error: refusal.message })}
+            {...(onTheField ? { error: refusal.message } : {})}
           />
         </>
       ) : (
         <>
-          <p>{made.existed ? strings.alreadyDone : strings.madeLine(made.made)}</p>
-          {made.made > 0 && <p>{strings.hiddenNote}</p>}
-          {made.made === 0 && !made.existed && (
-            <EmptyState title={strings.nothingTitle}>{strings.nothingText}</EmptyState>
-          )}
+          <Callout tone={made.made > 0 ? 'success' : 'warning'} isAnnounced>
+            {made.existed
+              ? strings.alreadyDone
+              : made.made === 0
+                ? strings.nothingText
+                : `${strings.madeLine(made.made)} ${strings.hiddenNote}`}
+          </Callout>
           {skipped.length > 0 && (
-            <>
-              <p>{strings.skippedLine(skipped.length)}</p>
-              <ul>
-                {skipped.map((row, index) => (
-                  <li key={`${row.url ?? ''}-${String(index)}`}>
-                    {`${row.title ?? row.url ?? strings.unnamed} — ${row.reason}`}
-                  </li>
-                ))}
-              </ul>
-            </>
+            <Callout tone="warning" title={strings.skippedLine(skipped.length)}>
+              <DescriptionList
+                layout="stacked"
+                items={skipped.map((row, index) => ({
+                  id: String(index),
+                  term: row.title ?? row.url ?? strings.unnamed,
+                  description: reasonOf(row),
+                }))}
+              />
+            </Callout>
           )}
         </>
       )}

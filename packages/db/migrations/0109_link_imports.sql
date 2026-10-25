@@ -20,7 +20,8 @@ CREATE TABLE "auth"."link_imports" (
 	"skipped" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "link_imports_source" CHECK (char_length("auth"."link_imports"."source") <= 400),
-	CONSTRAINT "link_imports_items" CHECK (array_length("auth"."link_imports"."item_ids", 1) is null or array_length("auth"."link_imports"."item_ids", 1) <= 40)
+	CONSTRAINT "link_imports_items" CHECK (array_length("auth"."link_imports"."item_ids", 1) is null or array_length("auth"."link_imports"."item_ids", 1) <= 40),
+	CONSTRAINT "link_imports_skipped" CHECK (jsonb_typeof("auth"."link_imports"."skipped") = 'array' and jsonb_array_length("auth"."link_imports"."skipped") <= 100 and pg_column_size("auth"."link_imports"."skipped") <= 65536)
 );
 --> statement-breakpoint
 ALTER TABLE "auth"."link_imports" ADD CONSTRAINT "link_imports_user_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user"("id") ON DELETE cascade ON UPDATE no action;
@@ -89,28 +90,10 @@ begin
 end;
 $$;
 --> statement-breakpoint
--- What one person's imports hold, newest first: the source, the rows it made and the rows it could not.
-create function crm_link_imports_of(owner uuid)
-  returns table (id uuid, source text, item_ids uuid[], skipped jsonb, created_at timestamptz)
-  language sql
-  stable
-  security definer
-  set search_path = pg_catalog, pg_temp
-begin atomic
-  select i.id, i.source, i.item_ids, i.skipped, i.created_at
-  from auth.link_imports i
-  where i.user_id = crm_link_imports_of.owner
-  order by i.created_at desc, i.id
-  limit 20;
-end;
---> statement-breakpoint
 revoke all on function crm_import_profile_links(uuid, uuid, text, jsonb, jsonb) from public;
 --> statement-breakpoint
 grant execute on function crm_import_profile_links(uuid, uuid, text, jsonb, jsonb) to crm_app;
---> statement-breakpoint
-revoke all on function crm_link_imports_of(uuid) from public;
---> statement-breakpoint
-grant execute on function crm_link_imports_of(uuid) to crm_app;
+
 --> statement-breakpoint
 reset role;
 --> statement-breakpoint
@@ -125,9 +108,8 @@ begin
     or not (select p.prosecdef from pg_proc p
       where p.oid = 'public.crm_import_profile_links(uuid, uuid, text, jsonb, jsonb)'::regprocedure)
     or not has_function_privilege('crm_app', 'public.crm_import_profile_links(uuid, uuid, text, jsonb, jsonb)', 'EXECUTE')
-    or has_function_privilege('crm_identity', 'public.crm_import_profile_links(uuid, uuid, text, jsonb, jsonb)', 'EXECUTE')
-    or not has_function_privilege('crm_app', 'public.crm_link_imports_of(uuid)', 'EXECUTE') then
-    raise exception 'the link import functions are not granted as they must be';
+    or has_function_privilege('crm_identity', 'public.crm_import_profile_links(uuid, uuid, text, jsonb, jsonb)', 'EXECUTE') then
+    raise exception 'crm_import_profile_links must be crm_handle''s own definer, executable by crm_app alone';
   end if;
   -- The app reaches an import only through those two: never the table itself.
   if has_table_privilege('crm_app', 'auth.link_imports', 'SELECT')

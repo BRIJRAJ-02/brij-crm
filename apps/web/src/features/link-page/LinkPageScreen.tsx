@@ -180,9 +180,7 @@ function Blocks({
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [deleting, setDeleting] = useState<ProfileItem | undefined>(undefined);
   const [isDeleting, setIsDeleting] = useState(false);
-  // The import's own id, minted when the modal opens and kept while it is open, so a send that failed on the way
-  // back (the rows landed, the answer didn't) adds nothing twice when it is tried again (spec 0055, AC-5528).
-  const [importId, setImportId] = useState<string | undefined>(undefined);
+  const [isImporting, setImporting] = useState(false);
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
   // The look, shown the moment it is picked and saved behind it (AC-5421). A refusal puts back what was there and
@@ -421,13 +419,10 @@ function Blocks({
   const isFull = !ADDABLE.some(roomFor);
   const addButtons = (
     <>
-      {/* Bringing a page across (spec 0055, AC-5524): quiet beside the two adds, since most people never do it. */}
-      <Button
-        variant="ghost"
-        icon="download"
-        isDisabled={state.status !== 'ready' || isFull}
-        onPress={() => setImportId(linkPage.newId())}
-      >
+      {/* Bringing a page across (spec 0055, AC-5524). Secondary, as Button's README puts Import with the view
+          controls: it is the thing a new arrival most wants, and a third weight in a row of three buttons made
+          it the hardest to see. The order carries the hierarchy instead. */}
+      <Button icon="download" isDisabled={state.status !== 'ready' || isFull} onPress={() => setImporting(true)}>
         {strings.bringAcross}
       </Button>
       <Button
@@ -701,11 +696,12 @@ function Blocks({
           {deleting.kind === 'page' ? strings.removePageText : strings.deleteText}
         </Modal>
       )}
-      {importId !== undefined && (
+      {isImporting && (
         <ImportLinksModal
           isOpen
-          onClose={() => setImportId(undefined)}
-          onImport={(url) => linkPage.importLinks(slug, importId, url)}
+          newId={linkPage.newId}
+          onClose={() => setImporting(false)}
+          onImport={(id, url) => linkPage.importLinks(slug, id, url)}
         />
       )}
       <VisuallyHidden>

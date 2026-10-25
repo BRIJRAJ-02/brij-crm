@@ -47,9 +47,11 @@ const IMPORT_REFUSAL = 'We can only bring links across from a link in bio page.'
 const IMPORT_UNREAD = 'We couldn’t read that page. Check the address, and that the page is public.';
 /** Past the hourly limit. It names no number a person would have to count against. */
 const IMPORT_SPENT = 'You’ve brought across a few pages just now. Try again in a little while.';
-/** The imports one account may ask for in an hour (AC-5528), counted here as asks and in the definer as imports. */
-const IMPORTS_AN_HOUR = 5;
-const HOUR = 3600;
+/** The reads one account may ask for in half an hour (AC-5528), counted here as asks and in the definer as writes. */
+const IMPORTS_A_WINDOW = 3;
+const HALF_HOUR = 1800;
+/** The longest address `auth.link_imports.source` holds, which the encoded address must also fit. */
+const IMPORT_SOURCE_MAX = 400;
 /** A page of links is a few hundred kilobytes at most (AC-5525). */
 const IMPORT_MAX_BYTES = 1024 * 1024;
 
@@ -100,15 +102,21 @@ export const profileRouter = member.profile.router({
    *
    * The hourly limit is kept twice on purpose. The definer counts the imports an account made, which bounds what
    * is written; this counts the asks, which bounds what we fetch, since a refused parse or a page that never
-   * answers writes nothing and would otherwise cost nothing to repeat.
+   * answers writes nothing and would otherwise cost nothing to repeat. The two count differently: the definer's
+   * hour slides, this one's is fixed, so a burst across a boundary can fetch twice the window's number before
+   * the definer refuses the writes. Hence two half hour windows rather than one hour: the most an account can
+   * make us fetch is six in an hour rather than ten, and the writes are still bounded at five by the definer.
    */
   importLinks: member.profile.importLinks.handler(async ({ context, input }) => {
     if (!URL.canParse(input.url)) throw apiError('CONFIG_INVALID', IMPORT_REFUSAL);
     const source = new URL(input.url);
     if (!isImportableHost(source)) throw apiError('CONFIG_INVALID', IMPORT_REFUSAL);
+    // The address as the row will hold it: percent encoding grows what was typed, and a source past the column's
+    // length would otherwise fail the write with a constraint error after the page was already fetched.
+    if (source.href.length > IMPORT_SOURCE_MAX) throw apiError('CONFIG_INVALID', IMPORT_REFUSAL);
     const asked = await context.limiter.consumeRateLimit(`link-import:${context.user.id}`, {
-      window: HOUR,
-      max: IMPORTS_AN_HOUR,
+      window: HALF_HOUR,
+      max: IMPORTS_A_WINDOW,
     });
     if (!asked.allowed) throw apiError('LIMIT_REACHED', IMPORT_SPENT);
     const fetched = await context.outsideFetch(source, {

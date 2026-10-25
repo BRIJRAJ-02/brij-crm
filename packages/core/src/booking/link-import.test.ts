@@ -1,7 +1,7 @@
 // Reading somebody else's link in bio page (spec 0055, AC-5525 to AC-5528): what it keeps, what it lists with a
 // reason, and that nothing in a page it read can become anything but a title and an address.
 import { describe, expect, it } from 'vitest';
-import { isImportableHost, LINK_IMPORT_HOSTS, readImportedPage } from './link-import.ts';
+import { isImportableHost, LINK_IMPORT_HOSTS, LINK_IMPORT_SKIPPED_MAX, readImportedPage } from './link-import.ts';
 
 const SOURCE = new URL('https://linktr.ee/ada');
 
@@ -114,5 +114,44 @@ describe('readImportedPage', () => {
   it('reads a page whose markup is broken without throwing', () => {
     const { rows } = readImportedPage('<a href="https://example.com/">Open<div></a><a href=', SOURCE);
     expect(rows).toEqual([{ title: 'Open', url: 'https://example.com/' }]);
+  });
+  // What the database's own check refuses, refused here instead. Each of these is somebody else's markup, not
+  // something the person typed, so one of them aborting an import of forty rows with "that block can't be saved
+  // as it is" would be a refusal they could do nothing about (the security review, 25 October 2026).
+  describe('rows the editor itself could not have saved', () => {
+    it('leaves behind an address past the length a block may hold', () => {
+      const long = `https://example.com/${'a'.repeat(2200)}`;
+      const { rows, skipped } = readImportedPage(page(`<a href="${long}">Long</a>`), SOURCE);
+      expect(rows).toEqual([]);
+      expect(skipped[0]).toMatchObject({ reason: 'not-web', title: 'Long' });
+    });
+
+    it('leaves behind an address carrying a name and password', () => {
+      const { rows, skipped } = readImportedPage(page('<a href="https://u:p@shop.example/">Shop</a>'), SOURCE);
+      expect(rows).toEqual([]);
+      expect(skipped[0]).toMatchObject({ reason: 'not-web', title: 'Shop' });
+    });
+
+    it('takes a control character out of a title rather than refusing the row', () => {
+      const { rows } = readImportedPage(page('<a href="https://shop.example/">Sho&#1;p mine</a>'), SOURCE);
+      expect(rows).toEqual([{ title: 'Sho p mine', url: 'https://shop.example/' }]);
+    });
+
+    it('cuts a long title by its letters, so an emoji is never left half written', () => {
+      const emoji = '\u{1f600}'.repeat(80);
+      const { rows } = readImportedPage(page(`<a href="https://shop.example/">${emoji}</a>`), SOURCE);
+      const title = rows[0]?.title ?? '';
+      expect(Array.from(title)).toHaveLength(60);
+      // A lone surrogate would make this false, and Postgres refuses the jsonb it ends up in.
+      expect(title).toBe(title.toWellFormed());
+    });
+  });
+
+  it('lists at most a hundred rows it could not make, and cuts a long address on one', () => {
+    const many = Array.from({ length: 300 }, () => '<a>Nowhere</a>').join('');
+    const long = `<a href="https://example.com/${'b'.repeat(4000)}">Long</a>`;
+    const { skipped } = readImportedPage(page(long + many), SOURCE);
+    expect(skipped).toHaveLength(LINK_IMPORT_SKIPPED_MAX);
+    expect((skipped[0]?.url ?? '').length).toBe(2048);
   });
 });

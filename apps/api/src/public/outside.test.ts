@@ -21,11 +21,14 @@ const answers = (parts: { status?: number; type?: string; body?: string; locatio
 
 const lookupOf = (map: Record<string, readonly string[]>) => (host: string) => Promise.resolve(map[host] ?? PUBLIC);
 
+/** Every caller names the hosts it will read; a test that isn't about that rule says "any of them". */
+const anyHost = () => true;
+
 describe('createOutsideFetch', () => {
   it('reads a public https address, and says who we are', async () => {
     const { send, calls } = answers({ type: 'text/html' });
     const read = createOutsideFetch({ fetch: send, lookup: lookupOf({}) });
-    const got = await read(new URL('https://linktr.ee/ada'));
+    const got = await read(new URL('https://linktr.ee/ada'), { allow: anyHost });
     expect(got.ok).toBe(true);
     expect(calls[0]?.url).toBe('https://linktr.ee/ada');
     const headers = calls[0]?.init.headers as Record<string, string>;
@@ -43,7 +46,7 @@ describe('createOutsideFetch', () => {
   ])('never opens %s (%s), and asks nothing', async (href) => {
     const { send } = answers({});
     const read = createOutsideFetch({ fetch: send, lookup: lookupOf({}) });
-    const got = await read(new URL(href));
+    const got = await read(new URL(href), { allow: anyHost });
     expect(got).toEqual({ ok: false, reason: 'url' });
     expect(send).not.toHaveBeenCalled();
   });
@@ -51,7 +54,10 @@ describe('createOutsideFetch', () => {
   it('refuses a name that resolves inward, without opening it', async () => {
     const { send } = answers({});
     const read = createOutsideFetch({ fetch: send, lookup: lookupOf({ 'inside.example.com': ['10.0.0.5'] }) });
-    expect(await read(new URL('https://inside.example.com/'))).toEqual({ ok: false, reason: 'url' });
+    expect(await read(new URL('https://inside.example.com/'), { allow: anyHost })).toEqual({
+      ok: false,
+      reason: 'url',
+    });
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -61,56 +67,62 @@ describe('createOutsideFetch', () => {
       fetch: send,
       lookup: lookupOf({ 'both.example.com': ['93.184.216.34', '127.0.0.1'] }),
     });
-    expect(await read(new URL('https://both.example.com/'))).toEqual({ ok: false, reason: 'url' });
+    expect(await read(new URL('https://both.example.com/'), { allow: anyHost })).toEqual({ ok: false, reason: 'url' });
     expect(send).not.toHaveBeenCalled();
   });
 
   it('refuses a name that resolves to nothing', async () => {
     const { send } = answers({});
     const read = createOutsideFetch({ fetch: send, lookup: () => Promise.resolve([]) });
-    expect(await read(new URL('https://nowhere.example.com/'))).toEqual({ ok: false, reason: 'url' });
+    expect(await read(new URL('https://nowhere.example.com/'), { allow: anyHost })).toEqual({
+      ok: false,
+      reason: 'url',
+    });
   });
 
   it('checks a redirect before following it: inward is refused after the first hop', async () => {
     const { send } = answers({ status: 302, location: 'https://inside.example.com/' });
     const read = createOutsideFetch({ fetch: send, lookup: lookupOf({ 'inside.example.com': ['169.254.169.254'] }) });
-    expect(await read(new URL('https://linktr.ee/ada'))).toEqual({ ok: false, reason: 'redirect' });
+    expect(await read(new URL('https://linktr.ee/ada'), { allow: anyHost })).toEqual({ ok: false, reason: 'redirect' });
   });
 
   it('refuses a redirect to another scheme', async () => {
     const { send } = answers({ status: 301, location: 'http://linktr.ee/ada' });
     const read = createOutsideFetch({ fetch: send, lookup: lookupOf({}) });
-    expect(await read(new URL('https://linktr.ee/ada'))).toEqual({ ok: false, reason: 'redirect' });
+    expect(await read(new URL('https://linktr.ee/ada'), { allow: anyHost })).toEqual({ ok: false, reason: 'redirect' });
   });
 
   it('follows at most two redirects', async () => {
     const { send, calls } = answers({ status: 302, location: 'https://linktr.ee/again' });
     const read = createOutsideFetch({ fetch: send, lookup: lookupOf({}) });
-    expect(await read(new URL('https://linktr.ee/ada'))).toEqual({ ok: false, reason: 'redirect' });
+    expect(await read(new URL('https://linktr.ee/ada'), { allow: anyHost })).toEqual({ ok: false, reason: 'redirect' });
     expect(calls).toHaveLength(3);
   });
 
   it('refuses a body past the cap, by what it says and by what it sends', async () => {
     const declared = answers({ type: 'text/html', length: '999999' });
     const readDeclared = createOutsideFetch({ fetch: declared.send, lookup: lookupOf({}), maxBytes: 10 });
-    expect(await readDeclared(new URL('https://linktr.ee/ada'))).toEqual({ ok: false, reason: 'size' });
+    expect(await readDeclared(new URL('https://linktr.ee/ada'), { allow: anyHost })).toEqual({
+      ok: false,
+      reason: 'size',
+    });
 
     const sent = answers({ type: 'text/html', body: 'x'.repeat(500) });
     const readSent = createOutsideFetch({ fetch: sent.send, lookup: lookupOf({}), maxBytes: 10 });
-    expect(await readSent(new URL('https://linktr.ee/ada'))).toEqual({ ok: false, reason: 'size' });
+    expect(await readSent(new URL('https://linktr.ee/ada'), { allow: anyHost })).toEqual({ ok: false, reason: 'size' });
   });
 
   it('takes only the types the caller asked for', async () => {
     const { send } = answers({ type: 'image/svg+xml' });
     const read = createOutsideFetch({ fetch: send, lookup: lookupOf({}) });
-    const got = await read(new URL('https://linktr.ee/icon'), { accept: ['image/png'] });
+    const got = await read(new URL('https://linktr.ee/icon'), { accept: ['image/png'], allow: anyHost });
     expect(got).toEqual({ ok: false, reason: 'type' });
   });
 
   it('answers a status that is not 200 as a miss, never as a body', async () => {
     const { send } = answers({ status: 404 });
     const read = createOutsideFetch({ fetch: send, lookup: lookupOf({}) });
-    expect(await read(new URL('https://linktr.ee/ada'))).toEqual({ ok: false, reason: 'status' });
+    expect(await read(new URL('https://linktr.ee/ada'), { allow: anyHost })).toEqual({ ok: false, reason: 'status' });
   });
 
   it('obeys a caller’s own rule as well as its own, and asks nothing when it fails', async () => {
@@ -128,6 +140,6 @@ describe('createOutsideFetch', () => {
   it('answers a network failure as a miss rather than throwing', async () => {
     const send = (() => Promise.reject(new Error('refused'))) as unknown as typeof globalThis.fetch;
     const read = createOutsideFetch({ fetch: send, lookup: lookupOf({}) });
-    expect(await read(new URL('https://linktr.ee/ada'))).toEqual({ ok: false, reason: 'network' });
+    expect(await read(new URL('https://linktr.ee/ada'), { allow: anyHost })).toEqual({ ok: false, reason: 'network' });
   });
 });

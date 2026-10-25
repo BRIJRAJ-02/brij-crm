@@ -40,12 +40,16 @@ export interface OutsideOptions {
   readonly accept?: readonly string[];
   /** A smaller cap than `OUTSIDE_MAX_BYTES`. */
   readonly maxBytes?: number;
-  /** A further rule the address must pass, before and after every redirect: the import's host allow list. */
-  readonly allow?: (url: URL) => boolean;
+  /**
+   * Which hosts this caller will read, checked before the first connection and again after every redirect.
+   * Required, not optional: the argument that this module is safe rests on every caller narrowing to a list it
+   * named, and an optional rule is one the next caller forgets (the security review, 25 October 2026).
+   */
+  readonly allow: (url: URL) => boolean;
 }
 
 /** Reads one outside address under every bound above. Never throws. */
-export type OutsideFetch = (url: URL, options?: OutsideOptions) => Promise<Fetched>;
+export type OutsideFetch = (url: URL, options: OutsideOptions) => Promise<Fetched>;
 
 const REDIRECTS: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 
@@ -104,14 +108,14 @@ export function createOutsideFetch(
   const timeoutMs = options.timeoutMs ?? OUTSIDE_TIMEOUT_MS;
   const ceiling = options.maxBytes ?? OUTSIDE_MAX_BYTES;
 
-  const reachable = async (url: URL, allow: ((url: URL) => boolean) | undefined): Promise<boolean> => {
+  const reachable = async (url: URL, allow: (url: URL) => boolean): Promise<boolean> => {
     if (!isFetchableUrl(url)) return false;
-    if (allow !== undefined && !allow(url)) return false;
+    if (!allow(url)) return false;
     const addresses = await lookup(url.hostname).catch(() => []);
     return addresses.length > 0 && !addresses.some((address) => isRefusedAddress(address));
   };
 
-  return async (start, wanted = {}) => {
+  return async (start, wanted) => {
     const signal = AbortSignal.timeout(timeoutMs);
     const maxBytes = Math.min(wanted.maxBytes ?? ceiling, ceiling);
     const accept = wanted.accept ?? [];

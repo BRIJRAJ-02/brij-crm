@@ -4395,7 +4395,7 @@
       "checkConstraints": {
         "comment_reactions_emoji": {
           "name": "comment_reactions_emoji",
-          "value": "emoji in ('👍', '❤️', '🎉', '😄', '👀', '✅')"
+          "value": "emoji in ('\ud83d\udc4d', '\u2764\ufe0f', '\ud83c\udf89', '\ud83d\ude04', '\ud83d\udc40', '\u2705')"
         }
       },
       "isRLSEnabled": false
@@ -17900,6 +17900,10 @@
         "link_imports_items": {
           "name": "link_imports_items",
           "value": "array_length(\"auth\".\"link_imports\".\"item_ids\", 1) is null or array_length(\"auth\".\"link_imports\".\"item_ids\", 1) <= 40"
+        },
+        "link_imports_skipped": {
+          "name": "link_imports_skipped",
+          "value": "jsonb_typeof(\"auth\".\"link_imports\".\"skipped\") = 'array' and jsonb_array_length(\"auth\".\"link_imports\".\"skipped\") <= 100 and pg_column_size(\"auth\".\"link_imports\".\"skipped\") <= 65536"
         }
       },
       "isRLSEnabled": false

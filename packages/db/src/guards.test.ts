@@ -144,7 +144,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly thirty nine security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly thirty eight security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -179,7 +179,6 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
       { name: 'crm_join_requests_of', owner: 'crm_domain_lookup' },
-      { name: 'crm_link_imports_of', owner: 'crm_handle' },
       { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_operator_daily', owner: 'crm_operator' },
       { name: 'crm_operator_members', owner: 'crm_operator' },
@@ -252,7 +251,6 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_join_requests_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
-      { name: 'crm_link_imports_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_daily', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_members', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -460,7 +458,6 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_profile_indexable',
         // Bringing a link in bio page across (spec 0055, migration 0109).
         'crm_import_profile_links',
-        'crm_link_imports_of',
       ],
       [
         'crm_save_public_profile(uuid, text, text)',
@@ -485,9 +482,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_profile_theme(uuid, jsonb)',
         'crm_save_profile_indexable(uuid, boolean)',
         'crm_import_profile_links(uuid, uuid, text, jsonb, jsonb)',
-        'crm_link_imports_of(uuid)',
       ],
-      Array.from({ length: 23 }, () => 'app'),
+      Array.from({ length: 22 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -1987,8 +1983,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
-      // A link in bio page brought across (spec 0055, migration 0109): read to answer one, and insert to make
-      // one. Never update or delete, so an import once made is what it was.
+      // A link in bio page brought across (spec 0055, migration 0109): read to see whether this import was
+      // already made, and insert to make one. Never update or delete, so an import once made is what it was.
       'link_imports INSERT',
       'link_imports SELECT',
       // The link page's blocks (migration 0098), through crm_handle's functions only.

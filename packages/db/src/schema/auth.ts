@@ -487,8 +487,8 @@ export const profileItemPresses = auth.table(
  * and reviewable: `itemIds` holds the rows it made in the order the page had them, and `skipped` the rows it
  * could not map, each with whatever it had and why, so nothing is dropped without being shown.
  *
- * Reached only through `crm_import_profile_links` and `crm_link_imports_of` (migration 0109), both owned by
- * `crm_handle`: the app role has no privilege on this table at all.
+ * Reached only through `crm_import_profile_links` (migration 0109), owned by `crm_handle`: the app role has no
+ * privilege on this table at all.
  */
 export const linkImports = auth.table(
   'link_imports',
@@ -511,6 +511,12 @@ export const linkImports = auth.table(
     index('link_imports_recent').on(t.userId, t.createdAt.desc()),
     check('link_imports_source', sql`char_length(${t.source}) <= 400`),
     check('link_imports_items', sql`array_length(${t.itemIds}, 1) is null or array_length(${t.itemIds}, 1) <= 40`),
+    // Bounded where it lands as well as where it is made: a page of bare anchors has thousands of rows we can't
+    // make, and this row is kept and sent back (the security review, 25 October 2026).
+    check(
+      'link_imports_skipped',
+      sql`jsonb_typeof(${t.skipped}) = 'array' and jsonb_array_length(${t.skipped}) <= 100 and pg_column_size(${t.skipped}) <= 65536`,
+    ),
   ],
 );
 

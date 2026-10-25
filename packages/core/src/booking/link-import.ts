@@ -5,7 +5,7 @@
 // It reads anchors and nothing else. No script is run, no attribute but `href` is read, and the text of a row is
 // the words inside its anchor with every tag stripped. A page that changes its markup tomorrow loses rows rather
 // than importing wrong ones, which is the right way round: every row lands hidden and a person decides.
-import { PROFILE_TITLE_MAX } from '@crm/contracts';
+import { checkProfileLink, PROFILE_TITLE_MAX } from '@crm/contracts';
 
 /** The link in bio services a page may be brought across from (AC-5524). Nothing else is ever fetched. */
 export const LINK_IMPORT_HOSTS: readonly string[] = [
@@ -20,6 +20,15 @@ export const LINK_IMPORT_HOSTS: readonly string[] = [
 
 /** The most rows one import brings (AC-5528). */
 export const LINK_IMPORT_MAX = 40;
+
+/**
+ * The most rows one import lists as skipped. A page of bare anchors has thousands, and every one of them would be
+ * stored and sent back; a person reading the list needs enough to recognise what was left behind, not all of it.
+ */
+export const LINK_IMPORT_SKIPPED_MAX = 100;
+
+/** The longest address kept on a skipped row, which is the contract's own cap on that field. */
+const SKIPPED_URL_MAX = 2048;
 
 /** Whether `url` is a page we will read: one of the seven, or a subdomain of one, and nothing else. */
 export function isImportableHost(url: URL): boolean {
@@ -84,10 +93,19 @@ function decodeEntities(text: string): string {
 function titleOf(inner: string): string {
   const withoutCode = inner.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ');
   const plain = decodeEntities(withoutCode.replace(/<[^>]*>/g, ' '))
+    // A control character becomes a space before the whitespace is collapsed: `&#1;` is not whitespace, so it
+    // would survive, and the database's check refuses a title that carries one. A page that writes them is
+    // somebody else's, so the import would fail on markup the person never typed.
+    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   const max = PROFILE_TITLE_MAX.link;
-  return plain.length > max ? plain.slice(0, max).trimEnd() : plain;
+  // By code point, not by UTF-16 unit: an emoji in a link's title is ordinary on these pages, and cutting one in
+  // half leaves a lone surrogate that Postgres refuses outright (22P05) rather than a title that is a little
+  // short. Code points rather than grapheme clusters because that is what the database counts (`char_length`),
+  // so a cluster-wise cut could still be over the limit.
+  const letters = Array.from(plain);
+  return letters.length > max ? letters.slice(0, max).join('').trimEnd() : plain;
 }
 
 /** Every anchor in the page, in the order it appears, as its `href` and the words inside it. */
@@ -117,38 +135,55 @@ export function readImportedPage(html: string, source: URL, max: number = LINK_I
   const rows: ImportedRow[] = [];
   const skipped: SkippedRow[] = [];
   const seen = new Set<string>();
+  // Kept with whatever it had, bounded: the contract caps a skipped row's address, and a page of bare anchors has
+  // thousands of them, every one of which would otherwise be stored and sent back.
+  const leaveBehind = (row: SkippedRow) => {
+    if (skipped.length >= LINK_IMPORT_SKIPPED_MAX) return;
+    const cut = row.url === undefined ? undefined : row.url.slice(0, SKIPPED_URL_MAX);
+    skipped.push({ ...row, ...(cut === undefined ? {} : { url: cut }) });
+  };
   for (const { href, inner } of anchorsOf(html)) {
     const title = titleOf(inner);
+    const named = title === '' ? {} : { title };
     if (href === undefined || href.trim() === '') {
-      skipped.push({ reason: 'no-address', ...(title === '' ? {} : { title }) });
+      leaveBehind({ reason: 'no-address', ...named });
       continue;
     }
     if (!URL.canParse(href, source.href)) {
-      skipped.push({ reason: 'not-web', url: href, ...(title === '' ? {} : { title }) });
+      leaveBehind({ reason: 'not-web', url: href, ...named });
       continue;
     }
     const url = new URL(href, source);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-      skipped.push({ reason: 'not-web', url: url.href, ...(title === '' ? {} : { title }) });
+      leaveBehind({ reason: 'not-web', url: url.href, ...named });
       continue;
     }
     if (url.hostname.toLowerCase() === source.hostname.toLowerCase()) {
-      skipped.push({ reason: 'the-page-itself', url: url.href, ...(title === '' ? {} : { title }) });
+      leaveBehind({ reason: 'the-page-itself', url: url.href, ...named });
       continue;
     }
-    const key = url.href;
+    // The editor's own rule, so an imported address is one the editor could have saved and the database's check
+    // will take: too long, userinfo in the authority, a control character. Without this one such anchor — which
+    // is somebody else's page, not something the person typed — refuses the whole import with a sentence about
+    // "that block" that they cannot act on.
+    const checked = checkProfileLink(url.href);
+    if (!checked.ok) {
+      leaveBehind({ reason: 'not-web', url: url.href, ...named });
+      continue;
+    }
+    const key = checked.url;
     if (seen.has(key)) {
-      skipped.push({ reason: 'repeated', url: key, ...(title === '' ? {} : { title }) });
+      leaveBehind({ reason: 'repeated', url: key, ...named });
       continue;
     }
     seen.add(key);
     if (title === '') {
       // An icon only row: we know where it goes and not what to call it, so it is shown rather than guessed at.
-      skipped.push({ reason: 'no-title', url: key });
+      leaveBehind({ reason: 'no-title', url: key });
       continue;
     }
     if (rows.length >= max) {
-      skipped.push({ reason: 'past-limit', title, url: key });
+      leaveBehind({ reason: 'past-limit', title, url: key });
       continue;
     }
     rows.push({ title, url: key });
