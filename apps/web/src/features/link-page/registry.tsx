@@ -111,7 +111,9 @@ export const BLOCK_KINDS: Readonly<Record<ProfileBlockKind, BlockKind>> = {
 };
 
 /** The Add menu's kinds, in order. */
-export const ADDABLE: readonly ProfileBlockKind[] = ['page', 'link', 'contact', 'heading'];
+// The order the picker draws them in, from the owner's Add item board: the commonest first, the section last,
+// and the one Add item opens on.
+export const ADDABLE: readonly ProfileBlockKind[] = ['link', 'page', 'contact', 'heading'];
 
 /** A booking page's lengths and kind, said once: "30 min · 60 min · Team". */
 export function pageFacts(page: { readonly durations: readonly number[]; readonly isTeam: boolean }): string {

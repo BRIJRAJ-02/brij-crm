@@ -345,13 +345,29 @@ function Blocks({
 
   // The owner's design adds every kind in one modal: the picker chooses the kind, the fields follow it, and the
   // kind swaps in place rather than closing one dialog to open another. An edit opens its kind's editor alone.
-  const openAdd = (kind: ProfileBlockKind) => setEditing({ kind, id: linkPage.newId() });
+  // A button opens the modal on the kind it names, unless that kind is full: then it opens on the first kind that
+  // isn't, so the picker never opens on a choice that can't be taken. Every kind full disables the button.
+  const roomFor = (kind: ProfileBlockKind) => linkPage.limit(items, kind) === undefined;
+  const openAdd = (kind: ProfileBlockKind) => {
+    const open = roomFor(kind) ? kind : ADDABLE.find(roomFor);
+    if (open !== undefined) setEditing({ kind: open, id: linkPage.newId() });
+  };
+  const isFull = !ADDABLE.some(roomFor);
   const addButtons = (
     <>
-      <Button icon="list-plus" isDisabled={state.status !== 'ready'} onPress={() => openAdd('heading')}>
+      <Button
+        icon="list-plus"
+        isDisabled={state.status !== 'ready' || !roomFor('heading')}
+        onPress={() => openAdd('heading')}
+      >
         {strings.newSection}
       </Button>
-      <Button variant="primary" icon="plus" isDisabled={state.status !== 'ready'} onPress={() => openAdd('link')}>
+      <Button
+        variant="primary"
+        icon="plus"
+        isDisabled={state.status !== 'ready' || isFull}
+        onPress={() => openAdd('link')}
+      >
         {strings.addItem}
       </Button>
     </>
@@ -363,7 +379,10 @@ function Blocks({
         variant="cards"
         value={editing.kind}
         // The id is minted once and kept as the kind changes, so the save that follows is still the one add.
-        onChange={(kind) => setEditing({ kind: kind as ProfileBlockKind, id: editing.id })}
+        onChange={(chosen) => {
+          const kind = ADDABLE.find((each) => each === chosen);
+          if (kind !== undefined) setEditing({ kind, id: editing.id });
+        }}
       >
         {ADDABLE.map((kind) => {
           const entry = BLOCK_KINDS[kind];

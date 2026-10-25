@@ -23,7 +23,7 @@ const page = (status: 'live' | 'paused'): ProfileItem => ({
 
 describe('the block registry', () => {
   it('offers every kind it has an editor for, in the Add menu’s order', () => {
-    expect(ADDABLE).toEqual(['page', 'link', 'contact', 'heading']);
+    expect(ADDABLE).toEqual(['link', 'page', 'contact', 'heading']);
     expect(ADDABLE.every((kind) => BLOCK_KINDS[kind].label !== '')).toBe(true);
   });
 
