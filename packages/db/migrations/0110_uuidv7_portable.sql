@@ -25,8 +25,16 @@ revoke all on function public.uuidv7() from public;
 grant execute on function public.uuidv7() to crm_app, crm_identity, crm_worker, crm_handle;
 --> statement-breakpoint
 -- Replaced, not dropped: `create or replace` keeps the grants 0098 wrote. The body is 0098's, with the one call
--- changed. Its owner and search_path are re-asserted below, as `create or replace` leaves them alone only when the
--- replacing role already owns it.
+-- changed. `crm_handle` owns it, and the migrating role is a member with `inherit false`, so only becoming that
+-- role may replace it: as the owner it is refused 42501, which is what CI caught.
+grant crm_handle to current_user with inherit false, set true;
+--> statement-breakpoint
+-- As 0098 did when it made the function: crm_handle may create in schema public only while it is replacing its
+-- own function, and the right is taken back below.
+grant create on schema public to crm_handle;
+--> statement-breakpoint
+set role crm_handle;
+--> statement-breakpoint
 create or replace function crm_place_profile_page(owner uuid, workspace uuid, page uuid)
   returns void
   language plpgsql
@@ -48,13 +56,14 @@ begin
 end;
 $$;
 --> statement-breakpoint
-grant crm_handle to current_user with inherit false, set true;
---> statement-breakpoint
-alter function crm_place_profile_page(uuid, uuid, uuid) owner to crm_handle;
---> statement-breakpoint
+-- Still as crm_handle, which owns the function: only its owner may say who runs it.
 revoke all on function crm_place_profile_page(uuid, uuid, uuid) from public;
 --> statement-breakpoint
 grant execute on function crm_place_profile_page(uuid, uuid, uuid) to crm_app;
+--> statement-breakpoint
+reset role;
+--> statement-breakpoint
+revoke create on schema public from crm_handle;
 --> statement-breakpoint
 -- The closing check: the name resolves on this server, and the function no longer names a schema that only one
 -- Postgres version has.
