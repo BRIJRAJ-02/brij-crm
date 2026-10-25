@@ -188,6 +188,33 @@ export const TableFirst: Story = {
   },
 };
 
+/** A quiet line in the footer, before its buttons: what the actions would otherwise have had to say. */
+export const FooterNote: Story = {
+  render: (args) => (
+    <Card
+      {...args}
+      title="Your link page"
+      footerNote="Booking pages from another workspace keep their own section. Nobody visiting the page sees which workspace a page came from."
+      footer={
+        <>
+          <Button icon="list-plus">New section</Button>
+          <Button variant="primary" icon="plus">
+            Add item
+          </Button>
+        </>
+      }
+    >
+      <p>Four blocks, in two sections.</p>
+    </Card>
+  ),
+  play: async ({ canvas }) => {
+    // The line reads before the buttons and leaves them their room.
+    const note = canvas.getByText(/another workspace/).getBoundingClientRect();
+    const add = canvas.getByRole('button', { name: 'Add item' }).getBoundingClientRect();
+    await expect(note.right).toBeLessThanOrEqual(Math.round(add.left) + 1);
+  },
+};
+
 /** A footer of a few actions in a phone's width: they wrap onto a second line at the end rather than run off. */
 export const FooterWraps: Story = {
   parameters: { crm: { screenshot: false } },

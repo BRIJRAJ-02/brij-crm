@@ -488,6 +488,8 @@ function Blocks({
               : strings.blocksText
         }
         footer={addButtons}
+        // Only where it is needed: with pages from one workspace there is nothing to explain.
+        {...(namesWorkspace ? { footerNote: strings.workspacesNote } : {})}
       >
         {list}
       </Card>

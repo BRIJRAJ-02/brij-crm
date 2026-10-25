@@ -122,9 +122,22 @@
     padding-block-start: 0;
   }
 
+  /* The footer's quiet line: it takes the room the buttons leave and wraps rather than pushing them, and on its
+     own line (a narrow card) it reads before them. */
+  .footNote {
+    flex: 1 1 var(--size-measure);
+    margin: 0;
+    min-inline-size: 0;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-align: start;
+  }
+
   .foot {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     justify-content: flex-end;
     gap: var(--space-8);
     padding-block: var(--space-8);

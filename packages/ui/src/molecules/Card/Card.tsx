@@ -21,6 +21,12 @@ interface CardBase {
   /** A footer under a hairline: a settings card's Save, a tile's link. */
   readonly footer?: ReactNode;
   /**
+   * A quiet line at the start of the footer, before its buttons, saying something about the list above that the
+   * buttons would otherwise have to carry (the link page's "Booking pages from another workspace keep their own
+   * section"). It takes the room the buttons leave and wraps rather than pushing them. Needs `footer`.
+   */
+  readonly footerNote?: ReactNode;
+  /**
    * `default` on the raised surface; `sunken` for a quieter group inside a
    * page; `bare` with no frame at all (no hairline, corners, shadow or
    * surface), for a page card that a full screen layout already frames
@@ -69,6 +75,7 @@ export function Card({
   children,
   actions,
   footer,
+  footerNote,
   tone = 'default',
   placement = 'inline',
   size,
@@ -109,7 +116,12 @@ export function Card({
           <PageEdge value={false}>{children}</PageEdge>
         </div>
       )}
-      {footer !== undefined && <footer className={styles.foot}>{footer}</footer>}
+      {footer !== undefined && (
+        <footer className={styles.foot}>
+          {footerNote !== undefined && <p className={styles.footNote}>{footerNote}</p>}
+          {footer}
+        </footer>
+      )}
     </>
   );
   return (

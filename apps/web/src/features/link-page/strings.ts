@@ -32,6 +32,10 @@ export const strings = {
   addItem: 'Add item',
   addHint: 'It goes to the end of the section. Drag it anywhere afterwards.',
   newSection: 'New section',
+  // Shown only when the person's booking pages come from more than one workspace, which is when the grouping
+  // needs explaining and the privacy question comes up.
+  workspacesNote:
+    'Booking pages from another workspace keep their own section. Nobody visiting the page sees which workspace a page came from.',
   addLink: 'Link',
   addLinkText: 'A website, a profile, an email or a phone number',
   addPage: 'Booking page',
