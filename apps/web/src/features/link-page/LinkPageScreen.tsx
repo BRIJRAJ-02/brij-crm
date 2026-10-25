@@ -5,15 +5,7 @@
 // once, on the list and in the phone, and is saved as it is made.
 // Leaves out: the contact card, the QR, the socials row (they come in later phases), themes and appearance, and the
 // handle itself (Settings › Profile).
-import type {
-  BlockDraft,
-  LinkPageStore,
-  MyProfile,
-  ProfileBlock,
-  ProfileBlockKind,
-  ProfileItem,
-  ProfilePageFacts,
-} from '@crm/data';
+import type { BlockDraft, LinkPageStore, MyProfile, ProfileBlock, ProfileBlockKind, ProfileItem } from '@crm/data';
 import {
   Button,
   ButtonLink,
@@ -44,7 +36,16 @@ import { useMemo, useState } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
-import { ADDABLE, BLOCK_KINDS, contactHref, figuresLine, pressesChip, previewBlock, rowWords } from './registry.tsx';
+import {
+  ADDABLE,
+  BLOCK_KINDS,
+  contactHref,
+  figuresLine,
+  pressesChip,
+  previewBlock,
+  rowWords,
+  type ChosenFacts,
+} from './registry.tsx';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 import { strings } from './strings.ts';
 
@@ -70,15 +71,17 @@ function nextHue(items: readonly ProfileItem[]) {
 }
 
 /** The block as the list shows it before the server answers: the checked block, as the server will store it. */
-function shownItem(
-  id: string,
-  block: ProfileBlock,
-  was: ProfileItem | undefined,
-  page?: ProfilePageFacts,
-): ProfileItem {
+function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined, facts?: ChosenFacts): ProfileItem {
   const updatedAt = new Date().toISOString();
   if (block.kind === 'heading') return { kind: 'heading', id, title: block.title, updatedAt };
-  if (block.kind === 'page') return { ...block, id, ...(page === undefined ? {} : { page }), updatedAt };
+  if (block.kind === 'page') {
+    const page = facts !== undefined && 'page' in facts ? facts.page : undefined;
+    return { ...block, id, ...(page === undefined ? {} : { page }), updatedAt };
+  }
+  if (block.kind === 'form') {
+    const form = facts !== undefined && 'form' in facts ? facts.form : undefined;
+    return { ...block, id, ...(form === undefined ? {} : { form }), updatedAt };
+  }
   if (block.kind === 'contact') return { ...block, id, updatedAt };
   if (block.kind === 'text' || block.kind === 'faq') return { ...block, id, updatedAt };
   return { ...block, id, hue: block.hue ?? (was?.kind === 'link' ? was.hue : 'blue'), updatedAt };
@@ -240,7 +243,7 @@ function Blocks({
     }
     return undefined;
   };
-  const submit = (draft: BlockDraft, page?: ProfilePageFacts) => {
+  const submit = (draft: BlockDraft, facts?: ChosenFacts) => {
     const was = editing?.item;
     setEditing(undefined);
     const withHue: BlockDraft =
@@ -248,7 +251,7 @@ function Blocks({
     const checked = linkPage.check(withHue, items, was?.id);
     if (!checked.ok) return;
     const id = was?.id ?? editing?.id ?? linkPage.newId();
-    void linkPage.save(slug, id, checked.block, shownItem(id, checked.block, was, page));
+    void linkPage.save(slug, id, checked.block, shownItem(id, checked.block, was, facts));
   };
 
   const rowMenu = (item: ProfileItem, index: number) => {

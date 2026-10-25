@@ -174,6 +174,21 @@ export const ProfileFaqBlock = z.object({
 /** A FAQ block. */
 export type ProfileFaqBlock = z.infer<typeof ProfileFaqBlock>;
 
+/**
+ * One of the person's own hosted forms (spec 0052, AC-5213), by its workspace and its id, with the words its row
+ * shows. The label is the owner's own, filled by the editor with the form's name: the form's internal name and the
+ * headline on its page both stay out of the public answer, so a block tells a visitor nothing the form itself
+ * wouldn't.
+ */
+export const ProfileFormBlock = z.object({
+  kind: z.literal('form'),
+  workspaceId: Uuid,
+  formId: Uuid,
+  label: oneLine(1, PROFILE_TITLE_MAX.form, 'Give the form a label.', 'Keep the label to 60 characters.'),
+});
+/** A form block. */
+export type ProfileFormBlock = z.infer<typeof ProfileFormBlock>;
+
 /** One block's fields, by kind: what every write is checked against before it is stored. */
 export const ProfileBlock = z.discriminatedUnion('kind', [
   ProfileLinkBlock,
@@ -182,6 +197,7 @@ export const ProfileBlock = z.discriminatedUnion('kind', [
   ProfileContactBlock,
   ProfileTextBlock,
   ProfileFaqBlock,
+  ProfileFormBlock,
 ]);
 /** One block's fields. */
 export type ProfileBlock = z.infer<typeof ProfileBlock>;
@@ -205,6 +221,25 @@ export const ProfilePageFacts = z.object({
 /** What the editor knows of a booking page block's page. */
 export type ProfilePageFacts = z.infer<typeof ProfilePageFacts>;
 
+/**
+ * What the editor knows of a form block's form: enough to say whether a visitor sees it, and where it goes. A form
+ * the owner archived, or whose workspace they left, has no facts at all, exactly as a booking page does.
+ */
+export const ProfileFormFacts = z.object({
+  /** The form's own name, as its workspace lists it: the editor's, never the public page's. */
+  name: z.string(),
+  /** Its public address after `/f/`. */
+  key: z.string(),
+  /** The workspace it is from, named beside it when a person has several. */
+  workspaceName: z.string(),
+  /** That workspace's address, for the editor's link to the form. */
+  workspaceSlug: z.string(),
+  /** `live`: a visitor may open it; `paused`: the block stays and comes back when the form is published again. */
+  status: z.enum(['live', 'paused']),
+});
+/** What the editor knows of a form block's form. */
+export type ProfileFormFacts = z.infer<typeof ProfileFormFacts>;
+
 /** What every stored block carries besides its fields. */
 const Stored = {
   id: Uuid,
@@ -221,6 +256,7 @@ export const ProfileItem = z.discriminatedUnion('kind', [
   ProfileContactBlock.extend(Stored),
   ProfileTextBlock.extend(Stored),
   ProfileFaqBlock.extend(Stored),
+  ProfileFormBlock.extend({ ...Stored, form: ProfileFormFacts.optional() }),
 ]);
 /** One block as the editor reads it. */
 export type ProfileItem = z.infer<typeof ProfileItem>;
@@ -232,6 +268,15 @@ export const ProfileItems = z.object({
 });
 /** The editor's read. */
 export type ProfileItems = z.infer<typeof ProfileItems>;
+
+/** A form the person may place on their link page, from any of their workspaces (spec 0052, AC-5213). */
+export const ProfileFormChoice = z.object({
+  workspaceId: Uuid,
+  formId: Uuid,
+  facts: ProfileFormFacts,
+});
+/** A form the person may place. */
+export type ProfileFormChoice = z.infer<typeof ProfileFormChoice>;
 
 /** A booking page the person may place on their link page, from any of their workspaces (AC-5117). */
 export const ProfilePageChoice = z.object({
@@ -286,6 +331,11 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
     title: z.string().optional(),
     items: z.array(ProfileFaqItem).min(1),
   }),
+  /**
+   * A Timefix form: the owner's own words and the form's address on our own origin (AC-5215, AC-5226). No workspace
+   * id, no form id, no question and no count: the same rule a booking page block follows.
+   */
+  z.object({ kind: z.literal('form'), id: Uuid, title: z.string().min(1), key: z.string().min(1) }),
 ]);
 /** One block as a visitor reads it. */
 export type PublicProfileItem = z.infer<typeof PublicProfileItem>;

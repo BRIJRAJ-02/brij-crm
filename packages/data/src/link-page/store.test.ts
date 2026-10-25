@@ -58,6 +58,7 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
     // The figures answer at once and are left out of `calls`: the order of the writes is what these tests read.
     counts: () => Promise.resolve(COUNTS),
     pageChoices: () => wait('pageChoices'),
+    formChoices: () => wait('formChoices'),
     saveItem: (input) => {
       for (const listen of saveListeners) listen(input);
       return wait(`save:${input.id}`);

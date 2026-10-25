@@ -426,6 +426,8 @@ export type {
   ProfileBlockKind,
   ProfileItem,
   ProfileLinkIcon,
+  ProfileFormChoice,
+  ProfileFormFacts,
   ProfilePageChoice,
   ProfilePageFacts,
   PublicProfileItem,

@@ -45,7 +45,7 @@ import type {
   PublicSlotsQuery,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import type { BookingEntry, HandleOwner, LinkPageRow, OwnedPageEntry } from '../access/door.ts';
+import type { BookingEntry, HandleOwner, LinkPageRow, OwnedFormEntry, OwnedPageEntry } from '../access/door.ts';
 import { pagePath } from './handles.ts';
 import { servedPicture, type AccountPicture, type AccountPictureReader } from './picture.ts';
 import { isPictureHidden } from './picture-choice.ts';
@@ -98,6 +98,15 @@ export interface PublicBookingDeps {
 }
 
 /** Refuses an entry the door didn't make for this page. */
+/** The same, for a form entry: the door's own `form` principal, naming that form and nothing else. */
+function checkFormEntry(entry: OwnedFormEntry): void {
+  checkScope(entry.scope);
+  const { principal } = entry.scope.access;
+  if (principal.kind !== 'form' || principal.formId !== entry.formId) {
+    throw new Error('Refused a form entry the door did not make.');
+  }
+}
+
 function checkEntry(entry: BookingEntry): void {
   checkScope(entry.scope);
   const { principal } = entry.scope.access;
@@ -340,16 +349,22 @@ function matches(item: PublicProfileItem, words: string): boolean {
   const said =
     item.kind === 'contact'
       ? [item.fullName, item.jobTitle ?? '', item.company ?? '']
-      : item.kind === 'text'
-        ? [item.title ?? '']
-        : item.kind === 'faq'
-          ? [item.title ?? '', ...item.items.map((asked) => asked.question)]
-          : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
+      : item.kind === 'form'
+        ? [item.title]
+        : item.kind === 'text'
+          ? [item.title ?? '']
+          : item.kind === 'faq'
+            ? [item.title ?? '', ...item.items.map((asked) => asked.question)]
+            : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
   return said.some((text) => text.toLowerCase().includes(words));
 }
 
 /** A stored block as a visitor reads it, or undefined: a kind this build doesn't draw, or a page they can't see. */
-function publicItemOf(row: LinkPageRow, pages: ReadonlyMap<string, PageRow>): PublicProfileItem | undefined {
+function publicItemOf(
+  row: LinkPageRow,
+  pages: ReadonlyMap<string, PageRow>,
+  forms: ReadonlyMap<string, string>,
+): PublicProfileItem | undefined {
   const data: Readonly<Record<string, unknown>> =
     typeof row.data === 'object' && row.data !== null ? (row.data as Readonly<Record<string, unknown>>) : {};
   let candidate: unknown;
@@ -393,6 +408,13 @@ function publicItemOf(row: LinkPageRow, pages: ReadonlyMap<string, PageRow>): Pu
       items: asked.data.items,
       ...(asked.data.title === undefined ? {} : { title: asked.data.title }),
     };
+  } else if (row.kind === 'form') {
+    // The address the door read, and the words the owner typed. The form's own name and headline stay behind
+    // (AC-5226): a block tells a visitor nothing the form's page wouldn't.
+    const key = row.form_id === null ? undefined : forms.get(row.form_id);
+    const label = typeof data.label === 'string' ? data.label.trim() : '';
+    if (key === undefined || label === '') return undefined;
+    candidate = { kind: 'form', id: row.id, title: label, key };
   } else if (row.kind === 'page') {
     const page = row.page_id === null ? undefined : pages.get(row.page_id);
     if (page === undefined) return undefined;
@@ -429,10 +451,12 @@ export async function readLinkPage(
     readonly owner: HandleOwner;
     readonly rows: readonly LinkPageRow[];
     readonly pages: readonly OwnedPageEntry[];
+    readonly forms: readonly OwnedFormEntry[];
   },
   query: { readonly search?: string } = {},
 ): Promise<PublicProfile> {
   for (const entry of found.pages) checkEntry(entry);
+  for (const entry of found.forms) checkFormEntry(entry);
   const words = query.search?.trim().toLowerCase().slice(0, 120) ?? '';
   const listed = words === '' ? found.rows.slice(0, PROFILE_PAGE_SIZE) : found.rows;
   const wanted = new Set(listed.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : [])));
@@ -482,11 +506,17 @@ export async function readLinkPage(
       }
     });
   }
-  // A page block whose page sits in another workspace than it names is never shown.
+  // A page block whose page sits in another workspace than it names is never shown; nor a form block's form. The
+  // door answered only forms a visitor may open now, so a paused one simply isn't in this map and its block waits.
   const where = new Map(found.pages.map((entry) => [entry.pageId, entry.scope.workspaceId]));
+  const formWorkspaces = new Map(found.forms.map((entry) => [entry.formId, entry.scope.workspaceId]));
+  const formKeys = new Map(found.forms.map((entry) => [entry.formId, entry.key]));
   const items = listed.flatMap((row) => {
     if (row.kind === 'page' && (row.page_id === null || where.get(row.page_id) !== row.workspace_id)) return [];
-    const item = publicItemOf(row, pages);
+    if (row.kind === 'form' && (row.form_id === null || formWorkspaces.get(row.form_id) !== row.workspace_id)) {
+      return [];
+    }
+    const item = publicItemOf(row, pages, formKeys);
     if (item === undefined) return [];
     if (words !== '' && (item.kind === 'heading' || !matches(item, words))) return [];
     return [item];

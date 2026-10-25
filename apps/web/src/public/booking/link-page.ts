@@ -29,6 +29,9 @@ export function blocksOf(handle: string, items: readonly PublicProfileItem[]): r
         return [
           { kind: 'text', id: item.id, body: item.body, ...(item.title === undefined ? {} : { title: item.title }) },
         ];
+      case 'form':
+        // Our own origin, in the same tab: an ordinary navigation, no frame and no new policy (AC-5215).
+        return [{ kind: 'form', id: item.id, title: item.title, href: `/f/${encodeURIComponent(item.key)}` }];
       case 'faq':
         return [
           {

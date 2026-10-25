@@ -3,7 +3,14 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { BIO_MAX, handleProblem } from './booking/handles.ts';
-import { ProfileBlock, ProfileCounts, ProfileItem, ProfileItems, ProfilePageChoice } from './booking/link-page.ts';
+import {
+  ProfileBlock,
+  ProfileCounts,
+  ProfileFormChoice,
+  ProfileItem,
+  ProfileItems,
+  ProfilePageChoice,
+} from './booking/link-page.ts';
 import { TimeZoneName } from './booking/settings.ts';
 import { Uuid } from './values/ids.ts';
 import { checkSocialLink, socialLinkProblem } from './values/social.ts';
@@ -188,6 +195,8 @@ export const profileContract = {
   update: oc.input(UpdateMyProfileInput).output(MyProfile),
   items: oc.input(WorkspaceScoped).output(ProfileItems),
   pageChoices: oc.input(WorkspaceScoped).output(z.array(ProfilePageChoice)),
+  /** The forms the caller may place on their link page (spec 0052, AC-5213), their own and not placed yet. */
+  formChoices: oc.input(WorkspaceScoped).output(z.array(ProfileFormChoice)),
   saveItem: oc.input(SaveProfileItemInput).output(ProfileItem),
   orderItems: oc.input(OrderProfileItemsInput).output(ProfileItems),
   archiveItem: oc.input(ArchiveProfileItemInput).output(ProfileItems),

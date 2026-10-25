@@ -4,12 +4,21 @@
 import { HUES } from '../values/hue-list.ts';
 
 /** The kinds this build draws. A read that meets any other kind skips it. */
-export const PROFILE_BLOCK_KINDS = ['link', 'page', 'heading', 'contact', 'text', 'faq'] as const;
+export const PROFILE_BLOCK_KINDS = ['link', 'page', 'heading', 'contact', 'text', 'faq', 'form'] as const;
 /** One of the kinds this build draws. */
 export type ProfileBlockKind = (typeof PROFILE_BLOCK_KINDS)[number];
 
 /** How many blocks of each kind one link page holds, and in all (AC-5102). */
-export const PROFILE_LIMITS = { items: 60, link: 40, heading: 12, page: 60, contact: 1, text: 5, faq: 2 } as const;
+export const PROFILE_LIMITS = {
+  items: 60,
+  link: 40,
+  heading: 12,
+  page: 60,
+  contact: 1,
+  text: 5,
+  faq: 2,
+  form: 3,
+} as const;
 
 /** The sentence a full kind is refused and disabled with (AC-5102), the server's and the editor's alike. */
 export function profileLimitSentence(kind: ProfileBlockKind | 'items'): string {
@@ -19,6 +28,7 @@ export function profileLimitSentence(kind: ProfileBlockKind | 'items'): string {
   if (kind === 'contact') return 'A link page holds one contact card.';
   if (kind === 'text') return `A link page holds up to ${String(PROFILE_LIMITS.text)} pieces of writing.`;
   if (kind === 'faq') return `A link page holds up to ${String(PROFILE_LIMITS.faq)} sets of questions.`;
+  if (kind === 'form') return `A link page holds up to ${String(PROFILE_LIMITS.form)} forms.`;
   return `A link page holds up to ${String(PROFILE_LIMITS.page)} booking pages.`;
 }
 
@@ -145,7 +155,7 @@ export function profileLinkProblem(reason: 'empty' | 'too_long' | 'invalid'): st
 }
 
 /** The longest title each kind takes, and a link's note. */
-export const PROFILE_TITLE_MAX = { link: 60, heading: 40, text: 60, faq: 60 } as const;
+export const PROFILE_TITLE_MAX = { link: 60, heading: 40, text: 60, faq: 60, form: 60 } as const;
 
 /** The longest piece of writing a text block holds, and how many line breaks it may have (spec 0052, AC-5205). */
 export const PROFILE_TEXT_MAX = 1_000;

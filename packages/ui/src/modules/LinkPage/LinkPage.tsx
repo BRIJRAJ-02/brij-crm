@@ -55,6 +55,16 @@ export type LinkPageBlock =
       readonly items: readonly { readonly question: string; readonly answer: string }[];
     }
   | {
+      readonly kind: 'form';
+      readonly id: string;
+      /** The owner's own words for the row. */
+      readonly title: string;
+      /** Where it goes: a path on our own origin (`/f/<key>`), opened in the same tab. */
+      readonly href: string;
+      /** The line under the title, when the page has one to say. */
+      readonly line?: string;
+    }
+  | {
       readonly kind: 'page';
       readonly id: string;
       readonly title: string;
@@ -243,6 +253,13 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
   }
   // Writing has no tile on the page, where it is prose; in the editor's rows it takes the same mark a heading does,
   // since there the row is a thing in a list rather than the words themselves.
+  if (block.kind === 'form') {
+    return (
+      <span className={styles.tile} data-tile="page">
+        <Icon name="clipboard-list" />
+      </span>
+    );
+  }
   if (block.kind === 'heading' || block.kind === 'text' || block.kind === 'faq') {
     return (
       <span className={styles.tile} data-tile="icon">
@@ -334,6 +351,32 @@ const RENDERERS: {
       </a>
     );
   },
+  // A Timefix form: a row that opens the form on our own origin, in the same tab. Our page, our policy: no frame,
+  // no script from anywhere else, and an ordinary navigation a visitor can come back from (AC-5215).
+  form: (block, onPress) => {
+    const target = block.href.startsWith('/') && !/^\/[/\\]/.test(block.href) ? block.href : undefined;
+    const body = (
+      <>
+        <LinkPageTile block={block} />
+        <BlockText title={block.title} {...(block.line === undefined ? {} : { line: block.line })} />
+      </>
+    );
+    if (target === undefined) {
+      return (
+        <span className={styles.block} data-inert="">
+          {body}
+        </span>
+      );
+    }
+    return (
+      <a className={styles.block} href={target} onClick={onPress}>
+        {body}
+        <span className={styles.end}>
+          <Icon name="chevron-right" size="sm" />
+        </span>
+      </a>
+    );
+  },
   page: (block, onPress) => {
     const target = block.href.startsWith('/') && !/^\/[/\\]/.test(block.href) ? block.href : undefined;
     const body = (
@@ -371,7 +414,11 @@ function BlockRow({
   const press = onPress === undefined ? undefined : () => onPress(block.id);
   return (
     <li className={styles.item}>
-      {block.kind === 'link' ? RENDERERS.link(block, press) : RENDERERS.page(block, press)}
+      {block.kind === 'link'
+        ? RENDERERS.link(block, press)
+        : block.kind === 'form'
+          ? RENDERERS.form(block, press)
+          : RENDERERS.page(block, press)}
     </li>
   );
 }

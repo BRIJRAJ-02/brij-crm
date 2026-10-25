@@ -3,7 +3,7 @@
 // Main task: type a block's fields and see it as a visitor will, then Add or Save; it shows on the list at once.
 // Leaves out: saving itself (the screen does, through the data layer, optimistic), and any kind without an entry in
 // the registry.
-import type { BlockDraft, BlockProblems, ProfileLinkIcon, ProfilePageChoice } from '@crm/data';
+import type { BlockDraft, BlockProblems, ProfileFormChoice, ProfileLinkIcon, ProfilePageChoice } from '@crm/data';
 import {
   Button,
   ButtonLink,
@@ -23,6 +23,7 @@ import {
 } from '@crm/ui';
 import { countryOfE164, DIAL_CODES, toE164 } from '@crm/contracts/forms';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { formsHref } from '../captures/tabs.ts';
 import { linksHref } from '../booking/links.ts';
 import { contactHref, contactWords, pageFacts, type BlockEditorProps, type EditorChrome } from './registry.tsx';
 import { ICON_WORDS, strings } from './strings.ts';
@@ -781,7 +782,7 @@ export function PageChooser({ slug, items, linkPage, chrome, onSubmit, onClose }
       setProblem(strings.pickPage);
       return;
     }
-    onSubmit({ kind: 'page', workspaceId: chosen.workspaceId, pageId: chosen.pageId }, chosen.facts);
+    onSubmit({ kind: 'page', workspaceId: chosen.workspaceId, pageId: chosen.pageId }, { page: chosen.facts });
   };
   const isMany = choices.status === 'ready' && new Set(choices.choices.map((each) => each.workspaceId)).size > 1;
   let body: ReactNode;
@@ -850,6 +851,177 @@ export function PageChooser({ slug, items, linkPage, chrome, onSubmit, onClose }
       onClose={onClose}
       {...(chrome === undefined ? {} : { chrome })}
       canSubmit={choices.status === 'ready' && choices.choices.length > 0}
+    >
+      {body}
+    </EditorModal>
+  );
+}
+
+/** The forms a chooser is reading, or what went wrong. */
+type FormChoices =
+  | { readonly status: 'loading' }
+  | { readonly status: 'error' }
+  | { readonly status: 'ready'; readonly choices: readonly ProfileFormChoice[] };
+
+/**
+ * Add or edit a Timefix form block (spec 0052, AC-5213): the person's own forms from every workspace not on the
+ * page yet, read fresh each time it opens, and the words its row shows. The label starts as the form's own name,
+ * which the owner may replace; the name itself never leaves the editor, so a visitor reads only what was typed.
+ */
+export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const formId = useId();
+  const editing = item?.kind === 'form' ? item : undefined;
+  const [choices, setChoices] = useState<FormChoices>(
+    editing === undefined ? { status: 'loading' } : { status: 'ready', choices: [] },
+  );
+  const [picked, setPicked] = useState<string | null>(editing?.formId ?? null);
+  const [label, setLabel] = useState(editing?.label ?? '');
+  const [touched, setTouched] = useState(editing !== undefined);
+  const [problems, setProblems] = useState<BlockProblems>({});
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    // Editing one: the form is already chosen, and only its label is open.
+    if (editing !== undefined) return;
+    let isCurrent = true;
+    linkPage.formChoices(slug).then(
+      (found) => {
+        if (!isCurrent) return;
+        const placed = new Set(items.flatMap((each) => (each.kind === 'form' ? [each.formId] : [])));
+        const open = found.filter((choice) => !placed.has(choice.formId));
+        setChoices({ status: 'ready', choices: open });
+        const first = open[0];
+        setPicked(first?.formId ?? null);
+        // The form's own name is the label's starting point, until the owner types their own.
+        if (first !== undefined) setLabel(first.facts.name);
+      },
+      () => {
+        if (isCurrent) setChoices({ status: 'error' });
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+    // The blocks as the chooser opened: a change while it is open never reads the choices again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkPage, slug, attempt]);
+
+  const chosen = choices.status === 'ready' ? choices.choices.find((each) => each.formId === picked) : undefined;
+  const draft = (): BlockDraft => ({
+    kind: 'form',
+    ...(editing === undefined
+      ? { ...(chosen === undefined ? {} : { workspaceId: chosen.workspaceId, formId: chosen.formId }) }
+      : { workspaceId: editing.workspaceId, formId: editing.formId }),
+    label,
+  });
+  const submit = () => {
+    const checked = linkPage.check(draft(), items, editing?.id);
+    if (!checked.ok) {
+      setProblems(checked.problems);
+      return;
+    }
+    onSubmit(draft(), chosen === undefined ? undefined : { form: chosen.facts });
+  };
+  const isMany = choices.status === 'ready' && new Set(choices.choices.map((each) => each.workspaceId)).size > 1;
+
+  let body: ReactNode;
+  if (choices.status === 'loading') {
+    body = <Skeleton shape="field" width="full" />;
+  } else if (choices.status === 'error') {
+    body = (
+      <Callout
+        tone="danger"
+        actions={
+          <Button
+            onPress={() => {
+              setChoices({ status: 'loading' });
+              setAttempt((was) => was + 1);
+            }}
+          >
+            {strings.retry}
+          </Button>
+        }
+      >
+        {strings.formsFailed}
+      </Callout>
+    );
+  } else if (editing === undefined && choices.choices.length === 0) {
+    body = (
+      <EmptyState
+        layout="row"
+        icon="clipboard-list"
+        title={items.some((each) => each.kind === 'form') ? strings.noForms : strings.noFormsYet}
+        actions={<ButtonLink href={formsHref(slug)}>{strings.noFormsAction}</ButtonLink>}
+      />
+    );
+  } else {
+    body = (
+      <Form
+        id={formId}
+        onSubmit={submit}
+        label={editing === undefined ? strings.newForm : strings.editForm}
+        focusesFirstField
+      >
+        {editing === undefined && (
+          <Select
+            label={strings.formPick}
+            searchLabel={strings.formSearch}
+            items={choices.choices.map((choice) => ({
+              id: choice.formId,
+              label: choice.facts.name,
+              icon: 'clipboard-list',
+              description: [
+                ...(isMany ? [choice.facts.workspaceName] : []),
+                ...(choice.facts.status === 'paused' ? [strings.formPaused] : []),
+              ]
+                .filter((part) => part !== '')
+                .join(' · '),
+            }))}
+            value={picked}
+            onChange={(next) => {
+              setPicked(next);
+              setProblems((held) => ({ ...held, form: undefined }));
+              // Until the owner types their own words, the label follows the form they pick.
+              const found = choices.choices.find((each) => each.formId === next);
+              if (!touched && found !== undefined) setLabel(found.facts.name);
+            }}
+            {...(problems.form === undefined ? {} : { error: problems.form })}
+          />
+        )}
+        <Field
+          label={strings.formLabel}
+          name="label"
+          autoComplete="off"
+          isRequired
+          maxLength={60}
+          hint={strings.formLabelHint}
+          value={label}
+          onChange={(next) => {
+            setLabel(next);
+            setTouched(true);
+            setProblems((held) => ({ ...held, title: undefined }));
+          }}
+          {...(problems.title === undefined ? {} : { error: problems.title })}
+        />
+      </Form>
+    );
+  }
+  return (
+    <EditorModal
+      title={editing === undefined ? strings.newForm : strings.editForm}
+      formId={formId}
+      submitLabel={editing === undefined ? strings.add : strings.save}
+      onClose={onClose}
+      {...(chrome === undefined ? {} : { chrome })}
+      canSubmit={choices.status === 'ready' && (editing !== undefined || choices.choices.length > 0)}
+      preview={
+        label.trim() === '' ? undefined : (
+          <LinkPage
+            layout="blocks"
+            caption={strings.howItLooks}
+            blocks={[{ kind: 'form', id: editing?.id ?? 'draft', title: label.trim(), href: '/f/preview' }]}
+          />
+        )
+      }
     >
       {body}
     </EditorModal>

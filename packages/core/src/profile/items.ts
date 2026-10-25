@@ -15,18 +15,20 @@ import {
   PROFILE_COUNT_DAYS,
   type ProfileCounts,
   type ProfileItems,
+  type ProfileFormChoice,
+  type ProfileFormFacts,
   type ProfilePageChoice,
   type ProfilePageFacts,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { enterOwnPages, ownUserId, type OwnedPageEntry } from '../access/door.ts';
+import { enterOwnForms, enterOwnPages, ownUserId, type OwnedFormEntry, type OwnedPageEntry } from '../access/door.ts';
 import { isUuid } from '../engine/ids.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 
-const { bookingPages, workspaces } = schema;
+const { bookingPages, forms, workspaces } = schema;
 
 /** One block as the editor's definers answer it. */
 interface ItemRow extends Record<string, unknown> {
@@ -36,13 +38,14 @@ interface ItemRow extends Record<string, unknown> {
   readonly data: unknown;
   readonly workspace_id: string | null;
   readonly page_id: string | null;
+  readonly form_id: string | null;
   readonly archived_at: string | Date | null;
   readonly updated_at: string | Date;
 }
 
 /** The columns every definer here answers, as text where the api wants text. */
 const ITEM_COLUMNS = sql.raw(
-  `id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, archived_at, updated_at`,
+  `id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id, archived_at, updated_at`,
 );
 
 /** The caller's identity, which their link page belongs to; a member made without one has none. */
@@ -56,6 +59,15 @@ function iso(value: string | Date): string {
 
 /** What a page block's page shows in the editor, by page id. */
 type FactsByPage = ReadonlyMap<string, { readonly workspaceId: string; readonly facts: ProfilePageFacts }>;
+
+/** What a form block's form shows in the editor, by form id. */
+type FactsByForm = ReadonlyMap<string, { readonly workspaceId: string; readonly facts: ProfileFormFacts }>;
+
+/** Both, read together: one block list may hold pages and forms from several workspaces. */
+interface BlockFacts {
+  readonly pages: FactsByPage;
+  readonly forms: FactsByForm;
+}
 
 /**
  * The facts of the booking pages `entries` name, each workspace's read in one transaction under its first entry's
@@ -123,7 +135,62 @@ async function factsOf(entries: readonly OwnedPageEntry[]): Promise<FactsByPage>
  * A stored block as the editor reads it, or undefined for a kind this build doesn't know or data its schema no
  * longer accepts: skipped, never a crash. A link always carries a hue (the oldest rows may lack one).
  */
-function itemOf(row: ItemRow, facts: FactsByPage): ProfileItem | undefined {
+/**
+ * Each form's facts for the editor, read inside its own workspace through the entry the door minted: the form's
+ * name as its workspace lists it, its public key, and the workspace's own name and address. A form the read can't
+ * see has no facts, and its block says Unavailable rather than disappearing (AC-5214).
+ */
+async function formFactsOf(entries: readonly OwnedFormEntry[]): Promise<FactsByForm> {
+  const byWorkspace = new Map<string, OwnedFormEntry[]>();
+  for (const entry of entries) {
+    const group = byWorkspace.get(entry.scope.workspaceId) ?? [];
+    group.push(entry);
+    byWorkspace.set(entry.scope.workspaceId, group);
+  }
+  const facts = new Map<string, { readonly workspaceId: string; readonly facts: ProfileFormFacts }>();
+  for (const [workspaceId, group] of byWorkspace) {
+    const [first] = group;
+    if (first === undefined) continue;
+    const live = new Map(group.map((entry) => [entry.formId, entry.isLive]));
+    const keys = new Map(group.map((entry) => [entry.formId, entry.key]));
+    await inWorkspace(first.scope, async (tx) => {
+      const [workspace] = await tx
+        .select({ name: workspaces.name, slug: workspaces.slug })
+        .from(workspaces)
+        .where(and(eq(workspaces.id, workspaceId), isNull(workspaces.deletedAt)));
+      if (workspace === undefined) return;
+      const rows = await tx
+        .select({ id: forms.id, name: forms.name })
+        .from(forms)
+        .where(
+          and(
+            inArray(
+              forms.id,
+              group.map((entry) => entry.formId),
+            ),
+            isNull(forms.archivedAt),
+          ),
+        );
+      for (const row of rows) {
+        const key = keys.get(row.id);
+        if (key === undefined) continue;
+        facts.set(row.id, {
+          workspaceId,
+          facts: {
+            name: row.name,
+            key,
+            workspaceName: workspace.name,
+            workspaceSlug: workspace.slug,
+            status: live.get(row.id) === true ? 'live' : 'paused',
+          },
+        });
+      }
+    });
+  }
+  return facts;
+}
+
+function itemOf(row: ItemRow, facts: BlockFacts): ProfileItem | undefined {
   const data = typeof row.data === 'object' && row.data !== null ? row.data : {};
   const stored = {
     id: row.id,
@@ -132,13 +199,23 @@ function itemOf(row: ItemRow, facts: FactsByPage): ProfileItem | undefined {
   };
   let candidate: unknown;
   if (row.kind === 'page') {
-    const found = row.page_id === null ? undefined : facts.get(row.page_id);
+    const found = row.page_id === null ? undefined : facts.pages.get(row.page_id);
     candidate = {
       kind: 'page',
       workspaceId: row.workspace_id,
       pageId: row.page_id,
       ...stored,
       ...(found === undefined || found.workspaceId !== row.workspace_id ? {} : { page: found.facts }),
+    };
+  } else if (row.kind === 'form') {
+    const found = row.form_id === null ? undefined : facts.forms.get(row.form_id);
+    candidate = {
+      ...data,
+      kind: 'form',
+      workspaceId: row.workspace_id,
+      formId: row.form_id,
+      ...stored,
+      ...(found === undefined || found.workspaceId !== row.workspace_id ? {} : { form: found.facts }),
     };
   } else if (row.kind === 'link') {
     candidate = { hue: 'blue', ...data, kind: 'link', ...stored };
@@ -159,10 +236,13 @@ async function readRows(tx: WorkspaceTx, owner: string, archived: boolean): Prom
 }
 
 /** The facts of every booking page the rows name, as the door lets the owner place them now. */
-async function factsForRows(scope: EngineScope, rows: readonly ItemRow[]): Promise<FactsByPage> {
+async function factsForRows(scope: EngineScope, rows: readonly ItemRow[]): Promise<BlockFacts> {
   const pageIds = rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
-  if (pageIds.length === 0) return new Map();
-  return factsOf(await enterOwnPages(scope, pageIds));
+  const formIds = rows.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : []));
+  return {
+    pages: pageIds.length === 0 ? new Map() : await factsOf(await enterOwnPages(scope, pageIds)),
+    forms: formIds.length === 0 ? new Map() : await formFactsOf(await enterOwnForms(scope, formIds)),
+  };
 }
 
 /** Both lists, read in one transaction, with their pages' facts. */
@@ -205,12 +285,34 @@ export async function listProfilePageChoices(scope: EngineScope): Promise<readon
     );
 }
 
+/**
+ * The forms the caller may place on their link page (spec 0052, AC-5213): their own, as the door names them, less
+ * the ones already on the page, by workspace then name. The same shape and the same rule as the booking pages'.
+ */
+export async function listProfileFormChoices(scope: EngineScope): Promise<readonly ProfileFormChoice[]> {
+  const owner = ownerOf(scope);
+  const live = await inWorkspace(scope, (tx) => readRows(tx, owner, false));
+  const placed = new Set(live.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : [])));
+  const entries = (await enterOwnForms(scope)).filter((entry) => !placed.has(entry.formId));
+  const facts = await formFactsOf(entries);
+  return [...facts]
+    .map(([formId, found]) => ({ workspaceId: found.workspaceId, formId, facts: found.facts }))
+    .sort(
+      (left, right) =>
+        left.facts.workspaceName.localeCompare(right.facts.workspaceName) ||
+        left.facts.name.localeCompare(right.facts.name) ||
+        (left.formId < right.formId ? -1 : 1),
+    );
+}
+
 /** A refusal for what a definer raised, or the error itself. */
 function refusalOf(error: unknown): unknown {
   const pg = postgresError(error);
   if (pg === undefined) return error;
   if (pg.code === '54000') {
-    const kind = (['link', 'heading', 'page', 'contact', 'text', 'faq'] as const).find((each) => each === pg.detail);
+    const kind = (['link', 'heading', 'page', 'contact', 'text', 'faq', 'form'] as const).find(
+      (each) => each === pg.detail,
+    );
     return refuse('LIMIT_REACHED', profileLimitSentence(kind ?? 'items'));
   }
   if (pg.code === '23505' && pg.constraint === 'profile_items_heading_once') {
@@ -223,6 +325,9 @@ function refusalOf(error: unknown): unknown {
   if (pg.code === '23505' && pg.constraint === 'profile_items_page_once') {
     return refuse('CONFIG_INVALID', 'That booking page is on your link page already.');
   }
+  if (pg.code === '23505' && pg.constraint === 'profile_items_form_once') {
+    return refuse('CONFIG_INVALID', 'That form is on your link page already.');
+  }
   if (pg.code === 'P0002') return refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
   if (pg.code === '22023') return refuse('CONFIG_INVALID', 'That block can’t be saved as it is.');
   return error;
@@ -234,17 +339,26 @@ function nextHue(links: number): (typeof HUES)[number] {
   return ring[links % ring.length] ?? 'blue';
 }
 
-/** A block's fields as the definer stores them: its kind, its data, and the page it names, if any. */
+/** A block's fields as the definer stores them: its kind, its data, and the page or form it names, if any. */
 function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
   if (block.kind === 'page') {
-    return { kind: block.kind, data: {}, workspaceId: block.workspaceId, pageId: block.pageId };
+    return { kind: block.kind, data: {}, workspaceId: block.workspaceId, pageId: block.pageId, formId: null };
+  }
+  if (block.kind === 'form') {
+    return {
+      kind: block.kind,
+      data: { label: block.label },
+      workspaceId: block.workspaceId,
+      pageId: null,
+      formId: block.formId,
+    };
   }
   if (block.kind === 'heading')
-    return { kind: block.kind, data: { title: block.title }, workspaceId: null, pageId: null };
+    return { kind: block.kind, data: { title: block.title }, workspaceId: null, pageId: null, formId: null };
   if (block.kind === 'contact') {
     // The card's fields as the schema kept them: an empty one was refused there, never stored.
     const { kind, ...data } = block;
-    return { kind, data, workspaceId: null, pageId: null };
+    return { kind, data, workspaceId: null, pageId: null, formId: null };
   }
   if (block.kind === 'faq') {
     return {
@@ -255,6 +369,7 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
       },
       workspaceId: null,
       pageId: null,
+      formId: null,
     };
   }
   if (block.kind === 'text') {
@@ -263,6 +378,7 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
       data: { body: block.body, ...(block.title === undefined || block.title === '' ? {} : { title: block.title }) },
       workspaceId: null,
       pageId: null,
+      formId: null,
     };
   }
   return {
@@ -276,6 +392,7 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
     },
     workspaceId: null,
     pageId: null,
+    formId: null,
   };
 }
 
@@ -305,6 +422,12 @@ export async function saveProfileItem(
       throw refuse('NOT_FOUND', 'That booking page can’t go on your link page.');
     }
   }
+  if (block.kind === 'form') {
+    const [entry] = await enterOwnForms(scope, [block.formId]);
+    if (entry?.scope.workspaceId !== block.workspaceId) {
+      throw refuse('NOT_FOUND', 'That form can’t go on your link page.');
+    }
+  }
   const row = await inWorkspace(scope, async (tx) => {
     // The live blocks only when they are needed: an edit's existence, or a new link's colour.
     const needsRows = input.isEdit === true || (block.kind === 'link' && block.hue === undefined);
@@ -318,7 +441,7 @@ export async function saveProfileItem(
     const stored = storedOf(block, nextHue(live.filter((each) => each.kind === 'link').length));
     try {
       const saved = await tx.execute<ItemRow>(
-        sql`select ${ITEM_COLUMNS} from crm_save_profile_item(${owner}::uuid, ${input.id}::uuid, ${stored.kind}, ${JSON.stringify(stored.data)}::jsonb, ${stored.workspaceId}::uuid, ${stored.pageId}::uuid)`,
+        sql`select ${ITEM_COLUMNS} from crm_save_profile_item(${owner}::uuid, ${input.id}::uuid, ${stored.kind}, ${JSON.stringify(stored.data)}::jsonb, ${stored.workspaceId}::uuid, ${stored.pageId}::uuid, ${stored.formId}::uuid)`,
       );
       return saved.rows[0];
     } catch (error) {

@@ -10,11 +10,20 @@ import type {
   ProfileBlockKind,
   ProfileItem,
   ProfilePageChoice,
+  ProfileFormFacts,
   ProfilePageFacts,
 } from '@crm/data';
 import type { Hue, IconName, LinkPageBlock, LinkPageMark } from '@crm/ui';
 import type { ComponentType, ReactNode } from 'react';
-import { ContactEditor, FaqEditor, HeadingEditor, LinkEditor, PageChooser, TextEditor } from './editors.tsx';
+import {
+  ContactEditor,
+  FaqEditor,
+  FormChooser,
+  HeadingEditor,
+  LinkEditor,
+  PageChooser,
+  TextEditor,
+} from './editors.tsx';
 import { strings } from './strings.ts';
 
 /**
@@ -52,9 +61,13 @@ export interface BlockEditorProps {
    * Checked and ready: the screen saves it (shown at once) and closes the Modal. A booking page comes with its
    * facts, so its row shows them before the server answers.
    */
-  readonly onSubmit: (draft: BlockDraft, page?: ProfilePageFacts) => void;
+  /** The chosen page's or form's facts, so the row reads right before the server answers. */
+  readonly onSubmit: (draft: BlockDraft, facts?: ChosenFacts) => void;
   readonly onClose: () => void;
 }
+
+/** What a chooser knows of what was picked, for the row it shows at once. */
+export type ChosenFacts = { readonly page: ProfilePageFacts } | { readonly form: ProfileFormFacts };
 
 /** How a block's row reads in the editor's list. */
 export interface BlockRowWords {
@@ -108,6 +121,14 @@ export const BLOCK_KINDS: Readonly<Record<ProfileBlockKind, BlockKind>> = {
     Editor: TextEditor,
     isEditable: true,
   },
+  form: {
+    label: strings.addForm,
+    description: strings.addFormText,
+    icon: 'clipboard-list',
+    Editor: FormChooser,
+    // The label is the only thing an edit could change, and the chooser is where it is typed.
+    isEditable: true,
+  },
   faq: {
     label: strings.addFaq,
     description: strings.addFaqText,
@@ -127,7 +148,7 @@ export const BLOCK_KINDS: Readonly<Record<ProfileBlockKind, BlockKind>> = {
 /** The Add menu's kinds, in order. */
 // The order the picker draws them in, from the owner's Add item board: the commonest first, the section last,
 // and the one Add item opens on.
-export const ADDABLE: readonly ProfileBlockKind[] = ['link', 'page', 'text', 'faq', 'contact', 'heading'];
+export const ADDABLE: readonly ProfileBlockKind[] = ['link', 'page', 'form', 'text', 'faq', 'contact', 'heading'];
 
 /** A booking page's lengths and kind, said once: "30 min · 60 min · Team". */
 export function pageFacts(page: { readonly durations: readonly number[]; readonly isTeam: boolean }): string {
@@ -149,6 +170,15 @@ export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWor
   if (item.kind === 'text') return { title: item.title ?? strings.text, address: item.body.split('\n')[0] ?? '' };
   // A set of questions has nowhere to go either: its row says how many it holds.
   if (item.kind === 'faq') return { title: item.title ?? strings.faq, address: strings.faqCount(item.items.length) };
+  if (item.kind === 'form') {
+    if (item.form === undefined) {
+      return { title: strings.form, address: strings.formUnavailable, isOff: true };
+    }
+    const line = [...(namesWorkspace ? [item.form.workspaceName] : []), strings.formRow].join(' · ');
+    return item.form.status === 'paused'
+      ? { title: item.label, address: `${strings.formPaused} · ${line}`, isOff: true }
+      : { title: item.label, address: line };
+  }
   if (item.kind === 'contact') return { title: item.fullName, address: contactWords(item, true) };
   if (item.page === undefined) {
     // Unavailable leads the line, as Paused does, so a phone keeps the row on one line.
@@ -197,6 +227,11 @@ export function previewBlock(
   if (item.kind === 'heading') return { kind: 'heading', id: item.id, title: item.title };
   if (item.kind === 'text') {
     return { kind: 'text', id: item.id, body: item.body, ...(item.title === undefined ? {} : { title: item.title }) };
+  }
+  if (item.kind === 'form') {
+    // A form a visitor can't open now is left out of the phone, as a paused booking page is.
+    if (item.form === undefined || item.form.status !== 'live') return undefined;
+    return { kind: 'form', id: item.id, title: item.label, href: `/f/${item.form.key}` };
   }
   if (item.kind === 'faq') {
     return {

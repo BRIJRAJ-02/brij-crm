@@ -182,6 +182,24 @@ export const Questions: Story = {
   },
 };
 
+/** A Timefix form: a row that opens the form on our own origin, in the same tab. */
+export const FormBlock: Story = {
+  args: {
+    person: { name: 'Ada Lovelace', id: 'ada', bio: 'Numbers, engines and the odd poem.' },
+    blocks: [
+      { kind: 'page', id: 'chat', title: 'Quick chat', href: '/ada/quick-chat', facts: '30 min' },
+      { kind: 'form', id: 'brief', title: 'Tell me about your project', href: '/f/work-with-me' },
+    ],
+  },
+  play: async ({ canvas }) => {
+    const row = canvas.getByRole('link', { name: /Tell me about your project/ });
+    await expect(row).toHaveAttribute('href', '/f/work-with-me');
+    // The same tab, on our own origin: no target, and nothing to open a window with.
+    await expect(row).not.toHaveAttribute('target');
+    await expect(row).not.toHaveAttribute('rel');
+  },
+};
+
 /** Long words wrap inside their card rather than pushing the page sideways at 390 wide. */
 export const LongWords: Story = {
   args: {

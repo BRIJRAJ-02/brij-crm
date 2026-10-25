@@ -35,6 +35,10 @@ A `faq` block is a set of questions on the library's own Disclosure (spec 0052, 
 
 It sits in a raised card like the rows beside it, because on this page anything that is not the person's own prose is a card, and like writing it is not a list item and has nothing to press.
 
+## A Timefix form
+
+A `form` block is a row like a booking page's, with the owner's own words and a quiet chevron, that opens `/f/:key` in the same tab (spec 0052, AC-5215). It is our own origin, so it is an ordinary navigation: no `target`, no `rel`, no frame and no script from anywhere else. Its press is counted exactly as any other row's is.
+
 ## Use
 
 ```tsx

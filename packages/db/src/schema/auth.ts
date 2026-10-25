@@ -365,25 +365,31 @@ export const profileItems = auth.table(
       .default(sql`'{}'::jsonb`),
     workspaceId: uuid('workspace_id'),
     pageId: uuid('page_id'),
+    /** Set only for `kind = 'form'`, always beside `workspaceId` (spec 0052, AC-5213). */
+    formId: uuid('form_id'),
     archivedAt: timestamptz('archived_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     foreignKey({ name: 'profile_items_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
-    check('profile_items_kind', sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq')`),
+    check('profile_items_kind', sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form')`),
     check('profile_items_position', sql`${t.position} between 0 and 999`),
     check('profile_items_placed', sql`(${t.archivedAt} is null) = (${t.position} is not null)`),
     check('profile_items_data', sql`jsonb_typeof(${t.data}) = 'object' and pg_column_size(${t.data}) <= 16384`),
-    check('profile_items_target', sql`(${t.workspaceId} is null) = (${t.pageId} is null)`),
+    check('profile_items_target', sql`(${t.workspaceId} is null) = (${t.pageId} is null and ${t.formId} is null)`),
+    check('profile_items_form', sql`(${t.kind} = 'form') = (${t.formId} is not null)`),
     check('profile_items_page', sql`${t.kind} <> 'page' or ${t.pageId} is not null`),
     check(
       'profile_items_plain',
-      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq') or ${t.pageId} is null`,
+      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq') or (${t.pageId} is null and ${t.formId} is null)`,
     ),
     uniqueIndex('profile_items_page_once')
       .on(t.userId, t.workspaceId, t.pageId)
       .where(sql`${t.kind} = 'page' and ${t.archivedAt} is null`),
+    uniqueIndex('profile_items_form_once')
+      .on(t.userId, t.workspaceId, t.formId)
+      .where(sql`${t.kind} = 'form' and ${t.archivedAt} is null`),
     uniqueIndex('profile_items_contact_once')
       .on(t.userId)
       .where(sql`${t.kind} = 'contact' and ${t.archivedAt} is null`),

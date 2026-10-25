@@ -136,6 +136,7 @@ export { getMyProfile, updateMyMemberProfile, type ProfileExtras } from './membe
 export {
   archiveProfileItem,
   deleteProfileItem,
+  listProfileFormChoices,
   listProfilePageChoices,
   orderProfileItems,
   readProfileCounts,

@@ -5,7 +5,14 @@
 // list, which puts the rows back, and a toast says why, with Try again. Only the person edits their page, so no
 // live event carries it; another tab's change shows when a screen next holds it, and an order made from a stale
 // list is refused by the server and read again.
-import type { ProfileBlock, ProfileCounts, ProfileItem, ProfileItems, ProfilePageChoice } from '@crm/contracts';
+import type {
+  ProfileBlock,
+  ProfileCounts,
+  ProfileFormChoice,
+  ProfileItem,
+  ProfileItems,
+  ProfilePageChoice,
+} from '@crm/contracts';
 import {
   checkContactCard,
   checkProfileLink,
@@ -68,6 +75,7 @@ export interface LinkPageApi {
   readonly items: (input: { readonly workspace: string }) => Promise<ProfileItems>;
   readonly counts: (input: { readonly workspace: string }) => Promise<ProfileCounts>;
   readonly pageChoices: (input: { readonly workspace: string }) => Promise<readonly ProfilePageChoice[]>;
+  readonly formChoices: (input: { readonly workspace: string }) => Promise<readonly ProfileFormChoice[]>;
   readonly saveItem: (input: {
     readonly workspace: string;
     readonly id: string;
@@ -115,6 +123,10 @@ interface ProfileProcedures {
     input: { workspace: string },
     options: { signal?: AbortSignal },
   ) => Promise<readonly ProfilePageChoice[]>;
+  readonly formChoices: (
+    input: { workspace: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<readonly ProfileFormChoice[]>;
   readonly saveItem: (
     input: { workspace: string; id: string; block: ProfileBlock; isEdit?: boolean; mutationId: string },
     options: { signal?: AbortSignal },
@@ -158,6 +170,7 @@ export type BlockProblems = Readonly<
       | 'note'
       | 'icon'
       | 'page'
+      | 'form'
       | 'body'
       | 'items'
       // One question's own two problems, by its place in the list: `question:0`, `answer:0`.
@@ -251,6 +264,12 @@ export type BlockDraft =
       readonly items: readonly { readonly question: string; readonly answer: string }[];
     }
   | { readonly kind: 'page'; readonly workspaceId?: string; readonly pageId?: string }
+  | {
+      readonly kind: 'form';
+      readonly workspaceId?: string;
+      readonly formId?: string;
+      readonly label: string;
+    }
   | ({ readonly kind: 'contact' } & Readonly<Partial<Record<ProfileContactField, string>>>);
 
 /** A title's problem: present, one line, and short enough for its kind. */
@@ -279,6 +298,18 @@ export function checkBlock(
       return { ok: false, problems: { page: 'Pick a booking page.' } };
     }
     return { ok: true, block: { kind: 'page', workspaceId: draft.workspaceId, pageId: draft.pageId } };
+  }
+  if (draft.kind === 'form') {
+    if (draft.workspaceId === undefined || draft.formId === undefined) {
+      return { ok: false, problems: { form: 'Pick a form.' } };
+    }
+    const label = draft.label.trim();
+    if (label === '') return { ok: false, problems: { title: 'Give the form a label.' } };
+    if (/[\r\n]/.test(label)) return { ok: false, problems: { title: 'Keep it to one line.' } };
+    if (label.length > PROFILE_TITLE_MAX.form) {
+      return { ok: false, problems: { title: 'Keep the label to 60 characters.' } };
+    }
+    return { ok: true, block: { kind: 'form', workspaceId: draft.workspaceId, formId: draft.formId, label } };
   }
   if (draft.kind === 'contact') {
     const { kind: _kind, ...typed } = draft;
@@ -605,6 +636,11 @@ export function createLinkPageStore(deps: LinkPageDeps) {
       deps.api.pageChoices({ workspace }).catch((error: unknown) => {
         throw toDataError(error);
       }),
+    /** The forms the person may still place, from every workspace, read fresh each time it is asked. */
+    formChoices: (workspace: string): Promise<readonly ProfileFormChoice[]> =>
+      deps.api.formChoices({ workspace }).catch((error: unknown) => {
+        throw toDataError(error);
+      }),
     /** Signed out: forgets the copy. */
     clear: (): void => {
       held = undefined;
@@ -631,6 +667,7 @@ export function openLinkPage(given: {
       items: (input) => call((options) => profile.items(input, options)),
       counts: (input) => call((options) => profile.counts(input, options)),
       pageChoices: (input) => call((options) => profile.pageChoices(input, options)),
+      formChoices: (input) => call((options) => profile.formChoices(input, options)),
       saveItem: (input) => call((options) => profile.saveItem(input, options)),
       orderItems: (input) => call((options) => profile.orderItems({ ...input, ids: [...input.ids] }, options)),
       archiveItem: (input) => call((options) => profile.archiveItem(input, options)),
@@ -666,6 +703,11 @@ export function openLinkPage(given: {
     icons: PROFILE_LINK_ICONS,
     /** A new block's id. */
     newId: (): string => deps.mintId(),
+    /** The forms the person may still place, from every workspace, read fresh each time it is asked. */
+    formChoices: (workspace: string): Promise<readonly ProfileFormChoice[]> =>
+      deps.api.formChoices({ workspace }).catch((error: unknown) => {
+        throw toDataError(error);
+      }),
     /** Signed out: forgets the copy. */
     clear: store.clear,
   };

@@ -23,7 +23,7 @@ const page = (status: 'live' | 'paused'): ProfileItem => ({
 
 describe('the block registry', () => {
   it('offers every kind it has an editor for, in the Add menu’s order', () => {
-    expect(ADDABLE).toEqual(['link', 'page', 'text', 'faq', 'contact', 'heading']);
+    expect(ADDABLE).toEqual(['link', 'page', 'form', 'text', 'faq', 'contact', 'heading']);
     expect(ADDABLE.every((kind) => BLOCK_KINDS[kind].label !== '')).toBe(true);
   });
 
@@ -113,6 +113,52 @@ describe('the block registry', () => {
     expect(rowWords({ ...asked, title: 'Before you book' }).title).toBe('Before you book');
     expect(rowWords({ ...asked, items: asked.items.slice(0, 1) }).address).toBe('1 question');
     expect(previewBlock(asked, 'ada', () => undefined)).toEqual({ kind: 'faq', id: 'f', items: asked.items });
+  });
+
+  it('reads and draws a Timefix form block (spec 0052)', () => {
+    const facts = {
+      name: 'Work with me',
+      key: 'work-with-me',
+      workspaceName: 'Acme',
+      workspaceSlug: 'acme',
+      status: 'live',
+    } as const;
+    const live: ProfileItem = {
+      kind: 'form',
+      id: 'f',
+      workspaceId: 'w',
+      formId: 'x',
+      label: 'Tell me about your project',
+      updatedAt: '',
+      form: facts,
+    };
+    expect(rowWords(live)).toEqual({ title: 'Tell me about your project', address: 'Form' });
+    expect(rowWords(live, true).address).toBe('Acme · Form');
+    // Its row is the owner's own words; the form's internal name never appears, here or on the page.
+    expect(previewBlock(live, 'ada', () => undefined)).toEqual({
+      kind: 'form',
+      id: 'f',
+      title: 'Tell me about your project',
+      href: '/f/work-with-me',
+    });
+    // Not published: the block stays, marked, and the phone leaves it out.
+    const paused: ProfileItem = { ...live, form: { ...facts, status: 'paused' } };
+    expect(rowWords(paused)).toMatchObject({ isOff: true });
+    expect(previewBlock(paused, 'ada', () => undefined)).toBeUndefined();
+    // Deleted, or in a workspace the person left: no facts at all.
+    const gone: ProfileItem = { kind: 'form', id: 'f', workspaceId: 'w', formId: 'x', label: 'Gone', updatedAt: '' };
+    expect(rowWords(gone)).toMatchObject({ title: 'Form', isOff: true });
+    expect(previewBlock(gone, 'ada', () => undefined)).toBeUndefined();
+    // A press is counted, as it is on any other row that goes somewhere (AC-5216).
+    expect(
+      pressesChip(live, {
+        days: 30,
+        views: 1,
+        visitors: 1,
+        before: { views: 0, visitors: 0 },
+        presses: [{ id: 'f', presses: 2 }],
+      }),
+    ).toEqual(['2\u00a0clicks']);
   });
 
   it('says the page’s figures and each block’s presses in plain words', () => {

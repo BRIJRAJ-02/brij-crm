@@ -30,7 +30,7 @@ import {
 } from '@crm/contracts';
 import { publicSocialsOf } from '../booking/socials.ts';
 import type { EmailLink } from '../emails/preferences.ts';
-import { checkScope, mintPageBeside, mintScope, rescope, type EngineScope } from './mint.ts';
+import { checkScope, mintFormBeside, mintPageBeside, mintScope, rescope, type EngineScope } from './mint.ts';
 import { inWorkspace } from './run.ts';
 import {
   bookingAccess,
@@ -857,6 +857,100 @@ export async function enterOwnPages(
   );
 }
 
+/** The ids crm_form_owner_forms reads past row level security, its key, and whether visitors may open it now. */
+interface OwnedFormRow extends Record<string, unknown> {
+  readonly workspace_id: string;
+  readonly form_id: string;
+  readonly public_key: string;
+  readonly is_live: boolean;
+}
+
+/** One of a person's own forms that may sit on their link page, as its read only entry. */
+export interface OwnedFormEntry {
+  readonly scope: EngineScope;
+  readonly formId: string;
+  /** Its public address after `/f/`. */
+  readonly key: string;
+  /** A visitor may open it now: live, not paused, draft or archived. */
+  readonly isLive: boolean;
+}
+
+/** How the owned forms read reaches the database and mints each form's read only entry. */
+interface OwnedFormsWay {
+  readonly read: (work: (tx: WorkspaceTx) => Promise<readonly OwnedFormRow[]>) => Promise<readonly OwnedFormRow[]>;
+  readonly mint: (workspaceId: string, formId: string) => EngineScope;
+}
+
+/** `crm_form_owner_forms` for `ownerUserId`, each form as its read only `form` entry. */
+async function ownedForms(
+  way: OwnedFormsWay,
+  ownerUserId: string,
+  formIds?: readonly string[],
+): Promise<readonly OwnedFormEntry[]> {
+  if (!isUuid(ownerUserId)) return [];
+  const wanted = formIds?.filter((id) => isUuid(id));
+  if (wanted !== undefined && wanted.length === 0) return [];
+  const rows = await way.read(async (tx) => {
+    const found = await tx.execute<OwnedFormRow>(
+      sql`select workspace_id::text as workspace_id, form_id::text as form_id, public_key, is_live from crm_form_owner_forms(${ownerUserId}::uuid, ${wanted === undefined ? null : `{${wanted.join(',')}}`}::uuid[])`,
+    );
+    return found.rows;
+  });
+  return rows.map((row) => ({
+    scope: way.mint(row.workspace_id, row.form_id),
+    formId: row.form_id,
+    key: row.public_key,
+    isLive: row.is_live,
+  }));
+}
+
+/**
+ * Which of a person's hosted forms may sit on their link page (spec 0052, AC-5213): their own, made by them as a
+ * member still active in a workspace that exists, not archived (`crm_form_owner_forms`, ids and the public key
+ * only), only those `formIds` names when given, each as its read only `form` entry. `ownerUserId` is the id a
+ * handle named: never an input. For a visitor's read of `/<handle>`; the person's own editor enters through
+ * `enterOwnForms`.
+ */
+export async function enterOwnedForms(
+  deps: { readonly db: Database },
+  ownerUserId: string,
+  formIds?: readonly string[],
+): Promise<readonly OwnedFormEntry[]> {
+  return ownedForms(
+    {
+      read: (work) => deps.db.withWorkspace(NO_WORKSPACE, work),
+      mint: (workspaceId, formId) =>
+        mintScope({
+          db: deps.db,
+          workspaceId,
+          actor: { type: 'form', id: formId },
+          access: formAccess(formId),
+        }),
+    },
+    ownerUserId,
+    formIds,
+  );
+}
+
+/**
+ * The signed in person's own forms that may sit on their link page, from every workspace they are in, as
+ * `enterOwnedForms` answers them, read through their own scope and each entered beside it (`mintFormBeside`) as the
+ * form's read only `form` actor. The owner is the scope's own identity.
+ */
+export async function enterOwnForms(
+  scope: EngineScope,
+  formIds?: readonly string[],
+): Promise<readonly OwnedFormEntry[]> {
+  return ownedForms(
+    {
+      read: (work) => inWorkspace(scope, work),
+      mint: (workspaceId, formId) => mintFormBeside(scope, workspaceId, formId),
+    },
+    ownUserId(scope),
+    formIds,
+  );
+}
+
 /** One live block of a link page as `crm_profile_items_public` answers it. */
 export interface LinkPageRow extends Record<string, unknown> {
   readonly id: string;
@@ -865,6 +959,7 @@ export interface LinkPageRow extends Record<string, unknown> {
   readonly data: unknown;
   readonly workspace_id: string | null;
   readonly page_id: string | null;
+  readonly form_id: string | null;
 }
 
 /**
@@ -881,6 +976,7 @@ export async function enterLinkPage(
   readonly owner: HandleOwner;
   readonly rows: readonly LinkPageRow[];
   readonly pages: readonly OwnedPageEntry[];
+  readonly forms: readonly OwnedFormEntry[];
 }> {
   // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
   const owner = await handleOwner(deps.db, handle, { withSocials: true });
@@ -888,12 +984,15 @@ export async function enterLinkPage(
   const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<LinkPageRow>(
-      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id from crm_profile_items_public(${owner.userId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
     ),
   );
   const pageIds = found.rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
   const pages = (await enterOwnedPages(deps, owner.userId, pageIds)).filter((entry) => entry.isLive);
-  return { owner, rows: found.rows, pages };
+  // A form block's form, the same way and under the same rule: only one a visitor may open now (AC-5214).
+  const formIds = found.rows.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : []));
+  const forms = (await enterOwnedForms(deps, owner.userId, formIds)).filter((entry) => entry.isLive);
+  return { owner, rows: found.rows, pages, forms };
 }
 
 /** A visitor as spec 0047 mints it: the day's HMAC, 32 lowercase hex digits. */
