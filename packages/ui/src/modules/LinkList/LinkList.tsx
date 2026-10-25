@@ -79,6 +79,12 @@ export interface LinkRow {
   readonly variant?: 'row' | 'section';
   /** With `variant="section"`: how many rows sit under it, drawn after the title. */
   readonly count?: number;
+  /**
+   * The row's `chips` are still on their way (a figure the screen reads apart from the rows, as the link page
+   * reads its clicks): their line is drawn as a Skeleton from the first frame, so the row keeps its height and
+   * nothing under it moves when the figure lands. Ignored once `chips` has anything in it.
+   */
+  readonly areChipsPending?: boolean;
 }
 
 /** Props for LinkList. */
@@ -456,7 +462,7 @@ function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isComp
         {!isCompact && row.description !== undefined && row.description !== '' && (
           <p className={styles.description}>{row.description}</p>
         )}
-        {!isCompact && <Chips chips={row.chips} />}
+        {!isCompact && <Chips chips={row.chips} isPending={row.areChipsPending === true} />}
       </div>
       {isCompact && (
         <div className={styles.facts}>
@@ -476,8 +482,17 @@ function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isComp
   );
 }
 
-/** A row's facts as neutral Badges, or nothing when it has none. */
-function Chips({ chips }: { readonly chips: readonly string[] }) {
+/** A row's facts as neutral Badges, the line held by a Skeleton while they load, or nothing when it has none. */
+function Chips({ chips, isPending = false }: { readonly chips: readonly string[]; readonly isPending?: boolean }) {
+  if (chips.length === 0 && isPending) {
+    return (
+      <ul className={styles.chips} data-pending="" aria-hidden>
+        <li>
+          <Skeleton width="short" />
+        </li>
+      </ul>
+    );
+  }
   if (chips.length === 0) return null;
   return (
     <ul className={styles.chips}>

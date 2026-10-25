@@ -331,8 +331,12 @@ function Blocks({
       id: item.id,
       title: words.title,
       address: words.address,
-      // Its presses over 30 days, once the figures are here (a pending block has none yet).
+      // Its presses over 30 days, once the figures are here (a pending block has none yet). The figures are read
+      // apart from the blocks, so until they land the chip's line is held, and the row never grows under a thumb.
       chips: isPending ? [] : pressesChip(item, counts),
+      ...(isPending || counts !== undefined || (state.status === 'ready' && state.countsFailed === true)
+        ? {}
+        : { areChipsPending: true }),
       leading: <LinkPageTile block={tileOf(item)} />,
       ...(words.badge === undefined ? {} : { badge: words.badge }),
       ...(words.isOff === true ? { isOff: true } : {}),

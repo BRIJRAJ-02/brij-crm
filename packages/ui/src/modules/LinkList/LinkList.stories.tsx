@@ -801,6 +801,35 @@ export const Sections: Story = {
   },
 };
 
+/** A figure still on its way: its line is held, so the row is the same height before and after it lands. */
+export const ChipsPending: Story = {
+  render: (args) => {
+    const row = (chips: string[], pending: boolean): LinkRow => ({
+      id: 'deck',
+      title: 'Our deck',
+      address: 'example.com/deck',
+      chips,
+      ...(pending ? { areChipsPending: true } : {}),
+      leading: <LinkPageTile block={{ kind: 'link', id: 'deck', title: 'Our deck', href: '', hue: 'purple' }} />,
+    });
+    return (
+      <Stage width="phone">
+        <LinkList {...args} label="Waiting" leadingLoading={<LinkPageTile />} rows={[row([], true)]} />
+        <LinkList {...args} label="Landed" leadingLoading={<LinkPageTile />} rows={[row(['12 clicks'], false)]} />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const rows = canvas.getAllByRole('row');
+    await expect(rows).toHaveLength(2);
+    const waiting = rows[0]?.getBoundingClientRect().height ?? 0;
+    const landed = rows[1]?.getBoundingClientRect().height ?? 0;
+    await expect(waiting).toBeGreaterThan(0);
+    // The brief measures this the way loading-shape does: within 4px.
+    await expect(Math.abs(waiting - landed)).toBeLessThanOrEqual(4);
+  },
+};
+
 /** Tiled rows while they load: the tile's place is held, so the titles land where the lines stood. */
 export const LeadingLoading: Story = {
   parameters: { crm: { screenshot: false } },

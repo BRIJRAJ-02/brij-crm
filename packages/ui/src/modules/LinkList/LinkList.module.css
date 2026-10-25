@@ -223,6 +223,13 @@
     list-style: none;
   }
 
+  /* A figure still on its way: the line keeps a Badge's height, so the row is the same before and after it lands
+     and nothing under it moves. */
+  .chips[data-pending] {
+    align-items: center;
+    min-block-size: var(--size-chip);
+  }
+
   .end {
     display: flex;
     flex: none;
