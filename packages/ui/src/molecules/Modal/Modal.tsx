@@ -50,6 +50,11 @@ export interface ModalProps {
   readonly children: ReactNode;
   /** The footer's buttons, Cancel first and the primary last. A Button with `slot="close"` closes the modal. */
   readonly actions?: ReactNode;
+  /**
+   * A quiet line at the start of the footer, before the buttons: what pressing the primary will do beyond the
+   * obvious ("It goes to the end of the section. Drag it anywhere afterwards."). Needs `actions`.
+   */
+  readonly hint?: ReactNode;
   readonly variant?: ModalVariant;
   /**
    * A wider window (`size-dialog-wide` plus a `size-column`, 980px), for a reference laid out as a settings page:
@@ -112,6 +117,7 @@ export function Modal({
   title,
   children,
   actions,
+  hint,
   variant = 'dialog',
   isWide = false,
   icon,
@@ -197,7 +203,12 @@ export function Modal({
               <PageEdge value={false}>{children}</PageEdge>
             </div>
           </InPopover>
-          {actions !== undefined && <div className={styles.foot}>{actions}</div>}
+          {actions !== undefined && (
+            <div className={styles.foot}>
+              {hint !== undefined && <p className={styles.hint}>{hint}</p>}
+              {actions}
+            </div>
+          )}
         </Dialog>
       </AriaModal>
     </ModalOverlay>

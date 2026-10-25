@@ -135,6 +135,17 @@
     background: var(--surface-subtle);
   }
 
+  /* The footer's quiet line: it takes the room left of the buttons, and wraps rather than pushing them. */
+  .hint {
+    flex: 1;
+    margin: 0;
+    min-inline-size: 0;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-align: start;
+  }
+
   /* On a phone the footer's buttons stack, each the dialog's width, the primary (listed last, after Cancel) on
      top. */
   @container modal-scrim (width < 480px) {

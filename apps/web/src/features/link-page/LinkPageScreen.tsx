@@ -131,9 +131,7 @@ function HeaderActions({ handle }: { readonly handle: string }) {
       >
         {shown}
       </ButtonLink>
-      {/* The share glyph lives in the link page's own icon chunk, which only LinkPage scopes; the modal this opens
-          is the QR, so the registry's own qr-code says what it does without pulling a second set into the app. */}
-      <Button icon="qr-code" onPress={() => setSharing(true)}>
+      <Button icon="upload" onPress={() => setSharing(true)}>
         {strings.share}
       </Button>
       <ShareLinkPageModal address={address} handle={handle} isOpen={isSharing} onClose={() => setSharing(false)} />

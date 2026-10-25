@@ -13,14 +13,45 @@
     gap: var(--space-8);
   }
 
-  .choices[data-orientation='horizontal'] {
-    flex-flow: row wrap;
-    column-gap: var(--space-16);
-  }
-
   .field {
     display: flex;
     flex-direction: column;
+  }
+
+  /* Cards: a grid two wide down to a phone, each choice a bordered box the whole of which picks it. */
+  .choices[data-variant='cards'] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(var(--size-measure), 1fr));
+    gap: var(--space-8);
+  }
+
+  .choices[data-variant='cards'] .field {
+    box-sizing: border-box;
+    gap: var(--space-2);
+    block-size: 100%;
+    padding: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .choices[data-variant='cards'] .field:has(.radio[data-selected]) {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .choices[data-variant='cards'] .field:has(.radio[data-hovered]:not([data-selected], [data-disabled])) {
+      background: var(--surface-hover);
+    }
+  }
+
+  .choices[data-orientation='horizontal'] {
+    flex-flow: row wrap;
+    column-gap: var(--space-16);
   }
 
   /* Positioned, so the visually hidden input stays inside the control. */
@@ -98,6 +129,13 @@
   /* The control and its label fade; a description under it stays readable. */
   .radio[data-disabled] {
     opacity: var(--opacity-disabled);
+  }
+
+  /* A card's label line: its glyph, then its words. */
+  .label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
   }
 
   .label[data-described] {
