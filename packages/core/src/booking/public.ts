@@ -855,10 +855,13 @@ export async function bookPublicSlot(
 
   // 4. The calendar event on the host's calendar, after the commit: three tries, then the booking stands without one.
   // A team booking's other hosts are invited beside the visitor (AC-627, AC-1322).
-  const coHosts = await memberEmails(
-    entry,
-    hosts.filter((id) => id !== host),
-  );
+  //
+  // The host they booked goes on it too, first (owner, 25 Oct 2026). They were left off because the event sits on
+  // their calendar and the provider makes them its organiser, but a guest's own copy never shows the organiser: a
+  // page with one host reached the visitor titled "meeting with <themselves>", one guest, themselves, and nothing
+  // on it naming who they were meeting. The provider marks the calendar's owner accepted rather than inviting them
+  // to their own event, so this adds a name, not an email.
+  const invitedHosts = await memberEmails(entry, [host, ...hosts.filter((id) => id !== host)]);
   let written: Awaited<ReturnType<BookingCalendar['events']>> | undefined;
   for (let attempt = 1; attempt <= 3 && written === undefined; attempt += 1) {
     try {
@@ -872,11 +875,11 @@ export async function bookPublicSlot(
         start: start.toISOString(),
         end: end.toISOString(),
         attendees: [
+          ...invitedHosts,
           { email: input.email, name: input.name },
           ...(input.guests ?? [])
             .filter((guest) => guest !== input.email)
             .map((guest) => ({ email: guest, name: guest })),
-          ...coHosts,
         ],
         video: page.location.type === 'video',
         ...(eventLocation(page, input) === undefined ? {} : { location: eventLocation(page, input) }),
