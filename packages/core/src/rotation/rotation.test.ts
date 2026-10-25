@@ -950,9 +950,12 @@ describe('fixed hosts and several rotations (spec 0037, AC-1319 to AC-1322)', ()
         where booking_id = ${booked.bookingId}::uuid`),
     );
     expect(ledger.rows.map((row) => row.rotation).sort()).toEqual([sales.id, solutions.id].sort());
-    // The event is on the fixed host's calendar, with the other hosts invited (AC-1322).
+    // The event is on the fixed host's calendar, with the other hosts invited (AC-1322), and the fixed host on it
+    // too, first: a guest's own copy never shows the organiser, so without them nothing on the visitor's copy names
+    // whose meeting it is (owner, 25 Oct 2026). Four now: the three hosts and the visitor.
     expect(events[0]?.hostMemberId).toBe(alice.id);
-    expect(events[0]?.attendees).toHaveLength(3);
+    expect(events[0]?.attendees).toHaveLength(4);
+    expect(events[0]?.attendees[0]?.email).toBe(`alice.fixed-${alice.id.slice(-6)}@acme.example`);
     expect(booked.booking.hostName).toMatch(/^Alice Fixed, .+ and .+$/);
   });
 
