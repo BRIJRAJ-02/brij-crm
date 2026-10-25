@@ -14,18 +14,20 @@ import {
   ProfileBlock,
   ProfileItem,
   profileLimitSentence,
+  SkippedImportRow,
   PROFILE_COUNT_DAYS,
   type ProfileCounts,
   type ProfileItems,
   type ProfileFormChoice,
   type ProfileFormFacts,
   type ProfilePageChoice,
+  type ProfileLinkImportResult,
   type ProfilePageFacts,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { enterOwnForms, enterOwnPages, ownUserId, type OwnedFormEntry, type OwnedPageEntry } from '../access/door.ts';
-import { isUuid } from '../engine/ids.ts';
+import { isUuid, newId } from '../engine/ids.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -647,5 +649,60 @@ export async function readProfileCounts(scope: EngineScope, now: Date = new Date
     presses: current.flatMap((row) =>
       row.item_id === null || Number(row.presses ?? 0) < 1 ? [] : [{ id: row.item_id, presses: Number(row.presses) }],
     ),
+  };
+}
+
+/**
+ * Keeps one link in bio page's rows as hidden blocks (spec 0055, AC-5524 to AC-5528). The reading of the page is
+ * not here: `readImportedPage` in `../booking/link-import.ts` turns HTML into rows with no network and no
+ * database, and the api's bounded fetch brings it. This is the write, and all it does is land what it was given.
+ *
+ * Every row lands hidden, in the order the page had them, so an import that is never reviewed changes nothing a
+ * visitor sees. `id` is the import's own: the same import again adds nothing and answers what it already holds.
+ */
+export async function importProfileLinks(
+  scope: EngineScope,
+  input: {
+    readonly id: string;
+    readonly source: string;
+    readonly rows: readonly { readonly title: string; readonly url: string }[];
+    readonly skipped: readonly SkippedImportRow[];
+  },
+): Promise<ProfileLinkImportResult> {
+  const owner = ownerOf(scope);
+  const blocks = input.rows.map((row, index) => ({
+    id: newId(),
+    // The hue ring runs over the import itself, so one import's rows read as a set rather than all one colour.
+    data: { title: row.title, url: row.url, hue: nextHue(index) },
+  }));
+  const skipped = input.skipped.map((row) => SkippedImportRow.parse(row));
+  const made = await inWorkspace(scope, async (tx) => {
+    try {
+      const answered = await tx.execute<{ existed: boolean; made: number }>(
+        sql`select existed, made from crm_import_profile_links(${owner}::uuid, ${input.id}::uuid, ${input.source}, ${JSON.stringify(blocks)}::jsonb, ${JSON.stringify(skipped)}::jsonb)`,
+      );
+      return answered.rows[0];
+    } catch (error) {
+      const pg = postgresError(error);
+      if (pg?.code === '54000' && pg.detail === 'imports') {
+        throw refuse('LIMIT_REACHED', 'You’ve brought across five pages in the last hour. Try again later.');
+      }
+      if (pg?.code === 'P0002') throw refuse('NOT_FOUND', 'That import isn’t yours.');
+      throw refusalOf(error);
+    }
+  });
+  const items = await readAll(scope, owner);
+  const existed = made?.existed ?? false;
+  return {
+    ...items,
+    import: {
+      id: input.id,
+      source: input.source,
+      made: made?.made ?? 0,
+      existed,
+      // A retry answers the page as it now stands and claims none of it: the ids are this call's only when it made them.
+      itemIds: existed ? [] : blocks.map((block) => block.id),
+      skipped,
+    },
   };
 }

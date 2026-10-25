@@ -491,6 +491,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       formChoices: os.profile.formChoices.handler(notServed),
       saveTheme: os.profile.saveTheme.handler(notServed),
       setIndexable: os.profile.setIndexable.handler(notServed),
+      importLinks: os.profile.importLinks.handler(notServed),
       saveItem: os.profile.saveItem.handler(notServed),
       orderItems: os.profile.orderItems.handler(notServed),
       archiveItem: os.profile.archiveItem.handler(notServed),

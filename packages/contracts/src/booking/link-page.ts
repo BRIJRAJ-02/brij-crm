@@ -302,6 +302,41 @@ export const ProfileItems = z.object({
 /** The editor's read. */
 export type ProfileItems = z.infer<typeof ProfileItems>;
 
+/** Why a row a link in bio page had is not a link we can make (spec 0055, AC-5527). */
+export const IMPORT_SKIPS = ['no-address', 'not-web', 'the-page-itself', 'repeated', 'past-limit', 'no-title'] as const;
+
+/**
+ * A row the import could not map, kept with whatever it had and why, so nothing is dropped without being shown
+ * (AC-5527). The person may still add it by hand from what is here.
+ */
+export const SkippedImportRow = z.object({
+  title: z.string().max(PROFILE_TITLE_MAX.link).optional(),
+  url: z.string().max(2048).optional(),
+  reason: z.enum(IMPORT_SKIPS),
+});
+/** A row the import could not map. */
+export type SkippedImportRow = z.infer<typeof SkippedImportRow>;
+
+/**
+ * One link in bio page brought across (AC-5524 to AC-5528). `made` is how many hidden blocks it holds, and
+ * `existed` says the same import was already made, so a retry adds nothing twice.
+ */
+export const ProfileLinkImport = z.object({
+  id: Uuid,
+  source: z.string(),
+  made: z.number().int().min(0),
+  existed: z.boolean(),
+  itemIds: z.array(Uuid),
+  skipped: z.array(SkippedImportRow),
+});
+/** One link in bio page brought across. */
+export type ProfileLinkImport = z.infer<typeof ProfileLinkImport>;
+
+/** What an import answers: the import itself, and the page's blocks as they now stand. */
+export const ProfileLinkImportResult = ProfileItems.extend({ import: ProfileLinkImport });
+/** What an import answers. */
+export type ProfileLinkImportResult = z.infer<typeof ProfileLinkImportResult>;
+
 /** A form the person may place on their link page, from any of their workspaces (spec 0052, AC-5213). */
 export const ProfileFormChoice = z.object({
   workspaceId: Uuid,

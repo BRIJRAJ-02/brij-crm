@@ -582,6 +582,17 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.profile.setIndexable({ workspace: m.slug, indexable: false, mutationId });
     return [{ kind: 'members', item_ids: [me.memberId] }];
   },
+  // Bringing a link in bio page across (spec 0055): hidden blocks in schema auth, so no outbox row either. The
+  // page it reads is the test outside fetch's fixed one, so nothing here touches the network.
+  'profile.importLinks': async (m, mutationId) => {
+    await m.client.profile.importLinks({
+      workspace: m.slug,
+      id: newId(),
+      url: 'https://linktr.ee/someone',
+      mutationId,
+    });
+    return [];
+  },
   // The link page's blocks (spec 0051) live in schema auth: no tenant change, so no outbox row.
   'profile.saveItem': async (m, mutationId) => {
     await m.client.profile.saveItem({

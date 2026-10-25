@@ -431,6 +431,8 @@ describe('the walk: a principal without the access is refused', () => {
         saveProfileTheme: { ground: 'ink', hue: 'green', mode: 'dark', shape: 'pill', fill: 'solid', font: 'mono' },
         // Whether search engines may show the page names nothing either, and Bea has no page: NOT_FOUND too.
         setProfileIndexable: false,
+        // An import of nothing: what it would land is Bea's own, so it answers Bea's page and holds none of Ada's.
+        importProfileLinks: { id: core.newId(), source: 'https://linktr.ee/bea', rows: [], skipped: [] },
       };
       expect(await refusalOf(service(name)(key, inputs[name]))).toMatchObject({ code: 'FORBIDDEN' });
       const outcome = await service(name)(beaScope, inputs[name]).then(
@@ -441,7 +443,8 @@ describe('the walk: a principal without the access is refused', () => {
         name === 'readProfileItems' ||
         name === 'listProfilePageChoices' ||
         name === 'listProfileFormChoices' ||
-        name === 'readProfileCounts'
+        name === 'readProfileCounts' ||
+        name === 'importProfileLinks'
       ) {
         // The reads answer Bea's own page, which holds nothing of Ada's: a refusal would say the wrong thing.
         expect(JSON.stringify(outcome)).not.toContain(theirs.id);

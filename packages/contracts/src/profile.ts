@@ -9,6 +9,7 @@ import {
   ProfileFormChoice,
   ProfileItem,
   ProfileItems,
+  ProfileLinkImportResult,
   ProfilePageChoice,
 } from './booking/link-page.ts';
 import { PageTheme } from './booking/page-theme.ts';
@@ -192,6 +193,19 @@ export const DeleteProfileItemInput = WorkspaceScoped.extend({
 export type DeleteProfileItemInput = z.infer<typeof DeleteProfileItemInput>;
 
 /**
+ * Brings one link in bio page across (spec 0055, AC-5524 to AC-5528). `id` is the import's own id, so a retry of
+ * the same import adds nothing twice, and `url` is the page to read, which must be one of the services on the
+ * allow list. Every row it makes lands hidden; nothing it brings is on the public page until a person turns it on.
+ */
+export const ImportProfileLinksInput = WorkspaceScoped.extend({
+  id: Uuid,
+  url: z.string().max(400),
+  mutationId: Uuid,
+});
+/** Brings one link in bio page across. */
+export type ImportProfileLinksInput = z.infer<typeof ImportProfileLinksInput>;
+
+/**
  * The profile procedures: any active member, for themself only. The link page's (spec 0051) act on the caller's own
  * account in every workspace: the owner is the session's, never an input, and no role reaches another person's.
  */
@@ -208,6 +222,8 @@ export const profileContract = {
   setIndexable: oc
     .input(WorkspaceScoped.extend({ indexable: z.boolean(), mutationId: Uuid }))
     .output(z.object({ indexable: z.boolean() })),
+  /** Brings one link in bio page across (spec 0055, AC-5524): the rows land hidden, and a person turns them on. */
+  importLinks: oc.input(ImportProfileLinksInput).output(ProfileLinkImportResult),
   saveItem: oc.input(SaveProfileItemInput).output(ProfileItem),
   orderItems: oc.input(OrderProfileItemsInput).output(ProfileItems),
   archiveItem: oc.input(ArchiveProfileItemInput).output(ProfileItems),

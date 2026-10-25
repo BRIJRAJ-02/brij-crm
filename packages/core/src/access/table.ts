@@ -133,6 +133,7 @@ export const ACCESS_TABLE = {
   listProfileFormChoices: { ownLinkPage: true },
   saveProfileTheme: { ownLinkPage: true },
   setProfileIndexable: { ownLinkPage: true },
+  importProfileLinks: { ownLinkPage: true },
   saveProfileItem: { ownLinkPage: true },
   orderProfileItems: { ownLinkPage: true },
   archiveProfileItem: { ownLinkPage: true },
