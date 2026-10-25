@@ -34,26 +34,22 @@ jobs:
           report() {
             name="$1"; url="$2"
             if [ -z "$url" ]; then echo "== $name: no secret set, skipped"; return; fi
+            case "$url" in *sslrootcert=*) ;; *\?*) url="$url&sslrootcert=system" ;; *) url="$url?sslrootcert=system" ;; esac
             echo "== $name"
-            psql "$url" -v ON_ERROR_STOP=0 -tAc "
-              select 'journal: ' || count(*) || ' applied, newest '
-                     || to_char(to_timestamp(max(created_at)/1000) at time zone 'UTC','YYYY-MM-DD HH24:MI')
-              from drizzle.__drizzle_migrations;"
-            psql "$url" -tAc "
-              with expected(name) as (values
-                ('crm_place_profile_page'),('crm_profile_items'),('crm_profile_items_public'),
-                ('crm_delete_profile_item'),('crm_archive_profile_item'),('crm_profile_counts'),
-                ('crm_import_profile_links'),('crm_public_profiles_of'),('crm_handle_owner'),
-                ('crm_count_item_press'),('crm_booking_page_by_address'),('crm_claim_workspace_address'),
-                ('crm_profile_item_blocks'),('crm_set_profile_theme'))
-              select 'MISSING function: ' || name from expected
-              where not exists (select 1 from pg_proc where proname = name);"
-            psql "$url" -tAc "
-              select 'MISSING table: ' || n from (values
-                ('auth.profile_items'),('auth.link_imports'),('auth.public_profiles'),
-                ('auth.profile_counts'),('auth.social_links'),('auth.booking_slug_history')) as t(n)
-              where to_regclass(n) is null;"
-            echo "   (nothing listed above means nothing expected is missing)"
+            psql "$url" -tAc "select 'server: ' || version();"
+            psql "$url" -tAc "select 'journal: ' || count(*) || ' applied, newest ' || to_char(to_timestamp(max(created_at)/1000) at time zone 'UTC','YYYY-MM-DD HH24:MI') from drizzle.__drizzle_migrations;"
+            echo "-- exact signature resolves?"
+            psql "$url" -tAc "select 'regprocedure: ' || 'public.crm_place_profile_page(uuid,uuid,uuid)'::regprocedure::text;" 2>&1 | tail -2
+            echo "-- every overload by that name"
+            psql "$url" -tAc "select n.nspname || '.' || p.proname || '(' || pg_get_function_arguments(p.oid) || ') owner=' || pg_get_userbyid(p.proowner) || ' cfg=' || coalesce(array_to_string(p.proconfig,','),'none') from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.proname='crm_place_profile_page';"
+            echo "-- deployed body"
+            psql "$url" -tAc "select pg_get_functiondef(p.oid) from pg_proc p where p.proname='crm_place_profile_page';"
+            echo "-- triggers on auth.profile_items"
+            psql "$url" -tAc "select t.tgname || ' -> ' || p.proname from pg_trigger t join pg_proc p on p.oid=t.tgfoid where t.tgrelid='auth.profile_items'::regclass and not t.tgisinternal;"
+            echo "-- check constraints on auth.profile_items"
+            psql "$url" -tAc "select conname || ': ' || pg_get_constraintdef(oid) from pg_constraint where conrelid='auth.profile_items'::regclass and contype='c';"
+            echo "-- can crm_app execute it?"
+            psql "$url" -tAc "select 'crm_app execute: ' || has_function_privilege('crm_app','public.crm_place_profile_page(uuid,uuid,uuid)','execute')::text;" 2>&1 | tail -2
           }
           case "$TARGET" in
             timefix)  report timefix "$TIMEFIX_URL" ;;
