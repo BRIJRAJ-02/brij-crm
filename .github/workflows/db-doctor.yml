@@ -48,6 +48,8 @@ jobs:
             psql "$url" -tAc "select t.tgname || ' -> ' || p.proname from pg_trigger t join pg_proc p on p.oid=t.tgfoid where t.tgrelid='auth.profile_items'::regclass and not t.tgisinternal;"
             echo "-- check constraints on auth.profile_items"
             psql "$url" -tAc "select conname || ': ' || pg_get_constraintdef(oid) from pg_constraint where conrelid='auth.profile_items'::regclass and contype='c';"
+            echo "-- where uuidv7 lives"
+            psql "$url" -tAc "select n.nspname || '.uuidv7() from ' || coalesce(e.extname,'core') from pg_proc p join pg_namespace n on n.oid=p.pronamespace left join pg_depend d on d.objid=p.oid and d.deptype='e' left join pg_extension e on e.oid=d.refobjid where p.proname='uuidv7' and p.pronargs=0;"
             echo "-- can crm_app execute it?"
             psql "$url" -tAc "select 'crm_app execute: ' || has_function_privilege('crm_app','public.crm_place_profile_page(uuid,uuid,uuid)','execute')::text;" 2>&1 | tail -2
           }
