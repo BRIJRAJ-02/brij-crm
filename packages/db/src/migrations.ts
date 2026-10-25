@@ -98,20 +98,76 @@ export async function grantQueueRights(client: pg.ClientBase): Promise<void> {
 }
 
 /**
+ * `uuidv7()` under one name on every Postgres we run on. The built in arrived in 18, and the two productions do not
+ * agree: Timefix's database is 17.11, brij-crm's is 18.6 (25 October 2026). Forty three of the migrations call
+ * `uuidv7()` unqualified from migration 0002 onwards, so on 17 a fresh database cannot be built at all without
+ * this. It runs before the migrations, not as one of them, because a migration numbered after 0002 would be far
+ * too late, and an already built database skips it either way.
+ *
+ * On 18 it wraps the built in. On 17 it writes the same value the built in would: 48 bits of millisecond time, the
+ * version nibble 7, the variant bits, and randomness from `gen_random_uuid()` for the rest. A database that
+ * already has one of its own (Timefix was patched by hand) keeps it untouched.
+ */
+async function ensureUuidV7(client: pg.Client): Promise<void> {
+  await client.query(`
+    do $$
+    begin
+      if to_regprocedure('public.uuidv7()') is not null then
+        return;
+      end if;
+      if to_regprocedure('pg_catalog.uuidv7()') is not null then
+        execute 'create function public.uuidv7() returns uuid language sql volatile parallel safe '
+             || 'as $f$select pg_catalog.uuidv7()$f$';
+      else
+        execute $f$
+          create function public.uuidv7() returns uuid
+            language sql volatile parallel safe
+          as $body$
+            with r as (select pg_catalog.uuid_send(pg_catalog.gen_random_uuid()) as b)
+            select pg_catalog.encode(
+              pg_catalog.set_byte(
+                pg_catalog.set_byte(
+                  overlay(b placing substring(
+                    pg_catalog.int8send(
+                      pg_catalog.floor(extract(epoch from pg_catalog.clock_timestamp()) * 1000)::bigint)
+                    from 3) from 1 for 6),
+                  6, (pg_catalog.get_byte(b, 6) & 15) | 112),
+                8, (pg_catalog.get_byte(b, 8) & 63) | 128),
+              'hex')::uuid
+            from r
+          $body$
+        $f$;
+      end if;
+      comment on function public.uuidv7() is
+        'uuidv7 under one name on Postgres 17 and 18 (packages/db/src/migrations.ts).';
+    end
+    $$;
+  `);
+}
+
+/**
  * Applies Graphile Worker's migrations, then ours, then the queue rights, all
  * as the owner on `ownerUrl` (a direct connection: Graphile's migrations
  * notify). Graphile's are idempotent, so each run only applies what is new.
  */
 export async function applyMigrations(ownerUrl: string, applicationName: string): Promise<void> {
-  await runMigrations({ connectionString: ownerUrl, logger: quiet });
   const client = new pg.Client({ connectionString: ownerUrl, application_name: applicationName });
   await client.connect();
   try {
-    await migrate(drizzle({ client }), {
-      migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)),
-    });
-    await grantQueueRights(client);
+    // Before anything else: migration 0002 already calls uuidv7(), which Postgres 17 has no built in for.
+    await ensureUuidV7(client);
   } finally {
     await client.end();
+  }
+  await runMigrations({ connectionString: ownerUrl, logger: quiet });
+  const second = new pg.Client({ connectionString: ownerUrl, application_name: applicationName });
+  await second.connect();
+  try {
+    await migrate(drizzle({ client: second }), {
+      migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)),
+    });
+    await grantQueueRights(second);
+  } finally {
+    await second.end();
   }
 }

@@ -42,6 +42,7 @@ pnpm db:setup       # all three, in order
 
 ## Gotchas
 
+- The two productions do not run the same Postgres: Timefix's database is 17.11, brij-crm's is 18.6, and CI only ever sees 18. A built in that arrived in 18 passes every test and then raises 42883 on Timefix. `src/portable.test.ts` refuses a `pg_catalog.` call to one; `uuidv7()` is given a shim by `applyMigrations` before any migration runs, so write it unqualified.
 - Outside `withWorkspace()`, a tenant query returns no rows rather than an error. The policies fail closed, which is safe but can look like a bug.
 - `withWorkspace()` throws a `TypeError` unless the id is a uuid.
 - `DATABASE_URL` is pooled (PgBouncer in transaction mode): no named prepared statements, and no LISTEN. LISTEN is accepted there but never delivers, so it only runs on `DATABASE_URL_DIRECT`.
