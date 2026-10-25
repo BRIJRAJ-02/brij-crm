@@ -16,6 +16,7 @@ import {
   type ProfileItem,
 } from '@crm/data';
 import {
+  BookingFoot,
   Button,
   ButtonLink,
   Card,
@@ -486,6 +487,11 @@ function Blocks({
   const preview = (
     <LinkPage
       isPreview
+      // What a visitor sees at the foot of the page: the editor hid it, so the preview was not the page (the
+      // owner, 25 October 2026). ProfilePage draws the same footer live. Its "Claim your free page" link is left
+      // out here: it is for a visitor without a page, not for the person whose page this is, and `claimPageHref`
+      // lives on the public pages' own entry, which the app's bundle has no reason to pull in.
+      foot={<BookingFoot page="booking_profile" />}
       person={{
         name: profile.name.trim() || handle,
         id: handle,
