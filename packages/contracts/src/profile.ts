@@ -127,6 +127,8 @@ export const MyProfile = z.object({
   socials: z.array(z.object({ network: SocialLinkNetwork, href: z.string() })).optional(),
   /** The look of their link page (spec 0054); the default until they pick one, and absent with no handle. */
   theme: PageTheme.optional(),
+  /** Whether search engines may show their link page (spec 0055, AC-5506); absent with no handle. */
+  indexable: z.boolean().optional(),
 });
 /** The caller's profile in this workspace. */
 export type MyProfile = z.infer<typeof MyProfile>;
@@ -202,6 +204,10 @@ export const profileContract = {
   formChoices: oc.input(WorkspaceScoped).output(z.array(ProfileFormChoice)),
   /** The look of the caller's own link page (spec 0054): read with the profile, saved whole. */
   saveTheme: oc.input(WorkspaceScoped.extend({ theme: PageTheme, mutationId: Uuid })).output(PageTheme),
+  /** Whether search engines may show the caller's own link page (spec 0055, AC-5506): read with the profile. */
+  setIndexable: oc
+    .input(WorkspaceScoped.extend({ indexable: z.boolean(), mutationId: Uuid }))
+    .output(z.object({ indexable: z.boolean() })),
   saveItem: oc.input(SaveProfileItemInput).output(ProfileItem),
   orderItems: oc.input(OrderProfileItemsInput).output(ProfileItems),
   archiveItem: oc.input(ArchiveProfileItemInput).output(ProfileItems),

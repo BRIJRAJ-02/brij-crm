@@ -5,6 +5,7 @@ import {
   getMyProfile,
   listProfileFormChoices,
   saveProfileTheme,
+  setProfileIndexable,
   listProfilePageChoices,
   orderProfileItems,
   readProfileCounts,
@@ -72,6 +73,9 @@ export const profileRouter = member.profile.router({
   ]),
   saveTheme: member.profile.saveTheme.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () => saveProfileTheme(context.scope, input.theme)),
+  ),
+  setIndexable: member.profile.setIndexable.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () => setProfileIndexable(context.scope, input.indexable)),
   ),
   saveItem: member.profile.saveItem.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>

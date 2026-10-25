@@ -642,6 +642,7 @@ interface HandleOwnerRow extends Record<string, unknown> {
   readonly name: string;
   readonly image: string | null;
   readonly theme: unknown;
+  readonly indexable: boolean;
 }
 
 /** The person a handle names (current or old): their identity, current handle, and what their profile shows. */
@@ -663,6 +664,8 @@ export interface HandleOwner {
    * later build widened, draws as the default rather than as nothing.
    */
   readonly theme: PageTheme;
+  /** Whether search engines may show their page (spec 0055, AC-5506): on until they say otherwise. */
+  readonly indexable: boolean;
 }
 
 /** The person `handle` names, or undefined: a malformed or reserved handle reads nothing. */
@@ -674,7 +677,7 @@ async function handleOwner(
   if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return undefined;
   return db.withWorkspace(NO_WORKSPACE, async (tx) => {
     const found = await tx.execute<HandleOwnerRow>(
-      sql`select user_id::text as user_id, handle, bio, name, image, theme from crm_handle_owner(${handle})`,
+      sql`select user_id::text as user_id, handle, bio, name, image, theme, indexable from crm_handle_owner(${handle})`,
     );
     const [row] = found.rows;
     if (row === undefined) return undefined;
@@ -687,6 +690,7 @@ async function handleOwner(
       // The same read as their booking pages' (`publicSocialsOf`), in this one transaction.
       socials: withSocials ? await publicSocialsOf(tx, row.user_id) : [],
       theme: PageTheme.safeParse(row.theme).data ?? DEFAULT_PAGE_THEME,
+      indexable: row.indexable,
     };
   });
 }

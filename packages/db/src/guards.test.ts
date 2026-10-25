@@ -144,7 +144,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly thirty six security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly thirty seven security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -197,6 +197,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
+      { name: 'crm_save_profile_indexable', owner: 'crm_handle' },
       { name: 'crm_save_profile_item', owner: 'crm_handle' },
       // The look of the page (spec 0054, migration 0105).
       { name: 'crm_save_profile_theme', owner: 'crm_handle' },
@@ -269,6 +270,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises PROFILE_ITEM_LIMIT, PROFILE_ITEM_DATA and PROFILE_ITEM_MISSING.
+      { name: 'crm_save_profile_indexable', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_save_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_save_profile_theme', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises the unique violation a taken handle is refused with.
@@ -446,8 +448,10 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_count_item_press',
         'crm_profile_counts',
         'crm_sweep_profile_counts',
-        // The look of the page (spec 0054, migration 0105).
+        // The look of the page (spec 0054, migration 0105), and whether search engines may show it
+        // (spec 0055, migration 0108).
         'crm_save_profile_theme',
+        'crm_save_profile_indexable',
       ],
       [
         'crm_save_public_profile(uuid, text, text)',
@@ -470,8 +474,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_profile_counts(uuid, date, date)',
         'crm_sweep_profile_counts(integer)',
         'crm_save_profile_theme(uuid, jsonb)',
+        'crm_save_profile_indexable(uuid, boolean)',
       ],
-      Array.from({ length: 20 }, () => 'app'),
+      Array.from({ length: 21 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -2045,6 +2050,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth."user".name SELECT',
       'auth.public_profiles.bio UPDATE',
       'auth.public_profiles.handle UPDATE',
+      // Whether search engines may show their page (spec 0055, migration 0108): one more column, and only
+      // through crm_save_profile_indexable. This line is the whole of what that spec widened.
+      'auth.public_profiles.indexable UPDATE',
       // The look of their page (spec 0054, migration 0105): one more column, and only through
       // crm_save_profile_theme. This line is the whole of what that spec widened.
       'auth.public_profiles.theme UPDATE',

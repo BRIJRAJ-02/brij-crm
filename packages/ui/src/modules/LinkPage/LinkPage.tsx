@@ -304,7 +304,7 @@ const TILE_ICONS = {
   heading: 'type',
   text: 'file-text',
   faq: 'circle-question-mark',
-  testimonial: 'quote',
+  testimonial: 'message-square',
 } as const satisfies Record<'heading' | 'text' | 'faq' | 'testimonial', IconName>;
 
 export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {

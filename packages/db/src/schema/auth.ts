@@ -334,6 +334,8 @@ export const publicProfiles = auth.table(
       .default(
         sql`'{"ground":"plain","hue":"blue","mode":"light","shape":"soft","fill":"plain","font":"sans"}'::jsonb`,
       ),
+    /** Whether search engines may show the link page (spec 0055, AC-5506): on until its owner says otherwise. */
+    indexable: boolean('indexable').notNull().default(true),
     updatedAt: updatedAt(),
   },
   (t) => [

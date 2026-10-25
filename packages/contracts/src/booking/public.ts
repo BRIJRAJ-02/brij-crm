@@ -140,6 +140,11 @@ export const PublicProfile = z.object({
   items: z.array(PublicProfileItem),
   /** The look its owner picked (spec 0054, AC-5404): the six names, and no colour value of any kind. */
   theme: PageTheme,
+  /**
+   * Whether search engines may show the page (spec 0055, AC-5506). The shell reads it with everything else, so a
+   * robots line costs no second call. Absent reads as shown, which is what every page said before the switch.
+   */
+  indexable: z.boolean().optional(),
   /** The cursor of the next page, while there is one. */
   next: z.string().optional(),
 });

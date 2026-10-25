@@ -332,6 +332,27 @@ export async function saveProfileTheme(scope: EngineScope, theme: PageTheme): Pr
   return PageTheme.safeParse(saved).data ?? parsed.data;
 }
 
+/**
+ * Whether search engines may show the caller's own link page (spec 0055, AC-5506). One column, written through the
+ * one definer; a person with no profile row has no handle either, so there is no page for anyone to show.
+ */
+export async function setProfileIndexable(scope: EngineScope, indexable: boolean): Promise<{ indexable: boolean }> {
+  const owner = ownerOf(scope);
+  const kept = await inWorkspace(scope, async (tx) => {
+    try {
+      const answered = await tx.execute<{ indexable: boolean }>(
+        sql`select crm_save_profile_indexable(${owner}::uuid, ${indexable}) as indexable`,
+      );
+      return answered.rows[0]?.indexable;
+    } catch (error) {
+      const pg = postgresError(error);
+      if (pg?.code === 'P0002') throw refuse('NOT_FOUND', 'Pick a handle before you choose this.');
+      throw error;
+    }
+  });
+  return { indexable: kept ?? indexable };
+}
+
 /** A refusal for what a definer raised, or the error itself. */
 function refusalOf(error: unknown): unknown {
   const pg = postgresError(error);

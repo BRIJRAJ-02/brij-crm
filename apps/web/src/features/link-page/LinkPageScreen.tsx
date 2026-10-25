@@ -45,6 +45,7 @@ import { useMemo, useState } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
 import { AppearanceCard } from './AppearanceCard.tsx';
+import { SharingCard } from './SharingCard.tsx';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import {
   ADDABLE,
@@ -196,6 +197,25 @@ function Blocks({
       (error: unknown) => {
         setPicked(was);
         setThemeRefusal(error instanceof Error ? (error as DataError) : undefined);
+      },
+    );
+  };
+  // Whether search engines may show the page (spec 0055, AC-5506), the same shape as the look above: shown the
+  // moment it is pressed, put back with its reason on the card if the save is refused.
+  const [switched, setSwitched] = useState<boolean | undefined>(undefined);
+  const [indexableRefusal, setIndexableRefusal] = useState<DataError | undefined>(undefined);
+  const indexable = switched ?? profile.indexable ?? true;
+  const chooseIndexable = (next: boolean) => {
+    const was = indexable;
+    setSwitched(next);
+    setIndexableRefusal(undefined);
+    void linkPage.setIndexable(slug, next).then(
+      (saved) => {
+        setSwitched(saved.indexable);
+      },
+      (error: unknown) => {
+        setSwitched(was);
+        setIndexableRefusal(error instanceof Error ? (error as DataError) : undefined);
       },
     );
   };
@@ -545,6 +565,11 @@ function Blocks({
         theme={theme}
         onChange={chooseTheme}
         {...(themeRefusal === undefined ? {} : { refusal: themeRefusal })}
+      />
+      <SharingCard
+        indexable={indexable}
+        onChange={chooseIndexable}
+        {...(indexableRefusal === undefined ? {} : { refusal: indexableRefusal })}
       />
       <Card
         title={strings.blocks}

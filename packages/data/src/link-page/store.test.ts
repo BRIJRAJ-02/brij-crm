@@ -60,6 +60,7 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
     pageChoices: () => wait('pageChoices'),
     formChoices: () => wait('formChoices'),
     saveTheme: ({ theme }) => Promise.resolve(theme),
+    setIndexable: ({ indexable }) => Promise.resolve({ indexable }),
     saveItem: (input) => {
       for (const listen of saveListeners) listen(input);
       return wait(`save:${input.id}`);

@@ -86,6 +86,10 @@ export const strings = {
   roleHint: 'Optional. It sits under their name.',
   /** A testimonial's row in the editor's list, where it has nowhere to go. */
   testimonial: 'Testimonial',
+  sharing: 'Sharing and search',
+  sharingText: 'What people see when your page is shared, and whether it can be found.',
+  indexable: 'Let search engines show this page',
+  indexableText: 'Off, your page still works and every link on it still opens. It just stops appearing in results.',
   appearance: 'Appearance',
   appearanceText: 'How your page looks. Every change shows in the preview and saves at once.',
   /**

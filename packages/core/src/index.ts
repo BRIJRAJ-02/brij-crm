@@ -138,6 +138,7 @@ export {
   deleteProfileItem,
   listProfileFormChoices,
   saveProfileTheme,
+  setProfileIndexable,
   listProfilePageChoices,
   orderProfileItems,
   readProfileCounts,

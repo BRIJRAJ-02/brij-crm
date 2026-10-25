@@ -13,6 +13,8 @@ export interface PublicProfileRow {
   readonly bio: string;
   /** The look they picked for their link page (spec 0054); the default until they touch it. */
   readonly theme: PageTheme;
+  /** Whether search engines may show their page (spec 0055, AC-5506). */
+  readonly indexable: boolean;
 }
 
 interface ProfileRow extends Record<string, unknown> {
@@ -20,6 +22,7 @@ interface ProfileRow extends Record<string, unknown> {
   readonly handle: string;
   readonly bio: string;
   readonly theme: unknown;
+  readonly indexable: boolean;
 }
 
 /** The handle, bio and look of each person named who has a handle (`crm_public_profiles_of`), by their user id. */
@@ -30,12 +33,17 @@ export async function publicProfilesOf(
   const ids = [...new Set(userIds.filter((id): id is string => id !== null && id !== undefined && isUuid(id)))];
   if (ids.length === 0) return new Map();
   const found = await tx.execute<ProfileRow>(
-    sql`select user_id::text as user_id, handle, bio, theme from crm_public_profiles_of(${`{${ids.join(',')}}`}::uuid[])`,
+    sql`select user_id::text as user_id, handle, bio, theme, indexable from crm_public_profiles_of(${`{${ids.join(',')}}`}::uuid[])`,
   );
   return new Map(
     found.rows.map((row) => [
       row.user_id,
-      { handle: row.handle, bio: row.bio, theme: PageTheme.safeParse(row.theme).data ?? DEFAULT_PAGE_THEME },
+      {
+        handle: row.handle,
+        bio: row.bio,
+        theme: PageTheme.safeParse(row.theme).data ?? DEFAULT_PAGE_THEME,
+        indexable: row.indexable,
+      },
     ]),
   );
 }

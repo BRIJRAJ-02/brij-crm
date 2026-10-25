@@ -48,12 +48,15 @@ import type {
   BookingView,
   AttributeOption,
   PickerAttributeType,
+  CreateFormInput,
   CreateWorkspaceInput,
   contract,
   FormDocument,
   FormStatus,
   FormSummary,
   FormView,
+  PublishFormInput,
+  SaveFormDraftInput,
   InvitationView,
   InvitePeek,
   InviteResult,
@@ -90,7 +93,6 @@ import type {
 import type { GlobalSearch } from './search/global.ts';
 import type { RecordRefDisplay as LinkedRecordDisplay } from '@crm/contracts/values';
 import type { InviteLinkDays } from '@crm/contracts/team-limits';
-import type { ProfileFormChoice } from '@crm/contracts';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -2129,6 +2131,13 @@ export function createDataLayer({
       call((options) => api.forms.list({ workspace, archived: false }, options)).then((page) => page.items),
   });
   /** A form write's answer as the list's row: the active list drops an archived form. */
+  /** The three form writes Email signup makes, bound to this layer's client (`link-page/signup-form.ts`). */
+  const signupWrites = {
+    create: (input: CreateFormInput) => call((options) => api.forms.create(input, options)),
+    saveDraft: (input: SaveFormDraftInput) => call((options) => api.forms.saveDraft(input, options)),
+    publish: (input: PublishFormInput) => call((options) => api.forms.publish(input, options)),
+  };
+
   const landForm =
     (formId: string) =>
     (items: readonly FormSummary[], form: FormView): readonly FormSummary[] =>
@@ -3025,90 +3034,6 @@ export function createDataLayer({
       }),
     );
     return records;
-  };
-
-  /**
-   * Email signup (spec 0052, AC-5217): makes a hosted form that asks one thing, an address, and publishes it, so
-   * the link page editor can add an ordinary form block pointing at it. It is not a kind of its own, and the
-   * addresses land in that form's responses, where every other capture on Timefix already lands, so the person's
-   * routing, notifications and export work on them unchanged.
-   *
-   * The form keeps its submissions only (`targets: {}`), which is what lets it be made in any workspace without
-   * asking which object to file against. Three calls, in order: make it, write its one question, publish it. Each
-   * goes through the same write path Captures uses, so the forms list learns about it without being read again.
-   */
-  const makeSignupForm = async (
-    workspace: string,
-    input: { readonly name: string; readonly headline: string; readonly buttonText: string },
-  ): Promise<ProfileFormChoice> => {
-    const made = await formLists.write(workspace, {
-      send: () =>
-        call((options) =>
-          api.forms.create(
-            { workspace, id: mintId(), name: input.name, mainObjectId: null, mutationId: mintId() },
-            options,
-          ),
-        ),
-      land: (items, form) => landForm(form.id)(items, form),
-    });
-    const saved = await formLists.write(workspace, {
-      send: () =>
-        call((options) =>
-          api.forms.saveDraft(
-            {
-              workspace,
-              formId: made.id,
-              document: {
-                ...made.draft,
-                // The one question a signup form asks. Written here rather than imported from the contracts:
-                // that module builds the document's Zod schema, and this file is in the first load, where Zod
-                // must not be (`apps/web/build.test.ts` fails on it).
-                questions: [
-                  {
-                    id: 'email',
-                    key: 'email',
-                    label: 'Email',
-                    answerType: 'email',
-                    placeholder: 'you@example.com',
-                    required: true,
-                    update: 'fill',
-                  },
-                ],
-                targets: {},
-                headline: input.headline,
-                buttonText: input.buttonText,
-              },
-              expectedRevision: made.revision,
-              mutationId: mintId(),
-            },
-            options,
-          ),
-        ),
-      land: landForm(made.id),
-    });
-    const live = await formLists.write(workspace, {
-      send: () =>
-        call((options) =>
-          api.forms.publish(
-            { workspace, formId: made.id, expectedRevision: saved.revision, name: input.name, mutationId: mintId() },
-            options,
-          ),
-        ),
-      land: landForm(made.id),
-    });
-    const held = await (me ?? Promise.resolve(undefined)).catch(() => undefined);
-    const inside = held?.workspaces.find((each) => each.slug === workspace);
-    return {
-      workspaceId: inside?.id ?? live.id,
-      formId: live.id,
-      facts: {
-        name: live.name,
-        key: live.publicKey,
-        workspaceName: inside?.name ?? workspace,
-        workspaceSlug: workspace,
-        status: live.status === 'live' ? 'live' : 'paused',
-      },
-    };
   };
 
   const readMe = (): Promise<Me | undefined> => {
@@ -4167,7 +4092,13 @@ export function createDataLayer({
             signup: {
               /** The workspaces an Email signup form may be made in: the person's own, oldest first (AC-5217). */
               workspaces: () => readMe().then((who) => who?.workspaces ?? []),
-              make: (workspace, input) => makeSignupForm(workspace, input),
+              // Loaded with the editor that uses it, so its three writes never ride in the first load.
+              make: async (workspace, input) =>
+                (await import('./link-page/signup-form.ts')).makeSignupForm(
+                  { forms: signupWrites, lists: formLists, landForm, mintId, readMe },
+                  workspace,
+                  input,
+                ),
             },
           }),
         )),

@@ -160,7 +160,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
   testimonial: {
     label: strings.addTestimonial,
     description: strings.addTestimonialText,
-    icon: 'quote',
+    icon: 'message-square',
     Editor: TestimonialEditor,
     isEditable: true,
   },

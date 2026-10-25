@@ -12,6 +12,19 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { firstLoad } from './first-load.ts';
 
+// 25 October 2026, the link page's blocks, appearance and sharing (specs 0052, 0054, 0055). This raise reverses
+// a call the owner made the same morning, to reduce rather than raise, so it was put to them again with the
+// measurement and they agreed to 1 kB. What was measured: land/r13 carried 249.72 kB before this round, 280 B
+// under the budget, so the room was already gone; the round itself adds about 400 B. Two reductions were made
+// first rather than asking straight away: Email signup's three form writes moved out of the first load into
+// `@crm/data/link-page/signup-form.ts` (264 B), and the testimonial block reuses the `message-square` mark the
+// registry already holds instead of adding a quote (about 90 B, and `packages/ui/AGENTS.md` now says why every
+// new icon costs every page). That left 134 B, which is what this 1 kB covers.
+//
+// Worth knowing before the next raise: an earlier reading of these chunks found 25 kB of date library in the
+// first load and it was not there. Rolldown names a shared chunk after one module inside it, so `number-*.js`
+// is React's JSX runtime and `calendar-strings-*.js` is our own error words. Attribute bytes by opening the
+// chunk, never by its name.
 const DIST = path.join(import.meta.dirname, 'dist');
 const manifest = JSON.parse(readFileSync(path.join(DIST, '.vite/manifest.json'), 'utf8'));
 const { js, css } = firstLoad(manifest);
@@ -38,7 +51,7 @@ if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_RE
 }
 
 export default [
-  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '250 kB', gzip: true, running: false },
+  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '251 kB', gzip: true, running: false },
   { name: 'First load CSS (gzipped)', path: inDist(css), limit: '40 kB', gzip: true, running: false },
   { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '221 kB', gzip: true, running: false },
   { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '17 kB', gzip: true, running: false },

@@ -429,6 +429,8 @@ describe('the walk: a principal without the access is refused', () => {
         // Bea has claimed no handle, so there is no public profile of theirs to put a look on: NOT_FOUND, with
         // the others below, rather than a look saved against nothing.
         saveProfileTheme: { ground: 'ink', hue: 'green', mode: 'dark', shape: 'pill', fill: 'solid', font: 'mono' },
+        // Whether search engines may show the page names nothing either, and Bea has no page: NOT_FOUND too.
+        setProfileIndexable: false,
       };
       expect(await refusalOf(service(name)(key, inputs[name]))).toMatchObject({ code: 'FORBIDDEN' });
       const outcome = await service(name)(beaScope, inputs[name]).then(

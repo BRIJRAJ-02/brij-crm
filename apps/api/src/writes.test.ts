@@ -7,7 +7,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { contract, defaultAvailability } from '@crm/contracts';
+import { contract, DEFAULT_PAGE_THEME, defaultAvailability } from '@crm/contracts';
 import { newId, NO_CALENDAR } from '@crm/core';
 import { bookPublicSlot, enterBookingPage } from '@crm/core/public';
 import type { Database, IdentityStore } from '@crm/db';
@@ -61,6 +61,8 @@ const READS: ReadonlySet<string> = new Set([
   'profile.items',
   'profile.counts',
   'profile.pageChoices',
+  // The forms the caller may place on the page (spec 0052, AC-5213): their own, read only.
+  'profile.formChoices',
   'deletedWorkspace.deleted',
   'access.mine',
   // Settings › History's Workspace changes (spec 0046).
@@ -168,6 +170,9 @@ let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
 let pokes = 0;
 /** The invitation tokens the app mailed, by address, read off the links (the mailer below stands in for Mailpit). */
+/** A handle nobody holds: these cases claim one so there is a page to change, and run beside each other. */
+const freeHandle = () => `p${newId().replaceAll('-', '').slice(0, 20)}`;
+
 const invitationTokens = new Map<string, string>();
 /** Sign in codes still go to Mailpit, where signIn reads them. */
 const mailpit = createMailpitMailer({ url: MAILPIT_URL, from: 'Timefix <noreply@example.com>' });
@@ -559,6 +564,23 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'profile.update': async (m, mutationId) => {
     const me = await m.client.profile.update({ workspace: m.slug, name: 'Renamed', mutationId });
     return [{ kind: 'members', item_ids: [me.memberId], mutation_id: mutationId }];
+  },
+  // The look of the link page (spec 0054) and whether search engines may show it (spec 0055) live in schema auth
+  // beside its blocks: no tenant change, so no outbox row of their own. Both need a handle to change, so each
+  // claims one first, and that claim is the one row the case expects.
+  'profile.saveTheme': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.saveTheme({
+      workspace: m.slug,
+      theme: { ...DEFAULT_PAGE_THEME, ground: 'paper' },
+      mutationId,
+    });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  'profile.setIndexable': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.setIndexable({ workspace: m.slug, indexable: false, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
   },
   // The link page's blocks (spec 0051) live in schema auth: no tenant change, so no outbox row.
   'profile.saveItem': async (m, mutationId) => {
@@ -2093,6 +2115,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'rotations.delete': 2,
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
+  'profile.saveTheme': 2,
+  'profile.setIndexable': 2,
   'profile.orderItems': 2,
   'profile.archiveItem': 2,
   'profile.deleteItem': 2,
