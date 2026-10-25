@@ -12,8 +12,8 @@ export const strings = {
   blocksText: 'In the order visitors see them.',
   // The figures (AC-5127): over the last 30 days, with the 30 before as the comparison. A number keeps its word on
   // its line (a no break space), so a phone never strands the "2" away from "views".
-  noPresses: 'No presses yet',
-  presses: (count: number) => `${figure(count)}\u00a0${count === 1 ? 'press' : 'presses'}`,
+  noPresses: 'No clicks yet',
+  presses: (count: number) => `${figure(count)}\u00a0${count === 1 ? 'click' : 'clicks'}`,
   noViewsYet: (days: number) => `No views yet in the last ${String(days)}\u00a0days.`,
   noViews: (days: number, before: number) =>
     `No views in the last ${String(days)}\u00a0days, down from ${figure(before)} in the ${String(days)}\u00a0days before.`,
@@ -24,14 +24,14 @@ export const strings = {
   viewsUp: (before: number, days: number) => `, up from ${figure(before)} in the ${String(days)}\u00a0days before.`,
   viewsDown: (before: number, days: number) => `, down from ${figure(before)} in the ${String(days)}\u00a0days before.`,
   viewsSame: (days: number) => `, the same as the ${String(days)}\u00a0days before.`,
-  countsFailed: 'Views and presses didn’t load.',
+  countsFailed: 'Views and clicks didn’t load.',
   add: 'Add',
   addLink: 'Link',
   addLinkText: 'A website, a profile, an email or a phone number',
   addPage: 'Booking page',
   addPageText: 'One of your public booking pages',
   addContact: 'Contact card',
-  addContactText: 'Your details, saved to a phone in one press',
+  addContactText: 'Your details, saved to a phone in one tap',
   addHeading: 'Heading',
   addHeadingText: 'A small title over the blocks under it',
   viewPage: 'View page',

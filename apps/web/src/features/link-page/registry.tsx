@@ -217,7 +217,7 @@ export function figuresLine(counts: ProfileCounts): string {
   return said + strings.viewsSame(days);
 }
 
-/** A block's presses as its row's chip: none for a heading (it can't be pressed), "No presses yet" for zero. */
+/** A block's presses as its row's chip, said as clicks: none for a heading (it can't be pressed), "No clicks yet" for zero. */
 export function pressesChip(item: ProfileItem, counts: ProfileCounts | undefined): readonly string[] {
   if (counts === undefined || item.kind === 'heading') return [];
   const presses = counts.presses.find((each) => each.id === item.id)?.presses ?? 0;

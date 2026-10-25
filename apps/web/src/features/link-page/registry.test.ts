@@ -119,8 +119,8 @@ describe('the block registry', () => {
       hue: 'blue',
       updatedAt: '',
     };
-    expect(pressesChip(link, counts(1, 1, 0))).toEqual(['3\u00a0presses']);
-    expect(pressesChip({ ...link, id: 'other' }, counts(1, 1, 0))).toEqual(['No presses yet']);
+    expect(pressesChip(link, counts(1, 1, 0))).toEqual(['3\u00a0clicks']);
+    expect(pressesChip({ ...link, id: 'other' }, counts(1, 1, 0))).toEqual(['No clicks yet']);
     expect(pressesChip({ kind: 'heading', id: 'h', title: 'H', updatedAt: '' }, counts(1, 1, 0))).toEqual([]);
     expect(pressesChip(link, undefined)).toEqual([]);
   });
