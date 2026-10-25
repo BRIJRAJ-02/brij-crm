@@ -1,5 +1,8 @@
-/* IconPicker: the library's search Field over a grid of 28px icon cells; the focused cell
-   takes surface-hover and the chosen one the accent's soft tint and edge. */
+/* IconPicker: the library's search Field over a grid of square icon cells; the focused cell
+   takes surface-hover and the chosen one the accent's soft tint and edge.
+   A cell is as tall as the eight columns make it wide, not size-nav-item: a nav row grew to
+   32px in the readability pass while the grid stayed size-menu wide, so cells drawn at the row
+   height stopped being square. */
 @layer components {
   .root {
     display: flex;
@@ -9,7 +12,8 @@
   }
 
   .scroller {
-    max-block-size: calc(6 * var(--size-nav-item) + 5 * var(--space-2));
+    /* Six whole rows: the cut edge of a seventh says there is more to scroll. */
+    max-block-size: calc(6 * ((var(--size-menu) - 7 * var(--space-2)) / 8) + 5 * var(--space-2));
     overflow: auto;
     border-radius: var(--radius-sm);
     outline: none;
@@ -31,7 +35,7 @@
   .item {
     display: grid;
     place-items: center;
-    block-size: var(--size-nav-item);
+    block-size: calc((var(--size-menu) - 7 * var(--space-2)) / 8);
     border: var(--border-width-hairline) solid transparent;
     border-radius: var(--radius-sm);
     color: var(--text-secondary);

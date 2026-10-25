@@ -1,4 +1,4 @@
-/* Card: a raised surface with a hairline and radius-lg; a header with the
+/* Card: a raised surface with a hairline and radius-xl; a header with the
    title and its actions, the body, and a footer on surface-subtle. */
 @layer components {
   .root {
@@ -7,7 +7,7 @@
     min-inline-size: 0;
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border-subtle);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
     background: var(--surface-raised);
     box-shadow: var(--shadow-xs);
     color: var(--text);
