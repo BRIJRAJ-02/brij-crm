@@ -20,12 +20,6 @@ export const isBookingsPageTab = (value: string): value is BookingsPageTab =>
 /** A Bookings tab's address. */
 export const bookingsTabHref = (slug: string, tab: BookingsPageTab) => `/w/${slug}/bookings/${tab}`;
 
-/** Bookings › Round robin: the groups a booking is shared out between (spec 0029). */
-export const roundRobinHref = (slug: string) => bookingsTabHref(slug, 'round-robin');
-
-/** Bookings › Calendars: a member's own calendar connections (specs 0024 and 0026). */
-export const calendarsHref = (slug: string) => bookingsTabHref(slug, 'calendars');
-
 /** The tab an address under Bookings shows: its last segment when that names a tab, else Calendar. */
 export function bookingsTabOf(pathname: string): BookingsPageTab {
   const last = pathname.replace(/\/+$/, '').split('/').at(-1) ?? '';

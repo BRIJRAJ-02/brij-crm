@@ -59,6 +59,10 @@ const ALL_SCREENS: readonly Screen[] = [
   { name: 'bookings calendar', start: at('tasks'), target: sidebar('Bookings') },
   { name: 'bookings list', start: at('bookings/calendar'), target: tab('List') },
   { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
+  // Calendars and Round robin came up out of Settings into Bookings (25 October 2026), so they are walked as the
+  // tabs they are; each draws its body inside the frame the tab strip already holds.
+  { name: 'bookings round robin', start: at('bookings/calendar'), target: tab('Round robin') },
+  { name: 'bookings calendars', start: at('bookings/calendar'), target: tab('Calendars') },
   { name: 'captures links', start: at('tasks'), target: sidebar('Captures') },
   { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
   { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },
@@ -68,7 +72,6 @@ const ALL_SCREENS: readonly Screen[] = [
     start: at('tasks'),
     target: (page) => page.getByRole('link', { name: 'Settings' }).first(),
   },
-  { name: 'settings calendars', start: at('settings/account/preferences'), target: sidebar('Calendars') },
   { name: 'settings members', start: at('settings/account/preferences'), target: sidebar('Members') },
   { name: 'settings objects', start: at('settings/account/preferences'), target: sidebar('Objects') },
   {

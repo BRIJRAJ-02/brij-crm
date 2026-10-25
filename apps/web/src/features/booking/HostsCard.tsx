@@ -19,8 +19,8 @@ import {
   RecordChip,
 } from '@crm/ui';
 import { useState } from 'react';
-import { roundRobinHref } from '../bookings/tabs.ts';
 import { strings } from './rotation-strings.ts';
+import { roundRobinHref } from './links.ts';
 
 /** The most fixed hosts, rotations, and hosts in all (spec 0037's numbers; the server checks them too). */
 const LIMITS = { fixed: 7, rotations: 3, hosts: 8 } as const;

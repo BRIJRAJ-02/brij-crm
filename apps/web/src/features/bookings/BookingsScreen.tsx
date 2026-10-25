@@ -64,7 +64,7 @@ import { offsetLabel, zoneDisplay } from '../../public/booking/time.ts';
 import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { createPortal } from 'react-dom';
-import { newLinkOnlyPageHref } from '../booking/links.ts';
+import { calendarsHref, newLinkOnlyPageHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
@@ -76,7 +76,6 @@ import {
   type CalendarsPanel,
 } from './CalendarsAside.tsx';
 import { ALL_CALENDARS, CalendarSwitch, showsOf, switchCalendars, useCalendarChoice } from './CalendarSwitch.tsx';
-import { calendarsHref } from '../bookings/tabs.ts';
 import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';

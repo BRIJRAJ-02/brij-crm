@@ -190,10 +190,9 @@ describe('the first load', () => {
   // 43 since the hosted form draws its own loading shape (24 October 2026): Skeleton is now drawn by all three
   // entries rather than two, so the build gives it a shared chunk instead of merging a copy into each. Same
   // bytes, one file.
-  // 44 since Calendars and Round robin became tabs of Bookings (25 October 2026): the tabs' addresses
-  // (features/bookings/tabs.ts) are now read by the frame and the command menu up front as well as by the
-  // bookings routes, so the build keeps them in a shared chunk rather than merging a copy into each. Same bytes,
-  // one file.
+  // 44 since Calendars and Round robin became tabs of Bookings (25 October 2026): their addresses are read by the
+  // command menu up front and by the bookings routes, so the build keeps that module in a shared chunk rather
+  // than merging a copy into each. Same bytes, one file.
   it('stays merged into a few dozen files, as it is with no top level await in the build', () => {
     expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(44);
   });

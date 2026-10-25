@@ -16,9 +16,9 @@ import {
   type CalendarListAccount,
 } from '@crm/ui';
 import { useState, type ReactNode } from 'react';
-import { calendarsHref } from '../bookings/tabs.ts';
 import type { BookingsSearch } from './search.ts';
 import { strings } from './strings.ts';
+import { calendarsHref } from '../booking/links.ts';
 
 /** Where the open or folded panel is kept, per browser. */
 const PANEL_KEY = 'crm.bookings.calendarsPanel';

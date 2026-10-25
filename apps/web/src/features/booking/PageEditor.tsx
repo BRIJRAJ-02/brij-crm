@@ -57,7 +57,6 @@ import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { linkPageHref } from '../link-page/nav-strings.ts';
 import { profileHref } from '../settings/nav.ts';
-import { calendarsHref } from '../bookings/tabs.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { noVideoLinkReason } from './destination.ts';
@@ -80,12 +79,13 @@ import { strings as capturesStrings } from '../captures/strings.ts';
 import { DeletePageDialog } from './DeletePageDialog.tsx';
 import {
   availabilityHref,
+  calendarsHref,
+  isNotOlder,
   linksHref,
-  pageEditorHref,
   PAGE_TABS,
+  pageEditorHref,
   pageTabOf,
   publicBookingOrigin,
-  isNotOlder,
   publicBookingUrl,
   type PageTab,
 } from './links.ts';

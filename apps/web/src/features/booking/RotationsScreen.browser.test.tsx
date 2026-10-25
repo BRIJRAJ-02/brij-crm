@@ -14,7 +14,7 @@ import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
-import { Route as RoundRobinRoute } from '../../routes/w.$slug.settings.scheduling.round-robin.tsx';
+import { Route as RoundRobinRoute } from '../../routes/w.$slug.bookings.round-robin.tsx';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { SettingsTopBarSlot } from '../settings/topBarSlot.ts';
@@ -337,15 +337,15 @@ describe('without booking.manage', () => {
     } as unknown as DataLayer;
     const toasts: Toasts = createToasts();
     const rootRoute = createRootRouteWithContext<{ data: DataLayer; toasts: Toasts }>()();
-    // The real route, under a bare root as the route tree would put it under the settings frame.
+    // The real route, under a bare root as the route tree would put it under the Bookings frame.
     const route = RoundRobinRoute.update({
-      id: '/w/$slug/settings/scheduling/round-robin',
-      path: '/w/$slug/settings/scheduling/round-robin',
+      id: '/w/$slug/bookings/round-robin',
+      path: '/w/$slug/bookings/round-robin',
       getParentRoute: () => rootRoute,
     } as Parameters<typeof RoundRobinRoute.update>[0]);
     const router = createRouter({
       routeTree: rootRoute.addChildren([route]),
-      history: createMemoryHistory({ initialEntries: ['/w/acme/settings/scheduling/round-robin'] }),
+      history: createMemoryHistory({ initialEntries: ['/w/acme/bookings/round-robin'] }),
       context: { data, toasts },
     });
     const host = document.createElement('div');

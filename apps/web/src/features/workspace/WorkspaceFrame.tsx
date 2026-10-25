@@ -33,7 +33,6 @@ import {
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { LazyCustomiseSidebarDialog } from './LazyCustomiseSidebarDialog.tsx';
 import { Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { bookingsTabOf } from '../bookings/tabs.ts';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
 import { useToday } from '../tasks/day.ts';
 import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
@@ -77,6 +76,9 @@ const NO_NAV: NavSource = {
   subscribe: () => () => undefined,
   getSnapshot: () => NOT_READ,
 };
+
+/** Bookings › Calendars' own address, the one page the stopped calendar banner stays off. */
+const CALENDARS_TAB = /\/bookings\/calendars\/?$/;
 
 /** Inside Settings (spec 0026): the settings sidebar's current page and the way back out. */
 export interface SettingsSidebar {
@@ -195,8 +197,10 @@ export function WorkspaceFrame({
   // The member's own sidebar (spec 0034): read with the workspace (AC-936), each change shown at once (AC-937). While
   // it loads, Records alone shows loading; read and failed, the defaults show, and the data layer says so.
   // Whether this is Bookings › Calendars, the one page the stopped calendar banner stays off (see `banner` below).
+  // Read off the address rather than through the tabs module, which the frame would otherwise pull into the first
+  // load for one comparison; `frame.flow.ts` walks the tab and holds the two together.
   const isOnCalendars = useLocation({
-    select: (location) => currentPage === 'bookings' && bookingsTabOf(location.pathname) === 'calendars',
+    select: (location) => currentPage === 'bookings' && CALENDARS_TAB.test(location.pathname),
   });
   const snapshot = useNav(isMissing ? NO_NAV : data.nav.source(slug));
   const nav = snapshot.status === 'ready' ? snapshot.nav : snapshot.status === 'error' ? DEFAULT_NAV : undefined;

@@ -51,7 +51,11 @@ if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_RE
 }
 
 export default [
-  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '251 kB', gzip: true, running: false },
+  // 252 kB from 26 October 2026 (the owner): Calendars and Round robin came up out of Settings into Bookings, so
+  // their addresses are read up front by the command menu, and a contact card gained its second and third email,
+  // phone and website. A whole shared chunk was taken back out of the first load before asking, and it was still
+  // about 80 bytes over. Raising this is a spec change, so it is the owner's call every time.
+  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '252 kB', gzip: true, running: false },
   { name: 'First load CSS (gzipped)', path: inDist(css), limit: '40 kB', gzip: true, running: false },
   { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '221 kB', gzip: true, running: false },
   { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '17 kB', gzip: true, running: false },

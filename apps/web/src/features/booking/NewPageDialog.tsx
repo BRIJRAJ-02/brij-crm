@@ -7,13 +7,13 @@ import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList, useSchedules } from '@crm/data/react';
 import { Button, Callout, Field, InfoTip, Link, Modal, Radio, RadioGroup, SegmentedControl, Select } from '@crm/ui';
 import { useState } from 'react';
-import { roundRobinHref } from '../bookings/tabs.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { lengthOf } from './durations.ts';
 import { memberZone } from './zone.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
+import { roundRobinHref } from './links.ts';
 
 /** The lengths offered as segments; any other the server allows goes through Custom. */
 const SEGMENTS = [15, 30, 45, 60] as const;
