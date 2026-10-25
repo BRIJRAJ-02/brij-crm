@@ -30,12 +30,13 @@ import {
   Callout,
   claimPageHref,
   DayStrip,
+  DeferredSelect,
   MonthTiles,
   SegmentedControl,
-  Select,
   Skeleton,
   SlotList,
   type BookingFact,
+  type DeferredSelectItem,
   type SelectItem,
 } from '@crm/ui/public-booking';
 import { createElement, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -400,7 +401,7 @@ function ChatLoading() {
 const NO_DAYS: ReadonlySet<string> = new Set();
 
 /** Every zone this browser knows, the current one first, each with its offset. */
-function zoneItems(current: string, at: number): readonly SelectItem[] {
+function zoneItems(current: string, at: number): readonly DeferredSelectItem[] {
   const listed = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
   return [current, ...listed.filter((zone) => zone !== current)].map((zone) => ({
     id: zone,
@@ -785,14 +786,15 @@ function Booking({
       children: isDetails ? (
         zoneDisplay(zone, now())
       ) : (
-        <Select
+        // The picker's list loads on the first hover, focus or press (or once the page is idle): a visitor rarely
+        // opens it, and its code was a tenth of the page's first load styles. Until then the same trigger stands in.
+        <DeferredSelect
           label={strings.timeZone}
-          isLabelHidden
-          variant="inline"
           items={zones}
           showsDescription
           isSearchable
           searchLabel={strings.zoneSearch}
+          placeholder={strings.zoneChoose}
           filter={zoneMatches}
           value={zone}
           onChange={(next) => {
