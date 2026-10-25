@@ -342,14 +342,19 @@ export const publicProfiles = auth.table(
     check('public_profiles_bio', sql`char_length(${t.bio}) <= 160`),
     check(
       'public_profiles_theme',
-      sql`jsonb_typeof(${t.theme}) = 'object'
-        and (select count(*) from jsonb_object_keys(${t.theme})) = 6
-        and ${t.theme} ->> 'ground' in ('plain', 'paper', 'tint', 'ink')
-        and ${t.theme} ->> 'hue' in ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')
-        and ${t.theme} ->> 'mode' in ('light', 'dark')
-        and ${t.theme} ->> 'shape' in ('soft', 'pill', 'square')
-        and ${t.theme} ->> 'fill' in ('plain', 'soft', 'outline', 'solid')
-        and ${t.theme} ->> 'font' in ('sans', 'mono')`,
+      // Postgres refuses a subquery in a check constraint, so "no key but these six" is the six taken away leaving
+      // an empty object. A check whose expression is NULL passes, so "all six present" needs `coalesce` — which
+      // makes the whole thing false for a person who has never picked a look, hence `is null or`.
+      sql`${t.theme} is null or (
+        jsonb_typeof(${t.theme}) = 'object'
+        and ${t.theme} - 'ground' - 'hue' - 'mode' - 'shape' - 'fill' - 'font' = '{}'::jsonb
+        and coalesce(${t.theme} ->> 'ground', '') in ('plain', 'paper', 'tint', 'ink')
+        and coalesce(${t.theme} ->> 'hue', '') in ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')
+        and coalesce(${t.theme} ->> 'mode', '') in ('light', 'dark')
+        and coalesce(${t.theme} ->> 'shape', '') in ('soft', 'pill', 'square')
+        and coalesce(${t.theme} ->> 'fill', '') in ('plain', 'soft', 'outline', 'solid')
+        and coalesce(${t.theme} ->> 'font', '') in ('sans', 'mono')
+      )`,
     ),
     foreignKey({ name: 'public_profiles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     foreignKey({

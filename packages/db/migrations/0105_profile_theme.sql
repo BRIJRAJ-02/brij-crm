@@ -16,16 +16,24 @@ set local lock_timeout = '5s';
 ALTER TABLE "auth"."public_profiles" ADD COLUMN "theme" jsonb DEFAULT '{"ground":"plain","hue":"blue","mode":"light","shape":"soft","fill":"plain","font":"sans"}'::jsonb NOT NULL;
 --> statement-breakpoint
 -- Exactly the six keys, each one a word from its own set. Said here as well as in Zod, because this is the rule.
+-- Exactly the six keys, every value a word from its own set.
+--
+-- Two things this cannot be written the obvious way. Postgres refuses a subquery in a check constraint, so "no key
+-- but these six" is the six taken away leaving an empty object, not a count of keys. And a check whose expression
+-- is NULL passes, so "all six present" needs `coalesce`, which in turn makes the whole expression false for a
+-- person who has never picked a look: hence the `theme is null or (...)`, which is the common case, not an edge.
 ALTER TABLE "auth"."public_profiles" ADD CONSTRAINT "public_profiles_theme" CHECK (
-  jsonb_typeof("auth"."public_profiles"."theme") = 'object'
-  and (select count(*) from jsonb_object_keys("auth"."public_profiles"."theme")) = 6
-  and "auth"."public_profiles"."theme" ->> 'ground' in ('plain', 'paper', 'tint', 'ink')
-  and "auth"."public_profiles"."theme" ->> 'hue' in
-    ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')
-  and "auth"."public_profiles"."theme" ->> 'mode' in ('light', 'dark')
-  and "auth"."public_profiles"."theme" ->> 'shape' in ('soft', 'pill', 'square')
-  and "auth"."public_profiles"."theme" ->> 'fill' in ('plain', 'soft', 'outline', 'solid')
-  and "auth"."public_profiles"."theme" ->> 'font' in ('sans', 'mono')
+  "auth"."public_profiles"."theme" is null or (
+    jsonb_typeof("auth"."public_profiles"."theme") = 'object'
+    and "auth"."public_profiles"."theme" - 'ground' - 'hue' - 'mode' - 'shape' - 'fill' - 'font' = '{}'::jsonb
+    and coalesce("auth"."public_profiles"."theme" ->> 'ground', '') in ('plain', 'paper', 'tint', 'ink')
+    and coalesce("auth"."public_profiles"."theme" ->> 'hue', '') in
+      ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')
+    and coalesce("auth"."public_profiles"."theme" ->> 'mode', '') in ('light', 'dark')
+    and coalesce("auth"."public_profiles"."theme" ->> 'shape', '') in ('soft', 'pill', 'square')
+    and coalesce("auth"."public_profiles"."theme" ->> 'fill', '') in ('plain', 'soft', 'outline', 'solid')
+    and coalesce("auth"."public_profiles"."theme" ->> 'font', '') in ('sans', 'mono')
+  )
 );
 --> statement-breakpoint
 grant update (theme, updated_at) on auth.public_profiles to crm_handle;
