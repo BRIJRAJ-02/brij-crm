@@ -23,7 +23,7 @@ import {
 import { countryOfE164, DIAL_CODES, toE164 } from '@crm/contracts/forms';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { linksHref } from '../booking/links.ts';
-import { contactHref, contactWords, pageFacts, type BlockEditorProps } from './registry.tsx';
+import { contactHref, contactWords, pageFacts, type BlockEditorProps, type EditorChrome } from './registry.tsx';
 import { ICON_WORDS, strings } from './strings.ts';
 
 /** The Modal every block editor sits in: its title, Cancel and the submit, and "How it looks" under the fields. */
@@ -34,6 +34,7 @@ function EditorModal({
   onClose,
   preview,
   canSubmit = true,
+  chrome,
   children,
 }: {
   readonly title: string;
@@ -43,11 +44,13 @@ function EditorModal({
   readonly preview?: ReactNode;
   /** False while there is nothing to submit (the choices loading, failed or empty): only Cancel shows. */
   readonly canSubmit?: boolean;
+  readonly chrome?: EditorChrome;
   readonly children: ReactNode;
 }) {
   return (
     <Modal
-      title={title}
+      title={chrome?.title ?? title}
+      {...(chrome?.hint === undefined ? {} : { hint: chrome.hint })}
       isOpen
       // Something typed is kept from a stray click outside: only Cancel or Esc throws it away.
       isDismissable={false}
@@ -61,12 +64,13 @@ function EditorModal({
           </Button>
           {canSubmit && (
             <Button variant="primary" type="submit" form={formId} kbd="⌘↵">
-              {submitLabel}
+              {chrome?.submitLabel ?? submitLabel}
             </Button>
           )}
         </>
       }
     >
+      {chrome?.leading}
       {children}
       {preview}
     </Modal>
@@ -82,7 +86,16 @@ function iconItems(icons: readonly ProfileLinkIcon[]): readonly SelectItem[] {
 }
 
 /** Add or edit a link: its title, address, note and icon, with the block drawn as typed under them. */
-export function LinkEditor({ item, items, newHue, linkPage, socialNetworks, onSubmit, onClose }: BlockEditorProps) {
+export function LinkEditor({
+  item,
+  items,
+  newHue,
+  linkPage,
+  socialNetworks,
+  chrome,
+  onSubmit,
+  onClose,
+}: BlockEditorProps) {
   const formId = useId();
   const editing = item?.kind === 'link' ? item : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
@@ -118,6 +131,7 @@ export function LinkEditor({ item, items, newHue, linkPage, socialNetworks, onSu
       formId={formId}
       submitLabel={editing === undefined ? strings.add : strings.save}
       onClose={onClose}
+      {...(chrome === undefined ? {} : { chrome })}
       preview={
         <LinkPage
           layout="blocks"
@@ -204,7 +218,7 @@ export function LinkEditor({ item, items, newHue, linkPage, socialNetworks, onSu
 }
 
 /** Add or rename a heading: its text, with the heading drawn as typed under it. */
-export function HeadingEditor({ item, items, linkPage, onSubmit, onClose }: BlockEditorProps) {
+export function HeadingEditor({ item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
   const formId = useId();
   const editing = item?.kind === 'heading' ? item : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
@@ -223,6 +237,7 @@ export function HeadingEditor({ item, items, linkPage, onSubmit, onClose }: Bloc
       formId={formId}
       submitLabel={editing === undefined ? strings.add : strings.save}
       onClose={onClose}
+      {...(chrome === undefined ? {} : { chrome })}
       preview={
         <LinkPage
           layout="blocks"
@@ -299,7 +314,16 @@ function phoneOf(stored: string | undefined, guess: string): PhoneFieldValue {
  * note, typed here and never read from a CRM record. Under them, the card as a visitor sees it. A new card starts
  * from the person's name; nothing else is filled in for them, so nothing is published unasked.
  */
-export function ContactEditor({ item, items, handle, linkPage, ownerName, onSubmit, onClose }: BlockEditorProps) {
+export function ContactEditor({
+  item,
+  items,
+  handle,
+  linkPage,
+  ownerName,
+  chrome,
+  onSubmit,
+  onClose,
+}: BlockEditorProps) {
   const formId = useId();
   const editing = item?.kind === 'contact' ? item : undefined;
   const [guess] = useState(guessCountry);
@@ -347,6 +371,7 @@ export function ContactEditor({ item, items, handle, linkPage, ownerName, onSubm
       formId={formId}
       submitLabel={editing === undefined ? strings.add : strings.save}
       onClose={onClose}
+      {...(chrome === undefined ? {} : { chrome })}
       preview={
         <LinkPage
           layout="blocks"
@@ -430,7 +455,7 @@ type Choices =
  * Add a booking page: the person's Public pages from every workspace not on the page yet, the workspace named beside
  * each (AC-5117), read fresh each time it opens.
  */
-export function PageChooser({ slug, items, linkPage, onSubmit, onClose }: BlockEditorProps) {
+export function PageChooser({ slug, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
   const formId = useId();
   const [choices, setChoices] = useState<Choices>({ status: 'loading' });
   const [picked, setPicked] = useState<string | null>(null);
@@ -531,6 +556,7 @@ export function PageChooser({ slug, items, linkPage, onSubmit, onClose }: BlockE
       formId={formId}
       submitLabel={strings.add}
       onClose={onClose}
+      {...(chrome === undefined ? {} : { chrome })}
       canSubmit={choices.status === 'ready' && choices.choices.length > 0}
     >
       {body}

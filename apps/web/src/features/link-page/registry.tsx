@@ -13,13 +13,27 @@ import type {
   ProfilePageFacts,
 } from '@crm/data';
 import type { Hue, IconName, LinkPageBlock, LinkPageMark } from '@crm/ui';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { ContactEditor, HeadingEditor, LinkEditor, PageChooser } from './editors.tsx';
 import { strings } from './strings.ts';
+
+/**
+ * What the one Add modal lends an editor, so every kind is added in the same dialog rather than one dialog per
+ * kind (the owner's Add item design): its title, the kind picker above the fields, the footer's quiet line and
+ * the primary button's word. An edit opens the kind's own editor with none of it, as before.
+ */
+export interface EditorChrome {
+  readonly title?: string;
+  readonly leading?: ReactNode;
+  readonly hint?: ReactNode;
+  readonly submitLabel?: string;
+}
 
 /** What a block's editor Modal is handed: the block being edited (none for an add), and what it needs to check. */
 export interface BlockEditorProps {
   readonly item?: ProfileItem;
+  /** Set only while the one Add modal is open: see EditorChrome. */
+  readonly chrome?: EditorChrome;
   /** The live blocks, for the checks the server keeps (a heading's text once). */
   readonly items: readonly ProfileItem[];
   /** The workspace the screen is in: the editors read through it. */

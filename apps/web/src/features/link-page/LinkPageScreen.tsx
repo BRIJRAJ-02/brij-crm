@@ -31,6 +31,8 @@ import {
   MenuTrigger,
   Modal,
   PreviewLayout,
+  Radio,
+  RadioGroup,
   SocialLinks,
   VisuallyHidden,
   type LinkPageBlock,
@@ -321,31 +323,45 @@ function Blocks({
     };
   });
 
-  const addMenu = (
-    <MenuTrigger>
-      <Button variant="primary" icon="plus" isDisabled={state.status !== 'ready'}>
-        {strings.add}
+  // The owner's design adds every kind in one modal: the picker chooses the kind, the fields follow it, and the
+  // kind swaps in place rather than closing one dialog to open another. An edit opens its kind's editor alone.
+  const openAdd = (kind: ProfileBlockKind) => setEditing({ kind, id: linkPage.newId() });
+  const addButtons = (
+    <>
+      <Button icon="list-plus" isDisabled={state.status !== 'ready'} onPress={() => openAdd('heading')}>
+        {strings.newSection}
       </Button>
-      <Menu label={strings.add}>
+      <Button variant="primary" icon="plus" isDisabled={state.status !== 'ready'} onPress={() => openAdd('link')}>
+        {strings.addItem}
+      </Button>
+    </>
+  );
+  const kindPicker =
+    editing === undefined || editing.item !== undefined ? undefined : (
+      <RadioGroup
+        label={strings.addWhat}
+        variant="cards"
+        value={editing.kind}
+        // The id is minted once and kept as the kind changes, so the save that follows is still the one add.
+        onChange={(kind) => setEditing({ kind: kind as ProfileBlockKind, id: editing.id })}
+      >
         {ADDABLE.map((kind) => {
           const entry = BLOCK_KINDS[kind];
           const full = linkPage.limit(items, kind);
           return (
-            <MenuItem
+            <Radio
               key={kind}
-              id={kind}
+              value={kind}
               icon={entry.icon}
               description={full ?? entry.description}
               isDisabled={full !== undefined}
-              onAction={() => setEditing({ kind, id: linkPage.newId() })}
             >
               {entry.label}
-            </MenuItem>
+            </Radio>
           );
         })}
-      </Menu>
-    </MenuTrigger>
-  );
+      </RadioGroup>
+    );
 
   const previewBlocks = items.flatMap((item) => {
     const block = previewBlock(item, handle, linkPage.markOf);
@@ -451,7 +467,7 @@ function Blocks({
               ? `${strings.blocksText} ${strings.countsFailed}`
               : strings.blocksText
         }
-        actions={addMenu}
+        footer={addButtons}
       >
         {list}
       </Card>
@@ -494,6 +510,16 @@ function Blocks({
       {Editor !== undefined && editing !== undefined && (
         <Editor
           {...(editing.item === undefined ? {} : { item: editing.item })}
+          {...(kindPicker === undefined
+            ? {}
+            : {
+                chrome: {
+                  title: strings.addTitle,
+                  leading: kindPicker,
+                  hint: strings.addHint,
+                  submitLabel: strings.addItem,
+                },
+              })}
           items={items}
           slug={slug}
           handle={handle}

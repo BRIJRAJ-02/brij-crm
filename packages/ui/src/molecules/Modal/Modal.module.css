@@ -153,6 +153,13 @@
       flex-direction: column-reverse;
       align-items: stretch;
     }
+
+    /* The column is reversed, so a higher order draws first: the quiet line stays over the buttons, where it is
+       read before the press rather than after it. */
+    .hint {
+      order: 1;
+      text-align: center;
+    }
   }
 
   /* The palette: flush, its title for screen readers only. */
