@@ -127,7 +127,13 @@ describe('book someone in (AC-709, AC-710)', () => {
     ]);
     expect(week.bookings[0]?.personRecordId).toBeDefined();
     expect(cal.events).toHaveLength(1);
-    expect(cal.events[0]?.attendees.map((each) => each.email)).toEqual(['grace@navy.example', 'alan@example.com']);
+    // The member who booked them in is on it first: a guest's own copy never shows the organiser, so without them
+    // the person booked in has nothing naming who booked them (owner, 25 Oct 2026).
+    expect(cal.events[0]?.attendees.map((each) => each.email)).toEqual([
+      'ada@example.com',
+      'grace@navy.example',
+      'alan@example.com',
+    ]);
   });
 
   it('a retry gives back the first booking', async () => {
@@ -271,6 +277,7 @@ describe('several guests and the calendar the member picks (spec 0027’s follow
       }),
     );
     expect(cal.events[0]?.attendees.map((each) => each.email)).toEqual([
+      'ada@example.com',
       'grace@navy.example',
       'alan@example.com',
       'katherine@nasa.example',
