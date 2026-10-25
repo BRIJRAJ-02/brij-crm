@@ -65,6 +65,10 @@ reset role;
 --> statement-breakpoint
 revoke create on schema public from crm_handle;
 --> statement-breakpoint
+-- And the membership itself, as 0098 did: nobody may become crm_handle once the migration is over, which
+-- `guards.test.ts` holds to by counting its members.
+revoke crm_handle from current_user;
+--> statement-breakpoint
 -- The closing check: the name resolves on this server, and the function no longer names a schema that only one
 -- Postgres version has.
 do $$
