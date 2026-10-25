@@ -89,7 +89,14 @@ jobs:
             echo "go=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          done_before=$(gh api "repos/$REPO/actions/workflows/deploy-web.yml/runs?head_sha=$sha&event=push&status=success" -q '.total_count')
+          # "Already deployed" means a push run whose deploy job really ran, not one whose gate declined and
+          # left the run green with the matrix skipped. Reading the run's own conclusion counted the declines
+          # too, so after a push the commit could never deploy by either route (25 October 2026).
+          done_before=0
+          for id in $(gh api --paginate "repos/$REPO/actions/workflows/deploy-web.yml/runs?head_sha=$sha&event=push" -q '.workflow_runs[].id'); do
+            shipped=$(gh api "repos/$REPO/actions/runs/$id/jobs" -q '[.jobs[] | select(.name | startswith("deploy")) | select(.conclusion == "success")] | length')
+            done_before=$((done_before + shipped))
+          done
           if [ "${done_before:-0}" -gt 0 ]; then
             echo "$sha was already deployed by the fast path."
             echo "go=false" >> "$GITHUB_OUTPUT"
