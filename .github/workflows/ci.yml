@@ -14,10 +14,108 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-jobs:
+jobs: # Which jobs this push needs (25 October 2026). The library's stories in three engines and its screenshots are
+  # the run's two longest jobs and they only ever test `packages/ui`, so a push that does not touch the library,
+  # the tokens it draws with, the lockfile or this workflow skips them. A new branch, a force push and anything
+  # that cannot be compared runs everything, so the safe answer is the default rather than the exception.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      ui: ${{ steps.filter.outputs.ui }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: filter
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -u
+          if [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "A new branch: running everything."
+            echo "ui=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! git fetch --no-tags --depth=1 origin "$BEFORE" 2>/dev/null; then
+            echo "The commit this push replaced is not reachable (a force push, or a prune): running everything."
+            echo "ui=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! changed=$(git diff --name-only "$BEFORE" "$GITHUB_SHA" 2>/dev/null); then
+            echo "The two commits do not compare: running everything."
+            echo "ui=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          printf '%s\n' "$changed" | sed 's/^/  /'
+          if printf '%s\n' "$changed" | grep -qE '^(packages/ui/|packages/tokens/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|\.github/workflows/ci\.yml$)'; then
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ui=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Everything that needs no database and no running app: types, lint, format, CSS, module edges, house rules,
+  # tokens, the migration journal, the first load budget and the artifact build. It used to run the test suites
+  # too, one after another, which made it the run's long pole at about 20 minutes; they are their own jobs below
+  # (25 October 2026). Chromium is still installed here because the artifact build render checks its previews.
   check:
     runs-on: ubuntu-latest
     # A hung browser once held a job for over 40 minutes; a normal run takes under 10 (every step runs since round 9).
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - id: install
+        run: pnpm install --frozen-lockfile
+      # Every step below runs even when one before it failed, so one push shows every red check at once.
+      - run: pnpm check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+      # A migration stamped before one already deployed is skipped for good (packages/db/scripts/journal.ts), so
+      # every push checks its journal against the commit it replaced.
+      - name: Migrations stay in deploy order
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BEFORE" || true
+          node packages/db/scripts/journal.ts "$BEFORE"
+      - name: Read the Playwright version
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        id: playwright
+        run: echo "version=$(node -p "require('./packages/ui/node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+      # The runner's apt mirror once stalled this step for 17 minutes and the job ran out of time (run 39768197543):
+      # apt gives up on a slow mirror after 20 seconds and tries the next, and a stalled try starts again once.
+      - name: Install the browsers and their system packages
+        timeout-minutes: 15
+        run: |
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/99ci-timeouts > /dev/null
+          for attempt in 1 2; do
+            if timeout 5m pnpm --filter @crm/ui exec playwright install --with-deps chromium; then break; fi
+            if [ "$attempt" = 2 ]; then exit 1; fi
+            echo "The browser install stalled or failed; trying once more"
+            # timeout stops playwright, not the apt-get it started under sudo, which then holds the dpkg lock and
+            # fails the retry (run 39798426646): let a slow one finish for up to 4 minutes, then stop it.
+            timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
+            sudo dpkg --configure -a || true
+          done
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+      - run: pnpm size
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+      - run: pnpm ui:artifact --check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+
+  # Every package's tests but the library's and the engine's, which have jobs of their own below. The web app's
+  # browser tests run here, so Chromium is installed.
+  tests:
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
       contents: read
@@ -66,26 +164,11 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - id: install
-        run: pnpm install --frozen-lockfile
-      # Every step below runs even when one before it failed, so one push shows every red check at once.
-      - run: pnpm check
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-      # A migration stamped before one already deployed is skipped for good (packages/db/scripts/journal.ts), so
-      # every push checks its journal against the commit it replaced.
-      - name: Migrations stay in deploy order
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        env:
-          BEFORE: ${{ github.event.before }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$BEFORE" || true
-          node packages/db/scripts/journal.ts "$BEFORE"
+      - run: pnpm install --frozen-lockfile
       - name: Read the Playwright version
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         id: playwright
         run: echo "version=$(node -p "require('./packages/ui/node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v6
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
@@ -104,29 +187,82 @@ jobs:
             timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
             sudo dpkg --configure -a || true
           done
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-      # Every package's tests; the library's stories run in their own jobs below.
-      # The library runs after the rest, on its own: its scroll perf test counts
-      # long tasks, and the database suites beside it on a small runner make them.
       - run: pnpm exec turbo run test --continue --filter='!@crm/ui' --filter='!@crm/core'
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-      # The engine's suite alone, after the rest: its 70,000 and 200,000 link tests are heavy for a small
-      # runner. Its count cancel test locks the records table, so query.test.ts has a database of its own
-      # (test/global-setup.ts): in the shared one the lock stalled every file (main, 13 October 2026).
+
+  # The engine's suite alone: its 70,000 and 200,000 link tests are heavy for a small runner, and its count
+  # cancel test locks the records table, so query.test.ts has a database of its own (test/global-setup.ts).
+  # It needs Postgres and nothing else: no HTTP, no mail, no realtime.
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    # A real Postgres for the integration tests (never a mocked one), the same
+    # major version and port as the local stack, so the test default URL fits.
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @crm/core run test
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+
+  # The library's Node and browser suites, and the scroll perf test last and alone: vitest runs projects side by
+  # side, and the browser suites beside it made long tasks of their own on the 2 core runner (8 October 2026).
+  # The stories themselves run per engine in `stories` below.
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./packages/ui/node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+      # The runner's apt mirror once stalled this step for 17 minutes and the job ran out of time (run 39768197543):
+      # apt gives up on a slow mirror after 20 seconds and tries the next, and a stalled try starts again once.
+      - name: Install the browsers and their system packages
+        timeout-minutes: 15
+        run: |
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/99ci-timeouts > /dev/null
+          for attempt in 1 2; do
+            if timeout 5m pnpm --filter @crm/ui exec playwright install --with-deps chromium; then break; fi
+            if [ "$attempt" = 2 ]; then exit 1; fi
+            echo "The browser install stalled or failed; trying once more"
+            # timeout stops playwright, not the apt-get it started under sudo, which then holds the dpkg lock and
+            # fails the retry (run 39798426646): let a slow one finish for up to 4 minutes, then stop it.
+            timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
+            sudo dpkg --configure -a || true
+          done
       - run: pnpm --filter @crm/ui exec vitest run --project stories --project unit --project browser
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
           CRM_STORY_BROWSERS: none
-      # The scroll perf test alone, last: vitest runs projects side by side, and the browser suites
-      # beside it made long tasks of their own on the 2 core runner (3 of 4 runs on 8 October 2026).
       - run: pnpm --filter @crm/ui exec vitest run --project perf
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-      - run: pnpm size
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-      - run: pnpm ui:artifact --check
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
 
   # The core loop's flows (spec 0005, milestone 4): the built app, the api and
   # the worker on the local ports against their own services, driven by
@@ -335,6 +471,8 @@ jobs:
   # add `--shard` to a job once it passes 10.
   stories:
     name: stories (${{ matrix.browser }})
+    needs: changes
+    if: ${{ needs.changes.outputs.ui == 'true' }}
     runs-on: ubuntu-latest
     # A hung browser once held a job for over 40 minutes; a normal run takes under 10 (every step runs since round 9).
     timeout-minutes: 35
@@ -382,6 +520,8 @@ jobs:
   # baselines. They run in the pinned Playwright image, the same one
   # `pnpm test:visual` uses locally, so fonts and rendering match exactly.
   visual:
+    needs: changes
+    if: ${{ needs.changes.outputs.ui == 'true' }}
     runs-on: ubuntu-latest
     # A hung browser once held a job for over 40 minutes; a normal run takes under 10 (every step runs since round 9).
     timeout-minutes: 35
