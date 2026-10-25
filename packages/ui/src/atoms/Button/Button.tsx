@@ -19,8 +19,8 @@ import styles from './Button.module.css';
 export type ButtonVariant =
   'secondary' | 'primary' | 'danger' | 'danger-solid' | 'ghost' | 'ghost-danger' | 'dashed' | 'link';
 
-/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label. */
-export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl';
+/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs. */
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'touch';
 
 interface ButtonLook {
   readonly variant?: ButtonVariant;
@@ -42,6 +42,11 @@ interface ButtonLook {
    * when the words go: the view bar's View settings.
    */
   readonly isLabelCollapsible?: boolean;
+  /**
+   * Fully rounded: a pill with a label (a link page's address to copy), a circle when the icon or mark stands
+   * alone (a link page's social links).
+   */
+  readonly isRound?: boolean;
   readonly isDisabled?: boolean;
   /**
    * A second label the button may swap to, whose width it keeps from the start, so the swap never moves what is
@@ -91,6 +96,8 @@ interface MarkOnlyFace {
   readonly provider: ProviderName;
   /** The accessible name, required because the mark is the only content ("LinkedIn, @ada"). */
   readonly label: string;
+  /** `mono` draws the mark's shape in the label's colour (a link page's social links, all in one colour). */
+  readonly markTone?: 'brand' | 'mono';
 }
 
 type ButtonFace = LabelledFace | IconOnlyFace | MarkOnlyFace;
@@ -147,6 +154,7 @@ function lookAttributes(look: ButtonLook, face: ButtonFace) {
     'data-full-width': look.isFullWidth === 'center' ? 'center' : look.isFullWidth === true ? 'start' : undefined,
     'data-collapsible': look.isLabelCollapsible === true || undefined,
     'data-icon-mark': ('isIconMark' in face && face.isIconMark === true) || undefined,
+    'data-round': look.isRound === true || undefined,
   };
 }
 
@@ -192,10 +200,22 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
       ) : face.icon !== undefined ? (
         <Icon
           name={face.icon}
-          size={'isIconMark' in face && face.isIconMark === true ? 'md' : look.size === 'sm' ? 'xs' : 'sm'}
+          size={
+            ('isIconMark' in face && face.isIconMark === true) || look.size === 'touch'
+              ? 'md'
+              : look.size === 'sm'
+                ? 'xs'
+                : 'sm'
+          }
         />
       ) : (
-        face.provider !== undefined && <ProviderMark provider={face.provider} size={look.size === 'lg' ? 'md' : 'sm'} />
+        face.provider !== undefined && (
+          <ProviderMark
+            provider={face.provider}
+            size={look.size === 'lg' || look.size === 'touch' ? 'md' : 'sm'}
+            {...('markTone' in face && face.markTone !== undefined ? { tone: face.markTone } : {})}
+          />
+        )
       )}
       {face.children !== undefined &&
         (look.labelReserve === undefined ? (
@@ -297,6 +317,11 @@ export type ButtonLinkProps = Omit<ButtonLook, 'kbd' | 'slot' | 'ref'> &
      * on a link a visitor didn't write and we don't vouch for (a host's social links).
      */
     readonly relations?: readonly ('me' | 'nofollow')[];
+    /**
+     * Heard as the link is followed, never instead of following it: a counter's beacon (a link page's Save contact).
+     * It must not hold the navigation up, and must not be the only way the action happens.
+     */
+    readonly onPress?: () => void;
   };
 
 /**
@@ -305,7 +330,7 @@ export type ButtonLinkProps = Omit<ButtonLook, 'kbd' | 'slot' | 'ref'> &
  * opens in a new tab with the browser's own gestures.
  */
 export function ButtonLink(props: ButtonLinkProps) {
-  const { href, isExternal = false, download, isDisabled, relations = [] } = props;
+  const { href, isExternal = false, download, isDisabled, relations = [], onPress } = props;
   const face: ButtonFace = props;
   const safe = safeHref(href);
   return (
@@ -315,6 +340,7 @@ export function ButtonLink(props: ButtonLinkProps) {
       isDisabled={(isDisabled ?? false) || safe === undefined}
       {...(isExternal ? { target: '_blank', rel: [...relations, 'noopener', 'noreferrer'].join(' ') } : {})}
       {...(download === undefined ? {} : { download })}
+      {...(onPress === undefined ? {} : { onPress })}
       {...(face.label === undefined ? {} : { 'aria-label': face.label })}
       {...lookAttributes(props, face)}
     >

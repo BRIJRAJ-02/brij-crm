@@ -49,6 +49,11 @@ export interface LinkRow {
    * ("Default"), read with the name. States that come and go (`badge`) stay at the row's end.
    */
   readonly titleBadge?: string;
+  /**
+   * A tile before the title, for rows that are told apart at a glance by what they are (a link page's blocks: a
+   * network's mark, an icon, a letter). Give every row one, and the list `leadingLoading`, so loading rows hold its place.
+   */
+  readonly leading?: ReactNode;
   /** A grey badge before the switch, only when it isn't taking people ("Off", "Not published", "Copying"). */
   readonly badge?: string;
   /** Off (not taking people): the title reads in the secondary colour, as the switch says. */
@@ -66,6 +71,20 @@ export interface LinkRow {
    * `data-href`, so the app can load that page while a pointer rests on the row.
    */
   readonly href?: string;
+  /**
+   * `section` draws the row as the heading over the rows after it: the title as a small uppercase label, its
+   * `count` beside it, no tile, and its actions at the end. It is still one row of the same list, so it is
+   * dragged, moved by the keyboard and counted like any other; what it heads is simply whatever follows it.
+   */
+  readonly variant?: 'row' | 'section';
+  /** With `variant="section"`: how many rows sit under it, drawn after the title. */
+  readonly count?: number;
+  /**
+   * The row's `chips` are still on their way (a figure the screen reads apart from the rows, as the link page
+   * reads its clicks): their line is drawn as a Skeleton from the first frame, so the row keeps its height and
+   * nothing under it moves when the figure lands. Ignored once `chips` has anything in it.
+   */
+  readonly areChipsPending?: boolean;
 }
 
 /** Props for LinkList. */
@@ -127,6 +146,11 @@ export interface LinkListProps {
    * loads dnd-kit, and no lazy chunk splits the files every page loads first.
    */
   readonly rowOrder?: ComponentType<RowOrderProps>;
+  /**
+   * Every row has a `leading` tile, and this is the tile's loading form (`<LinkPageTile />`): loading rows draw it, so
+   * the titles land where the lines stood. Set, the rows are laid out for a tile.
+   */
+  readonly leadingLoading?: ReactNode;
 }
 
 /** Props for LinkListToolbar. */
@@ -212,7 +236,9 @@ export function LinkList({
   rowsAreLinks = false,
   onMove,
   rowOrder: RowOrder,
+  leadingLoading,
 }: LinkListProps) {
+  const hasLeading = leadingLoading !== undefined;
   const isCompact = density === 'compact';
   const isCard = isCompact && placement === 'card';
   const [ownQuery, setOwnQuery] = useState('');
@@ -226,6 +252,7 @@ export function LinkList({
     'data-density': density,
     'data-placement': isCompact ? placement : undefined,
     'data-reorderable': moves === undefined ? undefined : '',
+    'data-leading': hasLeading ? '' : undefined,
   };
   const showSkeleton = useDelayedLoading(status === 'loading');
   if (status === 'no-access') {
@@ -270,7 +297,14 @@ export function LinkList({
       <div {...frameProps}>
         {toolbar}
         <div className={styles.root} aria-busy="true">
-          {showSkeleton && <SkeletonRows count={SKELETON_ROWS} isCompact={isCompact} hasGrip={moves !== undefined} />}
+          {showSkeleton && (
+            <SkeletonRows
+              count={SKELETON_ROWS}
+              isCompact={isCompact}
+              hasGrip={moves !== undefined}
+              leadingLoading={leadingLoading}
+            />
+          )}
           <VisuallyHidden>{strings.loading(label)}</VisuallyHidden>
         </div>
       </div>
@@ -298,6 +332,7 @@ export function LinkList({
           data-pending={row.isPending === true || undefined}
           data-off={row.isOff === true || undefined}
           data-href={row.isPending === true ? undefined : row.href}
+          data-variant={row.variant === 'section' ? 'section' : undefined}
         >
           {moves !== undefined && (
             <span className={styles.grip}>
@@ -359,16 +394,19 @@ function SkeletonRows({
   count,
   isCompact,
   hasGrip,
+  leadingLoading,
 }: {
   readonly count: number;
   readonly isCompact: boolean;
   readonly hasGrip: boolean;
+  readonly leadingLoading: ReactNode;
 }) {
   return Array.from({ length: count }, (_, index) => (
     // The last one is marked: the loading words for screen readers follow it, so it isn't the last child.
     <div key={index} className={styles.row} data-loading="" data-last={index === count - 1 || undefined}>
       {/* The grip's place, so the titles that follow land where these lines stood. */}
       {hasGrip && <span className={styles.grip} />}
+      {leadingLoading !== undefined && <span className={styles.leading}>{leadingLoading}</span>}
       <div className={styles.main}>
         <span className={styles.skeletonTitle}>
           <Skeleton width="medium" />
@@ -385,8 +423,30 @@ function SkeletonRows({
 
 /** A row's title line, description and chips, and its end: the same in a GridList row and a link row. */
 function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isCompact: boolean }) {
+  // A section heads the rows after it: its title is the label, and its end keeps the row's own actions.
+  if (row.variant === 'section') {
+    return (
+      <>
+        <div className={styles.main}>
+          <div className={styles.titleLine}>
+            <span className={styles.sectionTitle}>{row.title}</span>
+            {row.count !== undefined && <span className={styles.sectionCount}>{row.count}</span>}
+          </div>
+        </div>
+        <div className={styles.end}>
+          {row.badge !== undefined && <Badge text={row.badge} />}
+          {row.actions !== undefined && row.actions !== null && (
+            <div className={styles.rowActions} role="group" aria-label={row.title}>
+              {row.actions}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
   return (
     <>
+      {row.leading !== undefined && <span className={styles.leading}>{row.leading}</span>}
       <div className={styles.main}>
         <div className={styles.titleLine}>
           <span className={styles.title} title={isCompact ? row.title : undefined}>
@@ -402,7 +462,7 @@ function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isComp
         {!isCompact && row.description !== undefined && row.description !== '' && (
           <p className={styles.description}>{row.description}</p>
         )}
-        {!isCompact && <Chips chips={row.chips} />}
+        {!isCompact && <Chips chips={row.chips} isPending={row.areChipsPending === true} />}
       </div>
       {isCompact && (
         <div className={styles.facts}>
@@ -422,8 +482,17 @@ function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isComp
   );
 }
 
-/** A row's facts as neutral Badges, or nothing when it has none. */
-function Chips({ chips }: { readonly chips: readonly string[] }) {
+/** A row's facts as neutral Badges, the line held by a Skeleton while they load, or nothing when it has none. */
+function Chips({ chips, isPending = false }: { readonly chips: readonly string[]; readonly isPending?: boolean }) {
+  if (chips.length === 0 && isPending) {
+    return (
+      <ul className={styles.chips} data-pending="" aria-hidden>
+        <li>
+          <Skeleton width="short" />
+        </li>
+      </ul>
+    );
+  }
   if (chips.length === 0) return null;
   return (
     <ul className={styles.chips}>

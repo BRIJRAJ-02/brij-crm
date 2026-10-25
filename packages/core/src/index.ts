@@ -132,6 +132,20 @@ export {
   type WorkspaceDeletion,
 } from './workspace/settings.ts';
 export { getMyProfile, updateMyMemberProfile, type ProfileExtras } from './members/profile.ts';
+// The link page's blocks (spec 0051): the caller's own, in schema auth, through crm_handle's definers.
+export {
+  archiveProfileItem,
+  deleteProfileItem,
+  listProfileFormChoices,
+  saveProfileTheme,
+  setProfileIndexable,
+  listProfilePageChoices,
+  orderProfileItems,
+  readProfileCounts,
+  readProfileItems,
+  importProfileLinks,
+  saveProfileItem,
+} from './profile/items.ts';
 // A person's own account picture from our origin (23 Oct 2026): only Google's account pictures, with their version.
 export { servedPicture, type AccountPicture } from './booking/picture.ts';
 export {
@@ -643,3 +657,11 @@ export {
  */
 export { listAuditEvents, AUDIT_CURSOR_MESSAGE } from './audit/audit.ts';
 export { toEntryView, type AuditNames, type AuditRow } from './audit/view.ts';
+/**
+ * Bringing somebody's link in bio page across (spec 0055, AC-5524, AC-5525): the hosts we will read, and the
+ * parser that turns one of their pages into rows. Both are pure — no network and no database — and they are
+ * exported here as well as from `@crm/core/public` because the import is a signed in person's own write, not a
+ * public page's read, so the api reaches them from a module router rather than from `src/public/`.
+ */
+export { isImportableHost, readImportedPage, LINK_IMPORT_HOSTS, LINK_IMPORT_MAX } from './booking/link-import.ts';
+export type { ImportedPage, ImportedRow, ImportSkip, SkippedRow } from './booking/link-import.ts';

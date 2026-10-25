@@ -11,6 +11,10 @@ export { Avatar } from '../atoms/Avatar/Avatar.tsx';
 /** The tagged www.timefix.com links on every public page: "Powered by Timefix" (shared with the hosted form) and "Claim your free page". */
 export { claimPageHref, poweredByHref, type PoweredByPage } from '../lib/powered-by.ts';
 export { Button, ButtonLink } from '../atoms/Button/Button.tsx';
+/** A link page's address, copied from the pill under the person's name. */
+export { CopyButton } from '../atoms/Button/CopyButton.tsx';
+/** A public page's own toasts (BookingProvider makes them): a link page's Share says when it copied instead. */
+export { useToasts } from '../provider/context.ts';
 export { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 /** Inside it a loading state draws at once: a public page's first paint is already its loading state, so there is nothing for a skeleton to flash in front of. */
 export { LoadingNow } from '../provider/LoadingNow.tsx';
@@ -48,6 +52,8 @@ export { BookingChanges, type CancelOutcome, type GuestsOutcome } from '../modul
 export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';
 /** A profile's booking links (22 Oct 2026): the rows Captures › Links draws, the whole row opening the page. */
 export { LinkList, LinkListToolbar, type LinkRow } from '../modules/LinkList/LinkList.tsx';
+/** The link page at `/<handle>` (spec 0051): the person, their blocks in their order, the foot. */
+export { LinkPage, type LinkPageBlock, type LinkPagePerson } from '../modules/LinkPage/LinkPage.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';
 export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';

@@ -65,6 +65,7 @@ pnpm ui:artifact                   # build the artifact files into .artifact/; -
 
 ## Gotchas
 
+- The icon registry is one object, so it can't be tree shaken: every icon in `src/atoms/Icon/icons.ts` ships to every page, the app and the public ones alike, however few screens draw it. Measured on 25 October 2026, one Lucide mark costs about 90 bytes gzipped in the first load, which has had under 1 kB of room since the link page landed (`apps/web/.size-limit.js`). So reuse a mark the registry already holds before adding one, and say in the review which you chose and why.
 - `package.json` lists only the root stylesheets in `sideEffects`, so every other module (components and their CSS modules) is side effect free: a screen that imports one component from `@crm/ui` gets that component, not the whole library, and the app's first load holds only what `main.tsx` uses. A module that must run for its side effect alone has to be listed there.
 - The base layer sizes `[data-app-root]` (the web app's mount point) to the window, so AppShell and AuthLayout, which fill their container, fill the window. Their stories give them a window's height with `Stage height="page"`.
 - `apps/web/public/theme-boot.js` repeats the storage key and the `light` or `dark` check, because it has to run before any module loads. Change `THEME_STORAGE_KEY` and that file together (`apps/web/theme-boot.test.ts` checks they match).

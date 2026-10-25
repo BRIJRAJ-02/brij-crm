@@ -6,6 +6,7 @@ import { sql } from 'drizzle-orm';
 import { PERMISSIONS, type GlobalSearchResults } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import * as core from '../index.ts';
 import * as system from '../system.ts';
 import { testScope } from '../testing.ts';
@@ -240,7 +241,7 @@ describe('the access table', () => {
   });
 });
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 beforeAll(() => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-table-tests' });
@@ -391,6 +392,84 @@ describe('the walk: a principal without the access is refused', () => {
       // Another member never sees the owner's rail: each reads their own row.
       expect((await core.readNav(scope)).rail).toBe(false);
       expect((await core.readNav(owner)).rail).toBe(true);
+    },
+  );
+
+  it.each(entries.filter(([, entry]) => 'ownLinkPage' in entry).map(([name]) => name))(
+    '%s keeps to the caller’s own link page: a key is refused, another person’s block is absent',
+    async (name) => {
+      const { workspaceId, ownerId, memberId } = await memberOf('member');
+      const [ada, bea] = [core.newId(), core.newId()];
+      for (const id of [ada, bea]) {
+        await testQuery(ownerUrl, `insert into auth."user" (id, name, email) values ($1, 'Someone', $2)`, [
+          id,
+          `${id}@example.com`,
+        ]);
+      }
+      const adaScope = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId }, userId: ada });
+      const beaScope = testScope({ db, workspaceId, actor: { type: 'member', id: memberId }, userId: bea });
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() } });
+      const theirs = await core.saveProfileItem(adaScope, {
+        id: core.newId(),
+        block: { kind: 'heading', title: 'Ada’s' },
+      });
+      // Ada's own Public booking page: Bea may neither choose it nor place it.
+      const adaPage = await core.createBookingPage(adaScope, {
+        id: core.newId(),
+        title: 'Ada’s intro',
+        timeZone: 'UTC',
+        settings: {},
+      });
+      const inputs: Readonly<Record<string, unknown>> = {
+        saveProfileItem: { id: theirs.id, block: { kind: 'heading', title: 'Bea’s now' } },
+        orderProfileItems: [theirs.id],
+        archiveProfileItem: { id: theirs.id, archived: true },
+        deleteProfileItem: theirs.id,
+        // The look of a page names no block and no page, so it can only ever be the caller's own (spec 0054).
+        // Bea has claimed no handle, so there is no public profile of theirs to put a look on: NOT_FOUND, with
+        // the others below, rather than a look saved against nothing.
+        saveProfileTheme: { ground: 'ink', hue: 'green', mode: 'dark', shape: 'pill', fill: 'solid', font: 'mono' },
+        // Whether search engines may show the page names nothing either, and Bea has no page: NOT_FOUND too.
+        setProfileIndexable: false,
+        // An import of nothing: what it would land is Bea's own, so it answers Bea's page and holds none of Ada's.
+        importProfileLinks: { id: core.newId(), source: 'https://linktr.ee/bea', rows: [], skipped: [] },
+      };
+      expect(await refusalOf(service(name)(key, inputs[name]))).toMatchObject({ code: 'FORBIDDEN' });
+      const outcome = await service(name)(beaScope, inputs[name]).then(
+        (value) => ({ value }),
+        (error: unknown) => ({ refusal: core.isRefusal(error) ? error.refusal.code : error }),
+      );
+      if (
+        name === 'readProfileItems' ||
+        name === 'listProfilePageChoices' ||
+        name === 'listProfileFormChoices' ||
+        name === 'readProfileCounts' ||
+        name === 'importProfileLinks'
+      ) {
+        // The reads answer Bea's own page, which holds nothing of Ada's: a refusal would say the wrong thing.
+        expect(JSON.stringify(outcome)).not.toContain(theirs.id);
+        expect(JSON.stringify(outcome)).not.toContain(adaPage.id);
+      } else if (name === 'orderProfileItems') {
+        // Bea's order can only name Bea's own blocks: Ada's id makes it stale.
+        expect(outcome).toEqual({ refusal: 'CONFIG_INVALID' });
+      } else {
+        expect(outcome).toEqual({ refusal: 'NOT_FOUND' });
+      }
+      expect((await core.readProfileItems(adaScope)).items).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: theirs.id, title: 'Ada’s' })]),
+      );
+      if (name === 'saveProfileItem') {
+        const placing = await core
+          .saveProfileItem(beaScope, {
+            id: core.newId(),
+            block: { kind: 'page', workspaceId, pageId: adaPage.id },
+          })
+          .then(
+            () => 'placed',
+            (error: unknown) => (core.isRefusal(error) ? error.refusal.code : error),
+          );
+        expect(placing).toBe('NOT_FOUND');
+      }
     },
   );
 

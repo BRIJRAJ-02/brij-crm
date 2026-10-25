@@ -28,7 +28,7 @@ export type {
   PublicAddress,
   PublicHandleOffer,
   PublicProfile,
-  PublicProfileLink,
+  PublicProfileItem,
   PublicBooked,
   PublicChanged,
   PublicGuestsAnswer,
@@ -179,10 +179,18 @@ export function createBookingClient(options: PublicClientOptions): BookingClient
 
 /** What a handle address needs (22 Oct 2026): a person's profile, a page of links at a time, and one page's key. */
 export interface HandleClient {
-  /** The profile at `/<handle>` and its first (or `after`'s next) page of Public links, only titles holding `q`. */
+  /**
+   * The profile at `/<handle>` and its first (or `after`'s next) page of blocks, only those holding `q`. Read with
+   * neither, it is a view of the page (AC-5124); `q: ''` (a search cleared) reads the first page without being one.
+   */
   profile(handle: string, query?: { readonly after?: string; readonly q?: string }): Promise<PublicProfile>;
   /** The page `/<handle>/<slug>` names, by its public key, and the owner's current handle. */
   address(handle: string, slug: string): Promise<PublicAddress>;
+  /**
+   * Says a block was pressed (spec 0051, AC-5125): a beacon, so the navigation it starts never waits, and lost on
+   * purpose when it can't go. Nothing comes back.
+   */
+  press(handle: string, itemId: string): void;
   /**
    * Whether `/<handle>` is free to claim (25 Oct 2026), asked only once `profile` answered NOT_FOUND. One of two
    * words: `free`, or `absent` for a handle somebody holds, a word kept for Timefix and a word no handle could be
@@ -191,17 +199,35 @@ export interface HandleClient {
   offer(handle: string): Promise<PublicHandleOffer>;
 }
 
+/** Sends a beacon: the browser's `navigator.sendBeacon`, or a test's own. */
+export type BeaconLike = (url: string, body: string) => boolean;
+
 /** The handle client, on `origin` (the page's own), with `fetch` passed in for tests. */
-export function createHandleClient(options: PublicClientOptions): HandleClient {
-  const { call } = publicCaller(options, 'handles');
+export function createHandleClient(options: PublicClientOptions & { readonly beacon?: BeaconLike }): HandleClient {
+  const { base, call } = publicCaller(options, 'handles');
   const profiles = publicCaller(options, 'profiles');
+  const beacon: BeaconLike =
+    options.beacon ?? ((url, body) => typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, body));
   return {
     profile: (handle, query = {}) => {
+      // An empty `q` is still a search (a cleared one), so it is sent, and never counts as a view.
       const search = new URLSearchParams({
         ...(query.after === undefined ? {} : { after: query.after }),
-        ...(query.q === undefined || query.q === '' ? {} : { q: query.q }),
+        ...(query.q === undefined ? {} : { q: query.q }),
       }).toString();
-      return call<PublicProfile>(`${encodeURIComponent(handle)}${search === '' ? '' : `?${search}`}`);
+      // The first page's read is a view (AC-5124): it goes with this site's cookies, so the owner's own isn't one.
+      const isView = search === '';
+      return call<PublicProfile>(
+        `${encodeURIComponent(handle)}${isView ? '' : `?${search}`}`,
+        isView ? { credentials: 'same-origin' } : {},
+      );
+    },
+    press: (handle, itemId) => {
+      try {
+        beacon(`${base}/${encodeURIComponent(handle)}/press`, itemId);
+      } catch {
+        // A press that can't be sent is lost on purpose: nothing on the page waits on it.
+      }
     },
     address: (handle, slug) => call<PublicAddress>(`${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`),
     // Under `profiles`, where `/handles/:handle/:slug` would read `offer` as a page's slug.

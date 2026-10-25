@@ -101,6 +101,8 @@ describe('@crm/ui', () => {
       'LinkList',
       'LinkListRowOrder',
       'LinkListToolbar',
+      'LinkPage',
+      'LinkPageTile',
       'LoadingNow',
       'LockReason',
       'MatchCalendar',

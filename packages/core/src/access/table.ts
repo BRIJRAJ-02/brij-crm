@@ -43,7 +43,13 @@ export type AccessEntry =
    * The caller's own sidebar (spec 0034): a member reads and changes only their own row (no member id is ever
    * taken), and a principal that isn't a member gets the defaults on a read and `FORBIDDEN` on a change.
    */
-  | { readonly ownNav: true };
+  | { readonly ownNav: true }
+  /**
+   * The signed in person's own link page (spec 0051): their account's blocks, the same from every workspace, and no
+   * user id is ever taken. A principal that isn't a signed in member (a key, a form, the system) is `FORBIDDEN`, and
+   * another person's block answers as absent (`NOT_FOUND`).
+   */
+  | { readonly ownLinkPage: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -119,6 +125,19 @@ export const ACCESS_TABLE = {
   // A member's own profile (spec 0031, slice 7): themself only, so any member.
   getMyProfile: { anyMember: true },
   updateMyMemberProfile: { anyMember: true },
+  // The person's own link page (spec 0051): their account's blocks only.
+  readProfileItems: { ownLinkPage: true },
+  readProfileCounts: { ownLinkPage: true },
+  listProfilePageChoices: { ownLinkPage: true },
+  // The forms they may place (spec 0052) and the look of the page (spec 0054): their own account, as the rest.
+  listProfileFormChoices: { ownLinkPage: true },
+  saveProfileTheme: { ownLinkPage: true },
+  setProfileIndexable: { ownLinkPage: true },
+  importProfileLinks: { ownLinkPage: true },
+  saveProfileItem: { ownLinkPage: true },
+  orderProfileItems: { ownLinkPage: true },
+  archiveProfileItem: { ownLinkPage: true },
+  deleteProfileItem: { ownLinkPage: true },
   // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
   getWorkspaceSettings: { anyMember: true },
   updateWorkspace: { permission: 'workspace.manage' },

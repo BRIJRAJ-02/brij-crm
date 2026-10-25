@@ -7,14 +7,12 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { enterBookingProfile } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
 import { createBookingPage, deleteBookingPage, listBookingPages, reorderProfilePages } from './pages.ts';
-import { readBookingProfile } from './public.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -123,14 +121,6 @@ describe('a profile’s order', () => {
     ]);
     expect(answer.pages.every((each) => !Number.isNaN(Date.parse(each.updatedAt)))).toBe(true);
     expect(await places(ada.scope)).toEqual({ Demo: 0, Intro: 1, Off: 2, Coffee: 3, Hidden: 4 });
-
-    // The profile reads the new order at once: Sales first (its first page leads), then the page with no section.
-    const profile = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
-    expect(profile.links.map((link) => [link.title, link.section])).toEqual([
-      ['Demo', 'Sales'],
-      ['Intro', 'Sales'],
-      ['Coffee', undefined],
-    ]);
 
     // One audit entry, on the person, naming the pages' order before and after.
     expect(await reorders(ada.workspaceId)).toEqual([

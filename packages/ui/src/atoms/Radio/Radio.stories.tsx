@@ -128,3 +128,31 @@ export const WithInfo: Story = {
     await expect(canvas.getByRole('radio', { name: 'Only me' })).toHaveFocus();
   },
 };
+
+/** Cards: the choice is the first step of the form under it, each one saying what it adds (the link page's Add item). */
+export const Cards: Story = {
+  args: { label: 'What are you adding', defaultValue: 'link' },
+  render: (args) => (
+    <Stage width="dialog">
+      <RadioGroup {...args} variant="cards">
+        <Radio value="link" icon="link" description="Any address: a site, a social account, a form">
+          Link
+        </Radio>
+        <Radio value="page" icon="calendar" description="One of your pages, so people book a time">
+          Booking page
+        </Radio>
+        <Radio value="contact" icon="contact" description="Your details, saved to their phone">
+          Contact card
+        </Radio>
+        <Radio value="section" icon="list-plus" description="A heading that groups what comes under it">
+          Section
+        </Radio>
+      </RadioGroup>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const page = canvas.getByRole('radio', { name: /Booking page/ });
+    await userEvent.click(page);
+    await expect(page).toBeChecked();
+  },
+};

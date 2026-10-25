@@ -3,6 +3,16 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { BIO_MAX, handleProblem } from './booking/handles.ts';
+import {
+  ProfileBlock,
+  ProfileCounts,
+  ProfileFormChoice,
+  ProfileItem,
+  ProfileItems,
+  ProfileLinkImportResult,
+  ProfilePageChoice,
+} from './booking/link-page.ts';
+import { PageTheme } from './booking/page-theme.ts';
 import { TimeZoneName } from './booking/settings.ts';
 import { Uuid } from './values/ids.ts';
 import { checkSocialLink, socialLinkProblem } from './values/social.ts';
@@ -116,6 +126,10 @@ export const MyProfile = z.object({
    * booking pages and profile. Absent for a member with no sign in of their own.
    */
   socials: z.array(z.object({ network: SocialLinkNetwork, href: z.string() })).optional(),
+  /** The look of their link page (spec 0054); the default until they pick one, and absent with no handle. */
+  theme: PageTheme.optional(),
+  /** Whether search engines may show their link page (spec 0055, AC-5506); absent with no handle. */
+  indexable: z.boolean().optional(),
 });
 /** The caller's profile in this workspace. */
 export type MyProfile = z.infer<typeof MyProfile>;
@@ -139,8 +153,81 @@ export const UpdateMyProfileInput = WorkspaceScoped.extend({
 /** A change to the caller's own profile. */
 export type UpdateMyProfileInput = z.infer<typeof UpdateMyProfileInput>;
 
-/** The profile procedures: any active member, for themself only. */
+/**
+ * Adds or edits one block of the caller's link page (spec 0051, AC-5107): idempotent on the id the browser minted,
+ * so a retry of the same add answers the block already made and adds nothing.
+ */
+export const SaveProfileItemInput = WorkspaceScoped.extend({
+  id: Uuid,
+  block: ProfileBlock,
+  /** An edit of a block the editor showed: refused as gone when another tab deleted it, never made again. */
+  isEdit: z.boolean().optional(),
+  mutationId: Uuid,
+});
+/** Adds or edits one block of the caller's link page. */
+export type SaveProfileItemInput = z.infer<typeof SaveProfileItemInput>;
+
+/** The caller's live blocks in their new order: exactly the live blocks, each once (AC-5116). */
+export const OrderProfileItemsInput = WorkspaceScoped.extend({
+  ids: z.array(Uuid).min(1).max(60),
+  mutationId: Uuid,
+});
+/** The caller's live blocks in their new order. */
+export type OrderProfileItemsInput = z.infer<typeof OrderProfileItemsInput>;
+
+/** Archives one block of the caller's link page, or restores it to the end (AC-5106). */
+export const ArchiveProfileItemInput = WorkspaceScoped.extend({
+  id: Uuid,
+  archived: z.boolean(),
+  mutationId: Uuid,
+});
+/** Archives or restores one block. */
+export type ArchiveProfileItemInput = z.infer<typeof ArchiveProfileItemInput>;
+
+/** Deletes one block of the caller's link page for good (AC-5106: the editor asks first). */
+export const DeleteProfileItemInput = WorkspaceScoped.extend({
+  id: Uuid,
+  mutationId: Uuid,
+});
+/** Deletes one block. */
+export type DeleteProfileItemInput = z.infer<typeof DeleteProfileItemInput>;
+
+/**
+ * Brings one link in bio page across (spec 0055, AC-5524 to AC-5528). `id` is the import's own id, so a retry of
+ * the same import adds nothing twice, and `url` is the page to read, which must be one of the services on the
+ * allow list. Every row it makes lands hidden; nothing it brings is on the public page until a person turns it on.
+ */
+export const ImportProfileLinksInput = WorkspaceScoped.extend({
+  id: Uuid,
+  url: z.string().max(400),
+  mutationId: Uuid,
+});
+/** Brings one link in bio page across. */
+export type ImportProfileLinksInput = z.infer<typeof ImportProfileLinksInput>;
+
+/**
+ * The profile procedures: any active member, for themself only. The link page's (spec 0051) act on the caller's own
+ * account in every workspace: the owner is the session's, never an input, and no role reaches another person's.
+ */
 export const profileContract = {
   get: oc.input(WorkspaceScoped).output(MyProfile),
   update: oc.input(UpdateMyProfileInput).output(MyProfile),
+  items: oc.input(WorkspaceScoped).output(ProfileItems),
+  pageChoices: oc.input(WorkspaceScoped).output(z.array(ProfilePageChoice)),
+  /** The forms the caller may place on their link page (spec 0052, AC-5213), their own and not placed yet. */
+  formChoices: oc.input(WorkspaceScoped).output(z.array(ProfileFormChoice)),
+  /** The look of the caller's own link page (spec 0054): read with the profile, saved whole. */
+  saveTheme: oc.input(WorkspaceScoped.extend({ theme: PageTheme, mutationId: Uuid })).output(PageTheme),
+  /** Whether search engines may show the caller's own link page (spec 0055, AC-5506): read with the profile. */
+  setIndexable: oc
+    .input(WorkspaceScoped.extend({ indexable: z.boolean(), mutationId: Uuid }))
+    .output(z.object({ indexable: z.boolean() })),
+  /** Brings one link in bio page across (spec 0055, AC-5524): the rows land hidden, and a person turns them on. */
+  importLinks: oc.input(ImportProfileLinksInput).output(ProfileLinkImportResult),
+  saveItem: oc.input(SaveProfileItemInput).output(ProfileItem),
+  orderItems: oc.input(OrderProfileItemsInput).output(ProfileItems),
+  archiveItem: oc.input(ArchiveProfileItemInput).output(ProfileItems),
+  deleteItem: oc.input(DeleteProfileItemInput).output(z.object({ id: Uuid })),
+  /** The link page's figures (spec 0051, AC-5127): views, visitors and each block's presses over 30 days. */
+  counts: oc.input(WorkspaceScoped).output(ProfileCounts),
 };

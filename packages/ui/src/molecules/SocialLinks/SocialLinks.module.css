@@ -14,4 +14,11 @@
   .item {
     display: flex;
   }
+
+  /* Round (a link page): centred outlined circles, space-8 apart, from the page's own centre line. */
+  .root[data-variant='round'] {
+    justify-content: center;
+    gap: var(--space-8);
+    margin-inline: 0;
+  }
 }

@@ -6,19 +6,24 @@ export {
   enterBookingAddress,
   enterBookingByToken,
   enterBookingPage,
-  enterBookingProfile,
+  countItemPress,
+  countProfileView,
+  enterContactCard,
+  enterLinkPage,
   findHandleOwner,
   readHandleOffer,
   type BookingEntry,
   type HandleOwner,
+  type LinkPageRow,
+  type OwnedPageEntry,
   type ProfileCursor,
-  type ProfilePageEntry,
 } from './access/door.ts';
 export {
   bookPublicSlot,
   countPageView,
   readAddressedPage,
-  readBookingProfile,
+  readContactCard,
+  readLinkPage,
   readHandoffPrefill,
   getPublicBookingPage,
   isPageHost,
@@ -31,8 +36,27 @@ export {
   type PublicBookingDeps,
   type PublicPictureDeps,
 } from './booking/public.ts';
+// The link page's contact card as a vCard (spec 0051, AC-5114).
+export { writeVcard, type VcardPhoto } from './profile/vcard.ts';
 // A host's account picture (23 Oct 2026): only Google's picture hosts, so the api's fetch goes nowhere else.
 export { isPictureHost, pictureVersion, type AccountPicture, type AccountPictureReader } from './booking/picture.ts';
+
+// Where our server may never be made to send a request (spec 0055, AC-5520). The pure half of the one hardened
+// outside fetch: no network, no state, just the rule, so every caller asks the same question.
+export { isFetchableUrl, isRefusedAddress } from './booking/addresses.ts';
+
+// Bringing somebody's link in bio page across (spec 0055, AC-5524 to AC-5528): the seven hosts we will read, and
+// the parser that turns one of their pages into rows. No network here either.
+export {
+  isImportableHost,
+  LINK_IMPORT_HOSTS,
+  LINK_IMPORT_MAX,
+  readImportedPage,
+  type ImportedPage,
+  type ImportedRow,
+  type ImportSkip,
+  type SkippedRow,
+} from './booking/link-import.ts';
 // The booking chat (spec 0042): one turn, through the slots and booking services above.
 export { chatTurn, type ChatTurn } from './booking/chat/turn.ts';
 // The guest page's changes (milestone 2): move, add guests, cancel, and where it could move.

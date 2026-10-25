@@ -7,6 +7,8 @@ import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
 import { BookingDefaultView, BookingDuration, TimeZoneName } from './settings.ts';
 import { Uuid } from '../values/ids.ts';
+import { PageTheme } from './page-theme.ts';
+import { PublicProfileItem } from './link-page.ts';
 import { SOCIAL_LINK_NETWORKS } from '../values/social-networks.ts';
 
 /** A page's public key: 16 URL safe characters. */
@@ -117,30 +119,13 @@ export const PublicAddress = z.object({
 /** The page a handle address names. */
 export type PublicAddress = z.infer<typeof PublicAddress>;
 
-/** One booking page on a profile: its title, lengths and kind, opened at `/<handle>/<slug>`. */
-export const PublicProfileLink = z.object({
-  slug: z.string(),
-  title: z.string(),
-  description: z.string(),
-  durations: z.array(BookingDuration),
-  /** A team page books one of several people. */
-  isTeam: z.boolean(),
-  /** The small heading the owner put it under, if any. */
-  section: z.string().optional(),
-  /**
-   * Which of the person's workspaces the page is from, as an opaque key (owner ask, 24 Oct 2026): the same on every
-   * read of this profile, different for each workspace, and never a workspace's id or name. Links with different
-   * groups never share a card, whatever their sections.
-   */
-  group: z.string().regex(/^[0-9a-f]{16}$/),
-});
-/** One booking page on a profile. */
-export type PublicProfileLink = z.infer<typeof PublicProfileLink>;
-
-/** How many links one profile read answers. */
+/** How many blocks one profile read answers. */
 export const PROFILE_PAGE_SIZE = 20;
 
-/** `GET /api/public/handles/:handle?after&q`: the person and one page of their Public booking links. */
+/**
+ * `GET /api/public/handles/:handle?after&q`: the person and one page of their link page's blocks, every kind together
+ * in the owner's order (spec 0051, AC-5108). With `q`, every block that matches, flat, with no headings.
+ */
 export const PublicProfile = z.object({
   /** The current handle: an old one's address moves to it. */
   handle: z.string(),
@@ -152,7 +137,14 @@ export const PublicProfile = z.object({
   bio: z.string(),
   /** Their social links, in their order, absent when there are none (booking socials, 25 Oct 2026). */
   socials: z.array(PublicSocialLink).optional(),
-  links: z.array(PublicProfileLink),
+  items: z.array(PublicProfileItem),
+  /** The look its owner picked (spec 0054, AC-5404): the six names, and no colour value of any kind. */
+  theme: PageTheme,
+  /**
+   * Whether search engines may show the page (spec 0055, AC-5506). The shell reads it with everything else, so a
+   * robots line costs no second call. Absent reads as shown, which is what every page said before the switch.
+   */
+  indexable: z.boolean().optional(),
   /** The cursor of the next page, while there is one. */
   next: z.string().optional(),
 });
@@ -185,7 +177,7 @@ export type PublicHandleOffer = z.infer<typeof PublicHandleOffer>;
 export const PublicProfileQuery = z.object({
   after: z
     .string()
-    .regex(/^\d{1,3}\.[0-9a-f-]{36}$/, { error: 'That page of links isn’t right.' })
+    .regex(/^\d{1,3}\.[0-9a-f-]{36}$/, { error: 'That page of blocks isn’t right.' })
     .optional(),
   q: z.string().trim().max(120, { error: 'Keep the search to 120 characters.' }).optional(),
 });

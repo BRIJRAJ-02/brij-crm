@@ -328,18 +328,238 @@ export const publicProfiles = auth.table(
     userId: uuid('user_id').notNull(),
     handle: text('handle').notNull(),
     bio: text('bio').notNull().default(''),
+    /** The link page's look (spec 0054): six names from closed sets, never a colour or a size. */
+    theme: jsonb('theme')
+      .notNull()
+      .default(
+        sql`'{"ground":"plain","hue":"blue","mode":"light","shape":"soft","fill":"plain","font":"sans"}'::jsonb`,
+      ),
+    /** Whether search engines may show the link page (spec 0055, AC-5506): on until its owner says otherwise. */
+    indexable: boolean('indexable').notNull().default(true),
     updatedAt: updatedAt(),
   },
   (t) => [
     primaryKey({ name: 'public_profiles_pkey', columns: [t.userId] }),
     uniqueIndex('public_profiles_handle').on(t.handle),
     check('public_profiles_bio', sql`char_length(${t.bio}) <= 160`),
+    check(
+      'public_profiles_theme',
+      // Postgres refuses a subquery in a check constraint, so "no key but these six" is the six taken away leaving
+      // an empty object. A check whose expression is NULL passes, so "all six present" needs `coalesce` — which
+      // makes the whole thing false for a person who has never picked a look, hence `is null or`.
+      sql`${t.theme} is null or (
+        jsonb_typeof(${t.theme}) = 'object'
+        and ${t.theme} - 'ground' - 'hue' - 'mode' - 'shape' - 'fill' - 'font' = '{}'::jsonb
+        and coalesce(${t.theme} ->> 'ground', '') in ('plain', 'paper', 'tint', 'ink')
+        and coalesce(${t.theme} ->> 'hue', '') in ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')
+        and coalesce(${t.theme} ->> 'mode', '') in ('light', 'dark')
+        and coalesce(${t.theme} ->> 'shape', '') in ('soft', 'pill', 'square')
+        and coalesce(${t.theme} ->> 'fill', '') in ('plain', 'soft', 'outline', 'solid')
+        and coalesce(${t.theme} ->> 'font', '') in ('sans', 'mono')
+      )`,
+    ),
     foreignKey({ name: 'public_profiles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     foreignKey({
       name: 'public_profiles_handle_fk',
       columns: [t.handle],
       foreignColumns: [publicHandles.handle],
     }),
+  ],
+);
+
+/**
+ * The blocks of a person's link page at `/<handle>` (spec 0051, built as blocks): one ordered list per person, never
+ * a workspace's, so leaving a workspace never takes their LinkedIn with it. The common columns are real; everything
+ * else a kind holds is `data`, checked by its Zod schema (`ProfileBlock` in `@crm/contracts`) before every write and
+ * again by the definer, so a new kind is a schema and a renderer, and at most one line in `profile_items_kind`. A
+ * `page` block names a booking page by its workspace and id, and nothing else: whether a visitor sees it is still the
+ * booking lookup's call. `position` is null while archived, so only live blocks hold places; the deferred unique
+ * `(user_id, position)` (hand written in migration 0098) lets a reorder set every place in one statement. Written and
+ * read only through crm_handle's definers (migration 0098); crm_app holds no grant on it.
+ */
+export const profileItems = auth.table(
+  'profile_items',
+  {
+    id: uuid('id').notNull().primaryKey(),
+    userId: uuid('user_id').notNull(),
+    kind: text('kind').notNull(),
+    position: smallint('position'),
+    data: jsonb('data')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    workspaceId: uuid('workspace_id'),
+    pageId: uuid('page_id'),
+    /** Set only for `kind = 'form'`, always beside `workspaceId` (spec 0052, AC-5213). */
+    formId: uuid('form_id'),
+    archivedAt: timestamptz('archived_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({ name: 'profile_items_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    check(
+      'profile_items_kind',
+      sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial')`,
+    ),
+    check('profile_items_position', sql`${t.position} between 0 and 999`),
+    check('profile_items_placed', sql`(${t.archivedAt} is null) = (${t.position} is not null)`),
+    check('profile_items_data', sql`jsonb_typeof(${t.data}) = 'object' and pg_column_size(${t.data}) <= 16384`),
+    check('profile_items_target', sql`(${t.workspaceId} is null) = (${t.pageId} is null and ${t.formId} is null)`),
+    check('profile_items_form', sql`(${t.kind} = 'form') = (${t.formId} is not null)`),
+    check('profile_items_page', sql`${t.kind} <> 'page' or ${t.pageId} is not null`),
+    check(
+      'profile_items_plain',
+      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq', 'testimonial') or (${t.pageId} is null and ${t.formId} is null)`,
+    ),
+    uniqueIndex('profile_items_page_once')
+      .on(t.userId, t.workspaceId, t.pageId)
+      .where(sql`${t.kind} = 'page' and ${t.archivedAt} is null`),
+    uniqueIndex('profile_items_form_once')
+      .on(t.userId, t.workspaceId, t.formId)
+      .where(sql`${t.kind} = 'form' and ${t.archivedAt} is null`),
+    uniqueIndex('profile_items_contact_once')
+      .on(t.userId)
+      .where(sql`${t.kind} = 'contact' and ${t.archivedAt} is null`),
+    uniqueIndex('profile_items_heading_once')
+      .on(t.userId, sql`lower(btrim(${t.data} ->> 'title'))`)
+      .where(sql`${t.kind} = 'heading' and ${t.archivedAt} is null`),
+    index('profile_items_archived')
+      .on(t.userId, t.archivedAt)
+      .where(sql`${t.archivedAt} is not null`),
+  ],
+);
+
+/**
+ * A link page's views (spec 0051, AC-5124): one row per owner, UTC day and visitor (the daily HMAC spec 0047 mints,
+ * never an address or a user agent), with how many times that visitor read it that day. Reached only through
+ * crm_handle's definers; swept after a year by the daily cleanup.
+ */
+export const profileViews = auth.table(
+  'profile_views',
+  {
+    userId: uuid('user_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    visitor: text('visitor').notNull(),
+    views: integer('views').notNull().default(1),
+    firstAt: timestamptz('first_at').notNull().defaultNow(),
+    lastAt: timestamptz('last_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'profile_views_pkey', columns: [t.userId, t.day, t.visitor] }),
+    foreignKey({ name: 'profile_views_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    // The cleanup's pick, oldest days first.
+    index('profile_views_day').on(t.day),
+    check('profile_views_visitor', sql`${t.visitor} ~ '^[0-9a-f]{32}$'`),
+    check('profile_views_count', sql`${t.views} >= 1`),
+  ],
+);
+
+/**
+ * A link page block's presses (spec 0051, AC-5125): one row per block, UTC day and visitor, with how many times that
+ * visitor pressed it that day. Goes with its block; swept after a year.
+ */
+export const profileItemPresses = auth.table(
+  'profile_item_presses',
+  {
+    itemId: uuid('item_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    visitor: text('visitor').notNull(),
+    presses: integer('presses').notNull().default(1),
+    firstAt: timestamptz('first_at').notNull().defaultNow(),
+    lastAt: timestamptz('last_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'profile_item_presses_pkey', columns: [t.itemId, t.day, t.visitor] }),
+    foreignKey({
+      name: 'profile_item_presses_item_fk',
+      columns: [t.itemId],
+      foreignColumns: [profileItems.id],
+    }).onDelete('cascade'),
+    index('profile_item_presses_day').on(t.day),
+    check('profile_item_presses_visitor', sql`${t.visitor} ~ '^[0-9a-f]{32}$'`),
+    check('profile_item_presses_count', sql`${t.presses} >= 1`),
+  ],
+);
+
+/**
+ * One link in bio page brought across (spec 0055, AC-5524 to AC-5528). The blocks it made are ordinary hidden
+ * blocks in `profile_items`; this row is what makes an import idempotent on its own id, countable (five an hour),
+ * and reviewable: `itemIds` holds the rows it made in the order the page had them, and `skipped` the rows it
+ * could not map, each with whatever it had and why, so nothing is dropped without being shown.
+ *
+ * Reached only through `crm_import_profile_links` (migration 0109), owned by `crm_handle`: the app role has no
+ * privilege on this table at all.
+ */
+export const linkImports = auth.table(
+  'link_imports',
+  {
+    id: uuid('id').notNull().primaryKey(),
+    userId: uuid('user_id').notNull(),
+    /** The address the rows came from, as the person gave it. Never fetched again from here. */
+    source: text('source').notNull(),
+    itemIds: uuid('item_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    skipped: jsonb('skipped')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({ name: 'link_imports_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    index('link_imports_recent').on(t.userId, t.createdAt.desc()),
+    check('link_imports_source', sql`char_length(${t.source}) <= 400`),
+    check('link_imports_items', sql`array_length(${t.itemIds}, 1) is null or array_length(${t.itemIds}, 1) <= 40`),
+    // Bounded where it lands as well as where it is made: a page of bare anchors has thousands of rows we can't
+    // make, and this row is kept and sent back (the security review, 25 October 2026).
+    check(
+      'link_imports_skipped',
+      sql`jsonb_typeof(${t.skipped}) = 'array' and jsonb_array_length(${t.skipped}) <= 100 and pg_column_size(${t.skipped}) <= 65536`,
+    ),
+  ],
+);
+
+/**
+ * A link page's views by day (spec 0051, AC-5127): one row per owner and UTC day, kept beside `profile_views` by the
+ * same statement (a visitor's first view of the day adds one visitor), so the editor's figures read at most 60 rows
+ * however many people looked.
+ */
+export const profileViewDays = auth.table(
+  'profile_view_days',
+  {
+    userId: uuid('user_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    views: integer('views').notNull().default(0),
+    visitors: integer('visitors').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ name: 'profile_view_days_pkey', columns: [t.userId, t.day] }),
+    foreignKey({ name: 'profile_view_days_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete(
+      'cascade',
+    ),
+    index('profile_view_days_day').on(t.day),
+    check('profile_view_days_count', sql`${t.views} >= 0 and ${t.visitors} >= 0`),
+  ],
+);
+
+/** A link page block's presses by day (spec 0051, AC-5127), kept beside `profile_item_presses` the same way. */
+export const profileItemPressDays = auth.table(
+  'profile_item_press_days',
+  {
+    itemId: uuid('item_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    presses: integer('presses').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ name: 'profile_item_press_days_pkey', columns: [t.itemId, t.day] }),
+    foreignKey({
+      name: 'profile_item_press_days_item_fk',
+      columns: [t.itemId],
+      foreignColumns: [profileItems.id],
+    }).onDelete('cascade'),
+    index('profile_item_press_days_day').on(t.day),
+    check('profile_item_press_days_count', sql`${t.presses} >= 0`),
   ],
 );
 

@@ -7,7 +7,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { contract, defaultAvailability } from '@crm/contracts';
+import { contract, DEFAULT_PAGE_THEME, defaultAvailability } from '@crm/contracts';
 import { newId, NO_CALENDAR } from '@crm/core';
 import { bookPublicSlot, enterBookingPage } from '@crm/core/public';
 import type { Database, IdentityStore } from '@crm/db';
@@ -57,6 +57,12 @@ const READS: ReadonlySet<string> = new Set([
   // Slice 7: Workspace › General, Account › Profile, and a deleted workspace as its owner sees it.
   'workspace.get',
   'profile.get',
+  // The link page (spec 0051): the caller's own blocks, and the booking pages they may place.
+  'profile.items',
+  'profile.counts',
+  'profile.pageChoices',
+  // The forms the caller may place on the page (spec 0052, AC-5213): their own, read only.
+  'profile.formChoices',
   'deletedWorkspace.deleted',
   'access.mine',
   // Settings › History's Workspace changes (spec 0046).
@@ -164,6 +170,9 @@ let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
 let pokes = 0;
 /** The invitation tokens the app mailed, by address, read off the links (the mailer below stands in for Mailpit). */
+/** A handle nobody holds: these cases claim one so there is a page to change, and run beside each other. */
+const freeHandle = () => `p${newId().replaceAll('-', '').slice(0, 20)}`;
+
 const invitationTokens = new Map<string, string>();
 /** Sign in codes still go to Mailpit, where signIn reads them. */
 const mailpit = createMailpitMailer({ url: MAILPIT_URL, from: 'Timefix <noreply@example.com>' });
@@ -555,6 +564,62 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'profile.update': async (m, mutationId) => {
     const me = await m.client.profile.update({ workspace: m.slug, name: 'Renamed', mutationId });
     return [{ kind: 'members', item_ids: [me.memberId], mutation_id: mutationId }];
+  },
+  // The look of the link page (spec 0054) and whether search engines may show it (spec 0055) live in schema auth
+  // beside its blocks: no tenant change, so no outbox row of their own. Both need a handle to change, so each
+  // claims one first, and that claim is the one row the case expects.
+  'profile.saveTheme': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.saveTheme({
+      workspace: m.slug,
+      theme: { ...DEFAULT_PAGE_THEME, ground: 'paper' },
+      mutationId,
+    });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  'profile.setIndexable': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.setIndexable({ workspace: m.slug, indexable: false, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  // Bringing a link in bio page across (spec 0055): hidden blocks in schema auth, so no outbox row either. The
+  // page it reads is the test outside fetch's fixed one, so nothing here touches the network.
+  'profile.importLinks': async (m, mutationId) => {
+    await m.client.profile.importLinks({
+      workspace: m.slug,
+      id: newId(),
+      url: 'https://linktr.ee/someone',
+      mutationId,
+    });
+    return [];
+  },
+  // The link page's blocks (spec 0051) live in schema auth: no tenant change, so no outbox row.
+  'profile.saveItem': async (m, mutationId) => {
+    await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'link', title: 'Site', url: 'https://example.com' },
+      mutationId,
+    });
+    return [];
+  },
+  'profile.orderItems': async (m, mutationId) => {
+    const block = { kind: 'heading', title: 'Work' } as const;
+    const item = await m.client.profile.saveItem({ workspace: m.slug, id: newId(), block, mutationId: newId() });
+    await m.client.profile.orderItems({ workspace: m.slug, ids: [item.id], mutationId });
+    return [];
+  },
+  'profile.archiveItem': async (m, mutationId) => {
+    const block = { kind: 'heading', title: 'Work' } as const;
+    const item = await m.client.profile.saveItem({ workspace: m.slug, id: newId(), block, mutationId: newId() });
+    await m.client.profile.archiveItem({ workspace: m.slug, id: item.id, archived: true, mutationId });
+    return [];
+  },
+  'profile.deleteItem': async (m, mutationId) => {
+    const block = { kind: 'heading', title: 'Work' } as const;
+    const item = await m.client.profile.saveItem({ workspace: m.slug, id: newId(), block, mutationId: newId() });
+    await m.client.profile.deleteItem({ workspace: m.slug, id: item.id, mutationId });
+    return [];
   },
   'invitations.accept': async (m) => {
     const invitee = await signIn(app);
@@ -2061,6 +2126,11 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'rotations.delete': 2,
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
+  'profile.saveTheme': 2,
+  'profile.setIndexable': 2,
+  'profile.orderItems': 2,
+  'profile.archiveItem': 2,
+  'profile.deleteItem': 2,
   'bookings.blocks.remove': 2,
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,

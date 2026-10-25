@@ -18,15 +18,23 @@
 // 4. After the commit, the calendar event (three tries); a booking whose event
 //    failed stays confirmed and is marked for the host.
 import { handoffSubmission, handoffVisitor } from '../forms/public.ts';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   bookingPicturePath,
   PROFILE_PAGE_SIZE,
   profilePicturePath,
+  checkProfileLink,
+  headingGroupOf,
+  linkMarkOf,
+  ProfileContactBlock,
+  ProfileFaqBlock,
+  ProfileTestimonialBlock,
+  ProfileTextBlock,
+  PublicProfileItem,
+  type ProfileContactCard,
   type PublicAddress,
   type PublicProfile,
-  type PublicProfileLink,
 } from '@crm/contracts';
 import type {
   PublicBookInput,
@@ -39,7 +47,7 @@ import type {
   PublicSlotsQuery,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import type { BookingEntry, HandleOwner, ProfilePageEntry } from '../access/door.ts';
+import type { BookingEntry, HandleOwner, LinkPageRow, OwnedFormEntry, OwnedPageEntry } from '../access/door.ts';
 import { pagePath } from './handles.ts';
 import { servedPicture, type AccountPicture, type AccountPictureReader } from './picture.ts';
 import { isPictureHidden } from './picture-choice.ts';
@@ -92,6 +100,15 @@ export interface PublicBookingDeps {
 }
 
 /** Refuses an entry the door didn't make for this page. */
+/** The same, for a form entry: the door's own `form` principal, naming that form and nothing else. */
+function checkFormEntry(entry: OwnedFormEntry): void {
+  checkScope(entry.scope);
+  const { principal } = entry.scope.access;
+  if (principal.kind !== 'form' || principal.formId !== entry.formId) {
+    throw new Error('Refused a form entry the door did not make.');
+  }
+}
+
 function checkEntry(entry: BookingEntry): void {
   checkScope(entry.scope);
   const { principal } = entry.scope.access;
@@ -277,6 +294,24 @@ export function readProfilePicture(owner: HandleOwner): AccountPicture | undefin
 }
 
 /**
+ * A link page's contact card as its vCard is written (AC-5113, AC-5114): the card's stored fields checked again, and
+ * the person's picture to embed, unless they have none or hid it (the door reads no image then). A card whose stored
+ * fields no longer pass the rule is NOT_FOUND, as no card is.
+ */
+export function readContactCard(found: { readonly owner: HandleOwner; readonly data: unknown }): {
+  readonly card: ProfileContactCard;
+  readonly handle: string;
+  readonly picture?: AccountPicture;
+} {
+  const data = typeof found.data === 'object' && found.data !== null ? found.data : {};
+  const parsed = ProfileContactBlock.safeParse({ ...data, kind: 'contact' });
+  if (!parsed.success) throw refuse('NOT_FOUND', 'There’s no contact card here.');
+  const { kind: _kind, ...card } = parsed.data;
+  const picture = readProfilePicture(found.owner);
+  return { card, handle: found.owner.handle, ...(picture === undefined ? {} : { picture }) };
+}
+
+/**
  * The page a handle address names (22 Oct 2026), by its public key, and the owner's current handle: the public
  * page then reads it as `/b/<key>` does, closed or not. A deleted page is NOT_FOUND.
  */
@@ -300,35 +335,160 @@ function profileInitials(name: string, handle: string): string {
   return initialsOf(name) || handle.slice(0, 1).toUpperCase();
 }
 
-/**
- * A profile link's `group` (owner ask, 24 Oct 2026): which of the person's workspaces it is from, as an opaque key.
- * A hash of the person and the workspace, so it is the same on every read and every page of reads (a group continues
- * on the next page), differs per workspace, and names neither the workspace nor, across two people, a shared one.
- */
-function profileGroup(userId: string, workspaceId: string): string {
-  return createHash('sha256').update(`profile-group:${userId}:${workspaceId}`).digest('hex').slice(0, 16);
+/** What a booking page block shows a visitor: the row the profile drew before blocks (AC-5109). */
+interface PageRow {
+  readonly slug: string;
+  readonly title: string;
+  readonly description: string;
+  readonly durations: readonly number[];
+  readonly isTeam: boolean;
+}
+
+/** Whether a block holds the words searched for: its title and its note, or a page's description (AC-5133). */
+function matches(item: PublicProfileItem, words: string): boolean {
+  // Titles and the short lines under them only (AC-5228). A piece of writing matches on its title alone: a row
+  // that matched on words a visitor cannot see in it is a result that makes no sense.
+  const said =
+    item.kind === 'contact'
+      ? [item.fullName, item.jobTitle ?? '', item.company ?? '']
+      : item.kind === 'testimonial'
+        ? [item.author, item.role ?? '']
+        : item.kind === 'form'
+          ? [item.title]
+          : item.kind === 'text'
+            ? [item.title ?? '']
+            : item.kind === 'faq'
+              ? [item.title ?? '', ...item.items.map((asked) => asked.question)]
+              : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
+  return said.some((text) => text.toLowerCase().includes(words));
+}
+
+/** A stored block as a visitor reads it, or undefined: a kind this build doesn't draw, or a page they can't see. */
+function publicItemOf(
+  row: LinkPageRow,
+  pages: ReadonlyMap<string, PageRow>,
+  forms: ReadonlyMap<string, string>,
+): PublicProfileItem | undefined {
+  const data: Readonly<Record<string, unknown>> =
+    typeof row.data === 'object' && row.data !== null ? (row.data as Readonly<Record<string, unknown>>) : {};
+  let candidate: unknown;
+  if (row.kind === 'link') {
+    const url = typeof data.url === 'string' ? data.url : '';
+    // Checked again on the way out: a stored address the rule no longer accepts is never drawn as a link.
+    if (!checkProfileLink(url).ok) return undefined;
+    // The network's own mark for a profile or site on it, matched here so the public bundle never parses addresses.
+    const network = linkMarkOf(url);
+    candidate = {
+      kind: 'link',
+      id: row.id,
+      title: data.title,
+      url,
+      hue: typeof data.hue === 'string' ? data.hue : 'blue',
+      ...(typeof data.note === 'string' && data.note !== '' ? { note: data.note } : {}),
+      ...(network === undefined ? {} : { mark: network }),
+      ...(typeof data.icon === 'string' ? { icon: data.icon } : {}),
+    };
+  } else if (row.kind === 'heading') {
+    candidate = {
+      kind: 'heading',
+      id: row.id,
+      title: data.title,
+      group: headingGroupOf(typeof data.group === 'string' ? data.group : undefined),
+    };
+  } else if (row.kind === 'text') {
+    // Checked by its own schema before it goes out, so a row stored by an older build that fails the rule is
+    // skipped rather than drawn. The words go as text; nothing here ever becomes markup.
+    const written = ProfileTextBlock.safeParse({ ...data, kind: 'text' });
+    if (!written.success) return undefined;
+    candidate = {
+      kind: 'text',
+      id: row.id,
+      body: written.data.body,
+      ...(written.data.title === undefined ? {} : { title: written.data.title }),
+    };
+  } else if (row.kind === 'testimonial') {
+    // Checked again on the way out, as a piece of writing is: a row an older build stored badly is skipped rather
+    // than half drawn. The words go as text, and there is no picture in it to fetch.
+    const said = ProfileTestimonialBlock.safeParse({ ...data, kind: 'testimonial' });
+    if (!said.success) return undefined;
+    candidate = {
+      kind: 'testimonial',
+      id: row.id,
+      quote: said.data.quote,
+      author: said.data.author,
+      ...(said.data.role === undefined ? {} : { role: said.data.role }),
+    };
+  } else if (row.kind === 'faq') {
+    // Same rule as a piece of writing: parsed again on the way out, and a row an older build stored badly is
+    // skipped rather than half drawn. Every question and answer goes as text.
+    const asked = ProfileFaqBlock.safeParse({ ...data, kind: 'faq' });
+    if (!asked.success) return undefined;
+    candidate = {
+      kind: 'faq',
+      id: row.id,
+      items: asked.data.items,
+      ...(asked.data.title === undefined ? {} : { title: asked.data.title }),
+    };
+  } else if (row.kind === 'form') {
+    // The address the door read, and the words the owner typed. The form's own name and headline stay behind
+    // (AC-5226): a block tells a visitor nothing the form's page wouldn't.
+    const key = row.form_id === null ? undefined : forms.get(row.form_id);
+    const label = typeof data.label === 'string' ? data.label.trim() : '';
+    if (key === undefined || label === '') return undefined;
+    candidate = { kind: 'form', id: row.id, title: label, key };
+  } else if (row.kind === 'page') {
+    const page = row.page_id === null ? undefined : pages.get(row.page_id);
+    if (page === undefined) return undefined;
+    candidate = { kind: 'page', id: row.id, ...page };
+  } else if (row.kind === 'contact') {
+    // The card's whole rule first, as its vCard reads it, so the page never offers a card that answers 404. Then its
+    // name and the line under it only: the email, phone and the rest are in the vCard (AC-5114).
+    const card = ProfileContactBlock.safeParse({ ...data, kind: 'contact' });
+    if (!card.success) return undefined;
+    candidate = {
+      kind: 'contact',
+      id: row.id,
+      fullName: card.data.fullName,
+      ...(card.data.jobTitle === undefined ? {} : { jobTitle: card.data.jobTitle }),
+      ...(card.data.company === undefined ? {} : { company: card.data.company }),
+    };
+  } else {
+    return undefined;
+  }
+  const parsed = PublicProfileItem.safeParse(candidate);
+  return parsed.success ? parsed.data : undefined;
 }
 
 /**
- * A profile (22 Oct 2026): the person, and one page of their Public links as the door listed them, in its order
- * (read `PROFILE_PAGE_SIZE + 1` to know there is more). Each workspace's pages are read in one transaction under
- * the first of its entries, every entry checked first, and each page checked again there; each link carries its
- * workspace's opaque `group` (`profileGroup`), never the workspace. The name is the account's, else the handle;
- * never an email.
+ * A link page (spec 0051, AC-5108): the person, and one page of their live blocks in order, every kind together
+ * (read `PROFILE_PAGE_SIZE + 1` to know there is more). A booking page block shows only while the door lists its page
+ * (Public, live, its owner still an active member of a workspace that exists); each workspace's pages are read in one
+ * transaction under the first of its entries, every entry checked first, and each page checked again there. A
+ * block of a kind this build doesn't draw is skipped. With `search`, every block that matches, flat: no headings and
+ * no cursor. The answer names no workspace, no member and no email; the name is the account's, else the handle.
  */
-export async function readBookingProfile(found: {
-  readonly owner: HandleOwner;
-  readonly pages: readonly ProfilePageEntry[];
-}): Promise<PublicProfile> {
-  const listed = found.pages.slice(0, PROFILE_PAGE_SIZE);
-  for (const entry of listed) checkEntry(entry);
-  const byWorkspace = new Map<string, ProfilePageEntry[]>();
-  for (const entry of listed) {
+export async function readLinkPage(
+  found: {
+    readonly owner: HandleOwner;
+    readonly rows: readonly LinkPageRow[];
+    readonly pages: readonly OwnedPageEntry[];
+    readonly forms: readonly OwnedFormEntry[];
+  },
+  query: { readonly search?: string } = {},
+): Promise<PublicProfile> {
+  for (const entry of found.pages) checkEntry(entry);
+  for (const entry of found.forms) checkFormEntry(entry);
+  const words = query.search?.trim().toLowerCase().slice(0, 120) ?? '';
+  const listed = words === '' ? found.rows.slice(0, PROFILE_PAGE_SIZE) : found.rows;
+  const wanted = new Set(listed.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : [])));
+  const byWorkspace = new Map<string, OwnedPageEntry[]>();
+  for (const entry of found.pages) {
+    if (!wanted.has(entry.pageId)) continue;
     const group = byWorkspace.get(entry.scope.workspaceId) ?? [];
     group.push(entry);
     byWorkspace.set(entry.scope.workspaceId, group);
   }
-  const links = new Map<string, PublicProfileLink>();
+  const pages = new Map<string, PageRow>();
   for (const group of byWorkspace.values()) {
     const [first] = group;
     if (first === undefined) continue;
@@ -341,7 +501,6 @@ export async function readBookingProfile(found: {
           description: bookingPages.description,
           durations: bookingPages.durations,
           kind: bookingPages.kind,
-          section: bookingPages.profileSection,
         })
         .from(bookingPages)
         // Listed again under row level security, as the door's definer chose them: a page made Link only, paused or
@@ -358,37 +517,48 @@ export async function readBookingProfile(found: {
           ),
         );
       for (const row of rows) {
-        links.set(row.id, {
+        pages.set(row.id, {
           slug: row.slug,
           title: row.title,
           description: row.description,
           durations: row.durations,
           isTeam: row.kind === 'round_robin',
-          ...(row.section === null ? {} : { section: row.section }),
-          group: profileGroup(found.owner.userId, first.scope.workspaceId),
         });
       }
     });
   }
-  const ordered = listed.flatMap((entry) => {
-    const link = links.get(entry.pageId);
-    return link === undefined ? [] : [link];
+  // A page block whose page sits in another workspace than it names is never shown; nor a form block's form. The
+  // door answered only forms a visitor may open now, so a paused one simply isn't in this map and its block waits.
+  const where = new Map(found.pages.map((entry) => [entry.pageId, entry.scope.workspaceId]));
+  const formWorkspaces = new Map(found.forms.map((entry) => [entry.formId, entry.scope.workspaceId]));
+  const formKeys = new Map(found.forms.map((entry) => [entry.formId, entry.key]));
+  const items = listed.flatMap((row) => {
+    if (row.kind === 'page' && (row.page_id === null || where.get(row.page_id) !== row.workspace_id)) return [];
+    if (row.kind === 'form' && (row.form_id === null || formWorkspaces.get(row.form_id) !== row.workspace_id)) {
+      return [];
+    }
+    const item = publicItemOf(row, pages, formKeys);
+    if (item === undefined) return [];
+    if (words !== '' && (item.kind === 'heading' || !matches(item, words))) return [];
+    return [item];
   });
   const last = listed.at(-1);
-  // The account's name, else the handle: never a member name, which may be an email's first part.
   const name = found.owner.name.trim() || found.owner.handle;
   return {
     handle: found.owner.handle,
+    theme: found.owner.theme,
+    indexable: found.owner.indexable,
     name,
     initials: profileInitials(name, found.owner.handle),
     // The account's picture is Google's, which the public pages' policy (img-src 'self') never loads: our own
     // origin serves it, under the current handle.
     ...withPicture(found.owner),
     bio: found.owner.bio,
+    // Their social links: the row of icons under the bio, their own set, never a block.
     ...(found.owner.socials.length === 0 ? {} : { socials: [...found.owner.socials] }),
-    links: ordered,
-    ...(found.pages.length > PROFILE_PAGE_SIZE && last !== undefined
-      ? { next: `${String(last.position)}.${last.pageId}` }
+    items,
+    ...(words === '' && found.rows.length > PROFILE_PAGE_SIZE && last !== undefined
+      ? { next: `${String(last.position)}.${last.id}` }
       : {}),
   };
 }

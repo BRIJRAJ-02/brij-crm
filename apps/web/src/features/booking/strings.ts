@@ -97,12 +97,15 @@ export const strings = {
   saveAddressFirst: 'Save to use this address',
   /** The preview's note while the hours or limits have unsaved changes: its times come from the server. */
   previewSavedTimes: 'Shows your saved times until you save.',
-  findSection: 'Find or add a section',
   /** With no handle yet, the page keeps its /b/ link and this links to Settings › Profile. */
   setHandle: 'Set your handle to get a short address',
   slugChanging: 'Links with the old address keep working and move to the new one.',
   slugRequired: 'Give the page a web address.',
   slugInvalid: 'Use lowercase letters, numbers and single hyphens.',
+  onLinkPage: 'On your link page',
+  onLinkPageLine: 'Public pages join your link page. Move, hide or archive them there.',
+  linkPage: 'Link page',
+  editLinkPage: 'Edit link page',
   /**
    * The Page tab's "Opens in" row (the owner, 25 Oct 2026, looking at their page with Chat open: "default it to
    * this on my meeting page"): the view the page opens in for a visitor who hasn't picked one of their own.
@@ -111,9 +114,6 @@ export const strings = {
   opensInLine: 'Which way to pick a time a visitor sees first. They can switch, and their choice is remembered.',
   /** The three views, each named as the page's own switch names it. */
   opensInViews: { month: 'Month', list: 'List', chat: 'Book by chat' },
-  profileSection: 'Section',
-  profileSectionLine: 'Pages in the same section are listed together.',
-  noSection: 'No section',
   meeting: 'Meeting',
   durations: 'Durations',
   location: 'Location',

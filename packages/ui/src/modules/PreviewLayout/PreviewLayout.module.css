@@ -59,6 +59,17 @@
     align-items: start;
   }
 
+  /* `wide`: the phone's column is two fifths of the width, the body three, so the phone shows beside an editor that
+     already sits beside a sidebar. */
+  .measure[data-share='wide'] {
+    padding-inline-end: calc((100% - var(--space-32)) * 3 / 5 + var(--space-32));
+  }
+
+  .measure[data-share='wide'] > .body,
+  .measure[data-share='wide'] > .bar {
+    margin-inline-end: calc(-3 / 2 * 100% - var(--space-32));
+  }
+
   /* The body's column runs to the view's foot, so the footer under its content can sit there. It is a container of
      its own, so the rows inside it answer to the column's width, not the layout's. */
   .main {
@@ -226,6 +237,10 @@
     /* The editor in the first two thirds, the phone in the last. */
     .body[data-preview] {
       grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    }
+
+    .measure[data-share='wide'] > .body[data-preview] {
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
     }
 
     .side {

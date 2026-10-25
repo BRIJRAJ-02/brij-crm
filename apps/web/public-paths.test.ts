@@ -42,9 +42,11 @@ describe('vercel.json (handle addresses)', () => {
   });
 
   it.each([
-    ['/ada', '/book.html'],
-    ['/ada-lovelace/30min', '/book.html'],
-    ['/ada/30min-2', '/book.html'],
+    // Both handle addresses are served by the shell function (spec 0055), which answers the built shell and a
+    // meta block written from the person, or from the booking page the slug names.
+    ['/ada', '/api/handle'],
+    ['/ada-lovelace/30min', '/api/handle'],
+    ['/ada/30min-2', '/api/handle'],
     ['/b/AbCdEfGhIjKlMnOp', '/book.html'],
     ['/f/contact', '/form.html'],
     ['/', '/index.html'],
@@ -57,6 +59,13 @@ describe('vercel.json (handle addresses)', () => {
     ['/ada/30min/extra', '/index.html'],
   ])('sends %s to %s', (pathname, destination) => {
     expect(destinationOf(pathname)).toBe(destination);
+  });
+
+  it('gives the shell function’s answer the headers the static shell got, value for value (AC-5505)', () => {
+    // Nothing about the policy is written in the function: vercel.json's block matches the path, whoever answers
+    // it, so the two can never drift. This fails if a later change narrows that block to static files.
+    expect(policyForPath('/ada')).toBe(policyForPath('/ada/30min'));
+    expect(policyForPath('/ada')).toBeDefined();
   });
 
   it('lets any site frame a handle address, as /b/<key>, and keeps the app’s own policy everywhere else', () => {
@@ -143,7 +152,7 @@ describe('the public booking host', () => {
 
   it('keeps every path vercel.json sends to the booking or form bundle', () => {
     for (const pathname of ['/ada', '/ada-lovelace/30min', '/b/AbCdEfGhIjKlMnOp', '/f/contact']) {
-      expect(['/book.html', '/form.html']).toContain(destinationOf(pathname));
+      expect(['/book.html', '/form.html', '/api/handle']).toContain(destinationOf(pathname));
       expect(servedOnPublicHost(pathname), pathname).toBe(true);
     }
   });

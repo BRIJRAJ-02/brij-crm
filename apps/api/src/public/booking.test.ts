@@ -103,6 +103,11 @@ async function pageOf(m: Awaited<ReturnType<typeof memberWithWorkspace>>) {
   });
 }
 
+/** What a public block is called in a list: its title, a testimonial's author, or nothing. */
+function nameOf(item: { readonly title?: string; readonly author?: string }): string {
+  return item.title ?? item.author ?? '';
+}
+
 describe('the member procedures (AC-623, AC-645)', () => {
   it('makes, changes, lists and deletes a page; another member’s page is absent', async () => {
     const m = await memberWithWorkspace(app);
@@ -160,7 +165,8 @@ describe('handle addresses (22 Oct 2026)', () => {
     expect(JSON.parse(body)).toMatchObject({
       handle,
       bio: 'Hello.',
-      links: [{ slug: 'intro-call', title: 'Intro call' }],
+      // A new Public page joins the person's link page by itself (spec 0051).
+      items: [{ kind: 'page', slug: 'intro-call', title: 'Intro call' }],
     });
     const address = await handles(`${handle}/intro-call`);
     expect(await address.json()).toEqual({ publicKey: page.publicKey, handle, slug: 'intro-call' });
@@ -171,9 +177,9 @@ describe('handle addresses (22 Oct 2026)', () => {
     expect((await handles(`${handle}?after=nonsense`)).status).toBe(400);
   });
 
-  it('marks each workspace’s links with an opaque group, never the workspace (owner ask, 24 Oct)', async () => {
+  it('answers the link page’s blocks in the order Settings saved, never naming a workspace (spec 0051)', async () => {
     const m = await memberWithWorkspace(app);
-    const handle = `split-${newId().slice(-8)}`;
+    const handle = `blocks-${newId().slice(-8)}`;
     await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
     const { workspace: second } = await m.client.workspaces.create({
       id: newId(),
@@ -185,76 +191,115 @@ describe('handle addresses (22 Oct 2026)', () => {
       m.client.bookingPages.create({ workspace, id: newId(), title, timeZone: 'UTC', mutationId: newId() });
     await make(m.slug, 'Quick chat');
     await make(second.slug, 'Brijraj');
+    const save = (block: Parameters<typeof m.client.profile.saveItem>[0]['block'], id = newId()) =>
+      m.client.profile.saveItem({ workspace: m.slug, id, block, mutationId: newId() });
+    const site = await save({ kind: 'link', title: 'LinkedIn', url: 'linkedin.com/in/ada' });
+    // A retry of the same add makes nothing new.
+    await save({ kind: 'link', title: 'LinkedIn', url: 'linkedin.com/in/ada' }, site.id);
+    const heading = await save({ kind: 'heading', title: 'Meet me' });
+    const refused = await failure(() => save({ kind: 'link', title: 'Bad', url: 'javascript:alert(1)' }));
+    expect(refused.code).toBe('INPUT_INVALID');
+    const { items } = await m.client.profile.items({ workspace: m.slug });
+    expect(items.map((item) => item.kind)).toEqual(['page', 'page', 'link', 'heading']);
+    const [first, other] = items;
+    await m.client.profile.orderItems({
+      workspace: m.slug,
+      ids: [site.id, heading.id, first?.id ?? '', other?.id ?? ''],
+      mutationId: newId(),
+    });
+    // An order that misses a block is refused, and changes nothing.
+    const stale = await failure(() =>
+      m.client.profile.orderItems({ workspace: m.slug, ids: [site.id, heading.id], mutationId: newId() }),
+    );
+    expect(stale.code).toBe('CONFIG_INVALID');
     const read = await handles(handle);
+    expect(read.headers.get('cache-control')).toContain('no-store');
     const text = await read.text();
-    for (const secret of [m.workspace.id, second.id, m.slug, second.slug, 'Second shop']) {
+    for (const secret of [m.workspace.id, second.id, m.slug, second.slug, 'Second shop', m.email]) {
       expect(text).not.toContain(secret);
     }
     const body = PublicProfile.parse(JSON.parse(text));
-    const groups = new Map(body.links.map((link) => [link.title, link.group]));
-    expect(groups.size).toBe(2);
-    expect(groups.get('Quick chat')).not.toBe(groups.get('Brijraj'));
+    expect(body.items.map((item) => [item.kind, 'fullName' in item ? item.fullName : nameOf(item)])).toEqual([
+      ['link', 'LinkedIn'],
+      ['heading', 'Meet me'],
+      ['page', 'Quick chat'],
+      ['page', 'Brijraj'],
+    ]);
+    expect(body.items[0]).toMatchObject({ url: 'https://linkedin.com/in/ada', mark: 'linkedin' });
+    // A search answers the matches flat.
+    const found = PublicProfile.parse(await (await handles(`${handle}?q=chat`)).json());
+    expect(found.items.map((item) => ('fullName' in item ? item.fullName : nameOf(item)))).toEqual(['Quick chat']);
   });
 
-  it('lists the profile in the order Settings saved at once, never from a cache (owner ask A102)', async () => {
+  it('answers the contact card as a vCard to download, and 404 with none, archived, or no such person (AC-5114)', async () => {
     const m = await memberWithWorkspace(app);
-    const handle = `order-${newId().slice(-8)}`;
+    const handle = `card-${newId().slice(-8)}`;
     await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
-    const make = (title: string, profileSection?: string) =>
-      m.client.bookingPages.create({
-        workspace: m.slug,
-        id: newId(),
-        title,
-        timeZone: 'UTC',
-        ...(profileSection === undefined ? {} : { settings: { profileSection } }),
-        mutationId: newId(),
-      });
-    const intro = await make('Intro call', 'Sales');
-    const coffee = await make('Coffee chat');
-    const demo = await make('Demo', 'Sales');
-    /** The profile's links as a visitor reads them: each title and its section. */
-    const listed = async () => {
-      const read = await handles(handle);
-      expect(read.headers.get('cache-control')).toContain('no-store');
-      const body = (await read.json()) as { readonly links: readonly { title: string; section?: string }[] };
-      return body.links.map((link) => [link.title, link.section ?? null]);
-    };
-    // New pages join the end, in the order they were made.
-    expect(await listed()).toEqual([
-      ['Intro call', 'Sales'],
-      ['Coffee chat', null],
-      ['Demo', 'Sales'],
-    ]);
-    const answer = await m.client.bookingPages.reorderProfile({
+    expect((await handles(`${handle}/contact.vcf`)).status).toBe(404);
+    expect((await handles(`nobody-${newId().slice(-8)}/contact.vcf`)).status).toBe(404);
+    const card = await m.client.profile.saveItem({
       workspace: m.slug,
-      pageIds: [coffee.id, demo.id, intro.id],
+      id: newId(),
+      block: {
+        kind: 'contact',
+        fullName: 'Ada Lovelace',
+        company: 'Acme, Inc.',
+        email: 'ada@acme.dev',
+        phone: '+44 20 7946 0958',
+      },
       mutationId: newId(),
     });
-    expect(answer.pages.map((each) => [each.id, each.profilePosition])).toEqual([
-      [coffee.id, 0],
-      [demo.id, 1],
-      [intro.id, 2],
-    ]);
-    expect(await listed()).toEqual([
-      ['Coffee chat', null],
-      ['Demo', 'Sales'],
-      ['Intro call', 'Sales'],
-    ]);
-    // Someone else's page refuses the whole move as absent; a page named twice is refused at the boundary.
-    const other = await memberWithWorkspace(app);
-    const theirs = await pageOf(other);
-    const refused = await failure(() =>
-      m.client.bookingPages.reorderProfile({ workspace: m.slug, pageIds: [coffee.id, theirs.id], mutationId: newId() }),
+    const second = await failure(() =>
+      m.client.profile.saveItem({
+        workspace: m.slug,
+        id: newId(),
+        block: { kind: 'contact', fullName: 'Ada at home' },
+        mutationId: newId(),
+      }),
     );
-    expect(refused.code).toBe('NOT_FOUND');
-    const twice = await failure(() =>
-      m.client.bookingPages.reorderProfile({ workspace: m.slug, pageIds: [coffee.id, coffee.id], mutationId: newId() }),
+    expect(second).toMatchObject({ code: 'LIMIT_REACHED', message: 'A link page holds one contact card.' });
+    const answer = await handles(`${handle}/contact.vcf`);
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get('content-type')).toBe('text/vcard; charset=utf-8');
+    expect(answer.headers.get('content-disposition')).toBe(`attachment; filename="${handle}.vcf"`);
+    expect(answer.headers.get('cache-control')).toContain('no-store');
+    const vcard = await answer.text();
+    expect(vcard.split('\r\n')).toEqual(
+      expect.arrayContaining(['FN:Ada Lovelace', 'ORG:Acme\\, Inc.', 'EMAIL;TYPE=INTERNET:ada@acme.dev']),
     );
-    expect(twice.code).toBe('INPUT_INVALID');
-    expect(await listed()).toEqual([
-      ['Coffee chat', null],
-      ['Demo', 'Sales'],
-      ['Intro call', 'Sales'],
+    expect(vcard).not.toContain('PHOTO');
+    expect(vcard).not.toContain(m.email);
+    // The page shows its name only; the rest is in the file.
+    const page = PublicProfile.parse(await (await handles(handle)).json());
+    expect(page.items).toEqual([{ kind: 'contact', id: card.id, fullName: 'Ada Lovelace', company: 'Acme, Inc.' }]);
+    await m.client.profile.archiveItem({ workspace: m.slug, id: card.id, archived: true, mutationId: newId() });
+    expect((await handles(`${handle}/contact.vcf`)).status).toBe(404);
+  });
+
+  it('keeps each person’s link page their own: another member’s id changes nothing', async () => {
+    const ada = await memberWithWorkspace(app);
+    const bob = await memberWithWorkspace(app);
+    const mine = await ada.client.profile.saveItem({
+      workspace: ada.slug,
+      id: newId(),
+      block: { kind: 'heading', title: 'Ada’s' },
+      mutationId: newId(),
+    });
+    const taken = await failure(() =>
+      bob.client.profile.saveItem({
+        workspace: bob.slug,
+        id: mine.id,
+        block: { kind: 'heading', title: 'Bob’s now' },
+        mutationId: newId(),
+      }),
+    );
+    expect(taken.code).toBe('NOT_FOUND');
+    const gone = await failure(() =>
+      bob.client.profile.deleteItem({ workspace: bob.slug, id: mine.id, mutationId: newId() }),
+    );
+    expect(gone.code).toBe('NOT_FOUND');
+    expect((await ada.client.profile.items({ workspace: ada.slug })).items).toEqual([
+      expect.objectContaining({ id: mine.id, title: 'Ada’s' }),
     ]);
   });
 });
@@ -492,5 +537,135 @@ describe('page views for the operator console (spec 0047, AC-1625)', () => {
     await visit(`${page.publicKey}/viewer`);
     await settle();
     expect((await viewsOf(page.id)).map((row) => row.views)).toEqual([1, 2]);
+  });
+
+  it('counts a link page’s views and its blocks’ presses, never the owner’s own, a bot’s, or a block not theirs', async () => {
+    const m = await memberWithWorkspace(app);
+    const handle = `counts-${newId().slice(-8)}`;
+    await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
+    const site = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'link', title: 'Site', url: 'ada.dev' },
+      mutationId: newId(),
+    });
+    const heading = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'heading', title: 'More' },
+      mutationId: newId(),
+    });
+    const other = await memberWithWorkspace(app);
+    const theirs = await other.client.profile.saveItem({
+      workspace: other.slug,
+      id: newId(),
+      block: { kind: 'link', title: 'Theirs', url: 'bea.dev' },
+      mutationId: newId(),
+    });
+    const read = (headers: Record<string, string>, query = '') =>
+      app.request(`/api/public/handles/${handle}${query}`, {
+        headers: { [EDGE_HEADER]: TEST_EDGE_SECRET, 'x-forwarded-for': ip, ...headers },
+      });
+    const press = (body: string, headers: Record<string, string> = { 'user-agent': CHROME }) =>
+      app.request(`/api/public/handles/${handle}/press`, {
+        method: 'POST',
+        headers: {
+          [EDGE_HEADER]: TEST_EDGE_SECRET,
+          'x-forwarded-for': ip,
+          'content-type': 'text/plain;charset=UTF-8',
+          [ORIGIN_HEADER]: APP_URL,
+          origin: APP_URL,
+          ...headers,
+        },
+        body,
+      });
+    const ip = newIp();
+    await read({ 'user-agent': CHROME });
+    await read({ 'user-agent': CHROME });
+    // A later page and a search are the same view's reads; the owner, a crawler and no browser count nothing.
+    await read({ 'user-agent': CHROME }, '?q=site');
+    await read({ 'user-agent': CHROME }, '?q=');
+    await read({ 'user-agent': CHROME, cookie: m.cookie });
+    await read({ 'user-agent': 'Googlebot/2.1' });
+    await read({});
+    for (const body of [site.id, site.id, heading.id, theirs.id, 'nonsense', '']) {
+      expect((await press(body)).status).toBe(204);
+    }
+    expect((await press(site.id, { 'user-agent': CHROME, cookie: m.cookie })).status).toBe(204);
+    expect((await press(site.id, { 'user-agent': 'facebookexternalhit/1.1' })).status).toBe(204);
+    const nobody = await app.request('/api/public/handles/nobody-here-1/press', {
+      method: 'POST',
+      headers: {
+        [EDGE_HEADER]: TEST_EDGE_SECRET,
+        'x-forwarded-for': ip,
+        'user-agent': CHROME,
+        origin: APP_URL,
+        [ORIGIN_HEADER]: APP_URL,
+      },
+      body: site.id,
+    });
+    expect(nobody.status).toBe(204);
+    await settle();
+    const counts = await m.client.profile.counts({ workspace: m.slug });
+    expect(counts).toEqual({
+      days: 30,
+      views: 2,
+      visitors: 1,
+      before: { views: 0, visitors: 0 },
+      presses: [{ id: site.id, presses: 2 }],
+    });
+    // Another person's figures name nothing of these.
+    expect(JSON.stringify(await other.client.profile.counts({ workspace: other.slug }))).not.toContain(site.id);
+  });
+
+  it('takes a press from the public origin the page is served on, but no other, and no view another site makes', async () => {
+    const PUBLIC = 'https://book.example';
+    const env = { ...testEnv(), BOOKING_PUBLIC_ORIGIN: PUBLIC };
+    const onPublic = createApp({
+      services: {
+        ...testServices(env, { db, identity, mailer: createMailpitMailer({ url: MAILPIT_URL, from: env.MAIL_FROM }) }),
+        bookingCalendar: calendar,
+        bookingLimiter: createMemoryLimiter(),
+      },
+      env,
+    });
+    const m = await memberWithWorkspace(app);
+    const handle = `beacon-${newId().slice(-8)}`;
+    await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
+    const site = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'link', title: 'Site', url: 'ada.dev' },
+      mutationId: newId(),
+    });
+    const ip = newIp();
+    const press = (origin: string) =>
+      onPublic.request(`/api/public/handles/${handle}/press`, {
+        method: 'POST',
+        headers: {
+          [EDGE_HEADER]: TEST_EDGE_SECRET,
+          'x-forwarded-for': ip,
+          'user-agent': CHROME,
+          [ORIGIN_HEADER]: origin,
+          origin,
+        },
+        body: site.id,
+      });
+    expect((await press(PUBLIC)).status).toBe(204);
+    expect((await press('https://elsewhere.example')).status).toBe(403);
+    // A read another site makes (an image there) is answered but never a view.
+    await onPublic.request(`/api/public/handles/${handle}`, {
+      headers: {
+        [EDGE_HEADER]: TEST_EDGE_SECRET,
+        'x-forwarded-for': ip,
+        'user-agent': CHROME,
+        'sec-fetch-site': 'cross-site',
+      },
+    });
+    await settle();
+    expect(await m.client.profile.counts({ workspace: m.slug })).toMatchObject({
+      views: 0,
+      presses: [{ id: site.id, presses: 1 }],
+    });
   });
 });

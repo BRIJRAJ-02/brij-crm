@@ -53,6 +53,7 @@ import {
   PRIVATE_PICTURE_CACHE_CONTROL,
   type PictureFetch,
 } from './public/picture.ts';
+import { createOutsideFetch, type OutsideFetch } from './public/outside.ts';
 import { EMAIL_UNSUBSCRIBE_PATH, mountEmailPreferences } from './public/email-preferences.ts';
 import { emailLinkKey } from './email-link.ts';
 import { guestKeys } from './public/visitor.ts';
@@ -197,12 +198,21 @@ export interface AppServices {
   /** Where invitation emails go (spec 0031): the server's mailer; absent, every send fails and is reported unsent. */
   readonly mailer?: Mailer;
   /**
+   * The one read of an address somebody typed (spec 0055, AC-5531). Built here with the import's own bounds: five
+   * seconds and 1 MB, which is a page of links with room to spare. A test passes its own.
+   */
+  readonly outsideFetch?: OutsideFetch;
+  /**
    * Cuts a person's live connections when one of their sessions is signed
    * out elsewhere (spec 0033): the worker's notice where `WORKER_INTERNAL_URL`
    * is set, else nothing (tests pass their own to see it called).
    */
   readonly signedOut?: SignedOutNotice;
 }
+
+/** The import's bounds (spec 0055, AC-5525): a page of links, read once. */
+const IMPORT_TIMEOUT_MS = 5000;
+const IMPORT_MAX_BYTES = 1024 * 1024;
 
 /** A mailer that sends nothing and says so: an app built without one reports every invitation unsent. */
 const NO_MAILER: Mailer = {
@@ -211,6 +221,9 @@ const NO_MAILER: Mailer = {
 };
 
 /** The API. `router` is the app's own unless a test passes one. */
+/** The one public link page write: a block's press, `/api/public/handles/<handle>/press`. */
+const LINK_PAGE_PRESS = /^\/api\/public\/handles\/[a-z0-9-]+\/press$/;
+
 export function createApp({
   services,
   env,
@@ -224,6 +237,8 @@ export function createApp({
   installPlainErrors();
   const { db, identity, auth, wakeRelay, rules, timing, analytics = NO_ANALYTICS } = services;
   const mailer = services.mailer ?? NO_MAILER;
+  const outsideFetch =
+    services.outsideFetch ?? createOutsideFetch({ timeoutMs: IMPORT_TIMEOUT_MS, maxBytes: IMPORT_MAX_BYTES });
   // Who may start a workspace of their own (spec 0031, owner decision 3): the addresses sign up lets in by the list.
   const signupAllowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
   const signedOut = services.signedOut ?? NO_SIGNED_OUT;
@@ -360,6 +375,8 @@ export function createApp({
     const origin = c.get('origin');
     // A public booking page's own writes (book, chat, the guest page's changes) from the booking origin.
     if (origin === bookingOrigin && c.req.path.startsWith('/api/public/booking/')) return next();
+    // A link page's press beacon (spec 0051, AC-5125), from the public origin the page is served on; that one route.
+    if (origin === bookingOrigin && LINK_PAGE_PRESS.test(c.req.path) && c.req.method === 'POST') return next();
     if (!origin || !allowedOrigins.has(origin)) {
       return errorResponse('FORBIDDEN_ORIGIN', 'This request came from an origin the API does not accept.');
     }
@@ -408,6 +425,7 @@ export function createApp({
         bookingLinkKey: linkKey,
         rules,
         mailer,
+        outsideFetch,
         appUrl: env.APP_URL,
         // Only the limiter's one call, so a member handler holds nothing else of global identity at run time.
         limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },

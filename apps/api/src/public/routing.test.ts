@@ -386,8 +386,8 @@ describe('a team page’s routing rules and an anonymous visitor (spec 0043, spe
     // Ada's handle: the profile lists the team page, and its address names it.
     const handle = `ada-${newId().slice(-8)}`;
     await m.client.profile.update({ workspace: m.slug, handle, mutationId: newId() });
-    const profile = (await answered('profile', visit(`handles/${handle}`))) as { readonly links: readonly unknown[] };
-    expect(profile.links).toHaveLength(1);
+    const profile = (await answered('profile', visit(`handles/${handle}`))) as { readonly items: readonly unknown[] };
+    expect(profile.items).toHaveLength(1);
     await answered('address', visit(`handles/${handle}/${page.slug}`));
 
     // The server still routed both to Kim: the rule over Grace's job title, and the form's rule through the hand off.

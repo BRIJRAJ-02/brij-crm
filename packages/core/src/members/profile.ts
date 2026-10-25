@@ -98,6 +98,7 @@ async function readProfile(
     bio: held?.bio ?? '',
     ...(pictureHidden === undefined ? {} : { pictureHidden }),
     ...(socials === undefined ? {} : { socials: [...socials] }),
+    ...(held === undefined ? {} : { theme: held.theme, indexable: held.indexable }),
   };
 }
 

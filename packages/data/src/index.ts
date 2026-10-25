@@ -48,12 +48,15 @@ import type {
   BookingView,
   AttributeOption,
   PickerAttributeType,
+  CreateFormInput,
   CreateWorkspaceInput,
   contract,
   FormDocument,
   FormStatus,
   FormSummary,
   FormView,
+  PublishFormInput,
+  SaveFormDraftInput,
   InvitationView,
   InvitePeek,
   InviteResult,
@@ -167,6 +170,8 @@ export type {
 } from './preferences/store.ts';
 import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
+import type { LinkPageStore } from './link-page/store.ts';
+export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
 export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import type { SocialLinksAccess, SocialLinksStore } from './profile/socials.ts';
 export type { SocialLinksAccess, SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
@@ -188,7 +193,6 @@ import {
   upsertFirst,
   type CaptureListView,
 } from './captures/list.ts';
-import { createProfileOrder, type ProfileMoveOutcome } from './captures/profile-order.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
 import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navigation/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
@@ -420,6 +424,19 @@ export type {
   WorkspaceSummary,
   DeletedWorkspace,
   MyProfile,
+  ProfileBlock,
+  ProfileCounts,
+  ProfileBlockKind,
+  ProfileItem,
+  ProfileLinkIcon,
+  ProfileLinkImport,
+  SkippedImportRow,
+  PageTheme,
+  ProfileFormChoice,
+  ProfileFormFacts,
+  ProfilePageChoice,
+  ProfilePageFacts,
+  PublicProfileItem,
   PublicSocialLink,
   SocialLink,
   SocialLinkNetwork,
@@ -437,6 +454,9 @@ export type {
 export type { LinkSection, LinkSectionState, LinkSectionStatus, SectionKey } from './links/sections.ts';
 /** How many related records an Overview card shows per side (spec 0017, AC-383). */
 export { RELATED_PREVIEW } from '@crm/contracts/activity-keys';
+// The link page's look (spec 0054): the default and the named starting points are values the editor presses, not
+// only types, so they come through the one data layer like every other shape a screen uses.
+export { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme } from '@crm/contracts';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 export type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 export type {
@@ -480,7 +500,6 @@ export type {
   PageDestinationState,
 } from './calendar/calendars.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
-export type { ProfileMoveOutcome } from './captures/profile-order.ts';
 export { connectUrl, needsReconnect, type ConnectReturn } from './calendar/store.ts';
 export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
@@ -1152,12 +1171,14 @@ export function createDataLayer({
     });
     pendingOptions.clear();
     bookingPageLists.clear();
-    profileOrder.clear();
     pageRules.clear();
     formLists.clear();
     schedules.clear();
     preferences.clear();
     pictureChoice.clear();
+    void linkPage?.then((made) => {
+      made.clear();
+    });
     socialLinks?.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
@@ -1987,6 +2008,10 @@ export function createDataLayer({
     mintId,
     notify,
   });
+  // Settings › Account › Link page (spec 0051): the person's own blocks, the same in every workspace. Its store and
+  // rules load with the first screen that asks, never in the first load; the store builds its calls from the
+  // profile procedures and the one call path, in its own chunk.
+  let linkPage: Promise<LinkPageStore> | undefined;
   // Settings › Account › Profile: whether the person's picture shows on their public pages, read with the profile.
   const pictureChoice = createPictureChoiceStore({
     api: {
@@ -2099,14 +2124,6 @@ export function createDataLayer({
   const bookingPageLists = createCaptureList<BookingPageView>({
     read: (workspace) => call((options) => api.bookingPages.list({ workspace }, options)),
   });
-  // Settings › Profile's order (owner ask A102): moves shown in that same list at once, sent one at a time.
-  const profileOrder = createProfileOrder({
-    list: bookingPageLists,
-    send: (workspace, pageIds) =>
-      call((options) =>
-        api.bookingPages.reorderProfile({ workspace, pageIds: [...pageIds], mutationId: mintId() }, options),
-      ),
-  });
   // Settings › Rotations (spec 0029): one held list per workspace, patched by every rotation write below.
   const rotationLists = createCaptureList<RotationView>({
     read: (workspace) => call((options) => api.rotations.list({ workspace }, options)),
@@ -2116,6 +2133,13 @@ export function createDataLayer({
       call((options) => api.forms.list({ workspace, archived: false }, options)).then((page) => page.items),
   });
   /** A form write's answer as the list's row: the active list drops an archived form. */
+  /** The three form writes Email signup makes, bound to this layer's client (`link-page/signup-form.ts`). */
+  const signupWrites = {
+    create: (input: CreateFormInput) => call((options) => api.forms.create(input, options)),
+    saveDraft: (input: SaveFormDraftInput) => call((options) => api.forms.saveDraft(input, options)),
+    publish: (input: PublishFormInput) => call((options) => api.forms.publish(input, options)),
+  };
+
   const landForm =
     (formId: string) =>
     (items: readonly FormSummary[], form: FormView): readonly FormSummary[] =>
@@ -3014,6 +3038,30 @@ export function createDataLayer({
     return records;
   };
 
+  const readMe = (): Promise<Me | undefined> => {
+    me ??= attempt((options) => api.me.get(undefined, options)).then(
+      (answer) => {
+        // Someone is signed in again (in another tab, say): the next 401 ends their session too.
+        ended = false;
+        seenPerson = true;
+        // Now known for certain: the app keeps it as the next load's hint for which screen to hold a place for.
+        sessionKnown(true);
+        return answer;
+      },
+      (error: unknown) => {
+        const failure = toDataError(error);
+        // A 401 here is an answer, not a failure: nobody is signed in, and the app may keep that as its hint.
+        if (failure.code === 'UNAUTHENTICATED') {
+          sessionKnown(false);
+          return undefined;
+        }
+        me = undefined;
+        throw failure;
+      },
+    );
+    return me;
+  };
+
   return {
     me: {
       /**
@@ -3022,29 +3070,7 @@ export function createDataLayer({
        * sign out or a new workspace changes it. A 401 here is an answer
        * ("nobody"), so it never runs `onSignedOut`.
        */
-      get(): Promise<Me | undefined> {
-        me ??= attempt((options) => api.me.get(undefined, options)).then(
-          (answer) => {
-            // Someone is signed in again (in another tab, say): the next 401 ends their session too.
-            ended = false;
-            seenPerson = true;
-            // Now known for certain: the app keeps it as the next load's hint for which screen to hold a place for.
-            sessionKnown(true);
-            return answer;
-          },
-          (error: unknown) => {
-            const failure = toDataError(error);
-            // A 401 here is an answer, not a failure: nobody is signed in, and the app may keep that as its hint.
-            if (failure.code === 'UNAUTHENTICATED') {
-              sessionKnown(false);
-              return undefined;
-            }
-            me = undefined;
-            throw failure;
-          },
-        );
-        return me;
-      },
+      get: readMe,
       /**
        * Remembers `workspace` (its address) as the one the person last opened
        * (spec 0031, AC-802), so `/` and sign in bring them back to it on any
@@ -3304,16 +3330,6 @@ export function createDataLayer({
             ),
           ...shownDrop(bookingPageLists.items(workspace), pageId),
         }),
-      /**
-       * The reader's own pages in their profile's new order (owner ask A102): each id once, the order `/<handle>`
-       * lists them in, the reader's other pages after them. Shown in the held list at once (each page's
-       * `profilePosition`) and sent one move at a time: a move made while one is on its way waits, replacing any move
-       * already waiting, since each carries the whole order. Answers `saved`, or `replaced` for a move a later one
-       * carried. Only the last move of a run rejects when it is refused (`NOT_FOUND` for a page that isn't the
-       * reader's own), once the list is back in the order the server last confirmed.
-       */
-      reorderProfile: (workspace: string, pageIds: readonly string[]): Promise<ProfileMoveOutcome> =>
-        profileOrder.reorder(workspace, pageIds),
     },
     /**
      * Rotations (spec 0029): the pools round robin pages book from. Settings
@@ -4060,6 +4076,34 @@ export function createDataLayer({
         me = undefined;
         return restored;
       },
+    },
+    /**
+     * Settings › Account › Link page (spec 0051): the person's own blocks at `/<handle>`, the same in every
+     * workspace. `load()` answers its store (loaded on first use): every change shows at once and is sent after the
+     * ones before it; refused, it is put back and a toast says why, with Try again.
+     */
+    linkPage: {
+      load: (): Promise<LinkPageStore> =>
+        (linkPage ??= import('./link-page/store.ts').then(({ openLinkPage }) =>
+          openLinkPage({
+            profile: api.profile,
+            call,
+            mintId,
+            notify,
+            summary: refusalSummary,
+            signup: {
+              /** The workspaces an Email signup form may be made in: the person's own, oldest first (AC-5217). */
+              workspaces: () => readMe().then((who) => who?.workspaces ?? []),
+              // Loaded with the editor that uses it, so its three writes never ride in the first load.
+              make: async (workspace, input) =>
+                (await import('./link-page/signup-form.ts')).makeSignupForm(
+                  { forms: signupWrites, lists: formLists, landForm, mintId, readMe },
+                  workspace,
+                  input,
+                ),
+            },
+          }),
+        )),
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {

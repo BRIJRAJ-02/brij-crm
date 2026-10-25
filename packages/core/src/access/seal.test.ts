@@ -157,7 +157,8 @@ describe('the one runner (AC-138)', () => {
     const offenders = (await sources())
       .filter(
         ({ path, source }) =>
-          !['access/mint.ts', 'access/door.ts', 'testing.ts'].includes(path) && /\bmintScope\b/.test(source),
+          !['access/mint.ts', 'access/door.ts', 'testing.ts'].includes(path) &&
+          /\b(mintScope|mintPageBeside|rescope)\b/.test(source),
       )
       .map(({ path }) => path);
     expect(offenders).toEqual([]);

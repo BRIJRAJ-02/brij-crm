@@ -7,14 +7,14 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { enterBookingPage, enterBookingProfile, findHandleOwner } from '../access/door.ts';
+import { enterBookingPage, enterLinkPage, findHandleOwner } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
 import { createBookingPage, updateBookingPage } from './pages.ts';
-import { getPublicBookingPage, readBookingProfile } from './public.ts';
+import { getPublicBookingPage, readLinkPage } from './public.ts';
 import { publicSocialsOf } from './socials.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
@@ -332,9 +332,9 @@ describe('the links on the public pages', () => {
     const ada = await person('Ada Lovelace');
     const handle = `ada-${randomUUID().slice(0, 8)}`;
     await updateMyMemberProfile(ada.scope, { handle });
-    expect((await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }))).socials).toBeUndefined();
+    expect((await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }))).socials).toBeUndefined();
     await updateMyMemberProfile(ada.scope, { socials: [LINKS[2]] });
-    const profile = await readBookingProfile(await enterBookingProfile({ db }, handle, { max: 21 }));
+    const profile = await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }));
     expect(profile.socials).toEqual([{ network: 'x', href: 'https://x.com/ada', label: '@ada' }]);
     // Only the profile reads them: the picture route's lookup never does.
     expect((await findHandleOwner({ db }, handle)).socials).toEqual([]);

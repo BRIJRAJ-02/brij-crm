@@ -1,5 +1,5 @@
-/* QrCode: dark modules on a light ground in either theme (light-dark picks the
-   pair the theme's color-scheme makes light), with the card's corners. With a
+/* QrCode: dark modules on a white ground in either theme (the code carries
+   data-theme="light", so its tokens are the light theme's), with the card's corners. With a
    column beside it, the code is size-column wide and the column sits beside it
    where the slot has room, under it where it doesn't. */
 @layer components {
@@ -12,12 +12,16 @@
     border-radius: var(--radius-md);
   }
 
+  .root[data-size='fill'] {
+    inline-size: 100%;
+  }
+
   .ground {
-    fill: light-dark(var(--surface), var(--surface-inverse));
+    fill: var(--surface);
   }
 
   .modules {
-    fill: light-dark(var(--text), var(--on-inverse));
+    fill: var(--text);
   }
 
   /* The slot's width decides the layout, not the window's: a dialog is narrower than the page. The code (size-column)
@@ -32,6 +36,11 @@
 
   .layout > .root {
     inline-size: var(--size-column);
+  }
+
+  .root[data-size='sm'],
+  .layout > .root[data-size='sm'] {
+    inline-size: var(--size-column-narrow);
   }
 
   .aside {

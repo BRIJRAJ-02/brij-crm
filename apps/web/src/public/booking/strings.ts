@@ -100,17 +100,24 @@ export const strings = {
   },
   loading: 'Loading…',
   // A person's profile, /<handle> (22 Oct 2026).
-  profileLinks: 'Booking links',
   searchLinks: 'Search links',
+  /** The social icons row's name for screen readers. */
+  socials: (name: string) => `${name}’s social links`,
+  /** The square button beside Save contact: it hands the page on. */
+  sharePage: 'Share this page',
+  /** The browser can’t share, so the address went to the clipboard instead. */
+  shareCopied: 'Link copied',
+  /** Neither sharing nor copying worked: the address is in the bar, so there is still a way. */
+  shareFailed: 'The link didn’t copy. Copy it from the address bar instead.',
   team: 'Team',
-  noLinksTitle: 'Nothing to book here yet',
-  noLinksText: 'This person has no public booking links right now.',
-  noMatchesTitle: (query: string) => `No links match “${query}”`,
+  noLinksTitle: 'Nothing here yet',
+  noLinksText: 'This person hasn’t added any links yet.',
+  noMatchesTitle: (query: string) => `Nothing matches “${query}”`,
+  matches: (count: number) => (count === 0 ? 'No matches' : count === 1 ? '1 match' : `${String(count)} matches`),
   noMatchesText: 'Try fewer or other words.',
   showMore: 'Show more',
   moreFailed: 'More links didn’t load. Try again.',
   searchFailed: 'That search didn’t go through. Try again in a moment.',
-  sectionLinks: (section: string) => `${section} links`,
   /**
    * A profile with nothing to show. Since 25 Oct 2026 this is reached only when the address is somebody's, or a
    * word kept for Timefix, or the free read itself failed, so it no longer says no one has it: true in all three,

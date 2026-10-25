@@ -29,6 +29,7 @@ import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { PreferencesHeld, PreferencesState } from './preferences/store.ts';
 import type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
+import type { LinkPageHeld, LinkPageState } from './link-page/store.ts';
 import type { SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { NavSnapshot, NavSource } from './navigation/store.ts';
@@ -412,6 +413,11 @@ export function useCalendarSettings(held: CalendarSettingsHeld): CalendarSetting
 
 /** The member's own preferences in a workspace (Settings › Account › Preferences), read when first held. */
 export function usePreferences(held: PreferencesHeld): PreferencesState {
+  return useRetained(held);
+}
+
+/** The person's link page blocks (Settings › Account › Link page, spec 0051), read when first held. */
+export function useLinkPage(held: LinkPageHeld): LinkPageState {
   return useRetained(held);
 }
 

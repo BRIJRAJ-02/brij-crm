@@ -3,8 +3,9 @@
 // same origin files under /assets/, never data: URIs the CSP would refuse (AC-11).
 // It also checks the first load (spec 0003, AC-18): the heavy library entries
 // (grid, editor, charts, schema map) never sit in index.html's static graph.
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { PLAIN_ERRORS } from '@crm/contracts/plain-words';
 import { build } from 'vite';
@@ -116,6 +117,18 @@ describe('the built page', () => {
       expect(built).toContain('<link rel="stylesheet" href="/layers.css" id="react-aria-pressable-style">');
     },
   );
+
+  // The handle Function answers `/<handle>` from bytes it holds rather than a file it reads (spec 0055, AC-5501).
+  // The build writes them; this fails if that stopped happening, or if what it wrote is a shell nobody ships.
+  it('writes the built booking shell beside the handle Function, byte for byte', async () => {
+    const generated = path.join(import.meta.dirname, 'api', 'shell.generated.mjs');
+    expect(existsSync(generated), 'the build writes api/shell.generated.mjs').toBe(true);
+    const { BOOKING_SHELL } = (await import(pathToFileURL(generated).href)) as { BOOKING_SHELL: string };
+    expect(BOOKING_SHELL).toBe(readFileSync(path.join(outDir, 'book.html'), 'utf8'));
+    // The meta block replaces the shell's own title and its noindex, so both have to be there to replace.
+    expect(BOOKING_SHELL).toContain('<title>');
+    expect(BOOKING_SHELL).toContain('name="robots"');
+  });
 });
 
 describe('the public booking host (22 Oct 2026)', () => {
@@ -250,5 +263,19 @@ describe('the first load', () => {
     expect(firstLoad(manifest).js.some(carries)).toBe(true);
     expect(firstLoad(manifest, 'book.html').js.filter(carries)).toEqual([]);
     expect(firstLoad(manifest, 'form.html').js.filter(carries)).toEqual([]);
+  });
+
+  // AC-5131 (spec 0051): `/b/:key` and `/<handle>/<slug>` load exactly what they loaded before the link page. The
+  // booking entry's first load holds none of it (no LinkPage class, no profile module); the link page is the
+  // profile's own chunk, which only `/<handle>` loads, through a dynamic import.
+  it('keeps the link page out of the booking page’s first load', () => {
+    const { chunks, js, css: sheets } = firstLoad(manifest, 'book.html');
+    const read = (file: string) => readFileSync(path.join(outDir, file), 'utf8');
+    expect(chunks.filter((key) => /ProfilePage|link-page/.test(key))).toEqual([]);
+    expect(js.filter((file) => read(file).includes('ws-LinkPage-'))).toEqual([]);
+    expect(sheets.filter((file) => read(file).includes('ws-LinkPage-'))).toEqual([]);
+    const profile = Object.keys(manifest).find((key) => key.endsWith('public/booking/ProfilePage.tsx'));
+    expect(profile).toBeDefined();
+    expect(manifest['book.html']?.dynamicImports ?? []).toContain(profile);
   });
 });

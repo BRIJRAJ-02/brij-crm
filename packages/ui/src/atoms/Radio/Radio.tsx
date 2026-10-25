@@ -1,6 +1,8 @@
 import type { KeyboardEvent, ReactNode } from 'react';
 import { FieldError, RadioButton, RadioField, RadioGroup as AriaRadioGroup, Text } from 'react-aria-components';
 import { FieldLabel } from '../FieldLabel/FieldLabel.tsx';
+import { Icon } from '../Icon/Icon.tsx';
+import type { IconName } from '../Icon/icons.ts';
 import styles from './Radio.module.css';
 
 /** Props for Radio. */
@@ -11,11 +13,13 @@ export interface RadioProps {
   readonly children: string;
   /** A line under the label that says more. */
   readonly description?: string;
+  /** A glyph before the label, for a group drawn as cards (`variant="cards"`): what the choice adds. */
+  readonly icon?: IconName;
   readonly isDisabled?: boolean;
 }
 
 /** One choice in a RadioGroup. */
-export function Radio({ value, children, description, isDisabled = false }: RadioProps) {
+export function Radio({ value, children, description, icon, isDisabled = false }: RadioProps) {
   return (
     <RadioField className={styles.field} value={value} isDisabled={isDisabled}>
       <RadioButton className={styles.radio}>
@@ -23,6 +27,7 @@ export function Radio({ value, children, description, isDisabled = false }: Radi
           <span className={styles.dot} />
         </span>
         <span className={styles.label} data-described={description === undefined ? undefined : ''}>
+          {icon !== undefined && <Icon name={icon} size="sm" />}
           {children}
         </span>
       </RadioButton>
@@ -51,6 +56,12 @@ export interface RadioGroupProps {
   readonly onChange?: (value: string) => void;
   /** `vertical` (the default) stacks them; `horizontal` puts a few short ones in a row. */
   readonly orientation?: 'vertical' | 'horizontal';
+  /**
+   * `cards` draws each choice as a bordered card in a grid two wide, the chosen one on the accent's soft fill:
+   * a handful of choices that each start a different job, where the choice itself is the first step of a form
+   * (the link page's Add item). `plain` (the default) is the usual stack.
+   */
+  readonly variant?: 'plain' | 'cards';
   readonly isDisabled?: boolean;
   readonly isReadOnly?: boolean;
   /** Why the choice is invalid, as a sentence that says how to fix it. */
@@ -78,6 +89,7 @@ export function RadioGroup({
   defaultValue,
   onChange,
   orientation = 'vertical',
+  variant = 'plain',
   isDisabled = false,
   isReadOnly = false,
   error,
@@ -101,7 +113,7 @@ export function RadioGroup({
         // The group moves and picks a choice on any arrow key inside it; on the tip (or in its help) they do nothing.
         <FieldLabel label={label} aside={labelAside} info={info} tone="strong" onInfoKeyDown={keepArrows} />
       )}
-      <span className={styles.choices} data-orientation={orientation}>
+      <span className={styles.choices} data-orientation={orientation} data-variant={variant}>
         {children}
       </span>
       {/* React Aria takes a given id over its own, and the group's aria-describedby follows it. */}

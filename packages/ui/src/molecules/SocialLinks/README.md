@@ -22,6 +22,7 @@ New (booking socials, 25 October 2026). The owner asked for social links on book
 - `label` names the list for screen readers; each link is named "LinkedIn, ada" (the network, then its label), and its tooltip says "LinkedIn · ada".
 - Each opens in a new tab with `rel="me nofollow noopener noreferrer"`: `me` says the profile is the person's own, `nofollow` that we don't vouch for it. A link `safeHref` refuses draws disabled.
 - Nothing draws when there are no links, so a slot never leaves a gap.
+- `variant="round"` draws each link as a centred 44px outlined circle (Button `secondary`, `size="touch"`, `isRound`) with its mark in the text colour (ProviderMark `tone="mono"`): a link page's row under the person's card, from the owner's design (25 October 2026). Why a variant: the design draws every network in one colour, at a thumb's size, as one set; the quiet ghost marks stay for the booking page's rail.
 - `isInline` draws the same list with `span`s (`role="list"`), for a row inside text such as a SettingsRow's description.
 
 ## States

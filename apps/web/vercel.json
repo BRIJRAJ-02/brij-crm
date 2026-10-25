@@ -7,6 +7,9 @@
   "functions": {
     "api/index.mjs": {
       "maxDuration": 60
+    },
+    "api/handle.mjs": {
+      "maxDuration": 10
     }
   },
   "git": {
@@ -31,11 +34,11 @@
     },
     {
       "source": "/((?!(?:email-preferences|availability|integrations|developers|reschedule|theme-boot|two-factor|dashboard|undefined|accounts|bookings|calendar|callback|captures|download|manifest|schedule|security|settings|sign-out|webhooks|account|billing|booking|contact|favicon|objects|pricing|privacy|profile|sign-in|sign-up|sitemap|support|timefix|welcome|assets|cancel|health|invite|logout|manage|public|robots|search|signin|signup|static|status|verify|about|admin|brand|email|embed|forms|inbox|index|legal|links|login|oauth|terms|users|apps|auth|blog|book|demo|docs|edit|form|help|home|join|mail|null|root|team|user|api|app|new|www)(?:/|$))[a-z0-9][a-z0-9-]{1,38}[a-z0-9])",
-      "destination": "/book.html"
+      "destination": "/api/handle"
     },
     {
       "source": "/((?!(?:email-preferences|availability|integrations|developers|reschedule|theme-boot|two-factor|dashboard|undefined|accounts|bookings|calendar|callback|captures|download|manifest|schedule|security|settings|sign-out|webhooks|account|billing|booking|contact|favicon|objects|pricing|privacy|profile|sign-in|sign-up|sitemap|support|timefix|welcome|assets|cancel|health|invite|logout|manage|public|robots|search|signin|signup|static|status|verify|about|admin|brand|email|embed|forms|inbox|index|legal|links|login|oauth|terms|users|apps|auth|blog|book|demo|docs|edit|form|help|home|join|mail|null|root|team|user|api|app|new|www)(?:/|$))[a-z0-9][a-z0-9-]{1,38}[a-z0-9])/([a-z0-9][a-z0-9-]{0,59})",
-      "destination": "/book.html"
+      "destination": "/api/handle"
     },
     {
       "source": "/((?!api/|api$|f/|b/|embed/).*)",

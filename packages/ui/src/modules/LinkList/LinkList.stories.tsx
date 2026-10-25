@@ -7,6 +7,7 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkList, type LinkListProps, type LinkRow } from './LinkList.tsx';
 import { LinkListRowOrder } from './RowOrder.tsx';
+import { LinkPageTile } from '../LinkPage/LinkPage.tsx';
 
 function icons(title: string, isOff = false) {
   return (
@@ -710,4 +711,163 @@ export const ReorderNarrow: Story = {
     await expect(facts).toBeVisible();
     await expect(facts.getBoundingClientRect().top).toBeGreaterThanOrEqual(title.bottom);
   },
+};
+
+/** Rows with a tile before the title (a link page's blocks in its editor), moving by their grips. */
+export const Leading: Story = {
+  args: {
+    label: 'Blocks',
+    leadingLoading: <LinkPageTile />,
+    onMove: fn(),
+    rowOrder: LinkListRowOrder,
+    rows: [
+      {
+        id: 'intro',
+        title: 'Intro call',
+        address: 'Booking page',
+        chips: [],
+        leading: (
+          <LinkPageTile block={{ kind: 'page', id: 'intro', title: 'Intro call', href: '/a/intro', facts: '' }} />
+        ),
+      },
+      {
+        id: 'in',
+        title: 'LinkedIn',
+        address: 'linkedin.com/in/anish',
+        chips: [],
+        leading: (
+          <LinkPageTile
+            block={{ kind: 'link', id: 'in', title: 'LinkedIn', href: '', mark: 'linkedin', hue: 'blue' }}
+          />
+        ),
+      },
+      {
+        id: 'deck',
+        title: 'Our deck',
+        address: 'example.com/deck',
+        chips: [],
+        leading: <LinkPageTile block={{ kind: 'link', id: 'deck', title: 'Our deck', href: '', hue: 'purple' }} />,
+      },
+    ],
+  },
+};
+
+/** Sections heading the rows under them: a small uppercase label with its count, dragged like any other row. */
+export const Sections: Story = {
+  args: {
+    label: 'Blocks',
+    leadingLoading: <LinkPageTile />,
+    onMove: fn(),
+    rowOrder: LinkListRowOrder,
+    rows: [
+      { id: 'meet', title: 'Meet me', address: '', chips: [], variant: 'section', count: 2 },
+      {
+        id: 'intro',
+        title: 'Intro call',
+        address: 'Booking page',
+        chips: [],
+        leading: (
+          <LinkPageTile block={{ kind: 'page', id: 'intro', title: 'Intro call', href: '/a/intro', facts: '' }} />
+        ),
+      },
+      {
+        id: 'office',
+        title: 'Office hours',
+        address: 'Booking page',
+        chips: [],
+        leading: (
+          <LinkPageTile block={{ kind: 'page', id: 'office', title: 'Office hours', href: '/a/o', facts: '' }} />
+        ),
+      },
+      { id: 'elsewhere', title: 'Elsewhere', address: '', chips: [], variant: 'section', count: 1 },
+      {
+        id: 'in',
+        title: 'LinkedIn',
+        address: 'linkedin.com/in/anish',
+        chips: [],
+        leading: (
+          <LinkPageTile
+            block={{ kind: 'link', id: 'in', title: 'LinkedIn', href: '', mark: 'linkedin', hue: 'blue' }}
+          />
+        ),
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    // A section is one row of the same list, so it is in the rows and carries its count.
+    const section = canvas.getByRole('row', { name: /Meet me/ });
+    await expect(within(section).getByText('2')).toBeInTheDocument();
+    await expect(canvas.getAllByRole('row')).toHaveLength(5);
+  },
+};
+
+/** A figure still on its way: its line is held, so the row is the same height before and after it lands. */
+export const ChipsPending: Story = {
+  render: (args) => {
+    const row = (chips: string[], pending: boolean): LinkRow => ({
+      id: 'deck',
+      title: 'Our deck',
+      address: 'example.com/deck',
+      chips,
+      ...(pending ? { areChipsPending: true } : {}),
+      leading: <LinkPageTile block={{ kind: 'link', id: 'deck', title: 'Our deck', href: '', hue: 'purple' }} />,
+    });
+    return (
+      <Stage width="phone">
+        <LinkList {...args} label="Waiting" leadingLoading={<LinkPageTile />} rows={[row([], true)]} />
+        <LinkList {...args} label="Landed" leadingLoading={<LinkPageTile />} rows={[row(['12 clicks'], false)]} />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const rows = canvas.getAllByRole('row');
+    await expect(rows).toHaveLength(2);
+    const waiting = rows[0]?.getBoundingClientRect().height ?? 0;
+    const landed = rows[1]?.getBoundingClientRect().height ?? 0;
+    await expect(waiting).toBeGreaterThan(0);
+    // The brief measures this the way loading-shape does: within 4px.
+    await expect(Math.abs(waiting - landed)).toBeLessThanOrEqual(4);
+  },
+};
+
+/** Tiled rows while they load: the tile's place is held, so the titles land where the lines stood. */
+export const LeadingLoading: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Blocks', leadingLoading: <LinkPageTile />, status: 'loading', rows: [] },
+};
+
+/** Tiled rows on a phone: one line each, the long title wrapping and the address under it, the badge kept at the end. */
+export const LeadingNarrow: Story = {
+  args: {
+    label: 'Blocks',
+    leadingLoading: <LinkPageTile />,
+    onMove: fn(),
+    rowOrder: LinkListRowOrder,
+    rows: [
+      {
+        id: 'office',
+        title: 'Office hours for founders and their teams',
+        address: 'Paused, hidden from visitors · Booking page · 30 min',
+        chips: [],
+        isOff: true,
+        leading: (
+          <LinkPageTile block={{ kind: 'page', id: 'office', title: 'Office hours', href: '/a/o', facts: '' }} />
+        ),
+      },
+      {
+        id: 'gone',
+        title: 'Booking page',
+        address: 'This booking page is Link only, deleted, or in a workspace you left.',
+        chips: [],
+        badge: 'Unavailable',
+        isOff: true,
+        leading: <LinkPageTile block={{ kind: 'page', id: 'gone', title: 'Booking page', href: '', facts: '' }} />,
+      },
+    ],
+  },
+  render: (args) => (
+    <Stage width="phone">
+      <LinkList {...args} />
+    </Stage>
+  ),
 };

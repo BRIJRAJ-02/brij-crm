@@ -121,6 +121,12 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* A row's tile (a link page's block's mark, icon or letter), before its title. */
+  .leading {
+    display: inline-flex;
+    flex: none;
+  }
+
   .main {
     display: flex;
     flex: 1;
@@ -134,6 +140,31 @@
     align-items: baseline;
     gap: var(--space-8);
     min-inline-size: 0;
+  }
+
+  /* A section row heads the rows after it, so it is shorter than a row and sits on the list's own ground rather
+     than reading as one more thing on the page. */
+  .row[data-variant='section'] {
+    min-block-size: var(--size-row);
+    background: transparent;
+  }
+
+  .sectionTitle {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .sectionCount {
+    flex: none;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
   }
 
   .title {
@@ -190,6 +221,13 @@
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  /* A figure still on its way: the line keeps a Badge's height, so the row is the same before and after it lands
+     and nothing under it moves. */
+  .chips[data-pending] {
+    align-items: center;
+    min-block-size: var(--size-chip);
   }
 
   .end {
@@ -261,6 +299,38 @@
 
     .frame[data-reorderable]:not([data-density='compact']) .end {
       margin-inline-start: calc(var(--size-icon-sm) + 2 * var(--space-2) + var(--space-8));
+    }
+
+    /* Rows with a tile stay on one line, the tile and the end beside the words, which wrap: the address goes
+       under the title. */
+    .frame[data-leading] .row {
+      flex-wrap: nowrap;
+      gap: var(--space-12);
+    }
+
+    .frame[data-leading]:not([data-density='compact']) .main {
+      flex-basis: auto;
+    }
+
+    .frame[data-leading] .titleLine {
+      flex-wrap: wrap;
+      row-gap: 0;
+    }
+
+    .frame[data-leading] .address {
+      flex-basis: 100%;
+      white-space: normal;
+    }
+
+    .frame[data-leading] .title {
+      flex: 1 1 auto;
+      max-inline-size: 100%;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    .frame[data-leading][data-reorderable]:not([data-density='compact']) .end {
+      margin-inline-start: 0;
     }
   }
 

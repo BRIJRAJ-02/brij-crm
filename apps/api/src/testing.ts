@@ -12,6 +12,7 @@ import type { CalendarServices } from './calendar/services.ts';
 import type { ApiEnv } from './env.ts';
 import type { MailMessage, Mailer } from './mail/mailer.ts';
 import type { Analytics } from './monitoring/posthog.ts';
+import type { OutsideFetch } from './public/outside.ts';
 import type { SignedOutNotice } from './realtime/signed-out.ts';
 import { NO_WAKE, type WakeRelay } from './realtime/wake.ts';
 import type { RequestContext } from './orpc.ts';
@@ -86,6 +87,8 @@ export function testServices(
     calendar?: CalendarServices;
     /** The signed out notice (spec 0033): none unless given. */
     signedOut?: SignedOutNotice;
+    /** The one outside read (spec 0055): a fixed page unless given, so no test ever reaches the network. */
+    outsideFetch?: OutsideFetch;
   } = {},
 ): AppServices {
   const db = options.db ?? unreachableDatabase();
@@ -113,7 +116,22 @@ export function testServices(
     ...(options.jobs === undefined ? {} : { jobs: options.jobs }),
     ...(options.calendar === undefined ? {} : { calendar: options.calendar }),
     ...(options.signedOut === undefined ? {} : { signedOut: options.signedOut }),
+    outsideFetch: options.outsideFetch ?? testOutsideFetch(),
   };
+}
+
+/** The page every import reads in a test: two rows it can make, and one it cannot. No network, no resolver. */
+export const TEST_IMPORT_PAGE = [
+  '<html><body>',
+  '<a href="https://shop.example">Shop</a>',
+  '<a href="https://blog.example"><b>My</b> blog</a>',
+  '<a>Nowhere</a>',
+  '</body></html>',
+].join('');
+
+/** An outside fetch that answers `TEST_IMPORT_PAGE` whatever it is asked for, so no test reaches the network. */
+export function testOutsideFetch(html: string = TEST_IMPORT_PAGE): OutsideFetch {
+  return () => Promise.resolve({ ok: true, type: 'text/html', bytes: new TextEncoder().encode(html) });
 }
 
 // Built like the engine builds them (packages/core's refusals.ts), which

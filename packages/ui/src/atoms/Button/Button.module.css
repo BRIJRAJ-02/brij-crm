@@ -108,6 +108,24 @@
     letter-spacing: var(--tracking-title);
   }
 
+  /* A public page's control under a thumb (a link page's Save contact, Share and social links): 44px, the target a
+     finger needs (WCAG 2.5.5), with the icon at full size. Inside the app, nothing is this size. */
+  .root[data-size='touch'] {
+    gap: var(--space-8);
+    block-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+    padding-inline: var(--space-16);
+  }
+
+  .root[data-icon-only][data-size='touch'] {
+    inline-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+    padding-inline: 0;
+  }
+
+  /* Fully rounded: a pill with a label, a circle when the icon or mark stands alone (a link page's social links). */
+  .root[data-round] {
+    border-radius: var(--radius-full);
+  }
+
   /* A chip's height, for an icon only Remove beside a chip inside a field's box. */
   .root[data-size='sm'] {
     position: relative;

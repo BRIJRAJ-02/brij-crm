@@ -11,7 +11,7 @@ Shared configuration for every workspace: the TypeScript configs, the one ESLint
 | `tsconfig.base.json` | Strict flags for all code: `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `erasableSyntaxOnly` |
 | `tsconfig.node.json` | Node 24 code (`nodenext`) |
 | `tsconfig.react.json` | Browser code (`bundler`, `react-jsx`, Vite types) |
-| `eslint.js` | The ESLint presets (`server`, `client`, `screens`, `repoRoot`) and the house rules as lint rules, including: React Aria, Tiptap and other UI building blocks only in `packages/ui`, Yjs only there and in `packages/data`, no value atom imports in screens, no literal copy in the library's markup, and no network calls from the library |
+| `eslint.js` | The ESLint presets (`server`, `client`, `screens`, `repoRoot`) and the house rules as lint rules, including: React Aria, Tiptap and other UI building blocks only in `packages/ui`, Yjs only there and in `packages/data`, no value atom imports in screens, no literal copy in the library's markup, no network calls from the library, and (`fetchWrappers`, spec 0055 AC-5531) the network reachable only from the files a workspace names, so every read of an address a person typed goes through one module |
 | `stylelint.js` | Tokens only CSS, no `!important`, styles kept inside their component, and only token names that exist in `packages/tokens/tokens.css` (loaded by the root `stylelint.config.js`) |
 | `stylelint/system-colors.js` | The `crm/system-colors` rule: system colours (`Canvas`, `CanvasText` and the rest) only inside `@media (forced-colors: active)` |
 | `stylelint/breakpoint-tokens.js` | The `crm/breakpoint-tokens` rule: `@media` and `@container` conditions may only use the `breakpoint` token values from `packages/tokens/tokens.json` |

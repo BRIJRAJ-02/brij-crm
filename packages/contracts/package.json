@@ -21,6 +21,7 @@
     "./picker": "./src/values/picker.ts",
     "./activity-keys": "./src/activity-keys.ts",
     "./link-limits": "./src/link-limits.ts",
+    "./link-page": "./src/booking/link-page-rules.ts",
     "./task-limits": "./src/task-limits.ts",
     "./account-limits": "./src/account-limits.ts",
     "./note-limits": "./src/note-limits.ts",

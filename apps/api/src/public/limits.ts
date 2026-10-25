@@ -31,6 +31,17 @@ export const BOOKING_LIMITS = {
   /** A host's picture (23 Oct 2026): 60 a minute per address, 600 per page or handle; the edge keeps most of them. */
   picturesPerAddress: { max: 60, windowMs: 60_000 },
   picturesPerTarget: { max: 600, windowMs: 60_000 },
+  /**
+   * A link page's contact card as a vCard (spec 0051, AC-5114): 20 a minute per address; past 300 a minute for one
+   * handle, its cards go without the picture (the fetches of Google are what the handle's budget bounds).
+   */
+  vcardsPerAddress: { max: 20, windowMs: 60_000 },
+  vcardsPerHandle: { max: 300, windowMs: 60_000 },
+  /** A link page block's press (spec 0051, AC-5126): 60 a minute per address, 600 per handle; past them, uncounted. */
+  pressesPerAddress: { max: 60, windowMs: 60_000 },
+  pressesPerHandle: { max: 600, windowMs: 60_000 },
+  /** A link page's views (AC-5126): past 600 a minute for one page, its reads are answered but not counted. */
+  viewsPerHandle: { max: 600, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;
 
 /** The least time a person takes from opening the page to booking. */

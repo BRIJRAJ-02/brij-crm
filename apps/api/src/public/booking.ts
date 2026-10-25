@@ -19,7 +19,9 @@
 //   GET  /api/public/booking/:publicKey/connect  ?return: a guest connects Google for this visit
 //   GET  /api/public/booking/connect/callback    Google's answer: the guest's sealed cookie
 //   POST /api/public/booking/connect/forget      drops the guest's calendar
-//   GET  /api/public/handles/:handle             ?after&q: a profile and a page of its Public links (22 Oct 2026)
+//   GET  /api/public/handles/:handle             ?after&q: a link page and a page of its blocks (spec 0051)
+//   POST /api/public/handles/:handle/press       a press on a block, the id as text (a beacon), always 204
+//   GET  /api/public/handles/:handle/contact.vcf  the link page's contact card as a vCard (spec 0051)
 //   GET  /api/public/handles/:handle/:slug       the page a handle address names, by its public key
 //   GET  /api/public/booking/:publicKey/picture  a personal page's host picture, from our origin (23 Oct 2026)
 //   GET  /api/public/profiles/:handle/picture    a profile's picture, likewise (`picture.ts` fetches both)
@@ -39,6 +41,7 @@ import {
   PublicGuestsInput,
   PublicMoveInput,
   PublicMoveSlotsQuery,
+  PROFILE_LIMITS,
   PROFILE_PAGE_SIZE,
   type PublicHandleOffer,
   PublicProfileQuery,
@@ -75,14 +78,19 @@ import {
   removeGuest,
   enterBookingAddress,
   enterBookingPage,
-  enterBookingProfile,
+  countItemPress,
+  countProfileView,
+  enterContactCard,
+  enterLinkPage,
   findHandleOwner,
   getPublicBookingPage,
   readAddressedPage,
-  readBookingProfile,
   readHandleOffer,
+  readLinkPage,
   readPagePicture,
+  readContactCard,
   readProfilePicture,
+  writeVcard,
   isPageHost,
   type AccountPicture,
   type AccountPictureReader,
@@ -345,6 +353,89 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   });
 
+  /** The signed in person's id on this request, or undefined: no session, or one that couldn't be read. */
+  const signedInAs = async (c: Context<{ Variables: Variables }>): Promise<string | undefined> => {
+    const auth = services.visitor?.auth;
+    // No cookie, no session: most visitors never cost a session read.
+    if (auth === undefined || (c.req.header('cookie') ?? '') === '') return undefined;
+    try {
+      return (await auth.session(c.req.raw.headers, c.get('clientIp')))?.user.id;
+    } catch {
+      return undefined;
+    }
+  };
+
+  /**
+   * Today's visitor id on a link page, or undefined for a machine, with no counters, or for a read another site made
+   * (an image or a script there would otherwise count its own visitors as views; spec 0051, AC-5124).
+   */
+  const profileVisitor = (c: Context<{ Variables: Variables }>, ownerUserId: string): string | undefined => {
+    const userAgent = c.req.header('user-agent');
+    if (services.views === undefined || userAgent === undefined || isMachine(userAgent)) return undefined;
+    const site = c.req.header('sec-fetch-site');
+    if (site !== undefined && site !== 'same-origin') return undefined;
+    return visitorId(services.views.visitorKey, {
+      day: utcDay(services.now?.() ?? new Date()),
+      ip: c.get('clientIp'),
+      userAgent,
+      place: `profile:${ownerUserId}`,
+    });
+  };
+
+  /** Counts a link page view in the background, unless it is the owner's own read. */
+  const countView = (c: Context<{ Variables: Variables }>, ownerUserId: string): void => {
+    const visitor = profileVisitor(c, ownerUserId);
+    if (visitor === undefined || services.views === undefined) return;
+    // Past 600 a minute for one page, reads are answered but not counted (AC-5126).
+    if (!limiter(`profile:view-owner:${ownerUserId}`, BOOKING_LIMITS.viewsPerHandle).allowed) return;
+    const counted = signedInAs(c)
+      .then((userId) => (userId === ownerUserId ? undefined : countProfileView({ db }, ownerUserId, visitor)))
+      .catch((error: unknown) => {
+        log.warn('profile.view.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+      });
+    services.views.keepAlive(counted);
+  };
+
+  // A press on a link page's block (spec 0051, AC-5125, AC-5126): the block's public id as text, sent by
+  // `navigator.sendBeacon` so the visitor's navigation never waits. Always 204, whatever happened: a counter never
+  // says whether a handle or an id exists. Limited per address and per handle; a machine's press is dropped.
+  // A press body is one id: anything longer is no press, and is never read.
+  app.use(
+    '/public/handles/:handle/press',
+    bodyLimit({ maxSize: 256, onError: (c) => c.body(null, 204, { 'cache-control': 'no-store' }) }),
+  );
+  app.post('/public/handles/:handle/press', async (c) => {
+    const handle = c.req.param('handle');
+    const silent = () => c.body(null, 204, { 'cache-control': 'no-store' });
+    if (!HANDLE_PATTERN.test(handle)) return silent();
+    // A machine's press never spends a person's budget: dropped before the limits.
+    const userAgent = c.req.header('user-agent');
+    if (services.views === undefined || userAgent === undefined || isMachine(userAgent)) return silent();
+    // The handle's budget is per address it is reached by: an old handle has its own (noted for the spec).
+    const over = limited([
+      [`profile:press:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.pressesPerAddress],
+      [`profile:press-handle:${handle}`, BOOKING_LIMITS.pressesPerHandle],
+    ]);
+    if (over !== undefined) return silent();
+    const item = (await c.req.text().catch(() => '')).trim().slice(0, 64);
+    // The visitor is keyed on the handle's place; the core reads the owner and checks the block is theirs and live.
+    const visitor = visitorId(services.views.visitorKey, {
+      day: utcDay(services.now?.() ?? new Date()),
+      ip: c.get('clientIp'),
+      userAgent,
+      place: `press:${handle}`,
+    });
+    const counted = signedInAs(c)
+      .then((userId) =>
+        countItemPress({ db }, handle, item, visitor, userId === undefined ? {} : { signedInAs: userId }),
+      )
+      .catch((error: unknown) => {
+        log.warn('profile.press.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+      });
+    services.views.keepAlive(counted);
+    return silent();
+  });
+
   // Whether an address is free to claim (25 Oct 2026). Under `profiles` beside the picture, never under
   // `/handles/:handle/…`, where `offer` would shadow a page whose slug is "offer". The answer is one of two words:
   // a handle somebody holds, a word kept for Timefix and a word no handle could be all read `absent`. That is not
@@ -367,7 +458,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   });
 
-  // A handle address (22 Oct 2026): the person by a current or old handle, through the door's definers only.
+  // A handle address (22 Oct 2026): the person by a current or old handle, and their link page's blocks (spec 0051),
+  // through the door's definers only. A search reads every live block (at most 60) and answers the matches flat.
   app.get('/public/handles/:handle', async (c) => {
     const refused = limited([[`booking:read:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]]);
     if (refused !== undefined) return refused;
@@ -375,16 +467,67 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       after: c.req.query('after'),
       q: c.req.query('q'),
     });
-    if (!query.success) return answer('INPUT_INVALID', 'That page of links isn’t right.');
+    if (!query.success) return answer('INPUT_INVALID', 'That page of blocks isn’t right.');
     const [position, id] = query.data.after?.split('.') ?? [];
+    const search = query.data.q === undefined || query.data.q === '' ? undefined : query.data.q;
     try {
-      const found = await enterBookingProfile({ db }, c.req.param('handle'), {
-        ...(position === undefined || id === undefined ? {} : { after: { position: Number(position), id } }),
-        ...(query.data.q === undefined ? {} : { search: query.data.q }),
-        // One more than a page, so the answer knows there is more.
-        max: PROFILE_PAGE_SIZE + 1,
+      const found = await enterLinkPage({ db }, c.req.param('handle'), {
+        ...(search !== undefined || position === undefined || id === undefined
+          ? {}
+          : { after: { position: Number(position), id } }),
+        // One more than a page, so the answer knows there is more; every live block for a search.
+        max: search === undefined ? PROFILE_PAGE_SIZE + 1 : PROFILE_LIMITS.items + 1,
       });
-      return ok(await readBookingProfile(found));
+      const page = await readLinkPage(found, search === undefined ? {} : { search });
+      // One view per page load (its first page, with no `q` at all: a cleared search sends an empty one), never a
+      // machine's or the owner's own (AC-5124),
+      // counted after the answer is made and never holding it up.
+      if (c.req.query('q') === undefined && position === undefined) countView(c, found.owner.userId);
+      return ok(page);
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  // A link page's contact card as a vCard 3.0 (spec 0051, AC-5114, AC-5115): a plain download, so Save contact is a
+  // plain link that works with no script and from a QR code. Before `/:slug`, which a dotted name never is. A handle
+  // no one holds and one with no card answer the same 404. The picture is embedded only when the person has one and
+  // hasn't hidden it, and a picture that won't fetch leaves it out rather than failing the card.
+  app.get('/public/handles/:handle/contact.vcf', async (c) => {
+    const handle = c.req.param('handle');
+    if (!HANDLE_PATTERN.test(handle)) return answer('NOT_FOUND', 'There’s no contact card here.');
+    // Per address only: a handle wide limit would let a few addresses switch off a person's Save contact for everyone.
+    const refused = limited([[`booking:vcard:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.vcardsPerAddress]]);
+    if (refused !== undefined) return refused;
+    try {
+      const contact = readContactCard(await enterContactCard({ db }, handle));
+      // The handle's own budget bounds the fetches of Google: past it, the card goes without its picture.
+      const fetchesPicture =
+        contact.picture !== undefined &&
+        limited([[`booking:vcard-handle:${contact.handle}`, BOOKING_LIMITS.vcardsPerHandle]]) === undefined;
+      const fetched =
+        contact.picture === undefined || !fetchesPicture
+          ? undefined
+          : await services.pictures.fetch(contact.picture.url, { types: ['image/jpeg', 'image/png'] });
+      if (fetched?.ok === false) {
+        log.warn('booking.vcard.picture_missed', { requestId: c.get('requestId'), reason: fetched.reason });
+      }
+      // The page the card came from, so a saved contact still leads back to everything else on it (AC-5115).
+      const body = writeVcard(
+        contact.card,
+        fetched?.ok === true ? fetched : undefined,
+        `${services.ics.publicOrigin}/${encodeURIComponent(contact.handle)}`,
+      );
+      return new Response(body, {
+        headers: {
+          'content-type': 'text/vcard; charset=utf-8',
+          'content-disposition': `attachment; filename="${contact.handle}.vcf"`,
+          'cache-control': 'private, no-store',
+          'x-content-type-options': 'nosniff',
+          'content-security-policy': "default-src 'none'",
+          'x-robots-tag': 'noindex',
+        },
+      });
     } catch (error) {
       return refusalAnswer(error);
     }

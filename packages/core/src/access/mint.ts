@@ -16,7 +16,7 @@
 import type { Database } from '@crm/db';
 import type { Limits } from '../engine/limits.ts';
 import type { Actor } from '../engine/scope.ts';
-import type { Access } from './policy.ts';
+import { bookingAccess, formAccess, type Access } from './policy.ts';
 
 const SEALED: unique symbol = Symbol('crm.engineScope');
 
@@ -87,6 +87,38 @@ export function mintScope(fields: ScopeFields): EngineScope {
 export function rescope(scope: EngineScope, actor: Actor, access: Access): EngineScope {
   checkScope(scope);
   return mintScope({ db: scope.db, workspaceId: scope.workspaceId, actor, access });
+}
+
+/**
+ * A booking page's read only scope on the same database as `scope` (checked first), in the page's own workspace: its
+ * `booking` actor with no record access, as every public page read has. Only the door calls it (`enterOwnPages`): a
+ * person's own booking pages in each of their workspaces, once `crm_booking_owner_pages` has named them theirs (spec
+ * 0051). It mints nothing else, so no other actor or access can be had from a scope this way.
+ */
+export function mintPageBeside(scope: EngineScope, workspaceId: string, pageId: string): EngineScope {
+  checkScope(scope);
+  return mintScope({
+    db: scope.db,
+    workspaceId,
+    actor: { type: 'booking', id: pageId },
+    access: bookingAccess(pageId, []),
+  });
+}
+
+/**
+ * A form's read only scope on the same database as `scope` (checked first), in the form's own workspace: its `form`
+ * actor with no record access at all, since nothing here writes a record. Only the door calls it (`enterOwnForms`):
+ * a person's own forms in each of their workspaces, once `crm_form_owner_forms` has named them theirs (spec 0052,
+ * AC-5213). It mints nothing else, so no other actor or access can be had from a scope this way.
+ */
+export function mintFormBeside(scope: EngineScope, workspaceId: string, formId: string): EngineScope {
+  checkScope(scope);
+  return mintScope({
+    db: scope.db,
+    workspaceId,
+    actor: { type: 'form', id: formId },
+    access: formAccess(formId),
+  });
 }
 
 /** A scope that wasn't minted here: a programming error, answered as INTERNAL and logged. */

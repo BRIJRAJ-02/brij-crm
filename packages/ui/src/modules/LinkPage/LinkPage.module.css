@@ -1,0 +1,588 @@
+/* A link page, /<handle> (spec 0051): one column a thumb reaches, the person first (face, name, bio, their social
+   icons), then the blocks as whole rows to press, each a raised card with a leading tile, grouped under small
+   headings, then the foot. On the booking pages' background, so the two read as one product. */
+@layer components {
+  /* The owner's look (spec 0054): six data attributes on this root, each one block below, each block setting this
+     page's own custom properties from token variables. Nothing is written at run time, no value is stored anywhere
+     and no CSS is added when somebody picks a look: the whole of a theme is which of these blocks match. Everything
+     the page draws reads these properties rather than tokens directly (AC-5428), so a block kind added later takes
+     the theme by doing the same. */
+  /* Grounds (AC-5408). Each one is a surface, the words on it, and what a card looks like there. */
+  .root[data-page-ground='paper'] {
+    --page-surface: var(--surface-subtle);
+  }
+
+  /* Ink means a dark page. `surface-inverse` is the dark one only while the page is light; a page already in dark
+     is ink, so the override is for the light mode alone and in dark the ground is simply the page's own. */
+  .root[data-page-ground='ink'][data-page-mode='light'] {
+    --page-surface: var(--surface-inverse);
+    --page-text: var(--on-inverse);
+    --page-text-quiet: var(--on-inverse);
+    --page-card: var(--inverse-hover);
+    --page-card-border: var(--inverse-hover);
+    --page-card-text: var(--on-inverse);
+    --page-card-quiet: var(--on-inverse);
+    --page-card-mark: var(--on-inverse);
+    --page-card-hover: var(--inverse-hover);
+    --page-card-shadow: none;
+  }
+
+  /* The tint ground takes the person's hue, the nine of spec 0012 and no other colour. Every one is written out,
+     including blue, so the nine are a list a test can walk rather than eight and a default. */
+  .root[data-page-ground='tint'][data-page-hue='blue'] {
+    --page-surface: var(--tag-blue-bg);
+    --page-text: var(--tag-blue-text);
+    --page-text-quiet: var(--tag-blue-text);
+  }
+  .root[data-page-ground='tint'][data-page-hue='gray'] {
+    --page-surface: var(--tag-gray-bg);
+    --page-text: var(--tag-gray-text);
+    --page-text-quiet: var(--tag-gray-text);
+  }
+  .root[data-page-ground='tint'][data-page-hue='red'] {
+    --page-surface: var(--tag-red-bg);
+    --page-text: var(--tag-red-text);
+    --page-text-quiet: var(--tag-red-text);
+  }
+  .root[data-page-ground='tint'][data-page-hue='orange'] {
+    --page-surface: var(--tag-orange-bg);
+    --page-text: var(--tag-orange-text);
+    --page-text-quiet: var(--tag-orange-text);
+  }
+  .root[data-page-ground='tint'][data-page-hue='yellow'] {
+    --page-surface: var(--tag-yellow-bg);
+    --page-text: var(--tag-yellow-text);
+    --page-text-quiet: var(--tag-yellow-text);
+  }
+  .root[data-page-ground='tint'][data-page-hue='lime'] {
+    --page-surface: var(--tag-lime-bg);
+    --page-text: var(--tag-lime-text);
+    --page-text-quiet: var(--tag-lime-text);
+  }
+  .root[data-page-ground='tint'][data-page-hue='green'] {
+    --page-surface: var(--tag-green-bg);
+    --page-text: var(--tag-green-text);
+    --page-text-quiet: var(--tag-green-text);
+  }
+  .root[data-page-ground='tint'][data-page-hue='sky'] {
+    --page-surface: var(--tag-sky-bg);
+    --page-text: var(--tag-sky-text);
+    --page-text-quiet: var(--tag-sky-text);
+  }
+  .root[data-page-ground='tint'][data-page-hue='purple'] {
+    --page-surface: var(--tag-purple-bg);
+    --page-text: var(--tag-purple-text);
+    --page-text-quiet: var(--tag-purple-text);
+  }
+
+  /* Shapes are the radius scale and nothing else (AC-5409). */
+  .root[data-page-shape='pill'] {
+    --page-radius: var(--radius-full);
+  }
+
+  .root[data-page-shape='square'] {
+    --page-radius: var(--radius-xs);
+  }
+
+  /* Fills are pairs the system already has: a row filled quietly, outlined, or solid in the one accent. A filled
+     or tinted row also moves its second line and its chevron onto the card's own colour: the quiet greys have no
+     checked pair against the accent, and `text-secondary` on `accent` measured 1.19:1 (AC-5407). */
+  .root[data-page-fill='soft'] {
+    --page-card: var(--accent-soft);
+    --page-card-border: var(--accent-soft);
+    --page-card-text: var(--link);
+    --page-card-quiet: var(--link);
+    --page-card-mark: var(--link);
+    --page-card-hover: var(--accent-soft);
+    --page-card-shadow: none;
+  }
+
+  .root[data-page-fill='outline'] {
+    --page-card: transparent;
+    --page-card-border: var(--accent-border);
+    --page-card-text: var(--link);
+    --page-card-quiet: var(--link);
+    --page-card-mark: var(--link);
+    --page-card-hover: var(--accent-soft);
+    --page-card-shadow: none;
+  }
+
+  .root[data-page-fill='solid'] {
+    --page-card: var(--accent);
+    --page-card-border: var(--accent);
+    --page-card-text: var(--on-accent);
+    --page-card-quiet: var(--on-accent);
+    --page-card-mark: var(--on-accent);
+    --page-card-hover: var(--accent-hover);
+    --page-card-shadow: var(--shadow-control);
+  }
+
+  /* The typeface puts the name and each row's title in the mono face; sentences stay in Inter (AC-5410). Only the
+     family changes: the size, weight and line height stay the design system's, so a look can never resize the page. */
+  .root[data-page-font='mono'] {
+    --page-face: var(--font-mono);
+  }
+
+  .root {
+    --page-surface: var(--surface);
+    --page-text: var(--text);
+    --page-text-quiet: var(--text-secondary);
+    --page-card: var(--surface-raised);
+    --page-card-border: var(--border);
+    --page-card-border-width: var(--border-width-hairline);
+    --page-card-shadow: var(--shadow-xs);
+    --page-card-text: var(--text);
+    --page-card-quiet: var(--text-secondary);
+    --page-card-mark: var(--text-tertiary);
+    --page-card-hover: var(--surface-hover);
+    --page-radius: var(--radius-md);
+    --page-face: var(--font-sans);
+
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    min-block-size: 100dvb;
+    padding: var(--space-32) var(--space-16);
+    background: var(--page-surface);
+    color: var(--page-text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* In the editor's phone: the height its content takes, the phone's own background. */
+  .root[data-preview] {
+    min-block-size: auto;
+    padding-block: var(--space-24);
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
+    inline-size: 100%;
+    max-inline-size: var(--size-page-card);
+  }
+
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    text-align: center;
+  }
+
+  .hero > :first-child {
+    margin-block-end: var(--space-6);
+  }
+
+  /* The address pill under the bio: the page's own address, pressed to copy. While it loads, its own place, so
+     the header never grows when the address arrives. */
+  .pill {
+    display: flex;
+    margin-block-start: var(--space-6);
+  }
+
+  .pill[data-loading] {
+    inline-size: var(--size-column-narrow);
+    block-size: var(--size-control);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+
+  /* Save contact, the page's one action, with Share beside it: a thumb's row. */
+  .actions {
+    display: flex;
+    gap: var(--space-8);
+  }
+
+  .actions:empty {
+    display: none;
+  }
+
+  /* The address pill under the name, clear of the bio above it. */
+  .address {
+    display: inline-flex;
+    margin-block-start: var(--space-4);
+  }
+
+  /* Save contact takes the rest of the row, so Share stays a square beside it. */
+  .actions > :first-child {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .name {
+    margin: 0;
+    inline-size: 100%;
+    color: var(--page-text);
+    font: var(--text-heading);
+    font-family: var(--page-face);
+    letter-spacing: var(--tracking-heading);
+    overflow-wrap: anywhere;
+  }
+
+  .bio {
+    margin: 0;
+    inline-size: 100%;
+    max-inline-size: var(--size-dialog);
+    color: var(--page-text-quiet);
+    overflow-wrap: anywhere;
+  }
+
+  .summary {
+    margin: 0;
+    padding-inline: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* The blocks alone, an editor's "How it looks": the caption close over them. */
+  .draft {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .caption {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .blocks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
+    animation: rise var(--duration-popover) var(--ease-out) both;
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .heading {
+    margin: 0;
+    padding-inline: var(--space-4);
+    color: var(--page-text-quiet);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-kbd);
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  /* A folded section (spec 0054, AC-5416): the heading becomes the row, so it carries no heading styling of its
+     own; the button inside it is the page's own `.block`, which is what makes a folder look like every other row. */
+  .folderTitle {
+    display: flex;
+    margin: 0;
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  .block[data-folder-row] {
+    inline-size: 100%;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: start;
+  }
+
+  /* How many blocks the fold opens onto, beside the chevron. Shown as a number and read as a sentence. */
+  .count {
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The quiet mark every staying row ends in, turned a quarter when the section is open. */
+  .chevron {
+    display: inline-flex;
+    transition: rotate var(--duration-move) var(--ease-out);
+  }
+
+  .chevron[data-open] {
+    rotate: 90deg;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chevron {
+      transition: none;
+    }
+  }
+
+  /* What the fold opens onto, inset under its row so the blocks read as belonging to it. */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding-inline-start: var(--space-12);
+  }
+
+  /* Writing: the person's own words, not a row. No frame and nothing to press, so it reads as the page talking
+     rather than as one more thing to tap, and its line breaks are kept as typed. */
+  .writing {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding-inline: var(--space-4);
+  }
+
+  .writingTitle {
+    margin: 0;
+    color: var(--page-text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    overflow-wrap: anywhere;
+  }
+
+  .writingBody {
+    margin: 0;
+    color: var(--page-text-quiet);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* Something a customer said (spec 0052, AC-5220): a quiet quote in the reading measure, who said it under it in
+     the muted colour. No border, no quotation mark graphic and nothing to press — it is the page talking, not one
+     more thing to tap, so it sits in the prose inset the writing block uses rather than in a card. */
+  .said {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding-inline: var(--space-4);
+  }
+
+  .quote {
+    margin: 0;
+    color: var(--page-text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .author {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    color: var(--page-text-quiet);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    overflow-wrap: anywhere;
+  }
+
+  /* The role sits after the name, parted by a middot drawn here rather than typed into the markup. */
+  .role {
+    display: inline-flex;
+    gap: var(--space-6);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .role::before {
+    content: '·';
+  }
+
+  /* The questions, answered: a raised card like the rows beside it, since on this page anything that isn't the
+     person's own prose is a card. The folds inside it are the library's Disclosure, unchanged. */
+  .questions {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-12);
+    border: var(--page-card-border-width) solid var(--page-card-border);
+    border-radius: var(--page-radius);
+    background: var(--page-card);
+    box-shadow: var(--page-card-shadow);
+  }
+
+  .answer {
+    margin: 0;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: flex;
+  }
+
+  .block {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-12);
+    min-inline-size: 0;
+    padding: var(--space-12);
+    border: var(--page-card-border-width) solid var(--page-card-border);
+    border-radius: var(--page-radius);
+    background: var(--page-card);
+    box-shadow: var(--page-card-shadow);
+    color: var(--page-card-text);
+    text-decoration: none;
+    outline: none;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .block:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .block:not([data-loading], [data-inert]):hover {
+      border-color: var(--page-card-border);
+      background: var(--page-card-hover);
+    }
+
+    .block:not([data-loading]):hover .end {
+      color: var(--page-card-quiet);
+    }
+  }
+
+  /* The leading tile: a network's mark, a picked icon, a letter on its hue, or a booking page's calendar. */
+  .tile {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    inline-size: calc(var(--size-nav-item) + var(--space-4));
+    block-size: calc(var(--size-nav-item) + var(--space-4));
+    border-radius: var(--radius-sm);
+    background: var(--surface-sunken);
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .tile[data-tile='mark'] {
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
+  }
+
+  /* A booking page's calendar and a contact card's id card in the link colour: the accent itself is under 3:1 on
+     its soft tile in dark. */
+  .tile:is([data-tile='page'], [data-tile='card']) {
+    background: var(--accent-soft);
+    color: var(--link);
+  }
+
+  .tile[data-tile='loading'] {
+    align-items: stretch;
+    justify-content: stretch;
+    background: none;
+  }
+
+  .tile[data-hue='gray'] {
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+  }
+  .tile[data-hue='red'] {
+    background: var(--tag-red-bg);
+    color: var(--tag-red-text);
+  }
+  .tile[data-hue='orange'] {
+    background: var(--tag-orange-bg);
+    color: var(--tag-orange-text);
+  }
+  .tile[data-hue='yellow'] {
+    background: var(--tag-yellow-bg);
+    color: var(--tag-yellow-text);
+  }
+  .tile[data-hue='lime'] {
+    background: var(--tag-lime-bg);
+    color: var(--tag-lime-text);
+  }
+  .tile[data-hue='green'] {
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
+  }
+  .tile[data-hue='sky'] {
+    background: var(--tag-sky-bg);
+    color: var(--tag-sky-text);
+  }
+  .tile[data-hue='blue'] {
+    background: var(--tag-blue-bg);
+    color: var(--tag-blue-text);
+  }
+  .tile[data-hue='purple'] {
+    background: var(--tag-purple-bg);
+    color: var(--tag-purple-text);
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .title {
+    color: var(--page-card-text);
+    font: var(--text-title);
+    font-family: var(--page-face);
+    letter-spacing: var(--tracking-title);
+    overflow-wrap: anywhere;
+  }
+
+  .note {
+    color: var(--page-card-quiet);
+    overflow-wrap: anywhere;
+  }
+
+  .end {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--page-card-mark);
+    transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  /* The blocks arrive with a short rise. Movement only where motion is welcome; the fade always. */
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-2);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    @keyframes rise {
+      from {
+        opacity: 0;
+        translate: none;
+      }
+    }
+  }
+
+  @media (forced-colors: active) {
+    .block {
+      border-color: CanvasText;
+    }
+
+    .block:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

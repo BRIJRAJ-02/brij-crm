@@ -56,6 +56,11 @@ export interface PreviewLayoutProps {
    * default) takes the column's width.
    */
   readonly bodyWidth?: 'full' | 'form';
+  /**
+   * How much of the width the phone's column takes: `third` (the default) or `wide`, two fifths, for an editor that
+   * sits beside a sidebar (Settings › Account › Link page), whose layout would otherwise hide the phone on a laptop.
+   */
+  readonly previewShare?: 'third' | 'wide';
 }
 
 /** Where an editor's subject stands, as the TopBar's status says it. */
@@ -468,6 +473,7 @@ export function PreviewLayout({
   footer,
   bodyLayout = 'stack',
   bodyWidth = 'full',
+  previewShare = 'third',
 }: PreviewLayoutProps) {
   // The sheet's phone is drawn only while it is open, so a narrow page loads no second frame until asked.
   const [isOpen, setOpen] = useState(false);
@@ -477,7 +483,7 @@ export function PreviewLayout({
     <div className={styles.root}>
       <div className={styles.inner}>
         {notices}
-        <div className={styles.measure}>
+        <div className={styles.measure} data-share={previewShare === 'wide' ? 'wide' : undefined}>
           {hasPreview && (
             <div className={styles.bar}>
               <Button icon="smartphone" onPress={() => setOpen(true)}>

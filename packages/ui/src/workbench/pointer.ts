@@ -44,6 +44,20 @@ export async function hoverFresh(userEvent: Pointer, element: Element): Promise<
 }
 
 /**
+ * Moves the pointer off `element` and waits until it says so, for a story that pressed something and is then
+ * screenshotted. A click leaves the pointer resting on the control, so the shot catches its hovered look only
+ * when the timing says so: two baselines drifted in opposite directions in one CI run because of exactly that
+ * (25 October 2026, CommentThread's "Show earlier replies" and SetupChecklist's Dismiss). A story that presses a
+ * control and is kept as a screenshot calls this after the press, so what it shows is the control at rest.
+ */
+export async function restPointer(userEvent: Pointer, element: Element): Promise<void> {
+  await userEvent.unhover(element);
+  await waitFor(async () => {
+    await expect(element).not.toHaveAttribute('data-hovered');
+  });
+}
+
+/**
  * The open tooltip once it has finished fading in, so the accessibility check
  * that runs after a story never measures it half transparent.
  */

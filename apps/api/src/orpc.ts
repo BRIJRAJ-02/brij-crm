@@ -29,6 +29,7 @@ import type { CalendarServices } from './calendar/services.ts';
 import type { Mailer } from './mail/mailer.ts';
 import { apiError, inputProblems } from './errors.ts';
 import { log } from './log.ts';
+import type { OutsideFetch } from './public/outside.ts';
 import type { ReadGate } from './gate.ts';
 import type { Analytics } from './monitoring/posthog.ts';
 import { setRequestScope } from './monitoring/sentry.ts';
@@ -102,6 +103,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   bookingLinkKey: ManageLinkKey;
   /** The one way to send email (spec 0005): invitations (spec 0031) go through it. */
   mailer: Mailer;
+  /**
+   * The one read of an address somebody typed (spec 0055, AC-5531), bounded in `public/outside.ts`. Bringing a
+   * link in bio page across is its one caller here; anything else that needs an outside page takes it from here
+   * too, rather than calling the network itself.
+   */
+  outsideFetch: OutsideFetch;
   /** The app's own address (`APP_URL`): an invitation's link is `<appUrl>/invite/<token>`. */
   appUrl: string;
   /**

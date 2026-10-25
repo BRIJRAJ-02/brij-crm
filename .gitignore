@@ -24,3 +24,6 @@ playwright-report/
 
 # Swift build caches some tools leave behind.
 .build/
+
+# The booking shell the build writes beside the handle Function (spec 0055), never committed.
+apps/web/api/shell.generated.mjs
