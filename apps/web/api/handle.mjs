@@ -40,6 +40,17 @@ const readProfile = (origin) => async (handle, signal) => {
   return await answer.json();
 };
 
+/** Reads one of a person's booking pages, by the handle and the slug apart: neither is joined into a path here. */
+const readPage = (origin) => async (handle, slug, signal) => {
+  const answer = await fetch(`${origin}/api/public/handles/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`, {
+    signal,
+    headers: { accept: 'application/json' },
+  });
+  if (answer.status === 404) return undefined;
+  if (!answer.ok) throw new Error(`page read answered ${String(answer.status)}`);
+  return await answer.json();
+};
+
 export async function GET(request) {
   const url = new URL(request.url);
   // The canonical address is the public origin's, never the host this request happened to arrive on (AC-5502);
@@ -51,6 +62,7 @@ export async function GET(request) {
     // No card origin yet: the share card route (spec 0055, AC-5510) needs a server side drawing library, which is
     // the owner's call. Until it answers, the block names no picture rather than one that 404s.
     readProfile: readProfile(url.origin),
+    readPage: readPage(url.origin),
     onMiss: (handle, reason) => {
       // One line, the handle and why: a miss is invisible otherwise, since the visitor sees a working page.
       console.warn(JSON.stringify({ event: 'handle.shell.missed', handle, reason }));

@@ -37,6 +37,11 @@ export type MetaKind = 'profile' | 'website';
 export interface MetaSource {
   /** What the tab and the share preview are titled, before " · Timefix" is added. */
   readonly name: string;
+  /**
+   * The whole title, used as it stands, for a page that already names what it belongs to: a booking page reads
+   * "Intro call · Anish Rao", where adding the product would say nothing and push the host out of a preview.
+   */
+  readonly title?: string;
   /** The person's bio, or a booking page's note. Empty falls back to `DEFAULT_DESCRIPTION`. */
   readonly description?: string;
   /** The canonical address on the public origin, already built from `BOOKING_PUBLIC_ORIGIN` and the path. */
@@ -91,7 +96,7 @@ function tag(kind: 'name' | 'property', key: string, value: string | undefined):
  * (width, height and alt) are written only beside a card, so a shell with no card carries no claim about one.
  */
 export function metaTags(source: MetaSource): string {
-  const title = titleOf(source.name);
+  const title = source.title ?? titleOf(source.name);
   const description = describe(source.description);
   const card = source.card;
   return [

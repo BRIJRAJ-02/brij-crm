@@ -57,8 +57,15 @@ export function partsOf(pathname: string): { readonly handle: string; readonly s
   return slug === undefined || slug === '' ? { handle } : { handle, slug };
 }
 
+/** What a booking page read gives the shell: its own title and note, and the host it belongs to. */
+export interface ShellPage {
+  readonly title?: unknown;
+  readonly description?: unknown;
+  readonly hostName?: unknown;
+}
+
 /** What the shell was built from, which the answer's own header reports so a miss is visible in production. */
-export type ShellOutcome = 'profile' | 'unknown' | 'missed';
+export type ShellOutcome = 'profile' | 'page' | 'unknown' | 'missed';
 
 /** One answer: the page's bytes, its status and the outcome that produced it. */
 export interface ShellAnswer {
@@ -75,6 +82,11 @@ export interface ShellDeps {
   readonly origin: string;
   /** Reads a handle's public profile, or throws. Given the handle alone, so it can never be sent a path. */
   readonly readProfile: (handle: string, signal: AbortSignal) => Promise<ShellProfile | undefined>;
+  /**
+   * Reads one of their booking pages (spec 0055, slice 2), or throws. Given the handle and the slug apart, for
+   * the same reason: neither is ever joined into a path here.
+   */
+  readonly readPage?: (handle: string, slug: string, signal: AbortSignal) => Promise<ShellPage | undefined>;
   /**
    * The origin that serves the share card, which is the public one. Left out while no card route answers, and then
    * the block claims no picture at all rather than naming one that 404s: a crawler that fetches a missing card
@@ -93,11 +105,9 @@ export interface ShellDeps {
  */
 export async function shellFor(pathname: string, deps: ShellDeps): Promise<ShellAnswer> {
   const parts = partsOf(pathname);
-  // Until spec 0055's slice 2, a booking page's own address keeps the shell it has: a block written from the
-  // person rather than from the page would name the wrong thing.
-  if (parts === undefined || parts.slug !== undefined) {
-    return { body: deps.shell, status: 200, outcome: 'missed' };
-  }
+  if (parts === undefined) return { body: deps.shell, status: 200, outcome: 'missed' };
+  const slug = parts.slug;
+  if (slug !== undefined) return await pageShell(parts.handle, slug, deps);
   const canonical = `${deps.origin}/${encodeURIComponent(parts.handle)}`;
   const timeout = AbortSignal.timeout(READ_TIMEOUT_MS);
   let profile: ShellProfile | undefined;
@@ -132,4 +142,52 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
     ...(look === undefined ? {} : { look }),
   };
   return { body: withMeta(deps.shell, source), status: 200, outcome: 'profile' };
+}
+
+/**
+ * One of a person's booking pages, `/<handle>/<slug>` (AC-5502, AC-5507). The same block as a profile's, written
+ * from the page rather than from the person: its own title and note, and `website` rather than `profile`, since
+ * the thing being shared is a time to book and not somebody's page of links.
+ *
+ * The title names the host beside the page ("Intro call · Anish Rao") rather than the product, because a preview
+ * that says "Intro call · Timefix" tells the person receiving it nothing about who they would be meeting. With no
+ * host name to use it falls back to the product, as everything else here does.
+ *
+ * It is never indexed on its own: a booking page is reached through the person's page, and a search result for
+ * one time slot of one host is not what anybody is looking for. The profile's own switch governs the profile.
+ */
+async function pageShell(handle: string, slug: string, deps: ShellDeps): Promise<ShellAnswer> {
+  const readPage = deps.readPage;
+  if (readPage === undefined) return { body: deps.shell, status: 200, outcome: 'missed' };
+  const canonical = `${deps.origin}/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`;
+  const timeout = AbortSignal.timeout(READ_TIMEOUT_MS);
+  let page: ShellPage | undefined;
+  try {
+    page = await readPage(handle, slug, timeout);
+  } catch (error) {
+    deps.onMiss?.(handle, error instanceof Error ? error.name : 'unknown');
+    return { body: deps.shell, status: 200, outcome: 'missed' };
+  }
+  if (page === undefined) {
+    const source: MetaSource = {
+      name: '',
+      description: BRAND_DESCRIPTION,
+      canonical,
+      kind: 'website',
+      indexable: false,
+    };
+    return { body: withMeta(deps.shell, source), status: 404, outcome: 'unknown' };
+  }
+  const title = text(page.title);
+  const host = text(page.hostName);
+  const source: MetaSource = {
+    name: title ?? '',
+    // Named whole where there is a host to name: `titleOf` would otherwise add the product to it as well.
+    ...(title === undefined || host === undefined ? {} : { title: `${title} · ${host}` }),
+    canonical,
+    kind: 'website',
+    indexable: false,
+    ...(text(page.description) === undefined ? {} : { description: text(page.description) }),
+  };
+  return { body: withMeta(deps.shell, source), status: 200, outcome: 'page' };
 }

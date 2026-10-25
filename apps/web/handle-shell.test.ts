@@ -68,6 +68,59 @@ describe('cardUrl', () => {
   });
 });
 
+const page = { title: 'Intro call', description: 'Fifteen minutes, by video.', hostName: 'Anish Rao' };
+
+describe('shellFor, a booking page’s own address', () => {
+  const pageDeps = (over: Partial<ShellDeps> = {}) => deps({ readPage: () => Promise.resolve(page), ...over });
+
+  it('names the page and the host it belongs to, not the product', async () => {
+    const answer = await shellFor('/anish/intro', pageDeps());
+    expect(answer.status).toBe(200);
+    expect(answer.outcome).toBe('page');
+    expect(answer.body).toContain('<title>Intro call · Anish Rao</title>');
+    expect(answer.body).toContain('<meta name="description" content="Fifteen minutes, by video." />');
+    expect(answer.body).toContain('<meta property="og:type" content="website" />');
+    expect(answer.body).toContain('<link rel="canonical" href="https://timefix.com/anish/intro" />');
+  });
+
+  it('falls back to the product when the page names no host', async () => {
+    const answer = await shellFor(
+      '/anish/intro',
+      pageDeps({ readPage: () => Promise.resolve({ title: 'Intro call' }) }),
+    );
+    expect(answer.body).toContain('<title>Intro call · Timefix</title>');
+  });
+
+  it('is never indexed on its own: a person’s page is the way in', async () => {
+    const answer = await shellFor('/anish/intro', pageDeps());
+    expect(answer.body).toContain('<meta name="robots" content="noindex, follow" />');
+  });
+
+  it('reads the handle and the slug apart, never a path', async () => {
+    const readPage = vi.fn(() => Promise.resolve(page));
+    await shellFor('/anish/intro', pageDeps({ readPage }));
+    expect(readPage).toHaveBeenCalledWith('anish', 'intro', expect.any(AbortSignal));
+  });
+
+  it('answers a 404 and the brand’s words for a page nobody holds', async () => {
+    const answer = await shellFor('/anish/gone', pageDeps({ readPage: () => Promise.resolve(undefined) }));
+    expect(answer.status).toBe(404);
+    expect(answer.body).toContain('<title>Timefix</title>');
+  });
+
+  it('hands back the built shell when the read fails', async () => {
+    const answer = await shellFor('/anish/intro', pageDeps({ readPage: () => Promise.reject(new Error('down')) }));
+    expect(answer.body).toBe(shell);
+    expect(answer.status).toBe(200);
+  });
+
+  it('changes nothing below the head, as the profile’s does not', async () => {
+    const answer = await shellFor('/anish/intro', pageDeps());
+    const bodyOf = (html: string) => html.slice(html.indexOf('</head>'));
+    expect(bodyOf(answer.body)).toBe(bodyOf(shell));
+  });
+});
+
 describe('shellFor', () => {
   it('answers the person’s page, with their look and their card', async () => {
     const answer = await shellFor('/anish', deps());
@@ -150,7 +203,7 @@ describe('shellFor', () => {
     expect(answer.status).toBe(200);
   }, 3_000);
 
-  it('leaves a booking page’s own address alone until its own slice', async () => {
+  it('leaves a booking page’s address alone where no page read is given', async () => {
     const readProfile = vi.fn(() => Promise.resolve(profile));
     const answer = await shellFor('/anish/intro', deps({ readProfile }));
     expect(answer.body).toBe(shell);

@@ -42,11 +42,11 @@ describe('vercel.json (handle addresses)', () => {
   });
 
   it.each([
-    // A person's own page is served by the shell function (spec 0055), which answers the built shell and a meta
-    // block; a booking page's address still gets the shell as a file, until that spec's slice 2.
+    // Both handle addresses are served by the shell function (spec 0055), which answers the built shell and a
+    // meta block written from the person, or from the booking page the slug names.
     ['/ada', '/api/handle'],
-    ['/ada-lovelace/30min', '/book.html'],
-    ['/ada/30min-2', '/book.html'],
+    ['/ada-lovelace/30min', '/api/handle'],
+    ['/ada/30min-2', '/api/handle'],
     ['/b/AbCdEfGhIjKlMnOp', '/book.html'],
     ['/f/contact', '/form.html'],
     ['/', '/index.html'],
