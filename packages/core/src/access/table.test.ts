@@ -225,6 +225,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // A person's own account picture from our origin (23 Oct 2026): which of Google's pictures to serve, and its
   // version, from the session's user; pure, no scope.
   'servedPicture',
+  // Reading somebody else's link in bio page (spec 0055, AC-5524, AC-5525): the hosts we will read and the
+  // parser that turns one of their pages into rows. HTML in, rows out — no scope, no database, no network.
+  'isImportableHost',
+  'readImportedPage',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;

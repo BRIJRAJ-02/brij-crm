@@ -305,9 +305,10 @@ describe("migration 0018's closing check", () => {
     // And migration 0083's address claim, with its own closing check.
     'revoke all on auth.workspace_addresses from crm_address',
     'revoke all (workspace_id, slug) on auth.workspace_directory from crm_address',
-    // And migration 0086's handles, with their own closing check.
+    // And migration 0086's handles, with their own closing check, plus the columns 0105 and 0108 added to them
+    // (the page's look, and whether search engines may show it): a table level revoke leaves a column grant.
     'revoke all on auth.public_handles, auth.public_profiles from crm_handle',
-    'revoke all (handle, bio, updated_at) on auth.public_profiles from crm_handle',
+    'revoke all (handle, bio, updated_at, theme, indexable) on auth.public_profiles from crm_handle',
     'revoke all (id, name, image) on auth."user" from crm_handle',
     // And migration 0094's picture choice, with its own closing check.
     'revoke all (user_id, picture_hidden, updated_at) on auth.user_prefs from crm_handle',
@@ -316,6 +317,8 @@ describe("migration 0018's closing check", () => {
     // And migrations 0098 and 0100's link page (its blocks, views and presses), with their own closing checks.
     'revoke all on auth.profile_items, auth.profile_views, auth.profile_item_presses from crm_handle',
     'revoke all on auth.profile_view_days, auth.profile_item_press_days from crm_handle',
+    // And migration 0109's link imports, with its own closing check.
+    'revoke all on auth.link_imports from crm_handle',
   ];
 
   /** Runs `sql` (the check) after `setup`, in a transaction that is rolled back, so nothing outlives the test. */
