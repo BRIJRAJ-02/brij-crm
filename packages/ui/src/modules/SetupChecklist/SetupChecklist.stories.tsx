@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { restPointer } from '../../workbench/pointer.ts';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SetupChecklist, type SetupChecklistStep } from './SetupChecklist.tsx';
@@ -108,8 +109,11 @@ export const AllSet: Story = {
   args: { steps: STEPS.map((step) => ({ ...step, isDone: true })) },
   play: async ({ canvas, args }) => {
     await expect(canvas.getByText('You’re all set. Every setup step is done.')).toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: 'Dismiss' }));
+    const dismiss = canvas.getByRole('button', { name: 'Dismiss' });
+    await userEvent.click(dismiss);
     await expect(args.onHide).toHaveBeenCalled();
+    // The pointer is left resting on what it pressed, and this story is a screenshot: at rest, not hovered.
+    await restPointer(userEvent, dismiss);
   },
 };
 

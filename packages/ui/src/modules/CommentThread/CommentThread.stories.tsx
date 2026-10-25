@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { restPointer } from '../../workbench/pointer.ts';
 import { expect, fn, waitFor, within } from 'storybook/test';
 import { SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -174,8 +175,11 @@ export const DeletedAndSending: Story = {
 export const EarlierReplies: Story = {
   args: { thread: sampleThread({ earlierCount: 12 }), onShowEarlier: fn() },
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Show 12 earlier replies' }));
+    const earlier = canvas.getByRole('button', { name: 'Show 12 earlier replies' });
+    await userEvent.click(earlier);
     await expect(args.onShowEarlier).toHaveBeenCalled();
+    // The pointer is left resting on what it pressed, and this story is a screenshot: at rest, not hovered.
+    await restPointer(userEvent, earlier);
   },
 };
 
