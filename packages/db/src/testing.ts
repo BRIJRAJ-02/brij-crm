@@ -22,6 +22,8 @@ const SETUP_LOCK = 4_004_004;
 
 /** Where a test database lives, and how to reach it as the app, as the identity store and as the owner. */
 export interface TestDatabase {
+  /** The database's own name, so the suite that made it can drop it again (`dropTestDatabase`). */
+  readonly name: string;
   /** The app login role (a member of `crm_app`, bound by row level security). */
   readonly appUrl: string;
   /** The identity login role (a member of `crm_identity`): the only one that reads and writes schema `auth`. */
@@ -104,12 +106,41 @@ export async function prepareTestDatabase(
   }
 
   return {
+    name,
     appUrl: withCredentials(adminUrl, APP.role, APP.password, name),
     identityUrl: withCredentials(adminUrl, IDENTITY.role, IDENTITY.password, name),
     workerUrl: withCredentials(adminUrl, WORKER.role, WORKER.password, name),
     ownerUrl,
     adminUrl: onDatabase(adminUrl, name),
   };
+}
+
+/**
+ * Drops a database `prepareTestDatabase` made, which every suite does on its way out. Without it each run left
+ * its database behind: one per package, per worktree, per run, and a laptop had collected 268 of them and 11 GB
+ * before anybody looked (25 October 2026). A fresh run reuses its own name, so the old ones were invisible.
+ *
+ * `CRM_KEEP_TEST_DATABASE=1` keeps it, for the times a failing test is worth opening afterwards.
+ *
+ * It never throws: a database that will not drop is worth a line on stderr, never a suite reported as failed
+ * after every one of its tests passed.
+ */
+export async function dropTestDatabase(
+  database: Pick<TestDatabase, 'name'>,
+  adminUrl = process.env.TEST_DATABASE_ADMIN_URL ?? DEFAULT_ADMIN_URL,
+): Promise<void> {
+  if (process.env.CRM_KEEP_TEST_DATABASE === '1') return;
+  if (!/^crm_test_[a-z0-9_]+$/.test(database.name)) return;
+  const admin = new pg.Client({ connectionString: adminUrl, application_name: 'crm-test-teardown' });
+  try {
+    await admin.connect();
+    // `with (force)` ends whatever is still connected: a pool a test forgot to close holds the database open.
+    await admin.query(`drop database if exists ${admin.escapeIdentifier(database.name)} with (force)`);
+  } catch (error) {
+    process.stderr.write(`Could not drop the test database ${database.name}: ${String(error)}\n`);
+  } finally {
+    await admin.end().catch(() => undefined);
+  }
 }
 
 /**
