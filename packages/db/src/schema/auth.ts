@@ -482,6 +482,39 @@ export const profileItemPresses = auth.table(
 );
 
 /**
+ * One link in bio page brought across (spec 0055, AC-5524 to AC-5528). The blocks it made are ordinary hidden
+ * blocks in `profile_items`; this row is what makes an import idempotent on its own id, countable (five an hour),
+ * and reviewable: `itemIds` holds the rows it made in the order the page had them, and `skipped` the rows it
+ * could not map, each with whatever it had and why, so nothing is dropped without being shown.
+ *
+ * Reached only through `crm_import_profile_links` and `crm_link_imports_of` (migration 0109), both owned by
+ * `crm_handle`: the app role has no privilege on this table at all.
+ */
+export const linkImports = auth.table(
+  'link_imports',
+  {
+    id: uuid('id').notNull().primaryKey(),
+    userId: uuid('user_id').notNull(),
+    /** The address the rows came from, as the person gave it. Never fetched again from here. */
+    source: text('source').notNull(),
+    itemIds: uuid('item_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    skipped: jsonb('skipped')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({ name: 'link_imports_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    index('link_imports_recent').on(t.userId, t.createdAt.desc()),
+    check('link_imports_source', sql`char_length(${t.source}) <= 400`),
+    check('link_imports_items', sql`array_length(${t.itemIds}, 1) is null or array_length(${t.itemIds}, 1) <= 40`),
+  ],
+);
+
+/**
  * A link page's views by day (spec 0051, AC-5127): one row per owner and UTC day, kept beside `profile_views` by the
  * same statement (a visitor's first view of the day adds one visitor), so the editor's figures read at most 60 rows
  * however many people looked.
