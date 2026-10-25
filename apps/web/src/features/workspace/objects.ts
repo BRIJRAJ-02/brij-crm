@@ -28,6 +28,9 @@ export const tasksHref = (slug: string) => `/w/${slug}/tasks`;
 /** The member's inbox: mentions, assignments and replies (spec 0038). */
 export const inboxHref = (slug: string) => `/w/${slug}/inbox`;
 
+/** The member's own link page and its editor (spec 0051), a page of its own since 25 October 2026. */
+export const linkPageHref = (slug: string) => `/w/${slug}/link-page`;
+
 /** Home's address: where a workspace opens (owner, 21 October 2026). */
 export const homeHref = (slug: string) => `/w/${slug}/home`;
 

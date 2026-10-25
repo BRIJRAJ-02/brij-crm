@@ -33,6 +33,8 @@ export const strings = {
   bookings: 'Bookings',
   /** The sidebar's way to the booking pages and forms, after Bookings (spec 0022; one row, the owner, 22 October 2026). */
   captures: 'Captures',
+  /** The member's own public page (spec 0051), out of Settings and into the sidebar (owner, 25 October 2026). */
+  linkPage: 'Link page',
   /** The sidebar's first row and the workspace's landing page (owner, 21 October 2026). */
   home: 'Home',
   /** The tasks page's row (spec 0019), after the sections, as timefix has it; Tasks, as the page is named (owner, 21 October 2026). */

@@ -5,11 +5,11 @@
 import type { NavEntry, NavPage, NavPrefs, NavSectionKey, NavState, NavUniverse, ObjectSummary } from '@crm/data';
 import { navKey, sectionItems, sectionOrder } from '@crm/data/navigation';
 import type { IconName } from '@crm/ui';
-import { bookingsHref, capturesHref, inboxHref, navObjects, tasksHref } from './objects.ts';
+import { bookingsHref, capturesHref, inboxHref, linkPageHref, navObjects, tasksHref } from './objects.ts';
 import { strings } from './strings.ts';
 
 /** A page the sidebar marks current that isn't an object's: Tasks, Bookings and Captures (the trash is in Settings). */
-export type SidebarPage = 'home' | 'inbox' | 'tasks' | 'bookings' | 'captures';
+export type SidebarPage = 'home' | 'linkPage' | 'inbox' | 'tasks' | 'bookings' | 'captures';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {
@@ -24,6 +24,9 @@ export interface SidebarPageLink {
  * notifications (#28) exist; until then the server never offers it.
  */
 export const PAGE_LINKS: { readonly [Page in NavPage]?: SidebarPageLink } = {
+  // The link page (spec 0051) led the sidebar's own pages from 25 October 2026: it is what a member opens most,
+  // and Settings › Account › Profile was three levels of configuration away from it.
+  linkPage: { label: strings.linkPage, icon: 'id-card', href: linkPageHref },
   // The inbox (spec 0038) had a page and an unread count but no row, so a mention reached nobody (QA, 22 October 2026).
   inbox: { label: strings.inbox, icon: 'inbox', href: inboxHref },
   tasks: { label: strings.tasks, icon: 'square-check', href: tasksHref },

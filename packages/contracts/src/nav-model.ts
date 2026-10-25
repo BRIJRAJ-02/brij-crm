@@ -18,8 +18,12 @@ export const NAV_SECTIONS = ['favourites', 'records', 'lists', 'scheduling'] as 
 /** One of the sidebar's sections. */
 export type NavSectionKey = (typeof NAV_SECTIONS)[number];
 
-/** Inbox and Tasks, above the sections. */
-export const NAV_TOP_PAGES = ['inbox', 'tasks'] as const;
+/**
+ * Link page, Inbox and Tasks, above the sections. The link page is the member's own public page (spec 0051): it
+ * was reached through Settings › Account › Profile until 25 October 2026, which buried the product's most used
+ * surface three levels inside configuration (the owner).
+ */
+export const NAV_TOP_PAGES = ['linkPage', 'inbox', 'tasks'] as const;
 /**
  * The Scheduling section's pages, in their default order: Bookings (its Availability a tab of it) and Captures (its
  * Booking pages and Forms tabs), two rows as round 6 had them (the owner, 22 October 2026). A stored choice for a

@@ -1,6 +1,13 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
-import { createFileRoute, useLocation, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import {
+  createFileRoute,
+  redirect,
+  useLocation,
+  useNavigate,
+  useRouter,
+  type ErrorComponentProps,
+} from '@tanstack/react-router';
 import { LinkPageLoader } from '../features/link-page/LinkPageLoader.tsx';
 import { LinkPagePending } from '../features/link-page/LinkPagePending.tsx';
 import { ProfilePending, ProfileScreen } from '../features/settings/ProfileScreen.tsx';
@@ -10,6 +17,8 @@ import { isGooglePhotoResult, strings, type GooglePhotoResult } from '../feature
 /** The page's address: how a Google photo sync just went, if one did (`?google-photo=`, from the API's callback). */
 interface ProfileSearch {
   readonly 'google-photo'?: GooglePhotoResult;
+  /** The old way into the link page's editor, kept only so `beforeLoad` can send it to the page of its own. */
+  readonly view?: string;
 }
 
 // Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and time zone in this workspace,
@@ -17,9 +26,18 @@ interface ProfileSearch {
 export const Route = createFileRoute('/w/$slug/settings/account/profile')({
   // A result this build doesn't know (one the API added since) says the sync didn't work, rather than nothing.
   validateSearch: (search: Record<string, unknown>): ProfileSearch => {
+    const view = search['view'];
+    const moved = view === 'link-page' ? { view } : {};
     const result = search['google-photo'];
-    if (typeof result !== 'string') return {};
-    return { 'google-photo': isGooglePhotoResult(result) ? result : 'failed' };
+    if (typeof result !== 'string') return moved;
+    return { ...moved, 'google-photo': isGooglePhotoResult(result) ? result : 'failed' };
+  },
+  // `?view=link-page` was how the link page's editor opened until 25 October 2026, when it became a page of the
+  // workspace's own. Anything holding that address (a bookmark, an email, a link somebody sent) lands there.
+  beforeLoad: ({ params, search }) => {
+    if (search.view === 'link-page') {
+      throw redirect({ to: '/w/$slug/link-page', params: { slug: params.slug } });
+    }
   },
   loader: async ({ context, params }) => {
     try {

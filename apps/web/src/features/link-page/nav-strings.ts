@@ -4,5 +4,9 @@ export const navStrings = {
   title: 'Link page',
 } as const;
 
-/** The link page's editor (spec 0051), a view of Settings › Account › Profile: the person's page at /<handle>. */
-export const linkPageHref = (slug: string) => `/w/${slug}/settings/account/profile?view=link-page`;
+/**
+ * The link page's editor (spec 0051): the person's page at /<handle>. One definition, in the sidebar's own module,
+ * so the row in the sidebar, the card on Home, the booking page editor and Settings › Profile all point at the one
+ * address. It was a view of Settings › Account › Profile until 25 October 2026.
+ */
+export { linkPageHref } from '../workspace/objects.ts';

@@ -35,6 +35,7 @@ import {
   Radio,
   RadioGroup,
   SocialLinks,
+  TopBar,
   VisuallyHidden,
   type LinkPageBlock,
   type LinkRow,
@@ -46,7 +47,7 @@ import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../bookin
 import { profileHref } from '../settings/nav.ts';
 import { AppearanceCard } from './AppearanceCard.tsx';
 import { SharingCard } from './SharingCard.tsx';
-import { SettingsPage } from '../settings/SettingsPage.tsx';
+import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import {
   ADDABLE,
   blockKindOf,
@@ -107,29 +108,35 @@ function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined
 export function LinkPageScreen({ linkPage, slug, profile }: LinkPageScreenProps) {
   const handle = profile.handle;
   return (
-    <SettingsPage
-      title={strings.title}
-      crumbs={[{ id: 'profile', label: strings.profile, href: profileHref(slug) }]}
-      fillsView
-      {...(handle === undefined ? {} : { actions: <HeaderActions handle={handle} /> })}
-    >
-      {handle === undefined ? (
-        <PreviewLayout>
-          <Card>
-            <EmptyState
-              layout="row"
-              icon="at-sign"
-              title={strings.noHandle}
-              actions={<ButtonLink href={profileHref(slug)}>{strings.openProfile}</ButtonLink>}
-            >
-              {strings.noHandleText}
-            </EmptyState>
-          </Card>
-        </PreviewLayout>
-      ) : (
-        <Blocks linkPage={linkPage} slug={slug} profile={profile} handle={handle} />
-      )}
-    </SettingsPage>
+    // A page of the workspace since 25 October 2026, not a view inside Settings › Account › Profile: its own row
+    // in the sidebar, its own bar, and no trail of configuration above it (the owner).
+    <WorkspacePage
+      currentPage="linkPage"
+      page={{
+        topBar: (
+          <TopBar title={strings.title} icon="id-card">
+            {handle === undefined ? undefined : <HeaderActions handle={handle} />}
+          </TopBar>
+        ),
+        body:
+          handle === undefined ? (
+            <PreviewLayout>
+              <Card>
+                <EmptyState
+                  layout="row"
+                  icon="at-sign"
+                  title={strings.noHandle}
+                  actions={<ButtonLink href={profileHref(slug)}>{strings.openProfile}</ButtonLink>}
+                >
+                  {strings.noHandleText}
+                </EmptyState>
+              </Card>
+            </PreviewLayout>
+          ) : (
+            <Blocks linkPage={linkPage} slug={slug} profile={profile} handle={handle} />
+          ),
+      }}
+    />
   );
 }
 

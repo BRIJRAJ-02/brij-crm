@@ -101,8 +101,9 @@ describe('the sidebar', { timeout: 120_000 }, () => {
       rail: false,
       version: 0,
       favourites: [],
-      // Tasks (My tasks, spec 0019) for every member; Inbox waits for notifications (#28).
-      top: ['tasks'],
+      // The link page (spec 0051, a page of its own since 25 October 2026) and Tasks (My tasks, spec 0019) for
+      // every member; Inbox waits for notifications (#28).
+      top: ['linkPage', 'tasks'],
       scheduling: ['bookings', 'captures'],
     });
     const changed = await changeNav(w.bea, { op: 'fold', section: 'scheduling', folded: true });

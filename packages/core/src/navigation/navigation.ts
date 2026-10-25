@@ -200,7 +200,7 @@ function favouriteOf(kind: 'view' | 'record', id: string, label: string, object:
 }
 
 /** The pages above the sections that exist today: Tasks (My tasks, spec 0019). Inbox joins with #28. */
-const TOP_PAGES_BUILT: readonly NavPage[] = ['tasks'];
+const TOP_PAGES_BUILT: readonly NavPage[] = ['linkPage', 'tasks'];
 
 /**
  * The pages above the sections the caller has (AC-924): Tasks for every
