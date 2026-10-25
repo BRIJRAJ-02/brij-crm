@@ -383,7 +383,12 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
         bookingId: booked.bookingId,
         title: 'Intro call with Grace Hopper',
         start: MONDAY_9,
-        attendees: [{ email: 'grace@navy.example', name: 'Grace Hopper' }],
+        // The host they booked is on it, first, so a visitor's own copy names who they are meeting: the
+        // organiser is not shown on a guest's copy (owner, 25 Oct 2026).
+        attendees: [
+          { email: 'ada@example.com', name: 'Ada Host' },
+          { email: 'grace@navy.example', name: 'Grace Hopper' },
+        ],
         video: true,
       }),
     ]);
