@@ -3,6 +3,7 @@ import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { Disclosure, DisclosureGroup } from '../../molecules/Disclosure/Disclosure.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -44,6 +45,14 @@ export type LinkPageBlock =
       readonly title?: string;
       /** The words themselves, drawn as text with their line breaks kept. Never markup: nothing in it is parsed. */
       readonly body: string;
+    }
+  | {
+      readonly kind: 'faq';
+      readonly id: string;
+      /** A small heading over the questions; without one the page says "Questions". */
+      readonly title?: string;
+      /** The questions, in the owner's order, each one a fold that starts closed. All drawn as text. */
+      readonly items: readonly { readonly question: string; readonly answer: string }[];
     }
   | {
       readonly kind: 'page';
@@ -211,6 +220,12 @@ const SCHEME_ICONS = { mail: 'mail', phone: 'phone', text: 'message-square' } as
  * email's, a call's or a text's own icon, or its title's first letter on its hue; a booking page's calendar; a
  * heading's type mark (the editor only). With no block, the tile's place while it loads.
  */
+/** The mark the editor's row shows for a block that draws as words on the page rather than as a row. */
+const TILE_ICONS = { heading: 'type', text: 'file-text', faq: 'circle-question-mark' } as const satisfies Record<
+  'heading' | 'text' | 'faq',
+  IconName
+>;
+
 export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
   if (block === undefined) {
     return (
@@ -228,10 +243,10 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
   }
   // Writing has no tile on the page, where it is prose; in the editor's rows it takes the same mark a heading does,
   // since there the row is a thing in a list rather than the words themselves.
-  if (block.kind === 'heading' || block.kind === 'text') {
+  if (block.kind === 'heading' || block.kind === 'text' || block.kind === 'faq') {
     return (
       <span className={styles.tile} data-tile="icon">
-        <Icon name={block.kind === 'text' ? 'file-text' : 'type'} />
+        <Icon name={TILE_ICONS[block.kind]} />
       </span>
     );
   }
@@ -279,7 +294,7 @@ function BlockText({ title, line }: { readonly title: string; readonly line?: st
 
 /** Each kind's one renderer. A block of a kind with none never reaches here: callers skip what they can't map. */
 const RENDERERS: {
-  readonly [Kind in Exclude<LinkPageBlock['kind'], 'heading' | 'contact' | 'text'>]: (
+  readonly [Kind in Exclude<LinkPageBlock['kind'], 'heading' | 'contact' | 'text' | 'faq'>]: (
     block: Extract<LinkPageBlock, { kind: Kind }>,
     onPress: (() => void) | undefined,
   ) => ReactNode;
@@ -361,21 +376,24 @@ function BlockRow({
   );
 }
 
-/** A group's children in order: each run of pressable rows, and each piece of writing between them. */
+/** A group's children in order: each run of pressable rows, and each block that stands apart between them. */
 type Run =
   | { readonly kind: 'rows'; readonly key: string; readonly isFirst: boolean; readonly rows: BlockRowBlock[] }
-  | { readonly kind: 'text'; readonly key: string; readonly block: Extract<LinkPageBlock, { kind: 'text' }> };
+  | { readonly kind: 'apart'; readonly key: string; readonly block: ApartBlock };
 
-/** A block a row draws: everything but a heading, a contact card and a piece of writing. */
-type BlockRowBlock = Exclude<LinkPageBlock, { kind: 'heading' | 'contact' | 'text' }>;
+/** A block a row draws: everything but a heading, a contact card, a piece of writing and a set of questions. */
+type BlockRowBlock = Exclude<LinkPageBlock, { kind: 'heading' | 'contact' | 'text' | 'faq' }>;
+
+/** A block that is not a row: the person's own words, and the questions they answer. Neither records a press. */
+type ApartBlock = Extract<LinkPageBlock, { kind: 'text' | 'faq' }>;
 
 function runsOf(blocks: readonly LinkPageBlock[]): Run[] {
   const runs: Run[] = [];
   let isFirst = true;
   for (const block of blocks) {
     if (block.kind === 'heading' || block.kind === 'contact') continue;
-    if (block.kind === 'text') {
-      runs.push({ kind: 'text', key: block.id, block });
+    if (block.kind === 'text' || block.kind === 'faq') {
+      runs.push({ kind: 'apart', key: block.id, block });
       continue;
     }
     const last = runs.at(-1);
@@ -388,12 +406,51 @@ function runsOf(blocks: readonly LinkPageBlock[]): Run[] {
   return runs;
 }
 
-/** A piece of writing: the person's words, drawn as text, with nothing to press. */
-function TextBlock({ block }: { readonly block: Extract<LinkPageBlock, { kind: 'text' }> }) {
+/**
+ * A block that stands outside the list of rows: the person's words, or the questions they answer. Its title takes
+ * the level under whatever names its group, so a page with no sections never skips from the person's name to an
+ * h3 and one with them never repeats a section's own level.
+ */
+function ApartBlockView({ block, level }: { readonly block: ApartBlock; readonly level: 2 | 3 }) {
+  if (block.kind === 'faq') return <FaqBlock block={block} level={level} />;
+  const Title = level === 2 ? 'h2' : 'h3';
   return (
     <div className={styles.writing}>
-      {block.title !== undefined && block.title !== '' && <h3 className={styles.writingTitle}>{block.title}</h3>}
+      {block.title !== undefined && block.title !== '' && <Title className={styles.writingTitle}>{block.title}</Title>}
       <p className={styles.writingBody}>{block.body}</p>
+    </div>
+  );
+}
+
+/**
+ * The questions, on the library's own disclosure (AC-5210): each question a button that says whether it is open,
+ * its answer the region under it, every one closed to begin with so the page stays short, and several open at
+ * once since a visitor comparing two answers should not lose the first. Opening one counts nothing (AC-5211).
+ */
+function FaqBlock({
+  block,
+  level,
+}: {
+  readonly block: Extract<LinkPageBlock, { kind: 'faq' }>;
+  readonly level: 2 | 3;
+}) {
+  const title = block.title === undefined || block.title === '' ? strings.questions : block.title;
+  const Title = level === 2 ? 'h2' : 'h3';
+  return (
+    <div className={styles.questions}>
+      <Title className={styles.writingTitle}>{title}</Title>
+      <DisclosureGroup allowsMultipleExpanded>
+        {block.items.map((asked) => (
+          <Disclosure
+            key={asked.question}
+            id={asked.question}
+            title={asked.question}
+            headingLevel={level === 2 ? 3 : 4}
+          >
+            <p className={styles.answer}>{asked.answer}</p>
+          </Disclosure>
+        ))}
+      </DisclosureGroup>
     </div>
   );
 }
@@ -430,7 +487,7 @@ function Group({
             ))}
           </ul>
         ) : (
-          <TextBlock key={run.key} block={run.block} />
+          <ApartBlockView key={run.key} block={run.block} level={heading === undefined ? 2 : 3} />
         ),
       )}
     </section>

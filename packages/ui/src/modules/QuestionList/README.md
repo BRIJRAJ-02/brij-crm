@@ -26,6 +26,7 @@ Each question is a hairline card, space-8 apart (owner feedback F27, 20 October 
 - Reorder by the handle, with a drop line, or by the keyboard: focus the handle, Enter to pick up, arrows to move, Enter to drop, Esc to cancel. Each move is announced: "Budget, moved to position 3 of 6".
 - `hasProblem` marks the question a publish refused (the danger edge, and "Needs a fix" by its title); the caller keeps it open until it is fixed.
 - Without `onMove` the list is read only and shows no handles.
+- **A question with no type of its own** (a link page's FAQ, spec 0052): leave `typeLabel`, `typeIcon` and `isRequired` out and give `note` instead, the start of its answer on the second line. The row then begins with its grip rather than a type tile, and a row with neither a type nor a note keeps one line. Why a variant and not a new list: this is the same thing (a card, closed until opened, that reorders by its handle, holding whatever editor the caller renders); only the summary's parts differ, and the form builder's own summary is unchanged.
 - An open question ends in a footer line under a hairline: `renderFooter` puts its actions (Duplicate, Delete) at its end, and `renderFooterStart` a closing choice at its start on the same line (the form builder's "Visitors must answer"). Why a slot: the actions alone sat in an empty corner under the last field (owner feedback F27, 20 October 2026).
 
 ## States

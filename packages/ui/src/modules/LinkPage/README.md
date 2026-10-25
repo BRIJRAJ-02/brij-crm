@@ -29,6 +29,12 @@ A `text` block is the person's own words rather than a row (spec 0052, AC-5206):
 
 The body is drawn as text and never as markup, and the schema refuses every control character but a line break, so nothing in it can become an element. There is no bold, no italic and no inline link: a person who wants a link adds a link block. It records no press and shows no chip, because it has nowhere to go.
 
+## Questions
+
+A `faq` block is a set of questions on the library's own Disclosure (spec 0052, AC-5210): the block's title, defaulting to "Questions", then every question as a fold that starts closed, so the page stays short and a visitor reads it before reading the answers. Several open at once, since someone comparing two answers should not lose the first. Opening one counts nothing (AC-5211).
+
+It sits in a raised card like the rows beside it, because on this page anything that is not the person's own prose is a card, and like writing it is not a list item and has nothing to press.
+
 ## Use
 
 ```tsx

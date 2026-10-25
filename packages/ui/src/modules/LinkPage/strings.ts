@@ -5,6 +5,8 @@ export const strings = {
   /** The blocks as one list, for screen readers, when no heading names them. */
   blocks: 'Links',
   loading: 'Loading…',
+  /** What a set of questions is called when its owner gave it no title of its own (spec 0052, AC-5209). */
+  questions: 'Questions',
   /** The one primary action under the person: their contact card, downloaded as a vCard. */
   saveContact: 'Save contact',
   /** The address pill under the bio: its visible label is the address itself, so its name says what pressing it does. */

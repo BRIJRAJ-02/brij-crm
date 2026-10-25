@@ -164,6 +164,27 @@
     overflow-wrap: anywhere;
   }
 
+  /* The questions, answered: a raised card like the rows beside it, since on this page anything that isn't the
+     person's own prose is a card. The folds inside it are the library's Disclosure, unchanged. */
+  .questions {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .answer {
+    margin: 0;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .list {
     display: flex;
     flex-direction: column;

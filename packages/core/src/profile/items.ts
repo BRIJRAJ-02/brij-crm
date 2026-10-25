@@ -210,7 +210,7 @@ function refusalOf(error: unknown): unknown {
   const pg = postgresError(error);
   if (pg === undefined) return error;
   if (pg.code === '54000') {
-    const kind = (['link', 'heading', 'page', 'contact', 'text'] as const).find((each) => each === pg.detail);
+    const kind = (['link', 'heading', 'page', 'contact', 'text', 'faq'] as const).find((each) => each === pg.detail);
     return refuse('LIMIT_REACHED', profileLimitSentence(kind ?? 'items'));
   }
   if (pg.code === '23505' && pg.constraint === 'profile_items_heading_once') {
@@ -245,6 +245,17 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
     // The card's fields as the schema kept them: an empty one was refused there, never stored.
     const { kind, ...data } = block;
     return { kind, data, workspaceId: null, pageId: null };
+  }
+  if (block.kind === 'faq') {
+    return {
+      kind: block.kind,
+      data: {
+        items: block.items,
+        ...(block.title === undefined || block.title === '' ? {} : { title: block.title }),
+      },
+      workspaceId: null,
+      pageId: null,
+    };
   }
   if (block.kind === 'text') {
     return {

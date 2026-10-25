@@ -13,8 +13,13 @@ import {
   PROFILE_TITLE_MAX,
   profileLinkProblem,
   PROFILE_CONTROL,
+  PROFILE_FAQ_ANSWER_MAX,
+  PROFILE_FAQ_BREAKS,
+  PROFILE_FAQ_ITEMS,
+  PROFILE_FAQ_QUESTION_MAX,
   PROFILE_TEXT_BREAKS,
   PROFILE_TEXT_MAX,
+  sameQuestion,
   PUBLIC_LINK_MARKS,
 } from './link-page-rules.ts';
 
@@ -39,6 +44,22 @@ const oneLine = (min: number, max: number, empty: string, long: string) =>
     .min(min, empty)
     .max(max, long)
     .refine((text) => !PROFILE_CONTROL.test(text), { error: 'Keep it to one line, with no special characters.' });
+
+/**
+ * Several lines, trimmed, keeping its line breaks and nothing else: a piece of writing's body and a FAQ answer are
+ * the same shape with different numbers. `\r\n` becomes `\n` first so a Windows paste does not spend two breaks on
+ * one line, and every other control character, U+2028 and U+2029 among them, is refused.
+ */
+const manyLines = (max: number, breaks: number, empty: string, long: string, tooMany: string) =>
+  z
+    .string()
+    .transform((typed) => typed.replaceAll('\r\n', '\n').trim())
+    .refine((text) => text.length >= 1, { error: empty })
+    .refine((text) => text.length <= max, { error: long })
+    .refine((text) => (text.match(/\n/g) ?? []).length <= breaks, { error: tooMany })
+    .refine((text) => !PROFILE_CONTROL.test(text.replaceAll('\n', '')), {
+      error: 'Take out the special characters.',
+    });
 
 /** A link: a title, an address, an optional one line note and an optional icon (AC-5101, AC-5103). */
 export const ProfileLinkBlock = z.object({
@@ -107,21 +128,51 @@ export type ProfileContactBlock = z.infer<typeof ProfileContactBlock>;
 export const ProfileTextBlock = z.object({
   kind: z.literal('text'),
   title: oneLine(0, PROFILE_TITLE_MAX.text, '', 'Keep the title to 60 characters.').optional(),
-  body: z
-    .string()
-    .transform((typed) => typed.replaceAll('\r\n', '\n').trim())
-    .refine((text) => text.length >= 1, { error: 'Write something, or leave the block out.' })
-    .refine((text) => text.length <= PROFILE_TEXT_MAX, { error: 'Keep it to 1,000 characters.' })
-    .refine((text) => (text.match(/\n/g) ?? []).length <= PROFILE_TEXT_BREAKS, {
-      error: 'Keep it to 20 line breaks. A longer piece reads better somewhere it can be a page.',
-    })
-    // Line breaks are allowed through; every other control character, U+2028 and U+2029 among them, is not.
-    .refine((text) => !PROFILE_CONTROL.test(text.replaceAll('\n', '')), {
-      error: 'Take out the special characters.',
-    }),
+  body: manyLines(
+    PROFILE_TEXT_MAX,
+    PROFILE_TEXT_BREAKS,
+    'Write something, or leave the block out.',
+    'Keep it to 1,000 characters.',
+    'Keep it to 20 line breaks. A longer piece reads better somewhere it can be a page.',
+  ),
 });
 /** A text block. */
 export type ProfileTextBlock = z.infer<typeof ProfileTextBlock>;
+
+/** One question and its answer (AC-5209). The question is one line; the answer keeps its breaks, like a piece of writing. */
+export const ProfileFaqItem = z.object({
+  question: oneLine(1, PROFILE_FAQ_QUESTION_MAX, 'Write the question.', 'Keep the question to 120 characters.'),
+  answer: manyLines(
+    PROFILE_FAQ_ANSWER_MAX,
+    PROFILE_FAQ_BREAKS,
+    'Write the answer.',
+    'Keep the answer to 600 characters.',
+    'Keep the answer to 10 line breaks.',
+  ),
+});
+/** One question and its answer. */
+export type ProfileFaqItem = z.infer<typeof ProfileFaqItem>;
+
+/**
+ * The questions people ask, answered on the page (spec 0052, AC-5209): an optional title and one to ten questions.
+ * Plain text throughout, drawn as the library's disclosure list, so a visitor reads the page before the answers.
+ * The same question twice is refused: down the page it reads as a mistake either way.
+ */
+export const ProfileFaqBlock = z.object({
+  kind: z.literal('faq'),
+  title: oneLine(0, PROFILE_TITLE_MAX.faq, '', 'Keep the title to 60 characters.').optional(),
+  items: z
+    .array(ProfileFaqItem)
+    .min(1, 'Ask at least one question.')
+    .max(PROFILE_FAQ_ITEMS, 'Keep it to 10 questions.')
+    .refine(
+      (items) =>
+        !items.some((item, at) => items.slice(0, at).some((before) => sameQuestion(before.question, item.question))),
+      { error: 'You already asked that one.' },
+    ),
+});
+/** A FAQ block. */
+export type ProfileFaqBlock = z.infer<typeof ProfileFaqBlock>;
 
 /** One block's fields, by kind: what every write is checked against before it is stored. */
 export const ProfileBlock = z.discriminatedUnion('kind', [
@@ -130,6 +181,7 @@ export const ProfileBlock = z.discriminatedUnion('kind', [
   ProfilePageBlock,
   ProfileContactBlock,
   ProfileTextBlock,
+  ProfileFaqBlock,
 ]);
 /** One block's fields. */
 export type ProfileBlock = z.infer<typeof ProfileBlock>;
@@ -168,6 +220,7 @@ export const ProfileItem = z.discriminatedUnion('kind', [
   ProfilePageBlock.extend({ ...Stored, page: ProfilePageFacts.optional() }),
   ProfileContactBlock.extend(Stored),
   ProfileTextBlock.extend(Stored),
+  ProfileFaqBlock.extend(Stored),
 ]);
 /** One block as the editor reads it. */
 export type ProfileItem = z.infer<typeof ProfileItem>;
@@ -226,6 +279,13 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
   }),
   /** Writing: the words themselves, drawn as text and never as markup (spec 0052, AC-5206). */
   z.object({ kind: z.literal('text'), id: Uuid, title: z.string().optional(), body: z.string().min(1) }),
+  /** The questions, with their answers: a fold a visitor opens, counting nothing (AC-5210, AC-5211). */
+  z.object({
+    kind: z.literal('faq'),
+    id: Uuid,
+    title: z.string().optional(),
+    items: z.array(ProfileFaqItem).min(1),
+  }),
 ]);
 /** One block as a visitor reads it. */
 export type PublicProfileItem = z.infer<typeof PublicProfileItem>;

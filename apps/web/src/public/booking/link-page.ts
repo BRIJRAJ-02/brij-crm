@@ -29,6 +29,15 @@ export function blocksOf(handle: string, items: readonly PublicProfileItem[]): r
         return [
           { kind: 'text', id: item.id, body: item.body, ...(item.title === undefined ? {} : { title: item.title }) },
         ];
+      case 'faq':
+        return [
+          {
+            kind: 'faq',
+            id: item.id,
+            items: item.items,
+            ...(item.title === undefined ? {} : { title: item.title }),
+          },
+        ];
       case 'page':
         return [
           {

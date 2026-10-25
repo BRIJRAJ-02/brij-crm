@@ -166,6 +166,46 @@ describe('ProfileBlock', () => {
       ProfileBlock.safeParse({ kind: 'text', body: Array.from({ length: 21 }, () => 'line').join('\n') }).success,
     ).toBe(true);
   });
+
+  it('keeps a set of questions and refuses the same one twice (spec 0052)', () => {
+    expect(
+      ProfileBlock.parse({
+        kind: 'faq',
+        items: [{ question: ' Where are you? ', answer: ' Upstairs.\r\nRing the bell. ' }],
+      }),
+    ).toEqual({ kind: 'faq', items: [{ question: 'Where are you?', answer: 'Upstairs.\nRing the bell.' }] });
+
+    const asked = (question: string) => ({ question, answer: 'Yes.' });
+    // The same question twice, however it was typed, is one question asked twice.
+    expect(
+      ProfileBlock.safeParse({ kind: 'faq', items: [asked('Do you travel?'), asked(' do you TRAVEL? ')] }).success,
+    ).toBe(false);
+    // Two different questions are two questions.
+    expect(
+      ProfileBlock.safeParse({ kind: 'faq', items: [asked('Do you travel?'), asked('Do you deliver?')] }).success,
+    ).toBe(true);
+
+    for (const items of [
+      [],
+      Array.from({ length: 11 }, (_, at) => asked(`Question ${String(at)}`)),
+      [asked('')],
+      [asked('x'.repeat(121))],
+      [{ question: 'Two\nlines?', answer: 'Yes.' }],
+      [{ question: 'How long?', answer: '' }],
+      [{ question: 'How long?', answer: 'x'.repeat(601) }],
+      [{ question: 'How long?', answer: Array.from({ length: 12 }, () => 'line').join('\n') }],
+      [{ question: 'How long?', answer: 'Tab\there' }],
+    ]) {
+      expect(ProfileBlock.safeParse({ kind: 'faq', items }).success, JSON.stringify(items)).toBe(false);
+    }
+    // Ten questions is the limit, and exactly ten passes.
+    expect(
+      ProfileBlock.safeParse({
+        kind: 'faq',
+        items: Array.from({ length: 10 }, (_, at) => asked(`Question ${String(at)}`)),
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe('checkContactCard', () => {

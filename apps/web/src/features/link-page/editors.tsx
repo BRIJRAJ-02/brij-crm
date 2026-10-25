@@ -13,6 +13,7 @@ import {
   Form,
   LinkPage,
   Modal,
+  QuestionList,
   PhoneField,
   Select,
   Skeleton,
@@ -21,7 +22,7 @@ import {
   type SelectItem,
 } from '@crm/ui';
 import { countryOfE164, DIAL_CODES, toE164 } from '@crm/contracts/forms';
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { linksHref } from '../booking/links.ts';
 import { contactHref, contactWords, pageFacts, type BlockEditorProps, type EditorChrome } from './registry.tsx';
 import { ICON_WORDS, strings } from './strings.ts';
@@ -355,6 +356,215 @@ export function TextEditor({ item, items, linkPage, chrome, onSubmit, onClose }:
           }}
           {...(problems.body === undefined ? {} : { error: problems.body })}
         />
+      </Form>
+    </EditorModal>
+  );
+}
+
+/** A question's problem by its place in the list, as `checkBlock` words it ("question:0", "answer:0"). */
+function askedProblem(problems: BlockProblems, part: 'question' | 'answer', at: number): string | undefined {
+  return problems[`${part}:${String(at)}` as `question:${number}`];
+}
+
+/** One question as the FAQ editor holds it: its own id, so a row keeps its place while its words change. */
+interface FaqTyped {
+  readonly id: string;
+  readonly question: string;
+  readonly answer: string;
+}
+
+/**
+ * Add or edit the questions people ask (spec 0052, AC-5212): a title nobody has to give, and one to ten questions,
+ * each a card that opens on its two fields. A question is added with the plus, moved by its grip or the arrows on
+ * it, and removed from the card it opens. The page is drawn beside them as a visitor will read it.
+ */
+export function FaqEditor({ item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const formId = useId();
+  const editing = item?.kind === 'faq' ? item : undefined;
+  const [title, setTitle] = useState(editing?.title ?? '');
+  const [asked, setAsked] = useState<readonly FaqTyped[]>(() =>
+    (editing?.items ?? [{ question: '', answer: '' }]).map((each, at) => ({ id: `q${String(at)}`, ...each })),
+  );
+  // Every question a person adds opens on its fields; the ones already saved start closed, so a long list reads.
+  const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set(editing === undefined ? ['q0'] : []));
+  const [problems, setProblems] = useState<BlockProblems>({});
+  const minted = useRef(asked.length);
+
+  const draft = () => {
+    const kept = title.trim();
+    return {
+      kind: 'faq' as const,
+      items: asked.map((each) => ({ question: each.question, answer: each.answer })),
+      ...(kept === '' ? {} : { title: kept }),
+    };
+  };
+  const submit = () => {
+    const checked = linkPage.check(draft(), items, editing?.id);
+    if (!checked.ok) {
+      setProblems(checked.problems);
+      // A question that was refused opens, so its reason is on screen rather than folded away.
+      setOpenIds(
+        new Set(
+          asked
+            .filter(
+              (_each, at) =>
+                askedProblem(checked.problems, 'question', at) ?? askedProblem(checked.problems, 'answer', at),
+            )
+            .map((each) => each.id),
+        ),
+      );
+      return;
+    }
+    onSubmit(draft());
+  };
+  // The whole list's problems move with the rows, so a removed question never leaves its reason on the next one.
+  const change = (next: readonly FaqTyped[]) => {
+    setAsked(next);
+    setProblems((held) => ({ ...held, items: undefined }));
+  };
+  const typed = (id: string, part: 'question' | 'answer', words: string) => {
+    const at = asked.findIndex((each) => each.id === id);
+    change(asked.map((each) => (each.id === id ? { ...each, [part]: words } : each)));
+    setProblems((held) => ({ ...held, [`${part}:${String(at)}`]: undefined }));
+  };
+
+  return (
+    <EditorModal
+      title={editing === undefined ? strings.newFaq : strings.editFaq}
+      formId={formId}
+      submitLabel={editing === undefined ? strings.add : strings.save}
+      onClose={onClose}
+      {...(chrome === undefined ? {} : { chrome })}
+      preview={
+        <LinkPage
+          layout="blocks"
+          caption={strings.howItLooks}
+          blocks={[
+            {
+              kind: 'faq',
+              id: editing?.id ?? 'draft',
+              items: asked.map((each) => ({
+                question: each.question.trim() === '' ? strings.faqQuestionPlaceholder : each.question,
+                answer: each.answer.trim() === '' ? strings.faqAnswerPlaceholder : each.answer,
+              })),
+              ...(title.trim() === '' ? {} : { title: title.trim() }),
+            },
+          ]}
+        />
+      }
+    >
+      <Form
+        id={formId}
+        onSubmit={submit}
+        label={editing === undefined ? strings.newFaq : strings.editFaq}
+        focusesFirstField
+      >
+        <Field
+          label={strings.faqTitle}
+          name="title"
+          autoComplete="off"
+          maxLength={60}
+          placeholder={strings.faqTitlePlaceholder}
+          hint={strings.faqTitleHint}
+          value={title}
+          onChange={(next) => {
+            setTitle(next);
+            setProblems((held) => ({ ...held, title: undefined }));
+          }}
+          {...(problems.title === undefined ? {} : { error: problems.title })}
+        />
+        <QuestionList
+          label={strings.faqQuestions}
+          items={asked.map((each) => ({
+            id: each.id,
+            label: each.question.trim(),
+            note: each.answer.trim().split('\n')[0] ?? '',
+            hasProblem:
+              askedProblem(problems, 'question', asked.indexOf(each)) !== undefined ||
+              askedProblem(problems, 'answer', asked.indexOf(each)) !== undefined,
+          }))}
+          openIds={openIds}
+          onOpenChange={(id, isOpen) => {
+            setOpenIds((held) => {
+              const next = new Set(held);
+              if (isOpen) next.add(id);
+              else next.delete(id);
+              return next;
+            });
+          }}
+          onMove={(id, index) => {
+            const moving = asked.find((each) => each.id === id);
+            if (moving === undefined) return;
+            const rest = asked.filter((each) => each.id !== id);
+            change([...rest.slice(0, index), moving, ...rest.slice(index)]);
+            setProblems({});
+          }}
+          actions={
+            <Button
+              icon="plus"
+              isDisabled={asked.length >= 10}
+              onPress={() => {
+                const id = `q${String(minted.current)}`;
+                minted.current += 1;
+                change([...asked, { id, question: '', answer: '' }]);
+                setOpenIds(new Set([id]));
+              }}
+            >
+              {strings.faqAdd}
+            </Button>
+          }
+          renderFooter={(id) => (
+            <Button
+              icon="trash"
+              variant="ghost-danger"
+              onPress={() => {
+                change(asked.filter((each) => each.id !== id));
+                setProblems({});
+              }}
+            >
+              {strings.faqRemove}
+            </Button>
+          )}
+          renderOpen={(id) => {
+            const at = asked.findIndex((each) => each.id === id);
+            const one = asked[at];
+            if (one === undefined) return null;
+            return (
+              <>
+                <Field
+                  label={strings.faqQuestion}
+                  name={`question-${id}`}
+                  autoComplete="off"
+                  maxLength={120}
+                  placeholder={strings.faqQuestionPlaceholder}
+                  value={one.question}
+                  onChange={(next) => {
+                    typed(id, 'question', next);
+                  }}
+                  {...(askedProblem(problems, 'question', at) === undefined
+                    ? {}
+                    : { error: askedProblem(problems, 'question', at) })}
+                />
+                <Field
+                  label={strings.faqAnswer}
+                  name={`answer-${id}`}
+                  isMultiline
+                  maxLength={600}
+                  showCounter
+                  placeholder={strings.faqAnswerPlaceholder}
+                  value={one.answer}
+                  onChange={(next) => {
+                    typed(id, 'answer', next);
+                  }}
+                  {...(askedProblem(problems, 'answer', at) === undefined
+                    ? {}
+                    : { error: askedProblem(problems, 'answer', at) })}
+                />
+              </>
+            );
+          }}
+        />
+        {problems.items !== undefined && <Callout tone="danger">{problems.items}</Callout>}
       </Form>
     </EditorModal>
   );

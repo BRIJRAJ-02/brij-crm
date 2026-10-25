@@ -13,11 +13,16 @@ import {
   PROFILE_LIMITS,
   PROFILE_LINK_ICONS,
   PROFILE_NOTE_MAX,
+  PROFILE_FAQ_ANSWER_MAX,
+  PROFILE_FAQ_BREAKS,
+  PROFILE_FAQ_ITEMS,
+  PROFILE_FAQ_QUESTION_MAX,
   PROFILE_TEXT_BREAKS,
   PROFILE_TEXT_MAX,
   PROFILE_TITLE_MAX,
   profileLimitSentence,
   profileLinkProblem,
+  sameQuestion,
   type ProfileBlockKind,
   type ProfileContactField,
 } from '@crm/contracts/link-page';
@@ -146,7 +151,22 @@ interface Pending {
 
 /** Why a block can't be saved as typed, by field: the same rules the server keeps, said before anything is sent. */
 export type BlockProblems = Readonly<
-  Partial<Record<'title' | 'url' | 'note' | 'icon' | 'page' | 'body' | ProfileContactField, string>>
+  Partial<
+    Record<
+      | 'title'
+      | 'url'
+      | 'note'
+      | 'icon'
+      | 'page'
+      | 'body'
+      | 'items'
+      // One question's own two problems, by its place in the list: `question:0`, `answer:0`.
+      | `question:${number}`
+      | `answer:${number}`
+      | ProfileContactField,
+      string
+    >
+  >
 >;
 
 /** The refusal toast's action. */
@@ -225,6 +245,11 @@ export type BlockDraft =
     }
   | { readonly kind: 'heading'; readonly title: string }
   | { readonly kind: 'text'; readonly title?: string; readonly body: string }
+  | {
+      readonly kind: 'faq';
+      readonly title?: string;
+      readonly items: readonly { readonly question: string; readonly answer: string }[];
+    }
   | { readonly kind: 'page'; readonly workspaceId?: string; readonly pageId?: string }
   | ({ readonly kind: 'contact' } & Readonly<Partial<Record<ProfileContactField, string>>>);
 
@@ -276,6 +301,35 @@ export function checkBlock(
     }
     if (Object.keys(text).length > 0) return { ok: false, problems: text };
     return { ok: true, block: { kind: 'text', body, ...(kept === '' ? {} : { title: kept }) } };
+  }
+  if (draft.kind === 'faq') {
+    const asked: Record<string, string> = {};
+    const kept = draft.title?.trim() ?? '';
+    if (kept.length > PROFILE_TITLE_MAX.faq) asked.title = 'Keep the title to 60 characters.';
+    else if (/[\r\n]/.test(kept)) asked.title = 'Keep it to one line.';
+    if (draft.items.length === 0) asked.items = 'Ask at least one question.';
+    else if (draft.items.length > PROFILE_FAQ_ITEMS) asked.items = 'Keep it to 10 questions.';
+    const items = draft.items.map((item) => ({
+      question: item.question.trim(),
+      answer: item.answer.replaceAll('\r\n', '\n').trim(),
+    }));
+    items.forEach((item, at) => {
+      if (item.question === '') asked[`question:${String(at)}`] = 'Write the question.';
+      else if (/[\r\n]/.test(item.question)) asked[`question:${String(at)}`] = 'Keep it to one line.';
+      else if (item.question.length > PROFILE_FAQ_QUESTION_MAX) {
+        asked[`question:${String(at)}`] = 'Keep the question to 120 characters.';
+      } else if (items.slice(0, at).some((before) => sameQuestion(before.question, item.question))) {
+        asked[`question:${String(at)}`] = 'You already asked that one.';
+      }
+      if (item.answer === '') asked[`answer:${String(at)}`] = 'Write the answer.';
+      else if (item.answer.length > PROFILE_FAQ_ANSWER_MAX) {
+        asked[`answer:${String(at)}`] = 'Keep the answer to 600 characters.';
+      } else if ((item.answer.match(/\n/g) ?? []).length > PROFILE_FAQ_BREAKS) {
+        asked[`answer:${String(at)}`] = 'Keep the answer to 10 line breaks.';
+      }
+    });
+    if (Object.keys(asked).length > 0) return { ok: false, problems: asked };
+    return { ok: true, block: { kind: 'faq', items, ...(kept === '' ? {} : { title: kept }) } };
   }
   const problems: Partial<Record<'title' | 'url' | 'note' | 'icon' | 'page', string>> = {};
   const title = titleProblem(draft.title, draft.kind);

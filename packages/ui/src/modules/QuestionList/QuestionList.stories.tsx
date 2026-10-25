@@ -222,3 +222,35 @@ export const Empty: Story = {
     await expect(canvas.getByRole('heading', { name: 'Questions' })).toBeInTheDocument();
   },
 };
+
+/**
+ * A question with no type of its own: a link page's FAQ (spec 0052). The row begins with its grip, its second line
+ * is the start of the answer, and a question with no answer yet keeps one line.
+ */
+export const WithoutTypes: Story = {
+  render: () => {
+    const asked = [
+      { id: 'travel', question: 'Do you travel to me?', answer: 'Yes, anywhere inside the M25.' },
+      { id: 'ahead', question: 'How far ahead should I book?', answer: 'A week is plenty.' },
+      { id: 'new', question: '', answer: '' },
+    ];
+    return (
+      <Stage width="narrow-fill">
+        <QuestionList
+          label="Questions"
+          items={asked.map((each) => ({ id: each.id, label: each.question, note: each.answer }))}
+          openIds={new Set<string>()}
+          onOpenChange={() => undefined}
+          onMove={() => undefined}
+          renderOpen={() => null}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    // No type tile and no Required: the summary is the question and the start of its answer.
+    await expect(canvas.getByText('Yes, anywhere inside the M25.')).toBeVisible();
+    await expect(canvas.getByText('Untitled question')).toBeVisible();
+    await expect(canvas.getAllByRole('row')).toHaveLength(3);
+  },
+};

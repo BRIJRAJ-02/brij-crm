@@ -3,6 +3,7 @@ import { expect, fn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkPage, LinkPageTile, type LinkPageBlock } from './LinkPage.tsx';
 
@@ -145,6 +146,39 @@ export const Writing: Story = {
     await expect(words.closest('button')).toBeNull();
     // The page keeps its one list of pressable rows; writing is not in it.
     await expect(canvas.getAllByRole('listitem')).toHaveLength(1);
+  },
+};
+
+/** The questions, answered: folds that start closed, several open at once, and nothing counted. */
+export const Questions: Story = {
+  args: {
+    person: { name: 'Ada Lovelace', id: 'ada', bio: 'Numbers, engines and the odd poem.' },
+    blocks: [
+      { kind: 'page', id: 'chat', title: 'Quick chat', href: '/ada/quick-chat', facts: '30 min' },
+      {
+        kind: 'faq',
+        id: 'asked',
+        items: [
+          { question: 'Do you travel to me?', answer: 'Yes, anywhere inside the M25, for no extra charge.' },
+          { question: 'How far ahead should I book?', answer: 'A week is plenty.\nSooner is fine if I am free.' },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    const first = canvas.getByRole('button', { name: 'Do you travel to me?' });
+    // Every question starts closed, so the page stays short.
+    await expect(first).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(first);
+    await settleAnimations();
+    await expect(first).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByText(/inside the M25/)).toBeVisible();
+    // A second question opens beside the first: a visitor comparing two answers keeps both.
+    const second = canvas.getByRole('button', { name: 'How far ahead should I book?' });
+    await userEvent.click(second);
+    await settleAnimations();
+    await expect(first).toHaveAttribute('aria-expanded', 'true');
+    await expect(second).toHaveAttribute('aria-expanded', 'true');
   },
 };
 

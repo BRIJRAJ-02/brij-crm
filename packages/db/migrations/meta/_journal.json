@@ -715,6 +715,13 @@
       "when": 1792915797343,
       "tag": "0101_link_page_text",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1792916638252,
+      "tag": "0102_link_page_faq",
+      "breakpoints": true
     }
   ]
 }

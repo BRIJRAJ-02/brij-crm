@@ -27,6 +27,7 @@ import {
   checkProfileLink,
   linkMarkOf,
   ProfileContactBlock,
+  ProfileFaqBlock,
   ProfileTextBlock,
   PublicProfileItem,
   type ProfileContactCard,
@@ -341,7 +342,9 @@ function matches(item: PublicProfileItem, words: string): boolean {
       ? [item.fullName, item.jobTitle ?? '', item.company ?? '']
       : item.kind === 'text'
         ? [item.title ?? '']
-        : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
+        : item.kind === 'faq'
+          ? [item.title ?? '', ...item.items.map((asked) => asked.question)]
+          : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
   return said.some((text) => text.toLowerCase().includes(words));
 }
 
@@ -378,6 +381,17 @@ function publicItemOf(row: LinkPageRow, pages: ReadonlyMap<string, PageRow>): Pu
       id: row.id,
       body: written.data.body,
       ...(written.data.title === undefined ? {} : { title: written.data.title }),
+    };
+  } else if (row.kind === 'faq') {
+    // Same rule as a piece of writing: parsed again on the way out, and a row an older build stored badly is
+    // skipped rather than half drawn. Every question and answer goes as text.
+    const asked = ProfileFaqBlock.safeParse({ ...data, kind: 'faq' });
+    if (!asked.success) return undefined;
+    candidate = {
+      kind: 'faq',
+      id: row.id,
+      items: asked.data.items,
+      ...(asked.data.title === undefined ? {} : { title: asked.data.title }),
     };
   } else if (row.kind === 'page') {
     const page = row.page_id === null ? undefined : pages.get(row.page_id);

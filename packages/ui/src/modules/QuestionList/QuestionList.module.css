@@ -276,6 +276,11 @@
     }
   }
 
+  /* A question with neither a type nor a note (a FAQ answer left blank while it is typed) keeps one line, not two. */
+  .meta:empty {
+    display: none;
+  }
+
   .part {
     white-space: nowrap;
   }

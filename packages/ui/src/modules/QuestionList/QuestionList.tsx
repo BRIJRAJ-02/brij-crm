@@ -13,11 +13,19 @@ export interface QuestionListItem {
   readonly id: string;
   /** The question; empty shows "Untitled question", muted. */
   readonly label: string;
-  /** The answer type's name, first on the row's second line ("Short text"). */
-  readonly typeLabel: string;
-  /** The answer type's icon, on a tile at the row's start ("type" for short text, "mail" for email). */
-  readonly typeIcon: IconName;
-  readonly isRequired: boolean;
+  /**
+   * The answer type's name, first on the row's second line ("Short text"). Left out where a question has no type
+   * of its own: a link page's FAQ, whose second line is its answer's first words (`note`).
+   */
+  readonly typeLabel?: string;
+  /**
+   * The answer type's icon, on a tile at the row's start ("type" for short text, "mail" for email). Left out
+   * where there is no type: the row then begins with its grip, or with nothing when the list is read only.
+   */
+  readonly typeIcon?: IconName;
+  readonly isRequired?: boolean;
+  /** The row's second line where the question has no type: the start of its answer, on one line. */
+  readonly note?: string;
   /** For a choice question: how many choices it has. */
   readonly choiceCount?: number;
   /**
@@ -133,15 +141,17 @@ export function QuestionList({
                       onOpenChange(item.id, !isOpen);
                     }}
                   >
-                    <span className={styles.tile}>
-                      <Icon name={item.typeIcon} tile="gray" />
-                    </span>
+                    {item.typeIcon !== undefined && (
+                      <span className={styles.tile}>
+                        <Icon name={item.typeIcon} tile="gray" />
+                      </span>
+                    )}
                     <span className={styles.text}>
                       <span className={styles.title}>
                         <span className={styles.name} data-untitled={item.label === '' || undefined}>
                           {name}
                         </span>
-                        {item.isRequired && <span className={styles.required}>{strings.required}</span>}
+                        {item.isRequired === true && <span className={styles.required}>{strings.required}</span>}
                         {item.hasProblem === true && (
                           <span className={styles.problem}>
                             <Icon name="circle-alert" size="sm" />
@@ -152,7 +162,8 @@ export function QuestionList({
                       <span className={styles.meta}>
                         {/* Each part stays whole: a narrow column breaks the line between parts, never inside one. */}
                         {[
-                          item.typeLabel,
+                          ...(item.typeLabel === undefined ? [] : [item.typeLabel]),
+                          ...(item.note === undefined || item.note === '' ? [] : [item.note]),
                           ...(item.choiceCount === undefined
                             ? []
                             : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
