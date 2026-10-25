@@ -24,7 +24,7 @@ Ported from the artifact's DatePicker card. It is the date attribute's editor (c
 
 ## States
 
-Empty (placeholder segments), chosen, focus (accent border and ring), invalid, read only, disabled. In the calendar: today, chosen, in range, hover (pointer only), focus; inline, the shown week.
+Empty (placeholder segments), chosen, at rest the quiet `field-border` hairline like a Field (about 1.2:1, deliberately below the 3:1 non text minimum by the owner's call, design system version 31; don't raise it back), hover (it steps up to `control-border`), focus (accent border and ring), invalid, read only, disabled. In the calendar: today, chosen, in range, hover (pointer only), focus; inline, the shown week.
 
 ## Keyboard
 

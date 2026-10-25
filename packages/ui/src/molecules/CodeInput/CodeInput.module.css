@@ -54,6 +54,18 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* At rest the quiet field-border; under a pointer the row steps up to
+     control-border together, as Field's box does, since one input covers
+     every box and the row is the one target. The row, not the field: the
+     label and the error sentence are outside it and must not light the
+     boxes. Invalid and the focused next box are later and stronger, so they
+     keep their own edge. */
+  @media (hover: hover) and (pointer: fine) {
+    .boxes:hover .box {
+      border-color: var(--control-border);
+    }
+  }
+
   /* Large: the boxes share the row, size-input plus space-16 tall, with the
      digits in heading type, split in two halves by one more space-8. */
   .root[data-size='lg'] .boxes {

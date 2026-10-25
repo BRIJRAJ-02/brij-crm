@@ -1,5 +1,5 @@
 /* Select: the Field's label above a flat 30px trigger outlined like a Field
-   (field-border, 3:1 on surface-raised), showing
+   (the quiet field-border at rest, control-border under a pointer), showing
    the value as a tag, a dot or text, then a chevron. Its list opens in the
    Popover at the trigger's width, with Menu sized options and a check on the
    chosen one. */
@@ -31,6 +31,14 @@
     transition:
       border-color var(--duration-hover) var(--ease-hover),
       background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  /* At rest the quiet field-border; under a pointer it steps up to
+     control-border, as Field's box does. */
+  @media (hover: hover) and (pointer: fine) {
+    .trigger[data-hovered] {
+      border-color: var(--control-border);
+    }
   }
 
   .trigger[data-focus-visible],

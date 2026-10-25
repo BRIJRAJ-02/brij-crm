@@ -23,7 +23,7 @@ New. Two factor setup and sign in (#25) ask for a 6 digit code. It is one real f
 
 ## States
 
-Medium or large. Empty, focused and filling (the next box takes the 1px `accent-line` border and the faint halo, with a caret bar blinking once per `duration-pulse` where the next digit goes, steady under reduced motion), complete (the last box keeps the ring while focused), invalid, disabled, and with `errorRef` the error focused (the focus ring around its sentence).
+Medium or large. At rest the boxes take the quiet `field-border` hairline like a Field (about 1.2:1, deliberately below the 3:1 non text minimum by the owner's call, design system version 31; don't raise it back); under a pointer the row steps up to `control-border` together, since one input covers every box. Empty, focused and filling (the next box takes the 1px `accent-line` border and the faint halo, with a caret bar blinking once per `duration-pulse` where the next digit goes, steady under reduced motion), complete (the last box keeps the ring while focused), invalid, disabled, and with `errorRef` the error focused (the focus ring around its sentence).
 
 ## Keyboard
 

@@ -1,6 +1,6 @@
 # Field
 
-The one field design: an 11px label above a 30px input with a hairline `control-border` outline (3:1 on every surface), and a hint or an error below.
+The one field design: an 11px label above a 30px input with a hairline `field-border` outline, and a hint or an error below. That resting edge is deliberately quiet, about 1.2:1 and so below the 3:1 non text minimum: the owner's call (design system version 31, 20 October 2026). Do not raise it back. Under a pointer it steps up to `control-border`, and focus is the `accent-line` border with the faint halo, so the edge that marks where you are does meet 3:1. Checkboxes, radios and switches keep their 3.5:1 `control-border` outline.
 
 ## Why it exists
 
