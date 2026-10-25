@@ -165,6 +165,48 @@ describe('ProfileBlock', () => {
     expect(ProfileBlock.safeParse({ kind: 'link', title: 'Two\nlines', url: 'https://a.dev' }).success).toBe(false);
   });
 
+  // Three of each way to reach the person (26 October 2026). Every rule is the kind's, read off the key's own
+  // word, so `email3` can never be held to less than `email` is.
+  it('takes three emails, phones and websites, and holds each to its first one’s rule', () => {
+    expect(
+      ProfileBlock.parse({
+        kind: 'contact',
+        fullName: 'Ada',
+        email: 'ada@work.com',
+        email3: 'ada@notes.dev',
+        phone2: '+1 (555) 0100',
+        website2: 'notes.ada.dev',
+      }),
+    ).toEqual({
+      kind: 'contact',
+      fullName: 'Ada',
+      email: 'ada@work.com',
+      email3: 'ada@notes.dev',
+      phone2: '+1 (555) 0100',
+      // A second website is made canonical exactly as the first is.
+      website2: 'https://notes.ada.dev',
+    });
+    for (const card of [
+      { fullName: 'Ada', email2: 'ada' },
+      { fullName: 'Ada', phone3: '12' },
+      { fullName: 'Ada', website3: 'mailto:ada@ada.dev' },
+      { fullName: 'Ada', email2: '' },
+      { fullName: 'Ada', email3: `${'x'.repeat(116)}@b.co` },
+      // The same address twice is one address listed twice, however it was typed.
+      { fullName: 'Ada', email: 'ada@work.com', email2: 'ADA@work.com' },
+      { fullName: 'Ada', phone: '+1 555 0100', phone2: '+1 (555) 0100' },
+      { fullName: 'Ada', website: 'ada.dev', website3: 'https://ada.dev' },
+    ]) {
+      expect(ProfileBlock.safeParse({ kind: 'contact', ...card }).success, JSON.stringify(card)).toBe(false);
+    }
+    // A fourth of a kind is not a key the card has: the schema drops it, and the database refuses to store a row
+    // carrying one at all (`allowed`, migration 0111), so neither can ever reach a vCard.
+    expect(ProfileBlock.parse({ kind: 'contact', fullName: 'Ada', email4: 'ada@four.com' })).toEqual({
+      kind: 'contact',
+      fullName: 'Ada',
+    });
+  });
+
   it('keeps a piece of writing’s line breaks and refuses everything else (spec 0052)', () => {
     // A Windows paste is one break a line, not two, and the body is trimmed at its ends only.
     expect(ProfileBlock.parse({ kind: 'text', title: ' About ', body: ' One\r\nTwo  ' })).toEqual({

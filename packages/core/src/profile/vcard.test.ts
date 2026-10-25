@@ -85,4 +85,49 @@ describe('writeVcard', () => {
     for (const line of vcard.split('\r\n')) expect(octets(line)).toBeLessThanOrEqual(75);
     expect(writeVcard({ fullName: 'Ada' }, { type: 'image/webp', bytes })).not.toContain('PHOTO');
   });
+
+  // Three of each way to reach the person (26 October 2026): EMAIL, TEL and URL all repeat in RFC 6350, so one
+  // card is still one person in an address book.
+  it('writes a line for every email, phone and website the card carries, in the card’s own order', () => {
+    const vcard = writeVcard({
+      fullName: 'Ada Lovelace',
+      email: 'ada@work.com',
+      email2: 'ada@home.com',
+      email3: 'ada@notes.dev',
+      phone: '+442079460000',
+      phone2: '+447700900123',
+      website: 'https://ada.dev',
+      website2: 'https://notes.ada.dev',
+    });
+    const lines = vcard.split('\r\n');
+    expect(lines.filter((line) => line.startsWith('EMAIL'))).toEqual([
+      'EMAIL;TYPE=INTERNET:ada@work.com',
+      'EMAIL;TYPE=INTERNET:ada@home.com',
+      'EMAIL;TYPE=INTERNET:ada@notes.dev',
+    ]);
+    // The first number is the one a reader rings; nothing on the card says the rest are mobiles, so they say
+    // VOICE rather than guessing CELL and putting the wrong word in somebody's address book.
+    expect(lines.filter((line) => line.startsWith('TEL'))).toEqual([
+      'TEL;TYPE=CELL:+442079460000',
+      'TEL;TYPE=VOICE:+447700900123',
+    ]);
+    expect(lines.filter((line) => line.startsWith('URL'))).toEqual([
+      'URL:https://ada.dev',
+      'URL:https://notes.ada.dev',
+    ]);
+  });
+
+  it('closes a gap, and writes the page’s own address only when the card does not already carry it', () => {
+    // A second website cleared but a third kept is still two websites: the card is read in order, gaps closed.
+    const gapped = writeVcard({ fullName: 'Ada', website: 'https://ada.dev', website3: 'https://notes.ada.dev' });
+    expect(gapped.split('\r\n').filter((line) => line.startsWith('URL'))).toEqual([
+      'URL:https://ada.dev',
+      'URL:https://notes.ada.dev',
+    ]);
+    const page = 'https://timefix.com/ada';
+    const carried = writeVcard({ fullName: 'Ada', website: 'https://ada.dev', website2: page }, undefined, page);
+    expect(carried.split('\r\n').filter((line) => line === `URL:${page}`)).toHaveLength(1);
+    const missing = writeVcard({ fullName: 'Ada', website: 'https://ada.dev' }, undefined, page);
+    expect(missing).toContain(`URL:${page}`);
+  });
 });

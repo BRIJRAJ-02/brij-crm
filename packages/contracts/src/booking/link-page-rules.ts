@@ -263,21 +263,62 @@ export function linkMarkOf(url: string): (typeof PUBLIC_LINK_MARKS)[number] | un
   );
 }
 
-/** The contact card's fields (AC-5113), in the order the editor asks for them and the vCard writes them. */
-export const PROFILE_CONTACT_FIELDS = ['fullName', 'jobTitle', 'company', 'email', 'phone', 'website', 'note'] as const;
+/**
+ * The contact card's fields (AC-5113), in the order the editor asks for them and the vCard writes them. A person
+ * may be reached three ways of each kind (26 October 2026): a work address and a personal one, a mobile and a
+ * desk number, a company site and a portfolio. Several of each is the vCard's own shape, since EMAIL, TEL and URL
+ * all repeat in RFC 6350, so the page still holds one card and still downloads as one person.
+ */
+export const PROFILE_CONTACT_FIELDS = [
+  'fullName',
+  'jobTitle',
+  'company',
+  'email',
+  'email2',
+  'email3',
+  'phone',
+  'phone2',
+  'phone3',
+  'website',
+  'website2',
+  'website3',
+  'note',
+] as const;
 /** One of the contact card's fields. */
 export type ProfileContactField = (typeof PROFILE_CONTACT_FIELDS)[number];
 
+/** How many of each repeatable field a card may carry, the `2` and `3` above. */
+export const PROFILE_CONTACT_EACH = 3;
+
+/** The repeatable fields, each named by the word its keys begin with. */
+export const PROFILE_CONTACT_REPEATED = ['email', 'phone', 'website'] as const;
+/** One of the repeatable fields. */
+export type ProfileContactRepeated = (typeof PROFILE_CONTACT_REPEATED)[number];
+
+/**
+ * A field's kind: `email2` is an email and is held to an email's rule, here and in the database alike. A field
+ * that repeats is checked by its word, never by its full name, so a second one can never be checked less.
+ */
+export function contactFieldKind(field: ProfileContactField): ProfileContactField {
+  const word = PROFILE_CONTACT_REPEATED.find((each) => field.startsWith(each));
+  return word ?? field;
+}
+
+/** Every field of one repeatable kind, in order: `email`, `email2`, `email3`. */
+export function contactFieldsOf(word: ProfileContactRepeated): readonly ProfileContactField[] {
+  return PROFILE_CONTACT_FIELDS.filter((field) => contactFieldKind(field) === word);
+}
+
 /** The longest each contact card field may be, the database's check alike. */
-export const PROFILE_CONTACT_MAX = {
-  fullName: 80,
-  jobTitle: 120,
-  company: 120,
-  email: 120,
-  phone: 32,
-  website: PROFILE_LINK_MAX,
-  note: 120,
-} as const satisfies Record<ProfileContactField, number>;
+export const PROFILE_CONTACT_MAX = Object.fromEntries(
+  PROFILE_CONTACT_FIELDS.map((field) => {
+    const kind = contactFieldKind(field);
+    if (kind === 'fullName') return [field, 80];
+    if (kind === 'phone') return [field, 32];
+    if (kind === 'website') return [field, PROFILE_LINK_MAX];
+    return [field, 120];
+  }),
+) as Readonly<Record<ProfileContactField, number>>;
 
 /** A contact card's email: something, an at sign, a host with a dot, no spaces (the database's check alike). */
 export const PROFILE_CONTACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -285,15 +326,32 @@ export const PROFILE_CONTACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** A contact card's phone: a plus, digits, and the spaces, dots, dashes and brackets people put in. */
 export const PROFILE_CONTACT_PHONE = /^\+?[\d ().-]+$/;
 
-/** A contact card as stored: a full name, and the rest only when given. */
+/** A contact card as stored: a full name, and the rest only when given, up to three of each repeatable field. */
 export interface ProfileContactCard {
   readonly fullName: string;
   readonly jobTitle?: string;
   readonly company?: string;
   readonly email?: string;
+  readonly email2?: string;
+  readonly email3?: string;
   readonly phone?: string;
+  readonly phone2?: string;
+  readonly phone3?: string;
   readonly website?: string;
+  readonly website2?: string;
+  readonly website3?: string;
   readonly note?: string;
+}
+
+/**
+ * Every value of one repeatable kind a card carries, in order, the gaps closed: a card whose second email was
+ * cleared but whose third was not still reads as two emails. The vCard and the editor both walk a card this way.
+ */
+export function contactValuesOf(card: ProfileContactCard, word: ProfileContactRepeated): readonly string[] {
+  return contactFieldsOf(word).flatMap((field) => {
+    const value = card[field];
+    return value === undefined || value === '' ? [] : [value];
+  });
 }
 
 /** What a typed contact card becomes: the card stored, or each field's problem. */
@@ -302,7 +360,7 @@ export type ProfileContactChecked =
   | { readonly ok: false; readonly problems: Readonly<Partial<Record<ProfileContactField, string>>> };
 
 /** The words each field's name takes in a refusal. */
-const CONTACT_WORDS: Readonly<Record<ProfileContactField, string>> = {
+const CONTACT_KIND_WORDS: Readonly<Record<string, string>> = {
   fullName: 'name',
   jobTitle: 'job title',
   company: 'company',
@@ -311,6 +369,32 @@ const CONTACT_WORDS: Readonly<Record<ProfileContactField, string>> = {
   website: 'website',
   note: 'note',
 };
+
+/** The words a field's name takes in a refusal: a second email is still called an email. */
+const CONTACT_WORDS = (field: ProfileContactField): string => CONTACT_KIND_WORDS[contactFieldKind(field)] ?? field;
+
+/**
+ * The fields of a card that list something it already lists, however it was typed: the same address twice is one
+ * address, which the vCard would otherwise carry as two identical lines (26 October 2026). The later field is the
+ * one named, so the one the person typed first stays where they put it. The database refuses the same pair
+ * (migration 0111), comparing the values it stores, which are the canonical ones this answers about.
+ */
+export function repeatedContactFields(
+  card: Readonly<Partial<Record<ProfileContactField, string>>>,
+): readonly ProfileContactField[] {
+  const repeated: ProfileContactField[] = [];
+  for (const word of PROFILE_CONTACT_REPEATED) {
+    const seen = new Set<string>();
+    for (const field of contactFieldsOf(word)) {
+      const value = card[field];
+      if (value === undefined || value === '') continue;
+      const same = word === 'phone' ? value.replace(/\D/g, '') : value.toLowerCase();
+      if (seen.has(same)) repeated.push(field);
+      else seen.add(same);
+    }
+  }
+  return repeated;
+}
 
 /**
  * A contact card as typed (AC-5113), checked the same way in the editor and on the server: each field trimmed, an
@@ -322,6 +406,9 @@ export function checkContactCard(typed: Readonly<Partial<Record<ProfileContactFi
   const problems: Partial<Record<ProfileContactField, string>> = {};
   const card: Partial<Record<ProfileContactField, string>> = {};
   for (const field of PROFILE_CONTACT_FIELDS) {
+    // A second email is an email: every rule below is the kind's, never the field's own name, so `email3` can
+    // never be checked less than `email` (the database reads its keys the same way, migration 0111).
+    const kind = contactFieldKind(field);
     const value = (typed[field] ?? '').trim();
     if (value === '') {
       if (field === 'fullName') problems.fullName = 'Enter your name.';
@@ -331,29 +418,32 @@ export function checkContactCard(typed: Readonly<Partial<Record<ProfileContactFi
       problems[field] = 'Keep it to one line, with no special characters.';
       continue;
     }
-    if (field === 'website') {
+    if (kind === 'website') {
       const checked = checkProfileLink(value);
-      if (!checked.ok && checked.reason === 'too_long') problems.website = profileLinkProblem('too_long');
-      else if (!checked.ok || !/^https?:/.test(checked.url)) problems.website = 'Use a web address, like timefix.com.';
-      else card.website = checked.url;
+      if (!checked.ok && checked.reason === 'too_long') problems[field] = profileLinkProblem('too_long');
+      else if (!checked.ok || !/^https?:/.test(checked.url)) problems[field] = 'Use a web address, like timefix.com.';
+      else card[field] = checked.url;
       continue;
     }
     if (value.length > PROFILE_CONTACT_MAX[field]) {
-      problems[field] = `Keep the ${CONTACT_WORDS[field]} to ${String(PROFILE_CONTACT_MAX[field])} characters.`;
+      problems[field] = `Keep the ${CONTACT_WORDS(field)} to ${String(PROFILE_CONTACT_MAX[field])} characters.`;
       continue;
     }
-    if (field === 'email' && !PROFILE_CONTACT_EMAIL.test(value)) {
-      problems.email = 'Enter an email address, like ana@example.com.';
+    if (kind === 'email' && !PROFILE_CONTACT_EMAIL.test(value)) {
+      problems[field] = 'Enter an email address, like ana@example.com.';
       continue;
     }
-    if (field === 'phone') {
+    if (kind === 'phone') {
       const digits = value.replace(/\D/g, '').length;
       if (!PROFILE_CONTACT_PHONE.test(value) || digits < 3 || digits > 20) {
-        problems.phone = 'Enter the number with its country code.';
+        problems[field] = 'Enter the number with its country code.';
         continue;
       }
     }
     card[field] = value;
+  }
+  for (const field of repeatedContactFields(card)) {
+    problems[field] = `This ${CONTACT_WORDS(field)} is already on the card.`;
   }
   if (Object.keys(problems).length > 0 || card.fullName === undefined) return { ok: false, problems };
   return { ok: true, card: { ...card, fullName: card.fullName } };

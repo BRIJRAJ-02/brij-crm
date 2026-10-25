@@ -888,10 +888,49 @@ interface ContactTyped {
   readonly fullName: string;
   readonly jobTitle: string;
   readonly company: string;
+  // Three of each way to reach the person (26 October 2026). The second and third are typed into fields the
+  // editor only shows once they are asked for, so a card with one of each is the form it always was.
   readonly email: string;
+  readonly email2: string;
+  readonly email3: string;
   readonly phone: PhoneFieldValue;
+  readonly phone2: PhoneFieldValue;
+  readonly phone3: PhoneFieldValue;
   readonly website: string;
+  readonly website2: string;
+  readonly website3: string;
   readonly note: string;
+}
+
+/** How many of a repeatable field the editor shows: the ones already filled, and at least one. */
+const shownCount = (values: readonly (string | undefined)[]): number =>
+  Math.max(1, ...values.map((value, at) => (value === undefined || value === '' ? 0 : at + 1)));
+
+/** The three fields of each kind, in the order the card carries and the vCard writes them. */
+const EMAIL_FIELDS = ['email', 'email2', 'email3'] as const;
+const PHONE_FIELDS = ['phone', 'phone2', 'phone3'] as const;
+const WEBSITE_FIELDS = ['website', 'website2', 'website3'] as const;
+
+/**
+ * One more of a kind, under the fields of that kind: a quiet button rather than three empty fields, since most
+ * people have one of each and a form of nine boxes reads as work (26 October 2026). It leaves the form entirely
+ * once the third is shown, so nothing promises a fourth.
+ */
+function AddAnother({
+  word,
+  isShown,
+  onPress,
+}: {
+  readonly word: string;
+  readonly isShown: boolean;
+  readonly onPress: () => void;
+}) {
+  if (!isShown) return undefined;
+  return (
+    <Button variant="ghost" size="sm" icon="plus" onPress={onPress}>
+      {word}
+    </Button>
+  );
 }
 
 /** The country a new number starts in: the browser's language's region ("en-IN" is IN), else the US. */
@@ -937,15 +976,30 @@ export function ContactEditor({
     jobTitle: editing?.jobTitle ?? '',
     company: editing?.company ?? '',
     email: editing?.email ?? '',
+    email2: editing?.email2 ?? '',
+    email3: editing?.email3 ?? '',
     phone: phoneOf(editing?.phone, guess),
+    phone2: phoneOf(editing?.phone2, guess),
+    phone3: phoneOf(editing?.phone3, guess),
     website: editing?.website ?? '',
+    website2: editing?.website2 ?? '',
+    website3: editing?.website3 ?? '',
     note: editing?.note ?? '',
   }));
+  // How many of each the form shows: what the card already carries, and one more each time Add another is pressed.
+  const [shown, setShown] = useState(() => ({
+    email: shownCount([editing?.email, editing?.email2, editing?.email3]),
+    phone: shownCount([editing?.phone, editing?.phone2, editing?.phone3]),
+    website: shownCount([editing?.website, editing?.website2, editing?.website3]),
+  }));
   const [problems, setProblems] = useState<BlockProblems>({});
+  const sent = (value: PhoneFieldValue) => (value.national.trim() === '' ? '' : toE164(value.country, value.national));
   const draft: BlockDraft = {
     kind: 'contact',
     ...typed,
-    phone: typed.phone.national.trim() === '' ? '' : toE164(typed.phone.country, typed.phone.national),
+    phone: sent(typed.phone),
+    phone2: sent(typed.phone2),
+    phone3: sent(typed.phone3),
   };
   const submit = () => {
     const checked = linkPage.check(draft, items, editing?.id);
@@ -959,7 +1013,7 @@ export function ContactEditor({
     if (problems[name] !== undefined) setProblems((was) => ({ ...was, [name]: undefined }));
   };
   /** One text field, wired to its value and its problem, which clears as it is typed in. */
-  const field = (name: Exclude<keyof ContactTyped, 'phone'>) => ({
+  const field = (name: Exclude<keyof ContactTyped, 'phone' | 'phone2' | 'phone3'>) => ({
     name,
     autoComplete: 'off',
     value: typed[name],
@@ -1008,35 +1062,59 @@ export function ContactEditor({
           maxLength={120}
         />
         <Field {...field('company')} label={strings.contactCompany} maxLength={120} />
-        <Field
-          {...field('email')}
-          label={strings.contactEmail}
-          type="email"
-          inputMode="email"
-          isVerbatim
-          placeholder={strings.contactEmailPlaceholder}
-          maxLength={120}
+        {EMAIL_FIELDS.slice(0, shown.email).map((name, at) => (
+          <Field
+            key={name}
+            {...field(name)}
+            label={at === 0 ? strings.contactEmail : strings.contactEmailMore(at + 1)}
+            type="email"
+            inputMode="email"
+            isVerbatim
+            {...(at === 0 ? { placeholder: strings.contactEmailPlaceholder } : {})}
+            maxLength={120}
+          />
+        ))}
+        <AddAnother
+          word={strings.contactAddEmail}
+          isShown={shown.email < EMAIL_FIELDS.length}
+          onPress={() => setShown((was) => ({ ...was, email: was.email + 1 }))}
         />
-        <PhoneField
-          label={strings.contactPhone}
-          name="phone"
-          guess={guess}
-          hint={strings.contactPhoneHint}
-          value={typed.phone}
-          onChange={(next) => {
-            setTyped((was) => ({ ...was, phone: next }));
-            clear('phone');
-          }}
-          {...(problems.phone === undefined ? {} : { error: problems.phone })}
+        {PHONE_FIELDS.slice(0, shown.phone).map((name, at) => (
+          <PhoneField
+            key={name}
+            label={at === 0 ? strings.contactPhone : strings.contactPhoneMore(at + 1)}
+            name={name}
+            guess={guess}
+            {...(at === 0 ? { hint: strings.contactPhoneHint } : {})}
+            value={typed[name]}
+            onChange={(next) => {
+              setTyped((was) => ({ ...was, [name]: next }));
+              clear(name);
+            }}
+            {...(problems[name] === undefined ? {} : { error: problems[name] })}
+          />
+        ))}
+        <AddAnother
+          word={strings.contactAddPhone}
+          isShown={shown.phone < PHONE_FIELDS.length}
+          onPress={() => setShown((was) => ({ ...was, phone: was.phone + 1 }))}
         />
-        <Field
-          {...field('website')}
-          label={strings.contactWebsite}
-          type="url"
-          inputMode="url"
-          isVerbatim
-          placeholder={strings.contactWebsitePlaceholder}
-          maxLength={2_000}
+        {WEBSITE_FIELDS.slice(0, shown.website).map((name, at) => (
+          <Field
+            key={name}
+            {...field(name)}
+            label={at === 0 ? strings.contactWebsite : strings.contactWebsiteMore(at + 1)}
+            type="url"
+            inputMode="url"
+            isVerbatim
+            {...(at === 0 ? { placeholder: strings.contactWebsitePlaceholder } : {})}
+            maxLength={2_000}
+          />
+        ))}
+        <AddAnother
+          word={strings.contactAddWebsite}
+          isShown={shown.website < WEBSITE_FIELDS.length}
+          onPress={() => setShown((was) => ({ ...was, website: was.website + 1 }))}
         />
         <Field
           {...field('note')}

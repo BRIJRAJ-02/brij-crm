@@ -2,7 +2,7 @@
 // address book read, written by hand rather than by a library: a dozen lines, every value escaped per RFC 6350
 // (backslash, comma, semicolon and line breaks), every line folded at 75 octets of UTF-8 without splitting a
 // character, and lines ended with CRLF. The person's picture goes in as base64 when the caller fetched one.
-import type { ProfileContactCard } from '@crm/contracts';
+import { contactValuesOf, type ProfileContactCard } from '@crm/contracts';
 
 /** A picture to embed: its bytes and their type. A WebP is left out: older address books show it broken. */
 export interface VcardPhoto {
@@ -74,9 +74,10 @@ function base64Of(bytes: Uint8Array): string {
 }
 
 /**
- * A contact card as a vCard 3.0 file: the name (N and FN), the company, the job title, the email, the phone, the
- * website, the link page's own address (`pageUrl`) and the note, each only when given, and the picture when there
- * is one of a type a vCard names. Nothing else: no workspace data, nothing from a CRM record (AC-5113).
+ * A contact card as a vCard 3.0 file: the name (N and FN), the company, the job title, every email, phone and
+ * website the card carries, the link page's own address (`pageUrl`) and the note, each only when given, and the
+ * picture when there is one of a type a vCard names. Nothing else: no workspace data, nothing from a CRM record
+ * (AC-5113).
  */
 export function writeVcard(card: ProfileContactCard, photo?: VcardPhoto, pageUrl?: string): string {
   const { family, given } = nameParts(card.fullName);
@@ -87,13 +88,20 @@ export function writeVcard(card: ProfileContactCard, photo?: VcardPhoto, pageUrl
     `FN:${escapeVcardText(card.fullName)}`,
     ...(card.company === undefined ? [] : [`ORG:${escapeVcardText(card.company)}`]),
     ...(card.jobTitle === undefined ? [] : [`TITLE:${escapeVcardText(card.jobTitle)}`]),
-    ...(card.email === undefined ? [] : [`EMAIL;TYPE=INTERNET:${escapeVcardText(card.email)}`]),
-    ...(card.phone === undefined ? [] : [`TEL;TYPE=CELL:${escapeVcardText(card.phone)}`]),
-    ...(card.website === undefined ? [] : [`URL:${uriValue(card.website)}`]),
+    // EMAIL, TEL and URL all repeat in RFC 6350, so a card with three emails is three lines rather than three
+    // cards (26 October 2026). The first phone is the one a reader rings (CELL); the rest are plain VOICE, since
+    // nothing on the card says which is a mobile and guessing would put the wrong word in an address book.
+    ...contactValuesOf(card, 'email').map((email) => `EMAIL;TYPE=INTERNET:${escapeVcardText(email)}`),
+    ...contactValuesOf(card, 'phone').map(
+      (phone, at) => `TEL;TYPE=${at === 0 ? 'CELL' : 'VOICE'}:${escapeVcardText(phone)}`,
+    ),
+    ...contactValuesOf(card, 'website').map((website) => `URL:${uriValue(website)}`),
     // The link page itself, after the card's own website so an address book that shows one URL shows that one. A
     // second plain URL line is vCard 3.0 as written, and iOS and Android both list it; a TYPE or an X-ABLabel to
     // name it is Apple's own and reads as noise everywhere else (AC-5115, 25 October 2026).
-    ...(pageUrl === undefined || pageUrl === card.website ? [] : [`URL:${uriValue(pageUrl)}`]),
+    ...(pageUrl === undefined || contactValuesOf(card, 'website').includes(pageUrl)
+      ? []
+      : [`URL:${uriValue(pageUrl)}`]),
     ...(card.note === undefined ? [] : [`NOTE:${escapeVcardText(card.note)}`]),
   ];
   const photoType = photo === undefined ? undefined : PHOTO_TYPES[photo.type];

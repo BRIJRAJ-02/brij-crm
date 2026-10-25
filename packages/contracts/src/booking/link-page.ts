@@ -6,6 +6,7 @@ import * as z from 'zod';
 import { HUES } from '../values/hue-list.ts';
 import {
   checkContactCard,
+  repeatedContactFields,
   checkProfileLink,
   type ProfileContactField,
   PROFILE_LINK_ICONS,
@@ -117,16 +118,33 @@ const contactField = (field: ProfileContactField) =>
  * `checkContactCard` keeps it. Nothing comes from a CRM record. At most one is live (AC-5102); it is saved as a vCard
  * from the page (AC-5114).
  */
-export const ProfileContactBlock = z.object({
-  kind: z.literal('contact'),
-  fullName: contactField('fullName'),
-  jobTitle: contactField('jobTitle').optional(),
-  company: contactField('company').optional(),
-  email: contactField('email').optional(),
-  phone: contactField('phone').optional(),
-  website: contactField('website').optional(),
-  note: contactField('note').optional(),
-});
+export const ProfileContactBlock = z
+  .object({
+    kind: z.literal('contact'),
+    fullName: contactField('fullName'),
+    jobTitle: contactField('jobTitle').optional(),
+    company: contactField('company').optional(),
+    // Three of each way to reach the person (26 October 2026): a card written before them has only the first of
+    // each, and is exactly what it was.
+    email: contactField('email').optional(),
+    email2: contactField('email2').optional(),
+    email3: contactField('email3').optional(),
+    phone: contactField('phone').optional(),
+    phone2: contactField('phone2').optional(),
+    phone3: contactField('phone3').optional(),
+    website: contactField('website').optional(),
+    website2: contactField('website2').optional(),
+    website3: contactField('website3').optional(),
+    note: contactField('note').optional(),
+  })
+  .superRefine((card, ctx) => {
+    // Each field above is checked on its own, so the one rule that reads the whole card is here: the same address
+    // listed twice (26 October 2026). The values compared are the canonical ones, as the database compares what it
+    // stores (migration 0111).
+    for (const field of repeatedContactFields(card)) {
+      ctx.addIssue({ code: 'custom', path: [field], message: 'This is already on the card.' });
+    }
+  });
 /** A contact card block. */
 export type ProfileContactBlock = z.infer<typeof ProfileContactBlock>;
 
