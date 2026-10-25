@@ -39,6 +39,14 @@ const image =
     new Response(bytes, { headers: { 'content-type': type, ...headers } });
 const redirect = (location: string) => () => new Response(null, { status: 302, headers: { location } });
 
+// Every host in these tests resolves to one public address: what a name resolves to is the outside fetch's own
+// table test (`outside.test.ts`), and a picture only narrows which hosts it will ask for at all.
+const lookup = () => Promise.resolve(['93.184.216.34']);
+
+/** The picture fetch over a fake network, never the laptop's resolver. */
+const pictureFetch = (options: { fetch: typeof globalThis.fetch; timeoutMs?: number; maxBytes?: number }) =>
+  createPictureFetch({ ...options, lookup });
+
 describe('createPictureFetch', () => {
   it('fetches a picture on Google’s hosts, following a redirect between them', async () => {
     const other = 'https://lh4.googleusercontent.com/a/elsewhere=s256-c';
@@ -46,19 +54,19 @@ describe('createPictureFetch', () => {
       [SIZED]: redirect(other),
       [other]: image(JPEG, 'image/jpeg; charset=binary'),
     });
-    const fetched = await createPictureFetch({ fetch })(new URL(SIZED));
+    const fetched = await pictureFetch({ fetch })(new URL(SIZED));
     expect(fetched).toMatchObject({ ok: true, type: 'image/jpeg' });
     expect(asked).toEqual([SIZED, other]);
   });
 
   it('never leaves Google’s picture hosts: not first, not by a redirect', async () => {
     const { fetch, asked } = fakeFetch({ [SIZED]: redirect('https://evil.example/x.png') });
-    expect(await createPictureFetch({ fetch })(new URL('https://evil.example/x.png'))).toEqual({
+    expect(await pictureFetch({ fetch })(new URL('https://evil.example/x.png'))).toEqual({
       ok: false,
-      reason: 'redirect',
+      reason: 'url',
     });
     expect(asked).toEqual([]);
-    expect(await createPictureFetch({ fetch })(new URL(SIZED))).toEqual({ ok: false, reason: 'redirect' });
+    expect(await pictureFetch({ fetch })(new URL(SIZED))).toEqual({ ok: false, reason: 'redirect' });
     expect(asked).toEqual([SIZED]);
   });
 
@@ -66,7 +74,7 @@ describe('createPictureFetch', () => {
     const a = 'https://lh3.googleusercontent.com/a/one';
     const b = 'https://lh3.googleusercontent.com/a/two';
     const { fetch } = fakeFetch({ [SIZED]: redirect(a), [a]: redirect(b), [b]: redirect(SIZED) });
-    expect(await createPictureFetch({ fetch })(new URL(SIZED))).toEqual({ ok: false, reason: 'redirect' });
+    expect(await pictureFetch({ fetch })(new URL(SIZED))).toEqual({ ok: false, reason: 'redirect' });
   });
 
   it('answers only an image whose first bytes match its type', async () => {
@@ -80,7 +88,7 @@ describe('createPictureFetch', () => {
     ];
     for (const [answer, expected] of cases) {
       const { fetch } = fakeFetch({ [SIZED]: answer });
-      const fetched = await createPictureFetch({ fetch })(new URL(SIZED));
+      const fetched = await pictureFetch({ fetch })(new URL(SIZED));
       expect(fetched.ok ? { ...fetched, bytes: Uint8Array.from(fetched.bytes) } : fetched).toEqual(expected);
     }
   });
@@ -89,7 +97,7 @@ describe('createPictureFetch', () => {
     const big = new Uint8Array(64).fill(1);
     big.set(PNG);
     const declared = fakeFetch({ [SIZED]: image(big, 'image/png', { 'content-length': '64' }) });
-    expect(await createPictureFetch({ fetch: declared.fetch, maxBytes: 32 })(new URL(SIZED))).toEqual({
+    expect(await pictureFetch({ fetch: declared.fetch, maxBytes: 32 })(new URL(SIZED))).toEqual({
       ok: false,
       reason: 'size',
     });
@@ -106,7 +114,7 @@ describe('createPictureFetch', () => {
           { headers: { 'content-type': 'image/png' } },
         ),
     });
-    expect(await createPictureFetch({ fetch: streamed.fetch, maxBytes: 32 })(new URL(SIZED))).toEqual({
+    expect(await pictureFetch({ fetch: streamed.fetch, maxBytes: 32 })(new URL(SIZED))).toEqual({
       ok: false,
       reason: 'size',
     });
@@ -119,12 +127,12 @@ describe('createPictureFetch', () => {
           reject(new Error('aborted'));
         });
       })) as typeof globalThis.fetch;
-    expect(await createPictureFetch({ fetch: hangs, timeoutMs: 20 })(new URL(SIZED))).toEqual({
+    expect(await pictureFetch({ fetch: hangs, timeoutMs: 20 })(new URL(SIZED))).toEqual({
       ok: false,
       reason: 'timeout',
     });
     const fails = (() => Promise.reject(new TypeError('fetch failed'))) as typeof globalThis.fetch;
-    expect(await createPictureFetch({ fetch: fails })(new URL(SIZED))).toEqual({ ok: false, reason: 'network' });
+    expect(await pictureFetch({ fetch: fails })(new URL(SIZED))).toEqual({ ok: false, reason: 'network' });
   });
 });
 

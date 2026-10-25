@@ -493,6 +493,34 @@ describe('vendor wrappers in the server and screens presets (spec 0010, AC-184)'
   }, 60_000);
 });
 
+describe('the one outside fetch (spec 0055, AC-5531)', () => {
+  it('lets only the named files call the network, and names the module everywhere else', async () => {
+    const reads = (call: string) => `export async function read(url: URL) {\n  return await ${call}(url);\n}\n`;
+    const root = createWorkspace({
+      'src/public/outside.ts': reads('fetch'),
+      'src/realtime/centrifugo.ts': reads('globalThis.fetch'),
+      'src/import.ts': reads('fetch'),
+      'src/icons.ts': reads('globalThis.fetch'),
+    });
+    const messages = await lintWorkspace(
+      root,
+      server({ root, fetchWrappers: ['src/public/outside.ts', 'src/realtime/centrifugo.ts'] }),
+    );
+    for (const file of ['src/public/outside.ts', 'src/realtime/centrifugo.ts']) {
+      expect(rulesFor(messages, file)).toEqual([]);
+    }
+    expect(rulesFor(messages, 'src/import.ts')).toContain('no-restricted-globals');
+    expect(rulesFor(messages, 'src/icons.ts')).toContain('no-restricted-properties');
+    expect(messagesFor(messages, 'src/import.ts').join()).toMatch(/one outside fetch/);
+  }, 60_000);
+
+  it('leaves the network alone in a workspace that names no file', async () => {
+    const root = createWorkspace({ 'src/read.ts': 'export const read = (url: URL) => fetch(url);\n' });
+    const messages = await lintWorkspace(root, server({ root }));
+    expect(rulesFor(messages, 'src/read.ts')).not.toContain('no-restricted-globals');
+  }, 60_000);
+});
+
 describe('server preset for packages/db', () => {
   it('lets packages/db open the database connection', async () => {
     const root = createWorkspace({ 'src/client.ts': "import pg from 'pg';\nexport const pool = pg;\n" });

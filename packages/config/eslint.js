@@ -165,6 +165,24 @@ function noNetwork(message) {
   };
 }
 
+/**
+ * House rule (spec 0055, AC-5531): every read of an address a person typed goes through one module with one set
+ * of rules, so the address checks, the redirect checks and the caps are written once and cannot be forgotten by
+ * the next caller. `fetchWrappers` names the files a workspace allows a `fetch` in at all; everywhere else it is
+ * a lint error naming the module to use.
+ */
+const OUTSIDE_FETCH_MESSAGE =
+  'Read an outside address through the one outside fetch (apps/api/src/public/outside.ts), which checks where it goes.';
+
+/** The network globals refused outside `files`, which may use them. */
+function fetchOnlyIn(files) {
+  if (files.length === 0) return [];
+  return [
+    { rules: noNetwork(OUTSIDE_FETCH_MESSAGE) },
+    { files, rules: { 'no-restricted-globals': 'off', 'no-restricted-properties': 'off' } },
+  ];
+}
+
 // House rule: one field design. Screens render attribute values through
 // AttributeDisplay, never through the value atoms directly.
 const VALUE_ATOMS = ['Currency', 'Tag', 'TagList', 'StatusDot', 'Rating', 'LinkChip'];
@@ -379,9 +397,10 @@ function serverImports(databaseDriver, allow = []) {
  *   databaseDriver?: boolean,
  *   loadHarness?: boolean,
  *   vendorWrappers?: { files: string[], allow: string[] }[],
+ *   fetchWrappers?: string[],
  * }} options
  */
-export function server({ root, databaseDriver = false, loadHarness = false, vendorWrappers = [] }) {
+export function server({ root, databaseDriver = false, loadHarness = false, vendorWrappers = [], fetchWrappers = [] }) {
   // packages/load alone passes `loadHarness: true`: it may import the load scripts' guards and files, never minting.
   const harness = loadHarness ? ['harness'] : [];
   return defineConfig(
@@ -394,6 +413,7 @@ export function server({ root, databaseDriver = false, loadHarness = false, vend
     { files: BOTH_IMPORTERS, ...serverImports(databaseDriver, ['system', 'testing', 'load', 'public']) },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions]),
     wrapperExceptions(vendorWrappers),
+    fetchOnlyIn(fetchWrappers),
   );
 }
 
