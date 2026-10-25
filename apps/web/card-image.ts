@@ -239,3 +239,5 @@ export function cardFonts(assets: CardAssets) {
 export const CARD_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 /** Without a version (somebody typed the address), it is still cached, but only for an hour. */
 export const CARD_CACHE_CONTROL_UNVERSIONED = 'public, max-age=3600, s-maxage=3600';
+/** A card drawn from the address alone, because the read missed: kept a minute, so the real one follows soon. */
+export const CARD_CACHE_CONTROL_MISSED = 'public, max-age=60, s-maxage=60';

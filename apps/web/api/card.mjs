@@ -27,16 +27,28 @@ registerHooks({
 });
 
 // @boundaries-ignore the Vercel Function entry runs on the server, not in the client bundle
-const { CARD_CACHE_CONTROL, CARD_CACHE_CONTROL_UNVERSIONED, CARD_HEIGHT, CARD_WIDTH, cardFonts, cardTree, handleOf } =
-  await import('../card-image.ts');
+const {
+  CARD_CACHE_CONTROL,
+  CARD_CACHE_CONTROL_MISSED,
+  CARD_CACHE_CONTROL_UNVERSIONED,
+  CARD_HEIGHT,
+  CARD_WIDTH,
+  cardFonts,
+  cardTree,
+  handleOf,
+} = await import('../card-image.ts');
 const { default: satori } = await import('satori');
 const { Resvg } = await import('@resvg/resvg-js');
 
 /** Where the fonts and the lockup sit, beside this file so the bundle carries them (`includeFiles` in vercel.json). */
 const ASSETS = join(dirname(fileURLToPath(import.meta.url)), 'card-assets');
 
-/** How long the profile read may take before the request gives up, the shell's own patience. */
-const READ_TIMEOUT_MS = 800;
+/**
+ * How long the profile read may take. Longer than the shell's 800 ms on purpose: nobody is waiting on this, a
+ * crawler fetching a card will wait, and a cold function beside a cold database spent more than that on the first
+ * card production ever drew (26 October 2026), which a reader would have seen as a broken picture.
+ */
+const READ_TIMEOUT_MS = 3_000;
 /** How long the picture may take. Shorter: a card without a face is still a card, a slow one is a dead preview. */
 const PICTURE_TIMEOUT_MS = 600;
 /** The largest picture that is worth embedding; anything above it draws as initials. */
@@ -93,14 +105,17 @@ export async function GET(request) {
   } catch (error) {
     // One line, the handle and why, as the shell logs its own misses: a card nobody can draw is invisible otherwise.
     console.warn(JSON.stringify({ event: 'handle.card.missed', handle, reason: error?.name ?? 'unknown' }));
-    return new Response('Unavailable', { status: 503, headers: { 'cache-control': 'no-store' } });
+    // A card is still drawn, from the address alone. A reader who was sent this link sees the page it belongs to
+    // rather than a broken picture, which is what a 503 looks like in a message; it is kept for a minute only, so
+    // the real card takes its place as soon as the read works again.
+    profile = undefined;
   }
 
-  const name = typeof profile.name === 'string' && profile.name !== '' ? profile.name : handle;
-  const bio = typeof profile.bio === 'string' && profile.bio.trim() !== '' ? profile.bio.trim() : undefined;
+  const name = typeof profile?.name === 'string' && profile.name !== '' ? profile.name : handle;
+  const bio = typeof profile?.bio === 'string' && profile.bio.trim() !== '' ? profile.bio.trim() : undefined;
   // The address a visitor reads, which is the public origin's host and not whichever host this request arrived on.
   const shown = `${new URL(process.env.BOOKING_PUBLIC_ORIGIN ?? url.origin).host}/${handle}`;
-  const picture = await pictureOf(url.origin, profile.image);
+  const picture = profile === undefined ? undefined : await pictureOf(url.origin, profile.image);
   const loaded = await loadAssets();
 
   const svg = await satori(
@@ -121,7 +136,12 @@ export async function GET(request) {
     headers: {
       'content-type': 'image/png',
       // A versioned address is one picture forever; a bare one is kept an hour, since the page behind it changes.
-      'cache-control': url.searchParams.get('v') ? CARD_CACHE_CONTROL : CARD_CACHE_CONTROL_UNVERSIONED,
+      'cache-control':
+        profile === undefined
+          ? CARD_CACHE_CONTROL_MISSED
+          : url.searchParams.get('v')
+            ? CARD_CACHE_CONTROL
+            : CARD_CACHE_CONTROL_UNVERSIONED,
       'content-length': String(png.byteLength),
       'x-content-type-options': 'nosniff',
     },
