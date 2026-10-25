@@ -40,6 +40,10 @@ export {
 export { writeVcard, type VcardPhoto } from './profile/vcard.ts';
 // A host's account picture (23 Oct 2026): only Google's picture hosts, so the api's fetch goes nowhere else.
 export { isPictureHost, pictureVersion, type AccountPicture, type AccountPictureReader } from './booking/picture.ts';
+
+// Where our server may never be made to send a request (spec 0055, AC-5520). The pure half of the one hardened
+// outside fetch: no network, no state, just the rule, so every caller asks the same question.
+export { isFetchableUrl, isRefusedAddress } from './booking/addresses.ts';
 // The booking chat (spec 0042): one turn, through the slots and booking services above.
 export { chatTurn, type ChatTurn } from './booking/chat/turn.ts';
 // The guest page's changes (milestone 2): move, add guests, cancel, and where it could move.
