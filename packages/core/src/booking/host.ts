@@ -25,7 +25,7 @@ import { loadPage } from './slots.ts';
 import { manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { matchVisitor } from './visitor.ts';
 
-const { bookingPageMembers, bookings, objects } = schema;
+const { bookingPageMembers, bookings, members, objects } = schema;
 
 /** The shortest and longest meeting a member books in themselves, in minutes: the contract's bounds, so they can't drift. */
 export const HOST_BOOKING_MINUTES = HOST_BOOKING_LIMITS;
@@ -215,6 +215,15 @@ export async function bookAsHost(
   );
   if (result.replayed) return { bookingId: result.bookingId, replayed: true };
 
+  // The member who booked them in goes on the event too, first. The event sits on that member's calendar, so the
+  // provider makes them its organiser and marks them accepted rather than inviting them to their own meeting, but a
+  // guest's own copy never shows the organiser: without this the person booked in reads "<title> with <themselves>",
+  // one guest, themselves, and nothing naming who booked them (owner, 25 Oct 2026, the same fault as a public
+  // booking). Their name, not just an address, so the copy reads as a person.
+  const [booker] = await inWorkspace(scope, (tx) =>
+    tx.select({ email: members.email, name: members.name }).from(members).where(eq(members.id, host)),
+  );
+
   // The calendar event, after the commit: three tries, then the booking stands without one (it says so).
   let written: Awaited<ReturnType<BookingCalendar['events']>> | undefined;
   for (let attempt = 1; attempt <= 3 && written === undefined; attempt += 1) {
@@ -233,8 +242,12 @@ export async function bookAsHost(
         start: input.start.toISOString(),
         end: end.toISOString(),
         attendees: [
+          ...(booker === undefined ? [] : [booker]),
           { email: input.email, name: input.name },
-          ...guests.map((guest) => ({ email: guest, name: guest })),
+          // A member who typed their own address into the guests is already on it, by name, as the first attendee.
+          ...guests
+            .filter((guest) => guest !== booker?.email.trim().toLowerCase())
+            .map((guest) => ({ email: guest, name: guest })),
         ],
         video: result.place?.type === 'video',
         // In person or a custom place goes on the event; a phone page's number is the guest's, which isn't asked here.
