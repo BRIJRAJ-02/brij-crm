@@ -906,12 +906,18 @@ async function memberEmails(
   memberIds: readonly string[],
 ): Promise<readonly { readonly email: string; readonly name: string }[]> {
   if (memberIds.length === 0) return [];
-  return inWorkspace(entry.scope, (tx) =>
+  const found = await inWorkspace(entry.scope, (tx) =>
     tx
-      .select({ email: members.email, name: members.name })
+      .select({ id: members.id, email: members.email, name: members.name })
       .from(members)
       .where(inArray(members.id, [...memberIds])),
   );
+  // In the order asked for, not the order the rows happen to come back in: the host they booked is asked for first,
+  // and goes on the event first.
+  return memberIds
+    .map((id) => found.find((member) => member.id === id))
+    .filter((member) => member !== undefined)
+    .map(({ email, name }) => ({ email, name }));
 }
 
 /** The answers a booking keeps, read back as the guest page shows them. */

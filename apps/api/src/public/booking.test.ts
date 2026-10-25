@@ -298,9 +298,10 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     expect(ics.headers.get('content-type')).toBe('text/calendar; charset=utf-8');
     expect(await ics.text()).toContain('METHOD:REQUEST');
     expect((await visit('manage/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')).status).toBe(404);
-    expect(events.some((event) => event.start === MONDAY_9 && event.attendees[0]?.email === 'grace@navy.example')).toBe(
-      true,
-    );
+    // The host they booked is on the event, first, then the visitor: a guest's own copy never shows the organiser,
+    // so without the host on it nothing on the visitor's copy names who they are meeting (owner, 25 Oct 2026).
+    const made = events.find((event) => event.start === MONDAY_9);
+    expect(made?.attendees.map((attendee) => attendee.email)).toEqual([m.email, 'grace@navy.example']);
     const [listed] = await m.client.bookings.list({ workspace: m.slug, pageId: page.id, when: 'upcoming' });
     expect(listed).toMatchObject({ visitorName: 'Grace Hopper', status: 'confirmed', eventFailed: false });
     expect(listed?.personRecordId).toBeDefined();
