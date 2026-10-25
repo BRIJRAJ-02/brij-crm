@@ -30,6 +30,13 @@ export const HANDLE_HEADER_SOURCE = `/(${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?)`;
 /** vercel.json's app policy source: every path but the API, the public pages (hosted forms, booking pages) and the embed script. */
 export const APP_HEADER_SOURCE = `/((?!api/|api$|f/|b/[^/]+$|embed/|${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?$).*)`;
 
+/**
+ * The share card's own path, `/api/public/handles/<handle>/card.png` (spec 0055, AC-5510). It sits under the public
+ * API's prefix, so one origin serves it and the public host already allows it, but this project's own function
+ * draws it (`api/card.mjs`), never the API: the middleware leaves it alone and vercel.json's rewrite takes it.
+ */
+export const CARD_PATH = /^\/api\/public\/handles\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]\/card\.png$/;
+
 /** A path vercel.json sends to book.html as a handle address, matched as Vercel anchors it. */
 export const HANDLE_PATH = new RegExp(`^/${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?/?$`);
 

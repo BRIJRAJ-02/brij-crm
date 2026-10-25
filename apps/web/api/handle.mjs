@@ -59,8 +59,9 @@ export async function GET(request) {
   const { body, status, outcome } = await shellFor(url.pathname, {
     shell: BOOKING_SHELL,
     origin,
-    // No card origin yet: the share card route (spec 0055, AC-5510) needs a server side drawing library, which is
-    // the owner's call. Until it answers, the block names no picture rather than one that 404s.
+    // The share card is served from the public origin too, by `api/card.mjs` in this same deployment, so a crawler
+    // that follows the block reaches a picture on the address the page itself lives at (spec 0055, AC-5510).
+    cardOrigin: origin,
     readProfile: readProfile(url.origin),
     readPage: readPage(url.origin),
     onMiss: (handle, reason) => {

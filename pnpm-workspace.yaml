@@ -76,10 +76,12 @@ catalog:
   react-aria-components: 1.21.1
   react-dom: 19.3.0
   "@react-email/render": 2.1.0
+  "@resvg/resvg-js": 2.6.2
   react-email: 6.11.0
   resend: 6.32.0
   rolldown: 1.2.12
   rolldown-plugin-dts: 0.28.6
+  satori: 0.63.2
   size-limit: 14.1.0
   storybook: 10.6.1
   stylelint: 17.15.0

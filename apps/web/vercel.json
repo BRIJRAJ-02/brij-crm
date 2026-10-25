@@ -10,12 +10,20 @@
     },
     "api/handle.mjs": {
       "maxDuration": 10
+    },
+    "api/card.mjs": {
+      "maxDuration": 15,
+      "includeFiles": "api/card-assets/**"
     }
   },
   "git": {
     "deploymentEnabled": false
   },
   "rewrites": [
+    {
+      "source": "/api/public/handles/:handle/card.png",
+      "destination": "/api/card"
+    },
     {
       "source": "/api/(.*)",
       "destination": "/api"

@@ -30,6 +30,9 @@ const SLUG = '[a-z0-9][a-z0-9-]{0,59}';
 /** public-paths.ts's HANDLE_PATH: a handle address, `/<handle>` or `/<handle>/<slug>`, as Vercel anchors it. */
 export const HANDLE_PATH = new RegExp(`^/${HANDLE}(?:/${SLUG})?/?$`);
 
+/** public-paths.ts's CARD_PATH: the share card, under the public API's prefix but drawn by this project. */
+export const CARD_PATH = /^\/api\/public\/handles\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]\/card\.png$/;
+
 /** public-paths.ts's PUBLIC_HOST_PATH: the handle addresses, /b/, /f/, /embed/, the built files and /api/public/. */
 export const PUBLIC_HOST_PATH = new RegExp(
   `^(?:/(?:b|f|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:embed\\.js|favicon\\.ico|layers\\.css|theme-boot\\.js)|/${HANDLE}(?:/${SLUG})?/?)$`,
@@ -120,8 +123,13 @@ export const config = {
   matcher: ['/((?!assets/|brand/|embed\\.js$|favicon\\.ico$|layers\\.css$|theme-boot\\.js$).*)'],
 };
 
-/** Whether a path is the API's: only these get the edge's headers, the proxy or the function. */
-const isApiPath = (pathname: string) => pathname === '/api' || pathname.startsWith('/api/');
+/**
+ * Whether a path is the API's: only these get the edge's headers, the proxy or the function. The share card is the
+ * one exception under `/api/`: it is this project's own function, so it passes on to vercel.json's rewrite rather
+ * than to an API that has no such route (spec 0055, AC-5510).
+ */
+const isApiPath = (pathname: string) =>
+  (pathname === '/api' || pathname.startsWith('/api/')) && !CARD_PATH.test(pathname);
 
 /**
  * The header carrying the edge secret, which proves to the API that a request

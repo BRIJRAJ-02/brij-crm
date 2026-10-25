@@ -6,6 +6,7 @@ import { sourcePattern } from './csp.ts';
 import { readFileSync } from 'node:fs';
 import middleware, {
   apiTarget,
+  CARD_PATH,
   config,
   EDGE_HEADER,
   GEO_HEADERS,
@@ -281,6 +282,19 @@ describe('the api switch (spec 0045)', () => {
     expect(((await response.json()) as { code: string }).code).toBe('API_UNAVAILABLE');
   });
 
+  it('leaves the share card for this project, never the API, whatever the API is', () => {
+    // The card sits under /api/public/ so one origin serves it, but api/card.mjs draws it. Were it proxied, a
+    // deployment whose API is Railway would answer every pasted link's picture with that API's 404.
+    vi.stubEnv('API_ORIGIN_INTERNAL', 'https://api.timefix.com');
+    vi.stubEnv('EDGE_SECRET', 'the-real-edge-secret-of-32-characters');
+    vi.stubEnv('VERCEL_ENV', 'production');
+    const response = call('/api/public/handles/ada/card.png');
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
+    // The handle's own public read is the API's, as it always was.
+    expect(call('/api/public/handles/ada').headers.get('x-middleware-rewrite')).toContain('api.timefix.com');
+  });
+
   it('refuses a malformed edge secret in the function mode too', () => {
     vi.stubEnv('API_ORIGIN_INTERNAL', '');
     vi.stubEnv('EDGE_SECRET', 'short');
@@ -422,6 +436,7 @@ describe('the public host check written out in middleware.ts', () => {
   it('serves exactly the paths public-paths.ts serves', () => {
     expect(PUBLIC_HOST_PATH.source).toBe(paths.PUBLIC_HOST_PATH.source);
     expect(HANDLE_PATH.source).toBe(paths.HANDLE_PATH.source);
+    expect(CARD_PATH.source).toBe(paths.CARD_PATH.source);
   });
 
   it('moves exactly what public-paths.ts moves', () => {
