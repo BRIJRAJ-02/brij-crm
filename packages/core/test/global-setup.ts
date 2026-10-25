@@ -1,10 +1,15 @@
-// Runs once before this package's tests: fresh, migrated databases.
+// Runs once before this package's tests: fresh, migrated databases, dropped again on the way out.
 import type { TestProject } from 'vitest/node';
-import { prepareTestDatabase, type TestDatabase } from '@crm/db/testing';
+import { dropTestDatabase, prepareTestDatabase, type TestDatabase } from '@crm/db/testing';
 
-export async function setup(project: TestProject): Promise<void> {
-  project.provide('testDatabase', await prepareTestDatabase('crm_test_core'));
-  project.provide('lockingDatabase', await prepareTestDatabase('crm_test_core_locking'));
+export async function setup(project: TestProject): Promise<() => Promise<void>> {
+  const shared = await prepareTestDatabase('crm_test_core');
+  const locking = await prepareTestDatabase('crm_test_core_locking');
+  project.provide('testDatabase', shared);
+  project.provide('lockingDatabase', locking);
+  return async () => {
+    await Promise.all([dropTestDatabase(shared), dropTestDatabase(locking)]);
+  };
 }
 
 declare module 'vitest' {
