@@ -265,18 +265,22 @@ describe('a link page', () => {
     const seen = (await visitorRead(handle)).items;
     expect(seen.find((item) => item.id === folded.id)).toMatchObject({ kind: 'heading', group: 'folder' });
     expect(seen.find((item) => item.id === open.id)).toMatchObject({ kind: 'heading', group: 'open' });
-    // The schema refuses a third word, and so does the database for a caller that skipped it (AC-5415).
+    // The schema refuses a third word, and so does the database for a caller that skipped it (AC-5415). The check
+    // runs inside crm_save_profile_item, which is the only way in: crm_app may not execute the check itself.
     expect(ProfileBlock.safeParse({ kind: 'heading', title: 'Tabs', group: 'tabs' }).success).toBe(false);
     await expect(
-      testQuery(
-        ownerUrl,
-        `select crm_check_profile_item('heading', '{"title":"Tabs","group":"tabs"}'::jsonb, null, null, null)`,
-      ),
+      testQuery(appUrl, `select crm_save_profile_item($1, $2, 'heading', $3, null, null, null)`, [
+        ada.userId,
+        newId(),
+        JSON.stringify({ title: 'Tabs', group: 'tabs' }),
+      ]),
     ).rejects.toThrow(/PROFILE_ITEM_DATA/);
-    // And the two it allows pass it, so the function and the schema agree on the whole set.
+    // And the two it allows go through, so the function and the schema agree on the whole set.
     for (const group of ['open', 'folder']) {
-      await testQuery(ownerUrl, `select crm_check_profile_item('heading', $1::jsonb, null, null, null)`, [
-        JSON.stringify({ title: 'Read', group }),
+      await testQuery(appUrl, `select crm_save_profile_item($1, $2, 'heading', $3, null, null, null)`, [
+        ada.userId,
+        newId(),
+        JSON.stringify({ title: `Section ${group}`, group }),
       ]);
     }
   });
@@ -527,7 +531,7 @@ describe('a link page', () => {
       { fullName: ' Ada' },
     ]) {
       await expect(
-        testQuery(appUrl, `select crm_save_profile_item($1, $2, 'contact', $3, null, null)`, [
+        testQuery(appUrl, `select crm_save_profile_item($1, $2, 'contact', $3, null, null, null)`, [
           ada.userId,
           newId(),
           JSON.stringify(given),

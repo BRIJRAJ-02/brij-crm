@@ -425,13 +425,23 @@ describe('the walk: a principal without the access is refused', () => {
         orderProfileItems: [theirs.id],
         archiveProfileItem: { id: theirs.id, archived: true },
         deleteProfileItem: theirs.id,
+        // The look of a page names no block and no page, so it can only ever be the caller's own (spec 0054).
+        // Bea has claimed no handle, so there is no public profile of theirs to put a look on: NOT_FOUND, with
+        // the others below, rather than a look saved against nothing.
+        saveProfileTheme: { ground: 'ink', hue: 'green', mode: 'dark', shape: 'pill', fill: 'solid', font: 'mono' },
       };
       expect(await refusalOf(service(name)(key, inputs[name]))).toMatchObject({ code: 'FORBIDDEN' });
       const outcome = await service(name)(beaScope, inputs[name]).then(
         (value) => ({ value }),
         (error: unknown) => ({ refusal: core.isRefusal(error) ? error.refusal.code : error }),
       );
-      if (name === 'readProfileItems' || name === 'listProfilePageChoices' || name === 'readProfileCounts') {
+      if (
+        name === 'readProfileItems' ||
+        name === 'listProfilePageChoices' ||
+        name === 'listProfileFormChoices' ||
+        name === 'readProfileCounts'
+      ) {
+        // The reads answer Bea's own page, which holds nothing of Ada's: a refusal would say the wrong thing.
         expect(JSON.stringify(outcome)).not.toContain(theirs.id);
         expect(JSON.stringify(outcome)).not.toContain(adaPage.id);
       } else if (name === 'orderProfileItems') {

@@ -144,7 +144,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly thirty four security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly thirty six security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -171,6 +171,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_enqueue_notification_email', owner: 'crm_queue' },
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
+      // The forms a person may place on their link page (spec 0052, migration 0104).
+      { name: 'crm_form_owner_forms', owner: 'crm_form_lookup' },
       { name: 'crm_handle_owner', owner: 'crm_handle' },
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
@@ -196,6 +198,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
       { name: 'crm_save_profile_item', owner: 'crm_handle' },
+      // The look of the page (spec 0054, migration 0105).
+      { name: 'crm_save_profile_theme', owner: 'crm_handle' },
       { name: 'crm_save_public_profile', owner: 'crm_handle' },
       { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
@@ -237,6 +241,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_notification_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_form_owner_forms', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_handle_owner', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -265,6 +270,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises PROFILE_ITEM_LIMIT, PROFILE_ITEM_DATA and PROFILE_ITEM_MISSING.
       { name: 'crm_save_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_save_profile_theme', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises the unique violation a taken handle is refused with.
       { name: 'crm_save_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_save_social_links', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -353,7 +359,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['crm_workspaces_to_purge(integer)', 'crm_purge_workspace_begin(uuid)', 'crm_purge_workspace_end(uuid)'],
       ['worker', 'worker', 'worker'],
     ],
-    ['crm_form_lookup', ['crm_form_by_key'], ['crm_form_by_key(text)'], ['app']],
+    [
+      'crm_form_lookup',
+      ['crm_form_by_key', 'crm_form_owner_forms'],
+      ['crm_form_by_key(text)', 'crm_form_owner_forms(uuid, uuid[])'],
+      ['app', 'app'],
+    ],
     [
       'crm_invitation_lookup',
       ['crm_invitation_by_token', 'crm_invitation_open_for'],
@@ -435,6 +446,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_count_item_press',
         'crm_profile_counts',
         'crm_sweep_profile_counts',
+        // The look of the page (spec 0054, migration 0105).
+        'crm_save_profile_theme',
       ],
       [
         'crm_save_public_profile(uuid, text, text)',
@@ -447,7 +460,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_profile_items(uuid)',
         'crm_profile_items_archived(uuid)',
         'crm_profile_items_public(uuid, smallint, uuid, integer)',
-        'crm_save_profile_item(uuid, uuid, text, jsonb, uuid, uuid)',
+        'crm_save_profile_item(uuid, uuid, text, jsonb, uuid, uuid, uuid)',
         'crm_order_profile_items(uuid, uuid[])',
         'crm_archive_profile_item(uuid, uuid, boolean)',
         'crm_delete_profile_item(uuid, uuid)',
@@ -456,8 +469,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_count_item_press(uuid, uuid, text)',
         'crm_profile_counts(uuid, date, date)',
         'crm_sweep_profile_counts(integer)',
+        'crm_save_profile_theme(uuid, jsonb)',
       ],
-      Array.from({ length: 19 }, () => 'app'),
+      Array.from({ length: 20 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -2022,14 +2036,18 @@ describe('the auth schema: global identity, outside row level security (spec 000
       where a.grantee = 'crm_handle'::regrole
       order by 1
     `);
-    // The handles read a person's name and picture for their profile, and change only the handle and bio; and
-    // (migration 0094) read and set whether the picture stays off their public pages, never where `/` takes them.
+    // The handles read a person's name and picture for their profile, and change only the handle, the bio and
+    // (migration 0105) the look of the page; and (migration 0094) read and set whether the picture stays off
+    // their public pages, never where `/` takes them.
     expect(handles.rows.map((row) => row.grant)).toEqual([
       'auth."user".id SELECT',
       'auth."user".image SELECT',
       'auth."user".name SELECT',
       'auth.public_profiles.bio UPDATE',
       'auth.public_profiles.handle UPDATE',
+      // The look of their page (spec 0054, migration 0105): one more column, and only through
+      // crm_save_profile_theme. This line is the whole of what that spec widened.
+      'auth.public_profiles.theme UPDATE',
       'auth.public_profiles.updated_at UPDATE',
       'auth.user_prefs.picture_hidden INSERT',
       'auth.user_prefs.picture_hidden SELECT',
