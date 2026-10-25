@@ -252,7 +252,6 @@ import {
   Zap,
 } from 'lucide-react';
 import type { EditorIconName } from './editor-icons.ts';
-import type { LinkPageIconName } from './link-page-icons.ts';
 
 /** Lucide 1.49 icons by their lucide.dev name: the controls' own, one per attribute type, AI and help, and the curated object icons. */
 export const icons = {
@@ -506,4 +505,4 @@ export const icons = {
  * An icon Icon can draw, named exactly as lucide.dev lists it: one in the registry, or one a scoped set brings
  * with its own chunk (`editor-icons.ts`), which draws only inside that set's IconScope.
  */
-export type IconName = keyof typeof icons | EditorIconName | LinkPageIconName;
+export type IconName = keyof typeof icons | EditorIconName;

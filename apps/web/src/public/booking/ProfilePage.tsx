@@ -61,7 +61,7 @@ function ShareButton({ address, name }: { readonly address: string; readonly nam
           });
     void done.finally(() => setSharing(false));
   };
-  return <Button variant="secondary" size="touch" icon="share-2" label={strings.sharePage} onPress={share} />;
+  return <Button variant="secondary" size="touch" icon="upload" label={strings.sharePage} onPress={share} />;
 }
 
 /** Past this many rows (headings aside), a search sits above them (AC-5133). */

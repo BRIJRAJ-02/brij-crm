@@ -2,9 +2,8 @@ import { useId, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
-import { Icon, IconScope } from '../../atoms/Icon/Icon.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
-import { linkPageIcons } from '../../atoms/Icon/link-page-icons.ts';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -166,7 +165,7 @@ function Actions({
         <ButtonLink
           variant="primary"
           size="touch"
-          icon="contact-round"
+          icon="contact"
           href={href}
           isFullWidth="center"
           {...(onPress === undefined ? {} : { onPress: () => onPress(contact.id) })}
@@ -411,125 +410,121 @@ export function LinkPage({
   const groups = blocks === undefined ? [] : groupsOf(blocks);
   if (layout === 'blocks') {
     return (
-      <IconScope icons={linkPageIcons}>
-        <div
-          className={styles.draft}
-          data-layout="blocks"
-          role="group"
-          {...(caption === undefined ? {} : { 'aria-labelledby': captionId })}
-        >
-          {caption !== undefined && (
-            <p id={captionId} className={styles.caption}>
-              {caption}
-            </p>
-          )}
-          <div className={styles.blocks} inert>
-            {/* A contact card draws as the page's Save contact, which is where a visitor meets it. */}
-            <Actions contact={contact} share={undefined} onPress={undefined} />
-            {groupsOf(blocks ?? []).map((group, index) => (
-              <Group
-                key={group.heading?.id ?? `top-${String(index)}`}
-                rows={group.rows}
-                onPress={undefined}
-                {...(group.heading === undefined ? {} : { heading: group.heading })}
-              />
-            ))}
-          </div>
+      <div
+        className={styles.draft}
+        data-layout="blocks"
+        role="group"
+        {...(caption === undefined ? {} : { 'aria-labelledby': captionId })}
+      >
+        {caption !== undefined && (
+          <p id={captionId} className={styles.caption}>
+            {caption}
+          </p>
+        )}
+        <div className={styles.blocks} inert>
+          {/* A contact card draws as the page's Save contact, which is where a visitor meets it. */}
+          <Actions contact={contact} share={undefined} onPress={undefined} />
+          {groupsOf(blocks ?? []).map((group, index) => (
+            <Group
+              key={group.heading?.id ?? `top-${String(index)}`}
+              rows={group.rows}
+              onPress={undefined}
+              {...(group.heading === undefined ? {} : { heading: group.heading })}
+            />
+          ))}
         </div>
-      </IconScope>
+      </div>
     );
   }
   const Root = isPreview ? 'div' : 'main';
   return (
-    <IconScope icons={linkPageIcons}>
-      <Root className={styles.root} data-preview={isPreview || undefined} {...(isPreview ? { inert: true } : {})}>
-        <div className={styles.column}>
-          <header className={styles.hero} aria-busy={person === undefined || undefined}>
-            {person === undefined ? (
-              <>
-                <Skeleton shape="circle" size="xl" />
-                <p className={styles.name}>
-                  <Skeleton shape="text" width="medium" align="center" />
-                </p>
-                <p className={styles.bio}>
-                  <Skeleton shape="text" width="long" align="center" />
-                </p>
-                {/* The pill's own place, so the header doesn't grow when the address arrives. */}
-                {address !== undefined && (
-                  <span className={styles.pillLoading}>
-                    <Skeleton shape="fill" />
-                  </span>
-                )}
-              </>
-            ) : (
-              <>
-                <Avatar
-                  name={person.name}
-                  id={person.id}
-                  size="xl"
-                  isDecorative
-                  {...(person.image === undefined ? {} : { src: person.image })}
-                />
-                <h1 className={styles.name}>{person.name}</h1>
-                {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
-                {address !== undefined && (
-                  <span className={styles.address}>
-                    <CopyButton
-                      value={address.value}
-                      label={address.label}
-                      name={strings.copyAddress(address.label)}
-                      announcement={strings.addressCopied}
-                      isRound
-                    />
-                  </span>
-                )}
-              </>
-            )}
-          </header>
-          {/* The one action under the person, then the way to pass the page on, then where else to find them.
-              Share stands while the page loads: it shares the address the visitor is already on. */}
-          <Actions contact={contact} share={share} onPress={onPress} />
-          {socials}
-          {toolbar}
-          {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
-          {summary !== undefined && (
-            <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
-              {summary}
-            </p>
+    <Root className={styles.root} data-preview={isPreview || undefined} {...(isPreview ? { inert: true } : {})}>
+      <div className={styles.column}>
+        <header className={styles.hero} aria-busy={person === undefined || undefined}>
+          {person === undefined ? (
+            <>
+              <Skeleton shape="circle" size="xl" />
+              <p className={styles.name}>
+                <Skeleton shape="text" width="medium" align="center" />
+              </p>
+              <p className={styles.bio}>
+                <Skeleton shape="text" width="long" align="center" />
+              </p>
+              {/* The pill's own place, so the header doesn't grow when the address arrives. */}
+              {address !== undefined && (
+                <span className={styles.pillLoading}>
+                  <Skeleton shape="fill" />
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              <Avatar
+                name={person.name}
+                id={person.id}
+                size="xl"
+                isDecorative
+                {...(person.image === undefined ? {} : { src: person.image })}
+              />
+              <h1 className={styles.name}>{person.name}</h1>
+              {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
+              {address !== undefined && (
+                <span className={styles.address}>
+                  <CopyButton
+                    value={address.value}
+                    label={address.label}
+                    name={strings.copyAddress(address.label)}
+                    announcement={strings.addressCopied}
+                    isRound
+                  />
+                </span>
+              )}
+            </>
           )}
-          {blocks === undefined ? (
-            <ul className={styles.list} aria-busy="true" aria-label={strings.loading}>
-              {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
-                <li key={index} className={styles.item}>
-                  <span className={styles.block} data-loading="">
-                    <LinkPageTile />
-                    <span className={styles.text}>
-                      <span className={styles.title}>
-                        <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
-                      </span>
+        </header>
+        {/* The one action under the person, then the way to pass the page on, then where else to find them.
+              Share stands while the page loads: it shares the address the visitor is already on. */}
+        <Actions contact={contact} share={share} onPress={onPress} />
+        {socials}
+        {toolbar}
+        {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
+        {summary !== undefined && (
+          <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
+            {summary}
+          </p>
+        )}
+        {blocks === undefined ? (
+          <ul className={styles.list} aria-busy="true" aria-label={strings.loading}>
+            {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
+              <li key={index} className={styles.item}>
+                <span className={styles.block} data-loading="">
+                  <LinkPageTile />
+                  <span className={styles.text}>
+                    <span className={styles.title}>
+                      <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
                     </span>
                   </span>
-                </li>
-              ))}
-            </ul>
-          ) : groups.length === 0 ? (
-            empty
-          ) : (
-            <div className={styles.blocks}>
-              {groups.map((group, index) => (
-                <Group
-                  key={group.heading?.id ?? `top-${String(index)}`}
-                  rows={group.rows}
-                  onPress={onPress}
-                  {...(group.heading === undefined ? {} : { heading: group.heading })}
-                />
-              ))}
-            </div>
-          )}
-          {after}
-          {foot}
-        </div>
-      </Root>
-    </IconScope>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : groups.length === 0 ? (
+          empty
+        ) : (
+          <div className={styles.blocks}>
+            {groups.map((group, index) => (
+              <Group
+                key={group.heading?.id ?? `top-${String(index)}`}
+                rows={group.rows}
+                onPress={onPress}
+                {...(group.heading === undefined ? {} : { heading: group.heading })}
+              />
+            ))}
+          </div>
+        )}
+        {after}
+        {foot}
+      </div>
+    </Root>
   );
 }
