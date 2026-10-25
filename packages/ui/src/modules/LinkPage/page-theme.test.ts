@@ -63,7 +63,7 @@ describe('the page look the library draws', () => {
     expect(blocks.length).toBeGreaterThan(10);
     for (const block of blocks) {
       for (const [, value] of block.matchAll(/:\s*([^;]+);/g)) {
-        const kept = value.trim();
+        const kept = (value ?? '').trim();
         expect(
           kept === 'none' || kept === 'transparent' || kept.startsWith('var(--'),
           `"${kept}" is a token, none or transparent`,
