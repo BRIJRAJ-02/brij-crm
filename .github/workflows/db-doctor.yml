@@ -1,0 +1,62 @@
+# A read-only check of a production database, run by hand when a deploy's migrations and the schema disagree.
+# It never writes and never prints a connection string: only the names of things the code expects and the
+# database lacks. Added 25 October 2026, after `crm_place_profile_page` turned out to be missing on Timefix
+# while the deploy's migrate step reported "Migrations applied." (Drizzle skips, with no error, a migration
+# stamped before the newest one a database already applied.)
+name: Database doctor
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which production database to read
+        required: true
+        default: timefix
+        type: choice
+        options: [timefix, brij-crm, both]
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Read the schema
+        env:
+          TARGET: ${{ inputs.target }}
+          TIMEFIX_URL: ${{ secrets.TIMEFIX_DATABASE_URL_OWNER }}
+          BRIJ_URL: ${{ secrets.DATABASE_URL_OWNER }}
+        run: |
+          set -euo pipefail
+          report() {
+            name="$1"; url="$2"
+            if [ -z "$url" ]; then echo "== $name: no secret set, skipped"; return; fi
+            echo "== $name"
+            psql "$url" -v ON_ERROR_STOP=0 -tAc "
+              select 'journal: ' || count(*) || ' applied, newest '
+                     || to_char(to_timestamp(max(created_at)/1000) at time zone 'UTC','YYYY-MM-DD HH24:MI')
+              from drizzle.__drizzle_migrations;"
+            psql "$url" -tAc "
+              with expected(name) as (values
+                ('crm_place_profile_page'),('crm_profile_items'),('crm_profile_items_public'),
+                ('crm_delete_profile_item'),('crm_archive_profile_item'),('crm_profile_counts'),
+                ('crm_import_profile_links'),('crm_public_profiles_of'),('crm_handle_owner'),
+                ('crm_count_item_press'),('crm_booking_page_by_address'),('crm_claim_workspace_address'),
+                ('crm_profile_item_blocks'),('crm_set_profile_theme'))
+              select 'MISSING function: ' || name from expected
+              where not exists (select 1 from pg_proc where proname = name);"
+            psql "$url" -tAc "
+              select 'MISSING table: ' || n from (values
+                ('auth.profile_items'),('auth.link_imports'),('auth.public_profiles'),
+                ('auth.profile_counts'),('auth.social_links'),('auth.booking_slug_history')) as t(n)
+              where to_regclass(n) is null;"
+            echo "   (nothing listed above means nothing expected is missing)"
+          }
+          case "$TARGET" in
+            timefix)  report timefix "$TIMEFIX_URL" ;;
+            brij-crm) report brij-crm "$BRIJ_URL" ;;
+            both)     report timefix "$TIMEFIX_URL"; echo; report brij-crm "$BRIJ_URL" ;;
+          esac
