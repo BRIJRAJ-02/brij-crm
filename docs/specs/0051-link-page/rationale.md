@@ -89,6 +89,36 @@ Worth a word from the owner, though nothing waits on it:
 - **Whether the link page should be plan limited** once billing exists (for example, a free plan capped at five links). Nothing in this spec assumes a plan.
 - **Whether a workspace admin should ever see a colleague's link page figures.** This spec says no, and the operator console gains nothing from it.
 
+## Amendments, 25 October 2026: why the build moved to blocks
+
+The owner approved the build on 25 October ("start building this as a functionality") and in the same thread asked for "more blocks" later, pointing at liinks.co and linktw.in. That changed one force above: the item list was no longer four kinds for good, it was the first four of many.
+
+### Options considered for the amendment
+
+- **Per kind columns, as first written.** Every column has a database type and a check. But each new block would add nullable columns that only one kind uses, and the table's checks would grow with every kind. Rejected: it makes the next spec (0052) a series of table changes.
+- **One `data jsonb` per row, checked by a Zod union and again in the definer (chosen).** The shared columns stay real (owner, kind, place, archive, the booking page's workspace and page, because those are joined and indexed). A kind's own fields are one object, refused before every write if they don't match the kind. A new kind costs a schema, a renderer, an editor entry and one small migration that adds the word and replaces the check function.
+- **A table per kind.** Clean types, but one ordered list across tables needs a second ordering table, and the public read becomes a union of every table. Rejected for the same reason Option 2 above was: two places to get the order wrong.
+
+The chosen shape keeps the database's guarantees where they matter (one live contact card, one heading per text, a booking page once, a place per block) through expression and partial indexes over `data`, and leaves the per kind detail to the contract, where the editor and the server already share it.
+
+### Why social links are not a block
+
+The owner asked for social links on the booking pages first ("for bookings, add more options like adding social media"). They had to work on `/b/:key` and on the profile alike, so they became one set per person in their own table (spec 0053), and the link page draws that set as the row of icons under the bio, as Linktree and liinks.co do. A socials block would have been a second store for the same links, and a person would have had to keep two lists in step.
+
+### Calls made during the build (owner delegated, 21 October)
+
+Listed with their reasons in index.md, "Amendments, 25 October 2026". The ones worth the owner's eye: the workspace named headings from the backfill are public (amendment 8), and the owner's own views on the apex host count until the polish lane's owner preview fix lands (amendment 13).
+
+### The owner's design boards, 25 October 2026
+
+The boards (`Main`, `PublicLight`, `Share`, `Editor`, `AddItem` in the owner's project canvas) became readable again after phases 1c to 3 had shipped, so they are read here as the design, not as a suggestion. Three of their calls were worth weighing rather than copying.
+
+- **One Add modal or a menu of modals.** The built editor has a menu of four, each opening its own Modal, which is the cheaper shape while there are four kinds. The board draws one Modal with the kinds as a radio group. With spec 0052 adding text, questions, a form and more, a menu would reach eight or ten entries, which is a menu people scan rather than read. One modal with the kinds in it also lets the Section select and the "How it will look" row be written once instead of four times. The board wins, and the registry's per kind `Editor` entry is what the modal hosts, so nothing about the registry changes.
+- **Hidden switch or an Archived list.** An Archived list is the pattern the rest of the app uses, so it was the first text's choice. On a page whose whole point is a short ordered list, a second list at the bottom is a place rows go to be lost. A switch in the row, with the row staying where it is, says the same thing in one press and in one place. It costs the check that made `position` null while archived, which is a small migration and nothing else.
+- **Whether a heading's switch should carry its rows.** Hiding only the heading is what the store does today, and it is what AC-5106 said. On a board where a heading is a card around its rows, one switch on the card that leaves the rows showing would be a lie. Each row keeps its own state, so turning the card back on restores exactly what was on before, which makes the switch safe to press.
+
+The boards also settled the question amendment 8 left for the owner: the editor's own note says nobody visiting the page sees which workspace a page came from, so no heading is named after a workspace.
+
 ## References
 
 Sources, no links fetched for this spec:
