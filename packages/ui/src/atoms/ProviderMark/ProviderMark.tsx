@@ -55,6 +55,11 @@ export interface ProviderMarkProps {
    * beside a label that already names the brand: the mark is then decoration.
    */
   readonly isLabelled?: boolean;
+  /**
+   * `brand` (the default) draws the artwork as published. `mono` draws only its shape, in the text colour around it:
+   * a row of marks that must read as one set (a link page's social links, from the owner's design, 25 October 2026).
+   */
+  readonly tone?: 'brand' | 'mono';
 }
 
 /** One image per brand; a black mark (Timefix, X, GitHub, AngelList, TikTok, Threads) has a light and a dark one, shown by theme like the wordmark. */
@@ -81,11 +86,25 @@ const ART: Readonly<Record<ProviderName, string | { readonly light: string; read
  * actions and synced events, the Timefix mark on what Timefix made, and a
  * social network's mark on a profile link (LinkedIn, X, GitHub). The
  * one exception to the Lucide only rule (owner approval, 20 October 2026):
- * the artwork is never recoloured or redrawn, so it is an image, not an Icon.
+ * the artwork is never recoloured or redrawn, so it is an image, not an Icon,
+ * except as `tone="mono"`: its own shape in one colour, as the owner's link
+ * page design draws a person's social links (25 October 2026).
  */
-export function ProviderMark({ provider, size = 'md', isLabelled = false }: ProviderMarkProps) {
+export function ProviderMark({ provider, size = 'md', isLabelled = false, tone = 'brand' }: ProviderMarkProps) {
   const art = ART[provider];
   const alt = isLabelled ? strings.names[provider] : strings.unnamed;
+  if (tone === 'mono') {
+    // The artwork as a mask over the text colour: its shape only, the same file in either theme.
+    const shape = typeof art === 'string' ? art : art.light;
+    return (
+      <span
+        className={styles.mono}
+        data-size={size}
+        style={{ '--mark': `url("${shape}")` }}
+        {...(isLabelled ? { role: 'img', 'aria-label': alt } : { 'aria-hidden': true })}
+      />
+    );
+  }
   if (typeof art === 'string') {
     return <img className={styles.mark} data-size={size} src={art} alt={alt} />;
   }

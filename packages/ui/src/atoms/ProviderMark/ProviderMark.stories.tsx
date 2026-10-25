@@ -111,3 +111,18 @@ export const Social: Story = {
     await expect(canvas.getAllByRole('img', { name: 'GitHub' })).toHaveLength(2);
   },
 };
+
+/** The social networks' shapes in the text colour (`tone="mono"`), as a link page's social links draw them: one set. */
+export const Mono: Story = {
+  render: () => (
+    <Stage>
+      {SOCIAL.map((provider) => (
+        <ProviderMark key={provider} provider={provider} tone="mono" isLabelled />
+      ))}
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('img', { name: 'LinkedIn' })).toBeVisible();
+    await expect(canvas.getAllByRole('img')).toHaveLength(SOCIAL.length);
+  },
+};

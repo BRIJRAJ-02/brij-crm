@@ -101,3 +101,18 @@ export const RefusedLink: Story = {
     await expect(canvasElement.querySelector('a[href]')).toBeNull();
   },
 };
+
+/** Round: a link page's row under the person's card, centred circles with every mark in the text colour. */
+export const Round: Story = {
+  args: { links: [...ALL.slice(0, 3), ALL[9] as SocialLinkItem], variant: 'round' },
+  render: (args) => (
+    <Stage width="phone">
+      <SocialLinks {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const linkedin = canvas.getByRole('link', { name: 'LinkedIn, ada-lovelace' });
+    await expect(linkedin).toHaveAttribute('rel', 'me nofollow noopener noreferrer');
+    await expect(linkedin.getBoundingClientRect().height).toBe(44);
+  },
+};

@@ -1,7 +1,10 @@
 import { useId, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
-import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { ButtonLink } from '../../atoms/Button/Button.tsx';
+import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
+import { Icon, IconScope } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
+import { linkPageIcons } from '../../atoms/Icon/link-page-icons.ts';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -73,7 +76,17 @@ export interface LinkPageProps {
   readonly person?: LinkPagePerson;
   /** Missing while the page loads: block shaped skeletons hold their places. */
   readonly blocks?: readonly LinkPageBlock[];
-  /** Under the bio: the person's social icons row (their own set, never a block). */
+  /**
+   * The page's own address, shown under the bio as a pill that copies it: the label is the address a visitor reads
+   * ("timefix.com/ada"), the value what the clipboard gets (the whole address, scheme and all).
+   */
+  readonly address?: { readonly label: string; readonly value: string };
+  /**
+   * Beside Save contact: the page's own Share control, passed in because sharing is the caller's (the Web Share
+   * API on the public page, the Share modal in the editor), and this module touches neither.
+   */
+  readonly share?: ReactNode;
+  /** Under the actions: the person's social icons row (their own set, never a block). */
   readonly socials?: ReactNode;
   /** Above the blocks: a search, once there are many. */
   readonly toolbar?: ReactNode;
@@ -108,15 +121,62 @@ export interface LinkPageProps {
 /** How many skeleton blocks stand in while the page loads. */
 const LOADING_BLOCKS = 5;
 
-/** The blocks in groups: those before the first heading, then each heading with the blocks under it. */
+/**
+ * The blocks in groups: those before the first heading, then each heading with the blocks under it. A contact card
+ * never takes a place here: it is the header's Save contact, wherever the owner keeps it in their order (the
+ * owner's design, 25 October 2026).
+ */
 function groupsOf(blocks: readonly LinkPageBlock[]) {
   const groups: { heading?: Extract<LinkPageBlock, { kind: 'heading' }>; rows: LinkPageBlock[] }[] = [];
   for (const block of blocks) {
+    if (block.kind === 'contact') continue;
     if (block.kind === 'heading') groups.push({ heading: block, rows: [] });
     else if (groups.length === 0) groups.push({ rows: [block] });
     else groups.at(-1)?.rows.push(block);
   }
   return groups;
+}
+
+/** The owner's contact card, wherever it sits in their order: the one the header's Save contact downloads. */
+function contactOf(blocks: readonly LinkPageBlock[] | undefined) {
+  return blocks?.find((block) => block.kind === 'contact');
+}
+
+/**
+ * The actions under the person: Save contact, the page's one primary action, when the owner keeps a card, and the
+ * caller's Share beside it. Save contact is a plain link to the card's vCard on our own origin, so it works with no
+ * script and straight from a QR code, and a phone offers to add the card to its contacts.
+ */
+function Actions({
+  contact,
+  share,
+  onPress,
+}: {
+  readonly contact: Extract<LinkPageBlock, { kind: 'contact' }> | undefined;
+  readonly share: ReactNode;
+  readonly onPress: ((id: string) => void) | undefined;
+}) {
+  // Only this site's own path: the card is served by the api, never from elsewhere.
+  const href =
+    contact !== undefined && contact.href.startsWith('/') && !/^\/[/\\]/.test(contact.href) ? contact.href : undefined;
+  if (href === undefined && share === undefined) return null;
+  return (
+    <div className={styles.actions}>
+      {href !== undefined && contact !== undefined && (
+        <ButtonLink
+          variant="primary"
+          size="touch"
+          icon="contact-round"
+          href={href}
+          isFullWidth="center"
+          {...(onPress === undefined ? {} : { onPress: () => onPress(contact.id) })}
+        >
+          {strings.saveContact}
+        </ButtonLink>
+      )}
+      {share}
+    </div>
+  );
 }
 
 /** What kind of address a link holds: a web page (a new tab), or an email, a call or a text (the device's app). */
@@ -210,7 +270,7 @@ function BlockText({ title, line }: { readonly title: string; readonly line?: st
 
 /** Each kind's one renderer. A block of a kind with none never reaches here: callers skip what they can't map. */
 const RENDERERS: {
-  readonly [Kind in Exclude<LinkPageBlock['kind'], 'heading'>]: (
+  readonly [Kind in Exclude<LinkPageBlock['kind'], 'heading' | 'contact'>]: (
     block: Extract<LinkPageBlock, { kind: Kind }>,
     onPress: (() => void) | undefined,
   ) => ReactNode;
@@ -268,35 +328,8 @@ const RENDERERS: {
     return (
       <a className={styles.block} href={target} onClick={onPress}>
         {body}
-        <span className={styles.end} data-end="action">
-          {strings.book}
+        <span className={styles.end}>
           <Icon name="chevron-right" size="sm" />
-        </span>
-      </a>
-    );
-  },
-  contact: (block, onPress) => {
-    // Only this site's own path: the card is served by the api, never from elsewhere.
-    const target = block.href.startsWith('/') && !/^\/[/\\]/.test(block.href) ? block.href : undefined;
-    const body = (
-      <>
-        <LinkPageTile block={block} />
-        <BlockText title={block.title} {...(block.line === undefined ? {} : { line: block.line })} />
-      </>
-    );
-    if (target === undefined) {
-      return (
-        <span className={styles.block} data-inert="">
-          {body}
-        </span>
-      );
-    }
-    return (
-      <a className={styles.block} href={target} onClick={onPress}>
-        {body}
-        <span className={styles.end} data-end="action">
-          {strings.saveContact}
-          <Icon name="user-plus" size="sm" />
         </span>
       </a>
     );
@@ -308,17 +341,13 @@ function BlockRow({
   block,
   onPress,
 }: {
-  readonly block: Exclude<LinkPageBlock, { kind: 'heading' }>;
+  readonly block: Exclude<LinkPageBlock, { kind: 'heading' | 'contact' }>;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
   const press = onPress === undefined ? undefined : () => onPress(block.id);
   return (
     <li className={styles.item}>
-      {block.kind === 'link'
-        ? RENDERERS.link(block, press)
-        : block.kind === 'page'
-          ? RENDERERS.page(block, press)
-          : RENDERERS.contact(block, press)}
+      {block.kind === 'link' ? RENDERERS.link(block, press) : RENDERERS.page(block, press)}
     </li>
   );
 }
@@ -344,7 +373,9 @@ function Group({
       {rows.length > 0 && (
         <ul className={styles.list} {...(heading === undefined ? { 'aria-label': strings.blocks } : {})}>
           {rows.map((block) =>
-            block.kind === 'heading' ? null : <BlockRow key={block.id} block={block} onPress={onPress} />,
+            block.kind === 'heading' || block.kind === 'contact' ? null : (
+              <BlockRow key={block.id} block={block} onPress={onPress} />
+            ),
           )}
         </ul>
       )}
@@ -360,6 +391,8 @@ function Group({
 export function LinkPage({
   person,
   blocks,
+  address,
+  share,
   socials,
   toolbar,
   summary,
@@ -372,101 +405,119 @@ export function LinkPage({
   onPress,
 }: LinkPageProps) {
   const captionId = useId();
+  const contact = contactOf(blocks);
   if (layout === 'blocks') {
     return (
-      <div
-        className={styles.draft}
-        data-layout="blocks"
-        role="group"
-        {...(caption === undefined ? {} : { 'aria-labelledby': captionId })}
-      >
-        {caption !== undefined && (
-          <p id={captionId} className={styles.caption}>
-            {caption}
-          </p>
-        )}
-        <div className={styles.blocks} inert>
-          {groupsOf(blocks ?? []).map((group, index) => (
-            <Group
-              key={group.heading?.id ?? `top-${String(index)}`}
-              rows={group.rows}
-              onPress={undefined}
-              {...(group.heading === undefined ? {} : { heading: group.heading })}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
-  const Root = isPreview ? 'div' : 'main';
-  return (
-    <Root className={styles.root} data-preview={isPreview || undefined} {...(isPreview ? { inert: true } : {})}>
-      <div className={styles.column}>
-        <header className={styles.hero} aria-busy={person === undefined || undefined}>
-          {person === undefined ? (
-            <>
-              <Skeleton shape="circle" size="xl" />
-              <p className={styles.name}>
-                <Skeleton shape="text" width="medium" align="center" />
-              </p>
-              <p className={styles.bio}>
-                <Skeleton shape="text" width="long" align="center" />
-              </p>
-            </>
-          ) : (
-            <>
-              <Avatar
-                name={person.name}
-                id={person.id}
-                size="xl"
-                isDecorative
-                {...(person.image === undefined ? {} : { src: person.image })}
-              />
-              <h1 className={styles.name}>{person.name}</h1>
-              {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
-            </>
+      <IconScope icons={linkPageIcons}>
+        <div
+          className={styles.draft}
+          data-layout="blocks"
+          role="group"
+          {...(caption === undefined ? {} : { 'aria-labelledby': captionId })}
+        >
+          {caption !== undefined && (
+            <p id={captionId} className={styles.caption}>
+              {caption}
+            </p>
           )}
-          {socials}
-        </header>
-        {toolbar}
-        {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
-        {summary !== undefined && (
-          <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
-            {summary}
-          </p>
-        )}
-        {blocks === undefined ? (
-          <ul className={styles.list} aria-busy="true" aria-label={strings.loading}>
-            {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
-              <li key={index} className={styles.item}>
-                <span className={styles.block} data-loading="">
-                  <LinkPageTile />
-                  <span className={styles.text}>
-                    <span className={styles.title}>
-                      <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
-                    </span>
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : blocks.length === 0 ? (
-          empty
-        ) : (
-          <div className={styles.blocks}>
-            {groupsOf(blocks).map((group, index) => (
+          <div className={styles.blocks} inert>
+            {/* A contact card draws as the page's Save contact, which is where a visitor meets it. */}
+            <Actions contact={contact} share={undefined} onPress={undefined} />
+            {groupsOf(blocks ?? []).map((group, index) => (
               <Group
                 key={group.heading?.id ?? `top-${String(index)}`}
                 rows={group.rows}
-                onPress={onPress}
+                onPress={undefined}
                 {...(group.heading === undefined ? {} : { heading: group.heading })}
               />
             ))}
           </div>
-        )}
-        {after}
-        {foot}
-      </div>
-    </Root>
+        </div>
+      </IconScope>
+    );
+  }
+  const Root = isPreview ? 'div' : 'main';
+  return (
+    <IconScope icons={linkPageIcons}>
+      <Root className={styles.root} data-preview={isPreview || undefined} {...(isPreview ? { inert: true } : {})}>
+        <div className={styles.column}>
+          <header className={styles.hero} aria-busy={person === undefined || undefined}>
+            {person === undefined ? (
+              <>
+                <Skeleton shape="circle" size="xl" />
+                <p className={styles.name}>
+                  <Skeleton shape="text" width="medium" align="center" />
+                </p>
+                <p className={styles.bio}>
+                  <Skeleton shape="text" width="long" align="center" />
+                </p>
+              </>
+            ) : (
+              <>
+                <Avatar
+                  name={person.name}
+                  id={person.id}
+                  size="xl"
+                  isDecorative
+                  {...(person.image === undefined ? {} : { src: person.image })}
+                />
+                <h1 className={styles.name}>{person.name}</h1>
+                {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
+                {address !== undefined && (
+                  <CopyButton
+                    value={address.value}
+                    label={address.label}
+                    name={strings.copyAddress(address.label)}
+                    announcement={strings.addressCopied}
+                    isRound
+                  />
+                )}
+              </>
+            )}
+          </header>
+          {/* The one action under the person, then the way to pass the page on, then where else to find them. */}
+          {person !== undefined && <Actions contact={contact} share={share} onPress={onPress} />}
+          {socials}
+          {toolbar}
+          {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
+          {summary !== undefined && (
+            <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
+              {summary}
+            </p>
+          )}
+          {blocks === undefined ? (
+            <ul className={styles.list} aria-busy="true" aria-label={strings.loading}>
+              {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
+                <li key={index} className={styles.item}>
+                  <span className={styles.block} data-loading="">
+                    <LinkPageTile />
+                    <span className={styles.text}>
+                      <span className={styles.title}>
+                        <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
+                      </span>
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : blocks.length === 0 ? (
+            empty
+          ) : (
+            <div className={styles.blocks}>
+              {groupsOf(blocks).map((group, index) => (
+                <Group
+                  key={group.heading?.id ?? `top-${String(index)}`}
+                  rows={group.rows}
+                  onPress={onPress}
+                  {...(group.heading === undefined ? {} : { heading: group.heading })}
+                />
+              ))}
+            </div>
+          )}
+          {after}
+          {foot}
+        </div>
+      </Root>
+    </IconScope>
   );
 }

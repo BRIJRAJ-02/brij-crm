@@ -48,4 +48,35 @@
       display: inline-block;
     }
   }
+
+  /* The mark's shape in the text colour (tone mono): the artwork masks the colour, so every brand reads as one set. */
+  .mono {
+    /* The brand's own artwork, set by the component as the shape to mask. */
+    --mark: none;
+
+    display: inline-block;
+    flex: none;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    background: currentcolor;
+    mask: var(--mark) center / contain no-repeat;
+    vertical-align: middle;
+  }
+
+  .mono[data-size='sm'] {
+    inline-size: var(--size-icon-sm);
+    block-size: var(--size-icon-sm);
+  }
+
+  .mono[data-size='lg'] {
+    inline-size: var(--size-chip);
+    block-size: var(--size-chip);
+  }
+
+  @media (forced-colors: active) {
+    .mono {
+      forced-color-adjust: none;
+      background: CanvasText;
+    }
+  }
 }

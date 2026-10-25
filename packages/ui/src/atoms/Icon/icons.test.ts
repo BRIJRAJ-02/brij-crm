@@ -8,6 +8,7 @@ import path from 'node:path';
 import { HUES } from '../../hue.ts';
 import { editorIcons } from './editor-icons.ts';
 import { icons } from './icons.ts';
+import { linkPageIcons } from './link-page-icons.ts';
 
 const SRC = path.resolve(import.meta.dirname, '../..');
 const WEB = path.resolve(SRC, '../../../apps/web/src');
@@ -44,6 +45,29 @@ describe('the icon registry', () => {
     );
     expect(outside.filter((file) => asIcon.test(readFileSync(file, 'utf8')))).toEqual([]);
     expect(readFileSync(path.join(editor, 'FormatToolbar.tsx'), 'utf8')).toContain('<IconScope icons={editorIcons}>');
+  });
+
+  it('names the link page set as Lucide does, and shares no name with the registry or the editor set', () => {
+    for (const [name, glyph] of Object.entries(linkPageIcons)) {
+      const pascal = name.replace(/(^|-)([a-z0-9])/g, (_match, _dash: string, letter: string) => letter.toUpperCase());
+      expect(glyph.displayName, name).toBe(pascal);
+      expect([...Object.keys(icons), ...Object.keys(editorIcons)]).not.toContain(name);
+    }
+  });
+
+  it('draws the link page set only on the link page and its editor, inside LinkPageIcons', () => {
+    const module = path.join(SRC, 'modules', 'LinkPage');
+    const feature = path.join(WEB, 'features', 'link-page');
+    const names = Object.keys(linkPageIcons).join('|');
+    const asIcon = new RegExp(`(icon|name)(=|: |=\\{)['"](${names})['"]`);
+    const outside = [...sources(SRC), ...sources(WEB)].filter(
+      (file) =>
+        !file.startsWith(module) &&
+        !file.startsWith(feature) &&
+        !file.includes(`${path.sep}atoms${path.sep}Icon${path.sep}`),
+    );
+    expect(outside.filter((file) => asIcon.test(readFileSync(file, 'utf8')))).toEqual([]);
+    expect(readFileSync(path.join(module, 'LinkPage.tsx'), 'utf8')).toContain('<IconScope icons={linkPageIcons}>');
   });
 
   it('holds every curated object icon, so IconPicker can draw each one', () => {

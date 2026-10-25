@@ -25,6 +25,13 @@ export interface CopyButtonProps {
   readonly announcement?: string;
   /** The toast when the browser refuses, where the default's "Select the link" doesn't fit (no link shown). */
   readonly failureMessage?: string;
+  /** Fully rounded: a pill (a link page's address under the person's name). */
+  readonly isRound?: boolean;
+  /**
+   * A fuller accessible name while it hasn't copied, starting with the visible label (WCAG 2.5.3): a label that is
+   * the value itself ("timefix.com/ada") says what pressing it does ("timefix.com/ada, copy link").
+   */
+  readonly name?: string;
 }
 
 function selectText(element: HTMLElement | null | undefined) {
@@ -56,6 +63,8 @@ export function CopyButton({
   isDisabled = false,
   announcement = strings.copiedAnnouncement,
   failureMessage = strings.copyFailed,
+  isRound = false,
+  name,
 }: CopyButtonProps) {
   const toasts = useToasts();
   // Bumped on each copy, so a second press restarts the two seconds.
@@ -82,7 +91,15 @@ export function CopyButton({
   return (
     <>
       {isIconOnly ? (
-        <Button variant={variant} size={size} icon={icon} label={label} onPress={onPress} isDisabled={isDisabled} />
+        <Button
+          variant={variant}
+          size={size}
+          icon={icon}
+          label={label}
+          onPress={onPress}
+          isDisabled={isDisabled}
+          {...(isRound ? { isRound } : {})}
+        />
       ) : (
         <Button
           variant={variant}
@@ -91,6 +108,8 @@ export function CopyButton({
           onPress={onPress}
           isDisabled={isDisabled}
           labelReserve={isCopied ? label : strings.copiedLabel}
+          {...(isRound ? { isRound } : {})}
+          {...(name !== undefined && !isCopied ? { label: name } : {})}
           {...(isLabelCollapsible ? { isLabelCollapsible: true, label: isCopied ? strings.copiedLabel : label } : {})}
         >
           {isCopied ? strings.copiedLabel : label}
