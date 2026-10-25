@@ -43,7 +43,7 @@ import {
 } from '@crm/ui';
 import { useLinkPage } from '@crm/data/react';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
 import { AppearanceCard } from './AppearanceCard.tsx';
@@ -81,6 +81,17 @@ export interface LinkPageScreenProps {
 type Editing = { readonly kind: AddableKind; readonly item?: ProfileItem; readonly id: string };
 
 /** A new link's letter colour: the next of the hues after the links so far, gray last, as the server would pick. */
+/** How long after the last look is picked the one save goes out. Long enough to cover a run of choices, short
+ * enough that nobody leaves before it fires; leaving sends it anyway. */
+const THEME_SAVE_DELAY = 500;
+
+/** Whether two looks are the same six words, so an answer that changed nothing costs no render. */
+function sameTheme(one: PageTheme, other: PageTheme | undefined): boolean {
+  if (other === undefined) return false;
+  const keys = ['ground', 'hue', 'mode', 'shape', 'fill', 'font'] as const;
+  return keys.every((key) => one[key] === other[key]);
+}
+
 function nextHue(items: readonly ProfileItem[]) {
   const ring = [...HUES.filter((hue) => hue !== 'gray'), 'gray' as const];
   return ring[items.filter((item) => item.kind === 'link').length % ring.length] ?? 'blue';
@@ -196,19 +207,58 @@ function Blocks({
   const [picked, setPicked] = useState<PageTheme | undefined>(undefined);
   const [themeRefusal, setThemeRefusal] = useState<DataError | undefined>(undefined);
   const theme = picked ?? profile.theme ?? DEFAULT_PAGE_THEME;
-  const chooseTheme = (next: PageTheme) => {
-    const was = theme;
-    setPicked(next);
-    setThemeRefusal(undefined);
+  // What is on screen and what to put back, as refs: the save below runs after the picking has stopped, so it
+  // reads them then rather than closing over the render that scheduled it.
+  const shown = useRef<PageTheme | undefined>(undefined);
+  const before = useRef<PageTheme | undefined>(undefined);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Reads nothing but those refs and this screen's own props, so the copy the unmount holds is as good as any.
+  const sendTheme = () => {
+    timer.current = undefined;
+    const next = shown.current;
+    const was = before.current;
+    if (next === undefined || was === undefined) return;
     void linkPage.saveTheme(slug, next).then(
       (saved) => {
-        setPicked(saved);
+        before.current = saved;
+        // Only when the answer is a different look from the one on screen: setting the same six words again is a
+        // render of the whole page, and the preview with it, for nothing at all.
+        if (!sameTheme(saved, shown.current)) {
+          shown.current = saved;
+          setPicked(saved);
+        }
       },
       (error: unknown) => {
+        shown.current = was;
         setPicked(was);
         setThemeRefusal(error instanceof Error ? (error as DataError) : undefined);
       },
     );
+  };
+  // Leaving mid picking saves what was picked rather than dropping it: the request outlives this screen.
+  useEffect(
+    () => () => {
+      if (timer.current === undefined) return;
+      clearTimeout(timer.current);
+      sendTheme();
+    },
+    // The screen's props never change under it, so the first render's `sendTheme` is the only one there is.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a cleanup that reads refs alone
+    [],
+  );
+  /**
+   * A look is shown the moment it is picked (AC-5421) and saved once the picking stops. Dressing a page is half a
+   * dozen choices in a few seconds, and each one used to be its own round trip whose answer set the state again:
+   * production logged 19 saves in 15 seconds, every one of them re drawing the preview (25 October 2026).
+   */
+  const chooseTheme = (next: PageTheme) => {
+    // The look to put back is the one before this run of choices, not the one half a second ago.
+    before.current ??= theme;
+    shown.current = next;
+    setPicked(next);
+    setThemeRefusal(undefined);
+    if (timer.current !== undefined) clearTimeout(timer.current);
+    timer.current = setTimeout(sendTheme, THEME_SAVE_DELAY);
   };
   // Whether search engines may show the page (spec 0055, AC-5506), the same shape as the look above: shown the
   // moment it is pressed, put back with its reason on the card if the save is refused.
