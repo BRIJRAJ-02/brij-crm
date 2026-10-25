@@ -74,7 +74,9 @@
   }
 
   /* Inline in a line of text (a booking page's time zone): the value and its
-     chevron as text, no box; the keyboard's focus draws the outline. */
+     chevron as text, no box; the keyboard's focus draws the outline.
+     DeferredSelect.module.css draws the same closed trigger before this
+     loads: change the two together. */
   .root[data-variant='inline'] {
     align-self: flex-start;
     min-inline-size: 0;

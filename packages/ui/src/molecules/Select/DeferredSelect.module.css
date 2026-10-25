@@ -1,0 +1,69 @@
+/* DeferredSelect's stand in: the closed trigger of Select's inline variant (Select.module.css, `inline`), the same
+   box to the pixel, so nothing moves when the real one takes its place. Its own copy, because the point is to draw
+   it before Select's styles load; DeferredSelect's stories hold the two to the same box. Change both together. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    align-self: flex-start;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    box-sizing: border-box;
+    max-inline-size: 100%;
+    padding: 0;
+    border: var(--border-width-hairline) solid transparent;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: start;
+    outline: none;
+  }
+
+  .trigger:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-thick);
+  }
+
+  .root[data-disabled] .trigger {
+    opacity: var(--opacity-disabled);
+  }
+
+  .value {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-6);
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .plain {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .description {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  @media (forced-colors: active) {
+    .trigger {
+      border-color: ButtonText;
+    }
+  }
+}

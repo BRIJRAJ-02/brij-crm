@@ -129,3 +129,20 @@ describe('the view a booking page opens in', () => {
     expect(globalThis.localStorage.getItem('crm.booking.opens')).not.toContain(globalThis.location.pathname);
   });
 });
+
+describe('the time zone picker in the rail', () => {
+  it('draws with the page and opens on the first press, though its list loads apart', async () => {
+    fakeApi('month');
+    show();
+    await loaded();
+    const trigger = [...(host?.querySelectorAll('button') ?? [])].find(
+      (button) => button.getAttribute('aria-haspopup') === 'listbox',
+    );
+    expect(trigger?.getAttribute('aria-label')).toBe('Time zone');
+    act(() => trigger?.click());
+    await vi.waitFor(() => {
+      expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+    });
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Search city or GMT offset');
+  });
+});

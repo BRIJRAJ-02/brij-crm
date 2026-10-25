@@ -36,6 +36,15 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 
 - `group` on an option puts it under a heading: options with the same group follow one heading, in the order they come, after any without a group. Why a field: a booking page's "Add events to" lists each account's calendars under the account, as the Bookings calendars panel does.
 
+## DeferredSelect
+
+The inline Select whose list loads apart from the page's first paint: `<DeferredSelect label="Time zone" items={zones} value={zone} onChange={setZone} placeholder="Choose a time zone" showsDescription isSearchable />`.
+
+- Why it exists: the booking page's rail draws one Select, its time zone, which a visitor rarely opens, yet it brought React Aria's Select, ListBox and overlay code and Select's styles into the page's first load (1.6 kB of its 18 kB CSS budget, 25 October 2026). Neither a variant of Select (whose module is that code) nor another control fit: the closed trigger has to be the one people already see.
+- Until the code arrives, a stand in draws the same closed trigger: the same button, the same name ("Kolkata time GMT+5:30 Time zone"), `aria-haspopup="listbox"` and `aria-expanded="false"`, the same box to the pixel. It loads on the first hover, focus or press, or once the page has loaded and the browser is idle (`preload="intent"` waits for a hover, focus or press), and the real Select takes its place without moving; focus moves with it.
+- A press made before the code is in (a click, a tap, Enter, Space, or Alt and an arrow) opens the list as soon as it arrives, with its search focused, so one press always opens it; its first close puts focus back on the trigger.
+- It is the `inline` variant only, with plain options (a label and a `description`), and the caller names its empty state (`placeholder`), since Select's own default copy would load with it. Its stand in copies the inline trigger's rules (`DeferredSelect.module.css`): change the two together. Its stories hold the stand in to the loaded trigger's box and name.
+
 ## States
 
 Placeholder, chosen, several chosen (`multiple`), searching, offering Create, an option that can't be chosen (with its reason), focus and open (a 1px `accent-line` border and the faint halo; in a popover the border alone, as a Field's there), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.

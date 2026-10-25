@@ -30,9 +30,9 @@ import {
   Callout,
   claimPageHref,
   DayStrip,
+  DeferredSelect,
   MonthTiles,
   SegmentedControl,
-  Select,
   Skeleton,
   SlotList,
   type BookingFact,
@@ -785,14 +785,15 @@ function Booking({
       children: isDetails ? (
         zoneDisplay(zone, now())
       ) : (
-        <Select
+        // The picker's list loads on the first hover, focus or press (or once the page is idle): a visitor rarely
+        // opens it, and its code was a tenth of the page's first load styles. Until then the same trigger stands in.
+        <DeferredSelect
           label={strings.timeZone}
-          isLabelHidden
-          variant="inline"
           items={zones}
           showsDescription
           isSearchable
           searchLabel={strings.zoneSearch}
+          placeholder={strings.zoneChoose}
           filter={zoneMatches}
           value={zone}
           onChange={(next) => {

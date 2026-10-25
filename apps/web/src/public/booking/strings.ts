@@ -34,6 +34,8 @@ export const strings = {
   // The best match in words, for the dialog's question ("You’re both free at 9:30 AM on Tue 20 Oct").
   matchWhen: (time: string, day: string) => `${time} on ${day}`,
   zoneSearch: 'Search city or GMT offset',
+  /** The time zone picker with no zone chosen, which a page always has: only a stand in's empty state. */
+  zoneChoose: 'Choose a time zone',
   zoneNone: (query: string) => `No time zone matches "${query}".`,
   changeZone: (zone: string) => `Show times in another time zone. Now ${zone}`,
   // Details.

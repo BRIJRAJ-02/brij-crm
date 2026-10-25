@@ -21,7 +21,10 @@ export { EmptyState } from '../molecules/EmptyState/EmptyState.tsx';
 export { SegmentedControl } from '../molecules/SegmentedControl/SegmentedControl.tsx';
 /** A person's social links (booking socials, 25 Oct 2026): the rail and the profile draw them, a link page too. */
 export { SocialLinks, type SocialLinkItem } from '../molecules/SocialLinks/SocialLinks.tsx';
-export { Select, type SelectItem } from '../molecules/Select/Select.tsx';
+// The time zone's Select loads on demand (React Aria's list code and its styles, 25 Oct 2026): until then a stand
+// in draws the same closed trigger. Nothing on the booking path draws Select itself.
+export { DeferredSelect } from '../molecules/Select/DeferredSelect.tsx';
+export type { SelectItem } from '../molecules/Select/Select.tsx';
 export {
   BookingDetails,
   type BookingDetailsOutcome,
