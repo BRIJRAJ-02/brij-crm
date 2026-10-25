@@ -184,7 +184,11 @@ export {
   type ThemeSwitchProps,
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
 export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
-export { DeferredSelect, type DeferredSelectProps } from './molecules/Select/DeferredSelect.tsx';
+export {
+  DeferredSelect,
+  type DeferredSelectItem,
+  type DeferredSelectProps,
+} from './molecules/Select/DeferredSelect.tsx';
 export { ChoiceChips, type ChoiceChip, type ChoiceChipsProps } from './molecules/ChoiceChips/ChoiceChips.tsx';
 export { ConditionRow, type ConditionRowProps } from './molecules/ConditionRow/ConditionRow.tsx';
 export { Steps, type Step, type StepsProps, type StepsVariant } from './molecules/Steps/Steps.tsx';

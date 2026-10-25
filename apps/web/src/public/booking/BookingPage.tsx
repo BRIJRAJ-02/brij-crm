@@ -36,6 +36,7 @@ import {
   Skeleton,
   SlotList,
   type BookingFact,
+  type DeferredSelectItem,
   type SelectItem,
 } from '@crm/ui/public-booking';
 import { createElement, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -400,7 +401,7 @@ function ChatLoading() {
 const NO_DAYS: ReadonlySet<string> = new Set();
 
 /** Every zone this browser knows, the current one first, each with its offset. */
-function zoneItems(current: string, at: number): readonly SelectItem[] {
+function zoneItems(current: string, at: number): readonly DeferredSelectItem[] {
   const listed = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
   return [current, ...listed.filter((zone) => zone !== current)].map((zone) => ({
     id: zone,

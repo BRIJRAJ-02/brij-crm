@@ -25,6 +25,8 @@
     letter-spacing: inherit;
     text-align: start;
     outline: none;
+    /* As React Aria's pressables (reset.css): a double tap can't zoom the page before the real one is in. */
+    touch-action: pan-x pan-y pinch-zoom;
   }
 
   .trigger:focus-visible {
@@ -59,11 +61,5 @@
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
-  }
-
-  @media (forced-colors: active) {
-    .trigger {
-      border-color: ButtonText;
-    }
   }
 }

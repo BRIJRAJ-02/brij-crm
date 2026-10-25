@@ -133,16 +133,23 @@ describe('the view a booking page opens in', () => {
 describe('the time zone picker in the rail', () => {
   it('draws with the page and opens on the first press, though its list loads apart', async () => {
     fakeApi('month');
+    // The browser never idles here, so the list's code loads only for the press.
+    vi.stubGlobal('requestIdleCallback', () => 0);
+    vi.stubGlobal('cancelIdleCallback', () => undefined);
     show();
     await loaded();
     const trigger = [...(host?.querySelectorAll('button') ?? [])].find(
       (button) => button.getAttribute('aria-haspopup') === 'listbox',
     );
     expect(trigger?.getAttribute('aria-label')).toBe('Time zone');
+    // The stand in, not React Aria's own trigger: the list's code is not in the page's first load.
+    expect(trigger?.hasAttribute('data-react-aria-pressable')).toBe(false);
     act(() => trigger?.click());
     await vi.waitFor(() => {
       expect(document.querySelector('[role="listbox"]')).not.toBeNull();
     });
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Search city or GMT offset');
+    await vi.waitFor(() => {
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Search city or GMT offset');
+    });
   });
 });

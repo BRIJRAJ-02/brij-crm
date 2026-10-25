@@ -2,13 +2,24 @@ import { useEffect, useId, useRef, useState, type PointerEvent, type KeyboardEve
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import styles from './DeferredSelect.module.css';
-import type { Select as SelectComponent, SelectProps } from './Select.tsx';
+import type { Select as SelectComponent, SelectItem, SelectProps } from './Select.tsx';
+
+/**
+ * One option of a DeferredSelect: a plain one, its label and its `description`. The stand in draws only these, so an
+ * icon, a leading piece, a badge or a hue, which the real trigger would draw, are ruled out rather than jumping in.
+ */
+export type DeferredSelectItem = Omit<SelectItem, 'icon' | 'leading' | 'badge' | 'hue' | 'short'> & {
+  readonly icon?: never;
+  readonly leading?: never;
+  readonly badge?: never;
+  readonly hue?: never;
+  readonly short?: never;
+};
 
 /** Props for DeferredSelect: an inline Select's, less what a stand in can't keep. */
 export type DeferredSelectProps = Pick<
   SelectProps,
   | 'label'
-  | 'items'
   | 'value'
   | 'onChange'
   | 'isDisabled'
@@ -20,6 +31,7 @@ export type DeferredSelectProps = Pick<
   | 'placement'
   | 'onOpenChange'
 > & {
+  readonly items: readonly DeferredSelectItem[];
   /**
    * Shown while nothing is chosen. Given by the caller, since Select's own default ("Choose…") would bring its copy
    * into the first load: an inline select nearly always has a value (a visitor's time zone).
@@ -32,8 +44,11 @@ export type DeferredSelectProps = Pick<
   readonly preload?: 'idle' | 'intent';
 };
 
+/** What DeferredSelect loads: Select's module, or anything with its Select. */
+export type SelectModule = { readonly Select: typeof SelectComponent };
+
 // Select's code (React Aria's Select, ListBox and Autocomplete, and its own styles) as its own chunk.
-const loadSelect = () => import('./Select.tsx');
+const loadSelect = (): Promise<SelectModule> => import('./Select.tsx');
 
 /** Calls `start` once the page has loaded and the browser is idle; answers the cleanup. */
 function whenIdle(start: () => void): () => void {
@@ -58,57 +73,92 @@ function whenIdle(start: () => void): () => void {
   };
 }
 
-/** The keys that open a closed Select's list from its trigger: the arrows, with or without Alt. */
-const OPENING_KEYS = new Set(['ArrowDown', 'ArrowUp']);
+/**
+ * The keys that open a closed Select's list from its trigger: the arrows (with or without Alt), and Space, taken on
+ * its key down so a swap between its down and its up can't lose it. Enter's click already comes on its key down.
+ */
+const OPENING_KEYS = new Set(['ArrowDown', 'ArrowUp', ' ']);
 
 /**
  * An inline Select (a booking page's time zone, in a line of its rail) whose list loads apart from the page's first
  * paint. Until its code arrives a stand in draws the same closed trigger, the same button with the same name, in the
  * same place; the first hover, focus or press loads it, and the press that started it opens the list once it is in,
- * so one press always opens it. The real Select then takes the stand in's place, and the focus with it.
+ * so one press always opens it. The real Select then takes the stand in's place.
  */
-export function DeferredSelect({ preload = 'idle', onOpenChange, ...props }: DeferredSelectProps) {
-  const [loaded, setLoaded] = useState<{ readonly Select: typeof SelectComponent } | undefined>(undefined);
-  // What the visitor did on the stand in, so the real one picks up where they are: open, or focused.
+export function DeferredSelect(props: DeferredSelectProps) {
+  return <DeferredSelectFrom {...props} load={loadSelect} />;
+}
+
+/**
+ * DeferredSelect with its loader given: its stories hold the code back, to press the stand in itself and to fail the
+ * load. Screens use DeferredSelect.
+ */
+export function DeferredSelectFrom({
+  preload = 'idle',
+  onOpenChange,
+  load,
+  ...props
+}: DeferredSelectProps & { readonly load: () => Promise<SelectModule> }) {
+  const [loaded, setLoaded] = useState<SelectModule | undefined>(undefined);
+  // What the visitor did on the stand in, so the real one picks up where they are: a press waiting for the list.
   const [opens, setOpens] = useState(false);
   const [hasFocus, setHasFocus] = useState(false);
   const [wanted, setWanted] = useState(false);
+  // A load that failed is asked for again only on the next intent, never on idle in a loop.
+  const [hasFailed, setHasFailed] = useState(false);
   // The real trigger, and whether its first close has put focus back on it (see onOpenChange below).
   const trigger = useRef<HTMLButtonElement>(null);
+  const standIn = useRef<HTMLButtonElement>(null);
   const hasReturnedFocus = useRef(false);
   const triggerId = useId();
   const valueId = useId();
 
   useEffect(() => {
-    if (!wanted && preload === 'intent') return;
+    if (!wanted && (preload === 'intent' || hasFailed)) return;
     let isCurrent = true;
-    const load = () => {
-      loadSelect().then(
+    const start = () => {
+      load().then(
         (module) => {
           if (isCurrent) setLoaded({ Select: module.Select });
         },
-        // A chunk that fails to load leaves the stand in, and the next intent asks again.
+        // The stand in stays, and doesn't open later on its own. A browser may keep a failed import as failed, so
+        // the next intent's ask can fail at once; the time zone the page already shows stays right.
         () => {
           if (!isCurrent) return;
+          setHasFailed(true);
           setWanted(false);
           setOpens(false);
         },
       );
     };
     if (wanted) {
-      load();
+      start();
       return () => {
         isCurrent = false;
       };
     }
-    const cancel = whenIdle(load);
+    const cancel = whenIdle(start);
     return () => {
       isCurrent = false;
       cancel();
     };
-  }, [wanted, preload]);
+  }, [wanted, preload, hasFailed, load]);
 
-  if (loaded !== undefined) {
+  // A press waiting for the list is called off by a press anywhere else, as a click outside closes an open list.
+  useEffect(() => {
+    if (!opens || loaded !== undefined) return;
+    const away = (event: globalThis.PointerEvent) => {
+      if (event.target instanceof Node && standIn.current?.contains(event.target) === true) return;
+      setOpens(false);
+    };
+    document.addEventListener('pointerdown', away, true);
+    return () => document.removeEventListener('pointerdown', away, true);
+  }, [opens, loaded]);
+
+  // The real Select takes over once it is in, unless the stand in has the focus and no press waits: swapping the
+  // focused button would drop focus for a moment (and a screen reader would read it twice), so it waits for a press
+  // or for focus to move on.
+  if (loaded !== undefined && (opens || !hasFocus)) {
     const { Select } = loaded;
     return (
       <Select
@@ -116,24 +166,29 @@ export function DeferredSelect({ preload = 'idle', onOpenChange, ...props }: Def
         isLabelHidden
         variant="inline"
         triggerRef={trigger}
+        // The list opens on the press that loaded it, its search taking the focus.
+        {...(opens ? { defaultOpen: true } : {})}
         onOpenChange={(isOpen) => {
           onOpenChange?.(isOpen);
           // A list opened as it mounted keeps the stand in, long gone, as the place to hand focus back to, so its
           // first close would leave focus nowhere: put it on the trigger, as every later close does by itself.
-          if (isOpen || !opens || hasReturnedFocus.current) return;
+          // (Only when focus is lost: a list opened on the real trigger hands it back by itself.)
+          if (isOpen || hasReturnedFocus.current) return;
           hasReturnedFocus.current = true;
           focusLater(() => (document.activeElement === document.body ? trigger.current : undefined));
         }}
-        // The list opens on the press that loaded it (its search takes the focus); else focus stays where it was.
-        {...(opens ? { defaultOpen: true } : hasFocus ? { autoFocus: true } : {})}
       />
     );
   }
 
   const { label, items, value, placeholder, isDisabled = false, showsDescription = false } = props;
   const chosen = items.find((item) => item.id === value);
-  const want = () => setWanted(true);
+  // A disabled one neither loads nor opens on a hover or press (its pointer events still arrive in some browsers).
+  const want = () => {
+    if (!isDisabled) setWanted(true);
+  };
   const open = () => {
+    if (isDisabled) return;
     setWanted(true);
     setOpens(true);
   };
@@ -141,6 +196,7 @@ export function DeferredSelect({ preload = 'idle', onOpenChange, ...props }: Def
     <div className={styles.root} data-disabled={isDisabled || undefined}>
       {/* The same button React Aria's Select draws closed: named by its value, then its label. */}
       <button
+        ref={standIn}
         type="button"
         id={triggerId}
         className={styles.trigger}
@@ -154,14 +210,24 @@ export function DeferredSelect({ preload = 'idle', onOpenChange, ...props }: Def
           setHasFocus(true);
           want();
         }}
-        onBlur={() => setHasFocus(false)}
-        // A pointer opens on the press, as the real one does, so a release after the swap still opened it.
-        onPointerDown={(event: PointerEvent) => {
-          if (event.button === 0) open();
+        onBlur={() => {
+          setHasFocus(false);
+          setOpens(false);
         }}
-        // Enter and Space (and a tap, which may come without a pointer down first).
+        // A mouse opens on the press, as the real one does, so a release after the swap still opened it. A touch
+        // waits for its tap (the click below): a scroll that starts on the line must not open the list.
+        onPointerDown={(event: PointerEvent) => {
+          if (event.button === 0 && event.pointerType === 'mouse') open();
+          else want();
+        }}
+        // Enter, and a tap.
         onClick={open}
         onKeyDown={(event: KeyboardEvent) => {
+          // Esc calls off a press still waiting for the list.
+          if (event.key === 'Escape') {
+            setOpens(false);
+            return;
+          }
           if (!OPENING_KEYS.has(event.key)) return;
           event.preventDefault();
           open();
