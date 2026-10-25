@@ -5,6 +5,8 @@ import { navStrings } from './nav-strings.ts';
 const figure = (count: number) => new Intl.NumberFormat().format(count);
 
 export const strings = {
+  /** Bringing a link in bio page across (spec 0055, AC-5524), beside the two adds. */
+  bringAcross: 'Bring a page across',
   title: navStrings.title,
   /** The page's place in Settings: a page of Profile's. */
   profile: 'Profile',

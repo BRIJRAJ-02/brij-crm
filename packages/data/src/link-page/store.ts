@@ -12,6 +12,8 @@ import type {
   ProfileFormChoice,
   ProfileItem,
   ProfileItems,
+  ProfileLinkImport,
+  ProfileLinkImportResult,
   ProfilePageChoice,
 } from '@crm/contracts';
 import {
@@ -90,6 +92,12 @@ export interface LinkPageApi {
     readonly indexable: boolean;
     readonly mutationId: string;
   }) => Promise<{ readonly indexable: boolean }>;
+  readonly importLinks: (input: {
+    readonly workspace: string;
+    readonly id: string;
+    readonly url: string;
+    readonly mutationId: string;
+  }) => Promise<ProfileLinkImportResult>;
   readonly saveItem: (input: {
     readonly workspace: string;
     readonly id: string;
@@ -149,6 +157,10 @@ interface ProfileProcedures {
     input: { workspace: string; indexable: boolean; mutationId: string },
     options: { signal?: AbortSignal },
   ) => Promise<{ indexable: boolean }>;
+  readonly importLinks: (
+    input: { workspace: string; id: string; url: string; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<ProfileLinkImportResult>;
   readonly saveItem: (
     input: { workspace: string; id: string; block: ProfileBlock; isEdit?: boolean; mutationId: string },
     options: { signal?: AbortSignal },
@@ -633,6 +645,21 @@ export function createLinkPageStore(deps: LinkPageDeps) {
         () => remove(id),
       );
 
+    const importLinks = async (id: string, url: string): Promise<ProfileLinkImport> => {
+      const answered = await deps.api
+        .importLinks({ workspace, id, url, mutationId: deps.mintId() })
+        .catch((error: unknown) => {
+          throw toDataError(error);
+        });
+      // Nothing is shown before this answers: the rows come from a page we had not read, so there is nothing to
+      // guess at. What came back is the page as it now stands, and it goes in whole, behind whatever changes are
+      // still on their way (they are re-applied by `show`, as every other answer's are).
+      confirmed = { items: answered.items, archived: answered.archived };
+      landed += 1;
+      show();
+      return answered.import;
+    };
+
     const holder: LinkPageHeld = {
       subscribe(listener) {
         listeners.add(listener);
@@ -653,7 +680,7 @@ export function createLinkPageStore(deps: LinkPageDeps) {
         readCounts();
       },
     };
-    return { holder, read, save, order, archive, remove };
+    return { holder, read, save, order, archive, remove, importLinks };
   }
 
   const of = (opened: string) => {
@@ -707,6 +734,12 @@ export function createLinkPageStore(deps: LinkPageDeps) {
       deps.api.setIndexable({ workspace, indexable, mutationId: deps.mintId() }).catch((error: unknown) => {
         throw toDataError(error);
       }),
+    /**
+     * Brings one link in bio page across (spec 0055, AC-5524): `id` is the import's own, so sending the same one
+     * again adds nothing twice. Every row lands hidden, and the answer says what it made and what it could not.
+     */
+    importLinks: (workspace: string, id: string, url: string): Promise<ProfileLinkImport> =>
+      of(workspace).importLinks(id, url),
     /** Signed out: forgets the copy. */
     clear: (): void => {
       held = undefined;
@@ -746,6 +779,7 @@ export function openLinkPage(given: {
       formChoices: (input) => call((options) => profile.formChoices(input, options)),
       saveTheme: (input) => call((options) => profile.saveTheme(input, options)),
       setIndexable: (input) => call((options) => profile.setIndexable(input, options)),
+      importLinks: (input) => call((options) => profile.importLinks(input, options)),
       saveItem: (input) => call((options) => profile.saveItem(input, options)),
       orderItems: (input) => call((options) => profile.orderItems({ ...input, ids: [...input.ids] }, options)),
       archiveItem: (input) => call((options) => profile.archiveItem(input, options)),
@@ -808,6 +842,9 @@ export function openLinkPage(given: {
       deps.api.setIndexable({ workspace, indexable, mutationId: deps.mintId() }).catch((error: unknown) => {
         throw toDataError(error);
       }),
+    /** Brings one link in bio page across (spec 0055, AC-5524): the rows land hidden, for a person to turn on. */
+    importLinks: (workspace: string, id: string, url: string): Promise<ProfileLinkImport> =>
+      store.importLinks(workspace, id, url),
     /** Signed out: forgets the copy. */
     clear: store.clear,
   };

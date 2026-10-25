@@ -429,6 +429,8 @@ export type {
   ProfileBlockKind,
   ProfileItem,
   ProfileLinkIcon,
+  ProfileLinkImport,
+  SkippedImportRow,
   PageTheme,
   ProfileFormChoice,
   ProfileFormFacts,

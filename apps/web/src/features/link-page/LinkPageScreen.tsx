@@ -59,6 +59,7 @@ import {
   type AddableKind,
   type ChosenFacts,
 } from './registry.tsx';
+import { ImportLinksModal } from './ImportLinksModal.tsx';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 import { strings } from './strings.ts';
 
@@ -179,6 +180,9 @@ function Blocks({
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [deleting, setDeleting] = useState<ProfileItem | undefined>(undefined);
   const [isDeleting, setIsDeleting] = useState(false);
+  // The import's own id, minted when the modal opens and kept while it is open, so a send that failed on the way
+  // back (the rows landed, the answer didn't) adds nothing twice when it is tried again (spec 0055, AC-5528).
+  const [importId, setImportId] = useState<string | undefined>(undefined);
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
   // The look, shown the moment it is picked and saved behind it (AC-5421). A refusal puts back what was there and
@@ -417,6 +421,15 @@ function Blocks({
   const isFull = !ADDABLE.some(roomFor);
   const addButtons = (
     <>
+      {/* Bringing a page across (spec 0055, AC-5524): quiet beside the two adds, since most people never do it. */}
+      <Button
+        variant="ghost"
+        icon="download"
+        isDisabled={state.status !== 'ready' || isFull}
+        onPress={() => setImportId(linkPage.newId())}
+      >
+        {strings.bringAcross}
+      </Button>
       <Button
         icon="list-plus"
         isDisabled={state.status !== 'ready' || !roomFor('heading')}
@@ -687,6 +700,13 @@ function Blocks({
         >
           {deleting.kind === 'page' ? strings.removePageText : strings.deleteText}
         </Modal>
+      )}
+      {importId !== undefined && (
+        <ImportLinksModal
+          isOpen
+          onClose={() => setImportId(undefined)}
+          onImport={(url) => linkPage.importLinks(slug, importId, url)}
+        />
       )}
       <VisuallyHidden>
         <span role="status">{said}</span>
