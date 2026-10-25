@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { FIRST_SCREEN_FONTS, layerOrder, preloadFonts, uiVite } from '@crm/ui/vite';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
@@ -177,6 +177,33 @@ function publicBookingPage(): Plugin {
   };
 }
 
+/**
+ * The built booking shell, written beside the handle Function as a module (spec 0055, AC-5501), so that function
+ * answers `/<handle>` from bytes it already holds: no file read and no request for its own shell while a visitor
+ * waits. The build is the only writer, and `build.test.ts` fails when what it wrote is not what `dist` holds.
+ */
+function inlineBookingShell(): Plugin {
+  let outDir = '';
+  return {
+    name: 'crm:booking-shell',
+    apply: 'build',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    closeBundle: {
+      sequential: true,
+      order: 'post',
+      handler() {
+        const shell = readFileSync(path.join(outDir, 'book.html'), 'utf8');
+        writeFileSync(
+          path.join(import.meta.dirname, 'api', 'shell.generated.mjs'),
+          `// Written by the build (crm:booking-shell in vite.config.ts). Never edit it, and never commit it.\nexport const BOOKING_SHELL = ${JSON.stringify(shell)};\n`,
+        );
+      },
+    },
+  };
+}
+
 export default defineConfig({
   // One `.env` at the repo root for local work.
   envDir: '../..',
@@ -208,6 +235,8 @@ export default defineConfig({
     realtimeCsp(),
     // A web DSN must be on Sentry's EU ingest and allowed by the same CSP; both checks run on every build.
     checkSentryDsn(),
+    // The built booking shell, inlined into the handle Function that serves `/<handle>`.
+    inlineBookingShell(),
     uploadSourceMaps(),
     deleteSourceMaps(),
     deployedStylePolicy(),

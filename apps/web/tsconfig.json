@@ -24,6 +24,10 @@
     "realtime-csp.test.ts",
     "public-paths.ts",
     "public-paths.test.ts",
+    "handle-meta.ts",
+    "handle-meta.test.ts",
+    "handle-shell.ts",
+    "handle-shell.test.ts",
     "playwright.config.ts",
     "e2e"
   ]
