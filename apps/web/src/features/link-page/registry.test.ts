@@ -23,7 +23,7 @@ const page = (status: 'live' | 'paused'): ProfileItem => ({
 
 describe('the block registry', () => {
   it('offers every kind it has an editor for, in the Add menu’s order', () => {
-    expect(ADDABLE).toEqual(['link', 'page', 'contact', 'heading']);
+    expect(ADDABLE).toEqual(['link', 'page', 'text', 'faq', 'contact', 'heading']);
     expect(ADDABLE.every((kind) => BLOCK_KINDS[kind].label !== '')).toBe(true);
   });
 
@@ -88,6 +88,33 @@ describe('the block registry', () => {
     expect(previewBlock(bare, 'ada', () => undefined)).not.toHaveProperty('line');
   });
 
+  it('reads and draws the blocks that are words, not rows: writing and the questions (spec 0052)', () => {
+    const written: ProfileItem = { kind: 'text', id: 't', title: 'About', body: 'One\nTwo', updatedAt: '' };
+    // The row says what it is and shows the first line, since there is no address to show.
+    expect(rowWords(written)).toEqual({ title: 'About', address: 'One' });
+    expect(rowWords({ ...written, title: undefined })).toEqual({ title: 'Writing', address: 'One' });
+    expect(previewBlock(written, 'ada', () => undefined)).toEqual({
+      kind: 'text',
+      id: 't',
+      title: 'About',
+      body: 'One\nTwo',
+    });
+
+    const asked: ProfileItem = {
+      kind: 'faq',
+      id: 'f',
+      items: [
+        { question: 'Do you travel?', answer: 'Yes.' },
+        { question: 'How far ahead?', answer: 'A week.' },
+      ],
+      updatedAt: '',
+    };
+    expect(rowWords(asked)).toEqual({ title: 'Questions', address: '2 questions' });
+    expect(rowWords({ ...asked, title: 'Before you book' }).title).toBe('Before you book');
+    expect(rowWords({ ...asked, items: asked.items.slice(0, 1) }).address).toBe('1 question');
+    expect(previewBlock(asked, 'ada', () => undefined)).toEqual({ kind: 'faq', id: 'f', items: asked.items });
+  });
+
   it('says the page’s figures and each block’s presses in plain words', () => {
     const counts = (views: number, visitors: number, before: number) => ({
       days: 30,
@@ -122,6 +149,11 @@ describe('the block registry', () => {
     expect(pressesChip(link, counts(1, 1, 0))).toEqual(['3\u00a0clicks']);
     expect(pressesChip({ ...link, id: 'other' }, counts(1, 1, 0))).toEqual(['No clicks yet']);
     expect(pressesChip({ kind: 'heading', id: 'h', title: 'H', updatedAt: '' }, counts(1, 1, 0))).toEqual([]);
+    // Neither writing nor a set of questions has anywhere to go, so neither shows a chip (AC-5207, AC-5211).
+    expect(pressesChip({ kind: 'text', id: 't', body: 'Words', updatedAt: '' }, counts(1, 1, 0))).toEqual([]);
+    expect(
+      pressesChip({ kind: 'faq', id: 'f', items: [{ question: 'Q', answer: 'A' }], updatedAt: '' }, counts(1, 1, 0)),
+    ).toEqual([]);
     expect(pressesChip(link, undefined)).toEqual([]);
   });
 });

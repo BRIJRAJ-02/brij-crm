@@ -264,7 +264,10 @@ export function figuresLine(counts: ProfileCounts): string {
 
 /** A block's presses as its row's chip, said as clicks: none for a heading (it can't be pressed), "No clicks yet" for zero. */
 export function pressesChip(item: ProfileItem, counts: ProfileCounts | undefined): readonly string[] {
-  if (counts === undefined || item.kind === 'heading') return [];
+  // A heading, a piece of writing and a set of questions have nowhere to go, so none of them counts a press
+  // (AC-5207, AC-5211): a chip saying "No clicks yet" on one would read as a block nobody presses, not one
+  // that cannot be pressed.
+  if (counts === undefined || item.kind === 'heading' || item.kind === 'text' || item.kind === 'faq') return [];
   const presses = counts.presses.find((each) => each.id === item.id)?.presses ?? 0;
   return [presses === 0 ? strings.noPresses : strings.presses(presses)];
 }
