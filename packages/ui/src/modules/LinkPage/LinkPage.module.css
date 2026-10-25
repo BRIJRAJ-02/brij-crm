@@ -138,6 +138,32 @@
     overflow-wrap: anywhere;
   }
 
+  /* Writing: the person's own words, not a row. No frame and nothing to press, so it reads as the page talking
+     rather than as one more thing to tap, and its line breaks are kept as typed. */
+  .writing {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding-inline: var(--space-4);
+  }
+
+  .writingTitle {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    overflow-wrap: anywhere;
+  }
+
+  .writingBody {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .list {
     display: flex;
     flex-direction: column;

@@ -122,6 +122,32 @@ export const OneBlock: Story = {
   },
 };
 
+/** Writing between the rows: the person's own words, with their line breaks kept and nothing to press. */
+export const Writing: Story = {
+  args: {
+    person: { name: 'Ada Lovelace', id: 'ada', bio: 'Numbers, engines and the odd poem.' },
+    blocks: [
+      { kind: 'heading', id: 'about', title: 'About' },
+      {
+        kind: 'text',
+        id: 'who',
+        title: 'Before you book',
+        body: 'I work on analytical engines.\n\nBring the problem, not the solution. Half an hour is usually enough.',
+      },
+      { kind: 'page', id: 'chat', title: 'Quick chat', href: '/ada/quick-chat', facts: '30 min' },
+      { kind: 'text', id: 'ps', body: 'Mornings are better for me, London time.' },
+    ],
+  },
+  play: async ({ canvas }) => {
+    // The words are text, not a row: nothing in them is a link or a button.
+    const words = canvas.getByText(/analytical engines/);
+    await expect(words.closest('a')).toBeNull();
+    await expect(words.closest('button')).toBeNull();
+    // The page keeps its one list of pressable rows; writing is not in it.
+    await expect(canvas.getAllByRole('listitem')).toHaveLength(1);
+  },
+};
+
 /** Long words wrap inside their card rather than pushing the page sideways at 390 wide. */
 export const LongWords: Story = {
   args: {

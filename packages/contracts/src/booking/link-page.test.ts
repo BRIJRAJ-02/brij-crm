@@ -139,6 +139,33 @@ describe('ProfileBlock', () => {
     }
     expect(ProfileBlock.safeParse({ kind: 'link', title: 'Two\nlines', url: 'https://a.dev' }).success).toBe(false);
   });
+
+  it('keeps a piece of writing’s line breaks and refuses everything else (spec 0052)', () => {
+    // A Windows paste is one break a line, not two, and the body is trimmed at its ends only.
+    expect(ProfileBlock.parse({ kind: 'text', title: ' About ', body: ' One\r\nTwo  ' })).toEqual({
+      kind: 'text',
+      title: 'About',
+      body: 'One\nTwo',
+    });
+    // No title at all is the ordinary case: the words stand on their own.
+    expect(ProfileBlock.parse({ kind: 'text', body: 'Just words' })).toEqual({ kind: 'text', body: 'Just words' });
+    for (const written of [
+      { body: '' },
+      { body: '   ' },
+      { body: 'x'.repeat(1001) },
+      { body: Array.from({ length: 22 }, () => 'line').join('\n') },
+      { body: 'Tab\there' },
+      { body: 'Split\u2028here' },
+      { title: 'x'.repeat(61), body: 'Fine' },
+      { title: 'Two\nlines', body: 'Fine' },
+    ]) {
+      expect(ProfileBlock.safeParse({ kind: 'text', ...written }).success, JSON.stringify(written)).toBe(false);
+    }
+    // Twenty breaks is the limit, and exactly twenty passes.
+    expect(
+      ProfileBlock.safeParse({ kind: 'text', body: Array.from({ length: 21 }, () => 'line').join('\n') }).success,
+    ).toBe(true);
+  });
 });
 
 describe('checkContactCard', () => {

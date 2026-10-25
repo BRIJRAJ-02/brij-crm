@@ -38,6 +38,14 @@ export type LinkPageBlock =
     }
   | { readonly kind: 'heading'; readonly id: string; readonly title: string }
   | {
+      readonly kind: 'text';
+      readonly id: string;
+      /** A small heading over the words, when the person gave one. */
+      readonly title?: string;
+      /** The words themselves, drawn as text with their line breaks kept. Never markup: nothing in it is parsed. */
+      readonly body: string;
+    }
+  | {
       readonly kind: 'page';
       readonly id: string;
       readonly title: string;
@@ -218,10 +226,12 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
       </span>
     );
   }
-  if (block.kind === 'heading') {
+  // Writing has no tile on the page, where it is prose; in the editor's rows it takes the same mark a heading does,
+  // since there the row is a thing in a list rather than the words themselves.
+  if (block.kind === 'heading' || block.kind === 'text') {
     return (
       <span className={styles.tile} data-tile="icon">
-        <Icon name="type" />
+        <Icon name={block.kind === 'text' ? 'file-text' : 'type'} />
       </span>
     );
   }
@@ -269,7 +279,7 @@ function BlockText({ title, line }: { readonly title: string; readonly line?: st
 
 /** Each kind's one renderer. A block of a kind with none never reaches here: callers skip what they can't map. */
 const RENDERERS: {
-  readonly [Kind in Exclude<LinkPageBlock['kind'], 'heading' | 'contact'>]: (
+  readonly [Kind in Exclude<LinkPageBlock['kind'], 'heading' | 'contact' | 'text'>]: (
     block: Extract<LinkPageBlock, { kind: Kind }>,
     onPress: (() => void) | undefined,
   ) => ReactNode;
@@ -340,7 +350,7 @@ function BlockRow({
   block,
   onPress,
 }: {
-  readonly block: Exclude<LinkPageBlock, { kind: 'heading' | 'contact' }>;
+  readonly block: BlockRowBlock;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
   const press = onPress === undefined ? undefined : () => onPress(block.id);
@@ -348,6 +358,43 @@ function BlockRow({
     <li className={styles.item}>
       {block.kind === 'link' ? RENDERERS.link(block, press) : RENDERERS.page(block, press)}
     </li>
+  );
+}
+
+/** A group's children in order: each run of pressable rows, and each piece of writing between them. */
+type Run =
+  | { readonly kind: 'rows'; readonly key: string; readonly isFirst: boolean; readonly rows: BlockRowBlock[] }
+  | { readonly kind: 'text'; readonly key: string; readonly block: Extract<LinkPageBlock, { kind: 'text' }> };
+
+/** A block a row draws: everything but a heading, a contact card and a piece of writing. */
+type BlockRowBlock = Exclude<LinkPageBlock, { kind: 'heading' | 'contact' | 'text' }>;
+
+function runsOf(blocks: readonly LinkPageBlock[]): Run[] {
+  const runs: Run[] = [];
+  let isFirst = true;
+  for (const block of blocks) {
+    if (block.kind === 'heading' || block.kind === 'contact') continue;
+    if (block.kind === 'text') {
+      runs.push({ kind: 'text', key: block.id, block });
+      continue;
+    }
+    const last = runs.at(-1);
+    if (last?.kind === 'rows') last.rows.push(block);
+    else {
+      runs.push({ kind: 'rows', key: block.id, isFirst, rows: [block] });
+      isFirst = false;
+    }
+  }
+  return runs;
+}
+
+/** A piece of writing: the person's words, drawn as text, with nothing to press. */
+function TextBlock({ block }: { readonly block: Extract<LinkPageBlock, { kind: 'text' }> }) {
+  return (
+    <div className={styles.writing}>
+      {block.title !== undefined && block.title !== '' && <h3 className={styles.writingTitle}>{block.title}</h3>}
+      <p className={styles.writingBody}>{block.body}</p>
+    </div>
   );
 }
 
@@ -369,14 +416,22 @@ function Group({
           {heading.title}
         </h2>
       )}
-      {rows.length > 0 && (
-        <ul className={styles.list} {...(heading === undefined ? { 'aria-label': strings.blocks } : {})}>
-          {rows.map((block) =>
-            block.kind === 'heading' || block.kind === 'contact' ? null : (
+      {/* Writing is not a row, so it breaks out of the list rather than sitting in one: a run of rows is a list,
+          and a text block is the person's words between the lists. */}
+      {runsOf(rows).map((run) =>
+        run.kind === 'rows' ? (
+          <ul
+            key={run.key}
+            className={styles.list}
+            {...(heading === undefined && run.isFirst ? { 'aria-label': strings.blocks } : {})}
+          >
+            {run.rows.map((block) => (
               <BlockRow key={block.id} block={block} onPress={onPress} />
-            ),
-          )}
-        </ul>
+            ))}
+          </ul>
+        ) : (
+          <TextBlock key={run.key} block={run.block} />
+        ),
       )}
     </section>
   );

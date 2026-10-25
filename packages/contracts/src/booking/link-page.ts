@@ -13,6 +13,8 @@ import {
   PROFILE_TITLE_MAX,
   profileLinkProblem,
   PROFILE_CONTROL,
+  PROFILE_TEXT_BREAKS,
+  PROFILE_TEXT_MAX,
   PUBLIC_LINK_MARKS,
 } from './link-page-rules.ts';
 
@@ -97,12 +99,37 @@ export const ProfileContactBlock = z.object({
 /** A contact card block. */
 export type ProfileContactBlock = z.infer<typeof ProfileContactBlock>;
 
+/**
+ * A few lines in the person's own words (spec 0052, AC-5205): a title and a body of plain text. There is no markup
+ * at all, so there is nothing to sanitise on the way out; a person who wants a link adds a link block. Line breaks
+ * are the one thing kept, and `\r\n` becomes `\n` first so a Windows paste does not spend two of them.
+ */
+export const ProfileTextBlock = z.object({
+  kind: z.literal('text'),
+  title: oneLine(0, PROFILE_TITLE_MAX.text, '', 'Keep the title to 60 characters.').optional(),
+  body: z
+    .string()
+    .transform((typed) => typed.replaceAll('\r\n', '\n').trim())
+    .refine((text) => text.length >= 1, { error: 'Write something, or leave the block out.' })
+    .refine((text) => text.length <= PROFILE_TEXT_MAX, { error: 'Keep it to 1,000 characters.' })
+    .refine((text) => (text.match(/\n/g) ?? []).length <= PROFILE_TEXT_BREAKS, {
+      error: 'Keep it to 20 line breaks. A longer piece reads better somewhere it can be a page.',
+    })
+    // Line breaks are allowed through; every other control character, U+2028 and U+2029 among them, is not.
+    .refine((text) => !PROFILE_CONTROL.test(text.replaceAll('\n', '')), {
+      error: 'Take out the special characters.',
+    }),
+});
+/** A text block. */
+export type ProfileTextBlock = z.infer<typeof ProfileTextBlock>;
+
 /** One block's fields, by kind: what every write is checked against before it is stored. */
 export const ProfileBlock = z.discriminatedUnion('kind', [
   ProfileLinkBlock,
   ProfileHeadingBlock,
   ProfilePageBlock,
   ProfileContactBlock,
+  ProfileTextBlock,
 ]);
 /** One block's fields. */
 export type ProfileBlock = z.infer<typeof ProfileBlock>;
@@ -140,6 +167,7 @@ export const ProfileItem = z.discriminatedUnion('kind', [
   ProfileHeadingBlock.extend(Stored),
   ProfilePageBlock.extend({ ...Stored, page: ProfilePageFacts.optional() }),
   ProfileContactBlock.extend(Stored),
+  ProfileTextBlock.extend(Stored),
 ]);
 /** One block as the editor reads it. */
 export type ProfileItem = z.infer<typeof ProfileItem>;
@@ -196,6 +224,8 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
     jobTitle: z.string().optional(),
     company: z.string().optional(),
   }),
+  /** Writing: the words themselves, drawn as text and never as markup (spec 0052, AC-5206). */
+  z.object({ kind: z.literal('text'), id: Uuid, title: z.string().optional(), body: z.string().min(1) }),
 ]);
 /** One block as a visitor reads it. */
 export type PublicProfileItem = z.infer<typeof PublicProfileItem>;

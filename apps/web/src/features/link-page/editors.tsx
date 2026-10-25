@@ -278,6 +278,88 @@ export function HeadingEditor({ item, items, linkPage, chrome, onSubmit, onClose
   );
 }
 
+/** Add or edit a piece of writing: a title nobody has to give, and the words, with the page drawn as typed. */
+export function TextEditor({ item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const formId = useId();
+  const editing = item?.kind === 'text' ? item : undefined;
+  const [title, setTitle] = useState(editing?.title ?? '');
+  const [body, setBody] = useState(editing?.body ?? '');
+  const [problems, setProblems] = useState<BlockProblems>({});
+  const draft = () => {
+    const kept = title.trim();
+    return { kind: 'text' as const, body, ...(kept === '' ? {} : { title: kept }) };
+  };
+  const submit = () => {
+    const checked = linkPage.check(draft(), items, editing?.id);
+    if (!checked.ok) {
+      setProblems(checked.problems);
+      return;
+    }
+    onSubmit(draft());
+  };
+  return (
+    <EditorModal
+      title={editing === undefined ? strings.newText : strings.editText}
+      formId={formId}
+      submitLabel={editing === undefined ? strings.add : strings.save}
+      onClose={onClose}
+      {...(chrome === undefined ? {} : { chrome })}
+      preview={
+        <LinkPage
+          layout="blocks"
+          caption={strings.howItLooks}
+          blocks={[
+            {
+              kind: 'text',
+              id: editing?.id ?? 'draft',
+              body: body.trim() === '' ? strings.textBodyPlaceholder : body,
+              ...(title.trim() === '' ? {} : { title: title.trim() }),
+            },
+          ]}
+        />
+      }
+    >
+      <Form
+        id={formId}
+        onSubmit={submit}
+        label={editing === undefined ? strings.newText : strings.editText}
+        focusesFirstField
+      >
+        <Field
+          label={strings.textTitle}
+          name="title"
+          autoComplete="off"
+          maxLength={60}
+          placeholder={strings.textTitlePlaceholder}
+          hint={strings.textTitleHint}
+          value={title}
+          onChange={(next) => {
+            setTitle(next);
+            setProblems((held) => ({ ...held, title: undefined }));
+          }}
+          {...(problems.title === undefined ? {} : { error: problems.title })}
+        />
+        <Field
+          label={strings.textBody}
+          name="body"
+          isMultiline
+          isRequired
+          maxLength={1000}
+          showCounter
+          placeholder={strings.textBodyPlaceholder}
+          hint={strings.textBodyHint}
+          value={body}
+          onChange={(next) => {
+            setBody(next);
+            setProblems((held) => ({ ...held, body: undefined }));
+          }}
+          {...(problems.body === undefined ? {} : { error: problems.body })}
+        />
+      </Form>
+    </EditorModal>
+  );
+}
+
 /** The contact card's fields as typed, the phone as its country and national number. */
 interface ContactTyped {
   readonly fullName: string;

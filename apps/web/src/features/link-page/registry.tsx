@@ -14,7 +14,7 @@ import type {
 } from '@crm/data';
 import type { Hue, IconName, LinkPageBlock, LinkPageMark } from '@crm/ui';
 import type { ComponentType, ReactNode } from 'react';
-import { ContactEditor, HeadingEditor, LinkEditor, PageChooser } from './editors.tsx';
+import { ContactEditor, HeadingEditor, LinkEditor, PageChooser, TextEditor } from './editors.tsx';
 import { strings } from './strings.ts';
 
 /**
@@ -101,6 +101,13 @@ export const BLOCK_KINDS: Readonly<Record<ProfileBlockKind, BlockKind>> = {
     Editor: ContactEditor,
     isEditable: true,
   },
+  text: {
+    label: strings.addText,
+    description: strings.addTextText,
+    icon: 'file-text',
+    Editor: TextEditor,
+    isEditable: true,
+  },
   heading: {
     label: strings.addHeading,
     description: strings.addHeadingText,
@@ -113,7 +120,7 @@ export const BLOCK_KINDS: Readonly<Record<ProfileBlockKind, BlockKind>> = {
 /** The Add menu's kinds, in order. */
 // The order the picker draws them in, from the owner's Add item board: the commonest first, the section last,
 // and the one Add item opens on.
-export const ADDABLE: readonly ProfileBlockKind[] = ['link', 'page', 'contact', 'heading'];
+export const ADDABLE: readonly ProfileBlockKind[] = ['link', 'page', 'text', 'contact', 'heading'];
 
 /** A booking page's lengths and kind, said once: "30 min · 60 min · Team". */
 export function pageFacts(page: { readonly durations: readonly number[]; readonly isTeam: boolean }): string {
@@ -131,6 +138,8 @@ function shownAddress(url: string): string {
 export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWords {
   if (item.kind === 'link') return { title: item.title, address: shownAddress(item.url) };
   if (item.kind === 'heading') return { title: item.title, address: strings.heading };
+  // Writing has nowhere to go, so its row reads as what it is, with its first line after it.
+  if (item.kind === 'text') return { title: item.title ?? strings.text, address: item.body.split('\n')[0] ?? '' };
   if (item.kind === 'contact') return { title: item.fullName, address: contactWords(item, true) };
   if (item.page === undefined) {
     // Unavailable leads the line, as Paused does, so a phone keeps the row on one line.
@@ -177,6 +186,9 @@ export function previewBlock(
   markOf: (url: string) => LinkPageMark | undefined,
 ): LinkPageBlock | undefined {
   if (item.kind === 'heading') return { kind: 'heading', id: item.id, title: item.title };
+  if (item.kind === 'text') {
+    return { kind: 'text', id: item.id, body: item.body, ...(item.title === undefined ? {} : { title: item.title }) };
+  }
   if (item.kind === 'contact') {
     const line = contactWords(item);
     return {

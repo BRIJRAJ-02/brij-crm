@@ -13,6 +13,8 @@ import {
   PROFILE_LIMITS,
   PROFILE_LINK_ICONS,
   PROFILE_NOTE_MAX,
+  PROFILE_TEXT_BREAKS,
+  PROFILE_TEXT_MAX,
   PROFILE_TITLE_MAX,
   profileLimitSentence,
   profileLinkProblem,
@@ -144,7 +146,7 @@ interface Pending {
 
 /** Why a block can't be saved as typed, by field: the same rules the server keeps, said before anything is sent. */
 export type BlockProblems = Readonly<
-  Partial<Record<'title' | 'url' | 'note' | 'icon' | 'page' | ProfileContactField, string>>
+  Partial<Record<'title' | 'url' | 'note' | 'icon' | 'page' | 'body' | ProfileContactField, string>>
 >;
 
 /** The refusal toast's action. */
@@ -222,6 +224,7 @@ export type BlockDraft =
       readonly hue?: (typeof PROFILE_HUES)[number];
     }
   | { readonly kind: 'heading'; readonly title: string }
+  | { readonly kind: 'text'; readonly title?: string; readonly body: string }
   | { readonly kind: 'page'; readonly workspaceId?: string; readonly pageId?: string }
   | ({ readonly kind: 'contact' } & Readonly<Partial<Record<ProfileContactField, string>>>);
 
@@ -258,6 +261,21 @@ export function checkBlock(
     return checked.ok
       ? { ok: true, block: { kind: 'contact', ...checked.card } }
       : { ok: false, problems: checked.problems };
+  }
+  if (draft.kind === 'text') {
+    const text: Partial<Record<'title' | 'body', string>> = {};
+    const kept = draft.title?.trim() ?? '';
+    if (kept.length > PROFILE_TITLE_MAX.text) text.title = 'Keep the title to 60 characters.';
+    else if (/[\r\n]/.test(kept)) text.title = 'Keep it to one line.';
+    // A Windows paste arrives with \r\n; it is one break, not two, here and on the server alike.
+    const body = draft.body.replaceAll('\r\n', '\n').trim();
+    if (body === '') text.body = 'Write something, or leave the block out.';
+    else if (body.length > PROFILE_TEXT_MAX) text.body = 'Keep it to 1,000 characters.';
+    else if ((body.match(/\n/g) ?? []).length > PROFILE_TEXT_BREAKS) {
+      text.body = 'Keep it to 20 line breaks. A longer piece reads better somewhere it can be a page.';
+    }
+    if (Object.keys(text).length > 0) return { ok: false, problems: text };
+    return { ok: true, block: { kind: 'text', body, ...(kept === '' ? {} : { title: kept }) } };
   }
   const problems: Partial<Record<'title' | 'url' | 'note' | 'icon' | 'page', string>> = {};
   const title = titleProblem(draft.title, draft.kind);

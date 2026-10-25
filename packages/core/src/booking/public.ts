@@ -27,6 +27,7 @@ import {
   checkProfileLink,
   linkMarkOf,
   ProfileContactBlock,
+  ProfileTextBlock,
   PublicProfileItem,
   type ProfileContactCard,
   type PublicAddress,
@@ -333,10 +334,14 @@ interface PageRow {
 
 /** Whether a block holds the words searched for: its title and its note, or a page's description (AC-5133). */
 function matches(item: PublicProfileItem, words: string): boolean {
+  // Titles and the short lines under them only (AC-5228). A piece of writing matches on its title alone: a row
+  // that matched on words a visitor cannot see in it is a result that makes no sense.
   const said =
     item.kind === 'contact'
       ? [item.fullName, item.jobTitle ?? '', item.company ?? '']
-      : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
+      : item.kind === 'text'
+        ? [item.title ?? '']
+        : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
   return said.some((text) => text.toLowerCase().includes(words));
 }
 
@@ -363,6 +368,17 @@ function publicItemOf(row: LinkPageRow, pages: ReadonlyMap<string, PageRow>): Pu
     };
   } else if (row.kind === 'heading') {
     candidate = { kind: 'heading', id: row.id, title: data.title };
+  } else if (row.kind === 'text') {
+    // Checked by its own schema before it goes out, so a row stored by an older build that fails the rule is
+    // skipped rather than drawn. The words go as text; nothing here ever becomes markup.
+    const written = ProfileTextBlock.safeParse({ ...data, kind: 'text' });
+    if (!written.success) return undefined;
+    candidate = {
+      kind: 'text',
+      id: row.id,
+      body: written.data.body,
+      ...(written.data.title === undefined ? {} : { title: written.data.title }),
+    };
   } else if (row.kind === 'page') {
     const page = row.page_id === null ? undefined : pages.get(row.page_id);
     if (page === undefined) return undefined;

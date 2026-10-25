@@ -214,7 +214,7 @@ describe('handle addresses (22 Oct 2026)', () => {
       expect(text).not.toContain(secret);
     }
     const body = PublicProfile.parse(JSON.parse(text));
-    expect(body.items.map((item) => [item.kind, 'title' in item ? item.title : item.fullName])).toEqual([
+    expect(body.items.map((item) => [item.kind, 'fullName' in item ? item.fullName : (item.title ?? '')])).toEqual([
       ['link', 'LinkedIn'],
       ['heading', 'Meet me'],
       ['page', 'Quick chat'],
@@ -223,7 +223,9 @@ describe('handle addresses (22 Oct 2026)', () => {
     expect(body.items[0]).toMatchObject({ url: 'https://linkedin.com/in/ada', mark: 'linkedin' });
     // A search answers the matches flat.
     const found = PublicProfile.parse(await (await handles(`${handle}?q=chat`)).json());
-    expect(found.items.map((item) => ('title' in item ? item.title : item.fullName))).toEqual(['Quick chat']);
+    expect(found.items.map((item) => ('fullName' in item ? item.fullName : (item.title ?? '')))).toEqual([
+      'Quick chat',
+    ]);
   });
 
   it('answers the contact card as a vCard to download, and 404 with none, archived, or no such person (AC-5114)', async () => {

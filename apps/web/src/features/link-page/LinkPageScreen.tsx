@@ -80,6 +80,7 @@ function shownItem(
   if (block.kind === 'heading') return { kind: 'heading', id, title: block.title, updatedAt };
   if (block.kind === 'page') return { ...block, id, ...(page === undefined ? {} : { page }), updatedAt };
   if (block.kind === 'contact') return { ...block, id, updatedAt };
+  if (block.kind === 'text') return { ...block, id, updatedAt };
   return { ...block, id, hue: block.hue ?? (was?.kind === 'link' ? was.hue : 'blue'), updatedAt };
 }
 
