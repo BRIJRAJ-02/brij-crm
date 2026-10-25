@@ -45,6 +45,12 @@ import { LinkList, LinkListRowOrder } from '@crm/ui';
 
 `leading` puts a tile before a row's title (25 October 2026): the link page's editor (spec 0051) lists blocks that read apart at a glance by a network's mark, an icon or a letter, the tiles the page itself draws (`LinkPageTile`). Give every row one and the list `leadingLoading`, the tile's own loading form (`<LinkPageTile />`), which loading rows draw so the titles land where the lines stood; the tile's size lives in one place, LinkPage's module. Narrow (under 480), tiled rows stay on one line: the tile, the words (the title wraps, the address goes under it) and the end. Why a variant and not a new list: the rows are the same rows (title, address, the menu, the drag), only a tile joins them, in the comfortable density only.
 
+## Section rows
+
+`variant="section"` draws a row as the heading over the rows after it (25 October 2026): the link page's editor groups its blocks under headings the person names, and the owner's design draws each as a small uppercase label with the number of blocks beside it. The row keeps its grip, its menu and its place in the list, and its `count` is given by the screen, which is the only thing that knows where the next section starts.
+
+Why a row and not a group: a heading on the link page is itself a block (spec 0051), saved and ordered like any other, so it is dragged, moved by the keyboard and counted as one row. Grouping the list instead would have meant a second ordering model, drag across groups, and a heading that exists in the list's layout but not in the data. The look is the only thing that differs.
+
 ## Density
 
 On 20 October 2026 the owner asked for the Captures screens, ported from timefix, to be built on our own design system: the records area's look, not Cal.com's event types cards. So LinkList has two densities.

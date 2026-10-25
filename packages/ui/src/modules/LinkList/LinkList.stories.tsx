@@ -752,6 +752,55 @@ export const Leading: Story = {
   },
 };
 
+/** Sections heading the rows under them: a small uppercase label with its count, dragged like any other row. */
+export const Sections: Story = {
+  args: {
+    label: 'Blocks',
+    leadingLoading: <LinkPageTile />,
+    onMove: fn(),
+    rowOrder: LinkListRowOrder,
+    rows: [
+      { id: 'meet', title: 'Meet me', address: '', chips: [], variant: 'section', count: 2 },
+      {
+        id: 'intro',
+        title: 'Intro call',
+        address: 'Booking page',
+        chips: [],
+        leading: (
+          <LinkPageTile block={{ kind: 'page', id: 'intro', title: 'Intro call', href: '/a/intro', facts: '' }} />
+        ),
+      },
+      {
+        id: 'office',
+        title: 'Office hours',
+        address: 'Booking page',
+        chips: [],
+        leading: (
+          <LinkPageTile block={{ kind: 'page', id: 'office', title: 'Office hours', href: '/a/o', facts: '' }} />
+        ),
+      },
+      { id: 'elsewhere', title: 'Elsewhere', address: '', chips: [], variant: 'section', count: 1 },
+      {
+        id: 'in',
+        title: 'LinkedIn',
+        address: 'linkedin.com/in/anish',
+        chips: [],
+        leading: (
+          <LinkPageTile
+            block={{ kind: 'link', id: 'in', title: 'LinkedIn', href: '', mark: 'linkedin', hue: 'blue' }}
+          />
+        ),
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    // A section is one row of the same list, so it is in the rows and carries its count.
+    const section = canvas.getByRole('row', { name: /Meet me/ });
+    await expect(within(section).getByText('2')).toBeInTheDocument();
+    await expect(canvas.getAllByRole('row')).toHaveLength(5);
+  },
+};
+
 /** Tiled rows while they load: the tile's place is held, so the titles land where the lines stood. */
 export const LeadingLoading: Story = {
   parameters: { crm: { screenshot: false } },

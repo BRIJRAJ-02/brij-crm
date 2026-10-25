@@ -142,6 +142,31 @@
     min-inline-size: 0;
   }
 
+  /* A section row heads the rows after it, so it is shorter than a row and sits on the list's own ground rather
+     than reading as one more thing on the page. */
+  .row[data-variant='section'] {
+    min-block-size: var(--size-row);
+    background: transparent;
+  }
+
+  .sectionTitle {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .sectionCount {
+    flex: none;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
   .title {
     flex: none;
     max-inline-size: 70%;

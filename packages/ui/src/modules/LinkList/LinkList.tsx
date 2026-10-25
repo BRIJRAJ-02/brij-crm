@@ -71,6 +71,14 @@ export interface LinkRow {
    * `data-href`, so the app can load that page while a pointer rests on the row.
    */
   readonly href?: string;
+  /**
+   * `section` draws the row as the heading over the rows after it: the title as a small uppercase label, its
+   * `count` beside it, no tile, and its actions at the end. It is still one row of the same list, so it is
+   * dragged, moved by the keyboard and counted like any other; what it heads is simply whatever follows it.
+   */
+  readonly variant?: 'row' | 'section';
+  /** With `variant="section"`: how many rows sit under it, drawn after the title. */
+  readonly count?: number;
 }
 
 /** Props for LinkList. */
@@ -318,6 +326,7 @@ export function LinkList({
           data-pending={row.isPending === true || undefined}
           data-off={row.isOff === true || undefined}
           data-href={row.isPending === true ? undefined : row.href}
+          data-variant={row.variant === 'section' ? 'section' : undefined}
         >
           {moves !== undefined && (
             <span className={styles.grip}>
@@ -408,6 +417,27 @@ function SkeletonRows({
 
 /** A row's title line, description and chips, and its end: the same in a GridList row and a link row. */
 function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isCompact: boolean }) {
+  // A section heads the rows after it: its title is the label, and its end keeps the row's own actions.
+  if (row.variant === 'section') {
+    return (
+      <>
+        <div className={styles.main}>
+          <div className={styles.titleLine}>
+            <span className={styles.sectionTitle}>{row.title}</span>
+            {row.count !== undefined && <span className={styles.sectionCount}>{row.count}</span>}
+          </div>
+        </div>
+        <div className={styles.end}>
+          {row.badge !== undefined && <Badge text={row.badge} />}
+          {row.actions !== undefined && row.actions !== null && (
+            <div className={styles.rowActions} role="group" aria-label={row.title}>
+              {row.actions}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
   return (
     <>
       {row.leading !== undefined && <span className={styles.leading}>{row.leading}</span>}
