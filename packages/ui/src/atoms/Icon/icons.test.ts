@@ -56,18 +56,21 @@ describe('the icon registry', () => {
   });
 
   it('draws the link page set only on the link page and its editor, inside LinkPageIcons', () => {
-    const module = path.join(SRC, 'modules', 'LinkPage');
-    const feature = path.join(WEB, 'features', 'link-page');
+    // The three places a link page draws: the module, the public page that mounts it, and the editor.
+    const inside = [
+      path.join(SRC, 'modules', 'LinkPage'),
+      path.join(WEB, 'public', 'booking'),
+      path.join(WEB, 'features', 'link-page'),
+    ];
     const names = Object.keys(linkPageIcons).join('|');
     const asIcon = new RegExp(`(icon|name)(=|: |=\\{)['"](${names})['"]`);
     const outside = [...sources(SRC), ...sources(WEB)].filter(
       (file) =>
-        !file.startsWith(module) &&
-        !file.startsWith(feature) &&
-        !file.includes(`${path.sep}atoms${path.sep}Icon${path.sep}`),
+        !inside.some((each) => file.startsWith(each)) && !file.includes(`${path.sep}atoms${path.sep}Icon${path.sep}`),
     );
     expect(outside.filter((file) => asIcon.test(readFileSync(file, 'utf8')))).toEqual([]);
-    expect(readFileSync(path.join(module, 'LinkPage.tsx'), 'utf8')).toContain('<IconScope icons={linkPageIcons}>');
+    const module = path.join(SRC, 'modules', 'LinkPage', 'LinkPage.tsx');
+    expect(readFileSync(module, 'utf8')).toContain('<IconScope icons={linkPageIcons}>');
   });
 
   it('holds every curated object icon, so IconPicker can draw each one', () => {

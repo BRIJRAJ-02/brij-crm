@@ -40,6 +40,23 @@ describe('writeVcard', () => {
     ]);
   });
 
+  it('carries the link page\u2019s own address after the card\u2019s website, and never twice', () => {
+    const page = 'https://timefix.com/anish';
+    const both = writeVcard({ fullName: 'Anish Gupta', website: 'https://www.timefix.com' }, undefined, page);
+    expect(both.split('\r\n').filter((line) => line.startsWith('URL:'))).toEqual([
+      'URL:https://www.timefix.com',
+      `URL:${page}`,
+    ]);
+    // No website of their own: the page is the one address the card carries.
+    expect(writeVcard({ fullName: 'Anish Gupta' }, undefined, page)).toContain(`URL:${page}`);
+    // The website is already the page: one line, not the same address twice.
+    expect(
+      writeVcard({ fullName: 'Anish Gupta', website: page }, undefined, page)
+        .split('\r\n')
+        .filter((line) => line.startsWith('URL:')),
+    ).toEqual([`URL:${page}`]);
+  });
+
   it('escapes what a reader would split on, so a value never becomes another field', () => {
     expect(escapeVcardText('Sales; Ops, and \\ more\nEND:VCARD')).toBe('Sales\\; Ops\\, and \\\\ more\\nEND:VCARD');
     const vcard = writeVcard({ fullName: 'Ada; Byron', company: 'Acme, Inc.', website: 'https://a.dev/x,y;z' });

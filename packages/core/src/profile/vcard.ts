@@ -75,10 +75,10 @@ function base64Of(bytes: Uint8Array): string {
 
 /**
  * A contact card as a vCard 3.0 file: the name (N and FN), the company, the job title, the email, the phone, the
- * website and the note, each only when given, and the picture when there is one of a type a vCard names. Nothing
- * else: no workspace data, nothing from a CRM record (AC-5113).
+ * website, the link page's own address (`pageUrl`) and the note, each only when given, and the picture when there
+ * is one of a type a vCard names. Nothing else: no workspace data, nothing from a CRM record (AC-5113).
  */
-export function writeVcard(card: ProfileContactCard, photo?: VcardPhoto): string {
+export function writeVcard(card: ProfileContactCard, photo?: VcardPhoto, pageUrl?: string): string {
   const { family, given } = nameParts(card.fullName);
   const lines = [
     'BEGIN:VCARD',
@@ -90,6 +90,10 @@ export function writeVcard(card: ProfileContactCard, photo?: VcardPhoto): string
     ...(card.email === undefined ? [] : [`EMAIL;TYPE=INTERNET:${escapeVcardText(card.email)}`]),
     ...(card.phone === undefined ? [] : [`TEL;TYPE=CELL:${escapeVcardText(card.phone)}`]),
     ...(card.website === undefined ? [] : [`URL:${uriValue(card.website)}`]),
+    // The link page itself, after the card's own website so an address book that shows one URL shows that one. A
+    // second plain URL line is vCard 3.0 as written, and iOS and Android both list it; a TYPE or an X-ABLabel to
+    // name it is Apple's own and reads as noise everywhere else (AC-5115, 25 October 2026).
+    ...(pageUrl === undefined || pageUrl === card.website ? [] : [`URL:${uriValue(pageUrl)}`]),
     ...(card.note === undefined ? [] : [`NOTE:${escapeVcardText(card.note)}`]),
   ];
   const photoType = photo === undefined ? undefined : PHOTO_TYPES[photo.type];

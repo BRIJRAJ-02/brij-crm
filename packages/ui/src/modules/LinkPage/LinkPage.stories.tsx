@@ -222,11 +222,16 @@ export const Schemes: Story = {
 };
 
 /**
- * The contact card (AC-5109, AC-5115): the name and the line under it, and Save contact, a plain link to the card's
- * vCard that a phone offers to add to its contacts, from a QR code too.
+ * The header the owner's design draws (25 October 2026): the address as a pill that copies it, then Save contact
+ * as the page's one primary action, with Share beside it, then the networks. The contact card never takes a row:
+ * wherever the owner keeps it in their order, a visitor meets it as Save contact.
  */
-export const ContactCard: Story = {
-  args: { person: PERSON },
+export const Header: Story = {
+  args: {
+    person: PERSON,
+    address: { label: 'timefix.com/anish', value: 'https://timefix.com/anish' },
+    share: <Button variant="secondary" size="touch" icon="qr-code" label="Share this page" />,
+  },
   render: (args) => (
     <Stage width="phone" height="page">
       <LinkPage
@@ -246,39 +251,34 @@ export const ContactCard: Story = {
   ),
   play: async ({ canvas, canvasElement }) => {
     settleEntrance(canvasElement);
-    const save = canvas.getByRole('link', { name: /Anish Gupta.*Save contact/ });
-    await expect(save).toBeVisible();
+    const save = canvas.getByRole('link', { name: 'Save contact' });
     await expect(save).toHaveAttribute('href', '/api/public/handles/anish/contact.vcf');
+    // In place, never a new tab: a phone offers to add the card it downloads.
     await expect(save).not.toHaveAttribute('target');
+    // The pill says what pressing it does, over the address it shows (WCAG 2.5.3).
+    await expect(canvas.getByRole('button', { name: 'timefix.com/anish, copy link' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Share this page' })).toBeVisible();
+    // The card is the header's button, so nothing in the list repeats it.
+    await expect(canvas.queryByRole('link', { name: /Anish Gupta/ })).toBeNull();
   },
 };
 
-/**
- * A contact card with no line under its title keeps it by its tile, centred in the row's height, and a card
- * whose address isn't this site's own path draws as words, with no Save contact.
- */
-export const ContactCardStates: Story = {
+/** No contact card, and a card whose address isn't this site's own path: neither draws a Save contact. */
+export const WithoutContactCard: Story = {
   parameters: { crm: { screenshot: false } },
   args: { person: PERSON },
   render: (args) => (
     <Stage width="phone" height="page">
       <LinkPage
         {...args}
-        blocks={[
-          { kind: 'contact', id: 'bare', title: 'Anish Gupta', href: '/api/public/handles/anish/contact.vcf' },
-          { kind: 'contact', id: 'elsewhere', title: 'Not ours', href: 'https://example.com/card.vcf' },
-        ]}
+        blocks={[{ kind: 'contact', id: 'elsewhere', title: 'Not ours', href: 'https://example.com/card.vcf' }]}
+        empty={<EmptyState title="Nothing here yet" icon="link" />}
       />
     </Stage>
   ),
   play: async ({ canvas, canvasElement }) => {
     settleEntrance(canvasElement);
-    const bare = canvas.getByRole('link', { name: /Anish Gupta.*Save contact/ });
-    // Left aligned like every other title: it starts right after the tile.
-    const title = bare.querySelector('[class*="-title"]')?.getBoundingClientRect();
-    const tile = bare.querySelector('[data-tile]')?.getBoundingClientRect();
-    await expect((title?.left ?? 0) - (tile?.right ?? 0)).toBeLessThan(20);
-    await expect(canvas.queryByRole('link', { name: /Not ours/ })).toBeNull();
-    await expect(canvas.getByText('Not ours')).toBeVisible();
+    await expect(canvas.queryByRole('link', { name: 'Save contact' })).toBeNull();
+    await expect(canvas.queryByText('Not ours')).toBeNull();
   },
 };

@@ -103,6 +103,12 @@ export const strings = {
   searchLinks: 'Search links',
   /** The social icons row's name for screen readers. */
   socials: (name: string) => `${name}’s social links`,
+  /** The square button beside Save contact: it hands the page on. */
+  sharePage: 'Share this page',
+  /** The browser can’t share, so the address went to the clipboard instead. */
+  shareCopied: 'Link copied',
+  /** Neither sharing nor copying worked: the address is in the bar, so there is still a way. */
+  shareFailed: 'The link didn’t copy. Copy it from the address bar instead.',
   team: 'Team',
   noLinksTitle: 'Nothing here yet',
   noLinksText: 'This person hasn’t added any links yet.',

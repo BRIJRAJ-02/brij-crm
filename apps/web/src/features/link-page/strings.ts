@@ -9,7 +9,7 @@ export const strings = {
   /** The page's place in Settings: a page of Profile's. */
   profile: 'Profile',
   blocks: 'Blocks',
-  blocksText: 'In the order visitors see them.',
+  blocksText: 'One page for everything people can do with you. Drag to reorder.',
   // The figures (AC-5127): over the last 30 days, with the 30 before as the comparison. A number keeps its word on
   // its line (a no break space), so a phone never strands the "2" away from "views".
   noPresses: 'No clicks yet',
@@ -35,6 +35,10 @@ export const strings = {
   addHeading: 'Heading',
   addHeadingText: 'A small title over the blocks under it',
   viewPage: 'View page',
+  /** The header's pill: the address itself, so its name says what pressing it does. */
+  openAddress: (address: string) => `${address}, open your page`,
+  /** The header's Share: it opens the QR and the address to hand on. */
+  share: 'Share',
   // The rows.
   heading: 'Heading',
   bookingPage: 'Booking page',

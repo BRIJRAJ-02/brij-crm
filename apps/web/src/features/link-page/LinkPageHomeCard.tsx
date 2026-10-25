@@ -4,14 +4,14 @@
 // Leaves out: editing the page (Edit opens the editor) and its figures (phase 3). Loaded with its own chunk, so
 // neither it nor the QR library is in the app's first load.
 import type { DataLayer, MyProfile } from '@crm/data';
-import { Button, ButtonLink, Card, CopyButton, EmptyState, Modal, QrCode, Skeleton } from '@crm/ui';
+import { Button, ButtonLink, Card, CopyButton, EmptyState, QrCode, Skeleton } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
 import { homeStrings as strings } from './home-strings.ts';
 import { linkPageHref } from './nav-strings.ts';
-import { qrPng, saveFile } from './qr-png.ts';
+import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 
 /** Props for the card. */
 export interface LinkPageHomeCardProps {
@@ -112,59 +112,7 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
         </p>
         <p>{strings.scan}</p>
       </QrCode>
-      <QrModal address={address} shown={shown} handle={handle} isOpen={isShowing} onClose={() => setShowing(false)} />
+      <ShareLinkPageModal address={address} handle={handle} isOpen={isShowing} onClose={() => setShowing(false)} />
     </Card>
-  );
-}
-
-/** The code drawn large, to scan from across a table or save to print: Copy link and Download PNG. */
-function QrModal({
-  address,
-  shown,
-  handle,
-  isOpen,
-  onClose,
-}: {
-  readonly address: string;
-  /** The address without its scheme, as the card shows it. */
-  readonly shown: string;
-  readonly handle: string;
-  /** Kept mounted, so the Modal's own exit plays as it closes. */
-  readonly isOpen: boolean;
-  readonly onClose: () => void;
-}) {
-  const { toasts } = useRouteContext({ from: '__root__' });
-  const codeRef = useRef<SVGSVGElement>(null);
-  const [isSaving, setSaving] = useState(false);
-  const download = () => {
-    const svg = codeRef.current;
-    if (svg === null || isSaving) return;
-    setSaving(true);
-    qrPng(svg)
-      .then((png) => saveFile(png, `${handle}-link-page.png`))
-      .catch(() => toasts.toast({ tone: 'danger', message: strings.downloadFailed }))
-      .finally(() => setSaving(false));
-  };
-  return (
-    <Modal
-      title={strings.modalTitle}
-      isOpen={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      actions={
-        <>
-          <CopyButton value={address} label={strings.copyLink} announcement={strings.copied} />
-          <Button variant="primary" icon="download" isPending={isSaving} onPress={download}>
-            {strings.download}
-          </Button>
-        </>
-      }
-    >
-      <QrCode ref={codeRef} value={address} label={strings.qrLabel} size="fill" />
-      <p>
-        <strong>{shown}</strong>
-      </p>
-    </Modal>
   );
 }

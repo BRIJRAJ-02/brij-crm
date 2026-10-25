@@ -21,6 +21,7 @@ import {
   LinkListToolbar,
   LinkPage,
   SocialLinks,
+  useToasts,
 } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { claimHandleHref } from './claim.ts';
@@ -30,6 +31,37 @@ import { strings, tabTitle } from './strings.ts';
 /** The address as the visitor reads it in the bar: the host they are on, then the handle. */
 function addressOf(handle: string): string {
   return `${globalThis.location.host}/${handle}`;
+}
+
+/**
+ * Share this page: the device's own share sheet where there is one (the Web Share API), else the address on the
+ * clipboard with a toast saying so. A cancelled sheet is not a failure, so nothing is said and nothing is copied.
+ */
+function ShareButton({ address, name }: { readonly address: string; readonly name: string }) {
+  const toasts = useToasts();
+  const [isSharing, setSharing] = useState(false);
+  const copy = () =>
+    navigator.clipboard.writeText(address).then(
+      () => toasts.toast({ tone: 'success', message: strings.shareCopied }),
+      () => toasts.toast({ tone: 'danger', message: strings.shareFailed }),
+    );
+  const share = () => {
+    if (isSharing) return;
+    setSharing(true);
+    const card = { title: name, url: address };
+    // A title and a URL is the one shape every browser with a share sheet accepts, so there is nothing to ask canShare.
+    const sheet = typeof navigator.share === 'function' ? navigator.share(card) : undefined;
+    const done =
+      sheet === undefined
+        ? copy()
+        : sheet.catch((error: unknown) => {
+            // The person closed the sheet: they chose not to share, so nothing is copied and nothing is said.
+            if (error instanceof Error && error.name === 'AbortError') return undefined;
+            return copy();
+          });
+    void done.finally(() => setSharing(false));
+  };
+  return <Button variant="secondary" size="touch" icon="share-2" label={strings.sharePage} onPress={share} />;
 }
 
 /** Past this many rows (headings aside), a search sits above them (AC-5133). */
@@ -219,10 +251,15 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         // Our own origin's copy of their account picture; the initials show if it fails.
         ...(profile.image === undefined ? {} : { image: profile.image }),
       }}
-      // Their own set of networks, the row of icons under the bio (booking socials): never a block.
+      // The page's own address, as a visitor reads it, with a press to copy it.
+      address={{ label: addressOf(current), value: `${globalThis.location.origin}/${current}` }}
+      share={<ShareButton address={`${globalThis.location.origin}/${current}`} name={profile.name} />}
+      // Their own set of networks, the row of circles under the actions (booking socials): never a block.
       {...(profile.socials === undefined || profile.socials.length === 0
         ? {}
-        : { socials: <SocialLinks links={profile.socials} label={strings.socials(profile.name)} /> })}
+        : {
+            socials: <SocialLinks variant="round" links={profile.socials} label={strings.socials(profile.name)} />,
+          })}
       blocks={blocks}
       {...(isSearching ? { summary: strings.matches(blocks.length) } : {})}
       foot={foot}

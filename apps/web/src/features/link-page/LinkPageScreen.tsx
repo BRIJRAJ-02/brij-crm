@@ -43,6 +43,7 @@ import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../bookin
 import { profileHref } from '../settings/nav.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { ADDABLE, BLOCK_KINDS, contactHref, figuresLine, pressesChip, previewBlock, rowWords } from './registry.tsx';
+import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the Link page screen. */
@@ -88,15 +89,7 @@ export function LinkPageScreen({ linkPage, slug, profile }: LinkPageScreenProps)
       title={strings.title}
       crumbs={[{ id: 'profile', label: strings.profile, href: profileHref(slug) }]}
       fillsView
-      {...(handle === undefined
-        ? {}
-        : {
-            actions: (
-              <ButtonLink icon="external-link" href={publicProfileUrl(handle)} isExternal>
-                {strings.viewPage}
-              </ButtonLink>
-            ),
-          })}
+      {...(handle === undefined ? {} : { actions: <HeaderActions handle={handle} /> })}
     >
       {handle === undefined ? (
         <PreviewLayout>
@@ -115,6 +108,36 @@ export function LinkPageScreen({ linkPage, slug, profile }: LinkPageScreenProps)
         <Blocks linkPage={linkPage} slug={slug} profile={profile} handle={handle} />
       )}
     </SettingsPage>
+  );
+}
+
+/**
+ * The header's actions, as the owner's design draws them: the page's address as a pill that opens it, and Share,
+ * which opens the one Share modal (the QR, the address and the two ways to go on; Home's card opens the same one).
+ */
+function HeaderActions({ handle }: { readonly handle: string }) {
+  const address = publicProfileUrl(handle);
+  const shown = address.replace(/^https?:\/\//, '');
+  const [isSharing, setSharing] = useState(false);
+  return (
+    <>
+      <ButtonLink
+        variant="secondary"
+        isRound
+        iconRight="external-link"
+        href={address}
+        isExternal
+        label={strings.openAddress(shown)}
+      >
+        {shown}
+      </ButtonLink>
+      {/* The share glyph lives in the link page's own icon chunk, which only LinkPage scopes; the modal this opens
+          is the QR, so the registry's own qr-code says what it does without pulling a second set into the app. */}
+      <Button icon="qr-code" onPress={() => setSharing(true)}>
+        {strings.share}
+      </Button>
+      <ShareLinkPageModal address={address} handle={handle} isOpen={isSharing} onClose={() => setSharing(false)} />
+    </>
   );
 }
 

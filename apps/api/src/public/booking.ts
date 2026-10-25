@@ -512,7 +512,12 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       if (fetched?.ok === false) {
         log.warn('booking.vcard.picture_missed', { requestId: c.get('requestId'), reason: fetched.reason });
       }
-      const body = writeVcard(contact.card, fetched?.ok === true ? fetched : undefined);
+      // The page the card came from, so a saved contact still leads back to everything else on it (AC-5115).
+      const body = writeVcard(
+        contact.card,
+        fetched?.ok === true ? fetched : undefined,
+        `${services.ics.publicOrigin}/${encodeURIComponent(contact.handle)}`,
+      );
       return new Response(body, {
         headers: {
           'content-type': 'text/vcard; charset=utf-8',

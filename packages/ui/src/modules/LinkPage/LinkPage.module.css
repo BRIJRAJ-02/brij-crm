@@ -23,7 +23,7 @@
   .column {
     display: flex;
     flex-direction: column;
-    gap: var(--space-24);
+    gap: var(--space-20);
     inline-size: 100%;
     max-inline-size: var(--size-page-card);
   }
@@ -32,20 +32,56 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-8);
+    gap: var(--space-4);
     text-align: center;
   }
 
   .hero > :first-child {
-    margin-block-end: var(--space-4);
+    margin-block-end: var(--space-6);
+  }
+
+  /* The address pill under the bio: the page's own address, pressed to copy. While it loads, its own place, so
+     the header never grows when the address arrives. */
+  .pill {
+    display: flex;
+    margin-block-start: var(--space-6);
+  }
+
+  .pill[data-loading] {
+    inline-size: var(--size-column-narrow);
+    block-size: var(--size-control);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+
+  /* Save contact, the page's one action, with Share beside it: a thumb's row. */
+  .actions {
+    display: flex;
+    gap: var(--space-8);
+  }
+
+  .actions:empty {
+    display: none;
+  }
+
+  /* The address pill under the name, clear of the bio above it. */
+  .address {
+    display: inline-flex;
+    margin-block-start: var(--space-4);
+  }
+
+  /* Save contact takes the rest of the row, so Share stays a square beside it. */
+  .actions > :first-child {
+    flex: 1;
+    min-inline-size: 0;
   }
 
   .name {
     margin: 0;
     inline-size: 100%;
     color: var(--text);
-    font: var(--text-note-title);
-    letter-spacing: var(--tracking-note-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
     overflow-wrap: anywhere;
   }
 
@@ -82,7 +118,7 @@
   .blocks {
     display: flex;
     flex-direction: column;
-    gap: var(--space-24);
+    gap: var(--space-20);
     animation: rise var(--duration-popover) var(--ease-out) both;
   }
 
@@ -96,15 +132,16 @@
     margin: 0;
     padding-inline: var(--space-4);
     color: var(--text-secondary);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-kbd);
+    text-transform: uppercase;
     overflow-wrap: anywhere;
   }
 
   .list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
+    gap: var(--space-8);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -123,7 +160,7 @@
     min-inline-size: 0;
     padding: var(--space-12);
     border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-md);
     background: var(--surface-raised);
     box-shadow: var(--shadow-xs);
     color: var(--text);
@@ -144,7 +181,7 @@
       background: var(--surface-hover);
     }
 
-    .block:not([data-loading]):hover .end:not([data-end='action']) {
+    .block:not([data-loading]):hover .end {
       color: var(--text-secondary);
     }
   }
@@ -156,9 +193,9 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    inline-size: calc(var(--size-row) + var(--space-6));
-    block-size: calc(var(--size-row) + var(--space-6));
-    border-radius: var(--radius-lg);
+    inline-size: calc(var(--size-nav-item) + var(--space-4));
+    block-size: calc(var(--size-nav-item) + var(--space-4));
+    border-radius: var(--radius-sm);
     background: var(--surface-sunken);
     color: var(--text);
     font: var(--text-title);
@@ -247,14 +284,6 @@
     gap: var(--space-2);
     color: var(--text-tertiary);
     transition: color var(--duration-hover) var(--ease-hover);
-  }
-
-  /* A booking page's and a contact card's end says what pressing it does (Book, Save contact), in the one colour
-     that marks the action to take. */
-  .end[data-end='action'] {
-    color: var(--link);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
   }
 
   /* The blocks arrive with a short rise. Movement only where motion is welcome; the fade always. */

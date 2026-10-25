@@ -406,6 +406,9 @@ export function LinkPage({
 }: LinkPageProps) {
   const captionId = useId();
   const contact = contactOf(blocks);
+  // A page whose only block is the contact card has no rows: its card is the header's Save contact, so the list
+  // draws its empty state rather than an empty group.
+  const groups = blocks === undefined ? [] : groupsOf(blocks);
   if (layout === 'blocks') {
     return (
       <IconScope icons={linkPageIcons}>
@@ -451,6 +454,12 @@ export function LinkPage({
                 <p className={styles.bio}>
                   <Skeleton shape="text" width="long" align="center" />
                 </p>
+                {/* The pill's own place, so the header doesn't grow when the address arrives. */}
+                {address !== undefined && (
+                  <span className={styles.pillLoading}>
+                    <Skeleton shape="fill" />
+                  </span>
+                )}
               </>
             ) : (
               <>
@@ -464,19 +473,22 @@ export function LinkPage({
                 <h1 className={styles.name}>{person.name}</h1>
                 {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
                 {address !== undefined && (
-                  <CopyButton
-                    value={address.value}
-                    label={address.label}
-                    name={strings.copyAddress(address.label)}
-                    announcement={strings.addressCopied}
-                    isRound
-                  />
+                  <span className={styles.address}>
+                    <CopyButton
+                      value={address.value}
+                      label={address.label}
+                      name={strings.copyAddress(address.label)}
+                      announcement={strings.addressCopied}
+                      isRound
+                    />
+                  </span>
                 )}
               </>
             )}
           </header>
-          {/* The one action under the person, then the way to pass the page on, then where else to find them. */}
-          {person !== undefined && <Actions contact={contact} share={share} onPress={onPress} />}
+          {/* The one action under the person, then the way to pass the page on, then where else to find them.
+              Share stands while the page loads: it shares the address the visitor is already on. */}
+          <Actions contact={contact} share={share} onPress={onPress} />
           {socials}
           {toolbar}
           {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
@@ -500,11 +512,11 @@ export function LinkPage({
                 </li>
               ))}
             </ul>
-          ) : blocks.length === 0 ? (
+          ) : groups.length === 0 ? (
             empty
           ) : (
             <div className={styles.blocks}>
-              {groupsOf(blocks).map((group, index) => (
+              {groups.map((group, index) => (
                 <Group
                   key={group.heading?.id ?? `top-${String(index)}`}
                   rows={group.rows}
