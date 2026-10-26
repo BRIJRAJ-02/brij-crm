@@ -16,6 +16,7 @@ import {
 } from './FormParts.tsx';
 import styles from './HostedForm.module.css';
 import { FormBooking } from './FormBooking.tsx';
+import type { HostedRemoveUpload, HostedUpload } from './files.ts';
 import { Question } from './Question.tsx';
 import {
   useHostedForm,
@@ -41,6 +42,10 @@ export interface HostedFormProps {
   readonly prefill?: Readonly<Record<string, string>>;
   /** Sends the answers. Without it the answers are checked and the thank you shows, but nothing is sent. */
   readonly onSubmit?: (submission: HostedSubmission) => Promise<HostedSubmitOutcome>;
+  /** Sends a file for a file question (#32), reporting progress; without it the file question is disabled. */
+  readonly onUpload?: HostedUpload;
+  /** Takes back a file the visitor sent and removed. */
+  readonly onRemoveUpload?: HostedRemoveUpload;
   /** Goes to the form's web address after a submission, when it sends visitors on. */
   readonly onRedirect?: (url: string) => void;
   /** The clock, for the fill time (tests pass their own). */
@@ -64,10 +69,22 @@ export function HostedForm({
   prefill,
   onSubmit,
   onRedirect,
+  onUpload,
+  onRemoveUpload,
   now = Date.now,
   logo = TIMEFIX_LOGO,
 }: HostedFormProps) {
-  const { state, refs } = useHostedForm({ form, mode, countryGuess, prefill, onSubmit, onRedirect, now });
+  const { state, refs } = useHostedForm({
+    form,
+    mode,
+    countryGuess,
+    prefill,
+    onSubmit,
+    onRedirect,
+    onUpload,
+    onRemoveUpload,
+    now,
+  });
   const { words, preview } = state;
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
@@ -111,6 +128,7 @@ export function HostedForm({
                   countryGuess={countryGuess}
                   countryNames={state.countryNames}
                   onChange={(value) => state.change(question, value)}
+                  files={state.files}
                 />
               </QuestionSlot>
             ))}

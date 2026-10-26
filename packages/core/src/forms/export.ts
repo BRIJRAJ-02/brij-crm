@@ -375,6 +375,10 @@ function cellOf(value: unknown): string | number | boolean | undefined {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (Array.isArray(value)) return value.map((each) => String(cellOf(each) ?? '')).join(', ');
   if (typeof value === 'object' && 'number' in value && typeof value.number === 'string') return value.number;
+  // A file is its name: its address needs a signed in member, so it is opened from the submission, not the file.
+  if (typeof value === 'object' && 'fileId' in value && 'name' in value && typeof value.name === 'string') {
+    return value.name;
+  }
   return JSON.stringify(value);
 }
 

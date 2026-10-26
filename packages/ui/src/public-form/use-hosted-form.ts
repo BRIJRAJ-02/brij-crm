@@ -17,6 +17,7 @@ import {
 } from '@crm/contracts/forms';
 import { useEffect, useMemo, useRef, useState, type FocusEvent, type RefObject } from 'react';
 import { countriesIn } from '../lib/countries.ts';
+import type { HostedFileHandlers, HostedRemoveUpload, HostedUpload } from './files.ts';
 import { answerOf, focusQuestion } from './Question.tsx';
 
 /** Where the form is drawn: alone on its page, inside a site's iframe, or as the builder's inert preview. */
@@ -49,6 +50,9 @@ export interface HostedFormSettings {
   readonly prefill?: Readonly<Record<string, string>> | undefined;
   readonly onSubmit?: ((submission: HostedSubmission) => Promise<HostedSubmitOutcome>) | undefined;
   readonly onRedirect?: ((url: string) => void) | undefined;
+  /** Sends a file for a file question (#32); without it the file question is drawn and disabled. */
+  readonly onUpload?: HostedUpload | undefined;
+  readonly onRemoveUpload?: HostedRemoveUpload | undefined;
   readonly now: () => number;
   /** Told the keys a refusal named, before their errors show: a step layout goes to the first one's step. */
   readonly onRefused?: (keys: readonly string[]) => void;
@@ -82,6 +86,8 @@ export interface HostedFormState {
   readonly shownNote: string;
   readonly alert: string;
   readonly isSending: boolean;
+  /** The page's file calls for a file question, where it has them (never in a preview). */
+  readonly files: HostedFileHandlers | undefined;
   readonly isClosed: boolean;
   readonly view: HostedFormView;
   readonly round: number;
@@ -172,6 +178,8 @@ export function useHostedForm({
   prefill,
   onSubmit,
   onRedirect,
+  onUpload,
+  onRemoveUpload,
   now,
   onRefused,
 }: HostedFormSettings): {
@@ -192,6 +200,8 @@ export function useHostedForm({
   const [isSubmitted, setSubmitted] = useState(false);
   const [isSending, setSending] = useState(false);
   const [alert, setAlert] = useState('');
+  // The file questions with a file still going: the form won't send until they are in.
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [trap, setTrap] = useState('');
   const [view, setView] = useState<HostedFormView>({ kind: 'form' });
   const [round, setRound] = useState(0);
@@ -304,6 +314,10 @@ export function useHostedForm({
   const submit = () => {
     if (preview || isSending) return;
     setAlert('');
+    if (busy.size > 0) {
+      setAlert(words.fileBusy);
+      return;
+    }
     const result = checkAll(form.questions);
     if (!result.ok) {
       setSubmitted(true);
@@ -386,6 +400,21 @@ export function useHostedForm({
     shownNote,
     alert,
     isSending,
+    files:
+      preview || onUpload === undefined
+        ? undefined
+        : {
+            upload: onUpload,
+            remove: onRemoveUpload ?? (() => Promise.resolve()),
+            setBusy: (key, isBusy) => {
+              setBusy((current) => {
+                const next = new Set(current);
+                if (isBusy) next.add(key);
+                else next.delete(key);
+                return next;
+              });
+            },
+          },
     isClosed,
     view,
     round,

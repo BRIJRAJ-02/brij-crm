@@ -38,7 +38,6 @@ export interface PublishProblem {
     | 'FILING_GONE'
     | 'FILING_MISFIT'
     | 'FILING_FORBIDDEN'
-    | 'FILE_LATER'
     | 'SHOW_WHEN_INVALID'
     | 'ROUTING_INVALID';
   readonly message: string;
@@ -193,13 +192,6 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
       return {
         code: 'CHOICES_MISSING',
         message: `${named(question)} is a choice question with nothing to choose from.`,
-        questionId: question.id,
-      };
-    }
-    if (question.answerType === 'file') {
-      return {
-        code: 'FILE_LATER',
-        message: `${named(question)} asks for a file, which forms take once file attachments arrive. Choose another answer type.`,
         questionId: question.id,
       };
     }

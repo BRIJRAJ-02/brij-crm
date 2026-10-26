@@ -43,7 +43,7 @@ import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router'
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
-import { PhoneValue } from '@crm/contracts/values';
+import { FileValue, PhoneValue } from '@crm/contracts/values';
 import { answerFiling } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
@@ -115,9 +115,13 @@ function stateHue(submission: SubmissionSummary, isFiling: boolean): 'gray' | 'g
   return STATE_HUES[submission.state];
 }
 
-/** An answer as words: text, Yes or No, a phone's number. */
+/** An answer as words: text, Yes or No, a phone's number, a file's name. */
 function answerText(answer: SubmissionAnswer): string {
   const { value } = answer;
+  if (answer.answerType === 'file') {
+    const file = FileValue.safeParse(value);
+    return file.success ? file.data.name : '';
+  }
   if (typeof value === 'boolean') return value ? strings.yes : strings.no;
   if (typeof value === 'string') return value;
   if (typeof value === 'object' && value !== null && typeof (value as { number?: unknown }).number === 'string') {
@@ -731,6 +735,26 @@ export function SubmissionsTab({
 function answerValue(answer: SubmissionAnswer): ReactNode {
   const text = answerText(answer);
   if (text === '') return strings.noAnswer;
+  if (answer.answerType === 'file') {
+    // The stored file through the field set: its icon and name, a download link the api checks on every open.
+    const file = FileValue.safeParse(answer.value);
+    if (!file.success) return text;
+    return (
+      <AttributeDisplay
+        attribute={{
+          id: answer.questionId,
+          name: answer.label,
+          type: 'file',
+          allowMultiple: false,
+          isRequired: false,
+          isUnique: false,
+          isReadOnly: true,
+        }}
+        value={file.data}
+        surface="panel"
+      />
+    );
+  }
   if (answer.answerType !== 'phone') return text;
   // A phone the field set can read is a stored { number, country }; anything else shows as its words.
   const phone = PhoneValue.safeParse(answer.value);

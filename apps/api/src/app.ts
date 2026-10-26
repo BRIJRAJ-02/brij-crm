@@ -36,6 +36,8 @@ import { createEdgeGuard, type Geo } from './edge.ts';
 import { mountExports } from './forms/exports.ts';
 import { handoffKey } from './forms/handoff.ts';
 import { hashAddress, mountPublicForms } from './forms/public.ts';
+import { mountFormFiles } from './forms/uploads.ts';
+import { createFileStore, type FileStore } from './storage/blob.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
 import { bookingLinkKey } from './booking-link.ts';
@@ -176,6 +178,8 @@ export interface AppServices {
    * on the real network) unless a test passes its own (the fake provider).
    */
   readonly calendar?: CalendarServices;
+  /** Where form file uploads are kept (#32): Vercel Blob with `BLOB_READ_WRITE_TOKEN` unless a test passes its own; none without a token. */
+  readonly files?: FileStore;
   /** The public forms' reCAPTCHA check (spec 0023): Google with `RECAPTCHA_SECRET_KEY` unless a test passes one. */
   readonly captcha?: CaptchaVerifier;
   /** The public forms' and fill tickets' rate limits (spec 0023): the central limiter unless a test passes its own. */
@@ -481,6 +485,19 @@ export function createApp({
   // An export's download (spec 0023): the session and the same member door, with the same rules, only for its
   // starter.
   mountExports(app, {
+    auth,
+    enter: (session, slug) =>
+      enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
+  });
+  // Form file uploads (#32): a visitor's file into the private store, and a member's download of it.
+  mountFormFiles(app, {
+    db,
+    files:
+      services.files ??
+      (env.BLOB_READ_WRITE_TOKEN === undefined ? undefined : createFileStore(env.BLOB_READ_WRITE_TOKEN)),
+    limiter: createMemoryLimiter(),
+    publicOrigin: formsOrigin,
+    ipSalt,
     auth,
     enter: (session, slug) =>
       enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),

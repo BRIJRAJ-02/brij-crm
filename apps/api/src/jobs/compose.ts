@@ -3,6 +3,7 @@
 // booking emails (spec 0025) and the daily cleanup. The worker process and the
 // api's job drain on Vercel (spec 0045) both build their runners from this, so
 // a job runs the same way wherever it runs.
+import { createFileStore } from '../storage/blob.ts';
 import { connectedCalendar, jobKinds, NO_CALENDAR, type JobRegistry, type QueueRows, type Runner } from '@crm/core';
 import { purgeWorkspace, runDailyCleanup, syncConnection, systemScope } from '@crm/core/system';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
@@ -40,6 +41,7 @@ export interface JobTasksEnv {
   readonly RESEND_API_KEY?: string | undefined;
   readonly MAIL_FROM: string;
   readonly MAILPIT_URL?: string | undefined;
+  readonly BLOB_READ_WRITE_TOKEN?: string | undefined;
   readonly calendar: CalendarSettings | undefined;
 }
 
@@ -77,6 +79,8 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
   const registry = jobKinds({
     environment: env.APP_ENV,
     ...(options.queue === undefined ? {} : { queue: options.queue }),
+    // The daily cleanup removes form uploads nobody submitted (#32); without the store token that phase waits.
+    ...(env.BLOB_READ_WRITE_TOKEN === undefined ? {} : { uploads: createFileStore(env.BLOB_READ_WRITE_TOKEN) }),
   });
   const runner = createJobRunner({
     db,

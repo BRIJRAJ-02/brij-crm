@@ -6,6 +6,8 @@ import { CountryPicker } from '../molecules/CountryPicker/CountryPicker.tsx';
 import { Field } from '../molecules/Field/Field.tsx';
 import { PhoneField, type PhoneFieldValue } from '../molecules/PhoneField/PhoneField.tsx';
 import { Select } from '../molecules/Select/Select.tsx';
+import { FileQuestion } from './FileQuestion.tsx';
+import { isUploadedFile, type HostedFileHandlers } from './files.ts';
 
 /** The control of a question to type in, or else its first control (a dropdown's trigger): a phone's number before its code. */
 export function focusQuestion(container: HTMLElement | null, key: string): void {
@@ -28,9 +30,9 @@ export function asideOf(question: PublicQuestion, words: FormStrings): string | 
   return marked ? undefined : words.optional;
 }
 
-/** What a drawn answer sends: a phone as E.164 with its country, a file nothing yet, the rest as held. */
+/** What a drawn answer sends: a phone as E.164 with its country, a file as the id of its upload, the rest as held. */
 export function answerOf(question: PublicQuestion, value: unknown): unknown {
-  if (question.answerType === 'file') return undefined;
+  if (question.answerType === 'file') return isUploadedFile(value) ? { fileId: value.fileId } : undefined;
   if (question.answerType === 'phone') {
     const phone = value as PhoneFieldValue | undefined;
     if (phone === undefined || phone.national.trim() === '') return undefined;
@@ -61,6 +63,8 @@ export interface QuestionProps {
   readonly countryGuess: string | undefined;
   readonly countryNames: ReadonlyMap<string, string>;
   readonly onChange: (value: unknown) => void;
+  /** The page's file calls, for a file question; absent, the file question is drawn and disabled. */
+  readonly files?: HostedFileHandlers | undefined;
   /** Keeps the label for screen readers only, when a larger heading above already shows it (one at a time). */
   readonly isLabelHidden?: boolean;
 }
@@ -74,6 +78,7 @@ export function Question({
   countryGuess,
   countryNames,
   onChange,
+  files,
   isLabelHidden = false,
 }: QuestionProps) {
   const label = labelOf(question, words);
@@ -176,7 +181,17 @@ export function Question({
       );
     }
     case 'file':
-      return <Field {...labelProps} name={question.key} placeholder={words.fileLater} isDisabled />;
+      return (
+        <FileQuestion
+          questionKey={question.key}
+          label={isLabelHidden ? labelProps.label : aside === undefined ? label : `${label} ${aside}`}
+          words={words}
+          value={value}
+          error={error}
+          files={files}
+          onChange={onChange}
+        />
+      );
     default: {
       const kind = question.answerType;
       const autoComplete =

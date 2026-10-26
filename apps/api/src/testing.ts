@@ -1,5 +1,6 @@
 // Test helpers for the api's own suites: an app wired to a test router, a
 // database that is never reached, and a way to read the log lines it writes.
+import type { FileStore } from './storage/blob.ts';
 import { ENGINE_REFUSAL_CODES, type EngineRefusal } from '@crm/contracts';
 import { isInvitedEmail, NO_RULE_SOURCE, twoFactorRequiredBy, type JobRegistry, type RuleSource } from '@crm/core';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
@@ -87,6 +88,8 @@ export function testServices(
     calendar?: CalendarServices;
     /** The signed out notice (spec 0033): none unless given. */
     signedOut?: SignedOutNotice;
+    /** Where form file uploads are kept (#32): none unless given, so uploads answer 503. */
+    files?: FileStore;
     /** The one outside read (spec 0055): a fixed page unless given, so no test ever reaches the network. */
     outsideFetch?: OutsideFetch;
   } = {},
@@ -116,6 +119,7 @@ export function testServices(
     ...(options.jobs === undefined ? {} : { jobs: options.jobs }),
     ...(options.calendar === undefined ? {} : { calendar: options.calendar }),
     ...(options.signedOut === undefined ? {} : { signedOut: options.signedOut }),
+    ...(options.files === undefined ? {} : { files: options.files }),
     outsideFetch: options.outsideFetch ?? testOutsideFetch(),
   };
 }

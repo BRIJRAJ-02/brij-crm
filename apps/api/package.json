@@ -19,6 +19,7 @@
     "@hono/node-server": "catalog:",
     "@orpc/server": "catalog:",
     "@sentry/node": "catalog:",
+    "@vercel/blob": "catalog:",
     "@vercel/functions": "catalog:",
     "better-auth": "catalog:",
     "free-email-domains": "catalog:",

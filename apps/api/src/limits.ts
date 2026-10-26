@@ -72,6 +72,17 @@ export const FORM_LIMITS = {
 } as const satisfies Record<string, LimitRule>;
 
 /**
+ * Public form file uploads (#32): few and small by address (each is up to 4 MiB through a function), a bounded number
+ * in a workspace and per form, and the instance's own ceiling.
+ */
+export const UPLOAD_LIMITS = {
+  perAddress: { max: 6, windowMs: 60_000 },
+  perAddressInWorkspace: { max: 30, windowMs: 3_600_000 },
+  perForm: { max: 120, windowMs: 3_600_000 },
+  perInstance: { max: 10, windowMs: 1_000 },
+} as const satisfies Record<string, LimitRule>;
+
+/**
  * Fill tickets (spec 0023 spam follow-up): 30 a minute per address (a page
  * asks once per load and once per "Send another"), 200 a second across the
  * instance, and 5 submits per ticket

@@ -1,6 +1,7 @@
 // Test helpers for signing in for real: the app on a test database, codes
 // sent to Mailpit and read back through its API (`GET /api/v1/messages`, then
 // `GET /api/v1/message/{id}`), and an oRPC client carrying the session cookie.
+import type { FileStore } from '../src/storage/blob.ts';
 import { randomInt, randomUUID } from 'node:crypto';
 import type { JobRegistry, RuleSource } from '@crm/core';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
@@ -62,6 +63,7 @@ export function signInApp(
     jobs?: JobRegistry;
     calendar?: CalendarServices;
     signedOut?: SignedOutNotice;
+    files?: FileStore;
   } = {},
 ) {
   const env = testEnv(overrides);
@@ -77,6 +79,7 @@ export function signInApp(
     ...(options.jobs ? { jobs: options.jobs } : {}),
     ...(options.calendar ? { calendar: options.calendar } : {}),
     ...(options.signedOut ? { signedOut: options.signedOut } : {}),
+    ...(options.files ? { files: options.files } : {}),
   });
   return { app: createApp({ services, env, ...(options.router ? { router: options.router } : {}) }), services };
 }

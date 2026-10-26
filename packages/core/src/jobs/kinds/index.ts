@@ -1,4 +1,5 @@
 // The kinds a process runs (spec 0008): one file per kind beside this one.
+import type { UploadStore } from '../../forms/uploads.ts';
 import type { AppEnvironment } from '@crm/contracts';
 import { createRegistry, type AnyKind, type JobRegistry } from '../registry.ts';
 import { devSimulate, type Sleep } from './dev-simulate.ts';
@@ -23,6 +24,8 @@ export interface JobKindsOptions {
    * api, which never runs a step, doesn't.
    */
   readonly queue?: QueueRows;
+  /** The blob store the daily cleanup removes orphaned form uploads from (#32); without it that phase waits. */
+  readonly uploads?: UploadStore;
   /** Extra kinds: a test setup registers its own. */
   readonly extra?: readonly AnyKind[];
 }
@@ -37,7 +40,7 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
   const local = options.environment === 'local' || options.environment === 'preview';
   const tests = local ? [devSimulate(options.sleep) as AnyKind, devSimulate(options.sleep, 'light') as AnyKind] : [];
   return createRegistry([
-    maintenanceDaily(options.queue),
+    maintenanceDaily(options.queue, options.uploads),
     formsProcess(),
     formsFile(),
     formsSync(),

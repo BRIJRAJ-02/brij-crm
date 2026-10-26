@@ -120,6 +120,8 @@ async function start(): Promise<void> {
         else if (embedded) window.open(url, '_top');
         else window.location.assign(url);
       },
+      onUpload: (file, onProgress) => client.upload(address, file, onProgress),
+      onRemoveUpload: (fileId) => client.removeUpload(address, fileId),
       onSubmit: async (submission): Promise<HostedSubmitOutcome> => {
         const idempotencyKey = keys.get(submission.round) ?? crypto.randomUUID();
         keys.set(submission.round, idempotencyKey);

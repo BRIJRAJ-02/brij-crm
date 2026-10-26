@@ -29,8 +29,35 @@ export type SubmitOutcome =
   /** The endpoint couldn't be reached at all. */
   | { readonly kind: 'offline' };
 
+/** A file the server kept: the id the answer carries, and what it says about it. */
+export interface UploadedFile {
+  readonly fileId: string;
+  readonly name: string;
+  readonly size: number;
+  readonly contentType: string;
+}
+
+/** What sending a file answered. */
+export type UploadOutcome =
+  | { readonly kind: 'done'; readonly file: UploadedFile }
+  /** The server refused this file (its type, size or contents), with a sentence saying what to do. */
+  | { readonly kind: 'rejected'; readonly message: string }
+  /** Too many in a short time (429). */
+  | { readonly kind: 'limited' }
+  /** The endpoint failed or has no file storage: another try may work. */
+  | { readonly kind: 'failed' }
+  /** The endpoint couldn't be reached at all. */
+  | { readonly kind: 'offline' };
+
 /** The hosted page's client. */
 export interface PublicFormClient {
+  /**
+   * Sends one file for a file question (the request body is the file; its name travels in `x-file-name`),
+   * reporting progress from 0 to 100 as the bytes go. Never throws.
+   */
+  upload(address: string, file: File, onProgress: (percent: number) => void): Promise<UploadOutcome>;
+  /** Removes a file the visitor sent and no longer wants; the answer never says whether it was there. */
+  removeUpload(address: string, fileId: string): Promise<void>;
   load(address: string): Promise<FormLoad>;
   submit(address: string, body: SubmitBody): Promise<SubmitOutcome>;
   /**
@@ -55,6 +82,28 @@ function isForm(value: unknown): value is PublicForm {
   );
 }
 
+/** What the upload endpoint's answer means. */
+function readUpload(status: number, answer: unknown): UploadOutcome {
+  if (
+    status === 201 &&
+    isObject(answer) &&
+    typeof answer.fileId === 'string' &&
+    typeof answer.name === 'string' &&
+    typeof answer.size === 'number' &&
+    typeof answer.contentType === 'string'
+  ) {
+    return {
+      kind: 'done',
+      file: { fileId: answer.fileId, name: answer.name, size: answer.size, contentType: answer.contentType },
+    };
+  }
+  if (status === 429) return { kind: 'limited' };
+  if ((status === 400 || status === 413) && isObject(answer) && typeof answer.message === 'string') {
+    return { kind: 'rejected', message: answer.message };
+  }
+  return { kind: 'failed' };
+}
+
 /** A client on `base` (the page's own origin by default), through `fetch` (a fake one in tests). */
 export function createPublicFormClient(
   options: { readonly fetch?: FetchLike; readonly base?: string } = {},
@@ -71,6 +120,52 @@ export function createPublicFormClient(
         return isForm(body) ? { kind: 'form', form: body } : { kind: 'failed' };
       } catch {
         return { kind: 'failed' };
+      }
+    },
+    async upload(address, file, onProgress) {
+      // `fetch` reports no upload progress, so the bytes go through XMLHttpRequest. Tests pass their own `fetch` and
+      // use the fallback below, which has no progress to report.
+      if (options.fetch !== undefined || typeof XMLHttpRequest === 'undefined') {
+        try {
+          const response = await call(`${base}${path(address)}/uploads`, {
+            method: 'POST',
+            headers: { 'content-type': file.type, 'x-file-name': encodeURIComponent(file.name) },
+            body: file,
+          });
+          onProgress(100);
+          return readUpload(response.status, await response.json().catch(() => undefined));
+        } catch {
+          return { kind: 'offline' };
+        }
+      }
+      return new Promise<UploadOutcome>((resolve) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', `${base}${path(address)}/uploads`);
+        request.setRequestHeader('content-type', file.type);
+        request.setRequestHeader('x-file-name', encodeURIComponent(file.name));
+        request.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) onProgress(Math.min(99, Math.round((event.loaded / event.total) * 100)));
+        });
+        request.addEventListener('load', () => {
+          let answer: unknown;
+          try {
+            answer = JSON.parse(request.responseText);
+          } catch {
+            answer = undefined;
+          }
+          if (request.status >= 200 && request.status < 300) onProgress(100);
+          resolve(readUpload(request.status, answer));
+        });
+        request.addEventListener('error', () => resolve({ kind: 'offline' }));
+        request.addEventListener('abort', () => resolve({ kind: 'offline' }));
+        request.send(file);
+      });
+    },
+    async removeUpload(address, fileId) {
+      try {
+        await call(`${base}${path(address)}/uploads/${encodeURIComponent(fileId)}`, { method: 'DELETE' });
+      } catch {
+        // Nothing to tell the visitor: the file waits for the daily cleanup.
       }
     },
     async ticket(address) {

@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from 'react';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import styles from './FieldGroup.module.css';
 
@@ -12,6 +13,8 @@ export interface FieldGroupProps {
   readonly action?: ReactNode;
   /** One short line under the content. */
   readonly hint?: string;
+  /** What is wrong with the content, in the error colour under it; said at once to a screen reader. */
+  readonly error?: string;
   /** `row` sets the content in a wrapping row, `space-6` apart (a few Badges, then a Button); `block` stacks it. */
   readonly layout?: 'block' | 'row';
   /** `heading` draws the label as a section's heading over labelled values (a submission's Answers in a Panel). */
@@ -34,6 +37,7 @@ export function FieldGroup({
   meta,
   action,
   hint,
+  error,
   layout = 'block',
   tone = 'label',
   headingLevel,
@@ -42,6 +46,7 @@ export function FieldGroup({
 }: FieldGroupProps) {
   const labelId = useId();
   const hintId = useId();
+  const errorId = useId();
   // The meta stays outside the label, so the group's name is the label alone.
   const name = (
     <span className={styles.title}>
@@ -56,7 +61,13 @@ export function FieldGroup({
       role="group"
       {...(isLive ? { 'aria-live': 'polite' as const } : {})}
       aria-labelledby={labelId}
-      {...(hint === undefined ? {} : { 'aria-describedby': hintId })}
+      {...(hint === undefined && error === undefined
+        ? {}
+        : {
+            'aria-describedby': [error === undefined ? undefined : errorId, hint === undefined ? undefined : hintId]
+              .filter(Boolean)
+              .join(' '),
+          })}
     >
       <div className={styles.head}>
         {headingLevel === undefined ? name : <Heading level={headingLevel}>{name}</Heading>}
@@ -65,6 +76,12 @@ export function FieldGroup({
       <div className={styles.content} data-layout={layout === 'row' ? 'row' : undefined}>
         {children}
       </div>
+      {error !== undefined && (
+        <p id={errorId} className={styles.error} role="alert">
+          <Icon name="circle-alert" size="xs" />
+          {error}
+        </p>
+      )}
       {hint !== undefined && (
         <p id={hintId} className={styles.hint}>
           {hint}

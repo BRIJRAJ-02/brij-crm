@@ -52,3 +52,11 @@ export function useKeyboardPlatform(): KeyboardPlatform {
   if (platform === undefined) throw new Error('Wrap the app in <UiProvider> to show keyboard shortcuts.');
   return platform;
 }
+
+/** Where a stored file downloads from, by its id: the web app supplies it for the open workspace. */
+export const FileLinksContext = createContext<((fileId: string) => string) | undefined>(undefined);
+
+/** The download address of a stored file, when the app says where files download from; undefined draws no link. */
+export function useFileHref(): ((fileId: string) => string) | undefined {
+  return useContext(FileLinksContext);
+}

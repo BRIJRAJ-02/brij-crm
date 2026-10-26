@@ -10,6 +10,7 @@ export * from './presets.ts';
 export * from './publish.ts';
 export * from './show-when.ts';
 export * from './strings.ts';
+export * from './uploads.ts';
 export type {
   FillTicket,
   FormLanguage,

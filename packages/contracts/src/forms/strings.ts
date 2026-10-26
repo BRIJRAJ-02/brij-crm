@@ -35,7 +35,17 @@ export interface FormStrings {
   readonly searchCountries: string;
   readonly noCountries: string;
   readonly dialCode: string;
-  readonly fileLater: string;
+  /** A file answer the server can't match to an upload: said under the file question. */
+  readonly fileInvalid: string;
+  /** The file question's drop area: what it asks for. */
+  readonly fileChoose: string;
+  /** Said politely once a file is in, and once one is taken off. */
+  readonly fileUploaded: (name: string) => string;
+  readonly fileRemoved: (name: string) => string;
+  /** Under the button while a file is still going: the form waits for it. */
+  readonly fileBusy: string;
+  /** Said under the file question when an upload failed. */
+  readonly fileFailed: string;
   readonly previewNote: string;
   readonly recaptchaNotice: string;
   readonly honeypot: string;
@@ -108,7 +118,12 @@ const EN: FormStrings = {
   searchCountries: 'Search countries',
   noCountries: 'No country by that name.',
   dialCode: 'Country code',
-  fileLater: 'File uploads arrive soon.',
+  fileInvalid: 'Upload the file again.',
+  fileChoose: 'Choose a file',
+  fileUploaded: (name) => `${name} uploaded.`,
+  fileRemoved: (name) => `${name} removed.`,
+  fileBusy: 'Wait for the file to finish uploading, then send.',
+  fileFailed: 'That file did not upload. Try again, or choose another file.',
   previewNote: 'A preview of the form. It can’t be filled in here.',
   recaptchaNotice: 'This form is protected by reCAPTCHA. Google’s Privacy Policy and Terms of Service apply.',
   honeypot: 'Leave this empty',
