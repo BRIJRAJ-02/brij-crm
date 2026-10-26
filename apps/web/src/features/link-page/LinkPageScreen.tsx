@@ -9,11 +9,13 @@ import {
   DEFAULT_PAGE_THEME,
   type BlockDraft,
   type DataError,
+  type DataLayer,
   type LinkPageStore,
   type MyProfile,
   type PageTheme,
   type ProfileBlock,
   type ProfileItem,
+  type PublicSocialLink,
 } from '@crm/data';
 import {
   BookingFoot,
@@ -49,6 +51,7 @@ import { profileHref } from '../settings/nav.ts';
 import { AppearanceCard } from './AppearanceCard.tsx';
 import { BlockEditorFrame } from './editors.tsx';
 import { SharingCard } from './SharingCard.tsx';
+import { SocialsCardSlot } from '../booking/socials-slot.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import {
   ADDABLE,
@@ -68,6 +71,8 @@ import { strings } from './strings.ts';
 
 /** Props for the Link page screen. */
 export interface LinkPageScreenProps {
+  /** The data layer, for the cards that load a store of their own (the social links). */
+  readonly data: DataLayer;
   /** The link page's store (`data.linkPage.load()`, loaded with the route). */
   readonly linkPage: LinkPageStore;
   readonly slug: string;
@@ -140,7 +145,7 @@ function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined
 }
 
 /** The link page editor: the blocks beside the phone. */
-export function LinkPageScreen({ linkPage, slug, profile }: LinkPageScreenProps) {
+export function LinkPageScreen({ data, linkPage, slug, profile }: LinkPageScreenProps) {
   const handle = profile.handle;
   return (
     // A page of the workspace since 25 October 2026, not a view inside Settings › Account › Profile: its own row
@@ -168,7 +173,7 @@ export function LinkPageScreen({ linkPage, slug, profile }: LinkPageScreenProps)
               </Card>
             </PreviewLayout>
           ) : (
-            <Blocks linkPage={linkPage} slug={slug} profile={profile} handle={handle} />
+            <Blocks data={data} linkPage={linkPage} slug={slug} profile={profile} handle={handle} />
           ),
       }}
     />
@@ -205,11 +210,13 @@ function HeaderActions({ handle }: { readonly handle: string }) {
 
 /** The blocks, their editors and the phone, once the person has a handle. */
 function Blocks({
+  data,
   linkPage,
   slug,
   profile,
   handle,
 }: {
+  readonly data: DataLayer;
   readonly linkPage: LinkPageStore;
   readonly slug: string;
   readonly profile: MyProfile;
@@ -223,6 +230,16 @@ function Blocks({
   const [deleting, setDeleting] = useState<ProfileItem | undefined>(undefined);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isImporting, setImporting] = useState(false);
+  // Their social links as the card below holds them now, so the phone follows an edit before the profile is read
+  // again; undefined until the card has loaded its store, when the profile's own set stands.
+  const [socialPreview, setSocialPreview] = useState<readonly PublicSocialLink[] | undefined>(undefined);
+  // The card's set once it has one, else what the profile was read with; either way labelled as a visitor sees it.
+  const shownSocials = useMemo(
+    () =>
+      socialPreview ??
+      (profile.socials ?? []).map((link) => ({ ...link, label: link.href.replace(/^https?:\/\//, '') })),
+    [socialPreview, profile.socials],
+  );
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
   // The look, shown the moment it is picked and saved behind it (AC-5421). A refusal puts back what was there and
@@ -598,16 +615,8 @@ function Blocks({
       }}
       {...(state.status === 'ready' ? { blocks: previewBlocks } : {})}
       theme={theme}
-      // Their own set of networks (Settings › Profile's Social links), under the bio as visitors see it.
-      {...(profile.socials === undefined || profile.socials.length === 0
-        ? {}
-        : {
-            socials: (
-              <SocialLinks
-                links={profile.socials.map((link) => ({ ...link, label: link.href.replace(/^https?:\/\//, '') }))}
-              />
-            ),
-          })}
+      // Their own set of networks (the Social links card below), under the bio as visitors see it.
+      {...(shownSocials.length === 0 ? {} : { socials: <SocialLinks links={shownSocials} /> })}
       empty={
         <EmptyState title={strings.empty} icon="link">
           {strings.emptyText}
@@ -692,6 +701,9 @@ function Blocks({
         onChange={chooseIndexable}
         {...(indexableRefusal === undefined ? {} : { refusal: indexableRefusal })}
       />
+      {/* Their own set of links, changed here rather than only inside a booking page's editor (the owner, 26
+          October 2026): a link page always shows them, so this card has no switch. */}
+      <SocialsCardSlot data={data} slug={slug} onPreviewLinks={setSocialPreview} isTeam={false} isOwner />
       <Card
         title={strings.blocks}
         description={

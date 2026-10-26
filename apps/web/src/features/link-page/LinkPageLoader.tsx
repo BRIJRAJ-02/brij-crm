@@ -27,5 +27,5 @@ export function LinkPageLoader({ data, slug, profile }: LinkPageLoaderProps) {
     };
   }, [data, slug]);
   if (store === undefined) return <LinkPagePending />;
-  return <LinkPageScreen key={profile.memberId} linkPage={store} slug={slug} profile={profile} />;
+  return <LinkPageScreen key={profile.memberId} data={data} linkPage={store} slug={slug} profile={profile} />;
 }

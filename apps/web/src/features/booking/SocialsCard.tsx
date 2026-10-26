@@ -74,10 +74,14 @@ export interface SocialsCardProps {
   readonly isTeam: boolean;
   /** The reader owns the page: only they turn its links on or off, and only their own set is theirs to change. */
   readonly isOwner: boolean;
-  /** The page's draft switch, saved with the editor's other settings. */
-  readonly isShown: boolean;
-  readonly isLocked: boolean;
-  readonly onShownChange: (isShown: boolean) => void;
+  /**
+   * The page's draft switch, saved with the editor's other settings. Left out on the link page editor (the owner,
+   * 26 October 2026), which has no such switch: a link page always shows the links, so a switch there would be a
+   * control with nothing behind it. Without these the card is the links and the button to change them.
+   */
+  readonly isShown?: boolean;
+  readonly isLocked?: boolean;
+  readonly onShownChange?: (isShown: boolean) => void;
 }
 
 /** No links, one array, so an effect keyed on it doesn't run again for nothing. */
@@ -195,7 +199,9 @@ export function SocialsCard({
     return (
       <Card title={strings.title}>
         <SettingsRow title={strings.shown} description={strings.notOwner}>
-          <Switch label={strings.shown} isLabelHidden isSelected={isShown} isReadOnly />
+          {onShownChange === undefined ? undefined : (
+            <Switch label={strings.shown} isLabelHidden isSelected={isShown ?? false} isReadOnly />
+          )}
         </SettingsRow>
       </Card>
     );
@@ -205,9 +211,9 @@ export function SocialsCard({
       data={data}
       onPreviewLinks={onPreviewLinks}
       slug={slug}
-      isShown={isShown}
-      isLocked={isLocked}
-      onShownChange={onShownChange}
+      {...(isShown === undefined ? {} : { isShown })}
+      {...(isLocked === undefined ? {} : { isLocked })}
+      {...(onShownChange === undefined ? {} : { onShownChange })}
     />
   );
 }
@@ -220,6 +226,7 @@ function OwnSocialsCard({
   onShownChange,
   onPreviewLinks,
 }: Pick<SocialsCardProps, 'data' | 'slug' | 'isShown' | 'isLocked' | 'onShownChange' | 'onPreviewLinks'>) {
+  // A link page always shows them, so the card there describes them as the person's own set, with no switch.
   // Their store loads on first use, out of the app's first load, and only on their own personal page.
   const access = useSocialsAccess(data);
   const held = access?.of(slug) ?? NO_SOCIALS;
@@ -235,7 +242,7 @@ function OwnSocialsCard({
       <Skeleton width="short" />
     ) : state.status === 'error' ? undefined : links.length === 0 ? (
       strings.none
-    ) : !isShown ? (
+    ) : isShown === false ? (
       // Off, the card says so rather than showing marks the page won't.
       strings.hiddenHere
     ) : (
@@ -255,14 +262,19 @@ function OwnSocialsCard({
     );
   return (
     <Card title={strings.title} description={strings.everywhere} {...(edit === undefined ? {} : { actions: edit })}>
-      <SettingsRow title={strings.shown} {...(marks === undefined ? {} : { description: marks })}>
-        <Switch
-          label={strings.shown}
-          isLabelHidden
-          isSelected={isShown}
-          isReadOnly={isLocked}
-          onChange={onShownChange}
-        />
+      <SettingsRow
+        title={onShownChange === undefined ? strings.yours : strings.shown}
+        {...(marks === undefined ? {} : { description: marks })}
+      >
+        {onShownChange === undefined ? undefined : (
+          <Switch
+            label={strings.shown}
+            isLabelHidden
+            isSelected={isShown ?? false}
+            isReadOnly={isLocked ?? false}
+            onChange={onShownChange}
+          />
+        )}
       </SettingsRow>
       {state.status === 'error' && (
         <Callout

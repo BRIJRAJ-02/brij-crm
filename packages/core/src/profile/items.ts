@@ -393,7 +393,10 @@ export async function saveProfileShareImage(
             from crm_public_profiles_of(array[${owner}::uuid]) p`,
       );
       const row = answered.rows[0];
-      return { handle: row?.handle ?? '', version: row?.version ?? null };
+      // No row is no page: a person who has not picked a handle has nothing for a share image to belong to,
+      // and is refused the same way choosing a look refuses them, rather than quietly saving nothing.
+      if (row === undefined) throw refuse('NOT_FOUND', 'Pick a handle before you choose a share image.');
+      return { handle: row.handle, version: row.version };
     } catch (error) {
       const pg = postgresError(error);
       if (pg?.code === 'P0002') throw refuse('NOT_FOUND', 'Pick a handle before you choose a share image.');
@@ -401,7 +404,8 @@ export async function saveProfileShareImage(
       throw error;
     }
   });
-  return version === null || handle === '' ? {} : { shareImage: profileSharePath(handle, version) };
+  // A null version is the picture taken away, which is a save like any other: the drawn card stands again.
+  return version === null ? {} : { shareImage: profileSharePath(handle, version) };
 }
 
 /** A refusal for what a definer raised, or the error itself. */

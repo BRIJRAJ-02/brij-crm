@@ -56,10 +56,15 @@ export function applePassJson(config: AppleWalletConfig, pass: ApplePass): Recor
     serialNumber: pass.handle,
     organizationName: 'Timefix',
     description: `${pass.name} on Timefix`,
+    // The name sits at the top as the pass's own mark, so the face of the pass is a name and a code and
+    // nothing else (the owner, 26 October 2026).
     logoText: pass.name,
     foregroundColor: 'rgb(255, 255, 255)',
     backgroundColor: 'rgb(17, 17, 19)',
     labelColor: 'rgb(161, 161, 170)',
+    // Handing the pass on is the point: whoever receives it holds a code that opens this page. Apple allows it
+    // unless a pass says otherwise, and this says so out loud rather than leaving it to a default.
+    sharingProhibited: false,
     barcodes: [
       {
         format: 'PKBarcodeFormatQR',
@@ -69,12 +74,16 @@ export function applePassJson(config: AppleWalletConfig, pass: ApplePass): Recor
       },
     ],
     generic: {
-      primaryFields: [{ key: 'name', label: 'Name', value: pass.name }],
-      secondaryFields: [{ key: 'address', label: 'Page', value: address }],
-      ...(pass.bio === undefined || pass.bio === ''
-        ? {}
-        : { auxiliaryFields: [{ key: 'bio', label: 'About', value: pass.bio }] }),
-      backFields: [{ key: 'open', label: 'Your page', value: walletPageUrl(pass.pageUrl, 'apple_wallet') }],
+      // Every empty row is room the code gets instead. A pass with no fields draws its barcode large and
+      // centred, which is the whole of what this pass is for; the address is already legible under the code
+      // as the barcode's own alt text, and the rest is on the back.
+      primaryFields: [],
+      secondaryFields: [],
+      auxiliaryFields: [],
+      backFields: [
+        { key: 'open', label: 'Page', value: walletPageUrl(pass.pageUrl, 'apple_wallet') },
+        ...(pass.bio === undefined || pass.bio === '' ? [] : [{ key: 'bio', label: 'About', value: pass.bio }]),
+      ],
     },
   };
 }

@@ -132,6 +132,8 @@ export const ACCESS_TABLE = {
   // The forms they may place (spec 0052) and the look of the page (spec 0054): their own account, as the rest.
   listProfileFormChoices: { ownLinkPage: true },
   saveProfileTheme: { ownLinkPage: true },
+  // The picture their page shares with (spec 0055): their own account, like every other page setting.
+  saveProfileShareImage: { ownLinkPage: true },
   setProfileIndexable: { ownLinkPage: true },
   importProfileLinks: { ownLinkPage: true },
   saveProfileItem: { ownLinkPage: true },

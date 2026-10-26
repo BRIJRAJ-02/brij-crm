@@ -69,10 +69,27 @@ describe('applePassJson', () => {
     expect(json.barcodes[0]?.altText).toBe('timefix.com/ada');
   });
 
+  it('shows a name and a code and nothing else, so the code gets the room', () => {
+    const json = applePassJson(config, pass) as { logoText: string; generic: Record<string, unknown[]> };
+    expect(json.logoText).toBe('Ada Lovelace');
+    expect(json.generic.primaryFields).toEqual([]);
+    expect(json.generic.secondaryFields).toEqual([]);
+    expect(json.generic.auxiliaryFields).toEqual([]);
+  });
+
+  it('may be handed on, because a pass whose code opens a page is worth passing on', () => {
+    expect(applePassJson(config, pass)).toMatchObject({ sharingProhibited: false });
+  });
+
+  it('keeps the address and the bio on the back, where they do not crowd the code', () => {
+    const json = applePassJson(config, pass) as { generic: { backFields: { key: string }[] } };
+    expect(json.generic.backFields.map((field) => field.key)).toEqual(['open', 'bio']);
+  });
+
   it('leaves the About row out when they have no bio', () => {
     const { bio: _bio, ...noBio } = pass;
-    const json = applePassJson(config, noBio) as { generic: Record<string, unknown> };
-    expect(json.generic).not.toHaveProperty('auxiliaryFields');
+    const json = applePassJson(config, noBio) as { generic: { backFields: { key: string }[] } };
+    expect(json.generic.backFields.map((field) => field.key)).toEqual(['open']);
   });
 });
 
