@@ -8,6 +8,7 @@ import {
   getMyProfile,
   listProfileFormChoices,
   saveProfileTheme,
+  saveProfileShareImage,
   setProfileIndexable,
   listProfilePageChoices,
   orderProfileItems,
@@ -79,6 +80,22 @@ export const profileRouter = member.profile.router({
   }),
   // The link page (spec 0051): the caller's own blocks, in every workspace the same, never another person's.
   items: member.profile.items.handler(({ context }) => readProfileItems(context.scope)),
+  /**
+   * A link to save the caller's own page to a wallet (26 October 2026). The pass holds only what their page already
+   * shows — their name, the line under it and their address — and its code opens that address tagged
+   * `utm_medium=<wallet>`, so a scan at an event is tellable from a shared link. Google's save link is signed for
+   * the press that follows it and lasts minutes, so it is made here and never stored. With no credentials in this
+   * environment the answer is `off`, and the editor offers no button.
+   */
+  walletLink: member.profile.walletLink.handler(async ({ context, input }) => {
+    const wallet = context.walletLink(input.wallet);
+    if (wallet === undefined) return { off: true as const };
+    const me = await getMyProfile(context.scope);
+    if (me.handle === undefined) throw apiError('NOT_FOUND', 'Pick a handle before you save your page.');
+    return {
+      url: wallet({ handle: me.handle, name: me.name, ...(me.bio === '' ? {} : { bio: me.bio }) }),
+    };
+  }),
   counts: member.profile.counts.handler(async ({ context }) => {
     const counts = await readProfileCounts(context.scope);
     return { ...counts, presses: [...counts.presses] };
@@ -94,6 +111,14 @@ export const profileRouter = member.profile.router({
   ),
   setIndexable: member.profile.setIndexable.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () => setProfileIndexable(context.scope, input.indexable)),
+  ),
+  /**
+   * The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511). The contract bounds the
+   * base64's length; the service decodes it, reads the bytes for what they actually are, and writes the one
+   * column through the one definer.
+   */
+  setShareImage: member.profile.setShareImage.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () => saveProfileShareImage(context.scope, input.image)),
   ),
   /**
    * Bringing a link in bio page across (spec 0055, AC-5524 to AC-5528). Three steps, in this order and nowhere

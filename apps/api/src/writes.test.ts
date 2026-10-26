@@ -582,6 +582,20 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.profile.setIndexable({ workspace: m.slug, indexable: false, mutationId });
     return [{ kind: 'members', item_ids: [me.memberId] }];
   },
+  // The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511): one column in schema auth,
+  // so no outbox row of its own. The smallest real PNG there is, so the bytes pass their own signature check.
+  'profile.setShareImage': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.setShareImage({
+      workspace: m.slug,
+      image: {
+        type: 'image/png',
+        base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      },
+      mutationId,
+    });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
   // Bringing a link in bio page across (spec 0055): hidden blocks in schema auth, so no outbox row either. The
   // page it reads is the test outside fetch's fixed one, so nothing here touches the network.
   'profile.importLinks': async (m, mutationId) => {
@@ -2128,6 +2142,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookingPages.reorderProfile': 2,
   'profile.saveTheme': 2,
   'profile.setIndexable': 2,
+  'profile.setShareImage': 2,
   'profile.orderItems': 2,
   'profile.archiveItem': 2,
   'profile.deleteItem': 2,

@@ -81,8 +81,12 @@ import {
   countItemPress,
   countProfileView,
   enterContactCard,
+  enterLinkBlocks,
   enterLinkPage,
+  enterShareImage,
   findHandleOwner,
+  isUuid,
+  linkIconOf,
   getPublicBookingPage,
   readAddressedPage,
   readHandleOffer,
@@ -112,6 +116,8 @@ import type { TicketBook } from '../forms/ticket.ts';
 import { handoffForPage } from '../forms/handoff.ts';
 import { BOOKING_LIMITS, botReason, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
 import { pictureResponse, type PictureFetch } from './picture.ts';
+import { iconResponse, type FaviconFetch } from './favicon.ts';
+import { shareImageResponse } from './share-image.ts';
 import {
   findVisitor,
   GUEST_CALLBACK_PATH,
@@ -151,6 +157,8 @@ export interface PublicBookingServices {
    * none), and `fetch` gets it from Google's picture hosts (`picture.ts`).
    */
   readonly pictures: { readonly pictureOf: AccountPictureReader; readonly fetch: PictureFetch };
+  /** A link block's own site icon (26 Oct 2026): the site's favicon, fetched and answered from our origin. */
+  readonly favicons: FaviconFetch;
   /** Knowing the visitor (spec 0028): sign in, the member door, and the guest leg where calendar sync is on. */
   readonly visitor?: VisitorDeps & {
     /** Signs a guest connect's state (derived from the calendar token key). */
@@ -242,6 +250,12 @@ function refusalAnswer(error: unknown): Response {
 
 /** No picture here: 404, never cached. */
 const noPicture = (): Response => answer('NOT_FOUND', 'There’s no picture here.');
+
+/** No icon here: 404, never cached. The page draws the title's first letter instead, as it always could. */
+const noIcon = (): Response => answer('NOT_FOUND', 'There’s no icon here.');
+
+/** No share image here: 404, never cached. The card function draws its own card instead. */
+const noShareImage = (): Response => answer('NOT_FOUND', 'There’s no share image here.');
 
 /** A JSON answer, never cached (slots change by the minute; a page can be paused; a visitor's overlay is theirs). */
 function ok(body: unknown, setCookies: readonly string[] = []): Response {
@@ -348,6 +362,58 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (refused !== undefined) return refused;
     try {
       return await servePicture(c, readProfilePicture(await findHandleOwner({ db }, handle)));
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  // A link block's own site icon (26 Oct 2026): the site's favicon, fetched by us so `img-src 'self'` is unchanged
+  // (AC-5110). Only a link a page owner saved, on a live page, is reachable, and only at its current version, so
+  // this is never a way to have our server read an address somebody chose for it. A miss is a plain 404: the page
+  // draws the title's first letter, which is what it does without an icon anyway.
+  app.get('/public/profiles/:handle/items/:itemId/icon', async (c) => {
+    const handle = c.req.param('handle');
+    const itemId = c.req.param('itemId');
+    // A handle or id that can't be one never reaches the limiter's keys, nor the door.
+    if (!HANDLE_PATTERN.test(handle) || !isUuid(itemId)) return noIcon();
+    const refused = limited([
+      [`booking:icon:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.iconsPerAddress],
+      [`booking:icon-handle:${handle}`, BOOKING_LIMITS.iconsPerHandle],
+    ]);
+    if (refused !== undefined) return refused;
+    try {
+      const found = await enterLinkBlocks({ db }, handle, { max: PROFILE_LIMITS.items });
+      const icon = linkIconOf(found.rows, itemId);
+      // The whole query, exactly: anything added would miss the edge's copy and cost a fetch of the site each time.
+      if (icon === undefined || new URL(c.req.url).search !== `?v=${icon.version}`) return noIcon();
+      const fetched = await services.favicons(icon.url);
+      if (fetched.ok) return iconResponse(fetched);
+      // Why, never the address: it is one a person saved.
+      log.warn('booking.icon.missed', { requestId: c.get('requestId'), reason: fetched.reason });
+      return noIcon();
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  // A link page's own share image (spec 0055, AC-5511): the picture its owner set, answered from our own origin so
+  // a pasted link previews with it. Only its current version, so a stale or made up one is never read; a day of
+  // cache, as the card itself gets. Nothing is fetched from anywhere: these bytes are ours.
+  app.get('/public/profiles/:handle/share-image', async (c) => {
+    const handle = c.req.param('handle');
+    if (!HANDLE_PATTERN.test(handle)) return noShareImage();
+    const refused = limited([
+      [`booking:picture:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.picturesPerAddress],
+      [`booking:share-handle:${handle}`, BOOKING_LIMITS.picturesPerTarget],
+    ]);
+    if (refused !== undefined) return refused;
+    try {
+      // A handle no one holds throws NOT_FOUND here, which `refusalAnswer` turns into the same 404 as no picture.
+      const owner = await findHandleOwner({ db }, handle);
+      const picture = await enterShareImage({ db }, owner.userId);
+      // The whole query, exactly: anything added would miss the edge's copy and cost the read each time.
+      if (picture === undefined || new URL(c.req.url).search !== `?v=${picture.version}`) return noShareImage();
+      return shareImageResponse(picture);
     } catch (error) {
       return refusalAnswer(error);
     }

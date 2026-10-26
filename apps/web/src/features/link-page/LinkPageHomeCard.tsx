@@ -50,11 +50,40 @@ function useProfile(data: DataLayer, slug: string) {
   };
 }
 
+/**
+ * A link that saves the page to the person's wallet, or undefined (26 October 2026): this deployment has no
+ * credentials for a wallet, the read failed, or they have no handle yet. Asked for once a visit, because a save
+ * link is signed for a short while; a button nobody can use is never drawn, which is why this is read up front
+ * rather than when it is pressed.
+ */
+function useWalletLink(data: DataLayer, slug: string): string | undefined {
+  const [link, setLink] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    let isCurrent = true;
+    void data.linkPage.load().then(
+      (store) =>
+        store.walletLink(slug, 'apple_wallet').then(
+          (answer) => {
+            if (isCurrent && 'url' in answer) setLink(answer.url);
+          },
+          // No wallet is no error: the card simply doesn't offer it.
+          () => undefined,
+        ),
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug]);
+  return link;
+}
+
 /** Your link page: its QR code, its address, Copy link, Open, and the code large in a Modal to save. */
 export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const { read, retry } = useProfile(data, slug);
   const [isShowing, setShowing] = useState(false);
+  const wallet = useWalletLink(data, slug);
   if (read.status === 'loading') {
     return (
       <Card title={strings.title} isBusy>
@@ -103,6 +132,11 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
           <Button icon="qr-code" onPress={() => setShowing(true)}>
             {strings.showQr}
           </Button>
+          {wallet !== undefined && (
+            <ButtonLink href={wallet} isExternal icon="wallet">
+              {strings.addToWallet}
+            </ButtonLink>
+          )}
         </>
       }
     >

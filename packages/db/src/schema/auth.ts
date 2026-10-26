@@ -14,6 +14,7 @@ import {
   bigint,
   boolean,
   check,
+  customType,
   date,
   foreignKey,
   index,
@@ -29,6 +30,9 @@ import {
 } from 'drizzle-orm/pg-core';
 import { timestamptz } from './common.ts';
 import { members, workspaces } from './workspaces.ts';
+
+/** Raw bytes, for the one picture this schema keeps: a link page's own share image (spec 0055, AC-5511). */
+const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
 
 /** The `auth` schema: global identity, outside row level security. */
 export const auth = pgSchema('auth');
@@ -336,6 +340,14 @@ export const publicProfiles = auth.table(
       ),
     /** Whether search engines may show the link page (spec 0055, AC-5506): on until its owner says otherwise. */
     indexable: boolean('indexable').notNull().default(true),
+    /**
+     * The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511), with its type and a short
+     * version for the path that serves it. The three are set together or all null. The app never reads or writes
+     * these columns itself: `crm_save_profile_share_image` writes them and `crm_profile_share_image` reads them.
+     */
+    shareImage: bytea('share_image'),
+    shareImageType: text('share_image_type'),
+    shareImageVersion: text('share_image_version'),
     updatedAt: updatedAt(),
   },
   (t) => [

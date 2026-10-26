@@ -144,7 +144,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly thirty eight security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly forty security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -195,12 +195,15 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_items', owner: 'crm_handle' },
       { name: 'crm_profile_items_archived', owner: 'crm_handle' },
       { name: 'crm_profile_items_public', owner: 'crm_handle' },
+      // The picture a pasted link shows instead of the drawn card (spec 0055, migration 0112).
+      { name: 'crm_profile_share_image', owner: 'crm_handle' },
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
       { name: 'crm_save_profile_indexable', owner: 'crm_handle' },
       { name: 'crm_save_profile_item', owner: 'crm_handle' },
+      { name: 'crm_save_profile_share_image', owner: 'crm_handle' },
       // The look of the page (spec 0054, migration 0105).
       { name: 'crm_save_profile_theme', owner: 'crm_handle' },
       { name: 'crm_save_public_profile', owner: 'crm_handle' },
@@ -269,6 +272,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_items', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items_archived', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_profile_share_image', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -276,6 +280,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       // A plpgsql body: it raises PROFILE_ITEM_LIMIT, PROFILE_ITEM_DATA and PROFILE_ITEM_MISSING.
       { name: 'crm_save_profile_indexable', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_save_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      // A plpgsql body: it raises PROFILE_MISSING for a person who has no page to share.
+      { name: 'crm_save_profile_share_image', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_save_profile_theme', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises the unique violation a taken handle is refused with.
       { name: 'crm_save_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -458,6 +464,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_profile_indexable',
         // Bringing a link in bio page across (spec 0055, migration 0109).
         'crm_import_profile_links',
+        // The picture a pasted link shows instead of the drawn card (spec 0055, migration 0112).
+        'crm_save_profile_share_image',
+        'crm_profile_share_image',
       ],
       [
         'crm_save_public_profile(uuid, text, text)',
@@ -482,8 +491,10 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_profile_theme(uuid, jsonb)',
         'crm_save_profile_indexable(uuid, boolean)',
         'crm_import_profile_links(uuid, uuid, text, jsonb, jsonb)',
+        'crm_save_profile_share_image(uuid, bytea, text)',
+        'crm_profile_share_image(uuid)',
       ],
-      Array.from({ length: 22 }, () => 'app'),
+      Array.from({ length: 24 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -2065,6 +2076,12 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // Whether search engines may show their page (spec 0055, migration 0108): one more column, and only
       // through crm_save_profile_indexable. This line is the whole of what that spec widened.
       'auth.public_profiles.indexable UPDATE',
+      // The picture a pasted link shows instead of the drawn card (spec 0055, migration 0112): three more
+      // columns, and only through crm_save_profile_share_image. The bytes are read back by
+      // crm_profile_share_image, which is the definer's own select, never a grant to the app.
+      'auth.public_profiles.share_image UPDATE',
+      'auth.public_profiles.share_image_type UPDATE',
+      'auth.public_profiles.share_image_version UPDATE',
       // The look of their page (spec 0054, migration 0105): one more column, and only through
       // crm_save_profile_theme. This line is the whole of what that spec widened.
       'auth.public_profiles.theme UPDATE',

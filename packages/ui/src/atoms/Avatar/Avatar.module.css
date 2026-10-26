@@ -54,6 +54,12 @@
     --avatar-initials: var(--avatar-initials-xl);
   }
 
+  /* A person's own picture at the top of their link page: the largest, and the only one with a column to itself. */
+  .root[data-size='hero'] {
+    --avatar: var(--avatar-hero);
+    --avatar-initials: var(--avatar-initials-hero);
+  }
+
   .root[data-shape='square'] {
     border-radius: var(--radius-xs);
   }

@@ -9,6 +9,8 @@ export const homeStrings = {
   open: 'Open',
   edit: 'Edit',
   showQr: 'Show QR code',
+  /** Saves the page to the person's own wallet, so they can show its code without opening the app. */
+  addToWallet: 'Add to Wallet',
   noHandle: 'Claim your address to get a link page',
   noHandleText: 'Pick a handle in your profile, and your page and its QR code are ready at once.',
   goToProfile: 'Go to Profile',

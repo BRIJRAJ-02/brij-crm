@@ -92,6 +92,15 @@ export interface LinkPageApi {
     readonly indexable: boolean;
     readonly mutationId: string;
   }) => Promise<{ readonly indexable: boolean }>;
+  readonly setShareImage: (input: {
+    readonly workspace: string;
+    readonly image?: { readonly type: 'image/png' | 'image/jpeg'; readonly base64: string };
+    readonly mutationId: string;
+  }) => Promise<{ readonly shareImage?: string }>;
+  readonly walletLink: (input: {
+    readonly workspace: string;
+    readonly wallet: 'apple_wallet' | 'google_wallet';
+  }) => Promise<{ readonly url: string } | { readonly off: true }>;
   readonly importLinks: (input: {
     readonly workspace: string;
     readonly id: string;
@@ -157,6 +166,18 @@ interface ProfileProcedures {
     input: { workspace: string; indexable: boolean; mutationId: string },
     options: { signal?: AbortSignal },
   ) => Promise<{ indexable: boolean }>;
+  readonly setShareImage: (
+    input: {
+      workspace: string;
+      image?: { type: 'image/png' | 'image/jpeg'; base64: string };
+      mutationId: string;
+    },
+    options: { signal?: AbortSignal },
+  ) => Promise<{ shareImage?: string }>;
+  readonly walletLink: (
+    input: { workspace: string; wallet: 'apple_wallet' | 'google_wallet' },
+    options: { signal?: AbortSignal },
+  ) => Promise<{ url: string } | { off: true }>;
   readonly importLinks: (
     input: { workspace: string; id: string; url: string; mutationId: string },
     options: { signal?: AbortSignal },
@@ -735,6 +756,27 @@ export function createLinkPageStore(deps: LinkPageDeps) {
         throw toDataError(error);
       }),
     /**
+     * The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511); no `image` goes back to the
+     * drawn one. The answer is the path our own origin serves it from, which the screen draws straight away.
+     */
+    setShareImage: (
+      workspace: string,
+      image: { readonly type: 'image/png' | 'image/jpeg'; readonly base64: string } | undefined,
+    ): Promise<{ readonly shareImage?: string }> =>
+      deps.api
+        .setShareImage({ workspace, ...(image === undefined ? {} : { image }), mutationId: deps.mintId() })
+        .catch((error: unknown) => {
+          throw toDataError(error);
+        }),
+    /** A link to save the page to a wallet; `off` where this deployment has no credentials for that wallet. */
+    walletLink: (
+      workspace: string,
+      wallet: 'apple_wallet' | 'google_wallet',
+    ): Promise<{ readonly url: string } | { readonly off: true }> =>
+      deps.api.walletLink({ workspace, wallet }).catch((error: unknown) => {
+        throw toDataError(error);
+      }),
+    /**
      * Brings one link in bio page across (spec 0055, AC-5524): `id` is the import's own, so sending the same one
      * again adds nothing twice. Every row lands hidden, and the answer says what it made and what it could not.
      */
@@ -779,6 +821,8 @@ export function openLinkPage(given: {
       formChoices: (input) => call((options) => profile.formChoices(input, options)),
       saveTheme: (input) => call((options) => profile.saveTheme(input, options)),
       setIndexable: (input) => call((options) => profile.setIndexable(input, options)),
+      setShareImage: (input) => call((options) => profile.setShareImage(input, options)),
+      walletLink: (input) => call((options) => profile.walletLink(input, options)),
       importLinks: (input) => call((options) => profile.importLinks(input, options)),
       saveItem: (input) => call((options) => profile.saveItem(input, options)),
       orderItems: (input) => call((options) => profile.orderItems({ ...input, ids: [...input.ids] }, options)),
@@ -842,6 +886,19 @@ export function openLinkPage(given: {
       deps.api.setIndexable({ workspace, indexable, mutationId: deps.mintId() }).catch((error: unknown) => {
         throw toDataError(error);
       }),
+    /**
+     * A link to save the page to a wallet (26 October 2026): asked for when the button is pressed, because a save
+     * link is signed for that press and lasts minutes. `off` where this deployment has no credentials for it.
+     */
+    walletLink: (
+      workspace: string,
+      wallet: 'apple_wallet' | 'google_wallet',
+    ): Promise<{ readonly url: string } | { readonly off: true }> => store.walletLink(workspace, wallet),
+    /** The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511); none goes back to drawn. */
+    setShareImage: (
+      workspace: string,
+      image: { readonly type: 'image/png' | 'image/jpeg'; readonly base64: string } | undefined,
+    ): Promise<{ readonly shareImage?: string }> => store.setShareImage(workspace, image),
     /** Brings one link in bio page across (spec 0055, AC-5524): the rows land hidden, for a person to turn on. */
     importLinks: (workspace: string, id: string, url: string): Promise<ProfileLinkImport> =>
       store.importLinks(workspace, id, url),

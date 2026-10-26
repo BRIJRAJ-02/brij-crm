@@ -9,7 +9,9 @@ export {
   countItemPress,
   countProfileView,
   enterContactCard,
+  enterLinkBlocks,
   enterLinkPage,
+  enterShareImage,
   findHandleOwner,
   readHandleOffer,
   type BookingEntry,
@@ -23,6 +25,7 @@ export {
   countPageView,
   readAddressedPage,
   readContactCard,
+  linkIconOf,
   readLinkPage,
   readHandoffPrefill,
   getPublicBookingPage,
@@ -40,6 +43,14 @@ export {
 export { writeVcard, type VcardPhoto } from './profile/vcard.ts';
 // A host's account picture (23 Oct 2026): only Google's picture hosts, so the api's fetch goes nowhere else.
 export { isPictureHost, pictureVersion, type AccountPicture, type AccountPictureReader } from './booking/picture.ts';
+// What a picture's own bytes say it is: every image taken from outside is decided here, never by a claimed type.
+export { imageTypeOf, type ImageType } from './booking/image-type.ts';
+
+// A link block's own icon from our own origin (26 Oct 2026): what may be fetched for one, and nothing else.
+export { declaredIcon, faviconSources, faviconVersion, isFaviconSite, FAVICON_PATH } from './booking/favicon.ts';
+
+// Whether a path parameter is an id at all, so a public route turns away what the door would only refuse.
+export { isUuid } from './engine/ids.ts';
 
 // Where our server may never be made to send a request (spec 0055, AC-5520). The pure half of the one hardened
 // outside fetch: no network, no state, just the rule, so every caller asks the same question.

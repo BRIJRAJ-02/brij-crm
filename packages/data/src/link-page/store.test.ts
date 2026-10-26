@@ -58,6 +58,8 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
     // The figures answer at once and are left out of `calls`: the order of the writes is what these tests read.
     counts: () => Promise.resolve(COUNTS),
     pageChoices: () => wait('pageChoices'),
+    setShareImage: () => wait('setShareImage'),
+    walletLink: () => wait('walletLink'),
     formChoices: () => wait('formChoices'),
     saveTheme: ({ theme }) => Promise.resolve(theme),
     setIndexable: ({ indexable }) => Promise.resolve({ indexable }),

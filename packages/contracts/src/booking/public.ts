@@ -103,6 +103,24 @@ export function profilePicturePath(handle: string, version: string): string {
   return `/api/public/profiles/${encodeURIComponent(handle)}/picture?v=${encodeURIComponent(version)}`;
 }
 
+/**
+ * A link page's own share image, as our origin serves it: `GET /api/public/profiles/:handle/share-image?v=`. The
+ * picture a pasted link shows instead of the card we draw (spec 0055, AC-5511). Under `profiles` for the same
+ * reason a picture is: `/handles/:handle/:slug` is a page's address.
+ */
+export function profileSharePath(handle: string, version: string): string {
+  return `/api/public/profiles/${encodeURIComponent(handle)}/share-image?v=${encodeURIComponent(version)}`;
+}
+
+/**
+ * A link block's own icon, as our origin serves it: `GET /api/public/profiles/:handle/items/:id/icon?v=`. The api
+ * fetches the site's favicon and answers it itself, so `img-src 'self'` is unchanged (AC-5110). Under `profiles`
+ * for the same reason a picture is: `/handles/:handle/:slug` is a page's address.
+ */
+export function linkIconPath(handle: string, itemId: string, version: string): string {
+  return `/api/public/profiles/${encodeURIComponent(handle)}/items/${encodeURIComponent(itemId)}/icon?v=${encodeURIComponent(version)}`;
+}
+
 /** The signed in person's own picture, for the app (Settings › Profile): `GET /api/me/picture?v=`, never shared. */
 export function myPicturePath(version: string): string {
   return `/api/me/picture?v=${encodeURIComponent(version)}`;
@@ -145,6 +163,11 @@ export const PublicProfile = z.object({
    * robots line costs no second call. Absent reads as shown, which is what every page said before the switch.
    */
   indexable: z.boolean().optional(),
+  /**
+   * The picture a pasted link shows instead of the card we draw (spec 0055, AC-5511): a path on our own origin,
+   * absent when its owner has set none and the card is drawn. The card function reads this with the profile.
+   */
+  shareImage: z.string().optional(),
   /** The cursor of the next page, while there is one. */
   next: z.string().optional(),
 });

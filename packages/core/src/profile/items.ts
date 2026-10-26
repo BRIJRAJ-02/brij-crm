@@ -14,6 +14,9 @@ import {
   ProfileBlock,
   ProfileItem,
   profileLimitSentence,
+  profileSharePath,
+  SHARE_IMAGE_MAX_BYTES,
+  SHARE_IMAGE_TYPES,
   SkippedImportRow,
   PROFILE_COUNT_DAYS,
   type ProfileCounts,
@@ -28,6 +31,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { enterOwnForms, enterOwnPages, ownUserId, type OwnedFormEntry, type OwnedPageEntry } from '../access/door.ts';
 import { isUuid, newId } from '../engine/ids.ts';
+import { imageTypeOf } from '../booking/image-type.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -353,6 +357,51 @@ export async function setProfileIndexable(scope: EngineScope, indexable: boolean
     }
   });
   return { indexable: kept ?? indexable };
+}
+
+/**
+ * The picture a pasted link to the caller's own page shows instead of the card we draw (spec 0055, AC-5511), or
+ * `undefined` to clear it back to the drawn one. Answers the path our own origin serves it from.
+ *
+ * What a browser said the file was is not taken: the bytes are read for their own signature (`imageTypeOf`), and
+ * anything that is not a PNG or a JPEG is refused whatever the picker called it. The size is bounded here and
+ * again by the column's check, so neither alone is load bearing. The version in the path is the definer's own,
+ * never a caller's. One column write, through the one definer.
+ */
+export async function saveProfileShareImage(
+  scope: EngineScope,
+  image: { readonly type: string; readonly base64: string } | undefined,
+): Promise<{ readonly shareImage?: string }> {
+  const owner = ownerOf(scope);
+  let bytes: Buffer | undefined;
+  if (image !== undefined) {
+    bytes = Buffer.from(image.base64, 'base64');
+    if (bytes.byteLength === 0) throw refuseOn('CONFIG_INVALID', 'Add a picture.', 'image');
+    if (bytes.byteLength > SHARE_IMAGE_MAX_BYTES) {
+      throw refuseOn('CONFIG_INVALID', 'That picture is over 500 kB. Use a smaller one.', 'image');
+    }
+    const found = imageTypeOf(bytes);
+    // The bytes decide, not the picker: a renamed file, or a type nothing here can draw, is refused as one thing.
+    if (found === undefined || !SHARE_IMAGE_TYPES.some((kind) => kind === found)) {
+      throw refuseOn('CONFIG_INVALID', 'A share image has to be a PNG or a JPEG.', 'image');
+    }
+  }
+  const { handle, version } = await inWorkspace(scope, async (tx) => {
+    try {
+      const answered = await tx.execute<{ handle: string; version: string | null }>(
+        sql`select p.handle, crm_save_profile_share_image(${owner}::uuid, ${bytes ?? null}, ${image?.type ?? null}) as version
+            from crm_public_profiles_of(array[${owner}::uuid]) p`,
+      );
+      const row = answered.rows[0];
+      return { handle: row?.handle ?? '', version: row?.version ?? null };
+    } catch (error) {
+      const pg = postgresError(error);
+      if (pg?.code === 'P0002') throw refuse('NOT_FOUND', 'Pick a handle before you choose a share image.');
+      if (pg?.code === '23514') throw refuseOn('CONFIG_INVALID', 'That picture can’t be a share image.', 'image');
+      throw error;
+    }
+  });
+  return version === null || handle === '' ? {} : { shareImage: profileSharePath(handle, version) };
 }
 
 /** A refusal for what a definer raised, or the error itself. */

@@ -88,6 +88,26 @@ async function pictureOf(origin, image) {
   }
 }
 
+/**
+ * The owner's own share image, answered as the card itself (spec 0055, AC-5511), or undefined. A picture somebody
+ * chose for this is the card: it is drawn at no size of ours and letterboxed into none, since every platform that
+ * reads one crops it to its own shape anyway. Only our own origin's route, and only as a path: a profile's
+ * `shareImage` is data, never a destination.
+ */
+async function chosenCard(origin, path) {
+  if (typeof path !== 'string' || !path.startsWith('/api/public/profiles/')) return undefined;
+  try {
+    const answer = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(READ_TIMEOUT_MS) });
+    if (!answer.ok) return undefined;
+    const type = (answer.headers.get('content-type') ?? '').split(';')[0].trim();
+    if (type !== 'image/png' && type !== 'image/jpeg') return undefined;
+    const bytes = Buffer.from(await answer.arrayBuffer());
+    return bytes.byteLength === 0 ? undefined : { type, bytes };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function GET(request) {
   const url = new URL(request.url);
   const handle = handleOf(url.pathname);
@@ -109,6 +129,20 @@ export async function GET(request) {
     // rather than a broken picture, which is what a 503 looks like in a message; it is kept for a minute only, so
     // the real card takes its place as soon as the read works again.
     profile = undefined;
+  }
+
+  // A picture its owner chose stands in for the whole card, and nothing below is drawn at all.
+  const chosen = profile === undefined ? undefined : await chosenCard(url.origin, profile.shareImage);
+  if (chosen !== undefined) {
+    return new Response(chosen.bytes, {
+      status: 200,
+      headers: {
+        'content-type': chosen.type,
+        'cache-control': url.searchParams.get('v') ? CARD_CACHE_CONTROL : CARD_CACHE_CONTROL_UNVERSIONED,
+        'content-length': String(chosen.bytes.byteLength),
+        'x-content-type-options': 'nosniff',
+      },
+    });
   }
 
   const name = typeof profile?.name === 'string' && profile.name !== '' ? profile.name : handle;

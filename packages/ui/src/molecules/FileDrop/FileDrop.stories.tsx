@@ -26,6 +26,42 @@ export const Default: Story = {
   },
 };
 
+/** A one pixel PNG, standing in for a picture our own origin serves. `data:` is in every policy here. */
+const PIXEL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+/** Replacing a picture that is there already: it takes the upload icon's place, so nobody replaces it unseen. */
+export const WithPreview: Story = {
+  args: {
+    label: 'Picture when shared',
+    acceptedTypes: ['image/png', 'image/jpeg'],
+    maxSize: 500_000,
+    preview: { src: PIXEL, alt: 'Your page’s share picture' },
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByAltText('Your page’s share picture')).toBeInTheDocument();
+  },
+};
+
+/** An image from anywhere but our own origin is never drawn: the upload icon stays, with no word about it. */
+export const PreviewRefused: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Picture when shared', preview: { src: 'https://example.com/other.png', alt: 'Somewhere else' } },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByAltText('Somewhere else')).not.toBeInTheDocument();
+  },
+};
+
 /** Disabled. */
 export const Disabled: Story = {
   args: { isDisabled: true },

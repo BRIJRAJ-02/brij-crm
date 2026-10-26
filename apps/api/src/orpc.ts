@@ -21,6 +21,8 @@ import {
   type RuleSource,
 } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
+import type { WalletKind } from '@crm/contracts/brand';
+import type { WalletLinkMaker } from './wallet/wallet.ts';
 import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
 import type { Auth, SessionUser } from './auth/auth.ts';
@@ -150,6 +152,11 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * asks it for the caller's own user id only. Reads no token.
    */
   googleLinked: (userId: string) => Promise<boolean>;
+  /**
+   * Makes a save link for one wallet (26 Oct 2026), or undefined for a wallet this environment has no credentials
+   * for. The pass holds only what the caller's own page already shows; the handler reads that and hands it over.
+   */
+  walletLink: (wallet: WalletKind) => WalletLinkMaker | undefined;
   /**
    * The names of the workspaces a person is in that require two factor (spec
    * 0033, AC-885): Account › Sign in and devices says so, and keeps their last second

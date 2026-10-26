@@ -18,4 +18,6 @@ export const strings = {
    * says what it counts, so the row reads as "Work, 3 links inside, collapsed" rather than as a bare number.
    */
   inside: (count: number) => (count === 1 ? '1 link inside' : `${String(count)} links inside`),
+  /** A site icon names nothing a reader needs: the title beside it already says where the link goes. */
+  siteIconAlt: '',
 } as const;

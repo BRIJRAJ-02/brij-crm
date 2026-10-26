@@ -23,7 +23,9 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   bookingPicturePath,
   PROFILE_PAGE_SIZE,
+  linkIconPath,
   profilePicturePath,
+  profileSharePath,
   checkProfileLink,
   headingGroupOf,
   linkMarkOf,
@@ -50,6 +52,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry, HandleOwner, LinkPageRow, OwnedFormEntry, OwnedPageEntry } from '../access/door.ts';
 import { pagePath } from './handles.ts';
 import { servedPicture, type AccountPicture, type AccountPictureReader } from './picture.ts';
+import { faviconSources, faviconVersion } from './favicon.ts';
 import { isPictureHidden } from './picture-choice.ts';
 import { publicSocialsOf } from './socials.ts';
 import { checkScope } from '../access/mint.ts';
@@ -368,6 +371,7 @@ function publicItemOf(
   row: LinkPageRow,
   pages: ReadonlyMap<string, PageRow>,
   forms: ReadonlyMap<string, string>,
+  handle: string,
 ): PublicProfileItem | undefined {
   const data: Readonly<Record<string, unknown>> =
     typeof row.data === 'object' && row.data !== null ? (row.data as Readonly<Record<string, unknown>>) : {};
@@ -378,6 +382,11 @@ function publicItemOf(
     if (!checkProfileLink(url).ok) return undefined;
     // The network's own mark for a profile or site on it, matched here so the public bundle never parses addresses.
     const network = linkMarkOf(url);
+    const picked = typeof data.icon === 'string' ? data.icon : undefined;
+    // The site's own favicon, between the picked icon and the letter (AC-5110, extended 26 October 2026): only
+    // where neither of the two above it applies, and only for an address a site could be at, so the page asks our
+    // origin for an icon exactly where there is one to fetch.
+    const site = network === undefined && picked === undefined ? faviconSources(url) : undefined;
     candidate = {
       kind: 'link',
       id: row.id,
@@ -386,7 +395,8 @@ function publicItemOf(
       hue: typeof data.hue === 'string' ? data.hue : 'blue',
       ...(typeof data.note === 'string' && data.note !== '' ? { note: data.note } : {}),
       ...(network === undefined ? {} : { mark: network }),
-      ...(typeof data.icon === 'string' ? { icon: data.icon } : {}),
+      ...(picked === undefined ? {} : { icon: picked }),
+      ...(site === undefined ? {} : { siteIcon: linkIconPath(handle, row.id, faviconVersion(row.id, url)) }),
     };
   } else if (row.kind === 'heading') {
     candidate = {
@@ -457,6 +467,29 @@ function publicItemOf(
   }
   const parsed = PublicProfileItem.safeParse(candidate);
   return parsed.success ? parsed.data : undefined;
+}
+
+/**
+ * The address one link block's icon is fetched from, with the version its path must carry, or undefined (26
+ * October 2026). Undefined for a block that isn't a link, one whose stored address the rule no longer accepts,
+ * one no site could be at, and one that draws a network's mark or an icon its owner picked: those sit above a
+ * favicon in AC-5110's order, so fetching for them would be work nothing shows. The route answers 404 for each.
+ *
+ * The rows come from the door (`enterLinkBlocks`), so only a link a page owner saved, on a live page, is ever
+ * reachable: that, and not a host list, is what bounds where the icon fetch can be pointed.
+ */
+export function linkIconOf(
+  rows: readonly LinkPageRow[],
+  itemId: string,
+): { readonly url: string; readonly version: string } | undefined {
+  const row = rows.find((candidate) => candidate.id === itemId && candidate.kind === 'link');
+  if (row === undefined) return undefined;
+  const data: Readonly<Record<string, unknown>> =
+    typeof row.data === 'object' && row.data !== null ? (row.data as Readonly<Record<string, unknown>>) : {};
+  const url = typeof data.url === 'string' ? data.url : '';
+  if (!checkProfileLink(url).ok) return undefined;
+  if (linkMarkOf(url) !== undefined || typeof data.icon === 'string') return undefined;
+  return faviconSources(url) === undefined ? undefined : { url, version: faviconVersion(row.id, url) };
 }
 
 /**
@@ -537,7 +570,7 @@ export async function readLinkPage(
     if (row.kind === 'form' && (row.form_id === null || formWorkspaces.get(row.form_id) !== row.workspace_id)) {
       return [];
     }
-    const item = publicItemOf(row, pages, formKeys);
+    const item = publicItemOf(row, pages, formKeys, found.owner.handle);
     if (item === undefined) return [];
     if (words !== '' && (item.kind === 'heading' || !matches(item, words))) return [];
     return [item];
@@ -548,6 +581,11 @@ export async function readLinkPage(
     handle: found.owner.handle,
     theme: found.owner.theme,
     indexable: found.owner.indexable,
+    // The picture a pasted link shows instead of the drawn card (AC-5511): the path our own origin serves it from,
+    // never the bytes, which only the card and that one route ever read.
+    ...(found.owner.shareImageVersion === undefined
+      ? {}
+      : { shareImage: profileSharePath(found.owner.handle, found.owner.shareImageVersion) }),
     name,
     initials: profileInitials(name, found.owner.handle),
     // The account's picture is Google's, which the public pages' policy (img-src 'self') never loads: our own

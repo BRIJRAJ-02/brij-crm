@@ -27,7 +27,7 @@ export const Default: Story = {
   },
 };
 
-/** The six sizes, people as circles and companies as squares: 16px and 20px show one initial, 24px and up two. */
+/** The seven sizes, people as circles and companies as squares: 16px and 20px show one initial, 24px and up two. */
 export const Sizes: Story = {
   parameters: { crm: { preview: true } },
   render: () => (
@@ -38,6 +38,7 @@ export const Sizes: Story = {
       <Avatar name="Leo Martins" hue="blue" size="lg" />
       <Avatar name="Ada Lovelace" hue="lime" size="title" />
       <Avatar name="Alex Turner" hue="blue" size="xl" />
+      <Avatar name="Grace Hopper" hue="sky" size="hero" />
       <Avatar name="Northwind" hue="ink" shape="square" size="xs" />
       <Avatar name="Acme Logistics" hue="green" shape="square" size="md" />
       <Avatar name="Globex" hue="red" shape="square" size="lg" />
@@ -46,7 +47,7 @@ export const Sizes: Story = {
   ),
   play: async ({ canvasElement }) => {
     const shown = [...canvasElement.querySelectorAll('[role="img"]')].map((avatar) => avatar.textContent);
-    await expect(shown).toEqual(['M', 'J', 'PR', 'LM', 'AL', 'AT', 'N', 'AL', 'G', 'I']);
+    await expect(shown).toEqual(['M', 'J', 'PR', 'LM', 'AL', 'AT', 'GH', 'N', 'AL', 'G', 'I']);
   },
 };
 

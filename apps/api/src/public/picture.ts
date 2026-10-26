@@ -88,9 +88,13 @@ export function createPictureFetch(
 /**
  * A fetched picture as our answer: its own type and length, cacheable (`PICTURE_CACHE_CONTROL` unless said), never
  * sniffed as anything else, for our own pages only, and inert if opened on its own.
+ *
+ * A link block's icon is answered through here too (`./favicon.ts`), which is why `image/x-icon` is among the
+ * types: the headers that make an image we fetched safe to serve belong in one place. The type must always be one
+ * the caller read from the bytes themselves, never one a server claimed.
  */
 export function pictureResponse(
-  picture: { readonly type: PictureType; readonly bytes: Uint8Array },
+  picture: { readonly type: PictureType | 'image/x-icon'; readonly bytes: Uint8Array },
   cacheControl: string = PICTURE_CACHE_CONTROL,
 ): Response {
   return new Response(picture.bytes, {

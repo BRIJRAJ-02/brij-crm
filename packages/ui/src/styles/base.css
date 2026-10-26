@@ -79,12 +79,16 @@
     --avatar-lg: var(--space-32);
     --avatar-title: var(--size-toolbar);
     --avatar-xl: calc(var(--size-toolbar) + var(--space-24));
+    /* A person's own picture at the top of their link page (the owner, 26 October 2026: "a bit big"), where it is
+       the first thing read and has a whole column to itself. */
+    --avatar-hero: calc(var(--size-toolbar) * 2);
     --avatar-initials-xs: calc(var(--avatar-xs) * 0.5);
     --avatar-initials-sm: calc(var(--avatar-sm) * 0.45);
     --avatar-initials-md: calc(var(--avatar-md) * 0.4);
     --avatar-initials-lg: calc(var(--avatar-lg) * 0.4);
     --avatar-initials-title: calc(var(--avatar-title) * 0.4);
     --avatar-initials-xl: calc(var(--avatar-xl) * 0.4);
+    --avatar-initials-hero: calc(var(--avatar-hero) * 0.4);
   }
 
   /* Toasts are view transitions (see provider/toasts.tsx): a new one rises

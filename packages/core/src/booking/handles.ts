@@ -15,6 +15,11 @@ export interface PublicProfileRow {
   readonly theme: PageTheme;
   /** Whether search engines may show their page (spec 0055, AC-5506). */
   readonly indexable: boolean;
+  /**
+   * The version of the picture a pasted link to their page shows instead of the drawn card (spec 0055, AC-5511),
+   * or absent when they have set none. The bytes are never read with the profile: only the path's version is.
+   */
+  readonly shareImageVersion?: string;
 }
 
 interface ProfileRow extends Record<string, unknown> {
@@ -23,6 +28,7 @@ interface ProfileRow extends Record<string, unknown> {
   readonly bio: string;
   readonly theme: unknown;
   readonly indexable: boolean;
+  readonly share_image_version: string | null;
 }
 
 /** The handle, bio and look of each person named who has a handle (`crm_public_profiles_of`), by their user id. */
@@ -33,7 +39,7 @@ export async function publicProfilesOf(
   const ids = [...new Set(userIds.filter((id): id is string => id !== null && id !== undefined && isUuid(id)))];
   if (ids.length === 0) return new Map();
   const found = await tx.execute<ProfileRow>(
-    sql`select user_id::text as user_id, handle, bio, theme, indexable from crm_public_profiles_of(${`{${ids.join(',')}}`}::uuid[])`,
+    sql`select user_id::text as user_id, handle, bio, theme, indexable, share_image_version from crm_public_profiles_of(${`{${ids.join(',')}}`}::uuid[])`,
   );
   return new Map(
     found.rows.map((row) => [
@@ -43,6 +49,7 @@ export async function publicProfilesOf(
         bio: row.bio,
         theme: PageTheme.safeParse(row.theme).data ?? DEFAULT_PAGE_THEME,
         indexable: row.indexable,
+        ...(typeof row.share_image_version === 'string' ? { shareImageVersion: row.share_image_version } : {}),
       },
     ]),
   );

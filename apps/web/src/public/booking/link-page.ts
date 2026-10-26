@@ -21,6 +21,7 @@ export function blocksOf(handle: string, items: readonly PublicProfileItem[]): r
             ...(item.note === undefined ? {} : { note: item.note }),
             ...(item.mark === undefined ? {} : { mark: item.mark }),
             ...(item.icon === undefined ? {} : { icon: item.icon }),
+            ...(item.siteIcon === undefined ? {} : { siteIcon: item.siteIcon }),
           },
         ];
       case 'testimonial':

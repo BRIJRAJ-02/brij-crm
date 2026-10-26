@@ -136,12 +136,12 @@ export function cardTree(source: CardSource, assets: CardAssets): Element {
           {
             style: {
               display: 'flex',
-              width: '124px',
-              height: '124px',
-              borderRadius: '62px',
+              width: '164px',
+              height: '164px',
+              borderRadius: '82px',
               background: ACCENT,
               color: '#ffffff',
-              fontSize: '48px',
+              fontSize: '64px',
               fontWeight: 600,
               fontFamily: 'Host Grotesk',
               alignItems: 'center',
@@ -152,9 +152,9 @@ export function cardTree(source: CardSource, assets: CardAssets): Element {
         )
       : el('img', {
           src: source.picture,
-          width: 124,
-          height: 124,
-          style: { borderRadius: '62px', objectFit: 'cover' },
+          width: 164,
+          height: 164,
+          style: { borderRadius: '82px', objectFit: 'cover' },
         });
 
   return el(

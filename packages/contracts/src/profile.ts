@@ -3,6 +3,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { BIO_MAX, handleProblem } from './booking/handles.ts';
+import { WALLET_KINDS } from './brand.ts';
 import {
   ProfileBlock,
   ProfileCounts,
@@ -130,9 +131,45 @@ export const MyProfile = z.object({
   theme: PageTheme.optional(),
   /** Whether search engines may show their link page (spec 0055, AC-5506); absent with no handle. */
   indexable: z.boolean().optional(),
+  /**
+   * The picture a pasted link to their page shows instead of the card we draw (spec 0055, AC-5511): the path our
+   * own origin serves it from, absent when they have set none (and with no handle, since there is no page).
+   */
+  shareImage: z.string().optional(),
 });
 /** The caller's profile in this workspace. */
 export type MyProfile = z.infer<typeof MyProfile>;
+
+/** The picture types a share image may be: the two every social platform draws, and the two satori can embed. */
+export const SHARE_IMAGE_TYPES = ['image/png', 'image/jpeg'] as const;
+
+/**
+ * The largest share image taken, in bytes (spec 0055, AC-5511). It is also what keeps one upload inside the API's
+ * 1 MB body limit once it is base64: 500 kB becomes about 667 kB, and the database refuses anything larger.
+ */
+export const SHARE_IMAGE_MAX_BYTES = 500_000;
+
+/** How many base64 characters `SHARE_IMAGE_MAX_BYTES` can become, so a huge one is refused before it is decoded. */
+const SHARE_IMAGE_MAX_BASE64 = Math.ceil(SHARE_IMAGE_MAX_BYTES / 3) * 4;
+
+/**
+ * Setting or clearing the caller's own share image (spec 0055, AC-5511). The picture comes as base64, since this is
+ * the one JSON procedure that carries bytes; `image` absent clears it. The length is checked here and the bytes are
+ * checked again on the server, which is what decides: a client can claim any type it likes.
+ */
+export const SetShareImageInput = WorkspaceScoped.extend({
+  image: z
+    .object({
+      type: z.enum(SHARE_IMAGE_TYPES, { error: 'A share image has to be a PNG or a JPEG.' }),
+      base64: z
+        .string()
+        .min(1, { error: 'Add a picture.' })
+        .max(SHARE_IMAGE_MAX_BASE64, { error: 'That picture is over 500 kB. Use a smaller one.' }),
+    })
+    .optional(),
+  mutationId: Uuid,
+});
+export type SetShareImageInput = z.infer<typeof SetShareImageInput>;
 
 /**
  * A change to the caller's own profile: a new name, a time zone (null follows the workspace's), a handle and bio,
@@ -222,12 +259,26 @@ export const profileContract = {
   setIndexable: oc
     .input(WorkspaceScoped.extend({ indexable: z.boolean(), mutationId: Uuid }))
     .output(z.object({ indexable: z.boolean() })),
+  /**
+   * The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511). `image` absent clears it back
+   * to the drawn one. The answer is the path our origin serves it from, or absent once cleared.
+   */
+  setShareImage: oc.input(SetShareImageInput).output(z.object({ shareImage: z.string().optional() })),
   /** Brings one link in bio page across (spec 0055, AC-5524): the rows land hidden, and a person turns them on. */
   importLinks: oc.input(ImportProfileLinksInput).output(ProfileLinkImportResult),
   saveItem: oc.input(SaveProfileItemInput).output(ProfileItem),
   orderItems: oc.input(OrderProfileItemsInput).output(ProfileItems),
   archiveItem: oc.input(ArchiveProfileItemInput).output(ProfileItems),
   deleteItem: oc.input(DeleteProfileItemInput).output(z.object({ id: Uuid })),
+  /**
+   * A link to save the caller's own page to a wallet (26 October 2026): the owner carries their page and shows
+   * its code at an event. `url` is Google's save link, signed for the press that follows it, so it is asked for
+   * when the button is pressed and never held. `off` when the feature has no credentials in this environment,
+   * which is what the editor reads to decide whether to offer the button at all.
+   */
+  walletLink: oc
+    .input(WorkspaceScoped.extend({ wallet: z.enum(WALLET_KINDS) }))
+    .output(z.object({ url: z.string() }).or(z.object({ off: z.literal(true) }))),
   /** The link page's figures (spec 0051, AC-5127): views, visitors and each block's presses over 30 days. */
   counts: oc.input(WorkspaceScoped).output(ProfileCounts),
 };

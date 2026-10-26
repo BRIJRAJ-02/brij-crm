@@ -387,6 +387,11 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
     note: z.string().optional(),
     mark: z.enum(PUBLIC_LINK_MARKS).optional(),
     icon: z.enum(PROFILE_LINK_ICONS).optional(),
+    /**
+     * Where this site's own icon is served from, when there is no mark and no picked icon: our origin's path, which
+     * the api fills by fetching the site's favicon (26 October 2026). Absent means draw the letter.
+     */
+    siteIcon: z.string().optional(),
     hue: z.enum(HUES),
   }),
   /**

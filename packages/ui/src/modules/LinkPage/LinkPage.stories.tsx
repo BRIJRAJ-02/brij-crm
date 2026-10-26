@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent } from 'storybook/test';
+import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
@@ -291,6 +291,46 @@ export const Tiles: Story = {
       ))}
     </Stage>
   ),
+};
+
+/** A one pixel PNG, as our own origin's icon route would answer one. `data:` is in the pages' `img-src`. */
+const PIXEL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+/**
+ * A site's own icon, which our origin serves (26 October 2026): a link with no network mark and no picked icon
+ * draws the site's favicon, and falls back to its letter the moment the image fails, so a site with no icon (most
+ * of them, sooner or later) never leaves a gap.
+ */
+export const SiteIcons: Story = {
+  args: { person: PERSON },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage
+        {...args}
+        blocks={[
+          { kind: 'link', id: 'works', title: 'Ada’s notes', href: 'https://ada.dev', siteIcon: PIXEL, hue: 'sky' },
+          {
+            kind: 'link',
+            id: 'fails',
+            title: 'Burnt out',
+            href: 'https://gone.example',
+            siteIcon: '/does-not-exist.png',
+            hue: 'purple',
+          },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const rows = canvas.getAllByRole('link');
+    await expect(rows[0]?.querySelector('img')).toBeTruthy();
+    // The one that fails draws its letter instead, and never a broken picture.
+    await waitFor(async () => {
+      await expect(rows[1]?.querySelector('img')).toBeFalsy();
+    });
+    await expect(rows[1]?.textContent).toContain('B');
+  },
 };
 
 /** Only the blocks, inert, under their caption: an editor's "How it looks" for the block being typed. */

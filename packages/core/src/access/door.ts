@@ -643,6 +643,7 @@ interface HandleOwnerRow extends Record<string, unknown> {
   readonly image: string | null;
   readonly theme: unknown;
   readonly indexable: boolean;
+  readonly share_image_version: string | null;
 }
 
 /** The person a handle names (current or old): their identity, current handle, and what their profile shows. */
@@ -666,6 +667,11 @@ export interface HandleOwner {
   readonly theme: PageTheme;
   /** Whether search engines may show their page (spec 0055, AC-5506): on until they say otherwise. */
   readonly indexable: boolean;
+  /**
+   * The version of the picture a pasted link to their page shows instead of the drawn card (spec 0055, AC-5511),
+   * or absent when they have set none. The bytes are never read with the profile: only the path's version is.
+   */
+  readonly shareImageVersion?: string;
 }
 
 /** The person `handle` names, or undefined: a malformed or reserved handle reads nothing. */
@@ -677,7 +683,7 @@ async function handleOwner(
   if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return undefined;
   return db.withWorkspace(NO_WORKSPACE, async (tx) => {
     const found = await tx.execute<HandleOwnerRow>(
-      sql`select user_id::text as user_id, handle, bio, name, image, theme, indexable from crm_handle_owner(${handle})`,
+      sql`select user_id::text as user_id, handle, bio, name, image, theme, indexable, share_image_version from crm_handle_owner(${handle})`,
     );
     const [row] = found.rows;
     if (row === undefined) return undefined;
@@ -691,6 +697,7 @@ async function handleOwner(
       socials: withSocials ? await publicSocialsOf(tx, row.user_id) : [],
       theme: PageTheme.safeParse(row.theme).data ?? DEFAULT_PAGE_THEME,
       indexable: row.indexable,
+      ...(typeof row.share_image_version === 'string' ? { shareImageVersion: row.share_image_version } : {}),
     };
   });
 }
@@ -976,6 +983,50 @@ export interface LinkPageRow extends Record<string, unknown> {
 }
 
 /**
+ * The picture a pasted link to one person's page shows instead of the drawn card (spec 0055, AC-5511), or
+ * undefined when they have set none. The bytes, their type and the version the path must carry, through
+ * `crm_profile_share_image`: the one read of them anywhere, kept apart from the profile readers so that a page
+ * read never drags half a megabyte it will not draw. Exported only from `@crm/core/public`.
+ */
+export async function enterShareImage(
+  deps: { readonly db: Database },
+  userId: string,
+): Promise<{ readonly bytes: Uint8Array; readonly type: string; readonly version: string } | undefined> {
+  if (!isUuid(userId)) return undefined;
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ bytes: Buffer | null; kind: string | null; version: string | null }>(
+      sql`select bytes, kind, version from crm_profile_share_image(${userId}::uuid)`,
+    ),
+  );
+  const row = found.rows[0];
+  if (row === undefined || row.bytes === null || row.kind === null || row.version === null) return undefined;
+  return { bytes: Uint8Array.from(row.bytes), type: row.kind, version: row.version };
+}
+
+/**
+ * A link page's live blocks alone (spec 0051): the same person and the same `crm_profile_items_public` read as
+ * `enterLinkPage`, without the booking pages and forms a whole page needs. The icon route reads through here (26
+ * October 2026): it wants one link block's address, and a page's bookings and forms are nothing to it.
+ * Exported only from `@crm/core/public`.
+ */
+export async function enterLinkBlocks(
+  deps: { readonly db: Database },
+  handle: string,
+  query: { readonly after?: ProfileCursor; readonly max: number },
+): Promise<{ readonly owner: HandleOwner; readonly rows: readonly LinkPageRow[] }> {
+  // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
+  const owner = await handleOwner(deps.db, handle, { withSocials: true });
+  if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
+  const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<LinkPageRow>(
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
+    ),
+  );
+  return { owner, rows: found.rows };
+}
+
+/**
  * A link page `/<handle>` (spec 0051): the handle's person (current or old handle), up to `max` of their live blocks
  * in order after `after` (`crm_profile_items_public`), and of the booking pages those blocks name, the ones visitors
  * see now (`crm_booking_owner_pages`, live only), each as its read only `booking` entry. A handle no one holds is
@@ -991,15 +1042,8 @@ export async function enterLinkPage(
   readonly pages: readonly OwnedPageEntry[];
   readonly forms: readonly OwnedFormEntry[];
 }> {
-  // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
-  const owner = await handleOwner(deps.db, handle, { withSocials: true });
-  if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
-  const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
-  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
-    tx.execute<LinkPageRow>(
-      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
-    ),
-  );
+  const found = await enterLinkBlocks(deps, handle, query);
+  const owner = found.owner;
   const pageIds = found.rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
   const pages = (await enterOwnedPages(deps, owner.userId, pageIds)).filter((entry) => entry.isLive);
   // A form block's form, the same way and under the same rule: only one a visitor may open now (AC-5214).

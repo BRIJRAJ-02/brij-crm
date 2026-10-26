@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   signInPath,
+  walletPageUrl,
   TIMEFIX_APP,
   POWERED_BY_EMAILS,
   POWERED_BY_PAGES,
@@ -113,5 +114,29 @@ describe('signInPath', () => {
     for (const origin of ['', 'nonsense', 'http://app.timefix.com', '//evil.test', 'javascript:alert(1)']) {
       expect(signInPath({ handle: 'ada', appOrigin: origin }), origin).toBe('/sign-in?handle=ada');
     }
+  });
+});
+
+describe('walletPageUrl', () => {
+  it('tags the owner’s own address for the wallet the pass is in', () => {
+    expect(walletPageUrl('https://timefix.com/ada', 'apple_wallet')).toBe(
+      'https://timefix.com/ada?utm_source=timefix&utm_medium=apple_wallet&utm_campaign=wallet_pass',
+    );
+    expect(walletPageUrl('https://timefix.com/ada', 'google_wallet')).toContain('utm_medium=google_wallet');
+  });
+
+  it('keeps a query the address had and overwrites a tag it brought', () => {
+    const tagged = walletPageUrl('https://timefix.com/ada?a=1&utm_source=elsewhere#x', 'apple_wallet');
+    expect(tagged).toContain('a=1');
+    expect(tagged).toContain('utm_source=timefix');
+    expect(tagged).not.toContain('elsewhere');
+    expect(tagged).not.toContain('#');
+  });
+
+  it('refuses anything that is not a full https address, and an unknown wallet', () => {
+    expect(() => walletPageUrl('http://timefix.com/ada', 'apple_wallet')).toThrow();
+    expect(() => walletPageUrl('/ada', 'apple_wallet')).toThrow();
+    // @ts-expect-error a wallet off the list never builds a link.
+    expect(() => walletPageUrl('https://timefix.com/ada', 'paypal')).toThrow();
   });
 });

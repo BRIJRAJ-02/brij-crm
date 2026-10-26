@@ -479,6 +479,19 @@
     background: var(--surface-raised);
   }
 
+  /* A site's own icon, on the same raised square a network's mark sits on, so a row of links reads evenly however
+     each icon was found. Favicons come in every size and shape; the box holds them to one. */
+  .tile[data-tile='site'] {
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
+  }
+
+  .siteIcon {
+    inline-size: var(--size-chip);
+    block-size: var(--size-chip);
+    object-fit: contain;
+  }
+
   /* A booking page's calendar and a contact card's id card in the link colour: the accent itself is under 3:1 on
      its soft tile in dark. */
   .tile:is([data-tile='page'], [data-tile='card']) {

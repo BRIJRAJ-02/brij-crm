@@ -10,6 +10,7 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { safeHref } from '../../lib/safe-href.ts';
+import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { initialsOf } from '../../lib/stable-hue.ts';
 import styles from './LinkPage.module.css';
 import { strings } from './strings.ts';
@@ -34,6 +35,8 @@ export type LinkPageBlock =
       readonly mark?: LinkPageMark;
       /** Else the Lucide icon the owner picked. */
       readonly icon?: IconName;
+      /** Else the site's own icon, from our own origin: the api fetches the favicon and answers it (26 Oct 2026). */
+      readonly siteIcon?: string;
       /** Else the title's first letter, on this hue. */
       readonly hue: Hue;
     }
@@ -361,11 +364,48 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
       </span>
     );
   }
+  // The site's own icon, which our origin serves (26 October 2026). Below the picked icon and above the letter, so
+  // a link to a site with no mark still carries something of that site; it falls back to the letter by itself.
+  if (block.siteIcon !== undefined) {
+    return <SiteTile src={block.siteIcon} title={block.title} hue={block.hue} />;
+  }
+  return <LetterTile title={block.title} hue={block.hue} />;
+}
+
+/** A block's title as its first letter on its hue: the tile every other one falls back to. */
+function LetterTile({ title, hue }: { readonly title: string; readonly hue: Hue }) {
   // The first word's first letter, a whole grapheme (an accent or an emoji stays one).
-  const letter = initialsOf(block.title.trim().split(/\s+/u)[0] ?? '');
+  const letter = initialsOf(title.trim().split(/\s+/u)[0] ?? '');
   return (
-    <span className={styles.tile} data-tile="letter" data-hue={block.hue} aria-hidden="true">
+    <span className={styles.tile} data-tile="letter" data-hue={hue} aria-hidden="true">
       {letter}
+    </span>
+  );
+}
+
+/**
+ * A link's own site icon, from our origin only (`safeImageSrc`, AC-5110). A site with no icon answers 404 and a
+ * great many favicons are broken, so this draws the letter instead the moment the image fails rather than leaving
+ * a gap: the page never shows a broken picture. The icon is decorative, since the title beside it says where the
+ * link goes.
+ */
+function SiteTile({ src, title, hue }: { readonly src: string; readonly title: string; readonly hue: Hue }) {
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const image = safeImageSrc(src);
+  if (image === undefined || failed === image) return <LetterTile title={title} hue={hue} />;
+  return (
+    <span className={styles.tile} data-tile="site">
+      <img
+        className={styles.siteIcon}
+        src={image}
+        alt={strings.siteIconAlt}
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+        onError={() => {
+          setFailed(image);
+        }}
+      />
     </span>
   );
 }
@@ -821,7 +861,7 @@ export function LinkPage({
               <Avatar
                 name={person.name}
                 id={person.id}
-                size="xl"
+                size="hero"
                 isDecorative
                 {...(person.image === undefined ? {} : { src: person.image })}
               />

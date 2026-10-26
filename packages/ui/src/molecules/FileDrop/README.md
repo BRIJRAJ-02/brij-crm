@@ -20,7 +20,13 @@ New. Imports (#30) and file attributes (#32) take files the same way, and say up
 
 - Its hint reads "Drag a file here, or browse" when it takes one file and "Drag files here, or browse" with `allowsMultiple` (QA, 22 October 2026).
 
-Idle, drag over (accent), focus, refused (the error under it), disabled.
+Idle, with a preview, drag over (accent), focus, refused (the error under it), disabled.
+
+`preview` (26 October 2026) draws the picture that is there already in the upload icon's place, for a single file
+picker that replaces one: a page's share image, and later an avatar or a logo. Somebody should see what they are
+about to replace. It goes through `safeImageSrc` as every image in the library does, so only our own origin, a
+`data:` or a `blob:` is ever drawn, and it falls back to the icon without a word if the image won't load, since a
+broken picture inside a drop box reads as a broken control.
 
 ## Keyboard
 

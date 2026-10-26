@@ -39,7 +39,14 @@ import { hashAddress, mountPublicForms } from './forms/public.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
 import { bookingLinkKey } from './booking-link.ts';
-import { LOCAL_FORMS_IP_SALT, releaseOf, wakesOnUse, type ApiEnv } from './env.ts';
+import {
+  appleWalletSettings,
+  googleWalletSettings,
+  LOCAL_FORMS_IP_SALT,
+  releaseOf,
+  wakesOnUse,
+  type ApiEnv,
+} from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
 import type { Mailer } from './mail/mailer.ts';
@@ -54,6 +61,9 @@ import {
   type PictureFetch,
 } from './public/picture.ts';
 import { createOutsideFetch, type OutsideFetch } from './public/outside.ts';
+import { createFaviconFetch, type FaviconFetch } from './public/favicon.ts';
+import { createApplePass, createWalletLinks } from './wallet/wallet.ts';
+import { mountWalletPass } from './public/wallet.ts';
 import { EMAIL_UNSUBSCRIBE_PATH, mountEmailPreferences } from './public/email-preferences.ts';
 import { emailLinkKey } from './email-link.ts';
 import { guestKeys } from './public/visitor.ts';
@@ -193,6 +203,8 @@ export interface AppServices {
   readonly emailPreferenceLimiter?: PublicLimiter;
   /** Fetches a host's account picture from Google's picture hosts (23 Oct 2026): the real one unless a test passes its own. */
   readonly pictureFetch?: PictureFetch;
+  /** Fetches a link block's site icon (26 Oct 2026): the real one unless a test passes its own. */
+  readonly faviconFetch?: FaviconFetch;
   /** The clock the public booking routes read, for tests. */
   readonly now?: () => Date;
   /** Where invitation emails go (spec 0031): the server's mailer; absent, every send fails and is reported unsent. */
@@ -302,6 +314,8 @@ export function createApp({
         }));
   // Account pictures from Google's picture hosts (23 Oct 2026), for the public pages and the person's own.
   const pictureFetch = services.pictureFetch ?? createPictureFetch();
+  // A link block's own site icon (26 Oct 2026), for the public link page.
+  const faviconFetch = services.faviconFetch ?? createFaviconFetch();
   // The key every booking's guest page token derives from, shared with the worker's emails.
   const linkKey = bookingLinkKey(env);
   const calendarRoutes = createCalendarRoutes({
@@ -359,6 +373,15 @@ export function createApp({
   const formsOrigin = new URL(env.FORMS_PUBLIC_ORIGIN ?? env.APP_URL).origin;
   // The public booking pages may be served from their own origin (BOOKING_PUBLIC_ORIGIN): their writes come from there.
   const bookingOrigin = new URL(env.BOOKING_PUBLIC_ORIGIN ?? env.APP_URL).origin;
+  // Add to Wallet (26 Oct 2026): built once from the environment, so no handler ever reads a key.
+  const googleWallet = googleWalletSettings(env);
+  const appleWallet = appleWalletSettings(env);
+  const walletSettings = {
+    origin: bookingOrigin,
+    ...(googleWallet === undefined ? {} : { google: googleWallet }),
+    ...(appleWallet === undefined ? {} : { apple: appleWallet }),
+  };
+  const walletLinks = createWalletLinks(walletSettings);
   // The app and API share one origin, so a write from anywhere else is refused.
   app.use('*', async (c, next) => {
     if (SAFE_METHODS.has(c.req.method)) return next();
@@ -449,6 +472,8 @@ export function createApp({
         },
         // Only whether a person has Google linked, by their own user id, for Profile's Sync Google photo.
         googleLinked: (userId) => identity.hasGoogleAccount(userId),
+        // Add to Wallet (26 Oct 2026): one maker per wallet, or nothing where this environment has no credentials.
+        walletLink: walletLinks,
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
@@ -562,6 +587,7 @@ export function createApp({
         }),
       fetch: pictureFetch,
     },
+    favicons: faviconFetch,
     ...(services.now === undefined ? {} : { now: services.now }),
     // Knowing the visitor (spec 0028): their session through the member door, or a guest's own Google for the visit.
     visitor: {
@@ -614,6 +640,10 @@ export function createApp({
     for (const cookie of session.setCookies) answered.headers.append('set-cookie', cookie);
     return answered;
   });
+
+  // The caller's own link page as an Apple Wallet pass (26 Oct 2026). It lives under `public/` because it reads a
+  // handle through the public booking door, which only that folder may open; the route itself is private.
+  mountWalletPass(app, { db, auth, pass: createApplePass(walletSettings) });
 
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
   app.onError((error, c) => {

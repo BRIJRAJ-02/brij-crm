@@ -92,6 +92,13 @@ export const strings = {
   sharingText: 'What people see when your page is shared, and whether it can be found.',
   indexable: 'Let search engines show this page',
   indexableText: 'Off, your page still works and every link on it still opens. It just stops appearing in results.',
+  shareImage: 'Picture when shared',
+  shareImageText: 'Paste your link anywhere and this is the picture people see. Leave it and we draw one for you.',
+  shareImageDrop: 'Upload a picture',
+  shareImageAlt: 'Your page’s share picture',
+  shareImageRemove: 'Use the drawn one',
+  shareImageRemoving: 'Remove this picture?',
+  shareImageRemoveText: 'Your link will show the card we draw from your name and bio instead.',
   appearance: 'Appearance',
   appearanceText: 'How your page looks. Every change shows in the preview and saves at once.',
   /**

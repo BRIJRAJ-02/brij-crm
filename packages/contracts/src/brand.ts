@@ -127,3 +127,34 @@ export function timefixUrl({ surface, placement = 'footer_logo', workspaceSlug }
   }
   return `${TIMEFIX_SITE}/?${query.toString()}`;
 }
+
+/**
+ * The wallets a page's pass can be kept in, sent as `utm_medium` (26 October 2026). The owner carries their own
+ * link page in their wallet and shows its code; a visit that came from that scan should be tellable from one that
+ * came from a shared link, which is the whole point of tagging it.
+ */
+export const WALLET_KINDS = ['apple_wallet', 'google_wallet'] as const;
+/** Which wallet a pass is in (`utm_medium`). */
+export type WalletKind = (typeof WALLET_KINDS)[number];
+
+/**
+ * The owner's own page as a wallet pass's code carries it: their address, tagged `utm_source=timefix`,
+ * `utm_medium=<wallet>` and `utm_campaign=wallet_pass`. A query the address already had is kept, and a tag it
+ * already had is overwritten, so the pass's own tags always win. Anything but an `https` address throws, since a
+ * pass is signed and shipped to a phone and nothing unchecked belongs in one.
+ */
+export function walletPageUrl(pageUrl: string, kind: WalletKind): string {
+  if (!(WALLET_KINDS as readonly string[]).includes(kind)) throw new Error('That isn’t a wallet.');
+  let url: URL;
+  try {
+    url = new URL(pageUrl);
+  } catch {
+    throw new Error('A wallet pass needs a full https address.');
+  }
+  if (url.protocol !== 'https:') throw new Error('A wallet pass needs a full https address.');
+  url.searchParams.set('utm_source', 'timefix');
+  url.searchParams.set('utm_medium', kind);
+  url.searchParams.set('utm_campaign', 'wallet_pass');
+  url.hash = '';
+  return url.href;
+}

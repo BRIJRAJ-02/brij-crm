@@ -3,6 +3,7 @@ import { Button as AriaButton, DropZone, FileTrigger, Text } from 'react-aria-co
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { formatFileSize } from '../FileItem/FileItem.tsx';
+import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import styles from './FileDrop.module.css';
 import { strings } from './strings.ts';
 
@@ -17,6 +18,12 @@ export interface FileDropProps {
   readonly allowsMultiple?: boolean;
   /** Called with the files that passed the checks. */
   readonly onFiles: (files: readonly File[]) => void;
+  /**
+   * The picture that is there already, for a single file picker that replaces one (an avatar, a logo, a page's
+   * share image): drawn above the label, so somebody sees what they are about to replace. It comes from our own
+   * origin like every other image here (`safeImageSrc`), and goes quietly if it won't load.
+   */
+  readonly preview?: { readonly src: string; readonly alt: string };
   readonly isDisabled?: boolean;
 }
 
@@ -38,10 +45,13 @@ export function FileDrop({
   maxSize,
   allowsMultiple = false,
   onFiles,
+  preview,
   isDisabled = false,
 }: FileDropProps) {
   const { locale } = useFormatSettings();
   const [error, setError] = useState<string | undefined>(undefined);
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const shown = safeImageSrc(preview?.src);
   const take = (files: readonly File[]) => {
     const wrongType = files.find((file) => !accepts(file, acceptedTypes));
     if (wrongType !== undefined) {
@@ -70,7 +80,18 @@ export function FileDrop({
           void Promise.all(event.items.flatMap((item) => (item.kind === 'file' ? [item.getFile()] : []))).then(take);
         }}
       >
-        <Icon name="upload" size="md" tone="muted" />
+        {shown !== undefined && failed !== shown ? (
+          <img
+            className={styles.preview}
+            src={shown}
+            alt={preview?.alt ?? ''}
+            onError={() => {
+              setFailed(shown);
+            }}
+          />
+        ) : (
+          <Icon name="upload" size="md" tone="muted" />
+        )}
         <Text slot="label" className={styles.label}>
           {label}
         </Text>

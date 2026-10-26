@@ -7,7 +7,7 @@
 // So is whether their picture shows on their public pages (owner ask A124,
 // 23 Oct 2026), read and set through `booking/picture-choice.ts`, and their social links (25 Oct 2026), through
 // `booking/socials.ts`.
-import { BIO_MAX, handleProblem, type MyProfile, type UpdateMyProfileInput } from '@crm/contracts';
+import { BIO_MAX, handleProblem, profileSharePath, type MyProfile, type UpdateMyProfileInput } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq } from 'drizzle-orm';
 import { checkScope } from '../access/mint.ts';
@@ -99,6 +99,11 @@ async function readProfile(
     ...(pictureHidden === undefined ? {} : { pictureHidden }),
     ...(socials === undefined ? {} : { socials: [...socials] }),
     ...(held === undefined ? {} : { theme: held.theme, indexable: held.indexable }),
+    // The picture a pasted link to their page shows instead of the drawn card (AC-5511): the path our own origin
+    // serves it from, so the editor draws exactly what a visitor's link preview will.
+    ...(held?.shareImageVersion === undefined
+      ? {}
+      : { shareImage: profileSharePath(held.handle, held.shareImageVersion) }),
   };
 }
 

@@ -302,6 +302,31 @@ function Blocks({
       },
     );
   };
+  // The picture a pasted link shows instead of the drawn card (AC-5511). Shown the moment it is chosen, as the
+  // two above are; a refusal puts back what was there and says why on the same card.
+  const [chosenShare, setChosenShare] = useState<string | undefined>(undefined);
+  const [sharePicked, setSharePicked] = useState(false);
+  const shareImage = sharePicked ? chosenShare : profile.shareImage;
+  const chooseShareImage = (image: { readonly type: string; readonly base64: string } | undefined) => {
+    const was = shareImage;
+    setIndexableRefusal(undefined);
+    // Drawn from the bytes in hand, so the preview changes with the press rather than after the round trip.
+    setChosenShare(image === undefined ? undefined : `data:${image.type};base64,${image.base64}`);
+    setSharePicked(true);
+    // The picker's own word for the file, narrowed to what the procedure takes; the server reads the bytes anyway.
+    const kind: 'image/png' | 'image/jpeg' | undefined =
+      image?.type === 'image/png' ? 'image/png' : image?.type === 'image/jpeg' ? 'image/jpeg' : undefined;
+    const sent = image === undefined || kind === undefined ? undefined : { type: kind, base64: image.base64 };
+    void linkPage.setShareImage(slug, sent).then(
+      (saved) => {
+        setChosenShare(saved.shareImage);
+      },
+      (error: unknown) => {
+        setChosenShare(was);
+        setIndexableRefusal(error instanceof Error ? (error as DataError) : undefined);
+      },
+    );
+  };
   const items = useMemo(() => (state.status === 'ready' ? state.items : []), [state]);
   const counts = state.status === 'ready' ? state.counts : undefined;
   const socialNetworks = useMemo(() => (profile.socials ?? []).map((link) => link.network), [profile.socials]);
@@ -662,6 +687,8 @@ function Blocks({
       />
       <SharingCard
         indexable={indexable}
+        {...(shareImage === undefined ? {} : { shareImage })}
+        onShareImage={chooseShareImage}
         onChange={chooseIndexable}
         {...(indexableRefusal === undefined ? {} : { refusal: indexableRefusal })}
       />

@@ -42,6 +42,13 @@ export const BOOKING_LIMITS = {
   pressesPerHandle: { max: 600, windowMs: 60_000 },
   /** A link page's views (AC-5126): past 600 a minute for one page, its reads are answered but not counted. */
   viewsPerHandle: { max: 600, windowMs: 60_000 },
+  /**
+   * A link block's own icon (26 Oct 2026): tighter than a picture, because a miss costs a read of a site we do not
+   * run, not a read of Google. 20 a minute per address and 60 per handle cover a page of 20 links loading cold
+   * twice over; the edge keeps each one for a day, so a page in normal use asks once.
+   */
+  iconsPerAddress: { max: 20, windowMs: 60_000 },
+  iconsPerHandle: { max: 60, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;
 
 /** The least time a person takes from opening the page to booking. */

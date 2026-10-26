@@ -232,6 +232,121 @@ const calendarFields = {
   ),
 };
 
+// Add to Wallet (the owner, 26 October 2026): off unless `WALLET_PASSES=on`, so the app boots without it and the
+// buttons simply aren't offered. On, Google needs an approved Wallet API issuer id, a service account's address
+// and its RSA private key (PEM, with real newlines or `\n`), and the class every pass belongs to. Apple's half
+// arrives with its certificate. Nothing here is ever logged or answered.
+const walletFields = {
+  WALLET_PASSES: optional(z.enum(['on', 'off'])),
+  GOOGLE_WALLET_ISSUER_ID: optional(
+    z
+      .string()
+      .trim()
+      .regex(/^\d{10,30}$/, 'GOOGLE_WALLET_ISSUER_ID is a number.'),
+  ),
+  GOOGLE_WALLET_CLIENT_EMAIL: optional(z.email('GOOGLE_WALLET_CLIENT_EMAIL is the service account’s address.')),
+  GOOGLE_WALLET_PRIVATE_KEY: optional(z.string().min(1)),
+  GOOGLE_WALLET_CLASS: optional(
+    z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/, 'GOOGLE_WALLET_CLASS is one word.'),
+  ),
+};
+
+/** The wallet variables as parsed, before they are checked together. */
+interface WalletFields {
+  readonly WALLET_PASSES?: 'on' | 'off' | undefined;
+  readonly GOOGLE_WALLET_ISSUER_ID?: string | undefined;
+  readonly GOOGLE_WALLET_CLIENT_EMAIL?: string | undefined;
+  readonly GOOGLE_WALLET_PRIVATE_KEY?: string | undefined;
+  readonly GOOGLE_WALLET_CLASS?: string | undefined;
+  readonly APPLE_WALLET_PASS_TYPE_ID?: string | undefined;
+  readonly APPLE_WALLET_TEAM_ID?: string | undefined;
+  readonly APPLE_WALLET_CERTIFICATE?: string | undefined;
+  readonly APPLE_WALLET_KEY?: string | undefined;
+  readonly APPLE_WALLET_WWDR?: string | undefined;
+}
+
+/**
+ * Google Wallet once checked: all four together or the feature is off. A key pasted into a dashboard arrives with
+ * its newlines written out, so `\n` becomes a newline here and a real PEM either way.
+ */
+export interface GoogleWalletSettings {
+  readonly issuerId: string;
+  readonly clientEmail: string;
+  readonly privateKey: string;
+  readonly classSuffix: string;
+}
+
+/**
+ * The Google Wallet settings, or undefined when the feature is off. Having some of the four but not all of them is
+ * a mistake worth refusing to boot over: a half configured pass fails at the moment somebody presses the button.
+ */
+export function googleWalletSettings(env: WalletFields): GoogleWalletSettings | undefined {
+  if (env.WALLET_PASSES !== 'on') return undefined;
+  const { GOOGLE_WALLET_ISSUER_ID, GOOGLE_WALLET_CLIENT_EMAIL, GOOGLE_WALLET_PRIVATE_KEY, GOOGLE_WALLET_CLASS } = env;
+  if (
+    GOOGLE_WALLET_ISSUER_ID === undefined ||
+    GOOGLE_WALLET_CLIENT_EMAIL === undefined ||
+    GOOGLE_WALLET_PRIVATE_KEY === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    issuerId: GOOGLE_WALLET_ISSUER_ID,
+    clientEmail: GOOGLE_WALLET_CLIENT_EMAIL,
+    privateKey: GOOGLE_WALLET_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    classSuffix: GOOGLE_WALLET_CLASS ?? 'link_page',
+  };
+}
+
+/**
+ * Apple Wallet once checked: the five together, or the feature is off. A PEM pasted into a dashboard arrives with
+ * its newlines written out, so `\n` becomes a newline here and a real PEM either way.
+ */
+export interface AppleWalletSettings {
+  readonly passTypeId: string;
+  readonly teamId: string;
+  readonly certificatePem: string;
+  readonly privateKeyPem: string;
+  readonly wwdrPem: string;
+}
+
+/** A PEM as the environment may hold it: real newlines, or the `\n` a dashboard writes instead. */
+const pem = (value: string): string => value.replace(/\\n/g, '\n');
+
+/**
+ * The Apple Wallet settings, or undefined when the feature is off. Some of the five but not all of them is a
+ * mistake worth leaving the button undrawn over, rather than failing at the press.
+ */
+export function appleWalletSettings(env: WalletFields): AppleWalletSettings | undefined {
+  if (env.WALLET_PASSES !== 'on') return undefined;
+  const {
+    APPLE_WALLET_PASS_TYPE_ID,
+    APPLE_WALLET_TEAM_ID,
+    APPLE_WALLET_CERTIFICATE,
+    APPLE_WALLET_KEY,
+    APPLE_WALLET_WWDR,
+  } = env;
+  if (
+    APPLE_WALLET_PASS_TYPE_ID === undefined ||
+    APPLE_WALLET_TEAM_ID === undefined ||
+    APPLE_WALLET_CERTIFICATE === undefined ||
+    APPLE_WALLET_KEY === undefined ||
+    APPLE_WALLET_WWDR === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    passTypeId: APPLE_WALLET_PASS_TYPE_ID,
+    teamId: APPLE_WALLET_TEAM_ID,
+    certificatePem: pem(APPLE_WALLET_CERTIFICATE),
+    privateKeyPem: pem(APPLE_WALLET_KEY),
+    wwdrPem: pem(APPLE_WALLET_WWDR),
+  };
+}
+
 /** The calendar variables as parsed, before they are checked together. */
 interface CalendarFields {
   readonly CALENDAR_SYNC?: 'on' | 'off' | undefined;
@@ -405,6 +520,7 @@ export const ApiEnv = z
     // handler time) to every /api/rpc answer. Local only: it exposes internal timings, so it is refused elsewhere.
     LOAD_TIMING: optional(z.enum(['on', 'off'])),
     ...calendarFields,
+    ...walletFields,
     // Forms (spec 0023): reCAPTCHA v3's keys, the site key sent to browsers and the secret the API verifies tokens
     // with. Both or neither, and optional everywhere: unset, the honeypot, the fill time and the rate limits decide
     // alone; set, the score is one more spam signal.
@@ -596,6 +712,7 @@ export const WorkerEnv = z
     // Neon's compute can suspend; 180 when unset, 0 never sleeps (a paid plan, or debugging). Only with the jobs on.
     WORKER_IDLE_SLEEP_SECONDS: optional(z.coerce.number().int().min(0).max(86_400)),
     ...calendarFields,
+    ...walletFields,
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });

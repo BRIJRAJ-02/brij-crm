@@ -24,6 +24,7 @@
     "free-email-domains": "catalog:",
     "graphile-worker": "catalog:",
     "hono": "catalog:",
+    "node-forge": "catalog:",
     "posthog-node": "catalog:",
     "resend": "catalog:",
     "zod": "catalog:"
@@ -32,6 +33,7 @@
     "@crm/config": "workspace:*",
     "@orpc/client": "catalog:",
     "@types/node": "catalog:",
+    "@types/node-forge": "catalog:",
     "drizzle-orm": "catalog:",
     "eslint": "catalog:",
     "typescript": "catalog:",

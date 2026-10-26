@@ -36,6 +36,14 @@
     box-shadow: var(--shadow-focus);
   }
 
+  /* What is there already, in the icon's place: wide enough to read, never tall enough to push the words out. */
+  .preview {
+    max-inline-size: var(--size-tile);
+    max-block-size: var(--size-row);
+    border-radius: var(--radius-sm);
+    object-fit: contain;
+  }
+
   .label {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
