@@ -36,6 +36,12 @@ export const APP_HEADER_SOURCE = `/((?!api/|api$|f/|b/[^/]+$|embed/|${HANDLE_SEG
  * draws it (`api/card.mjs`), never the API: the middleware leaves it alone and vercel.json's rewrite takes it.
  */
 export const CARD_PATH = /^\/api\/public\/handles\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]\/card\.png$/;
+/**
+ * The band across an Apple Wallet pass, `/api/public/handles/<handle>/pass-strip.png` (the owner, 26 October
+ * 2026). Drawn by the same function as the card, for the same reason, and left alone by the middleware the same
+ * way: the API has no font and no renderer, and this project already has both.
+ */
+export const STRIP_PATH = /^\/api\/public\/handles\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]\/pass-strip\.png$/;
 
 /** A path vercel.json sends to book.html as a handle address, matched as Vercel anchors it. */
 export const HANDLE_PATH = new RegExp(`^/${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?/?$`);

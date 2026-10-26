@@ -30,8 +30,14 @@ const SLUG = '[a-z0-9][a-z0-9-]{0,59}';
 /** public-paths.ts's HANDLE_PATH: a handle address, `/<handle>` or `/<handle>/<slug>`, as Vercel anchors it. */
 export const HANDLE_PATH = new RegExp(`^/${HANDLE}(?:/${SLUG})?/?$`);
 
-/** public-paths.ts's CARD_PATH: the share card, under the public API's prefix but drawn by this project. */
+/** public-paths.ts's CARD_PATH and STRIP_PATH: pictures under the public API's prefix, drawn by this project. */
 export const CARD_PATH = /^\/api\/public\/handles\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]\/card\.png$/;
+/**
+ * The band across an Apple Wallet pass, `/api/public/handles/<handle>/pass-strip.png` (the owner, 26 October
+ * 2026). Drawn by the same function as the card, for the same reason, and left alone by the middleware the same
+ * way: the API has no font and no renderer, and this project already has both.
+ */
+export const STRIP_PATH = /^\/api\/public\/handles\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]\/pass-strip\.png$/;
 
 /** public-paths.ts's PUBLIC_HOST_PATH: the handle addresses, /b/, /f/, /embed/, the built files and /api/public/. */
 export const PUBLIC_HOST_PATH = new RegExp(
@@ -129,7 +135,7 @@ export const config = {
  * than to an API that has no such route (spec 0055, AC-5510).
  */
 const isApiPath = (pathname: string) =>
-  (pathname === '/api' || pathname.startsWith('/api/')) && !CARD_PATH.test(pathname);
+  (pathname === '/api' || pathname.startsWith('/api/')) && !CARD_PATH.test(pathname) && !STRIP_PATH.test(pathname);
 
 /**
  * The header carrying the edge secret, which proves to the API that a request

@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import middleware, {
   apiTarget,
   CARD_PATH,
+  STRIP_PATH,
   config,
   EDGE_HEADER,
   GEO_HEADERS,
@@ -437,6 +438,7 @@ describe('the public host check written out in middleware.ts', () => {
     expect(PUBLIC_HOST_PATH.source).toBe(paths.PUBLIC_HOST_PATH.source);
     expect(HANDLE_PATH.source).toBe(paths.HANDLE_PATH.source);
     expect(CARD_PATH.source).toBe(paths.CARD_PATH.source);
+    expect(STRIP_PATH.source).toBe(paths.STRIP_PATH.source);
   });
 
   it('moves exactly what public-paths.ts moves', () => {

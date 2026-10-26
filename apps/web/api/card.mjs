@@ -33,9 +33,12 @@ const {
   CARD_CACHE_CONTROL_UNVERSIONED,
   CARD_HEIGHT,
   CARD_WIDTH,
+  STRIP_HEIGHT,
+  STRIP_WIDTH,
   cardFonts,
   cardTree,
   handleOf,
+  stripTree,
 } = await import('../card-image.ts');
 const { default: satori } = await import('satori');
 const { Resvg } = await import('@resvg/resvg-js');
@@ -131,8 +134,13 @@ export async function GET(request) {
     profile = undefined;
   }
 
+  // The pass's band (the owner, 26 October 2026). It is drawn from the same profile, but never from a chosen
+  // share image: that picture is made to be cropped by whatever reads it, and a band 375 × 144 would crop it to
+  // nothing recognisable. A pass carries the person, which is what this draws.
+  const isStrip = url.pathname.endsWith('/pass-strip.png');
+
   // A picture its owner chose stands in for the whole card, and nothing below is drawn at all.
-  const chosen = profile === undefined ? undefined : await chosenCard(url.origin, profile.shareImage);
+  const chosen = profile === undefined || isStrip ? undefined : await chosenCard(url.origin, profile.shareImage);
   if (chosen !== undefined) {
     return new Response(chosen.bytes, {
       status: 200,
@@ -152,18 +160,19 @@ export async function GET(request) {
   const picture = profile === undefined ? undefined : await pictureOf(url.origin, profile.image);
   const loaded = await loadAssets();
 
-  const svg = await satori(
-    cardTree(
-      { name, handle: shown, description: bio ?? DEFAULT_DESCRIPTION, ...(picture === undefined ? {} : { picture }) },
-      loaded,
-    ),
-    {
-      width: CARD_WIDTH,
-      height: CARD_HEIGHT,
-      fonts: cardFonts(loaded),
-    },
-  );
-  const png = new Resvg(svg, { fitTo: { mode: 'width', value: CARD_WIDTH } }).render().asPng();
+  const source = {
+    name,
+    handle: shown,
+    description: bio ?? DEFAULT_DESCRIPTION,
+    ...(picture === undefined ? {} : { picture }),
+  };
+  const width = isStrip ? STRIP_WIDTH : CARD_WIDTH;
+  const svg = await satori(isStrip ? stripTree(source, loaded) : cardTree(source, loaded), {
+    width,
+    height: isStrip ? STRIP_HEIGHT : CARD_HEIGHT,
+    fonts: cardFonts(loaded),
+  });
+  const png = new Resvg(svg, { fitTo: { mode: 'width', value: width } }).render().asPng();
 
   return new Response(png, {
     status: 200,

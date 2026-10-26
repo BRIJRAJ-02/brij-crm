@@ -40,11 +40,17 @@ export interface ApplePass {
   /** `icon.png` (29px) and `icon@2x.png` (58px). Apple refuses a pass with no icon. */
   readonly icon: Uint8Array;
   readonly icon2x: Uint8Array;
+  /**
+   * The band across the pass (`strip@3x.png`, 1125 × 432), drawn in the share card's own language. Absent where
+   * it could not be drawn in time: the pass is then the plain tag it was, which is far better than no pass.
+   */
+  readonly strip?: Uint8Array;
 }
 
 /**
- * The pass's own description (`pass.json`). A Generic pass: not a ticket, not a boarding pass, not a loyalty card.
- * The code is what the pass is for, and the address is repeated as text under it so it can be read aloud.
+ * The pass's own description (`pass.json`). A Store Card where there is a band to carry, because that is the one
+ * style Apple draws a strip on; a Generic pass without, which is the same pass with no picture. The code is what
+ * the pass is for either way, and the address is repeated as text under it so it can be read aloud.
  */
 export function applePassJson(config: AppleWalletConfig, pass: ApplePass): Record<string, unknown> {
   const address = pass.pageUrl.replace(/^https:\/\//, '');
@@ -73,7 +79,7 @@ export function applePassJson(config: AppleWalletConfig, pass: ApplePass): Recor
         altText: address,
       },
     ],
-    generic: {
+    [pass.strip === undefined ? 'generic' : 'storeCard']: {
       // Every empty row is room the code gets instead. A pass with no fields draws its barcode large and
       // centred, which is the whole of what this pass is for; the address is already legible under the code
       // as the barcode's own alt text, and the rest is on the back.
@@ -140,6 +146,9 @@ export function applePkpass(config: AppleWalletConfig, pass: ApplePass): Uint8Ar
     { name: 'pass.json', bytes: encoder.encode(JSON.stringify(applePassJson(config, pass))) },
     { name: 'icon.png', bytes: pass.icon },
     { name: 'icon@2x.png', bytes: pass.icon2x },
+    // One size only, at three pixels to the point: every phone that shows a pass has that screen, and a second
+    // copy of the same picture is bytes the person waits for.
+    ...(pass.strip === undefined ? [] : [{ name: 'strip@3x.png', bytes: pass.strip }]),
   ];
   const manifest = encoder.encode(JSON.stringify(appleManifest(files)));
   return makeZip([

@@ -39,18 +39,35 @@ function noise(row: number, column: number): number {
  * The field as an SVG data URI: satori lays out boxes and text, so the dashes arrive as one picture rather than
  * several thousand elements. Each dash's alpha is its place, fading upward and toward the far side.
  */
-function fieldImage(width: number, height: number): string {
+interface Field {
+  /**
+   * Where the dashes are densest. The card fades upward into its own ink; the pass's band fades downward into
+   * the pass it sits on, so neither ends on an edge.
+   */
+  readonly fade?: 'up' | 'down';
+  /**
+   * Whether the field also fades toward the far side. The card does: it leaves the right clear for the words
+   * over it. A band 375 points wide and 144 tall has no far side to speak of, and the same falloff leaves the
+   * blue bunched in one corner, so the band runs the dashes the whole way across instead.
+   */
+  readonly sideways?: boolean;
+  /** How strongly the dashes read, against `STRENGTH`'s 0.85. */
+  readonly strength?: number;
+}
+
+function fieldImage(width: number, height: number, field: Field = {}): string {
+  const { fade = 'up', sideways = true, strength = STRENGTH } = field;
   const columns = Math.ceil(width / STEP_X);
   const rows = Math.ceil(height / STEP_Y);
   const dashes: string[] = [];
   for (let row = 0; row < rows; row += 1) {
-    const down = row / rows;
+    const down = fade === 'up' ? row / rows : 1 - row / rows;
     for (let column = 0; column < columns; column += 1) {
       const grain = noise(row, column);
       if (grain < 0.3) continue;
-      const toward = column / columns;
-      const place = down ** 1.35 * (1 - toward) ** 1.25 * (0.6 + grain * 0.4);
-      const alpha = Math.min(1, place) * STRENGTH;
+      const toward = sideways ? (1 - column / columns) ** 1.25 : 1;
+      const place = down ** 1.35 * toward * (0.6 + grain * 0.4);
+      const alpha = Math.min(1, place) * strength;
       if (alpha < 0.012) continue;
       const length = DASH_WIDTH - 2 + Math.round(noise(column, row) * 6);
       const x = column * STEP_X + (STEP_X - length) / 2;
@@ -65,11 +82,12 @@ function fieldImage(width: number, height: number): string {
 }
 
 /**
- * The handle `/api/public/handles/<handle>/card.png` names, or undefined when the path names none. The shape is a
- * handle's own, so nothing else is ever sent on to the api: a path is read here, never trusted.
+ * The handle `/api/public/handles/<handle>/card.png` or `.../pass-strip.png` names, or undefined when the path
+ * names none. The shape is a handle's own, so nothing else is ever sent on to the api: a path is read here,
+ * never trusted.
  */
 export function handleOf(pathname: string): string | undefined {
-  const match = /^\/api\/public\/handles\/([^/]+)\/card\.png$/.exec(pathname);
+  const match = /^\/api\/public\/handles\/([^/]+)\/(?:card|pass-strip)\.png$/.exec(pathname);
   const handle = match?.[1];
   if (handle === undefined) return undefined;
   let decoded: string;
@@ -113,6 +131,15 @@ export interface CardAssets {
   /** The Timefix lockup as a data URI (the white one, made for a dark ground). */
   readonly wordmark: string;
 }
+
+/**
+ * The band across an Apple Wallet pass (the owner, 26 October 2026): 375 × 144 points at three pixels to the
+ * point, which is the one size Apple draws a store card's strip at. It carries the same ground, face and lockup
+ * as the share card, so the pass reads as ours rather than as Apple's default furniture; it is short and wide,
+ * so the name sits beside the face instead of under it, and the page's own words have no room and are left out.
+ */
+export const STRIP_WIDTH = 1125;
+export const STRIP_HEIGHT = 432;
 
 /** A satori element, written by hand: this file has no JSX, so the entry needs no build step. */
 interface Element {
@@ -223,6 +250,99 @@ export function cardTree(source: CardSource, assets: CardAssets): Element {
         source.description,
       ),
     ),
+  );
+}
+
+/** The pass's band: the face, their name and address beside it, the lockup above, on the same dash field. */
+export function stripTree(source: CardSource, assets: CardAssets): Element {
+  const FACE = 216;
+  const face =
+    source.picture === undefined
+      ? el(
+          'div',
+          {
+            style: {
+              display: 'flex',
+              width: `${String(FACE)}px`,
+              height: `${String(FACE)}px`,
+              borderRadius: `${String(FACE / 2)}px`,
+              background: ACCENT,
+              color: '#ffffff',
+              fontSize: '84px',
+              fontWeight: 600,
+              fontFamily: 'Host Grotesk',
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+          },
+          initialsOf(source.name),
+        )
+      : el('img', {
+          src: source.picture,
+          width: FACE,
+          height: FACE,
+          style: { borderRadius: `${String(FACE / 2)}px`, objectFit: 'cover' },
+        });
+
+  return el(
+    'div',
+    {
+      style: {
+        display: 'flex',
+        width: `${String(STRIP_WIDTH)}px`,
+        height: `${String(STRIP_HEIGHT)}px`,
+        // No ground of its own, and no dash field: the pass's own background shows through, so the band has no
+        // edge where it ends (the owner, 26 October 2026). A seam across a pass reads as a mistake, not a design.
+        background: 'transparent',
+        position: 'relative',
+        fontFamily: 'Inter',
+      },
+    },
+    el('img', {
+      src: fieldImage(STRIP_WIDTH, STRIP_HEIGHT, { fade: 'down', sideways: false, strength: 1 }),
+      width: STRIP_WIDTH,
+      height: STRIP_HEIGHT,
+      style: { position: 'absolute', left: '0px', top: '0px' },
+    }),
+    el(
+      'div',
+      {
+        style: {
+          display: 'flex',
+          position: 'absolute',
+          left: '72px',
+          right: '72px',
+          top: '108px',
+          alignItems: 'center',
+        },
+      },
+      face,
+      el(
+        'div',
+        { style: { display: 'flex', flexDirection: 'column', marginLeft: '44px', maxWidth: '700px' } },
+        el(
+          'div',
+          {
+            style: {
+              fontSize: '74px',
+              fontWeight: 600,
+              color: TEXT,
+              fontFamily: 'Host Grotesk',
+              letterSpacing: '-0.025em',
+              lineHeight: 1.02,
+            },
+          },
+          source.name,
+        ),
+        el('div', { style: { display: 'flex', fontSize: '34px', color: SOFT, marginTop: '14px' } }, source.handle),
+      ),
+    ),
+    el('img', {
+      src: assets.wordmark,
+      width: 116,
+      height: 28,
+      style: { position: 'absolute', right: '72px', top: '44px' },
+    }),
   );
 }
 

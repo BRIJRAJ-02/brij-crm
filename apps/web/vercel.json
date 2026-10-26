@@ -25,6 +25,10 @@
       "destination": "/api/card"
     },
     {
+      "source": "/api/public/handles/:handle/pass-strip.png",
+      "destination": "/api/card"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api"
     },

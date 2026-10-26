@@ -63,7 +63,7 @@ export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps:
       return nothing();
     }
     if (owner.userId !== session.user.id) return nothing();
-    const bytes = make({
+    const bytes = await make({
       handle: owner.handle,
       name: owner.name.trim() === '' ? owner.handle : owner.name,
       ...(owner.bio === '' ? {} : { bio: owner.bio }),
