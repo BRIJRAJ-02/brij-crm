@@ -25,7 +25,7 @@ import {
 } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { claimHandleHref } from './claim.ts';
-import { blocksOf, passHref } from './link-page.ts';
+import { blocksOf } from './link-page.ts';
 import { strings, tabTitle } from './strings.ts';
 
 /** The address as the visitor reads it in the bar: the host they are on, then the handle. */
@@ -294,8 +294,10 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
       // The page's own address, as a visitor reads it, with a press to copy it.
       address={{ label: addressOf(current), value: `${globalThis.location.origin}/${current}` }}
       share={<ShareButton address={`${globalThis.location.origin}/${current}`} name={profile.name} />}
-      // The same page as a pass to keep: a plain link to the api on this origin, so no script and no data call.
-      walletHref={passHref(current)}
+      // No Add to Apple Wallet here (the owner, 27 October 2026). A visitor who has just arrived has nothing to keep
+      // yet, and the pass took a row of its own above everything the page is for. `LinkPage` still takes a
+      // `walletHref`, and the pass itself is still served at /api/public/handles/<handle>/pass.pkpass, so offering
+      // it again, further down or after a visitor acts, is passing that prop back.
       // Their own set of networks, the row of circles under the actions (booking socials): never a block.
       {...(profile.socials === undefined || profile.socials.length === 0
         ? {}
