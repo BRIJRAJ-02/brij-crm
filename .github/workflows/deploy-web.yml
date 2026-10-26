@@ -65,16 +65,32 @@ jobs:
           PUSH_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          REQUIRED=("check" "flows (1/4)" "flows (2/4)" "flows (3/4)" "flows (4/4)" "stories (chromium)" "stories (firefox)" "stories (webkit)" "visual")
+          # These must be green on the commit. Nothing else may stand in for them.
+          REQUIRED=("check" "flows (1/4)" "flows (2/4)" "flows (3/4)" "flows (4/4)")
+          # These run only when the change touched packages/ui (`needs.changes` in ci.yml), so on any other change
+          # they are skipped rather than green. Reading skipped as "not passed" meant the fast path declined every
+          # time the library was untouched, which is most changes, so the path never once fired (26 October 2026).
+          # They are listed apart rather than loosening the rule for all nine: a flow shard skipped because an
+          # earlier job failed must never read as a pass.
+          IF_UI_CHANGED=("stories (chromium)" "stories (firefox)" "stories (webkit)" "visual")
           if [ "$EVENT" = push ]; then
             sha="$PUSH_SHA"
             echo "sha=$sha" >> "$GITHUB_OUTPUT"
-            # Every required job must have passed on this exact commit, on whichever branch ran it.
-            passed=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
-              -q '.check_runs[] | select(.conclusion == "success") | .name' | sort -u)
+            runs=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
+              -q '.check_runs[] | "\(.conclusion)\t\(.name)"')
+            # `|| true`: no line of a kind is an empty list, not a failure, and `set -e` would end the job.
+            passed=$(grep -E '^success\s' <<< "$runs" | cut -f2- | sort -u || true)
+            settled=$(grep -E '^(success|skipped)\s' <<< "$runs" | cut -f2- | sort -u || true)
             for name in "${REQUIRED[@]}"; do
               if ! grep -Fxq "$name" <<< "$passed"; then
                 echo "$sha hasn't passed \"$name\" yet, so main's own CI run will trigger the deploy."
+                echo "go=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            done
+            for name in "${IF_UI_CHANGED[@]}"; do
+              if ! grep -Fxq "$name" <<< "$settled"; then
+                echo "$sha hasn't settled \"$name\" yet, so main's own CI run will trigger the deploy."
                 echo "go=false" >> "$GITHUB_OUTPUT"
                 exit 0
               fi

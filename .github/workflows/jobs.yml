@@ -53,8 +53,13 @@ jobs:
           # The secret goes in a header read from stdin, never on the command line or in the log. A turn that ends on
           # its budget left work due (a long import, a backlog of reminders), so the run calls again, up to 4 turns.
           for turn in 1 2 3 4; do
-            status=$(printf 'x-crm-jobs-secret: %s\n' "$JOBS_RUN_SECRET" | curl -sS -o body.json -w '%{http_code}' \
-              --max-time 120 -X POST -H @- "$JOBS_URL")
+            # Never -L: a redirect would carry the secret header to whatever host the answer named. The address it
+            # pointed at is reported instead, since that is the one thing a 3xx is worth knowing (26 October 2026,
+            # after four runs failed on a bare "answered 308" that said nothing about where).
+            answer=$(printf 'x-crm-jobs-secret: %s\n' "$JOBS_RUN_SECRET" | curl -sS -o body.json \
+              -w '%{http_code} %{redirect_url}' --max-time 120 -X POST -H @- "$JOBS_URL")
+            status=${answer%% *}
+            moved=${answer#* }
             code=$(jq -r '.code // empty' body.json 2>/dev/null || true)
             if [ "$status" = 200 ]; then
               echo "Job run $turn: $(jq -c '{outcome, ms}' body.json)"
@@ -62,6 +67,10 @@ jobs:
             elif [ "$code" = NOT_FOUND ] || [ "$code" = FORBIDDEN_ORIGIN ]; then
               echo "::notice::No job endpoint here: the api runs behind a proxy, where the worker runs the jobs."
               break
+            elif [ -n "$moved" ]; then
+              # The secret was never sent: curl stops at the redirect, which is the point.
+              echo "::error::The job run at $JOBS_URL answered $status and pointed at $moved, so nothing ran."
+              exit 1
             else
               echo "::error::The job run answered $status ${code:-with no code}."
               exit 1

@@ -70,6 +70,16 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           cache: pnpm
       - id: install
         run: pnpm install --frozen-lockfile
+      # Turborepo's own cache, so a push that touched one package doesn't typecheck, lint and test the other
+      # twelve again (26 October 2026). A hit is sound by construction: turbo keys a task on its inputs, so a
+      # cached answer is the one this commit would have produced. The key carries the commit, which makes every
+      # run its own entry, and the prefix restores the newest entry before it.
+      - uses: actions/cache@v6
+        with:
+          path: .turbo
+          key: turbo-${{ github.job }}-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ github.job }}-${{ runner.os }}-
       # Every step below runs even when one before it failed, so one push shows every red check at once.
       - run: pnpm check
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
@@ -187,6 +197,16 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
             timeout 4m bash -c 'while pgrep -x apt-get > /dev/null; do sleep 5; done' || sudo pkill -x apt-get || true
             sudo dpkg --configure -a || true
           done
+      # Turborepo's own cache, so a push that touched one package doesn't typecheck, lint and test the other
+      # twelve again (26 October 2026). A hit is sound by construction: turbo keys a task on its inputs, so a
+      # cached answer is the one this commit would have produced. The key carries the commit, which makes every
+      # run its own entry, and the prefix restores the newest entry before it.
+      - uses: actions/cache@v6
+        with:
+          path: .turbo
+          key: turbo-${{ github.job }}-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ github.job }}-${{ runner.os }}-
       - run: pnpm exec turbo run test --continue --filter='!@crm/ui' --filter='!@crm/core'
 
   # The engine's suite alone: its 70,000 and 200,000 link tests are heavy for a small runner, and its count
