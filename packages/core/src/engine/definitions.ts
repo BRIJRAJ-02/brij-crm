@@ -698,6 +698,33 @@ export async function defineObject(
   return result;
 }
 
+/**
+ * Defines an object and its first attributes in one write (one transaction): the object with its system and
+ * Name attributes, then each given attribute in order through `insertAttribute`. Any refusal rolls all of it
+ * back. A replay of the same object id (a lost answer) answers the object already made and adds nothing.
+ */
+export async function defineObjectWithAttributes(
+  scope: EngineScope,
+  input: Omit<ObjectInput, 'standard'>,
+  attributeInputs: readonly Omit<AttributeInput, 'objectId' | 'listId'>[],
+  hooks: readonly AfterWrite[] = [],
+) {
+  requirePermission(scope, 'schema.manage');
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const made = await insertObject(context, input);
+      if (made.replayed) return made;
+      for (const attribute of attributeInputs) {
+        await insertAttribute(context, { ...attribute, objectId: made.objectId });
+      }
+      return made;
+    },
+    hooks,
+  );
+  return result;
+}
+
 /** Defines an attribute on an object, or on a list for its entries (AC-1, AC-2, AC-6, AC-16). */
 export async function defineAttribute(scope: EngineScope, input: AttributeInput, hooks: readonly AfterWrite[] = []) {
   requirePermission(scope, 'schema.manage');

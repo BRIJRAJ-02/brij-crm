@@ -1,10 +1,22 @@
 // Brief
-// Purpose: create a custom object (Projects, Partners) from Settings, Objects.
-// Main task: name it (one and many), keep or change the API name, pick its icon and colour, then Create object.
-// Leaves out: attributes (the object starts with Name and the system ones; the Attributes tab adds the rest).
-import { freeHue, toApiSlug, type Hue, type NewObject, type ObjectIcon, type ObjectSummary } from '@crm/data';
-import { Button, Field, Form, Modal, type FormRefusal } from '@crm/ui';
-import { useId, useState } from 'react';
+// Purpose: create a custom object (Projects, Partners) with its first attributes, from Settings, Objects.
+// Main task: type the name; the plural, API name, icon, colour and starter attributes follow, then Create (⌘↵).
+// Leaves out: select options, relationships and rules (the Attributes tab adds them); every guess stays editable.
+import { toApiSlug, type Hue, type NewObject, type ObjectIcon, type ObjectSummary } from '@crm/data';
+import {
+  Button,
+  Disclosure,
+  Field,
+  fieldTypeOf,
+  Form,
+  HUES,
+  Modal,
+  Select,
+  typeLabelOf,
+  type FormRefusal,
+} from '@crm/ui';
+import { useEffect, useId, useRef, useState } from 'react';
+import { hueFor, iconFor, INLINE_TYPES, pluralOf, startersFor, typeFor, type InlineType } from './new-object-guess.ts';
 import { ObjectHueField, ObjectIconButton } from './ObjectLookFields.tsx';
 import { formRefusals, objectWords } from './refusals.ts';
 import { strings } from './strings.ts';
@@ -33,6 +45,7 @@ export function NewObjectDialog({ isOpen, onOpenChange, objects, newId, onCreate
   return (
     <Modal
       title={strings.newObject}
+      variant="window"
       isOpen={isOpen}
       // While the server answers, the dialog stays: a refusal has to land on its field.
       onOpenChange={(open) => {
@@ -70,10 +83,23 @@ interface NewObjectFormProps extends Pick<NewObjectDialogProps, 'objects' | 'new
   readonly onBusyChange: (isBusy: boolean) => void;
 }
 
+/** One attribute row: its text, a type the person chose (else the name's guess) and a key that survives reordering. */
+interface Row {
+  readonly key: number;
+  readonly title: string;
+  readonly type: InlineType | undefined;
+}
+
+/** The most attributes one create starts with (the server's own cap is 30). */
+const MAX_ROWS = 30;
+
+const typeItems = INLINE_TYPES.map((type) => ({ id: type, label: typeLabelOf(type), icon: fieldTypeOf(type).icon }));
+const isInlineType = (id: string | null): id is InlineType => INLINE_TYPES.some((type) => type === id);
+
 /**
- * The form: the plural follows the singular plus "s", and the API name
- * follows the plural (the server's own `toApiSlug`), each until the person
- * edits it.
+ * The form. Everything follows the name until the person edits it: the plural, the API name (the server's own
+ * `toApiSlug`), the icon and the colour. Attribute rows add a row on Enter, guess their type from their name, and
+ * Create sends the object with its attributes in one request (one transaction on the server).
  */
 function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate, onCreated }: NewObjectFormProps) {
   // One id per opening, sent again on every press.
@@ -81,32 +107,107 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
   const [singular, setSingular] = useState('');
   const [plural, setPlural] = useState<string | undefined>(undefined);
   const [apiSlug, setApiSlug] = useState<string | undefined>(undefined);
-  const [icon, setIcon] = useState<ObjectIcon>('box');
-  const [hue, setHue] = useState<Hue>(() => freeHue(objects.filter((object) => !object.isArchived)));
+  const [pickedIcon, setIcon] = useState<ObjectIcon | undefined>(undefined);
+  const [pickedHue, setHue] = useState<Hue | undefined>(undefined);
+  const [rows, setRows] = useState<readonly Row[]>([{ key: 0, title: '', type: undefined }]);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
-  const pluralShown = plural ?? (singular.trim() === '' ? '' : `${singular.trim()}s`);
+  const [isNamesOpen, setNamesOpen] = useState(false);
+  const [rowErrors, setRowErrors] = useState<Readonly<Record<number, string>>>({});
+  const nextKey = useRef(1);
+  const inputs = useRef(new Map<number, HTMLInputElement | null>());
+  const focusKey = useRef<number | undefined>(undefined);
+  // Enter in a field also asks the form to submit natively; an Enter this dialog already used must not create.
+  const enterUsed = useRef(false);
+  const markEnter = () => {
+    enterUsed.current = true;
+    setTimeout(() => {
+      enterUsed.current = false;
+    }, 0);
+  };
+  const live = objects.filter((object) => !object.isArchived);
+
+  const trimmed = singular.trim();
+  const pluralShown = plural ?? pluralOf(trimmed);
   const slugShown = apiSlug ?? (pluralShown.trim() === '' ? '' : toApiSlug(pluralShown, 'object'));
+  const icon = pickedIcon ?? iconFor(trimmed);
+  const hue =
+    pickedHue ??
+    hueFor(
+      trimmed,
+      HUES,
+      live.map((object) => object.hue),
+    );
+  const typeOf = (row: Row): InlineType => row.type ?? typeFor(row.title);
+
+  // After a row is added or removed, focus goes where the person was heading.
+  useEffect(() => {
+    if (focusKey.current === undefined) return;
+    inputs.current.get(focusKey.current)?.focus();
+    focusKey.current = undefined;
+  }, [rows]);
+
+  const change = (key: number, changes: Partial<Row>) => {
+    setRows((current) => current.map((row) => (row.key === key ? { ...row, ...changes } : row)));
+    setRowErrors((current) => ({ ...current, [key]: '' }));
+  };
+  const addAfter = (key: number, filled?: Pick<Row, 'title' | 'type'>) => {
+    const added: Row = { key: nextKey.current, title: '', type: undefined };
+    nextKey.current += 1;
+    focusKey.current = added.key;
+    setRows((current) => {
+      const at = current.findIndex((row) => row.key === key);
+      const filledRows = current.map((row) => (row.key === key && filled !== undefined ? { ...row, ...filled } : row));
+      return [...filledRows.slice(0, at + 1), added, ...filledRows.slice(at + 1)];
+    });
+  };
+  const remove = (key: number) => {
+    const at = rows.findIndex((row) => row.key === key);
+    if (rows.length === 1) {
+      change(key, { title: '', type: undefined });
+      inputs.current.get(key)?.focus();
+      return;
+    }
+    focusKey.current = rows[at > 0 ? at - 1 : 1]?.key;
+    setRows((current) => current.filter((row) => row.key !== key));
+  };
+
+  const last = rows.at(-1);
+  const taken = new Set(rows.map((row) => row.title.trim().toLowerCase()));
+  const starters = startersFor(trimmed).filter((starter) => !taken.has(starter.title.toLowerCase()));
 
   const create = () => {
-    if (isBusy) return;
+    if (isBusy || enterUsed.current) return;
+    const filled = rows.filter((row) => row.title.trim() !== '');
+    const seen = new Set<string>(['name']);
+    const errors: Record<number, string> = {};
+    for (const row of filled) {
+      const slug = toApiSlug(row.title, 'attribute');
+      if (seen.has(slug)) errors[row.key] = slug === 'name' ? strings.nameIsDefault : strings.attributeRepeated;
+      seen.add(slug);
+    }
     const missing = [
-      ...(singular.trim() === '' ? ['singularName'] : []),
+      ...(trimmed === '' ? ['singularName'] : []),
       ...(pluralShown.trim() === '' ? ['pluralName'] : []),
     ].map((field) => ({ code: 'INPUT_INVALID', message: strings.nameMissing, attributeId: field }));
-    if (missing.length > 0) {
+    if (missing.length > 0 || Object.keys(errors).length > 0) {
+      setRowErrors(errors);
       setRefusals(missing);
+      if (missing.some((refusal) => refusal.attributeId === 'pluralName')) setNamesOpen(true);
       return;
     }
     onBusyChange(true);
     setRefusals([]);
     onCreate({
       id,
-      singularName: singular.trim(),
+      singularName: trimmed,
       pluralName: pluralShown.trim(),
       // Sent only when the person typed one; the server derives the same otherwise.
       ...(apiSlug === undefined || apiSlug.trim() === '' ? {} : { apiSlug: apiSlug.trim() }),
       icon,
       hue,
+      ...(filled.length === 0
+        ? {}
+        : { attributes: filled.map((row) => ({ title: row.title.trim(), type: typeOf(row) })) }),
     }).then(
       (object) => {
         onBusyChange(false);
@@ -114,7 +215,12 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
       },
       (error: unknown) => {
         onBusyChange(false);
-        setRefusals(formRefusals(error, FIELDS, objectWords));
+        const next = formRefusals(error, FIELDS, objectWords);
+        // The API name sits in a closed disclosure: a refusal on it opens it.
+        if (next.some((refusal) => refusal.attributeId === 'apiSlug' || refusal.attributeId === 'pluralName')) {
+          setNamesOpen(true);
+        }
+        setRefusals(next);
       },
     );
   };
@@ -130,7 +236,8 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
       focusesFirstField
     >
       <Field
-        label={strings.singularName}
+        label={strings.objectName}
+        placeholder={strings.objectNamePlaceholder}
         prefix={<ObjectIconButton icon={icon} hue={hue} onChange={setIcon} />}
         name="singularName"
         autoComplete="off"
@@ -138,29 +245,113 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
         maxLength={100}
         value={singular}
         onChange={setSingular}
-      />
-      <Field
-        label={strings.pluralName}
-        name="pluralName"
-        autoComplete="off"
-        isRequired
-        maxLength={100}
-        value={pluralShown}
-        onChange={setPlural}
-      />
-      <Field
-        label={strings.apiName}
-        name="apiSlug"
-        autoComplete="off"
-        maxLength={63}
-        hint={strings.apiNameHint}
-        value={slugShown}
-        // Emptied, it follows the plural again.
-        onChange={(next) => {
-          setApiSlug(next === '' ? undefined : next);
+        // Enter moves on to the first attribute rather than creating.
+        onSubmit={() => {
+          markEnter();
+          const first = rows[0];
+          if (first !== undefined) inputs.current.get(first.key)?.focus();
         }}
+        hint={trimmed === '' ? undefined : strings.followsName(pluralShown, slugShown)}
       />
-      <ObjectHueField hue={hue} onChange={setHue} />
+      <Disclosure title={strings.namesAndApi} isExpanded={isNamesOpen} onExpandedChange={setNamesOpen} variant="quiet">
+        <Field
+          label={strings.pluralName}
+          name="pluralName"
+          autoComplete="off"
+          isRequired
+          maxLength={100}
+          value={pluralShown}
+          // Emptied, it follows the name again.
+          onChange={(next) => {
+            setPlural(next === '' ? undefined : next);
+          }}
+        />
+        <Field
+          label={strings.apiName}
+          name="apiSlug"
+          autoComplete="off"
+          maxLength={63}
+          hint={strings.apiNameHint}
+          value={slugShown}
+          onChange={(next) => {
+            setApiSlug(next === '' ? undefined : next);
+          }}
+        />
+        <ObjectHueField hue={hue} onChange={setHue} />
+      </Disclosure>
+      <div role="group" aria-label={strings.firstAttributes}>
+        {rows.map((row, index) => (
+          <Field
+            key={row.key}
+            ref={(element) => {
+              inputs.current.set(row.key, element);
+              return () => {
+                inputs.current.delete(row.key);
+              };
+            }}
+            label={index === 0 ? strings.firstAttributes : strings.attributeN(index + 1)}
+            isLabelHidden={index > 0}
+            labelAside={index === 0 ? strings.nameIsAlways : undefined}
+            placeholder={index === 0 ? strings.attributePlaceholder : strings.attributeMore}
+            autoComplete="off"
+            maxLength={100}
+            value={row.title}
+            isDisabled={isBusy}
+            error={rowErrors[row.key] === '' ? undefined : rowErrors[row.key]}
+            onChange={(title) => {
+              change(row.key, { title });
+            }}
+            // Enter adds the next row under this one; on an empty row it does nothing but stay.
+            onSubmit={() => {
+              markEnter();
+              if (row.title.trim() !== '' && rows.length < MAX_ROWS && !isBusy) addAfter(row.key);
+            }}
+            // Backspace in an empty row takes it away and goes back up.
+            onKeyDown={(event) => {
+              if (event.key === 'Backspace' && !event.repeat && row.title === '' && rows.length > 1 && !isBusy) {
+                event.preventDefault();
+                remove(row.key);
+              }
+            }}
+            suggestions={
+              row.key === last?.key && row.title === '' && starters.length > 0
+                ? {
+                    label: strings.starters,
+                    items: starters.map((starter) => starter.title),
+                    onPick: (title) => {
+                      const starter = starters.find((each) => each.title === title);
+                      if (starter !== undefined) addAfter(row.key, starter);
+                    },
+                  }
+                : undefined
+            }
+            after={
+              <>
+                <Select
+                  label={strings.attributeType(row.title.trim() === '' ? String(index + 1) : row.title.trim())}
+                  isLabelHidden
+                  size="sm"
+                  isDisabled={isBusy}
+                  items={typeItems}
+                  value={typeOf(row)}
+                  onChange={(next) => {
+                    if (isInlineType(next)) change(row.key, { type: next });
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  icon="x"
+                  isDisabled={isBusy}
+                  label={strings.removeAttribute(row.title.trim() === '' ? String(index + 1) : row.title.trim())}
+                  onPress={() => {
+                    remove(row.key);
+                  }}
+                />
+              </>
+            }
+          />
+        ))}
+      </div>
     </Form>
   );
 }

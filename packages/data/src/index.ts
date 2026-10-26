@@ -787,6 +787,8 @@ export interface NewObject {
   readonly apiSlug?: string;
   readonly icon: ObjectSummary['icon'];
   readonly hue: ObjectSummary['hue'];
+  /** First attributes beside Name, made in the same transaction as the object. */
+  readonly attributes?: readonly { readonly title: string; readonly type: PickerAttributeType }[];
 }
 
 /** What settings may change on an object (spec 0012, AC-224). Its API name never changes. */
@@ -3776,6 +3778,7 @@ export function createDataLayer({
               ...(input.apiSlug === undefined ? {} : { apiSlug: input.apiSlug }),
               icon: input.icon,
               hue: input.hue,
+              ...(input.attributes === undefined ? {} : { attributes: input.attributes.map((a) => ({ ...a })) }),
               mutationId,
             },
             options,
