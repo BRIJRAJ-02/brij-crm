@@ -10,11 +10,16 @@ import { applePkpass, type AppleWalletConfig } from './apple.ts';
 import { googleWalletLink, type GoogleWalletConfig } from './google.ts';
 import { passIcons } from './icon.ts';
 
-/** The one page a pass stands for, as a handler knows it: the caller's own, read from their profile. */
+/** The one page a pass stands for, as a handler knows it: read from the profile the handle belongs to. */
 export interface WalletPerson {
   readonly handle: string;
   readonly name: string;
   readonly bio?: string;
+  /**
+   * Whether somebody other than the owner is saving it (26 October 2026). The pass is the same either way; what
+   * changes is the code's tag, so a visit from a pass a visitor saved reads apart from one the owner carries.
+   */
+  readonly shared?: boolean;
 }
 
 /** Makes one save link for one person. Never throws for a missing credential: there is no maker without one. */
@@ -94,11 +99,14 @@ export function createApplePass(settings: WalletSettings): ApplePassMaker | unde
   return async (person) => {
     const icons = passIcons();
     const strip = await stripOf(origin, person.handle);
+    // `walletPageUrl` sets the source, medium and campaign and leaves everything else alone, so the one tag that
+    // says who saved this pass is set here and survives.
+    const page = `${origin}/${encodeURIComponent(person.handle)}${person.shared === true ? '?utm_content=shared' : ''}`;
     return applePkpass(config, {
       handle: person.handle,
       name: person.name,
       ...(person.bio === undefined || person.bio === '' ? {} : { bio: person.bio }),
-      pageUrl: `${origin}/${encodeURIComponent(person.handle)}`,
+      pageUrl: page,
       icon: icons.icon,
       icon2x: icons.icon2x,
       ...(strip === undefined ? {} : { strip }),

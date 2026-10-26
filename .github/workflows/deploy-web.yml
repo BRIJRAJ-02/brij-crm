@@ -45,7 +45,9 @@ concurrency:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The push path waits up to fifteen minutes for the jobs it needs, so the job itself must outlast that wait.
+    # At five it was killed mid wait and the deploy read as cancelled (26 October 2026).
+    timeout-minutes: 20
     permissions:
       actions: read
       checks: read
