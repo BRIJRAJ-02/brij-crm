@@ -6,8 +6,15 @@ import { CountryPicker } from '../molecules/CountryPicker/CountryPicker.tsx';
 import { Field } from '../molecules/Field/Field.tsx';
 import { PhoneField, type PhoneFieldValue } from '../molecules/PhoneField/PhoneField.tsx';
 import { Select } from '../molecules/Select/Select.tsx';
-import { FileQuestion } from './FileQuestion.tsx';
+import { lazy, Suspense } from 'react';
+import { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 import { isUploadedFile, type HostedFileHandlers } from './files.ts';
+
+// The file question loads on its own: its drop area brings React Aria's drag and drop code, about 24 kB gzipped,
+// which no form without a file question ever needs and which took the hosted form's first load past its budget
+// when it arrived (26 October 2026). Until it lands a Skeleton of the same height stands in, so the form draws at
+// once and keeps its shape.
+const LazyFileQuestion = lazy(() => import('./FileQuestion.tsx').then((module) => ({ default: module.FileQuestion })));
 
 /** The control of a question to type in, or else its first control (a dropdown's trigger): a phone's number before its code. */
 export function focusQuestion(container: HTMLElement | null, key: string): void {
@@ -182,15 +189,17 @@ export function Question({
     }
     case 'file':
       return (
-        <FileQuestion
-          questionKey={question.key}
-          label={isLabelHidden ? labelProps.label : aside === undefined ? label : `${label} ${aside}`}
-          words={words}
-          value={value}
-          error={error}
-          files={files}
-          onChange={onChange}
-        />
+        <Suspense fallback={<Skeleton shape="block" />}>
+          <LazyFileQuestion
+            questionKey={question.key}
+            label={isLabelHidden ? labelProps.label : aside === undefined ? label : `${label} ${aside}`}
+            words={words}
+            value={value}
+            error={error}
+            files={files}
+            onChange={onChange}
+          />
+        </Suspense>
       );
     default: {
       const kind = question.answerType;

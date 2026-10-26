@@ -100,6 +100,8 @@ describe('Account › Profile (AC-821)', () => {
       name: 'Ada',
       email: 'ada@example.com',
       workspaceTimeZone: 'UTC',
+      // The workspace the page belongs to, since a link page is one membership's now (spec 0056).
+      workspaceName: 'Acme',
       image: served,
       // A member with no identity has no handle, and no suggestion for one.
       bio: '',

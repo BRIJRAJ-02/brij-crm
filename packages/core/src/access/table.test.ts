@@ -160,6 +160,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'processSubmission',
   'chooseOwner',
   'newPublicKey',
+  // A submission's files (spec 0023's uploads): both run inside the submission's own transaction, which
+  // `submitForm` already opened under its public form scope, so they take a tx and never a scope of their own.
+  'claimUploads',
+  'attachUploads',
   // The visitor a form hands to a booking page, read from its answers: a pure helper, no scope.
   'visitorOf',
   // A workspace's public key for a snippet's tagging: a one way digest of its id, no scope.
@@ -688,16 +692,35 @@ async function dataWorld() {
     role: 'member',
     rules: { levels: [objectRule(people, 'read'), objectRule(listId, 'read')], records: [] },
   });
-  // A form on People with one submission (spec 0023).
+  // A form on People with one submission (spec 0023), asking for a file too, so a submission carries one and
+  // `readUpload` has something real to be refused (spec 0023's uploads).
   const form = await core.createForm(owner, { id: core.newId(), name: 'Pilot form', mainObjectId: people });
-  const live = await core.publishForm(owner, { formId: form.id, expectedRevision: form.revision });
+  const withFile = await core.saveFormDraft(owner, {
+    formId: form.id,
+    document: {
+      ...form.draft,
+      questions: [
+        ...form.draft.questions,
+        { id: 'brief', key: 'brief', label: 'Brief', answerType: 'file', required: false, update: 'fill' },
+      ],
+    },
+    expectedRevision: form.revision,
+  });
+  const live = await core.publishForm(owner, { formId: form.id, expectedRevision: withFile.revision });
   const visitor = await core.enterPublicForm({ db }, live.publicKey);
+  const fileId = core.newId();
+  await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute(
+      sql`insert into form_uploads (workspace_id, id, form_id, pathname, name, size, content_type)
+          values (${workspaceId}::uuid, ${fileId}::uuid, ${form.id}::uuid, ${`forms/${workspaceId}/${form.id}/${fileId}.pdf`}, 'brief.pdf', 1024, 'application/pdf')`,
+    ),
+  );
   await core.submitForm(visitor.scope, core.jobKinds({ environment: 'local' }), {
     formId: form.id,
     body: {
       idempotencyKey: core.newId(),
       versionNumber: 1,
-      answers: { name: 'Pilot', email: 'pilot@example.com' },
+      answers: { name: 'Pilot', email: 'pilot@example.com', brief: { fileId } },
       hidden: {},
       fillMs: 10_000,
     },
@@ -716,6 +739,7 @@ async function dataWorld() {
     people,
     formId: form.id,
     submissionId,
+    fileId,
     name: attribute('name'),
     jobTitle: attribute('job_title'),
     company: attribute('company'),
@@ -969,6 +993,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   getSubmission: refused('NOT_FOUND', (scope, world) =>
     core.getSubmission(scope, { submissionId: world.submissionId }),
   ),
+  // A submission's file (spec 0023's uploads): a reader who cannot open the submission cannot open its file,
+  // and an id of one that is not theirs reads as the same nothing as an id of nothing.
+  readUpload: refused('NOT_FOUND', (scope, world) => core.readUpload(scope, { fileId: world.fileId })),
   // Notes (spec 0019): a hidden record's notes are absent, its list NOT_FOUND as the record is.
   getNote: refused('NOT_FOUND', (scope, world) => core.getNote(scope, { noteId: world.noteId })),
   // Comments (spec 0038): a hidden record's threads are absent, to read and to write.

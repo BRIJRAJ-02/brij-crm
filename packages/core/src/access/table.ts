@@ -350,8 +350,19 @@ export const ACCESS_TABLE = {
   getPublicForm: { publicForm: true },
   submitForm: { publicForm: true },
   postingRules: { publicForm: true },
+  // A visitor's file for a form question (spec 0023's uploads): the same public form scope as the submission it
+  // belongs to, and each one refuses outright unless the scope is that very form's (`ownForm`).
+  prepareUpload: { publicForm: true },
+  registerUpload: { publicForm: true },
+  discardUpload: { publicForm: true },
+  // The member's download of one. Its own read decides, by the submission the file is attached to: the form's
+  // objects, its main record, or `forms.manage` where a submission made no record.
+  readUpload: { data: 'read' },
   // Booking pages (spec 0025).
   listBookingPages: { bookingPages: true },
+  // Where a page's answers may be filed (spec 0057): a page the reader may change, and People's attributes as
+  // they may write them, so it is the booking pages check and the reader's own data reach together.
+  bookingPageAttributes: { bookingPages: true },
   getBookingPage: { bookingPages: true },
   createBookingPage: { bookingPages: true },
   updateBookingPage: { bookingPages: true },

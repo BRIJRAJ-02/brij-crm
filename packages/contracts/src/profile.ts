@@ -116,9 +116,11 @@ export const MyProfile = z.object({
   handle: z.string().optional(),
   /**
    * The other workspaces they belong to where they already have a link page (spec 0056, AC-5618): only workspaces
-   * they are an active member of, named by the directory. Absent when there are none.
+   * they are an active member of, as ids. Absent when there are none. The ids are named in the browser, from the
+   * workspaces `me.get` already answers: a workspace's name is the directory's, and the member door has no
+   * identity to read it through.
    */
-  otherLinkPages: z.array(z.object({ workspaceId: Uuid, workspaceName: z.string() })).optional(),
+  otherLinkPages: z.array(z.object({ workspaceId: Uuid })).optional(),
   /** A free handle from their name, for the field's first value while they have none. */
   suggestedHandle: z.string().optional(),
   /** Their one line bio on their public profile. */

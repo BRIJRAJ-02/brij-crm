@@ -74,6 +74,31 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
     toasts.toast({ tone: 'success', message: strings.googlePhoto.synced.text() });
     onPhotoResultSeen();
   }, [photoResult, toasts, onPhotoResultSeen]);
+  // The names of the workspaces where this account already has a link page (spec 0056, AC-5618). The profile
+  // answers their ids only: a workspace's name belongs to the directory, which a member handler may not read, and
+  // this browser already holds every workspace it belongs to from `me.get`, cached for the app load. The map is
+  // held and the line derived from it in render, so nothing is set during the effect itself.
+  const [workspaceNames, setWorkspaceNames] = useState<ReadonlyMap<string, string>>(new Map());
+  useEffect(() => {
+    let isCurrent = true;
+    void data.me.get().then(
+      (me) => {
+        if (isCurrent) setWorkspaceNames(new Map((me?.workspaces ?? []).map((each) => [each.id, each.name])));
+      },
+      () => {
+        // The line is a courtesy; without it the handle field still works.
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data]);
+  // Only the ones this browser can name: an id with no name says nothing useful, so it says nothing.
+  const otherPageNames = (profile.otherLinkPages ?? []).flatMap((other) => {
+    const name = workspaceNames.get(other.workspaceId);
+    return name === undefined ? [] : [name];
+  });
+
   const photoNote: (typeof strings.googlePhoto)[Exclude<GooglePhotoResult, 'synced'>] | undefined =
     photoResult === undefined || photoResult === 'synced' ? undefined : strings.googlePhoto[photoResult];
   // Back from Google with the browser's back button, the page comes out of the back/forward cache as it was left:
@@ -297,9 +322,7 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
               profile.handle === undefined
                 ? [
                     strings.handleNew,
-                    ...(profile.otherLinkPages === undefined
-                      ? []
-                      : [strings.otherLinkPages(profile.otherLinkPages.map((other) => other.workspaceName))]),
+                    ...(otherPageNames.length === 0 ? [] : [strings.otherLinkPages(otherPageNames)]),
                   ].join(' ')
                 : strings.handleKept
             }

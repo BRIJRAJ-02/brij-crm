@@ -143,6 +143,8 @@ const READS: ReadonlySet<string> = new Set([
   // Booking pages (spec 0025).
   'bookingPages.list',
   'bookingPages.get',
+  // Where a page's answers may be filed (spec 0057): People and its attributes as this reader may write them.
+  'bookingPages.attributes',
   'bookings.list',
   'bookings.listAll',
   'bookings.meetings',

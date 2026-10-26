@@ -29,11 +29,6 @@ export interface ProfileExtras {
   readonly image?: string | undefined;
   /** Whether the account has Google linked, for Sync Google photo; undefined where Google sign in is off. */
   readonly google?: 'linked' | 'unlinked' | undefined;
-  /**
-   * The names of the workspaces the account belongs to, by id, from the directory (spec 0056, AC-5618): the only way
-   * to name a workspace the caller is not in right now, since a workspace's own row is another one's to read.
-   */
-  readonly workspaceNames?: ReadonlyMap<string, string> | undefined;
 }
 
 /** The caller's member id, or a refusal: only a member has a profile. */
@@ -91,16 +86,15 @@ async function readProfile(
   // The person's choice; a member with no identity of their own has none to make.
   const pictureHidden = userId === undefined ? undefined : await isPictureHidden(tx, userId);
   const socials = userId === undefined ? undefined : await socialLinksOfUser(tx, userId);
-  // The person's link pages in their other workspaces, named from the directory: only ones they still belong to.
+  // The person's link pages in their other workspaces (spec 0056, AC-5618), as ids. Not named here: a workspace's
+  // name belongs to the directory, which is global identity, and a member handler has none (`orpc.ts`'s door takes
+  // it away). The browser already holds every workspace it belongs to, from `me.get`, so it names these itself.
   const others =
     userId === undefined || held !== undefined
       ? []
-      : (await profileHandlesOf(tx, userId)).flatMap((each) => {
-          const workspaceName = extras.workspaceNames?.get(each.workspaceId);
-          return each.workspaceId === scope.workspaceId || workspaceName === undefined
-            ? []
-            : [{ workspaceId: each.workspaceId, workspaceName }];
-        });
+      : (await profileHandlesOf(tx, userId)).flatMap((each) =>
+          each.workspaceId === scope.workspaceId ? [] : [{ workspaceId: each.workspaceId }],
+        );
   return {
     memberId,
     name: row.name,

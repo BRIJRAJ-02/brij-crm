@@ -131,7 +131,11 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
     .getByRole('row', { name: /Send the contract/ })
     .first()
     .click();
-  await window.getByRole('button', { name: 'More actions' }).click();
+  // The task's own window, which the note window's locator never matches: it holds no Note editor, and its title
+  // is the plain word (the note window's is the note's own title, so only the editor tells that one apart).
+  const taskWindow = page.getByRole('dialog', { name: 'Task' });
+  await expect(taskWindow).toBeVisible();
+  await taskWindow.getByRole('button', { name: 'More actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete task' }).click();
   await expect(tasks.getByRole('row', { name: /Send the contract/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Undo' }).click();

@@ -36,12 +36,9 @@ async function extrasOf(context: RequestContext & SessionContext): Promise<Profi
       ? 'linked'
       : 'unlinked'
     : undefined;
-  // The directory's names for the workspaces this account belongs to, so a link page elsewhere can be named.
-  const memberships = await context.identity.workspacesOf(user.id);
   return {
     ...(picture === undefined ? {} : { image: myPicturePath(picture.version) }),
     ...(google === undefined ? {} : { google }),
-    workspaceNames: new Map(memberships.map((workspace) => [workspace.id, workspace.name])),
   };
 }
 

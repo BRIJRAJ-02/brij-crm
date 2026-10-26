@@ -699,6 +699,17 @@ export async function defineObject(
 }
 
 /**
+ * The settings a first attribute needs but the dialog has no room to ask for. Only currency has one: its type
+ * refuses to be made without a default currency, and the dialog guesses `currency` from a name like "Budget", so
+ * without this a person typing a word of their own language is refused for a setting they were never shown. USD
+ * is the schema's own example, and the attribute's settings change it afterwards (26 October 2026).
+ */
+function firstConfig(attribute: { readonly type: string; readonly config?: unknown }): { config?: unknown } {
+  if (attribute.config !== undefined || attribute.type !== 'currency') return {};
+  return { config: { defaultCurrency: 'USD' } };
+}
+
+/**
  * Defines an object and its first attributes in one write (one transaction): the object with its system and
  * Name attributes, then each given attribute in order through `insertAttribute`. Any refusal rolls all of it
  * back. A replay of the same object id (a lost answer) answers the object already made and adds nothing.
@@ -716,7 +727,7 @@ export async function defineObjectWithAttributes(
       const made = await insertObject(context, input);
       if (made.replayed) return made;
       for (const attribute of attributeInputs) {
-        await insertAttribute(context, { ...attribute, objectId: made.objectId });
+        await insertAttribute(context, { ...attribute, objectId: made.objectId, ...firstConfig(attribute) });
       }
       return made;
     },
