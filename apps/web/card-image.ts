@@ -53,10 +53,17 @@ interface Field {
   readonly sideways?: boolean;
   /** How strongly the dashes read, against `STRENGTH`'s 0.85. */
   readonly strength?: number;
+  /**
+   * A bloom the dashes gather into, in the picture's own pixels, instead of a straight fade. The band uses one,
+   * thrown behind the face: a field that only fades downward is at full strength along the band's top edge,
+   * which on a pass with no ground of its own is a hard blue line across it. Gathered into a bloom it has no
+   * edge anywhere, and the blue reads as something behind the person rather than a texture over the pass.
+   */
+  readonly bloom?: { readonly x: number; readonly y: number; readonly radius: number };
 }
 
 function fieldImage(width: number, height: number, field: Field = {}): string {
-  const { fade = 'up', sideways = true, strength = STRENGTH } = field;
+  const { fade = 'up', sideways = true, strength = STRENGTH, bloom } = field;
   const columns = Math.ceil(width / STEP_X);
   const rows = Math.ceil(height / STEP_Y);
   const dashes: string[] = [];
@@ -66,7 +73,15 @@ function fieldImage(width: number, height: number, field: Field = {}): string {
       const grain = noise(row, column);
       if (grain < 0.3) continue;
       const toward = sideways ? (1 - column / columns) ** 1.25 : 1;
-      const place = down ** 1.35 * toward * (0.6 + grain * 0.4);
+      const near =
+        bloom === undefined
+          ? down ** 1.35
+          : (() => {
+              const dx = (column * STEP_X + STEP_X / 2 - bloom.x) / bloom.radius;
+              const dy = (row * STEP_Y + STEP_Y / 2 - bloom.y) / bloom.radius;
+              return Math.max(0, 1 - Math.hypot(dx, dy)) ** 0.8;
+            })();
+      const place = near * toward * (0.6 + grain * 0.4);
       const alpha = Math.min(1, place) * strength;
       if (alpha < 0.012) continue;
       const length = DASH_WIDTH - 2 + Math.round(noise(column, row) * 6);
@@ -112,6 +127,18 @@ export function initialsOf(name: string): string {
     .toUpperCase();
 }
 
+/**
+ * A sentence cut to fit, at the last word that still does, with an ellipsis where something was dropped. satori
+ * has no line clamp, so a bio nobody kept short would otherwise push the rest of the band off the picture.
+ */
+export function clampWords(text: string, limit: number): string {
+  const tidy = text.trim().replace(/\s+/gu, ' ');
+  if (Array.from(tidy).length <= limit) return tidy;
+  const cut = Array.from(tidy).slice(0, limit).join('');
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.–-]+$/u, '')}…`;
+}
+
 /** What one card says. Every string may have come from the person, so none is trusted with markup. */
 export interface CardSource {
   /** Whose page it is. */
@@ -134,9 +161,9 @@ export interface CardAssets {
 
 /**
  * The band across an Apple Wallet pass (the owner, 26 October 2026): 375 × 144 points at three pixels to the
- * point, which is the one size Apple draws a store card's strip at. It carries the same ground, face and lockup
- * as the share card, so the pass reads as ours rather than as Apple's default furniture; it is short and wide,
- * so the name sits beside the face instead of under it, and the page's own words have no room and are left out.
+ * point, which is the one size Apple draws a store card's strip at. It carries the same face and lockup as the
+ * share card, so the pass reads as ours rather than as Apple's default furniture. It is short and wide, so it is
+ * read across: the person on the left, their own sentence on the right.
  */
 export const STRIP_WIDTH = 1125;
 export const STRIP_HEIGHT = 432;
@@ -253,9 +280,27 @@ export function cardTree(source: CardSource, assets: CardAssets): Element {
   );
 }
 
-/** The pass's band: the face, their name and address beside it, the lockup above, on the same dash field. */
+/**
+ * The pass's band. The pass already draws the person's name (`logoText`, in its own header) and their address
+ * (the code's alt text, under the code), so a band that drew either again would be spending the one picture the
+ * pass has on words already on it. It draws what the pass cannot: the person, large, and their own sentence.
+ *
+ * The face is the hero — three quarters of the band's height — with the dash field gathered behind it, and the
+ * lockup and the bio stand in the half the old band left empty.
+ */
 export function stripTree(source: CardSource, assets: CardAssets): Element {
-  const FACE = 216;
+  /** Nearly the whole height of the band: the picture is what somebody holds the pass up to show (the owner). */
+  const FACE = 324;
+  const EDGE = 64;
+  const TOP = (STRIP_HEIGHT - FACE) / 2;
+  /** A ring, so a dark photograph still ends somewhere against a dark pass. */
+  const RING = 'rgba(235, 237, 239, 0.14)';
+  /** Where the words start, and how much room they have between the face and the far edge. */
+  const COLUMN = EDGE + FACE + 56;
+  const COLUMN_WIDTH = STRIP_WIDTH - COLUMN - EDGE;
+  /** As many letters of the bio as three lines of this column hold, measured on the drawn band. */
+  const BIO_LIMIT = 94;
+
   const face =
     source.picture === undefined
       ? el(
@@ -268,11 +313,13 @@ export function stripTree(source: CardSource, assets: CardAssets): Element {
               borderRadius: `${String(FACE / 2)}px`,
               background: ACCENT,
               color: '#ffffff',
-              fontSize: '84px',
+              fontSize: '132px',
               fontWeight: 600,
               fontFamily: 'Host Grotesk',
+              letterSpacing: '-0.02em',
               alignItems: 'center',
               justifyContent: 'center',
+              border: `3px solid ${RING}`,
             },
           },
           initialsOf(source.name),
@@ -281,7 +328,7 @@ export function stripTree(source: CardSource, assets: CardAssets): Element {
           src: source.picture,
           width: FACE,
           height: FACE,
-          style: { borderRadius: `${String(FACE / 2)}px`, objectFit: 'cover' },
+          style: { borderRadius: `${String(FACE / 2)}px`, objectFit: 'cover', border: `3px solid ${RING}` },
         });
 
   return el(
@@ -291,58 +338,64 @@ export function stripTree(source: CardSource, assets: CardAssets): Element {
         display: 'flex',
         width: `${String(STRIP_WIDTH)}px`,
         height: `${String(STRIP_HEIGHT)}px`,
-        // No ground of its own, and no dash field: the pass's own background shows through, so the band has no
-        // edge where it ends (the owner, 26 October 2026). A seam across a pass reads as a mistake, not a design.
+        // No ground of its own: the pass's own background shows through, so the band has no edge where it ends
+        // (the owner, 26 October 2026). A seam across a pass reads as a mistake, not a design.
         background: 'transparent',
         position: 'relative',
         fontFamily: 'Inter',
       },
     },
     el('img', {
-      src: fieldImage(STRIP_WIDTH, STRIP_HEIGHT, { fade: 'down', sideways: false, strength: 1 }),
+      src: fieldImage(STRIP_WIDTH, STRIP_HEIGHT, {
+        sideways: false,
+        strength: 1,
+        // Off the face and a little low: most of a bloom centred on the face would be behind it, and the band
+        // would keep only its fringe. Thrown down and to the right, the blue breaks out past the picture and
+        // runs under the words, which is where there is room for it.
+        bloom: { x: EDGE + FACE * 0.78, y: STRIP_HEIGHT * 0.62, radius: FACE * 2.4 },
+      }),
       width: STRIP_WIDTH,
       height: STRIP_HEIGHT,
       style: { position: 'absolute', left: '0px', top: '0px' },
     }),
     el(
       'div',
+      { style: { display: 'flex', position: 'absolute', left: `${String(EDGE)}px`, top: `${String(TOP)}px` } },
+      face,
+    ),
+    el(
+      'div',
       {
         style: {
           display: 'flex',
+          flexDirection: 'column',
           position: 'absolute',
-          left: '72px',
-          right: '72px',
-          top: '108px',
-          alignItems: 'center',
+          left: `${String(COLUMN)}px`,
+          top: `${String(TOP)}px`,
+          height: `${String(FACE)}px`,
+          width: `${String(COLUMN_WIDTH)}px`,
+          justifyContent: 'center',
         },
       },
-      face,
+      el('img', { src: assets.wordmark, width: 116, height: 28, style: { opacity: 0.75, marginBottom: '26px' } }),
+      // The one line of the band its owner writes: the profile's bio, from the link page editor. A page with
+      // none carries the same sentence its share card does, so the band is never a face beside a gap.
       el(
         'div',
-        { style: { display: 'flex', flexDirection: 'column', marginLeft: '44px', maxWidth: '700px' } },
-        el(
-          'div',
-          {
-            style: {
-              fontSize: '74px',
-              fontWeight: 600,
-              color: TEXT,
-              fontFamily: 'Host Grotesk',
-              letterSpacing: '-0.025em',
-              lineHeight: 1.02,
-            },
+        {
+          style: {
+            display: 'flex',
+            fontSize: '42px',
+            fontWeight: 600,
+            color: TEXT,
+            fontFamily: 'Host Grotesk',
+            letterSpacing: '-0.02em',
+            lineHeight: 1.18,
           },
-          source.name,
-        ),
-        el('div', { style: { display: 'flex', fontSize: '34px', color: SOFT, marginTop: '14px' } }, source.handle),
+        },
+        clampWords(source.description, BIO_LIMIT),
       ),
     ),
-    el('img', {
-      src: assets.wordmark,
-      width: 116,
-      height: 28,
-      style: { position: 'absolute', right: '72px', top: '44px' },
-    }),
   );
 }
 

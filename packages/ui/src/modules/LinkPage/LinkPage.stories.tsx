@@ -411,6 +411,61 @@ export const Header: Story = {
   },
 };
 
+/**
+ * The same header with a pass to keep (26 October 2026): Add to Apple Wallet under Save contact and Share, as a
+ * quieter second save on a row of its own. Another story already screenshots the header, so this one checks the
+ * link alone.
+ */
+export const Wallet: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    person: PERSON,
+    address: { label: 'timefix.com/anish', value: 'https://timefix.com/anish' },
+    share: <Button variant="secondary" size="touch" icon="qr-code" label="Share this page" />,
+    walletHref: '/api/public/handles/anish/pass.pkpass',
+  },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage
+        {...args}
+        blocks={[
+          {
+            kind: 'contact',
+            id: 'card',
+            title: 'Anish Gupta',
+            line: 'Cofounder · Timefix',
+            href: '/api/public/handles/anish/contact.vcf',
+          },
+          ...anishBlocks(),
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    const pass = canvas.getByRole('link', { name: 'Add to Apple Wallet' });
+    await expect(pass).toHaveAttribute('href', '/api/public/handles/anish/pass.pkpass');
+    // In place, never a new tab: the phone opens Wallet from the file it downloads.
+    await expect(pass).not.toHaveAttribute('target');
+    await expect(canvas.getByRole('link', { name: 'Save contact' })).toBeVisible();
+  },
+};
+
+/** An address that isn't this site's own path never becomes the wallet link. */
+export const WalletElsewhere: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { person: PERSON, walletHref: 'https://example.com/pass.pkpass' },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage {...args} blocks={anishBlocks()} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    await expect(canvas.queryByRole('link', { name: 'Add to Apple Wallet' })).toBeNull();
+  },
+};
+
 /** No contact card, and a card whose address isn't this site's own path: neither draws a Save contact. */
 export const WithoutContactCard: Story = {
   parameters: { crm: { screenshot: false } },

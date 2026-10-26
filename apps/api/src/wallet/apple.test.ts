@@ -12,6 +12,7 @@ import forge from 'node-forge';
 import { describe, expect, it } from 'vitest';
 import { applePassJson, applePkpass, appleManifest, type AppleWalletConfig } from './apple.ts';
 import { passIcon, passIcons } from './icon.ts';
+import { passBackground, passBackground2x } from './background.ts';
 import { makeZip, sha1 } from './zip.ts';
 
 /** A certificate and key of this test's own: nothing here ever touches a real Pass Type ID certificate. */
@@ -49,6 +50,9 @@ const pass = {
   bio: 'Notes, links and a time to meet.',
   pageUrl: 'https://timefix.com/ada',
   ...passIcons(),
+  // A real ground, so what the manifest signs is what ships; it is the same few hundred milliseconds either way.
+  background: passBackground(),
+  background2x: passBackground2x(),
 };
 
 describe('applePassJson', () => {
@@ -69,12 +73,31 @@ describe('applePassJson', () => {
     expect(json.barcodes[0]?.altText).toBe('timefix.com/ada');
   });
 
-  it('shows a name and a code and nothing else, so the code gets the room', () => {
-    const json = applePassJson(config, pass) as { logoText: string; generic: Record<string, unknown[]> };
-    expect(json.logoText).toBe('Ada Lovelace');
+  it('reads as a card: the brand, then the name, the address and the line under it', () => {
+    const json = applePassJson(config, pass) as {
+      logoText: string;
+      backgroundColor: string;
+      generic: Record<string, { key: string; value: string }[]>;
+    };
+    expect(json.logoText).toBe('timefix');
+    expect(json.backgroundColor).toBe('rgb(253, 92, 23)');
+    expect(json.generic.headerFields).toEqual([{ key: 'name', label: 'Name', value: 'Ada Lovelace' }]);
+    expect(json.generic.secondaryFields).toEqual([{ key: 'page', label: 'Page', value: 'timefix.com/ada' }]);
+    expect(json.generic.auxiliaryFields?.[0]?.value).toBe('Notes, links and a time to meet.');
+    // The middle stays empty, so the code keeps the room it needs.
     expect(json.generic.primaryFields).toEqual([]);
-    expect(json.generic.secondaryFields).toEqual([]);
-    expect(json.generic.auxiliaryFields).toEqual([]);
+  });
+
+  it('cuts a long line at a whole word rather than letting the row shrink to nothing', () => {
+    const long = {
+      ...pass,
+      bio: 'Engineer and designer, building scheduling software that gets out of the way of the people using it.',
+    };
+    const json = applePassJson(config, long) as { generic: { auxiliaryFields: { value: string }[] } };
+    const value = json.generic.auxiliaryFields[0]?.value ?? '';
+    expect(value.endsWith('…')).toBe(true);
+    expect(value.length).toBeLessThanOrEqual(91);
+    expect(value).not.toMatch(/\s…$/);
   });
 
   it('may be handed on, because a pass whose code opens a page is worth passing on', () => {
@@ -114,13 +137,29 @@ describe('applePkpass', () => {
 
   it('holds the five files a pass needs, and a real system reads the zip', () => {
     const found = entries(applePkpass(config, pass));
-    expect(Object.keys(found).sort()).toEqual(['icon.png', 'icon@2x.png', 'manifest.json', 'pass.json', 'signature']);
+    expect(Object.keys(found).sort()).toEqual([
+      'background.png',
+      'background@2x.png',
+      'background@3x.png',
+      'icon.png',
+      'icon@2x.png',
+      'manifest.json',
+      'pass.json',
+      'signature',
+    ]);
   });
 
   it('hashes every file but the manifest and the signature, and gets them right', () => {
     const found = entries(applePkpass(config, pass));
     const manifest = JSON.parse((found['manifest.json'] ?? Buffer.alloc(0)).toString('utf8')) as Record<string, string>;
-    expect(Object.keys(manifest).sort()).toEqual(['icon.png', 'icon@2x.png', 'pass.json']);
+    expect(Object.keys(manifest).sort()).toEqual([
+      'background.png',
+      'background@2x.png',
+      'background@3x.png',
+      'icon.png',
+      'icon@2x.png',
+      'pass.json',
+    ]);
     for (const [name, digest] of Object.entries(manifest)) {
       expect(sha1(Uint8Array.from(found[name] ?? Buffer.alloc(0))), name).toBe(digest);
     }

@@ -7,6 +7,7 @@
 // a shared link.
 import type { WalletKind } from '@crm/contracts/brand';
 import { applePkpass, type AppleWalletConfig } from './apple.ts';
+import { passBackground, passBackground2x } from './background.ts';
 import { googleWalletLink, type GoogleWalletConfig } from './google.ts';
 import { passIcons } from './icon.ts';
 
@@ -65,40 +66,22 @@ export function createWalletLinks(settings: WalletSettings): (wallet: WalletKind
   };
 }
 
-/** How long the band may take to draw before the pass goes out without it. */
-const STRIP_TIMEOUT_MS = 2_000;
-/** The largest band worth carrying: the drawing is a few tens of kilobytes, and anything else is not it. */
-const STRIP_MAX_BYTES = 600_000;
-
 /**
- * The band for one page, or undefined. Our own origin's drawing route and nothing else, and every way it can go
- * wrong answers undefined: a pass without its picture is a pass, a pass that failed to build is nothing.
+ * Makes one person's `.pkpass`, or undefined where Apple has no certificate here. Synchronous since the ground
+ * stopped being fetched (26 October 2026): everything a pass needs is already in this process.
  */
-async function stripOf(origin: string, handle: string): Promise<Uint8Array | undefined> {
-  try {
-    const answer = await fetch(`${origin}/api/public/handles/${encodeURIComponent(handle)}/pass-strip.png`, {
-      signal: AbortSignal.timeout(STRIP_TIMEOUT_MS),
-    });
-    if (!answer.ok) return undefined;
-    if ((answer.headers.get('content-type') ?? '').split(';')[0]?.trim() !== 'image/png') return undefined;
-    const bytes = new Uint8Array(await answer.arrayBuffer());
-    return bytes.byteLength === 0 || bytes.byteLength > STRIP_MAX_BYTES ? undefined : bytes;
-  } catch {
-    return undefined;
-  }
-}
-
-/** Makes the caller's own `.pkpass`, or undefined where Apple has no certificate here. */
-export type ApplePassMaker = (person: WalletPerson) => Promise<Uint8Array>;
+export type ApplePassMaker = (person: WalletPerson) => Uint8Array;
 
 /** The `.pkpass` maker, or undefined: the one thing the route needs, built from the same settings. */
 export function createApplePass(settings: WalletSettings): ApplePassMaker | undefined {
   const config = settings.apple;
   if (config === undefined) return undefined;
   const origin = new URL(settings.origin).origin;
-  return async (person) => {
+  // The ground is the same for every pass, so it is drawn once when the maker is built rather than per request.
+  const background = passBackground();
+  const background2x = passBackground2x();
+  return (person) => {
     const icons = passIcons();
-    const strip = await stripOf(origin, person.handle);
     // `walletPageUrl` sets the source, medium and campaign and leaves everything else alone, so the one tag that
     // says who saved this pass is set here and survives.
     const page = `${origin}/${encodeURIComponent(person.handle)}${person.shared === true ? '?utm_content=shared' : ''}`;
@@ -109,7 +92,8 @@ export function createApplePass(settings: WalletSettings): ApplePassMaker | unde
       pageUrl: page,
       icon: icons.icon,
       icon2x: icons.icon2x,
-      ...(strip === undefined ? {} : { strip }),
+      background,
+      background2x,
     });
   };
 }

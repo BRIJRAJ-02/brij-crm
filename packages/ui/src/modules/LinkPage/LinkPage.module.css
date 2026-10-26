@@ -189,14 +189,21 @@
     overflow: hidden;
   }
 
-  /* Save contact, the page's one action, with Share beside it: a thumb's row. */
+  /* Save contact, the page's one action, with Share beside it: a thumb's row, and under it Add to Apple Wallet
+     when the page offers one. */
   .actions {
     display: flex;
+    flex-direction: column;
     gap: var(--space-8);
   }
 
   .actions:empty {
     display: none;
+  }
+
+  .actionRow {
+    display: flex;
+    gap: var(--space-8);
   }
 
   /* The address pill under the name, clear of the bio above it. */
@@ -206,7 +213,7 @@
   }
 
   /* Save contact takes the rest of the row, so Share stays a square beside it. */
-  .actions > :first-child {
+  .actionRow > :first-child {
     flex: 1;
     min-inline-size: 0;
   }

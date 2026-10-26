@@ -134,6 +134,12 @@ export interface LinkPageProps {
    * API on the public page, the Share modal in the editor), and this module touches neither.
    */
   readonly share?: ReactNode;
+  /**
+   * Under the actions: the page as an Apple Wallet pass, `/api/public/handles/<handle>/pass.pkpass` on this site. A
+   * plain link, like Save contact, so it needs no script and a phone opens Wallet straight from it. Left out where
+   * the page draws without one (the editor's preview, which shows no Share either).
+   */
+  readonly walletHref?: string;
   /** Under the actions: the person's social icons row (their own set, never a block). */
   readonly socials?: ReactNode;
   /** Above the blocks: a search, once there are many. */
@@ -240,39 +246,57 @@ function contactOf(blocks: readonly LinkPageBlock[] | undefined) {
   return blocks?.find((block) => block.kind === 'contact');
 }
 
+/** A path on this site's own origin, or undefined: what the header's own links are allowed to point at. */
+function ownPath(href: string | undefined): string | undefined {
+  return href !== undefined && href.startsWith('/') && !/^\/[/\\]/.test(href) ? href : undefined;
+}
+
 /**
- * The actions under the person: Save contact, the page's one primary action, when the owner keeps a card, and the
- * caller's Share beside it. Save contact is a plain link to the card's vCard on our own origin, so it works with no
- * script and straight from a QR code, and a phone offers to add the card to its contacts.
+ * The actions under the person: Save contact, the page's one primary action, when the owner keeps a card, with the
+ * caller's Share beside it, and under them Add to Apple Wallet when the caller passes a pass address. Both are plain
+ * links to our own origin, so they work with no script and straight from a QR code, and a phone offers to add the
+ * card to its contacts or opens Wallet. The wallet takes a row of its own rather than a third place in the first
+ * row: at a thumb's size three controls leave no room for its words.
  */
 function Actions({
   contact,
   share,
+  walletHref,
   onPress,
 }: {
   readonly contact: Extract<LinkPageBlock, { kind: 'contact' }> | undefined;
   readonly share: ReactNode;
+  readonly walletHref?: string;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
-  // Only this site's own path: the card is served by the api, never from elsewhere.
-  const href =
-    contact !== undefined && contact.href.startsWith('/') && !/^\/[/\\]/.test(contact.href) ? contact.href : undefined;
-  if (href === undefined && share === undefined) return null;
+  // Only this site's own path: the card and the pass are served by the api, never from elsewhere.
+  const href = contact === undefined ? undefined : ownPath(contact.href);
+  const wallet = ownPath(walletHref);
+  if (href === undefined && share === undefined && wallet === undefined) return null;
   return (
     <div className={styles.actions}>
-      {href !== undefined && contact !== undefined && (
-        <ButtonLink
-          variant="primary"
-          size="touch"
-          icon="contact"
-          href={href}
-          isFullWidth="center"
-          {...(onPress === undefined ? {} : { onPress: () => onPress(contact.id) })}
-        >
-          {strings.saveContact}
+      {(href !== undefined || share !== undefined) && (
+        <div className={styles.actionRow}>
+          {href !== undefined && contact !== undefined && (
+            <ButtonLink
+              variant="primary"
+              size="touch"
+              icon="contact"
+              href={href}
+              isFullWidth="center"
+              {...(onPress === undefined ? {} : { onPress: () => onPress(contact.id) })}
+            >
+              {strings.saveContact}
+            </ButtonLink>
+          )}
+          {share}
+        </div>
+      )}
+      {wallet !== undefined && (
+        <ButtonLink size="touch" icon="wallet" href={wallet} isFullWidth="center">
+          {strings.addToWallet}
         </ButtonLink>
       )}
-      {share}
     </div>
   );
 }
@@ -772,6 +796,7 @@ export function LinkPage({
   blocks,
   address,
   share,
+  walletHref,
   socials,
   toolbar,
   summary,
@@ -883,7 +908,12 @@ export function LinkPage({
         </header>
         {/* The one action under the person, then the way to pass the page on, then where else to find them.
               Share stands while the page loads: it shares the address the visitor is already on. */}
-        <Actions contact={contact} share={share} onPress={onPress} />
+        <Actions
+          contact={contact}
+          share={share}
+          onPress={onPress}
+          {...(walletHref === undefined ? {} : { walletHref })}
+        />
         {socials}
         {toolbar}
         {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}

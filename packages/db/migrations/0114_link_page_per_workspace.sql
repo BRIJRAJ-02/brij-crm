@@ -122,7 +122,7 @@ begin
 
   select count(*) into moved from link_page_home;
   if moved > 0 or gone_items > 0 then
-    raise notice '0113_link_page_per_workspace: % people moved to one workspace, % cross-workspace page/form items removed, % rows without a membership removed',
+    raise notice '0114_link_page_per_workspace: % people moved to one workspace, % cross-workspace page/form items removed, % rows without a membership removed',
       moved, gone_items, gone_people;
   end if;
 end
@@ -938,7 +938,8 @@ begin atomic
   from auth.public_profiles p
   where p.user_id = crm_profile_share_image.owner
     and p.workspace_id = crm_profile_share_image.workspace
-    and p.share_image is not null;
+    and p.share_image is not null
+    and public.crm_workspace_member(p.user_id, p.workspace_id);
 end;
 --> statement-breakpoint
 create function crm_save_profile_theme(owner uuid, workspace uuid, theme jsonb)

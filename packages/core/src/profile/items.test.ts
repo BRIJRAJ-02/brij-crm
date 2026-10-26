@@ -727,6 +727,9 @@ describe('every definer asks for an active member of the workspace (spec 0056, A
         [user, elsewhere, '{"ground":"plain","hue":"blue","mode":"light","shape":"soft","fill":"plain","font":"sans"}'],
       ],
       ['crm_save_profile_indexable($1, $2, $3)', [user, elsewhere, false]],
+      // The share image moved onto the membership with the rest (spec 0055's picture, migration 0114).
+      ['crm_save_profile_share_image($1, $2, null, null)', [user, elsewhere]],
+      ['crm_place_profile_page($1, $2, $3)', [user, elsewhere, newId()]],
     ];
     for (const [call, args] of writes) {
       await expect(testQuery(appUrl, `select ${call}`, args), call).rejects.toThrow(/PROFILE_NOT_MEMBER/);
@@ -736,6 +739,7 @@ describe('every definer asks for an active member of the workspace (spec 0056, A
       'crm_profile_items($1, $2)',
       'crm_profile_items_archived($1, $2)',
       'crm_profile_items_public($1, $2, 0::smallint, null::uuid, 50)',
+      'crm_profile_share_image($1, $2)',
     ]) {
       expect(await testQuery(appUrl, `select * from ${call}`, [user, elsewhere]), call).toEqual([]);
     }

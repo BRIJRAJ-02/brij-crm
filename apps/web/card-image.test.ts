@@ -5,7 +5,18 @@ import { readFile } from 'node:fs/promises';
 import { Resvg } from '@resvg/resvg-js';
 import satori from 'satori';
 import { describe, expect, it } from 'vitest';
-import { CARD_HEIGHT, CARD_WIDTH, cardFonts, cardTree, handleOf, initialsOf } from './card-image.ts';
+import {
+  CARD_HEIGHT,
+  CARD_WIDTH,
+  STRIP_HEIGHT,
+  STRIP_WIDTH,
+  cardFonts,
+  cardTree,
+  clampWords,
+  handleOf,
+  initialsOf,
+  stripTree,
+} from './card-image.ts';
 
 const assetsAt = (file: string) => new URL(`./api/card-assets/${file}`, import.meta.url);
 
@@ -23,6 +34,16 @@ async function draw(source: Parameters<typeof cardTree>[0]): Promise<Buffer> {
     fonts: cardFonts(assets),
   });
   return Buffer.from(new Resvg(svg, { fitTo: { mode: 'width', value: CARD_WIDTH } }).render().asPng());
+}
+
+/** One pass band, drawn the same way: `api/card.mjs` draws it at the strip's size with the same fonts. */
+async function drawStrip(source: Parameters<typeof stripTree>[0]): Promise<Buffer> {
+  const svg = await satori(stripTree(source, assets) as never, {
+    width: STRIP_WIDTH,
+    height: STRIP_HEIGHT,
+    fonts: cardFonts(assets),
+  });
+  return Buffer.from(new Resvg(svg, { fitTo: { mode: 'width', value: STRIP_WIDTH } }).render().asPng());
 }
 
 /** A PNG's own declared size, out of its IHDR chunk: proof the bytes are a picture of the size we claim. */
@@ -56,6 +77,62 @@ describe('the share card', () => {
     const without = await draw({ name: 'Ada', handle: 'timefix.com/ada', description: 'Hello.' });
     expect(sizeOf(withFace)).toEqual({ width: CARD_WIDTH, height: CARD_HEIGHT });
     expect(withFace.equals(without)).toBe(false);
+  });
+});
+
+describe('the pass band', () => {
+  it('draws the one size Apple takes a strip at', async () => {
+    const png = await drawStrip({
+      name: 'Ada Lovelace',
+      handle: 'timefix.com/ada',
+      description: 'Notes on the engine.',
+    });
+    expect(sizeOf(png)).toEqual({ width: STRIP_WIDTH, height: STRIP_HEIGHT });
+  });
+
+  it('draws the bio, which is the line its owner edits', async () => {
+    const one = await drawStrip({ name: 'Ada', handle: 'timefix.com/ada', description: 'Notes on the engine.' });
+    const other = await drawStrip({ name: 'Ada', handle: 'timefix.com/ada', description: 'Out of office.' });
+    expect(sizeOf(one)).toEqual({ width: STRIP_WIDTH, height: STRIP_HEIGHT });
+    // The same person with two sentences is two bands: a band that dropped the bio would make these equal.
+    expect(one.equals(other)).toBe(false);
+  });
+
+  it('stays the same size with a bio nobody kept short', async () => {
+    const png = await drawStrip({
+      name: 'Bartholomew Cunningham-Fairweather',
+      handle: 'timefix.com/bartholomew',
+      description:
+        'Engineer and designer, building scheduling software that gets out of the way of the people using it, '.repeat(
+          4,
+        ),
+    });
+    expect(sizeOf(png)).toEqual({ width: STRIP_WIDTH, height: STRIP_HEIGHT });
+  });
+
+  it('takes a picture where it has one', async () => {
+    const face = `data:image/png;base64,${(await readFile(assetsAt('timefix-wordmark.png'))).toString('base64')}`;
+    const withFace = await drawStrip({ name: 'Ada', handle: 'timefix.com/ada', description: 'Hello.', picture: face });
+    const without = await drawStrip({ name: 'Ada', handle: 'timefix.com/ada', description: 'Hello.' });
+    expect(sizeOf(withFace)).toEqual({ width: STRIP_WIDTH, height: STRIP_HEIGHT });
+    expect(withFace.equals(without)).toBe(false);
+  });
+});
+
+describe('a clamped sentence', () => {
+  it('leaves one that already fits alone, tidying its spaces', () => {
+    expect(clampWords('  Notes on   the engine. ', 40)).toBe('Notes on the engine.');
+  });
+
+  it('cuts at a word, never mid word, and says it was cut', () => {
+    const cut = clampWords('Engineer and designer, building scheduling software that gets out of the way', 40);
+    expect(cut.endsWith('…')).toBe(true);
+    expect(cut.length).toBeLessThanOrEqual(41);
+    expect('Engineer and designer, building scheduling software that gets out of the way').toContain(cut.slice(0, -1));
+  });
+
+  it('cuts a single long word rather than answering nothing', () => {
+    expect(clampWords('a'.repeat(50), 10)).toBe(`${'a'.repeat(10)}…`);
   });
 });
 

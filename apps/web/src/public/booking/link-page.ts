@@ -91,3 +91,13 @@ export function blocksOf(handle: string, items: readonly PublicProfileItem[]): r
     }
   });
 }
+
+/**
+ * The page as an Apple Wallet pass, from the api on this origin (26 October 2026): a plain GET that answers a
+ * `.pkpass` as an attachment, so the button is one link and a phone opens Wallet from it. Where this deployment has
+ * no Apple certificate the address answers a `{ code, message }` 404; the public profile read says nothing about
+ * that, so the button is always shown rather than guessed at.
+ */
+export function passHref(handle: string): string {
+  return `/api/public/handles/${encodeURIComponent(handle)}/pass.pkpass`;
+}

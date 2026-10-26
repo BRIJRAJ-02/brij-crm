@@ -1042,7 +1042,7 @@ export async function enterLinkBlocks(
   const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<LinkPageRow>(
-      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
     ),
   );
   return { owner, rows: found.rows };

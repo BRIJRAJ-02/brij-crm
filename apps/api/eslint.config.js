@@ -40,8 +40,10 @@ export default server({
     'src/realtime/signed-out.ts',
     'src/realtime/wake.ts',
     'src/mail/mailpit.ts',
-    // The pass's band, drawn by this deployment's own picture route: the origin comes from the environment and
-    // the handle is the caller's own, checked against `HANDLE_PATTERN` before the route reaches the door.
+    // The pass's band, drawn by this deployment's own picture route: the origin comes from the environment, never
+    // from the request, and the handle reaches it only after `HANDLE_PATTERN` and the door, encoded into the path.
+    // It is no longer always the caller's own — a visitor may save somebody else's page (26 October 2026) — which
+    // changes nothing here, because the address this builds never leaves our own origin.
     'src/wallet/wallet.ts',
     // One provider's API, at its own constant addresses.
     'src/auth/google-photo.ts',

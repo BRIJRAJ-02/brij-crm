@@ -40,17 +40,27 @@ export interface ApplePass {
   /** `icon.png` (29px) and `icon@2x.png` (58px). Apple refuses a pass with no icon. */
   readonly icon: Uint8Array;
   readonly icon2x: Uint8Array;
-  /**
-   * The band across the pass (`strip@3x.png`, 1125 × 432), drawn in the share card's own language. Absent where
-   * it could not be drawn in time: the pass is then the plain tag it was, which is far better than no pass.
-   */
-  readonly strip?: Uint8Array;
+  /** The ground behind the whole pass (`background.png`), at @2x and @3x. Drawn by `./background.ts`. */
+  readonly background: Uint8Array;
+  readonly background2x: Uint8Array;
+}
+
+/** The most of a bio a pass row will hold before it is cut at a whole word. Past this Apple shrinks it to nothing. */
+const BIO_LIMIT = 90;
+
+/** A bio as one pass row: tidied, cut at the last whole word that fits, with an ellipsis where it was cut. */
+function oneLine(bio: string): string {
+  const text = bio.replace(/\s+/g, ' ').trim();
+  if (text.length <= BIO_LIMIT) return text;
+  const cut = text.slice(0, BIO_LIMIT);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > BIO_LIMIT * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
 /**
- * The pass's own description (`pass.json`). A Store Card where there is a band to carry, because that is the one
- * style Apple draws a strip on; a Generic pass without, which is the same pass with no picture. The code is what
- * the pass is for either way, and the address is repeated as text under it so it can be read aloud.
+ * The pass's own description (`pass.json`), shaped like the passes Apple's own Wallet makes (the owner, 26
+ * October 2026): a Generic pass over a full bleed ground, white type on the brand's blue, the person's name in
+ * the header, their address and their line under it, and the code beneath.
  */
 export function applePassJson(config: AppleWalletConfig, pass: ApplePass): Record<string, unknown> {
   const address = pass.pageUrl.replace(/^https:\/\//, '');
@@ -64,10 +74,12 @@ export function applePassJson(config: AppleWalletConfig, pass: ApplePass): Recor
     description: `${pass.name} on Timefix`,
     // The name sits at the top as the pass's own mark, so the face of the pass is a name and a code and
     // nothing else (the owner, 26 October 2026).
-    logoText: pass.name,
+    logoText: 'timefix',
     foregroundColor: 'rgb(255, 255, 255)',
-    backgroundColor: 'rgb(17, 17, 19)',
-    labelColor: 'rgb(161, 161, 170)',
+    // The same orange Apple's own user passes carry, so a phone that cannot draw the ground still shows the
+    // right pass rather than a white one.
+    backgroundColor: 'rgb(253, 92, 23)',
+    labelColor: 'rgba(255, 255, 255, 0.72)',
     // Handing the pass on is the point: whoever receives it holds a code that opens this page. Apple allows it
     // unless a pass says otherwise, and this says so out loud rather than leaving it to a default.
     sharingProhibited: false,
@@ -79,13 +91,14 @@ export function applePassJson(config: AppleWalletConfig, pass: ApplePass): Recor
         altText: address,
       },
     ],
-    [pass.strip === undefined ? 'generic' : 'storeCard']: {
-      // Every empty row is room the code gets instead. A pass with no fields draws its barcode large and
-      // centred, which is the whole of what this pass is for; the address is already legible under the code
-      // as the barcode's own alt text, and the rest is on the back.
+    generic: {
+      // The name is the pass's header, as a member's name is on Apple's own; the address and the line under it
+      // follow, so the face of the pass reads as a card rather than a code with a caption.
+      headerFields: [{ key: 'name', label: 'Name', value: pass.name }],
       primaryFields: [],
-      secondaryFields: [],
-      auxiliaryFields: [],
+      secondaryFields: [{ key: 'page', label: 'Page', value: address }],
+      auxiliaryFields:
+        pass.bio === undefined || pass.bio === '' ? [] : [{ key: 'about', label: 'About', value: oneLine(pass.bio) }],
       backFields: [
         { key: 'open', label: 'Page', value: walletPageUrl(pass.pageUrl, 'apple_wallet') },
         ...(pass.bio === undefined || pass.bio === '' ? [] : [{ key: 'bio', label: 'About', value: pass.bio }]),
@@ -146,9 +159,11 @@ export function applePkpass(config: AppleWalletConfig, pass: ApplePass): Uint8Ar
     { name: 'pass.json', bytes: encoder.encode(JSON.stringify(applePassJson(config, pass))) },
     { name: 'icon.png', bytes: pass.icon },
     { name: 'icon@2x.png', bytes: pass.icon2x },
-    // One size only, at three pixels to the point: every phone that shows a pass has that screen, and a second
-    // copy of the same picture is bytes the person waits for.
-    ...(pass.strip === undefined ? [] : [{ name: 'strip@3x.png', bytes: pass.strip }]),
+    // Apple asks for the ground at each scale and falls back to the plain name on an older device, so all three
+    // go in; the @2x stands in for the 1x, which nothing in use today draws.
+    { name: 'background.png', bytes: pass.background2x },
+    { name: 'background@2x.png', bytes: pass.background2x },
+    { name: 'background@3x.png', bytes: pass.background },
   ];
   const manifest = encoder.encode(JSON.stringify(appleManifest(files)));
   return makeZip([

@@ -34,12 +34,18 @@ const answer = (code: 'NOT_FOUND' | 'UNAUTHENTICATED' | 'RATE_LIMITED', message:
 const PASS_LIMIT: LimitRule = { max: 20, windowMs: 60_000 };
 
 /**
- * The public route's limits: 6 a minute per client address, and 120 for one handle across this instance. A visitor
- * presses the button once, so six is already generous; the handle's ceiling is what holds a sweep of one page.
+ * The public route's limits: 6 a minute per client address, 30 for one page. A visitor presses the button once, so
+ * six is generous, and this is the most expensive public GET in the app: each pass signs with node-forge, which is
+ * synchronous and holds the event loop, and the band behind it is a 1125 x 432 drawing by another function.
+ *
+ * What these are worth, honestly: the window is this process's own memory (#41), so on Vercel's fluid instances
+ * the real ceiling is thirty times however many instances are up. They slow a sweep rather than stop one. The page
+ * key is the owner's current handle, read back from the door, never the one asked for: a person who has changed
+ * handle five times would otherwise hand an attacker five separate buckets against the same drawing.
  */
 const PUBLIC_PASS_LIMITS = {
   perAddress: { max: 6, windowMs: 60_000 },
-  perHandle: { max: 120, windowMs: 60_000 },
+  perHandle: { max: 30, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;
 
 /** Where a visitor's browser asks for somebody's pass. The web app builds the same address (`publicPassPath`). */
@@ -104,7 +110,7 @@ export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps:
       return nothing();
     }
     if (owner.userId !== session.user.id) return nothing();
-    const bytes = await make({
+    const bytes = make({
       handle: owner.handle,
       name: owner.name.trim() === '' ? owner.handle : owner.name,
       ...(owner.bio === '' ? {} : { bio: owner.bio }),
@@ -122,11 +128,8 @@ export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps:
     const handle = c.req.param('handle') ?? '';
     // Checked before it becomes a limiter key, so a made up address can't fill the table.
     if (!HANDLE_PATTERN.test(handle)) return nothing();
-    for (const [key, rule] of [
-      [`wallet-pass-public:${addressKey(c.get('clientIp'))}`, PUBLIC_PASS_LIMITS.perAddress],
-      [`wallet-pass-handle:${handle}`, PUBLIC_PASS_LIMITS.perHandle],
-    ] as const) {
-      if (!limiter(key, rule).allowed) return tooMany();
+    if (!limiter(`wallet-pass-public:${addressKey(c.get('clientIp'))}`, PUBLIC_PASS_LIMITS.perAddress).allowed) {
+      return tooMany();
     }
     let owner;
     try {
@@ -134,7 +137,9 @@ export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps:
     } catch {
       return nothing();
     }
-    const bytes = await make({
+    // The page's own budget, on the handle the door answered: an old address of theirs shares this one.
+    if (!limiter(`wallet-pass-handle:${owner.handle}`, PUBLIC_PASS_LIMITS.perHandle).allowed) return tooMany();
+    const bytes = make({
       handle: owner.handle,
       name: owner.name.trim() === '' ? owner.handle : owner.name,
       ...(owner.bio === '' ? {} : { bio: owner.bio }),
