@@ -24,6 +24,7 @@ import {
   deleteBookingPage,
   deleteSchedule,
   duplicateSchedule,
+  bookingPageAttributes,
   getBookingPage,
   getSchedule,
   listBookingPages,
@@ -52,6 +53,9 @@ import { member } from '../../orpc.ts';
 export const bookingPagesRouter = member.bookingPages.router({
   list: member.bookingPages.list.handler(async ({ context }) => [...(await listBookingPages(context.scope))]),
   get: member.bookingPages.get.handler(({ context, input }) => getBookingPage(context.scope, { pageId: input.pageId })),
+  attributes: member.bookingPages.attributes.handler(({ context, input }) =>
+    bookingPageAttributes(context.scope, { pageId: input.pageId }),
+  ),
   create: member.bookingPages.create.handler(async ({ context, input }) => {
     try {
       return await commitWrite(context, { mutationId: input.mutationId }, () =>

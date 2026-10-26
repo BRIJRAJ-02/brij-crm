@@ -689,6 +689,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       }),
       delete: os.bookingPages.delete.handler(notServed),
       reorderProfile: os.bookingPages.reorderProfile.handler(notServed),
+      attributes: os.bookingPages.attributes.handler(notServed),
     },
     home: {
       teamToday: os.home.teamToday.handler(notServed),
@@ -3069,6 +3070,8 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     rescheduleHost: 'same',
     isPrivate: false,
     showSocials: true,
+    questions: [],
+    fileToCrm: true,
     defaultView: 'month',
     profileSection: null,
     profilePosition: 0,

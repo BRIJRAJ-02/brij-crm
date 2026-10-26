@@ -4,7 +4,14 @@
 // renders (`PublicForm`): no attribute ids, filing, owner or routing.
 import { createHash } from 'node:crypto';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { choiceKeysOf, FormDocument, type PublicForm, type PublishAttribute } from '@crm/contracts';
+import {
+  choiceKeysOf,
+  FormDocument,
+  type FormQuestion,
+  type PublicForm,
+  type PublicQuestion,
+  type PublishAttribute,
+} from '@crm/contracts';
 import { Hue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
@@ -251,6 +258,23 @@ function choicesOf(question: FormDocument['questions'][number]): {
 }
 
 /**
+ * One question as a visitor's page renders it: what drawing and checking need, never where its answer is filed or
+ * how. A form and a booking page (spec 0057) both send theirs through here.
+ */
+export function publicQuestionOf(question: FormQuestion): PublicQuestion {
+  return {
+    id: question.id,
+    key: question.key,
+    label: question.label,
+    answerType: question.answerType,
+    ...(question.choices === undefined ? {} : choicesOf(question)),
+    ...(question.placeholder === undefined || question.placeholder === '' ? {} : { placeholder: question.placeholder }),
+    required: question.required,
+    ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
+  };
+}
+
+/**
  * A version's document as the visitor's page renders it: every question with
  * its key, label, type, choices and placeholder, the words and the look; no
  * attribute ids, filing, owner or routing. "Book a quick meeting" stays off
@@ -266,18 +290,7 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
     buttonText: document.buttonText,
     language: document.language,
     look: document.look,
-    questions: document.questions.map((question) => ({
-      id: question.id,
-      key: question.key,
-      label: question.label,
-      answerType: question.answerType,
-      ...(question.choices === undefined ? {} : choicesOf(question)),
-      ...(question.placeholder === undefined || question.placeholder === ''
-        ? {}
-        : { placeholder: question.placeholder }),
-      required: question.required,
-      ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
-    })),
+    questions: document.questions.map(publicQuestionOf),
     ...(document.after.kind === 'message' && document.after.message !== '' ? { thanks: document.after.message } : {}),
     offersMeeting: false,
     ...(context.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: context.recaptchaSiteKey }),

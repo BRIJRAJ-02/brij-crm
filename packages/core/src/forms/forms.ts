@@ -277,24 +277,32 @@ export async function formAttributes(
     const form = await visibleForm(tx, scope, input.formId);
     const objectId = form.mainObjectId;
     if (objectId === null) return { items: [] };
-    const attributes = fileable(await loadAttributes(tx, objectId));
-    const writesObject = objectLevel(scope.access, objectId) === 'write';
-    const items = attributes.flatMap((attribute) => {
-      const level = fieldLevel(scope.access, { id: attribute.id, objectId });
-      if (level === 'hidden') return [];
-      return [
-        {
-          attributeId: attribute.id,
-          title: attribute.title,
-          type: attribute.type,
-          isRequired: attribute.isRequired,
-          isUnique: attribute.isUnique,
-          canWrite: writesObject && level === 'write',
-        },
-      ];
-    });
-    return { objectId, objectName: await objectName(tx, objectId), items };
+    return targetChoices(tx, scope, objectId);
   });
+}
+
+/**
+ * An object and the attributes an answer may be filed on (AC-658): its live, non system attributes the reader can
+ * see, with whether they may write each. A form's Where it goes and a booking page's (spec 0057, AC-5706) list these.
+ */
+export async function targetChoices(tx: WorkspaceTx, scope: EngineScope, objectId: string): Promise<FormTargetChoices> {
+  const attributes = fileable(await loadAttributes(tx, objectId));
+  const writesObject = objectLevel(scope.access, objectId) === 'write';
+  const items = attributes.flatMap((attribute) => {
+    const level = fieldLevel(scope.access, { id: attribute.id, objectId });
+    if (level === 'hidden') return [];
+    return [
+      {
+        attributeId: attribute.id,
+        title: attribute.title,
+        type: attribute.type,
+        isRequired: attribute.isRequired,
+        isUnique: attribute.isUnique,
+        canWrite: writesObject && level === 'write',
+      },
+    ];
+  });
+  return { objectId, objectName: await objectName(tx, objectId), items };
 }
 
 /** Whether an address is another form's, through the public key lookup (it spans workspaces, ids only). */

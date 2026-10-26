@@ -73,8 +73,16 @@ export const bookingPages = pgTable(
     dailyLimit: smallint('daily_limit'),
     /** How often a slot starts; null steps by the chosen duration. */
     slotStep: smallint('slot_step'),
-    /** The forms question shape (milestone 2). */
+    /**
+     * The page's own questions (spec 0057, AC-5701): spec 0023's `FormQuestion` list, at most 20, checked by the
+     * contracts' `BookingQuestions` on every write and again on read.
+     */
     questions: jsonb('questions').notNull().default([]),
+    /**
+     * Whether a booking finds or makes the visitor's records and files the answers onto the person (spec 0057,
+     * AC-5708, migration 0114): on by default, which is what every page did before.
+     */
+    fileToCrm: boolean('file_to_crm').notNull().default(true),
     /** A team page's routing rules (spec 0043, AC-1608): `RoutingRules`, tried at each booking. */
     routing: jsonb('routing').notNull().default({ rules: [] }),
     /** `{ mode: 'create' | 'move_open', stageOptionId }` (milestone 2). */
@@ -163,6 +171,10 @@ export const bookingPages = pgTable(
     check('booking_pages_hours_mode', sql`${t.hoursMode} in ('mine', 'own')`),
     check('booking_pages_reschedule_host', sql`${t.rescheduleHost} in ('same', 'rotation')`),
     check('booking_pages_default_view', sql`${t.defaultView} in ('month', 'list', 'chat')`),
+    check(
+      'booking_pages_questions',
+      sql`jsonb_typeof(${t.questions}) = 'array' and jsonb_array_length(${t.questions}) <= 20`,
+    ),
     check('booking_pages_destination_removed_name', sql`char_length(${t.destinationRemovedName}) <= 255`),
     check('booking_pages_title', sql`char_length(${t.title}) between 1 and 120`),
     check('booking_pages_description', sql`char_length(${t.description}) <= 2000`),

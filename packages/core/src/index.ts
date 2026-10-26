@@ -396,6 +396,7 @@ export { deriveKey, signValue, verifyValue } from './calendar/signing.ts';
 export { decodeTokenKey, openTokens, sealTokens, type TokenBinding, type TokenKey } from './calendar/tokens.ts';
 // Booking pages (spec 0025): members' pages and bookings, and the calendar calls the api passes in.
 export {
+  bookingPageAttributes,
   createBookingPage,
   deleteBookingPage,
   getBookingPage,

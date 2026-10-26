@@ -4,6 +4,7 @@
 import * as z from 'zod';
 import { DateValue } from '../values/attribute-values.ts';
 import { Uuid } from '../values/ids.ts';
+import { FormQuestion } from '../forms/document.ts';
 
 /** The meeting lengths offered as ready picks, in minutes; any other length in steps of 5 is a custom one. */
 export const BOOKING_DURATIONS = [15, 30, 45, 60, 90] as const;
@@ -181,6 +182,50 @@ export const BookingDefaultView = z.enum(['month', 'list', 'chat']);
 /** Month, List or Chat. */
 export type BookingDefaultView = z.infer<typeof BookingDefaultView>;
 
+/** The most questions one booking page asks beside the name and email (spec 0057, AC-5701). */
+export const BOOKING_QUESTIONS_MAX = 20;
+
+/**
+ * A booking page's own questions (spec 0057, AC-5701 to AC-5703): spec 0023's `FormQuestion` exactly, so a question
+ * means the same on a form and on a booking page. At most 20, each id and key once, each attribute filed on once, and
+ * no file question until a booking page takes uploads. Where an answer is filed (People only) is checked on save.
+ */
+export const BookingQuestions = z
+  .array(FormQuestion)
+  .max(BOOKING_QUESTIONS_MAX, { error: `A booking page asks at most ${String(BOOKING_QUESTIONS_MAX)} questions.` })
+  .superRefine((questions, context) => {
+    const seen = { ids: new Set<string>(), keys: new Set<string>(), attributes: new Set<string>() };
+    questions.forEach((question, index) => {
+      const at = [index];
+      if (seen.ids.has(question.id)) {
+        context.addIssue({ code: 'custom', path: [...at, 'id'], message: 'Two questions share one id.' });
+      }
+      if (seen.keys.has(question.key)) {
+        context.addIssue({ code: 'custom', path: [...at, 'key'], message: 'Two questions use the same key.' });
+      }
+      if (question.answerType === 'file') {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'answerType'],
+          message: 'A booking page can’t ask for a file yet.',
+        });
+      }
+      const attributeId = question.filedOn?.attributeId;
+      if (attributeId !== undefined && seen.attributes.has(attributeId)) {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'filedOn'],
+          message: 'Two questions are filed on one attribute.',
+        });
+      }
+      seen.ids.add(question.id);
+      seen.keys.add(question.key);
+      if (attributeId !== undefined) seen.attributes.add(attributeId);
+    });
+  });
+/** A booking page's own questions. */
+export type BookingQuestions = z.infer<typeof BookingQuestions>;
+
 /** Live takes bookings; paused shows the page as not taking bookings. */
 export const BookingPageStatus = z.enum(['live', 'paused']);
 /** Live or paused. */
@@ -238,6 +283,13 @@ export const BookingPageSettings = z.object({
    * default. The owner's alone to change, as the address is; a team page never shows them (AC-754).
    */
   showSocials: z.boolean(),
+  /** The questions a visitor answers beside their name and email (spec 0057, AC-5701); none asks nothing more. */
+  questions: BookingQuestions,
+  /**
+   * Whether a booking finds or makes the visitor's person and company and files the answers onto the person (spec
+   * 0057, AC-5708): on by default, today's behaviour. Off, the booking keeps the answers and touches no record.
+   */
+  fileToCrm: z.boolean(),
 });
 /** Every setting a member edits. */
 export type BookingPageSettings = z.infer<typeof BookingPageSettings>;

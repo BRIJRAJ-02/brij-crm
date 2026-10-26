@@ -8,6 +8,7 @@ import {
   BookingDefaultView,
   BookingDuration,
   BookingLocation,
+  BookingQuestions,
   isTimeZone,
   minutesOf,
   RoutingRules,
@@ -118,6 +119,9 @@ export function pageOf(
     defaultView: BookingDefaultView.safeParse(row.defaultView).data ?? 'month',
     profileSection: row.profileSection,
     profilePosition: row.profilePosition,
+    // Parsed again on the way out (spec 0057): a stored list the schema no longer takes reads as no questions.
+    questions: BookingQuestions.safeParse(row.questions).data ?? [],
+    fileToCrm: row.fileToCrm,
     ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
     createdAt: row.createdAt,
