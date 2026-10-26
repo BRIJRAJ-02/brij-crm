@@ -293,7 +293,16 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
         <Card>
           <SettingsRow
             title={strings.handle}
-            description={profile.handle === undefined ? strings.handleNew : strings.handleKept}
+            description={
+              profile.handle === undefined
+                ? [
+                    strings.handleNew,
+                    ...(profile.otherLinkPages === undefined
+                      ? []
+                      : [strings.otherLinkPages(profile.otherLinkPages.map((other) => other.workspaceName))]),
+                  ].join(' ')
+                : strings.handleKept
+            }
             control="field"
           >
             <Field

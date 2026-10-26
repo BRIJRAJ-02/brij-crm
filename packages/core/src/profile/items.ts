@@ -1,5 +1,7 @@
-// The link page's blocks (spec 0051, built as blocks): a person's one ordered list at `/<handle>`, kept with their
-// account in schema auth (migration 0098), out of the app role's reach. These are its only ways there, each one of
+// The link page's blocks (spec 0051, built as blocks; one page per workspace since spec 0056): a person's ordered
+// list at `/<handle>` in ONE workspace, kept with their account in schema auth (migrations 0098 and 0113), out of the
+// app role's reach. Every definer takes the session's own workspace beside the owner and refuses unless the owner is
+// an active member of it, so a person's pages in their other workspaces are never read or written from here. These are its only ways there, each one of
 // crm_handle's definers, run inside the caller's workspace transaction with the session's own user id: no input names
 // the owner, so no role in any workspace reaches another person's page. A booking page block names a page by its
 // workspace and id; which of the person's pages it may name, and what the editor shows of one, comes through the
@@ -30,6 +32,7 @@ import {
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { enterOwnForms, enterOwnPages, ownUserId, type OwnedFormEntry, type OwnedPageEntry } from '../access/door.ts';
+import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { isUuid, newId } from '../engine/ids.ts';
 import { imageTypeOf } from '../booking/image-type.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -198,7 +201,7 @@ async function formFactsOf(entries: readonly OwnedFormEntry[]): Promise<FactsByF
   return facts;
 }
 
-function itemOf(row: ItemRow, facts: BlockFacts): ProfileItem | undefined {
+function itemOf(row: ItemRow, facts: BlockFacts, outside: ReadonlySet<string> = new Set()): ProfileItem | undefined {
   const data = typeof row.data === 'object' && row.data !== null ? row.data : {};
   const stored = {
     id: row.id,
@@ -226,7 +229,13 @@ function itemOf(row: ItemRow, facts: BlockFacts): ProfileItem | undefined {
       ...(found === undefined || found.workspaceId !== row.workspace_id ? {} : { form: found.facts }),
     };
   } else if (row.kind === 'link') {
-    candidate = { hue: 'blue', ...data, kind: 'link', ...stored };
+    candidate = {
+      hue: 'blue',
+      ...data,
+      kind: 'link',
+      ...stored,
+      ...(outside.has(row.id) ? { outsideWorkspace: true } : {}),
+    };
   } else {
     candidate = { ...data, kind: row.kind, ...stored };
   }
@@ -234,11 +243,16 @@ function itemOf(row: ItemRow, facts: BlockFacts): ProfileItem | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-async function readRows(tx: WorkspaceTx, owner: string, archived: boolean): Promise<readonly ItemRow[]> {
+async function readRows(
+  tx: WorkspaceTx,
+  owner: string,
+  workspace: string,
+  archived: boolean,
+): Promise<readonly ItemRow[]> {
   const found = await tx.execute<ItemRow>(
     archived
-      ? sql`select ${ITEM_COLUMNS} from crm_profile_items_archived(${owner}::uuid)`
-      : sql`select ${ITEM_COLUMNS} from crm_profile_items(${owner}::uuid)`,
+      ? sql`select ${ITEM_COLUMNS} from crm_profile_items_archived(${owner}::uuid, ${workspace}::uuid)`
+      : sql`select ${ITEM_COLUMNS} from crm_profile_items(${owner}::uuid, ${workspace}::uuid)`,
   );
   return found.rows;
 }
@@ -253,33 +267,56 @@ async function factsForRows(scope: EngineScope, rows: readonly ItemRow[]): Promi
   };
 }
 
-/** Both lists, read in one transaction, with their pages' facts. */
-async function readAll(scope: EngineScope, owner: string): Promise<ProfileItems> {
-  const [live, archived] = await inWorkspace(scope, async (tx) => [
-    await readRows(tx, owner, false),
-    await readRows(tx, owner, true),
-  ]);
+/** Whether the options name any of our own origins, which is what makes an address one of ours to check. */
+interface AddressOptions {
+  readonly publicOrigins?: readonly string[];
+}
+
+/** Both lists, read in one transaction, with their pages' facts and the links that have left the workspace. */
+async function readAll(scope: EngineScope, owner: string, options: AddressOptions = {}): Promise<ProfileItems> {
+  const origins = options.publicOrigins ?? [];
+  const [live, archived, outside] = await inWorkspace(scope, async (tx) => {
+    const liveRows = await readRows(tx, owner, scope.workspaceId, false);
+    const archivedRows = await readRows(tx, owner, scope.workspaceId, true);
+    // A link to one of our own pages that no longer resolves in this workspace (AC-5612), marked for the editor.
+    const gone = new Set<string>();
+    if (origins.length > 0) {
+      for (const row of [...liveRows, ...archivedRows]) {
+        const url =
+          row.kind === 'link' && typeof row.data === 'object' && row.data !== null && 'url' in row.data
+            ? row.data.url
+            : undefined;
+        if (
+          typeof url === 'string' &&
+          (await workspaceAddressProblem(tx, scope.workspaceId, url, origins)) !== undefined
+        ) {
+          gone.add(row.id);
+        }
+      }
+    }
+    return [liveRows, archivedRows, gone] as const;
+  });
   const facts = await factsForRows(scope, [...live, ...archived]);
   const items = (rows: readonly ItemRow[]) =>
     rows.flatMap((row) => {
-      const item = itemOf(row, facts);
+      const item = itemOf(row, facts, outside);
       return item === undefined ? [] : [item];
     });
   return { items: items(live), archived: items(archived) };
 }
 
 /** The caller's link page: its live blocks in order, and its archived ones, newest first (the editor's read). */
-export async function readProfileItems(scope: EngineScope): Promise<ProfileItems> {
-  return readAll(scope, ownerOf(scope));
+export async function readProfileItems(scope: EngineScope, options: AddressOptions = {}): Promise<ProfileItems> {
+  return readAll(scope, ownerOf(scope), options);
 }
 
 /**
- * The booking pages the caller may still place (AC-5117): their Public pages in every workspace they are an active
- * member of, live or paused, without the ones a live block holds already, by workspace then title.
+ * The booking pages the caller may still place (AC-5117, AC-5606): their Public pages in the workspace they are in,
+ * live or paused, without the ones a live block holds already, by title. Never another workspace's.
  */
 export async function listProfilePageChoices(scope: EngineScope): Promise<readonly ProfilePageChoice[]> {
   const owner = ownerOf(scope);
-  const live = await inWorkspace(scope, (tx) => readRows(tx, owner, false));
+  const live = await inWorkspace(scope, (tx) => readRows(tx, owner, scope.workspaceId, false));
   const placed = new Set(live.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : [])));
   const entries = (await enterOwnPages(scope)).filter((entry) => !placed.has(entry.pageId));
   const facts = await factsOf(entries);
@@ -299,7 +336,7 @@ export async function listProfilePageChoices(scope: EngineScope): Promise<readon
  */
 export async function listProfileFormChoices(scope: EngineScope): Promise<readonly ProfileFormChoice[]> {
   const owner = ownerOf(scope);
-  const live = await inWorkspace(scope, (tx) => readRows(tx, owner, false));
+  const live = await inWorkspace(scope, (tx) => readRows(tx, owner, scope.workspaceId, false));
   const placed = new Set(live.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : [])));
   const entries = (await enterOwnForms(scope)).filter((entry) => !placed.has(entry.formId));
   const facts = await formFactsOf(entries);
@@ -325,7 +362,7 @@ export async function saveProfileTheme(scope: EngineScope, theme: PageTheme): Pr
   const saved = await inWorkspace(scope, async (tx) => {
     try {
       const answered = await tx.execute<{ theme: unknown }>(
-        sql`select theme from crm_save_profile_theme(${owner}::uuid, ${JSON.stringify(parsed.data)}::jsonb) as theme`,
+        sql`select theme from crm_save_profile_theme(${owner}::uuid, ${scope.workspaceId}::uuid, ${JSON.stringify(parsed.data)}::jsonb) as theme`,
       );
       return answered.rows[0]?.theme;
     } catch (error) {
@@ -347,7 +384,7 @@ export async function setProfileIndexable(scope: EngineScope, indexable: boolean
   const kept = await inWorkspace(scope, async (tx) => {
     try {
       const answered = await tx.execute<{ indexable: boolean }>(
-        sql`select crm_save_profile_indexable(${owner}::uuid, ${indexable}) as indexable`,
+        sql`select crm_save_profile_indexable(${owner}::uuid, ${scope.workspaceId}::uuid, ${indexable}) as indexable`,
       );
       return answered.rows[0]?.indexable;
     } catch (error) {
@@ -358,6 +395,9 @@ export async function setProfileIndexable(scope: EngineScope, indexable: boolean
   });
   return { indexable: kept ?? indexable };
 }
+
+/** The sentence for a booking page or form that is not in the workspace the block is written in (AC-5605). */
+const NOT_IN_WORKSPACE = 'That page isn’t in this workspace.';
 
 /**
  * The picture a pasted link to the caller's own page shows instead of the card we draw (spec 0055, AC-5511), or
@@ -373,6 +413,7 @@ export async function saveProfileShareImage(
   image: { readonly type: string; readonly base64: string } | undefined,
 ): Promise<{ readonly shareImage?: string }> {
   const owner = ownerOf(scope);
+  const workspace = scope.workspaceId;
   let bytes: Buffer | undefined;
   if (image !== undefined) {
     bytes = Buffer.from(image.base64, 'base64');
@@ -389,8 +430,8 @@ export async function saveProfileShareImage(
   const { handle, version } = await inWorkspace(scope, async (tx) => {
     try {
       const answered = await tx.execute<{ handle: string; version: string | null }>(
-        sql`select p.handle, crm_save_profile_share_image(${owner}::uuid, ${bytes ?? null}, ${image?.type ?? null}) as version
-            from crm_public_profiles_of(array[${owner}::uuid]) p`,
+        sql`select p.handle, crm_save_profile_share_image(${owner}::uuid, ${workspace}::uuid, ${bytes ?? null}, ${image?.type ?? null}) as version
+            from crm_public_profiles_of(array[${owner}::uuid], ${workspace}::uuid) p`,
       );
       const row = answered.rows[0];
       // No row is no page: a person who has not picked a handle has nothing for a share image to belong to,
@@ -431,6 +472,10 @@ function refusalOf(error: unknown): unknown {
   if (pg.code === '23505' && pg.constraint === 'profile_items_form_once') {
     return refuse('CONFIG_INVALID', 'That form is on your link page already.');
   }
+  // A booking page or form that is not the person's own in this workspace (AC-5605): another workspace's, a deleted
+  // one, a guessed id. One answer for all of them.
+  if (pg.code === '42704') return refuse('NOT_FOUND', NOT_IN_WORKSPACE);
+  if (pg.code === '42501') return refuse('FORBIDDEN', 'You’re not a member of this workspace.');
   if (pg.code === 'P0002') return refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
   if (pg.code === '22023') return refuse('CONFIG_INVALID', 'That block can’t be saved as it is.');
   return error;
@@ -531,6 +576,7 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
 export async function saveProfileItem(
   scope: EngineScope,
   input: { readonly id: string; readonly block: ProfileBlock; readonly isEdit?: boolean },
+  options: { readonly publicOrigins?: readonly string[] } = {},
 ): Promise<ProfileItem> {
   const owner = ownerOf(scope);
   const parsed = ProfileBlock.safeParse(input.block);
@@ -541,24 +587,31 @@ export async function saveProfileItem(
     throw field === undefined ? refuse('CONFIG_INVALID', message) : refuseOn('CONFIG_INVALID', message, field);
   }
   const block = parsed.data;
+  // A block belongs to the workspace the session is in, whatever the block says (AC-5604); the definer checks the
+  // page or form against that workspace again, from its own rows.
+  if ((block.kind === 'page' || block.kind === 'form') && block.workspaceId !== scope.workspaceId) {
+    throw refuse('NOT_FOUND', NOT_IN_WORKSPACE);
+  }
   if (block.kind === 'page') {
     const [entry] = await enterOwnPages(scope, [block.pageId]);
-    if (entry?.scope.workspaceId !== block.workspaceId) {
-      throw refuse('NOT_FOUND', 'That booking page can’t go on your link page.');
-    }
+    if (entry === undefined) throw refuse('NOT_FOUND', NOT_IN_WORKSPACE);
   }
   if (block.kind === 'form') {
     const [entry] = await enterOwnForms(scope, [block.formId]);
-    if (entry?.scope.workspaceId !== block.workspaceId) {
-      throw refuse('NOT_FOUND', 'That form can’t go on your link page.');
-    }
+    if (entry === undefined) throw refuse('NOT_FOUND', NOT_IN_WORKSPACE);
   }
   const row = await inWorkspace(scope, async (tx) => {
+    // A link to one of our own pages stays inside this workspace (spec 0056, AC-5610): another workspace's page, and
+    // one that is nowhere, are refused alike. A link to any other site is untouched.
+    if (block.kind === 'link') {
+      const problem = await workspaceAddressProblem(tx, scope.workspaceId, block.url, options.publicOrigins ?? []);
+      if (problem !== undefined) throw refuseOn('CONFIG_INVALID', problem, 'url');
+    }
     // The live blocks only when they are needed: an edit's existence, or a new link's colour.
     const needsRows = input.isEdit === true || (block.kind === 'link' && block.hue === undefined);
-    const live = needsRows ? await readRows(tx, owner, false) : [];
+    const live = needsRows ? await readRows(tx, owner, scope.workspaceId, false) : [];
     if (input.isEdit === true && !live.some((each) => each.id === input.id)) {
-      const archived = await readRows(tx, owner, true);
+      const archived = await readRows(tx, owner, scope.workspaceId, true);
       if (!archived.some((each) => each.id === input.id)) {
         throw refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
       }
@@ -566,7 +619,7 @@ export async function saveProfileItem(
     const stored = storedOf(block, nextHue(live.filter((each) => each.kind === 'link').length));
     try {
       const saved = await tx.execute<ItemRow>(
-        sql`select ${ITEM_COLUMNS} from crm_save_profile_item(${owner}::uuid, ${input.id}::uuid, ${stored.kind}, ${JSON.stringify(stored.data)}::jsonb, ${stored.workspaceId}::uuid, ${stored.pageId}::uuid, ${stored.formId}::uuid)`,
+        sql`select ${ITEM_COLUMNS} from crm_save_profile_item(${owner}::uuid, ${scope.workspaceId}::uuid, ${input.id}::uuid, ${stored.kind}, ${JSON.stringify(stored.data)}::jsonb, ${stored.pageId}::uuid, ${stored.formId}::uuid)`,
       );
       return saved.rows[0];
     } catch (error) {
@@ -583,14 +636,20 @@ export async function saveProfileItem(
  * Sets the caller's whole order at once (AC-5116): `ids` must be exactly their live blocks, each once. An order from
  * a tab that missed a change is `CONFIG_INVALID`, and the editor puts its rows back. Answers both lists.
  */
-export async function orderProfileItems(scope: EngineScope, ids: readonly string[]): Promise<ProfileItems> {
+export async function orderProfileItems(
+  scope: EngineScope,
+  ids: readonly string[],
+  options: AddressOptions = {},
+): Promise<ProfileItems> {
   const owner = ownerOf(scope);
   if (ids.length === 0 || !ids.every((id) => isUuid(id))) {
     throw refuse('CONFIG_INVALID', 'Your link page changed somewhere else. It now shows the latest order.');
   }
   await inWorkspace(scope, async (tx) => {
     try {
-      await tx.execute(sql`select crm_order_profile_items(${owner}::uuid, ${`{${ids.join(',')}}`}::uuid[])`);
+      await tx.execute(
+        sql`select crm_order_profile_items(${owner}::uuid, ${scope.workspaceId}::uuid, ${`{${ids.join(',')}}`}::uuid[])`,
+      );
     } catch (error) {
       const pg = postgresError(error);
       if (pg?.code === '22023') {
@@ -599,7 +658,7 @@ export async function orderProfileItems(scope: EngineScope, ids: readonly string
       throw refusalOf(error);
     }
   });
-  return readAll(scope, owner);
+  return readAll(scope, owner, options);
 }
 
 /**
@@ -609,12 +668,27 @@ export async function orderProfileItems(scope: EngineScope, ids: readonly string
 export async function archiveProfileItem(
   scope: EngineScope,
   input: { readonly id: string; readonly archived: boolean },
+  options: AddressOptions = {},
 ): Promise<ProfileItems> {
   const owner = ownerOf(scope);
   const found = await inWorkspace(scope, async (tx) => {
+    // A link restored to the page is checked as a new one is (spec 0056, AC-5610): one that now names a page outside
+    // this workspace stays archived.
+    if (!input.archived) {
+      const origins = options.publicOrigins ?? [];
+      const row = (await readRows(tx, owner, scope.workspaceId, true)).find((each) => each.id === input.id);
+      const url =
+        row?.kind === 'link' && typeof row.data === 'object' && row.data !== null && 'url' in row.data
+          ? row.data.url
+          : undefined;
+      if (typeof url === 'string' && origins.length > 0) {
+        const problem = await workspaceAddressProblem(tx, scope.workspaceId, url, origins);
+        if (problem !== undefined) throw refuse('CONFIG_INVALID', problem);
+      }
+    }
     try {
       const answer = await tx.execute<{ found: boolean }>(
-        sql`select crm_archive_profile_item(${owner}::uuid, ${input.id}::uuid, ${input.archived}) as found`,
+        sql`select crm_archive_profile_item(${owner}::uuid, ${scope.workspaceId}::uuid, ${input.id}::uuid, ${input.archived}) as found`,
       );
       return answer.rows[0]?.found === true;
     } catch (error) {
@@ -622,7 +696,7 @@ export async function archiveProfileItem(
     }
   });
   if (!found) throw refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
-  return readAll(scope, owner);
+  return readAll(scope, owner, options);
 }
 
 /** Deletes one block for good (AC-5106; the editor asks first). */
@@ -630,7 +704,7 @@ export async function deleteProfileItem(scope: EngineScope, id: string): Promise
   const owner = ownerOf(scope);
   const found = await inWorkspace(scope, async (tx) => {
     const answer = await tx.execute<{ found: boolean }>(
-      sql`select crm_delete_profile_item(${owner}::uuid, ${id}::uuid) as found`,
+      sql`select crm_delete_profile_item(${owner}::uuid, ${scope.workspaceId}::uuid, ${id}::uuid) as found`,
     );
     return answer.rows[0]?.found === true;
   });
@@ -670,9 +744,15 @@ interface CountRow extends Record<string, unknown> {
 }
 
 /** One period's rows from `crm_profile_counts`. */
-async function countsIn(tx: WorkspaceTx, owner: string, from: string, to: string): Promise<readonly CountRow[]> {
+async function countsIn(
+  tx: WorkspaceTx,
+  owner: string,
+  workspace: string,
+  from: string,
+  to: string,
+): Promise<readonly CountRow[]> {
   const found = await tx.execute<CountRow>(
-    sql`select item_id::text as item_id, presses, views, visitors from crm_profile_counts(${owner}::uuid, ${from}::date, ${to}::date)`,
+    sql`select item_id::text as item_id, presses, views, visitors from crm_profile_counts(${owner}::uuid, ${workspace}::uuid, ${from}::date, ${to}::date)`,
   );
   return found.rows;
 }
@@ -688,8 +768,8 @@ export async function readProfileCounts(scope: EngineScope, now: Date = new Date
   const today = now.toISOString().slice(0, 10);
   const from = dayBefore(today, days - 1);
   const [current, before] = await inWorkspace(scope, async (tx) => [
-    await countsIn(tx, owner, from, today),
-    await countsIn(tx, owner, dayBefore(from, days), dayBefore(from, 1)),
+    await countsIn(tx, owner, scope.workspaceId, from, today),
+    await countsIn(tx, owner, scope.workspaceId, dayBefore(from, days), dayBefore(from, 1)),
   ]);
   const traffic = (rows: readonly CountRow[]) => {
     const row = rows.find((each) => each.item_id === null);
@@ -721,18 +801,38 @@ export async function importProfileLinks(
     readonly rows: readonly { readonly title: string; readonly url: string }[];
     readonly skipped: readonly SkippedImportRow[];
   },
+  options: AddressOptions = {},
 ): Promise<ProfileLinkImportResult> {
   const owner = ownerOf(scope);
-  const blocks = input.rows.map((row, index) => ({
+  // A row naming one of our own pages outside this workspace never lands (spec 0056, AC-5610): it stays behind,
+  // shown with why, like every other row the import could not make.
+  const origins = options.publicOrigins ?? [];
+  const foreign =
+    origins.length === 0
+      ? new Set<number>()
+      : await inWorkspace(scope, async (tx) => {
+          const found = new Set<number>();
+          for (const [index, row] of input.rows.entries()) {
+            if ((await workspaceAddressProblem(tx, scope.workspaceId, row.url, origins)) !== undefined)
+              found.add(index);
+          }
+          return found;
+        });
+  const kept = input.rows.filter((_, index) => !foreign.has(index));
+  const left = input.rows.flatMap((row, index) =>
+    foreign.has(index) ? [{ title: row.title, url: row.url, reason: 'not-in-workspace' as const }] : [],
+  );
+  const blocks = kept.map((row, index) => ({
     id: newId(),
     // The hue ring runs over the import itself, so one import's rows read as a set rather than all one colour.
     data: { title: row.title, url: row.url, hue: nextHue(index) },
   }));
-  const skipped = input.skipped.map((row) => SkippedImportRow.parse(row));
+  // At most 100 kept, as the row's own check allows.
+  const skipped = [...left, ...input.skipped].slice(0, 100).map((row) => SkippedImportRow.parse(row));
   const made = await inWorkspace(scope, async (tx) => {
     try {
       const answered = await tx.execute<{ existed: boolean; made: number }>(
-        sql`select existed, made from crm_import_profile_links(${owner}::uuid, ${input.id}::uuid, ${input.source}, ${JSON.stringify(blocks)}::jsonb, ${JSON.stringify(skipped)}::jsonb)`,
+        sql`select existed, made from crm_import_profile_links(${owner}::uuid, ${scope.workspaceId}::uuid, ${input.id}::uuid, ${input.source}, ${JSON.stringify(blocks)}::jsonb, ${JSON.stringify(skipped)}::jsonb)`,
       );
       return answered.rows[0];
     } catch (error) {

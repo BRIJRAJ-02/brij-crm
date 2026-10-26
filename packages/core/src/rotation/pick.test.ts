@@ -107,6 +107,7 @@ describe('unionSlots and intersectSlots (AC-734, AC-735)', () => {
 function teamPage(over: Partial<PageRecord> = {}): PageRecord {
   return {
     id: 'page',
+    workspaceId: 'workspace',
     publicKey: 'aaaaaaaaaaaaaaaa',
     kind: 'round_robin',
     ownerMemberId: 'a',

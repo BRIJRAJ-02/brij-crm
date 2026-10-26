@@ -34,10 +34,12 @@ export const strings = {
   addItem: 'Add item',
   addHint: 'It goes to the end of the section. Drag it anywhere afterwards.',
   newSection: 'New section',
-  // Shown only when the person's booking pages come from more than one workspace, which is when the grouping
-  // needs explaining and the privacy question comes up.
-  workspacesNote:
-    'Booking pages from another workspace keep their own section. Nobody visiting the page sees which workspace a page came from.',
+  /** Leads a link's row when it names one of our own pages that is not in this workspace (spec 0056, AC-5612). */
+  notInWorkspace: 'Not in this workspace, hidden from visitors',
+  /** The address field's error when an existing link names a page outside this workspace. */
+  notInWorkspaceFix: 'That page isn’t in this workspace. Change the address, or remove this link.',
+  /** The one quiet line that says whose page this is: each workspace has its own (spec 0056, AC-5617). */
+  inWorkspace: (name: string) => `Your link page in ${name}.`,
   addLink: 'Link',
   addLinkText: 'A website, a profile, an email or a phone number',
   addPage: 'Booking page',
@@ -144,10 +146,10 @@ export const strings = {
   formSearch: 'Search your forms',
   formPickOne: 'Pick a form.',
   formsFailed: 'Your forms couldn’t be loaded.',
-  noForms: 'Every form of yours is on the page already',
-  noFormsYet: 'You have no forms yet',
+  noForms: 'Every form of yours in this workspace is on the page already',
+  noFormsYet: 'You have no forms in this workspace yet',
   noFormsAction: 'Go to Forms',
-  /** A form block's row: what it is, after the workspace when there are several. */
+  /** A form block's row: what it is. */
   formRow: 'Form',
   formPaused: 'Not published, hidden from visitors',
   formUnavailable: 'Unavailable, hidden from visitors · Deleted, or in a workspace you left',
@@ -265,8 +267,8 @@ export const strings = {
   page: 'Booking page',
   pageSearch: 'Find a booking page',
   pagesFailed: 'Your booking pages didn’t load.',
-  noPages: 'Every public booking page you have is on your link page already.',
-  noPagesYet: 'You have no public booking pages yet.',
+  noPages: 'Every public booking page you have here is on your link page already.',
+  noPagesYet: 'You have no public booking pages in this workspace yet.',
   pickPage: 'Pick a booking page.',
   noPagesAction: 'Make a booking page',
   howItLooks: 'How it looks',

@@ -31,6 +31,7 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { FORMS_PROCESS } from './process.ts';
 import { attachUploads, claimUploads } from './uploads.ts';
 import { routeSubmission, storedRoute, submissionDecision } from '../routing/forms.ts';
+import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { loadForm, loadVersions, publicFormOf, workspacePublicKey, type FormRow } from './shared.ts';
 import {
   judgeSubmission,
@@ -94,17 +95,26 @@ async function nextOf(
   document: FormDocument,
   submissionId: string | undefined,
   sign: SignHandoff | undefined,
-  route?: Route,
+  route: Route | undefined,
+  where: { readonly workspaceId: string; readonly publicOrigins: readonly string[] },
 ): Promise<SubmitNext> {
   const { after } = document;
+  // A redirect that has come to name another workspace's page is never followed (spec 0056, AC-5612): a rule's falls
+  // through to the form's own next step, and the form's own is answered as its thank you.
+  const stays = async (url: string) =>
+    (await workspaceAddressProblem(tx, where.workspaceId, url, where.publicOrigins)) === undefined;
   if (route?.kind === 'message') return { kind: 'message', text: route.message, offersMeeting: false };
-  if (route?.kind === 'redirect') return { kind: 'redirect', url: route.url };
+  if (route?.kind === 'redirect' && (await stays(route.url))) return { kind: 'redirect', url: route.url };
   if (route?.kind === 'book' && submissionId !== undefined) {
     const countdownSeconds = after.kind === 'booking' ? after.countdownSeconds : BOOKING_COUNTDOWN.default;
     const routed = await bookingNext(tx, route.bookingPageId, submissionId, sign, countdownSeconds, route.message);
     if (routed !== undefined) return routed;
   }
-  if (after.kind === 'redirect') return { kind: 'redirect', url: after.url };
+  if (after.kind === 'redirect') {
+    return (await stays(after.url))
+      ? { kind: 'redirect', url: after.url }
+      : { kind: 'message', text: '', offersMeeting: false };
+  }
   if (after.kind === 'message') return { kind: 'message', text: after.message, offersMeeting: false };
   const booked =
     submissionId === undefined
@@ -126,6 +136,7 @@ async function bookingNext(
     .select({
       publicKey: bookingPages.publicKey,
       slug: bookingPages.slug,
+      workspaceId: bookingPages.workspaceId,
       ownerUserId: bookingPages.ownerUserId,
       isPrivate: bookingPages.isPrivate,
     })
@@ -281,6 +292,8 @@ export interface SubmitInput {
   readonly answersKey?: string;
   /** Signs the booking hand off when the form sends visitors on to book (AC-1057). */
   readonly signHandoff?: SignHandoff;
+  /** Our own public origins: a redirect to another workspace's page is never followed (spec 0056, AC-5612). */
+  readonly publicOrigins?: readonly string[];
 }
 
 /** What storing a submission answered: the visitor's next step, and how the spam checks judged it. */
@@ -473,6 +486,7 @@ export async function submitForm(
           same ? first.id : undefined,
           input.signHandoff,
           same ? await storedRoute(tx, live.document, first.id) : undefined,
+          { workspaceId: scope.workspaceId, publicOrigins: input.publicOrigins ?? [] },
         );
         return { next: again, verdict: judged.verdict, replayed: true };
       }
@@ -493,7 +507,10 @@ export async function submitForm(
               context: cameFrom,
             })
           : undefined;
-      const next = await nextOf(tx, live.document, row.id, input.signHandoff, route);
+      const next = await nextOf(tx, live.document, row.id, input.signHandoff, route, {
+        workspaceId: scope.workspaceId,
+        publicOrigins: input.publicOrigins ?? [],
+      });
       return { next, verdict: judged.verdict, replayed: false };
     },
     hooks,

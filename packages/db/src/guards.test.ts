@@ -144,7 +144,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly forty security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly these security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -174,6 +174,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       // The forms a person may place on their link page (spec 0052, migration 0104).
       { name: 'crm_form_owner_forms', owner: 'crm_form_lookup' },
       { name: 'crm_handle_owner', owner: 'crm_handle' },
+      // Whether a handle is held or was (a handle is never freed), and a person's pages by workspace (spec 0056).
+      { name: 'crm_handle_taken', owner: 'crm_handle' },
       // Bringing a link in bio page across (spec 0055, migration 0109).
       { name: 'crm_import_profile_links', owner: 'crm_handle' },
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
@@ -192,6 +194,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_pictures_hidden', owner: 'crm_handle' },
       { name: 'crm_place_profile_page', owner: 'crm_handle' },
       { name: 'crm_profile_counts', owner: 'crm_handle' },
+      { name: 'crm_profile_handles_of', owner: 'crm_handle' },
       { name: 'crm_profile_items', owner: 'crm_handle' },
       { name: 'crm_profile_items_archived', owner: 'crm_handle' },
       { name: 'crm_profile_items_public', owner: 'crm_handle' },
@@ -214,6 +217,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_profile_counts', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
+      // Whether a person is an active member of a workspace: crm_handle's definers ask it (spec 0056, migration 0113).
+      { name: 'crm_workspace_member', owner: 'crm_booking_lookup' },
       { name: 'crm_workspaces_by_domain', owner: 'crm_domain_lookup' },
       { name: 'crm_workspaces_to_purge', owner: 'crm_purge' },
     ]);
@@ -249,6 +254,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_form_owner_forms', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_handle_owner', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_handle_taken', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises PROFILE_ITEM_LIMIT, LINK_IMPORT_LIMIT and LINK_IMPORT_MISSING.
       { name: 'crm_import_profile_links', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -269,6 +275,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       // A plpgsql body: it does nothing when the page is there already or a limit is reached.
       { name: 'crm_place_profile_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_profile_handles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items_archived', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -297,6 +304,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_workspace_member', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspaces_by_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspaces_to_purge', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
     ]);
@@ -374,7 +382,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     [
       'crm_form_lookup',
       ['crm_form_by_key', 'crm_form_owner_forms'],
-      ['crm_form_by_key(text)', 'crm_form_owner_forms(uuid, uuid[])'],
+      ['crm_form_by_key(text)', 'crm_form_owner_forms(uuid, uuid, uuid[])'],
       ['app', 'app'],
     ],
     [
@@ -398,14 +406,16 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_booking_profile_pages',
         'crm_booking_owner_slugs',
         'crm_booking_owner_pages',
+        // Whether a person is an active member of a workspace: executable by crm_handle alone, so no signature below.
+        'crm_workspace_member',
       ],
       [
         'crm_booking_page_by_key(text)',
         'crm_booking_by_token(text)',
-        'crm_booking_page_by_address(uuid, text)',
-        'crm_booking_profile_pages(uuid, smallint, uuid, text, integer)',
-        'crm_booking_owner_slugs(uuid, text)',
-        'crm_booking_owner_pages(uuid, uuid[])',
+        'crm_booking_page_by_address(uuid, uuid, text)',
+        'crm_booking_profile_pages(uuid, uuid, smallint, uuid, text, integer)',
+        'crm_booking_owner_slugs(uuid, uuid, text)',
+        'crm_booking_owner_pages(uuid, uuid, uuid[])',
       ],
       ['app', 'app', 'app', 'app', 'app', 'app'],
     ],
@@ -467,32 +477,40 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // The picture a pasted link shows instead of the drawn card (spec 0055, migration 0112).
         'crm_save_profile_share_image',
         'crm_profile_share_image',
+        // Whether a handle is held, and a person's handles by workspace (spec 0056, migration 0113).
+        'crm_handle_taken',
+        'crm_profile_handles_of',
       ],
       [
-        'crm_save_public_profile(uuid, text, text)',
-        'crm_public_profiles_of(uuid[])',
+        'crm_save_public_profile(uuid, uuid, text, text)',
+        'crm_public_profiles_of(uuid[], uuid)',
         'crm_handle_owner(text)',
         'crm_save_picture_hidden(uuid, boolean)',
         'crm_pictures_hidden(uuid[])',
         'crm_save_social_links(uuid, text[], text[])',
         'crm_social_links_of(uuid[])',
-        'crm_profile_items(uuid)',
-        'crm_profile_items_archived(uuid)',
-        'crm_profile_items_public(uuid, smallint, uuid, integer)',
-        'crm_save_profile_item(uuid, uuid, text, jsonb, uuid, uuid, uuid)',
-        'crm_order_profile_items(uuid, uuid[])',
-        'crm_archive_profile_item(uuid, uuid, boolean)',
-        'crm_delete_profile_item(uuid, uuid)',
+        'crm_profile_items(uuid, uuid)',
+        'crm_profile_items_archived(uuid, uuid)',
+        'crm_profile_items_public(uuid, uuid, smallint, uuid, integer)',
+        'crm_save_profile_item(uuid, uuid, uuid, text, jsonb, uuid, uuid)',
+        'crm_order_profile_items(uuid, uuid, uuid[])',
+        'crm_archive_profile_item(uuid, uuid, uuid, boolean)',
+        'crm_delete_profile_item(uuid, uuid, uuid)',
         'crm_place_profile_page(uuid, uuid, uuid)',
-        'crm_count_profile_view(uuid, text)',
-        'crm_count_item_press(uuid, uuid, text)',
-        'crm_profile_counts(uuid, date, date)',
+        'crm_count_profile_view(uuid, uuid, text)',
+        'crm_count_item_press(uuid, uuid, uuid, text)',
+        'crm_profile_counts(uuid, uuid, date, date)',
         'crm_sweep_profile_counts(integer)',
         'crm_save_profile_theme(uuid, jsonb)',
         'crm_save_profile_indexable(uuid, boolean)',
         'crm_import_profile_links(uuid, uuid, text, jsonb, jsonb)',
         'crm_save_profile_share_image(uuid, bytea, text)',
         'crm_profile_share_image(uuid)',
+        'crm_save_profile_theme(uuid, uuid, jsonb)',
+        'crm_save_profile_indexable(uuid, uuid, boolean)',
+        'crm_import_profile_links(uuid, uuid, uuid, text, jsonb, jsonb)',
+        'crm_handle_taken(text)',
+        'crm_profile_handles_of(uuid)',
       ],
       Array.from({ length: 24 }, () => 'app'),
     ],
@@ -1872,6 +1890,11 @@ describe('the auth schema: global identity, outside row level security (spec 000
     // for access, since whether a visitor sees the page is still the booking lookup's call.
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
       'profile_items',
+      // A link page is one workspace's (spec 0056, migration 0113): its handles, profile and counted views name it.
+      'profile_view_days',
+      'profile_views',
+      'public_handles',
+      'public_profiles',
       'workspace_addresses',
       'workspace_directory',
       'workspace_membership',

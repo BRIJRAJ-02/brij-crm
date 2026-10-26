@@ -300,7 +300,16 @@ const Stored = {
 
 /** One block as the editor reads it: its fields, its id, and for a booking page, the page's facts when it has any. */
 export const ProfileItem = z.discriminatedUnion('kind', [
-  ProfileLinkBlock.extend({ ...Stored, url: z.string(), hue: z.enum(HUES) }),
+  ProfileLinkBlock.extend({
+    ...Stored,
+    url: z.string(),
+    hue: z.enum(HUES),
+    /**
+     * Set when the link names one of our own pages that is not in this workspace any more (a slug reused, a page
+     * moved, spec 0056, AC-5612): visitors are not sent there, and the editor says so.
+     */
+    outsideWorkspace: z.literal(true).optional(),
+  }),
   ProfileHeadingBlock.extend(Stored),
   ProfilePageBlock.extend({ ...Stored, page: ProfilePageFacts.optional() }),
   ProfileContactBlock.extend(Stored),
@@ -321,7 +330,16 @@ export const ProfileItems = z.object({
 export type ProfileItems = z.infer<typeof ProfileItems>;
 
 /** Why a row a link in bio page had is not a link we can make (spec 0055, AC-5527). */
-export const IMPORT_SKIPS = ['no-address', 'not-web', 'the-page-itself', 'repeated', 'past-limit', 'no-title'] as const;
+export const IMPORT_SKIPS = [
+  'no-address',
+  'not-web',
+  'the-page-itself',
+  'repeated',
+  'past-limit',
+  'no-title',
+  // One of our own pages from another workspace (spec 0056, AC-5610): a link page holds its own workspace's only.
+  'not-in-workspace',
+] as const;
 
 /**
  * A row the import could not map, kept with whatever it had and why, so nothing is dropped without being shown

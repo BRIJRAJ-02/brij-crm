@@ -139,6 +139,8 @@ export const CHAT_BODY_LIMIT_BYTES = 128 * 1024;
 
 /** What the public booking routes serve with. */
 export interface PublicBookingServices {
+  /** Our own public origins: a link on a link page to another workspace's page is left out (spec 0056, AC-5612). */
+  readonly publicOrigins?: readonly string[];
   readonly db: Database;
   readonly calendar: BookingCalendar & { readonly busy: BusyReader & { readonly fresh?: BusyReader } };
   readonly limiter: PublicLimiter;
@@ -410,7 +412,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     try {
       // A handle no one holds throws NOT_FOUND here, which `refusalAnswer` turns into the same 404 as no picture.
       const owner = await findHandleOwner({ db }, handle);
-      const picture = await enterShareImage({ db }, owner.userId);
+      const picture = await enterShareImage({ db }, owner.userId, owner.workspaceId);
       // The whole query, exactly: anything added would miss the edge's copy and cost the read each time.
       if (picture === undefined || new URL(c.req.url).search !== `?v=${picture.version}`) return noShareImage();
       return shareImageResponse(picture);
@@ -449,13 +451,15 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   };
 
   /** Counts a link page view in the background, unless it is the owner's own read. */
-  const countView = (c: Context<{ Variables: Variables }>, ownerUserId: string): void => {
+  const countView = (c: Context<{ Variables: Variables }>, ownerUserId: string, workspaceId: string): void => {
     const visitor = profileVisitor(c, ownerUserId);
     if (visitor === undefined || services.views === undefined) return;
     // Past 600 a minute for one page, reads are answered but not counted (AC-5126).
     if (!limiter(`profile:view-owner:${ownerUserId}`, BOOKING_LIMITS.viewsPerHandle).allowed) return;
     const counted = signedInAs(c)
-      .then((userId) => (userId === ownerUserId ? undefined : countProfileView({ db }, ownerUserId, visitor)))
+      .then((userId) =>
+        userId === ownerUserId ? undefined : countProfileView({ db }, ownerUserId, workspaceId, visitor),
+      )
       .catch((error: unknown) => {
         log.warn('profile.view.failed', { requestId: c.get('requestId'), ...errorFields(error) });
       });
@@ -543,12 +547,14 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
           : { after: { position: Number(position), id } }),
         // One more than a page, so the answer knows there is more; every live block for a search.
         max: search === undefined ? PROFILE_PAGE_SIZE + 1 : PROFILE_LIMITS.items + 1,
+        ...(services.publicOrigins === undefined ? {} : { publicOrigins: services.publicOrigins }),
       });
       const page = await readLinkPage(found, search === undefined ? {} : { search });
       // One view per page load (its first page, with no `q` at all: a cleared search sends an empty one), never a
       // machine's or the owner's own (AC-5124),
       // counted after the answer is made and never holding it up.
-      if (c.req.query('q') === undefined && position === undefined) countView(c, found.owner.userId);
+      if (c.req.query('q') === undefined && position === undefined)
+        countView(c, found.owner.userId, found.owner.workspaceId);
       return ok(page);
     } catch (error) {
       return refusalAnswer(error);

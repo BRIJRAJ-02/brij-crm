@@ -36,9 +36,12 @@ async function extrasOf(context: RequestContext & SessionContext): Promise<Profi
       ? 'linked'
       : 'unlinked'
     : undefined;
+  // The directory's names for the workspaces this account belongs to, so a link page elsewhere can be named.
+  const memberships = await context.identity.workspacesOf(user.id);
   return {
     ...(picture === undefined ? {} : { image: myPicturePath(picture.version) }),
     ...(google === undefined ? {} : { google }),
+    workspaceNames: new Map(memberships.map((workspace) => [workspace.id, workspace.name])),
   };
 }
 
@@ -79,7 +82,9 @@ export const profileRouter = member.profile.router({
     );
   }),
   // The link page (spec 0051): the caller's own blocks, in every workspace the same, never another person's.
-  items: member.profile.items.handler(({ context }) => readProfileItems(context.scope)),
+  items: member.profile.items.handler(({ context }) =>
+    readProfileItems(context.scope, { publicOrigins: context.publicOrigins }),
+  ),
   /**
    * A link to save the caller's own page to a wallet (26 October 2026). The pass holds only what their page already
    * shows — their name, the line under it and their address — and its code opens that address tagged
@@ -152,29 +157,43 @@ export const profileRouter = member.profile.router({
     if (!fetched.ok) throw apiError('CONFIG_INVALID', IMPORT_UNREAD);
     const page = readImportedPage(new TextDecoder().decode(fetched.bytes), source);
     return commitWrite(context, { mutationId: input.mutationId }, () =>
-      importProfileLinks(context.scope, {
-        id: input.id,
-        source: source.href,
-        rows: page.rows,
-        skipped: page.skipped,
-      }),
+      importProfileLinks(
+        context.scope,
+        {
+          id: input.id,
+          source: source.href,
+          rows: page.rows,
+          skipped: page.skipped,
+        },
+        { publicOrigins: context.publicOrigins },
+      ),
     );
   }),
   saveItem: member.profile.saveItem.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      saveProfileItem(context.scope, {
-        id: input.id,
-        block: input.block,
-        ...(input.isEdit === undefined ? {} : { isEdit: input.isEdit }),
-      }),
+      saveProfileItem(
+        context.scope,
+        {
+          id: input.id,
+          block: input.block,
+          ...(input.isEdit === undefined ? {} : { isEdit: input.isEdit }),
+        },
+        { publicOrigins: context.publicOrigins },
+      ),
     ),
   ),
   orderItems: member.profile.orderItems.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => orderProfileItems(context.scope, input.ids)),
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      orderProfileItems(context.scope, input.ids, { publicOrigins: context.publicOrigins }),
+    ),
   ),
   archiveItem: member.profile.archiveItem.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      archiveProfileItem(context.scope, { id: input.id, archived: input.archived }),
+      archiveProfileItem(
+        context.scope,
+        { id: input.id, archived: input.archived },
+        { publicOrigins: context.publicOrigins },
+      ),
     ),
   ),
   deleteItem: member.profile.deleteItem.handler(({ context, input }) =>

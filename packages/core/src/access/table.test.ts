@@ -410,6 +410,17 @@ describe('the walk: a principal without the access is refused', () => {
           `${id}@example.com`,
         ]);
       }
+      // The link page is one workspace's: its person is an active member there with their own identity (spec 0056).
+      await testQuery(ownerUrl, `update members set user_id = $1 where workspace_id = $2 and id = $3`, [
+        ada,
+        workspaceId,
+        ownerId,
+      ]);
+      await testQuery(ownerUrl, `update members set user_id = $1 where workspace_id = $2 and id = $3`, [
+        bea,
+        workspaceId,
+        memberId,
+      ]);
       const adaScope = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId }, userId: ada });
       const beaScope = testScope({ db, workspaceId, actor: { type: 'member', id: memberId }, userId: bea });
       const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() } });

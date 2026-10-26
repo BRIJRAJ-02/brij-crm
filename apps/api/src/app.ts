@@ -386,6 +386,15 @@ export function createApp({
     ...(appleWallet === undefined ? {} : { apple: appleWallet }),
   };
   const walletLinks = createWalletLinks(walletSettings);
+  // Our own public origins: an address on one that names a booking page, form or handle stays in one workspace.
+  const publicOrigins = [
+    ...new Set([
+      new URL(env.APP_URL).origin,
+      formsOrigin,
+      bookingOrigin,
+      ...(env.PUBLIC_ALIAS_ORIGINS ?? []).map((origin) => new URL(origin).origin),
+    ]),
+  ];
   // The app and API share one origin, so a write from anywhere else is refused.
   app.use('*', async (c, next) => {
     if (SAFE_METHODS.has(c.req.method)) return next();
@@ -454,6 +463,7 @@ export function createApp({
         mailer,
         outsideFetch,
         appUrl: env.APP_URL,
+        publicOrigins,
         // Only the limiter's one call, so a member handler holds nothing else of global identity at run time.
         limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
         mayStartWorkspace: (email) => signupAllowlist.allows(email),
@@ -539,6 +549,7 @@ export function createApp({
     limiter: formLimiter,
     tickets,
     publicOrigin: formsOrigin,
+    publicOrigins,
     ipSalt,
     answersKey: createHmac('sha256', ipSalt).update('crm-answers-hash-v1').digest('hex'),
     handoffKey: formsHandoffKey,
@@ -579,6 +590,7 @@ export function createApp({
   mountPublicBooking(app, {
     db,
     handoffKey: formsHandoffKey,
+    publicOrigins,
     calendar: {
       busy: bookingBusy,
       events: booking.events,

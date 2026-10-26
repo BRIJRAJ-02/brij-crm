@@ -49,7 +49,7 @@ describe('the block registry', () => {
       address: 'ada.dev',
     });
     expect(rowWords(page('live'))).toEqual({ title: 'Intro', address: 'Booking page · 30 min' });
-    expect(rowWords(page('live'), true).address).toBe('Booking page · Acme · 30 min');
+    // The workspace is never named beside a page: a link page holds one workspace's pages (spec 0056, AC-5606).
     expect(rowWords(page('paused'))).toMatchObject({
       isOff: true,
       address: 'Paused, hidden from visitors · Booking page · 30 min',
@@ -172,7 +172,6 @@ describe('the block registry', () => {
       form: facts,
     };
     expect(rowWords(live)).toEqual({ title: 'Tell me about your project', address: 'Form' });
-    expect(rowWords(live, true).address).toBe('Acme · Form');
     // Its row is the owner's own words; the form's internal name never appears, here or on the page.
     expect(previewBlock(live, 'ada', () => undefined)).toEqual({
       kind: 'form',

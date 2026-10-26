@@ -597,10 +597,12 @@ export function createLinkPageStore(deps: LinkPageDeps) {
           return true;
         } catch (error) {
           const refusal = toDataError(error);
+          // A rule's refusal (a limit, a field, something gone) answers the same again, so it offers no Try again.
+          const isRule = ['CONFIG_INVALID', 'NOT_FOUND', 'LIMIT_REACHED'].includes(refusal.code);
           deps.notify({
             tone: 'danger',
             message: deps.summary(refusal),
-            action: { label: TRY_AGAIN, onAction: () => void retry() },
+            ...(isRule ? {} : { action: { label: TRY_AGAIN, onAction: () => void retry() } }),
           });
           // What failed may have been stale (another tab): read the server's lists again behind the toast.
           if (['CONFIG_INVALID', 'NOT_FOUND', 'LIMIT_REACHED'].includes(refusal.code))

@@ -246,7 +246,12 @@ export function LinkEditor({
             setUrl(next);
             if (problems.url !== undefined) setProblems({ ...problems, url: undefined });
           }}
-          {...(problems.url === undefined ? {} : { error: problems.url })}
+          {...(problems.url !== undefined
+            ? { error: problems.url }
+            : editing?.outsideWorkspace === true && url === editing.url
+              ? // Said at once, before a save the server would refuse (spec 0056, AC-5612).
+                { error: strings.notInWorkspaceFix }
+              : {})}
         />
         <Field
           label={strings.linkTitle}
@@ -1174,7 +1179,6 @@ export function PageChooser({ slug, items, linkPage, chrome, onSubmit, onClose }
     }
     onSubmit({ kind: 'page', workspaceId: chosen.workspaceId, pageId: chosen.pageId }, { page: chosen.facts });
   };
-  const isMany = choices.status === 'ready' && new Set(choices.choices.map((each) => each.workspaceId)).size > 1;
   let body: ReactNode;
   if (choices.status === 'loading') {
     body = <Skeleton shape="field" width="full" />;
@@ -1215,11 +1219,7 @@ export function PageChooser({ slug, items, linkPage, chrome, onSubmit, onClose }
             id: choice.pageId,
             label: choice.facts.title,
             icon: 'calendar-clock',
-            description: [
-              ...(isMany ? [choice.facts.workspaceName] : []),
-              pageFacts(choice.facts),
-              ...(choice.facts.status === 'paused' ? [strings.paused] : []),
-            ]
+            description: [pageFacts(choice.facts), ...(choice.facts.status === 'paused' ? [strings.paused] : [])]
               .filter((part) => part !== '')
               .join(' · '),
           }))}
@@ -1311,7 +1311,6 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
     }
     onSubmit(draft(), chosen === undefined ? undefined : { form: chosen.facts });
   };
-  const isMany = choices.status === 'ready' && new Set(choices.choices.map((each) => each.workspaceId)).size > 1;
 
   let body: ReactNode;
   if (choices.status === 'loading') {
@@ -1359,12 +1358,7 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
               id: choice.formId,
               label: choice.facts.name,
               icon: 'clipboard-list',
-              description: [
-                ...(isMany ? [choice.facts.workspaceName] : []),
-                ...(choice.facts.status === 'paused' ? [strings.formPaused] : []),
-              ]
-                .filter((part) => part !== '')
-                .join(' · '),
+              description: choice.facts.status === 'paused' ? strings.formPaused : '',
             }))}
             value={picked}
             onChange={(next) => {

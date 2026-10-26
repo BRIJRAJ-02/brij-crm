@@ -114,6 +114,11 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   /** The app's own address (`APP_URL`): an invitation's link is `<appUrl>/invite/<token>`. */
   appUrl: string;
   /**
+   * Our own public origins (the app's, the forms' and the booking pages'): an address on one of them that names a
+   * booking page, form or handle may only name one of the writer's own workspace (spec 0056, AC-5610).
+   */
+  publicOrigins: readonly string[];
+  /**
    * The cross instance limiter (`auth.rate_limit`, through the identity
    * store), and only that piece of identity, so a member handler can limit
    * invitation sends per workspace and per inviter (spec 0031, AC-808).

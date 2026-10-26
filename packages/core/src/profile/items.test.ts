@@ -1,9 +1,8 @@
 // The link page's blocks (spec 0051, built as blocks), against the real Postgres: adding, editing, ordering,
 // archiving and deleting through crm_handle's definers with the session's own id; the limits and the address rules;
 // a booking page block shown only while the door lists its page; the public read a page at a time and its search;
-// a kind this build doesn't know skipped; another person's id changing nothing; and the backfill of 0098.
+// a kind this build doesn't know skipped; another person's id changing nothing; and one link page per workspace (spec 0056). The backfill of 0113 is in home-workspace.test.ts.
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
@@ -269,16 +268,18 @@ describe('a link page', () => {
     // runs inside crm_save_profile_item, which is the only way in: crm_app may not execute the check itself.
     expect(ProfileBlock.safeParse({ kind: 'heading', title: 'Tabs', group: 'tabs' }).success).toBe(false);
     await expect(
-      testQuery(appUrl, `select crm_save_profile_item($1, $2, 'heading', $3, null, null, null)`, [
+      testQuery(appUrl, `select crm_save_profile_item($1, $2, $3, 'heading', $4, null, null)`, [
         ada.userId,
+        ada.workspaceId,
         newId(),
         JSON.stringify({ title: 'Tabs', group: 'tabs' }),
       ]),
     ).rejects.toThrow(/PROFILE_ITEM_DATA/);
     // And the two it allows go through, so the function and the schema agree on the whole set.
     for (const group of ['open', 'folder']) {
-      await testQuery(appUrl, `select crm_save_profile_item($1, $2, 'heading', $3, null, null, null)`, [
+      await testQuery(appUrl, `select crm_save_profile_item($1, $2, $3, 'heading', $4, null, null)`, [
         ada.userId,
+        ada.workspaceId,
         newId(),
         JSON.stringify({ title: `Section ${group}`, group }),
       ]);
@@ -381,26 +382,80 @@ describe('a link page', () => {
     expect(await kinds()).toEqual(['link']);
   });
 
-  it('offers the person’s Public pages from every workspace, without the ones placed', async () => {
+  it('offers only the pages of the workspace they are in, without the ones placed (spec 0056, AC-5606)', async () => {
     const ada = await person('Ada', randomUUID(), 'Acme');
     const other = await person('Ada', ada.userId, 'Personal');
     const intro = await page(ada.scope, 'Intro');
     const coffee = await page(other.scope, 'Coffee');
     await page(ada.scope, 'Secret', { isPrivate: true });
-    // Each joined the link page as it was made: take them off, so both are offered again.
+    // Each joined its own workspace's link page as it was made: take Acme's off, so it is offered again.
     for (const item of (await readProfileItems(ada.scope)).items) await deleteProfileItem(ada.scope, item.id);
     const before = await listProfilePageChoices(ada.scope);
-    expect(before.map((choice) => [choice.facts.workspaceName, choice.facts.title])).toEqual([
-      ['Acme', 'Intro'],
-      ['Personal', 'Coffee'],
+    // Acme's only: Personal's Coffee is never offered here, and the other workspace offers only its own.
+    expect(before.map((choice) => choice.facts.title)).toEqual(['Intro']);
+    expect((await listProfilePageChoices(other.scope)).map((choice) => choice.pageId)).toEqual([]);
+    expect((await readProfileItems(other.scope)).items.map((item) => item.kind === 'page' && item.pageId)).toEqual([
+      coffee.id,
     ]);
-    // A page from the other workspace, placed from this one.
-    await add(ada.scope, { kind: 'page', workspaceId: other.workspaceId, pageId: coffee.id });
-    expect((await listProfilePageChoices(ada.scope)).map((choice) => choice.pageId)).toEqual([intro.id]);
-    // Named under another workspace than its own, it is refused.
+    await add(ada.scope, { kind: 'page', workspaceId: ada.workspaceId, pageId: intro.id });
+    expect(await listProfilePageChoices(ada.scope)).toEqual([]);
+  });
+
+  it('refuses a booking page or form of another workspace, a deleted one and a guessed id, writing nothing (AC-5605)', async () => {
+    const ada = await person('Ada', randomUUID(), 'Acme');
+    const other = await person('Ada', ada.userId, 'Personal');
+    const coffee = await page(other.scope, 'Coffee');
+    const refused = { code: 'NOT_FOUND', message: 'That page isn’t in this workspace.' };
+    // Named under either workspace, Personal's page can't go on Acme's link page.
     expect(
-      await refusalOf(add(ada.scope, { kind: 'page', workspaceId: ada.workspaceId, pageId: coffee.id })),
-    ).toMatchObject({ code: 'NOT_FOUND' });
+      await refusalOf(add(ada.scope, { kind: 'page', workspaceId: other.workspaceId, pageId: coffee.id })),
+    ).toEqual(refused);
+    expect(await refusalOf(add(ada.scope, { kind: 'page', workspaceId: ada.workspaceId, pageId: coffee.id }))).toEqual(
+      refused,
+    );
+    expect(await refusalOf(add(ada.scope, { kind: 'page', workspaceId: ada.workspaceId, pageId: newId() }))).toEqual(
+      refused,
+    );
+    expect(
+      await refusalOf(add(ada.scope, { kind: 'form', workspaceId: ada.workspaceId, formId: newId(), label: 'Hello' })),
+    ).toEqual(refused);
+    // The definer refuses it too, past core: it reads the page through its workspace, never the item's say so.
+    await expect(
+      testQuery(appUrl, `select crm_save_profile_item($1, $2, $3, 'page', '{}', $4, null)`, [
+        ada.userId,
+        ada.workspaceId,
+        newId(),
+        coffee.id,
+      ]),
+    ).rejects.toThrow(/PROFILE_TARGET_MISSING/);
+    // A workspace the owner isn't an active member of is refused whatever the block is.
+    await expect(
+      testQuery(appUrl, `select crm_save_profile_item($1, $2, $3, 'heading', '{"title":"Hi"}', null, null)`, [
+        ada.userId,
+        randomUUID(),
+        newId(),
+      ]),
+    ).rejects.toThrow(/PROFILE_NOT_MEMBER/);
+    // Nothing was written for Acme.
+    expect((await readProfileItems(ada.scope)).items.filter((item) => item.kind === 'page')).toEqual([]);
+  });
+
+  it('keeps each workspace’s link page, order and limits its own', async () => {
+    const ada = await person('Ada', randomUUID(), 'Acme');
+    const other = await person('Ada', ada.userId, 'Personal');
+    await add(ada.scope, link('Acme site', 'https://acme.dev'));
+    await add(other.scope, link('Personal site', 'https://ada.dev'));
+    await add(other.scope, { kind: 'heading', title: 'Sales' });
+    // One heading per text is per page, so Acme may hold the same word.
+    await add(ada.scope, { kind: 'heading', title: 'Sales' });
+    expect((await readProfileItems(ada.scope)).items.map((item) => item.kind)).toEqual(['link', 'heading']);
+    expect((await readProfileItems(other.scope)).items.map((item) => item.kind)).toEqual(['link', 'heading']);
+    // An order from one page never names the other's blocks.
+    const mine = (await readProfileItems(ada.scope)).items.map((item) => item.id);
+    expect(await refusalOf(orderProfileItems(other.scope, mine))).toMatchObject({ code: 'CONFIG_INVALID' });
+    // And the other workspace's block can't be reached by its id from here.
+    const theirs = (await readProfileItems(other.scope)).items[0];
+    expect(await refusalOf(deleteProfileItem(ada.scope, theirs?.id ?? ''))).toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('never lets another person change or read a block by its id', async () => {
@@ -531,8 +586,9 @@ describe('a link page', () => {
       { fullName: ' Ada' },
     ]) {
       await expect(
-        testQuery(appUrl, `select crm_save_profile_item($1, $2, 'contact', $3, null, null, null)`, [
+        testQuery(appUrl, `select crm_save_profile_item($1, $2, $3, 'contact', $4, null, null)`, [
           ada.userId,
+          ada.workspaceId,
           newId(),
           JSON.stringify(given),
         ]),
@@ -551,15 +607,15 @@ describe('a link page', () => {
     const view = async (back: number, n: number, views = 1) => {
       await testQuery(
         ownerUrl,
-        `insert into auth.profile_views (user_id, day, visitor, views) values ($1, $2, $3, $4)`,
-        [ada.userId, day(back), visitor(n), views],
+        `insert into auth.profile_views (user_id, workspace_id, day, visitor, views) values ($1, $2, $3, $4, $5)`,
+        [ada.userId, ada.workspaceId, day(back), visitor(n), views],
       );
       await testQuery(
         ownerUrl,
-        `insert into auth.profile_view_days (user_id, day, views, visitors) values ($1, $2, $3, 1)
-         on conflict (user_id, day) do update set views = profile_view_days.views + excluded.views,
+        `insert into auth.profile_view_days (user_id, workspace_id, day, views, visitors) values ($1, $2, $3, $4, 1)
+         on conflict (user_id, workspace_id, day) do update set views = profile_view_days.views + excluded.views,
            visitors = profile_view_days.visitors + 1`,
-        [ada.userId, day(back), views],
+        [ada.userId, ada.workspaceId, day(back), views],
       );
     };
     await view(0, 1, 3);
@@ -598,8 +654,8 @@ describe('a link page', () => {
     );
     expect(days.map((row) => row.day)).not.toContain(day(400));
     // The counters keep the day rows themselves: a real view adds to today's.
-    await countProfileView({ db }, ada.userId, visitor(1));
-    await countProfileView({ db }, ada.userId, visitor(99));
+    await countProfileView({ db }, ada.userId, ada.workspaceId, visitor(1));
+    await countProfileView({ db }, ada.userId, ada.workspaceId, visitor(99));
     expect((await readProfileCounts(ada.scope)).views).toBe(7);
     expect((await readProfileCounts(ada.scope)).visitors).toBe(4);
   });
@@ -634,8 +690,8 @@ describe('a link page', () => {
     await add(ada.scope, link('Site', 'https://ada.dev'));
     await testQuery(
       ownerUrl,
-      `insert into auth.profile_items (id, user_id, kind, position, data) values ($1, $2, 'contact', 5, '{"fullName":""}')`,
-      [newId(), ada.userId],
+      `insert into auth.profile_items (id, user_id, workspace_id, kind, position, data) values ($1, $2, $3, 'contact', 5, '{"fullName":""}')`,
+      [newId(), ada.userId, ada.workspaceId],
     );
     expect((await readProfileItems(ada.scope)).items.map((item) => item.kind)).toEqual(['link']);
     expect((await visitorRead(handle)).items.map((item) => item.kind)).toEqual(['link']);
@@ -646,50 +702,48 @@ describe('a link page', () => {
   });
 });
 
-describe('the backfill (migration 0098, AC-5129)', () => {
-  /** The migration's backfill, run for one person only, as the owner (as the migration runs). */
-  async function backfill(userId: string) {
-    const text = readFileSync(new URL('../../../db/migrations/0098_profile_items.sql', import.meta.url), 'utf8');
-    const from = text.lastIndexOf('set local row_security = off;');
-    const to = text.indexOf('-- Refuse to finish unless the new functions');
-    const statements = text
-      .slice(from, to)
-      .split('--> statement-breakpoint')
-      .filter((each) => each.trim() !== '')
-      .map((each) => each.replace('and p.owner_user_id is not null', `and p.owner_user_id = '${userId}'::uuid`));
-    expect(statements).toHaveLength(3);
-    // The pages joined the link page as they were made: start from none, as before the migration.
-    await testQuery(ownerUrl, `delete from auth.profile_items where user_id = $1`, [userId]);
-    await testQuery(ownerUrl, `begin;\n${statements.join(';\n')};\ncommit;`.replaceAll(';;', ';'));
-  }
-
-  it('turns one workspace’s profile into blocks: no section first, then each section as a heading', async () => {
+describe('every definer asks for an active member of the workspace (spec 0056, AC-5601, AC-5613)', () => {
+  it('refuses a write, and answers nothing to a read, for a workspace the person is not in', async () => {
     const ada = await person('Ada');
-    const handle = fresh('backfill');
-    await updateMyMemberProfile(ada.scope, { handle });
-    await page(ada.scope, 'Pitch', { profilePosition: 0, profileSection: 'Sales' });
-    await page(ada.scope, 'Coffee', { profilePosition: 1 });
-    await page(ada.scope, 'Demo', { profilePosition: 2, profileSection: ' sales ' });
-    await page(ada.scope, 'Paused', { profilePosition: 3, status: 'paused' });
-    await page(ada.scope, 'Secret', { profilePosition: 4, isPrivate: true });
-    await backfill(ada.userId);
-    const { items } = await readProfileItems(ada.scope);
-    expect(
-      items.map((item) => (item.kind === 'page' ? item.page?.title : item.kind === 'heading' ? `# ${item.title}` : '')),
-    ).toEqual(['Coffee', 'Paused', '# Sales', 'Pitch', 'Demo']);
-    expect((await visitorRead(handle)).items.map(titleOf)).toEqual(['Coffee', 'Sales', 'Pitch', 'Demo']);
-  });
-
-  it('heads each workspace’s pages with no section with that workspace’s name', async () => {
-    const ada = await person('Ada', randomUUID(), 'Acme');
-    const other = await person('Ada', ada.userId, 'Personal');
-    await page(ada.scope, 'Pitch', { profilePosition: 0, profileSection: 'Sales' });
-    await page(other.scope, 'Coffee', { profilePosition: 1 });
-    await page(ada.scope, 'Intro', { profilePosition: 2 });
-    await backfill(ada.userId);
-    const { items } = await readProfileItems(ada.scope);
-    expect(
-      items.map((item) => (item.kind === 'page' ? item.page?.title : item.kind === 'heading' ? `# ${item.title}` : '')),
-    ).toEqual(['# Personal', 'Coffee', '# Acme', 'Intro', '# Sales', 'Pitch']);
+    const mine = await add(ada.scope, link('Mine', 'https://ada.dev'));
+    await add(ada.scope, { kind: 'heading', title: 'Hello' });
+    const elsewhere = randomUUID();
+    const user = ada.userId;
+    const writes: readonly (readonly [string, readonly unknown[]])[] = [
+      ['crm_save_public_profile($1, $2, $3, $4)', [user, elsewhere, fresh('nobody'), '']],
+      [
+        'crm_save_profile_item($1, $2, $3, $4, $5, null, null)',
+        [user, elsewhere, newId(), 'link', '{"title":"x","url":"https://x.dev"}'],
+      ],
+      ['crm_order_profile_items($1, $2, $3::uuid[])', [user, elsewhere, `{${mine.id}}`]],
+      ['crm_archive_profile_item($1, $2, $3, true)', [user, elsewhere, mine.id]],
+      ['crm_delete_profile_item($1, $2, $3)', [user, elsewhere, mine.id]],
+      [
+        'crm_import_profile_links($1, $2, $3, $4, $5::jsonb, $6::jsonb)',
+        [user, elsewhere, newId(), 'https://linktr.ee/x', '[]', '[]'],
+      ],
+      [
+        'crm_save_profile_theme($1, $2, $3::jsonb)',
+        [user, elsewhere, '{"ground":"plain","hue":"blue","mode":"light","shape":"soft","fill":"plain","font":"sans"}'],
+      ],
+      ['crm_save_profile_indexable($1, $2, $3)', [user, elsewhere, false]],
+    ];
+    for (const [call, args] of writes) {
+      await expect(testQuery(appUrl, `select ${call}`, args), call).rejects.toThrow(/PROFILE_NOT_MEMBER/);
+    }
+    // The reads answer no row, whatever the id of the person's items.
+    for (const call of [
+      'crm_profile_items($1, $2)',
+      'crm_profile_items_archived($1, $2)',
+      'crm_profile_items_public($1, $2, 0::smallint, null::uuid, 50)',
+    ]) {
+      expect(await testQuery(appUrl, `select * from ${call}`, [user, elsewhere]), call).toEqual([]);
+    }
+    // A person who is not the owner of this workspace's page reads nothing of it either.
+    expect(await testQuery(appUrl, 'select * from crm_profile_items($1, $2)', [randomUUID(), ada.workspaceId])).toEqual(
+      [],
+    );
+    // The page itself is untouched.
+    expect((await readProfileItems(ada.scope)).items.map((item) => item.id)).toContain(mine.id);
   });
 });

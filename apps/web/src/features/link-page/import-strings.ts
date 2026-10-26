@@ -29,5 +29,6 @@ export const importStrings = {
     repeated: 'it’s the same link twice',
     'past-limit': 'your page is full',
     'no-title': 'it had no words to use as a title',
+    'not-in-workspace': 'it’s a page of another workspace',
   },
 } as const;

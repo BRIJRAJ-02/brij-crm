@@ -2,6 +2,8 @@
 
 export const homeStrings = {
   title: 'Your link page',
+  /** The one quiet line under the title: the page of the workspace they are in (spec 0056, AC-5617). */
+  inWorkspace: (name: string) => `Your link page in ${name}.`,
   qrLabel: 'QR code for your link page',
   scan: 'Point a phone camera at the code to open your page. Print it on a badge, or show it from your phone.',
   copyLink: 'Copy link',

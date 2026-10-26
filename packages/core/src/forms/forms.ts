@@ -38,7 +38,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { bookingTargetProblem } from '../booking/pages.ts';
 import { writeAudit } from '../members/audit.ts';
-import { changedRuleIds, checkFormRoutes, rulesChanged } from '../routing/check.ts';
+import { changedRuleIds, checkFormAddresses, checkFormRoutes, rulesChanged } from '../routing/check.ts';
 import { can, fieldLevel, objectLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
@@ -597,6 +597,14 @@ async function writeDraft(tx: WorkspaceTx, scope: EngineScope, form: FormRow, do
   await touchForm(tx, scope, form.id, { draftVersionId }, true);
 }
 
+/**
+ * Our own public origins, which a redirect's address is checked against (spec 0056, AC-5610): the app's, the forms'
+ * and the booking pages'. The api passes the deployment's; with none, no address is one of ours.
+ */
+export interface AddressOptions {
+  readonly publicOrigins?: readonly string[];
+}
+
 /** What saving a draft takes. */
 export interface SaveDraftInput {
   readonly formId: string;
@@ -609,6 +617,7 @@ export async function saveFormDraft(
   scope: EngineScope,
   input: SaveDraftInput,
   hooks: readonly AfterWrite[] = [],
+  options: AddressOptions = {},
 ): Promise<FormView> {
   requirePermission(scope, 'forms.manage');
   const { result } = await runWrite(
@@ -618,6 +627,7 @@ export async function saveFormDraft(
       if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
       checkRevision(form, input.expectedRevision);
       checkDraft(form, input.document);
+      await checkFormAddresses(tx, scope.workspaceId, input.document, options.publicOrigins ?? []);
       // A form's conditions never read a person's or a company's field (its editor offers none), refused in publish's
       // words: every member who sees the form reads its draft, so a stored one would show them a field's id and the
       // value looked for, even a field hidden from them (security review, 23 October 2026).
@@ -666,6 +676,7 @@ export async function publishForm(
   scope: EngineScope,
   input: PublishInput,
   hooks: readonly AfterWrite[] = [],
+  options: AddressOptions = {},
 ): Promise<FormView> {
   requirePermission(scope, 'forms.manage');
   const { result } = await runWrite(
@@ -684,6 +695,8 @@ export async function publishForm(
       checkDraft(form, draft.document);
       await checkBookingTarget(tx, scope, draft.document, 'live');
       await checkFormRoutes(tx, scope, draft.document.routing.rules, 'live');
+      // Again on publish (spec 0056, AC-5612): a redirect that has come to name another workspace's page is refused.
+      await checkFormAddresses(tx, scope.workspaceId, draft.document, options.publicOrigins ?? []);
       const problem = publishProblem({
         name: form.name,
         slug: form.publicKey,

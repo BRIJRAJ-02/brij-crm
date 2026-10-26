@@ -2,6 +2,8 @@
 
 export const shareStrings = {
   title: 'Share your link page',
+  /** Whose page the code opens: each workspace has its own (spec 0056, AC-5617). */
+  inWorkspace: (name: string) => `Your link page in ${name}.`,
   qrLabel: 'A QR code that opens your link page',
   scan: 'Point a phone camera at this to open your page. Print it on a badge or a card for events.',
   address: 'Your link page address',

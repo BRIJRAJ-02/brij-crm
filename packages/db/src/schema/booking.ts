@@ -43,8 +43,9 @@ export const bookingPages = pgTable(
     /** Random, URL safe, 16 characters: the public link's key. */
     publicKey: text('public_key').notNull(),
     /**
-     * The page's address after its owner's handle, `/<handle>/<slug>` (22 Oct 2026): unique among the owner's live
-     * pages across every workspace (`booking_pages_owner_slug`), and among the owner member's in this one.
+     * The page's address after its owner's handle, `/<handle>/<slug>` (22 Oct 2026): unique among the owner member's
+     * live pages in this workspace (`booking_pages_slug`); a handle belongs to one workspace (spec 0056), so the same
+     * slug may repeat across a person's workspaces and each address still names one page.
      */
     slug: text('slug').notNull(),
     kind: text('kind').notNull().default('personal'),
@@ -138,10 +139,6 @@ export const bookingPages = pgTable(
     uniqueIndex('booking_pages_slug')
       .on(t.workspaceId, t.ownerMemberId, t.slug)
       .where(sql`${t.deletedAt} is null`),
-    // `/<handle>/<slug>` names one page: read only through crm_booking_lookup's crm_booking_page_by_address.
-    uniqueIndex('booking_pages_owner_slug')
-      .on(t.ownerUserId, t.slug)
-      .where(sql`${t.deletedAt} is null and ${t.ownerUserId} is not null`),
     // A profile's listed pages, in the owner's order: read only through crm_booking_profile_pages.
     index('booking_pages_profile')
       .on(t.ownerUserId, t.profilePosition, t.id)
@@ -306,7 +303,7 @@ export const bookingPageMembers = pgTable(
  * current one, and up to 20 old ones, which keep finding the page (the public page moves to the current address).
  * Kept only by the trigger crm_booking_page_slugs_keep (0087) on `booking_pages`: a page that is deleted or changes
  * hands loses its old slugs, and its rows go with it when it is purged. `booking_page_slugs_owner_slug` keeps a slug
- * one page of a person holds or held from any other page of theirs, in every workspace, so an old link never finds
+ * one page of a person holds or held from any other page of theirs, in the same workspace (spec 0056, migration 0113), so an old link never finds
  * a different page; the same page may take it back.
  */
 export const bookingPageSlugs = pgTable(
@@ -330,7 +327,7 @@ export const bookingPageSlugs = pgTable(
     }).onDelete('cascade'),
     // An old address is found before the workspace is known: read only through crm_booking_lookup's
     // crm_booking_page_by_address and crm_booking_owner_slugs.
-    uniqueIndex('booking_page_slugs_owner_slug').on(t.ownerUserId, t.slug),
+    uniqueIndex('booking_page_slugs_owner_slug').on(t.ownerUserId, t.workspaceId, t.slug),
     check(
       'booking_page_slugs_slug_shape',
       sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`,

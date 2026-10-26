@@ -1,7 +1,7 @@
 # 0051. The link page at `/<handle>`
 
 **Date**: 2026-10-24
-**Status**: Proposed
+**Status**: Proposed (amended by [0056](../0056-link-page-per-workspace.md): one link page per workspace)
 
 **Numbering**: 0051 taken by the spec lane on 24 October 2026 (0048 is Lists, 0049 and 0050 are claimed by another chat). This spec owns AC-5101 to AC-5199.
 

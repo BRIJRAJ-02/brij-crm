@@ -199,9 +199,13 @@ function shownAddress(url: string): string {
   return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
 }
 
-/** How a block's row reads; a booking page names its workspace only when the person's pages come from several. */
-export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWords {
-  if (item.kind === 'link') return { title: item.title, address: shownAddress(item.url) };
+/** How a block's row reads; a link to one of our pages outside this workspace leads with saying so, and is off. */
+export function rowWords(item: ProfileItem): BlockRowWords {
+  if (item.kind === 'link') {
+    return item.outsideWorkspace === true
+      ? { title: item.title, address: `${strings.notInWorkspace} · ${shownAddress(item.url)}`, isOff: true }
+      : { title: item.title, address: shownAddress(item.url) };
+  }
   if (item.kind === 'heading')
     return { title: item.title, address: item.group === 'folder' ? strings.headingFolds : strings.heading };
   // Writing has nowhere to go, so its row reads as what it is, with its first line after it.
@@ -214,7 +218,7 @@ export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWor
     if (item.form === undefined) {
       return { title: strings.form, address: strings.formUnavailable, isOff: true };
     }
-    const line = [...(namesWorkspace ? [item.form.workspaceName] : []), strings.formRow].join(' · ');
+    const line = strings.formRow;
     return item.form.status === 'paused'
       ? { title: item.label, address: `${strings.formPaused} · ${line}`, isOff: true }
       : { title: item.label, address: line };
@@ -233,12 +237,9 @@ export function rowWords(item: ProfileItem, namesWorkspace = false): BlockRowWor
   // Paused leads the line rather than standing as a badge at the row's end, so a phone keeps the title on one line.
   return {
     title: item.page.title,
-    address: [
-      ...(isPaused ? [strings.pausedHidden] : []),
-      strings.bookingPage,
-      ...(namesWorkspace ? [item.page.workspaceName] : []),
-      ...(facts === '' ? [] : [facts]),
-    ].join(' · '),
+    address: [...(isPaused ? [strings.pausedHidden] : []), strings.bookingPage, ...(facts === '' ? [] : [facts])].join(
+      ' · ',
+    ),
     ...(isPaused ? { isOff: true } : {}),
   };
 }

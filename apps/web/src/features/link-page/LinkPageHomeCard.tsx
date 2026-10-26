@@ -118,6 +118,9 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
   return (
     <Card
       title={strings.title}
+      {...(read.profile.workspaceName === undefined
+        ? {}
+        : { description: strings.inWorkspace(read.profile.workspaceName) })}
       actions={
         <ButtonLink variant="ghost" href={linkPageHref(slug)}>
           {strings.edit}
@@ -146,7 +149,13 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
         </p>
         <p>{strings.scan}</p>
       </QrCode>
-      <ShareLinkPageModal address={address} handle={handle} isOpen={isShowing} onClose={() => setShowing(false)} />
+      <ShareLinkPageModal
+        address={address}
+        handle={handle}
+        workspaceName={read.profile.workspaceName}
+        isOpen={isShowing}
+        onClose={() => setShowing(false)}
+      />
     </Card>
   );
 }

@@ -8,6 +8,7 @@ import { isHiddenFact, NUMBER_OPS, type RoutingRule } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import type { Access } from '../access/policy.ts';
+import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { bookingTargetProblem } from '../booking/pages.ts';
 import { refuseOn } from '../engine/refusals.ts';
 import { fieldsSeen, ruleFields } from './seen.ts';
@@ -173,6 +174,32 @@ export async function checkPageRoutes(
       throw refuseOn('CONFIG_INVALID', `${name} compares a hidden field as a number, but it holds text.`, 'routing');
     }
     await checkHosts(tx, pageId, rule.then.hosts, name);
+  }
+}
+
+/**
+ * A form's redirects (spec 0056, AC-5610 to AC-5612): the `after` redirect and every routing rule's redirect may only
+ * hold an address of our own that resolves inside this workspace; an address on any other site is not checked. The
+ * first one that names a page of another workspace, or of none, is `CONFIG_INVALID`, on the field it came from.
+ */
+export async function checkFormAddresses(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  document: {
+    readonly after: { readonly kind: string; readonly url?: string };
+    readonly routing: { readonly rules: readonly RoutingRule[] };
+  },
+  origins: readonly string[],
+): Promise<void> {
+  if (document.after.kind === 'redirect' && document.after.url !== undefined) {
+    const problem = await workspaceAddressProblem(tx, workspaceId, document.after.url, origins);
+    if (problem !== undefined) throw refuseOn('CONFIG_INVALID', problem, 'after');
+  }
+  for (const [index, rule] of document.routing.rules.entries()) {
+    if (rule.then.kind !== 'redirect') continue;
+    const problem = await workspaceAddressProblem(tx, workspaceId, rule.then.url, origins);
+    if (problem !== undefined)
+      throw refuseOn('CONFIG_INVALID', `${ruleName(rule, index)} ${problem.toLowerCase()}`, 'routing');
   }
 }
 

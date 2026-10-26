@@ -5,3 +5,4 @@ export * from './link-page.ts';
 export * from './page-theme.ts';
 export * from './public.ts';
 export * from './settings.ts';
+export * from './workspace-address.ts';

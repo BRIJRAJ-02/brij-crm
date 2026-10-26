@@ -101,12 +101,27 @@ describe('a handle', () => {
     expect(await updateMyMemberProfile(ada.scope, { handle: first })).toMatchObject({ handle: first });
   });
 
-  it('is the same in each of the person’s workspaces', async () => {
+  it('belongs to one workspace: another of theirs has none, claims its own, and is refused the same word (spec 0056)', async () => {
     const ada = await person('Ada');
     const handle = fresh('ada');
     await updateMyMemberProfile(ada.scope, { handle });
     const other = await person('Ada', ada.userId);
-    expect((await getMyProfile(other.scope)).handle).toBe(handle);
+    // The other workspace has no handle of hers yet; the claim note shows there.
+    expect((await getMyProfile(other.scope)).handle).toBeUndefined();
+    // And says, quietly, that they already have a page in the workspace that holds one (spec 0056, AC-5618): only a
+    // workspace they belong to, named by the directory the api reads, so nobody else's is ever named.
+    const names = new Map([[ada.workspaceId, 'Acme']]);
+    expect((await getMyProfile(other.scope, { workspaceNames: names })).otherLinkPages).toEqual([
+      { workspaceId: ada.workspaceId, workspaceName: 'Acme' },
+    ]);
+    expect((await getMyProfile(other.scope)).otherLinkPages).toBeUndefined();
+    expect((await getMyProfile(ada.scope, { workspaceNames: names })).otherLinkPages).toBeUndefined();
+    // The same word can't be taken twice, not even by the same person in another workspace (AC-5601).
+    expect(await refusalOf(updateMyMemberProfile(other.scope, { handle }))).toBe('SLUG_TAKEN');
+    const second = fresh('ada-work');
+    await updateMyMemberProfile(other.scope, { handle: second });
+    expect((await getMyProfile(other.scope)).handle).toBe(second);
+    expect((await getMyProfile(ada.scope)).handle).toBe(handle);
   });
 });
 
@@ -145,14 +160,17 @@ describe('a handle address', () => {
     expect(facts.path).toBeUndefined();
   });
 
-  it('keeps a slug unique per person across workspaces, so each address names one page', async () => {
+  it('lets a slug repeat across a person’s workspaces, each address naming one page (spec 0056, AC-5608)', async () => {
     const ada = await person('Ada');
     const elsewhere = await person('Ada', ada.userId);
     const one = await page(ada.scope, 'Sync');
     const two = await page(elsewhere.scope, 'Sync');
     expect(one.slug).toBe('sync');
-    expect(two.slug).toBe('sync-2');
-    expect(await refusalOf(updateBookingPage(elsewhere.scope, { pageId: two.id, settings: { slug: 'sync' } }))).toBe(
+    expect(two.slug).toBe('sync');
+    // Within one workspace it is still one page per slug.
+    const three = await page(ada.scope, 'Sync');
+    expect(three.slug).toBe('sync-2');
+    expect(await refusalOf(updateBookingPage(ada.scope, { pageId: three.id, settings: { slug: 'sync' } }))).toBe(
       'SLUG_TAKEN',
     );
   });
@@ -214,19 +232,17 @@ describe('slug history (22 Oct 2026)', () => {
     });
   });
 
-  it('refuses an old slug to another page of the person’s, in any workspace, but lets its own page take it back', async () => {
+  it('refuses an old slug to another page of the person’s in the workspace, but lets its own page take it back', async () => {
     const ada = await person('Ada');
-    const elsewhere = await person('Ada', ada.userId);
     const made = await page(ada.scope, 'Intro call');
     await rename(ada.scope, made.id, 'meet');
-    const other = await page(elsewhere.scope, 'Other');
-    const refused = rename(elsewhere.scope, other.id, made.slug);
+    const other = await page(ada.scope, 'Other');
+    const refused = rename(ada.scope, other.id, made.slug);
     expect(await refusalMessage(refused)).toBe(
       'Another of your booking pages used this address before, so it stays with that page. Pick another.',
     );
-    expect(await refusalOf(rename(ada.scope, other.id, made.slug))).toBe('NOT_FOUND');
     // A new page's default slug skips it too.
-    expect((await page(elsewhere.scope, 'Intro call')).slug).toBe(`${made.slug}-2`);
+    expect((await page(ada.scope, 'Intro call')).slug).toBe(`${made.slug}-2`);
     expect((await rename(ada.scope, made.id, made.slug)).slug).toBe(made.slug);
   });
 
@@ -295,11 +311,10 @@ describe('what a workspace may publish under a person', () => {
     );
   });
 
-  it('stops addressing and listing a page once its owner has left that workspace', async () => {
+  it('stops addressing a handle once its person has left that workspace, keeps it theirs, and brings it back on rejoining (AC-5603)', async () => {
     const ada = await person('Ada');
     const handle = fresh('gone');
-    await updateMyMemberProfile(ada.scope, { handle });
-    // Ada joins Bob's workspace as a member, and makes a page there.
+    // Ada joins Bob's workspace as a member, claims a handle there and makes a page there.
     const bob = await person('Bob');
     const adaThere = newId();
     await db.withWorkspace(bob.workspaceId, (tx) =>
@@ -307,21 +322,39 @@ describe('what a workspace may publish under a person', () => {
         sql`insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type) values (${bob.workspaceId}, ${adaThere}, ${ada.userId}, 'Ada', ${`${ada.userId}@example.com`}, 'member', 'system', 'system')`,
       ),
     );
-    const made = await page(
-      testScope({ db, workspaceId: bob.workspaceId, actor: { type: 'member', id: adaThere }, role: 'member' }),
-      'Elsewhere',
-    );
+    const adaInBob = testScope({
+      db,
+      workspaceId: bob.workspaceId,
+      actor: { type: 'member', id: adaThere },
+      role: 'member',
+      userId: ada.userId,
+    });
+    await updateMyMemberProfile(adaInBob, { handle });
+    const made = await page(adaInBob, 'Elsewhere');
     expect((await readAddressedPage(await enterBookingAddress({ db }, handle, made.slug))).publicKey).toBe(
       made.publicKey,
     );
-    await db.withWorkspace(bob.workspaceId, (tx) =>
-      tx.execute(
-        sql`update members set status = 'removed', left_at = now(), removed_by_type = 'system' where id = ${adaThere}`,
-      ),
-    );
+    const setStatus = (status: 'removed' | 'active') =>
+      db.withWorkspace(bob.workspaceId, (tx) =>
+        tx.execute(
+          status === 'removed'
+            ? sql`update members set status = 'removed', left_at = now(), removed_by_type = 'system' where id = ${adaThere}`
+            : sql`update members set status = 'active', left_at = null, removed_by_type = null, removed_by_id = null, removed_by_member_id = null where id = ${adaThere}`,
+        ),
+      );
+    await setStatus('removed');
+    // The word-for-word not found page of any unheld address, revealing nothing about the workspace.
     expect(await refusalOf(enterBookingAddress({ db }, handle, made.slug))).toBe('NOT_FOUND');
-    const profile = await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }));
-    expect(profile.items.map((item) => (item.kind === 'page' ? item.slug : item.id))).not.toContain(made.slug);
+    expect(await refusalOf(enterLinkPage({ db }, handle, { max: 21 }))).toBe('NOT_FOUND');
+    // The handle stays reserved to her: nobody else can claim it, and the offer says so.
+    expect(await readHandleOffer({ db }, handle)).toBe('absent');
+    const bobAsked = await refusalOf(updateMyMemberProfile(bob.scope, { handle }));
+    expect(bobAsked).toBe('SLUG_TAKEN');
+    await setStatus('active');
+    expect((await readAddressedPage(await enterBookingAddress({ db }, handle, made.slug))).publicKey).toBe(
+      made.publicKey,
+    );
+    expect((await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }))).handle).toBe(handle);
   });
 });
 

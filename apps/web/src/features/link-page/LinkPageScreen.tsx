@@ -155,7 +155,7 @@ export function LinkPageScreen({ data, linkPage, slug, profile }: LinkPageScreen
       page={{
         topBar: (
           <TopBar title={strings.title} icon="id-card">
-            {handle === undefined ? undefined : <HeaderActions handle={handle} />}
+            {handle === undefined ? undefined : <HeaderActions handle={handle} workspaceName={profile.workspaceName} />}
           </TopBar>
         ),
         body:
@@ -184,7 +184,13 @@ export function LinkPageScreen({ data, linkPage, slug, profile }: LinkPageScreen
  * The header's actions, as the owner's design draws them: the page's address as a pill that opens it, and Share,
  * which opens the one Share modal (the QR, the address and the two ways to go on; Home's card opens the same one).
  */
-function HeaderActions({ handle }: { readonly handle: string }) {
+function HeaderActions({
+  handle,
+  workspaceName,
+}: {
+  readonly handle: string;
+  readonly workspaceName?: string | undefined;
+}) {
   const address = publicProfileUrl(handle);
   const shown = address.replace(/^https?:\/\//, '');
   const [isSharing, setSharing] = useState(false);
@@ -203,7 +209,13 @@ function HeaderActions({ handle }: { readonly handle: string }) {
       <Button icon="upload" onPress={() => setSharing(true)}>
         {strings.share}
       </Button>
-      <ShareLinkPageModal address={address} handle={handle} isOpen={isSharing} onClose={() => setSharing(false)} />
+      <ShareLinkPageModal
+        address={address}
+        handle={handle}
+        workspaceName={workspaceName}
+        isOpen={isSharing}
+        onClose={() => setSharing(false)}
+      />
     </>
   );
 }
@@ -483,9 +495,6 @@ function Blocks({
     // A paused or unavailable page still shows its calendar tile in the list.
     return { kind: 'page', id: item.id, title: rowWords(item).title, href: '', facts: '' };
   };
-  // A workspace is named beside a booking page only when the person's pages come from more than one.
-  const namesWorkspace =
-    new Set([...items, ...archived].flatMap((item) => (item.kind === 'page' ? [item.workspaceId] : []))).size > 1;
   // A section heads everything after it until the next one, which is what its count says.
   const underSection = (at: number) => {
     let count = 0;
@@ -496,7 +505,7 @@ function Blocks({
     return count;
   };
   const rows: LinkRow[] = items.map((item, index) => {
-    const words = rowWords(item, namesWorkspace);
+    const words = rowWords(item);
     const isPending = pending.has(item.id);
     if (item.kind === 'heading') {
       return {
@@ -707,16 +716,16 @@ function Blocks({
       <SocialsCardSlot data={data} slug={slug} onPreviewLinks={setSocialPreview} isTeam={false} isOwner />
       <Card
         title={strings.blocks}
-        description={
+        description={[
+          // Whose page this is: each workspace has its own (spec 0056, AC-5617).
+          ...(profile.workspaceName === undefined ? [] : [strings.inWorkspace(profile.workspaceName)]),
           counts !== undefined
             ? `${strings.blocksText} ${figuresLine(counts)}`
             : state.status === 'ready' && state.countsFailed === true
               ? `${strings.blocksText} ${strings.countsFailed}`
-              : strings.blocksText
-        }
+              : strings.blocksText,
+        ].join(' ')}
         footer={addButtons}
-        // Only where it is needed: with pages from one workspace there is nothing to explain.
-        {...(namesWorkspace ? { footerNote: strings.workspacesNote } : {})}
       >
         {list}
       </Card>
@@ -729,7 +738,7 @@ function Blocks({
             isToolbarHidden
             leadingLoading={<LinkPageTile />}
             rows={archived.map((item, index) => {
-              const words = rowWords(item, namesWorkspace);
+              const words = rowWords(item);
               return {
                 id: item.id,
                 title: words.title,
