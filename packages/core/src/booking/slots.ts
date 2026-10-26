@@ -38,6 +38,8 @@ export interface PageRecord extends BookingPageSettings {
   /** The zone the virtual default takes on this page: its own stored hours' zone (its creator's, AC-963). */
   readonly fallbackZone: string;
   readonly id: string;
+  /** The workspace the page lives in: its owner's handle there is the one its address uses (spec 0056). */
+  readonly workspaceId: string;
   readonly publicKey: string;
   readonly kind: 'personal' | 'collective' | 'round_robin';
   readonly ownerMemberId: string;
@@ -89,6 +91,7 @@ export function pageOf(
   const step = row.slotStep;
   return {
     id: row.id,
+    workspaceId: row.workspaceId,
     publicKey: row.publicKey,
     kind: KINDS.has(row.kind) ? (row.kind as PageRecord['kind']) : 'personal',
     ownerMemberId: row.ownerMemberId,

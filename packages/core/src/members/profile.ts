@@ -79,7 +79,7 @@ async function readProfile(
   // The account's picture as our own origin serves it (the api's path), else the member's own https one.
   const image = extras.image ?? safeImage(row.avatarUrl ?? undefined);
   const userId = selfUserId(scope);
-  const held = userId === undefined ? undefined : (await publicProfilesOf(tx, [userId])).get(userId);
+  const held = userId === undefined ? undefined : (await publicProfilesOf(tx, scope.workspaceId, [userId])).get(userId);
   // While they have no handle, the field starts from a free one made from their name.
   const suggested = held === undefined && userId !== undefined ? await suggestHandle(tx, row.name) : undefined;
   // The person's choice; a member with no identity of their own has none to make.
@@ -162,7 +162,7 @@ export async function updateMyMemberProfile(
         if (userId === undefined) throw refuseOn('FORBIDDEN', 'Only a signed in person has a handle.', 'handle');
         const nextHandle = handle ?? now.handle;
         if (nextHandle === undefined) throw refuseOn('VALUE_REQUIRED', 'Pick a handle first.', 'handle');
-        await savePublicProfile(tx, userId, nextHandle, bio ?? now.bio);
+        await savePublicProfile(tx, userId, scope.workspaceId, nextHandle, bio ?? now.bio);
         if (handle !== undefined) {
           before.handle = now.handle ?? null;
           after.handle = handle;

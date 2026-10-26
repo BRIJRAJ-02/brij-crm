@@ -637,6 +637,7 @@ export async function enterBookingByToken(
 /** What a handle answers past schema auth's fence (`crm_handle_owner`): never an email. */
 interface HandleOwnerRow extends Record<string, unknown> {
   readonly user_id: string;
+  readonly workspace_id: string;
   readonly handle: string;
   readonly bio: string;
   readonly name: string;
@@ -648,6 +649,8 @@ interface HandleOwnerRow extends Record<string, unknown> {
 /** The person a handle names (current or old): their identity, current handle, and what their profile shows. */
 export interface HandleOwner {
   readonly userId: string;
+  /** The one workspace this handle, and the link page behind it, belong to (spec 0056, AC-5601). Never sent out. */
+  readonly workspaceId: string;
   /** Their current handle: an old one's address moves to it. */
   readonly handle: string;
   readonly bio: string;
@@ -677,12 +680,13 @@ async function handleOwner(
   if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return undefined;
   return db.withWorkspace(NO_WORKSPACE, async (tx) => {
     const found = await tx.execute<HandleOwnerRow>(
-      sql`select user_id::text as user_id, handle, bio, name, image, theme, indexable from crm_handle_owner(${handle})`,
+      sql`select user_id::text as user_id, workspace_id::text as workspace_id, handle, bio, name, image, theme, indexable from crm_handle_owner(${handle})`,
     );
     const [row] = found.rows;
     if (row === undefined) return undefined;
     return {
       userId: row.user_id,
+      workspaceId: row.workspace_id,
       handle: row.handle,
       bio: row.bio,
       name: row.name,
@@ -716,7 +720,7 @@ export async function findHandleOwner(deps: { readonly db: Database }, handle: s
  * `enterBookingProfile` either way. It is so that the offer is only ever made for an address that is genuinely
  * free to take, and so no later caller can grow a reason in words out of this answer.
  *
- * Reads through `crm_handle_owner`, the same definer every other handle read goes through, so this adds no way to
+ * Reads through `crm_handle_taken`, one more of crm_handle's definers (a boolean), so this adds no way to
  * the data, and `HANDLE_PATTERN` and `isReservedHandle` are the same checks the claim itself refuses on
  * (`handleProblem`), so `free` never promises an address the claim would reject. Exported only from
  * `@crm/core/public`.
@@ -725,7 +729,15 @@ export async function readHandleOffer(deps: { readonly db: Database }, handle: s
   // A word kept for Timefix can never be claimed, so it is never offered.
   if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return 'absent';
   // A person holds it, listed or not: `absent`, exactly as a reserved word reads.
-  return (await handleOwner(deps.db, handle)) === undefined ? 'free' : 'absent';
+  // Held or ever held (`crm_handle_taken`), not whether its person is still a member: a handle is never freed, so one
+  // whose person left is no more free than one whose page is live (spec 0056, AC-5603).
+  const held = await deps.db.withWorkspace(NO_WORKSPACE, async (tx) => {
+    const found = await tx.execute<{ held: boolean } & Record<string, unknown>>(
+      sql`select crm_handle_taken(${handle}) as held`,
+    );
+    return found.rows[0]?.held === true;
+  });
+  return held ? 'absent' : 'free';
 }
 
 /** A page's narrow, read only entry: its `booking` actor with no record access, as the guest page's. */
@@ -756,7 +768,7 @@ export async function enterBookingAddress(
   if (owner === undefined) throw missing();
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<PageKeyRow>(
-      sql`select workspace_id::text as workspace_id, page_id::text as page_id from crm_booking_page_by_address(${owner.userId}::uuid, ${slug})`,
+      sql`select workspace_id::text as workspace_id, page_id::text as page_id from crm_booking_page_by_address(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${slug})`,
     ),
   );
   const [row] = found.rows;
@@ -791,14 +803,15 @@ interface OwnedPagesWay {
 async function ownedPages(
   way: OwnedPagesWay,
   ownerUserId: string,
+  workspaceId: string,
   pageIds?: readonly string[],
 ): Promise<readonly OwnedPageEntry[]> {
-  if (!isUuid(ownerUserId)) return [];
+  if (!isUuid(ownerUserId) || !isUuid(workspaceId)) return [];
   const wanted = pageIds?.filter((id) => isUuid(id));
   if (wanted !== undefined && wanted.length === 0) return [];
   const rows = await way.read(async (tx) => {
     const found = await tx.execute<OwnedPageRow>(
-      sql`select workspace_id::text as workspace_id, page_id::text as page_id, is_live from crm_booking_owner_pages(${ownerUserId}::uuid, ${wanted === undefined ? null : `{${wanted.join(',')}}`}::uuid[])`,
+      sql`select workspace_id::text as workspace_id, page_id::text as page_id, is_live from crm_booking_owner_pages(${ownerUserId}::uuid, ${workspaceId}::uuid, ${wanted === undefined ? null : `{${wanted.join(',')}}`}::uuid[])`,
     );
     return found.rows;
   });
@@ -820,6 +833,7 @@ async function ownedPages(
 export async function enterOwnedPages(
   deps: { readonly db: Database },
   ownerUserId: string,
+  workspaceId: string,
   pageIds?: readonly string[],
 ): Promise<readonly OwnedPageEntry[]> {
   return ownedPages(
@@ -834,6 +848,7 @@ export async function enterOwnedPages(
         }),
     },
     ownerUserId,
+    workspaceId,
     pageIds,
   );
 }
@@ -866,6 +881,7 @@ export async function enterOwnPages(
       mint: (workspaceId, pageId) => mintPageBeside(scope, workspaceId, pageId),
     },
     ownUserId(scope),
+    scope.workspaceId,
     pageIds,
   );
 }
@@ -898,14 +914,15 @@ interface OwnedFormsWay {
 async function ownedForms(
   way: OwnedFormsWay,
   ownerUserId: string,
+  workspaceId: string,
   formIds?: readonly string[],
 ): Promise<readonly OwnedFormEntry[]> {
-  if (!isUuid(ownerUserId)) return [];
+  if (!isUuid(ownerUserId) || !isUuid(workspaceId)) return [];
   const wanted = formIds?.filter((id) => isUuid(id));
   if (wanted !== undefined && wanted.length === 0) return [];
   const rows = await way.read(async (tx) => {
     const found = await tx.execute<OwnedFormRow>(
-      sql`select workspace_id::text as workspace_id, form_id::text as form_id, public_key, is_live from crm_form_owner_forms(${ownerUserId}::uuid, ${wanted === undefined ? null : `{${wanted.join(',')}}`}::uuid[])`,
+      sql`select workspace_id::text as workspace_id, form_id::text as form_id, public_key, is_live from crm_form_owner_forms(${ownerUserId}::uuid, ${workspaceId}::uuid, ${wanted === undefined ? null : `{${wanted.join(',')}}`}::uuid[])`,
     );
     return found.rows;
   });
@@ -927,6 +944,7 @@ async function ownedForms(
 export async function enterOwnedForms(
   deps: { readonly db: Database },
   ownerUserId: string,
+  workspaceId: string,
   formIds?: readonly string[],
 ): Promise<readonly OwnedFormEntry[]> {
   return ownedForms(
@@ -941,6 +959,7 @@ export async function enterOwnedForms(
         }),
     },
     ownerUserId,
+    workspaceId,
     formIds,
   );
 }
@@ -960,6 +979,7 @@ export async function enterOwnForms(
       mint: (workspaceId, formId) => mintFormBeside(scope, workspaceId, formId),
     },
     ownUserId(scope),
+    scope.workspaceId,
     formIds,
   );
 }
@@ -997,14 +1017,14 @@ export async function enterLinkPage(
   const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<LinkPageRow>(
-      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
     ),
   );
   const pageIds = found.rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
-  const pages = (await enterOwnedPages(deps, owner.userId, pageIds)).filter((entry) => entry.isLive);
+  const pages = (await enterOwnedPages(deps, owner.userId, owner.workspaceId, pageIds)).filter((entry) => entry.isLive);
   // A form block's form, the same way and under the same rule: only one a visitor may open now (AC-5214).
   const formIds = found.rows.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : []));
-  const forms = (await enterOwnedForms(deps, owner.userId, formIds)).filter((entry) => entry.isLive);
+  const forms = (await enterOwnedForms(deps, owner.userId, owner.workspaceId, formIds)).filter((entry) => entry.isLive);
   return { owner, rows: found.rows, pages, forms };
 }
 
@@ -1019,11 +1039,12 @@ const PROFILE_VISITOR = /^[0-9a-f]{32}$/;
 export async function countProfileView(
   deps: { readonly db: Database },
   ownerUserId: string,
+  workspaceId: string,
   visitor: string,
 ): Promise<void> {
-  if (!isUuid(ownerUserId) || !PROFILE_VISITOR.test(visitor)) return;
+  if (!isUuid(ownerUserId) || !isUuid(workspaceId) || !PROFILE_VISITOR.test(visitor)) return;
   await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
-    tx.execute(sql`select crm_count_profile_view(${ownerUserId}::uuid, ${visitor})`),
+    tx.execute(sql`select crm_count_profile_view(${ownerUserId}::uuid, ${workspaceId}::uuid, ${visitor})`),
   );
 }
 
@@ -1046,7 +1067,9 @@ export async function countItemPress(
   // The owner's own presses (signed in on this site) aren't a visitor's.
   if (owner === undefined || owner.userId === options.signedInAs) return;
   await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
-    tx.execute(sql`select crm_count_item_press(${owner.userId}::uuid, ${itemId}::uuid, ${visitor})`),
+    tx.execute(
+      sql`select crm_count_item_press(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${itemId}::uuid, ${visitor})`,
+    ),
   );
 }
 
@@ -1065,7 +1088,7 @@ export async function enterContactCard(
   if (owner === undefined) throw missing();
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<{ readonly data: unknown } & Record<string, unknown>>(
-      sql`select data from crm_profile_items_public(${owner.userId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where kind = 'contact' limit 1`,
+      sql`select data from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where kind = 'contact' limit 1`,
     ),
   );
   const [row] = found.rows;

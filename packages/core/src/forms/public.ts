@@ -124,6 +124,7 @@ async function bookingNext(
     .select({
       publicKey: bookingPages.publicKey,
       slug: bookingPages.slug,
+      workspaceId: bookingPages.workspaceId,
       ownerUserId: bookingPages.ownerUserId,
       isPrivate: bookingPages.isPrivate,
     })

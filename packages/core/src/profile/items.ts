@@ -1,5 +1,7 @@
-// The link page's blocks (spec 0051, built as blocks): a person's one ordered list at `/<handle>`, kept with their
-// account in schema auth (migration 0098), out of the app role's reach. These are its only ways there, each one of
+// The link page's blocks (spec 0051, built as blocks; one page per workspace since spec 0056): a person's ordered
+// list at `/<handle>` in ONE workspace, kept with their account in schema auth (migrations 0098 and 0112), out of the
+// app role's reach. Every definer takes the session's own workspace beside the owner and refuses unless the owner is
+// an active member of it, so a person's pages in their other workspaces are never read or written from here. These are its only ways there, each one of
 // crm_handle's definers, run inside the caller's workspace transaction with the session's own user id: no input names
 // the owner, so no role in any workspace reaches another person's page. A booking page block names a page by its
 // workspace and id; which of the person's pages it may name, and what the editor shows of one, comes through the
@@ -230,11 +232,16 @@ function itemOf(row: ItemRow, facts: BlockFacts): ProfileItem | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-async function readRows(tx: WorkspaceTx, owner: string, archived: boolean): Promise<readonly ItemRow[]> {
+async function readRows(
+  tx: WorkspaceTx,
+  owner: string,
+  workspace: string,
+  archived: boolean,
+): Promise<readonly ItemRow[]> {
   const found = await tx.execute<ItemRow>(
     archived
-      ? sql`select ${ITEM_COLUMNS} from crm_profile_items_archived(${owner}::uuid)`
-      : sql`select ${ITEM_COLUMNS} from crm_profile_items(${owner}::uuid)`,
+      ? sql`select ${ITEM_COLUMNS} from crm_profile_items_archived(${owner}::uuid, ${workspace}::uuid)`
+      : sql`select ${ITEM_COLUMNS} from crm_profile_items(${owner}::uuid, ${workspace}::uuid)`,
   );
   return found.rows;
 }
@@ -252,8 +259,8 @@ async function factsForRows(scope: EngineScope, rows: readonly ItemRow[]): Promi
 /** Both lists, read in one transaction, with their pages' facts. */
 async function readAll(scope: EngineScope, owner: string): Promise<ProfileItems> {
   const [live, archived] = await inWorkspace(scope, async (tx) => [
-    await readRows(tx, owner, false),
-    await readRows(tx, owner, true),
+    await readRows(tx, owner, scope.workspaceId, false),
+    await readRows(tx, owner, scope.workspaceId, true),
   ]);
   const facts = await factsForRows(scope, [...live, ...archived]);
   const items = (rows: readonly ItemRow[]) =>
@@ -270,12 +277,12 @@ export async function readProfileItems(scope: EngineScope): Promise<ProfileItems
 }
 
 /**
- * The booking pages the caller may still place (AC-5117): their Public pages in every workspace they are an active
- * member of, live or paused, without the ones a live block holds already, by workspace then title.
+ * The booking pages the caller may still place (AC-5117, AC-5606): their Public pages in the workspace they are in,
+ * live or paused, without the ones a live block holds already, by title. Never another workspace's.
  */
 export async function listProfilePageChoices(scope: EngineScope): Promise<readonly ProfilePageChoice[]> {
   const owner = ownerOf(scope);
-  const live = await inWorkspace(scope, (tx) => readRows(tx, owner, false));
+  const live = await inWorkspace(scope, (tx) => readRows(tx, owner, scope.workspaceId, false));
   const placed = new Set(live.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : [])));
   const entries = (await enterOwnPages(scope)).filter((entry) => !placed.has(entry.pageId));
   const facts = await factsOf(entries);
@@ -295,7 +302,7 @@ export async function listProfilePageChoices(scope: EngineScope): Promise<readon
  */
 export async function listProfileFormChoices(scope: EngineScope): Promise<readonly ProfileFormChoice[]> {
   const owner = ownerOf(scope);
-  const live = await inWorkspace(scope, (tx) => readRows(tx, owner, false));
+  const live = await inWorkspace(scope, (tx) => readRows(tx, owner, scope.workspaceId, false));
   const placed = new Set(live.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : [])));
   const entries = (await enterOwnForms(scope)).filter((entry) => !placed.has(entry.formId));
   const facts = await formFactsOf(entries);
@@ -321,7 +328,7 @@ export async function saveProfileTheme(scope: EngineScope, theme: PageTheme): Pr
   const saved = await inWorkspace(scope, async (tx) => {
     try {
       const answered = await tx.execute<{ theme: unknown }>(
-        sql`select theme from crm_save_profile_theme(${owner}::uuid, ${JSON.stringify(parsed.data)}::jsonb) as theme`,
+        sql`select theme from crm_save_profile_theme(${owner}::uuid, ${scope.workspaceId}::uuid, ${JSON.stringify(parsed.data)}::jsonb) as theme`,
       );
       return answered.rows[0]?.theme;
     } catch (error) {
@@ -343,7 +350,7 @@ export async function setProfileIndexable(scope: EngineScope, indexable: boolean
   const kept = await inWorkspace(scope, async (tx) => {
     try {
       const answered = await tx.execute<{ indexable: boolean }>(
-        sql`select crm_save_profile_indexable(${owner}::uuid, ${indexable}) as indexable`,
+        sql`select crm_save_profile_indexable(${owner}::uuid, ${scope.workspaceId}::uuid, ${indexable}) as indexable`,
       );
       return answered.rows[0]?.indexable;
     } catch (error) {
@@ -354,6 +361,9 @@ export async function setProfileIndexable(scope: EngineScope, indexable: boolean
   });
   return { indexable: kept ?? indexable };
 }
+
+/** The sentence for a booking page or form that is not in the workspace the block is written in (AC-5605). */
+const NOT_IN_WORKSPACE = 'That page isn’t in this workspace.';
 
 /** A refusal for what a definer raised, or the error itself. */
 function refusalOf(error: unknown): unknown {
@@ -378,6 +388,10 @@ function refusalOf(error: unknown): unknown {
   if (pg.code === '23505' && pg.constraint === 'profile_items_form_once') {
     return refuse('CONFIG_INVALID', 'That form is on your link page already.');
   }
+  // A booking page or form that is not the person's own in this workspace (AC-5605): another workspace's, a deleted
+  // one, a guessed id. One answer for all of them.
+  if (pg.code === '42704') return refuse('NOT_FOUND', NOT_IN_WORKSPACE);
+  if (pg.code === '42501') return refuse('FORBIDDEN', 'You’re not a member of this workspace.');
   if (pg.code === 'P0002') return refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
   if (pg.code === '22023') return refuse('CONFIG_INVALID', 'That block can’t be saved as it is.');
   return error;
@@ -488,24 +502,25 @@ export async function saveProfileItem(
     throw field === undefined ? refuse('CONFIG_INVALID', message) : refuseOn('CONFIG_INVALID', message, field);
   }
   const block = parsed.data;
+  // A block belongs to the workspace the session is in, whatever the block says (AC-5604); the definer checks the
+  // page or form against that workspace again, from its own rows.
+  if ((block.kind === 'page' || block.kind === 'form') && block.workspaceId !== scope.workspaceId) {
+    throw refuse('NOT_FOUND', NOT_IN_WORKSPACE);
+  }
   if (block.kind === 'page') {
     const [entry] = await enterOwnPages(scope, [block.pageId]);
-    if (entry?.scope.workspaceId !== block.workspaceId) {
-      throw refuse('NOT_FOUND', 'That booking page can’t go on your link page.');
-    }
+    if (entry === undefined) throw refuse('NOT_FOUND', NOT_IN_WORKSPACE);
   }
   if (block.kind === 'form') {
     const [entry] = await enterOwnForms(scope, [block.formId]);
-    if (entry?.scope.workspaceId !== block.workspaceId) {
-      throw refuse('NOT_FOUND', 'That form can’t go on your link page.');
-    }
+    if (entry === undefined) throw refuse('NOT_FOUND', NOT_IN_WORKSPACE);
   }
   const row = await inWorkspace(scope, async (tx) => {
     // The live blocks only when they are needed: an edit's existence, or a new link's colour.
     const needsRows = input.isEdit === true || (block.kind === 'link' && block.hue === undefined);
-    const live = needsRows ? await readRows(tx, owner, false) : [];
+    const live = needsRows ? await readRows(tx, owner, scope.workspaceId, false) : [];
     if (input.isEdit === true && !live.some((each) => each.id === input.id)) {
-      const archived = await readRows(tx, owner, true);
+      const archived = await readRows(tx, owner, scope.workspaceId, true);
       if (!archived.some((each) => each.id === input.id)) {
         throw refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
       }
@@ -513,7 +528,7 @@ export async function saveProfileItem(
     const stored = storedOf(block, nextHue(live.filter((each) => each.kind === 'link').length));
     try {
       const saved = await tx.execute<ItemRow>(
-        sql`select ${ITEM_COLUMNS} from crm_save_profile_item(${owner}::uuid, ${input.id}::uuid, ${stored.kind}, ${JSON.stringify(stored.data)}::jsonb, ${stored.workspaceId}::uuid, ${stored.pageId}::uuid, ${stored.formId}::uuid)`,
+        sql`select ${ITEM_COLUMNS} from crm_save_profile_item(${owner}::uuid, ${scope.workspaceId}::uuid, ${input.id}::uuid, ${stored.kind}, ${JSON.stringify(stored.data)}::jsonb, ${stored.pageId}::uuid, ${stored.formId}::uuid)`,
       );
       return saved.rows[0];
     } catch (error) {
@@ -537,7 +552,9 @@ export async function orderProfileItems(scope: EngineScope, ids: readonly string
   }
   await inWorkspace(scope, async (tx) => {
     try {
-      await tx.execute(sql`select crm_order_profile_items(${owner}::uuid, ${`{${ids.join(',')}}`}::uuid[])`);
+      await tx.execute(
+        sql`select crm_order_profile_items(${owner}::uuid, ${scope.workspaceId}::uuid, ${`{${ids.join(',')}}`}::uuid[])`,
+      );
     } catch (error) {
       const pg = postgresError(error);
       if (pg?.code === '22023') {
@@ -561,7 +578,7 @@ export async function archiveProfileItem(
   const found = await inWorkspace(scope, async (tx) => {
     try {
       const answer = await tx.execute<{ found: boolean }>(
-        sql`select crm_archive_profile_item(${owner}::uuid, ${input.id}::uuid, ${input.archived}) as found`,
+        sql`select crm_archive_profile_item(${owner}::uuid, ${scope.workspaceId}::uuid, ${input.id}::uuid, ${input.archived}) as found`,
       );
       return answer.rows[0]?.found === true;
     } catch (error) {
@@ -577,7 +594,7 @@ export async function deleteProfileItem(scope: EngineScope, id: string): Promise
   const owner = ownerOf(scope);
   const found = await inWorkspace(scope, async (tx) => {
     const answer = await tx.execute<{ found: boolean }>(
-      sql`select crm_delete_profile_item(${owner}::uuid, ${id}::uuid) as found`,
+      sql`select crm_delete_profile_item(${owner}::uuid, ${scope.workspaceId}::uuid, ${id}::uuid) as found`,
     );
     return answer.rows[0]?.found === true;
   });
@@ -617,9 +634,15 @@ interface CountRow extends Record<string, unknown> {
 }
 
 /** One period's rows from `crm_profile_counts`. */
-async function countsIn(tx: WorkspaceTx, owner: string, from: string, to: string): Promise<readonly CountRow[]> {
+async function countsIn(
+  tx: WorkspaceTx,
+  owner: string,
+  workspace: string,
+  from: string,
+  to: string,
+): Promise<readonly CountRow[]> {
   const found = await tx.execute<CountRow>(
-    sql`select item_id::text as item_id, presses, views, visitors from crm_profile_counts(${owner}::uuid, ${from}::date, ${to}::date)`,
+    sql`select item_id::text as item_id, presses, views, visitors from crm_profile_counts(${owner}::uuid, ${workspace}::uuid, ${from}::date, ${to}::date)`,
   );
   return found.rows;
 }
@@ -635,8 +658,8 @@ export async function readProfileCounts(scope: EngineScope, now: Date = new Date
   const today = now.toISOString().slice(0, 10);
   const from = dayBefore(today, days - 1);
   const [current, before] = await inWorkspace(scope, async (tx) => [
-    await countsIn(tx, owner, from, today),
-    await countsIn(tx, owner, dayBefore(from, days), dayBefore(from, 1)),
+    await countsIn(tx, owner, scope.workspaceId, from, today),
+    await countsIn(tx, owner, scope.workspaceId, dayBefore(from, days), dayBefore(from, 1)),
   ]);
   const traffic = (rows: readonly CountRow[]) => {
     const row = rows.find((each) => each.item_id === null);
@@ -679,7 +702,7 @@ export async function importProfileLinks(
   const made = await inWorkspace(scope, async (tx) => {
     try {
       const answered = await tx.execute<{ existed: boolean; made: number }>(
-        sql`select existed, made from crm_import_profile_links(${owner}::uuid, ${input.id}::uuid, ${input.source}, ${JSON.stringify(blocks)}::jsonb, ${JSON.stringify(skipped)}::jsonb)`,
+        sql`select existed, made from crm_import_profile_links(${owner}::uuid, ${scope.workspaceId}::uuid, ${input.id}::uuid, ${input.source}, ${JSON.stringify(blocks)}::jsonb, ${JSON.stringify(skipped)}::jsonb)`,
       );
       return answered.rows[0];
     } catch (error) {

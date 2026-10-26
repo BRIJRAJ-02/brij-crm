@@ -236,6 +236,7 @@ export async function listBookingPages(
     const hosts = await pageHosts(tx, pages);
     const handles = await publicProfilesOf(
       tx,
+      scope.workspaceId,
       pages.map((page) => page.ownerUserId),
     );
     // One read of the fields every page's rules name.
@@ -279,9 +280,12 @@ async function viewWithCounts(tx: WorkspaceTx, scope: EngineScope, page: PageRec
 }
 
 /** The page owner's handle, when they have one: the page's address is then `/<handle>/<slug>`. */
-async function ownerHandle(tx: WorkspaceTx, page: Pick<PageRecord, 'ownerUserId'>): Promise<string | undefined> {
+async function ownerHandle(
+  tx: WorkspaceTx,
+  page: Pick<PageRecord, 'ownerUserId' | 'workspaceId'>,
+): Promise<string | undefined> {
   if (page.ownerUserId === null) return undefined;
-  return (await publicProfilesOf(tx, [page.ownerUserId])).get(page.ownerUserId)?.handle;
+  return (await publicProfilesOf(tx, page.workspaceId, [page.ownerUserId])).get(page.ownerUserId)?.handle;
 }
 
 const HOSTS_INVALID = 'A round robin page needs 1 to 3 rotations and at most 8 hosts in all.';
@@ -371,10 +375,10 @@ export function checkDurations(durations: readonly number[] | undefined): void {
 }
 
 /**
- * A slug free among the owner's live pages, so `/<handle>/<slug>` names one page: in this workspace, and in every
- * workspace their identity has pages in (`crm_booking_owner_slugs`). The wanted one, else it with -2, -3 …
+ * A slug free among the owner's live pages, so `/<handle>/<slug>` names one page: in this workspace, including the
+ * ones their pages used to hold (`crm_booking_owner_slugs`). A slug may repeat across a person's workspaces (spec 0056). The wanted one, else it with -2, -3 …
  */
-async function freeSlug(tx: WorkspaceTx, ownerMemberId: string, wanted: string): Promise<string> {
+async function freeSlug(tx: WorkspaceTx, workspaceId: string, ownerMemberId: string, wanted: string): Promise<string> {
   const base = wanted.slice(0, 56).replace(/-+$/, '');
   const [owner] = await tx.select({ userId: members.userId }).from(members).where(eq(members.id, ownerMemberId));
   const here = await tx
@@ -387,7 +391,8 @@ async function freeSlug(tx: WorkspaceTx, ownerMemberId: string, wanted: string):
         like(bookingPages.slug, `${base}%`),
       ),
     );
-  const elsewhere = owner?.userId === null || owner === undefined ? [] : await ownerSlugs(tx, owner.userId, base);
+  const elsewhere =
+    owner?.userId === null || owner === undefined ? [] : await ownerSlugs(tx, owner.userId, workspaceId, base);
   const taken = new Set([...here.map((row) => row.slug), ...elsewhere]);
   if (!taken.has(wanted)) return wanted;
   for (let n = 2; ; n += 1) if (!taken.has(`${base}-${String(n)}`)) return `${base}-${String(n)}`;
@@ -468,7 +473,7 @@ export async function createBookingPage(
     const settings: BookingPageSettings = {
       title: input.title,
       description: given.description ?? '',
-      slug: given.slug ?? (await freeSlug(tx, owner, slugFromTitle(input.title))),
+      slug: given.slug ?? (await freeSlug(tx, scope.workspaceId, owner, slugFromTitle(input.title))),
       durations: given.durations ?? [30],
       location: given.location ?? { type: 'video' },
       bufferBefore: given.bufferBefore ?? 0,

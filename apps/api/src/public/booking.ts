@@ -383,13 +383,15 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   };
 
   /** Counts a link page view in the background, unless it is the owner's own read. */
-  const countView = (c: Context<{ Variables: Variables }>, ownerUserId: string): void => {
+  const countView = (c: Context<{ Variables: Variables }>, ownerUserId: string, workspaceId: string): void => {
     const visitor = profileVisitor(c, ownerUserId);
     if (visitor === undefined || services.views === undefined) return;
     // Past 600 a minute for one page, reads are answered but not counted (AC-5126).
     if (!limiter(`profile:view-owner:${ownerUserId}`, BOOKING_LIMITS.viewsPerHandle).allowed) return;
     const counted = signedInAs(c)
-      .then((userId) => (userId === ownerUserId ? undefined : countProfileView({ db }, ownerUserId, visitor)))
+      .then((userId) =>
+        userId === ownerUserId ? undefined : countProfileView({ db }, ownerUserId, workspaceId, visitor),
+      )
       .catch((error: unknown) => {
         log.warn('profile.view.failed', { requestId: c.get('requestId'), ...errorFields(error) });
       });
@@ -482,7 +484,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       // One view per page load (its first page, with no `q` at all: a cleared search sends an empty one), never a
       // machine's or the owner's own (AC-5124),
       // counted after the answer is made and never holding it up.
-      if (c.req.query('q') === undefined && position === undefined) countView(c, found.owner.userId);
+      if (c.req.query('q') === undefined && position === undefined)
+        countView(c, found.owner.userId, found.owner.workspaceId);
       return ok(page);
     } catch (error) {
       return refusalAnswer(error);

@@ -5,7 +5,7 @@ import { bookingPagePath, DEFAULT_PAGE_THEME, handleFromName, HANDLE_MAX, PageTh
 import type { WorkspaceTx } from '@crm/db';
 import { sql } from 'drizzle-orm';
 import { isUuid } from '../engine/ids.ts';
-import { postgresError, refuseOn } from '../engine/refusals.ts';
+import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 
 /** A person's public facts: their current handle and bio. */
 export interface PublicProfileRow {
@@ -25,15 +25,19 @@ interface ProfileRow extends Record<string, unknown> {
   readonly indexable: boolean;
 }
 
-/** The handle, bio and look of each person named who has a handle (`crm_public_profiles_of`), by their user id. */
+/**
+ * The handle, bio and look each person named holds in ONE workspace (`crm_public_profiles_of`), by their user id: a
+ * person's handle belongs to their membership there (spec 0056, AC-5601), so another workspace's is never answered.
+ */
 export async function publicProfilesOf(
   tx: WorkspaceTx,
+  workspaceId: string,
   userIds: readonly (string | null | undefined)[],
 ): Promise<ReadonlyMap<string, PublicProfileRow>> {
   const ids = [...new Set(userIds.filter((id): id is string => id !== null && id !== undefined && isUuid(id)))];
   if (ids.length === 0) return new Map();
   const found = await tx.execute<ProfileRow>(
-    sql`select user_id::text as user_id, handle, bio, theme, indexable from crm_public_profiles_of(${`{${ids.join(',')}}`}::uuid[])`,
+    sql`select user_id::text as user_id, handle, bio, theme, indexable from crm_public_profiles_of(${`{${ids.join(',')}}`}::uuid[], ${workspaceId}::uuid)`,
   );
   return new Map(
     found.rows.map((row) => [
@@ -55,9 +59,15 @@ const HANDLE_CLAIM_CONSTRAINT = 'public_handles_pkey';
  * Claims `handle` for the person and sets their bio (`crm_save_public_profile`): their old handle keeps finding
  * them. A handle another person holds or held is `SLUG_TAKEN` on `handle`; past 20 held, `LIMIT_REACHED`.
  */
-export async function savePublicProfile(tx: WorkspaceTx, userId: string, handle: string, bio: string): Promise<void> {
+export async function savePublicProfile(
+  tx: WorkspaceTx,
+  userId: string,
+  workspaceId: string,
+  handle: string,
+  bio: string,
+): Promise<void> {
   try {
-    await tx.execute(sql`select crm_save_public_profile(${userId}::uuid, ${handle}, ${bio})`);
+    await tx.execute(sql`select crm_save_public_profile(${userId}::uuid, ${workspaceId}::uuid, ${handle}, ${bio})`);
   } catch (error) {
     const pg = postgresError(error);
     if (pg?.code === '23505' && pg.constraint === HANDLE_CLAIM_CONSTRAINT) {
@@ -66,18 +76,22 @@ export async function savePublicProfile(tx: WorkspaceTx, userId: string, handle:
     if (pg?.code === '54000') {
       throw refuseOn('LIMIT_REACHED', 'You’ve changed your handle too many times. Pick one you used before.', 'handle');
     }
+    if (pg?.code === '42501') throw refuse('FORBIDDEN', 'You’re not a member of this workspace.');
     throw error;
   }
 }
 
-interface OwnerRow extends Record<string, unknown> {
-  readonly user_id: string;
+interface HeldRow extends Record<string, unknown> {
+  readonly held: boolean;
 }
 
-/** Whether a person holds or held `handle` (`crm_handle_owner`). */
+/**
+ * Whether anyone holds or ever held `handle` (`crm_handle_taken`): a handle is never freed, so this does not ask
+ * whether its person is still a member of anything (`crm_handle_owner` does, and answers nothing then).
+ */
 async function isHeld(tx: WorkspaceTx, handle: string): Promise<boolean> {
-  const found = await tx.execute<OwnerRow>(sql`select user_id::text as user_id from crm_handle_owner(${handle})`);
-  return found.rows.length > 0;
+  const found = await tx.execute<HeldRow>(sql`select crm_handle_taken(${handle}) as held`);
+  return found.rows[0]?.held === true;
 }
 
 /** A free handle from a name, for the field's first value: the name's, else it with -2, -3 … up to -9; else none. */
@@ -99,6 +113,7 @@ export async function pagePath(
   tx: WorkspaceTx,
   page: {
     readonly ownerUserId: string | null;
+    readonly workspaceId: string;
     readonly slug: string;
     readonly publicKey: string;
     readonly isPrivate: boolean;
@@ -108,7 +123,7 @@ export async function pagePath(
   const handle =
     page.ownerUserId === null
       ? undefined
-      : (await publicProfilesOf(tx, [page.ownerUserId])).get(page.ownerUserId)?.handle;
+      : (await publicProfilesOf(tx, page.workspaceId, [page.ownerUserId])).get(page.ownerUserId)?.handle;
   return bookingPagePath({ handle, slug: page.slug, publicKey: page.publicKey });
 }
 
@@ -116,8 +131,15 @@ interface SlugRow extends Record<string, unknown> {
   readonly slug: string;
 }
 
-/** The slugs the person's live pages hold in every workspace that start with `prefix` (`crm_booking_owner_slugs`). */
-export async function ownerSlugs(tx: WorkspaceTx, userId: string, prefix: string): Promise<readonly string[]> {
-  const found = await tx.execute<SlugRow>(sql`select slug from crm_booking_owner_slugs(${userId}::uuid, ${prefix})`);
+/** The slugs the person's pages hold in ONE workspace that start with `prefix` (`crm_booking_owner_slugs`). */
+export async function ownerSlugs(
+  tx: WorkspaceTx,
+  userId: string,
+  workspaceId: string,
+  prefix: string,
+): Promise<readonly string[]> {
+  const found = await tx.execute<SlugRow>(
+    sql`select slug from crm_booking_owner_slugs(${userId}::uuid, ${workspaceId}::uuid, ${prefix})`,
+  );
   return found.rows.map((row) => row.slug);
 }
