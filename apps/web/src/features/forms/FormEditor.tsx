@@ -13,7 +13,7 @@ import {
   type SubmissionState,
   type SubmissionView,
 } from '@crm/data';
-import { previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
+import { FORM_QUESTIONS_MAX, previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
 import {
   Button,
   Callout,
@@ -38,20 +38,24 @@ import {
   changeQuestion,
   draftGap,
   fileByLabel,
+  isMatchQuestion,
   planNewAttributes,
   publishAttributesOf,
   sameDocument,
   savableDraft,
   statusOf,
+  withQuestions,
 } from './draft.ts';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { PublishDialog } from './PublishDialog.tsx';
-import { QuestionsSection } from './QuestionsSection.tsx';
+import { QuestionsSection } from '../questions/QuestionsSection.tsx';
+import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
 import { firstRefusal, saveFailureMessage } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
 import { useJobFollower } from './followJobs.ts';
 import { strings } from './strings.ts';
+import { strings as questionStrings } from '../questions/strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { FormToolbarSlot } from './toolbarSlot.ts';
 import { SubmissionsTab } from './SubmissionsTab.tsx';
@@ -224,37 +228,12 @@ export function FormEditor(props: FormEditorProps) {
     const objectId = target.objectId;
     const plans = planNewAttributes(draft, target.items, canBuild && canManage && objectId !== undefined);
     if (objectId === undefined || plans.length === 0) return { document: draft, choices: target };
-    const made: { questionId: string; attributeId: string }[] = [];
-    let next = draft;
-    for (const plan of plans) {
-      // A hidden attribute may hold the title already: the server says SLUG_TAKEN, and a numbered title goes next.
-      for (let n = 1; n <= 5; n += 1) {
-        const title = n === 1 ? plan.title : `${plan.title} ${String(n)}`;
-        try {
-          const attribute = await data.attributes.create(slug, {
-            id: data.attributes.newId(),
-            objectId,
-            title,
-            type: plan.type,
-            ...(plan.type === 'select'
-              ? {
-                  options: plan.choices.map((label) => ({
-                    id: data.attributes.newId(),
-                    label,
-                    hue: 'gray' as const,
-                  })),
-                }
-              : {}),
-          });
-          made.push({ questionId: plan.questionId, attributeId: attribute.id });
-          next = changeQuestion(next, plan.questionId, { filedOn: attribute.id });
-          break;
-        } catch (error: unknown) {
-          if (!(isDataError(error) && error.code === 'SLUG_TAKEN')) break;
-        }
-      }
-    }
+    const made = await createPlannedAttributes(data, slug, objectId, plans);
     if (made.length === 0) return { document: draft, choices: target };
+    const next = made.reduce(
+      (document, each) => changeQuestion(document, each.questionId, { filedOn: each.attributeId }),
+      draft,
+    );
     setDraft(next);
     latest.current = next;
     const choices = await data.forms.attributes(slug, form.id);
@@ -268,7 +247,7 @@ export function FormEditor(props: FormEditorProps) {
           setDraft((before) =>
             made.reduce((document, each) => changeQuestion(document, each.questionId, { filedOn: null }), before),
           );
-          Promise.all(made.map((each) => data.attributes.archive(slug, each.attributeId))).then(
+          archiveMadeAttributes(data, slug, made).then(
             () => data.forms.attributes(slug, form.id).then(setTarget, failed),
             failed,
           );
@@ -564,8 +543,19 @@ export function FormEditor(props: FormEditorProps) {
             )}
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
-              draft={draft}
-              onChange={setDraft}
+              questions={draft.questions}
+              onChange={(update) => {
+                setDraft((before) => withQuestions(before, update(before.questions)));
+              }}
+              max={FORM_QUESTIONS_MAX}
+              holder={questionStrings.formHolder}
+              keptWith="submission"
+              locked={{
+                ids: new Set(
+                  draft.questions.filter((question) => isMatchQuestion(draft, question)).map((question) => question.id),
+                ),
+                reason: strings.emailStays,
+              }}
               attributes={target.items}
               objectName={target.objectName}
               liveIds={liveIds}

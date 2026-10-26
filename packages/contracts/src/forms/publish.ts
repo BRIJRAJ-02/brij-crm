@@ -130,6 +130,85 @@ function showWhenProblem(
 }
 
 /**
+ * The first problem with a list of questions, or undefined: a Show when that reads what it can't, a missing label, a
+ * choice question with nothing to choose, a file question, and filing onto an attribute that is gone, doesn't fit or
+ * the writer can't write. A form's publish asks it (with its target's match attribute, whose email question always
+ * shows) and a booking page's save too (spec 0057), so a question breaks the same way on both.
+ */
+export function questionsProblem(
+  questions: readonly FormDocument['questions'][number][],
+  attributes: ReadonlyMap<string, PublishAttribute>,
+  target?: { readonly matchAttributeId?: string | undefined },
+): PublishProblem | undefined {
+  const all: Readable = new Map(questions.map((question) => [question.key, question]));
+  const before = new Map<string, FormDocument['questions'][number]>();
+  for (const question of questions) {
+    const hidden = showWhenProblem(question.showWhen, before, all);
+    before.set(question.key, question);
+    if (hidden !== undefined) {
+      return { code: 'SHOW_WHEN_INVALID', message: showWhenMessage(question, hidden), questionId: question.id };
+    }
+    if (
+      question.showWhen !== undefined &&
+      target !== undefined &&
+      target.matchAttributeId === question.filedOn?.attributeId &&
+      question.answerType === 'email'
+    ) {
+      return {
+        code: 'SHOW_WHEN_INVALID',
+        message: `${named(question)} is how a submission becomes a person, so it always shows. Remove its Show when.`,
+        questionId: question.id,
+      };
+    }
+    if (question.label.trim() === '') {
+      return { code: 'LABEL_MISSING', message: 'Every question needs a label.', questionId: question.id };
+    }
+    if (
+      CHOICE_TYPES.includes(question.answerType) &&
+      (question.choices ?? []).every((choice) => choice.trim() === '')
+    ) {
+      return {
+        code: 'CHOICES_MISSING',
+        message: `${named(question)} is a choice question with nothing to choose from.`,
+        questionId: question.id,
+      };
+    }
+    if (question.answerType === 'file') {
+      return {
+        code: 'FILE_LATER',
+        message: `${named(question)} asks for a file, which forms take once file attachments arrive. Choose another answer type.`,
+        questionId: question.id,
+      };
+    }
+    const filed = question.filedOn;
+    if (filed === undefined) continue;
+    const attribute = attributes.get(filed.attributeId);
+    if (attribute === undefined) {
+      return {
+        code: 'FILING_GONE',
+        message: `${named(question)} is filed on an attribute that no longer exists. Choose another in Where it goes, or Not filed.`,
+        questionId: question.id,
+      };
+    }
+    if (!fitsAttribute(question.answerType, attribute.type)) {
+      return {
+        code: 'FILING_MISFIT',
+        message: `${named(question)} is filed on ${attribute.objectName} · ${attribute.title}, which takes another kind of answer. Choose another in Where it goes, or Not filed.`,
+        questionId: question.id,
+      };
+    }
+    if (!attribute.canWrite) {
+      return {
+        code: 'FILING_FORBIDDEN',
+        message: `You can't write to ${attribute.objectName} · ${attribute.title}, so this form can't file answers there.`,
+        questionId: question.id,
+      };
+    }
+  }
+  return undefined;
+}
+
+/**
  * The first problem that stops a draft going live, or undefined when it can.
  * In order: the name, the address, an email question filed on the match
  * attribute (how a submission becomes a person; not asked of a form that
@@ -163,71 +242,13 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
       };
     }
   }
+  const problem = questionsProblem(
+    questions,
+    input.attributes,
+    targets.main === undefined ? undefined : { matchAttributeId: targets.main.matchAttributeId },
+  );
+  if (problem !== undefined) return problem;
   const all: Readable = new Map(questions.map((question) => [question.key, question]));
-  const before = new Map<string, FormDocument['questions'][number]>();
-  for (const question of questions) {
-    const hidden = showWhenProblem(question.showWhen, before, all);
-    before.set(question.key, question);
-    if (hidden !== undefined) {
-      return { code: 'SHOW_WHEN_INVALID', message: showWhenMessage(question, hidden), questionId: question.id };
-    }
-    if (
-      question.showWhen !== undefined &&
-      targets.main?.matchAttributeId === question.filedOn?.attributeId &&
-      question.answerType === 'email' &&
-      targets.main !== undefined
-    ) {
-      return {
-        code: 'SHOW_WHEN_INVALID',
-        message: `${named(question)} is how a submission becomes a person, so it always shows. Remove its Show when.`,
-        questionId: question.id,
-      };
-    }
-    if (question.label.trim() === '') {
-      return { code: 'LABEL_MISSING', message: 'Every question needs a label.', questionId: question.id };
-    }
-    if (
-      CHOICE_TYPES.includes(question.answerType) &&
-      (question.choices ?? []).every((choice) => choice.trim() === '')
-    ) {
-      return {
-        code: 'CHOICES_MISSING',
-        message: `${named(question)} is a choice question with nothing to choose from.`,
-        questionId: question.id,
-      };
-    }
-    if (question.answerType === 'file') {
-      return {
-        code: 'FILE_LATER',
-        message: `${named(question)} asks for a file, which forms take once file attachments arrive. Choose another answer type.`,
-        questionId: question.id,
-      };
-    }
-    const filed = question.filedOn;
-    if (filed === undefined) continue;
-    const attribute = input.attributes.get(filed.attributeId);
-    if (attribute === undefined) {
-      return {
-        code: 'FILING_GONE',
-        message: `${named(question)} is filed on an attribute that no longer exists. Choose another in Where it goes, or Not filed.`,
-        questionId: question.id,
-      };
-    }
-    if (!fitsAttribute(question.answerType, attribute.type)) {
-      return {
-        code: 'FILING_MISFIT',
-        message: `${named(question)} is filed on ${attribute.objectName} · ${attribute.title}, which takes another kind of answer. Choose another in Where it goes, or Not filed.`,
-        questionId: question.id,
-      };
-    }
-    if (!attribute.canWrite) {
-      return {
-        code: 'FILING_FORBIDDEN',
-        message: `You can't write to ${attribute.objectName} · ${attribute.title}, so this form can't file answers there.`,
-        questionId: question.id,
-      };
-    }
-  }
   for (const [index, rule] of (input.document.routing?.rules ?? []).entries()) {
     const problem = showWhenProblem(rule.when, all, all, true);
     if (problem !== undefined) {

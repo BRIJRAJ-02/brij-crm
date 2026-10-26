@@ -1,71 +1,27 @@
 // The builder's changes to a draft (spec 0023, 0023-experience.md, Questions):
 // plain functions over the document, each answering a new one, so the screen
-// keeps one draft in state and the tests check every rule here.
-import type {
-  AnswerType,
-  FormAttributeChoice,
-  FormDocument,
-  FormQuestion,
-  FormTargetChoices,
-  FormView,
-} from '@crm/data';
-import {
-  CHOICE_TYPES,
-  FILES_ONTO,
-  FORM_SLUG,
-  fitsAttribute,
-  freeKey,
-  keyFromLabel,
-  type PublishAttribute,
-  type QuestionPreset,
-  slugFromName,
-} from '@crm/data/forms';
+// keeps one draft in state and the tests check every rule here. The question
+// list's own rules live in the shared editor (`features/questions/questions.ts`,
+// spec 0057, which a booking page uses too); these wrap them over a form.
+import type { FormAttributeChoice, FormDocument, FormQuestion, FormTargetChoices, FormView } from '@crm/data';
+import { FORM_SLUG, type PublishAttribute, type QuestionPreset, slugFromName } from '@crm/data/forms';
+import * as list from '../questions/questions.ts';
+import type { PlannedAttribute, QuestionChange } from '../questions/questions.ts';
 import { strings } from './strings.ts';
-
-/** The keys the draft's questions use, but `except`'s. */
-function keysOf(document: FormDocument, except?: string): ReadonlySet<string> {
-  return new Set(document.questions.filter((question) => question.id !== except).map((question) => question.key));
-}
 
 /** A new question at the end: Short text, no label yet ("Untitled question"), not filed, optional. */
 export function addQuestion(document: FormDocument, id: string): FormDocument {
-  const question: FormQuestion = {
-    id,
-    key: freeKey('question', keysOf(document)),
-    label: '',
-    answerType: 'short_text',
-    required: false,
-    update: 'fill',
-  };
-  return { ...document, questions: [...document.questions, question] };
+  return { ...document, questions: list.addQuestion(document.questions, id) };
 }
 
 /** A preset's question at the end, not filed, its key made free. */
 export function addPreset(document: FormDocument, preset: QuestionPreset, id: string): FormDocument {
-  const question: FormQuestion = {
-    id,
-    key: freeKey(preset.key, keysOf(document)),
-    label: preset.label,
-    answerType: preset.answerType,
-    ...(preset.choices === undefined ? {} : { choices: [...preset.choices] }),
-    ...(preset.placeholder === undefined ? {} : { placeholder: preset.placeholder }),
-    required: false,
-    update: 'fill',
-  };
-  return { ...document, questions: [...document.questions, question] };
+  return { ...document, questions: list.addPreset(document.questions, preset, id) };
 }
 
 /** A copy right below `id`, its key suffixed (`company_2`) and not filed, so two questions never share an attribute. */
 export function duplicateQuestion(document: FormDocument, id: string, copyId: string): FormDocument {
-  const index = document.questions.findIndex((question) => question.id === id);
-  const source = document.questions[index];
-  if (source === undefined) return document;
-  const { filedOn: _filed, ...rest } = source;
-  const copy: FormQuestion = { ...rest, id: copyId, key: freeKey(source.key, keysOf(document)) };
-  return {
-    ...document,
-    questions: [...document.questions.slice(0, index + 1), copy, ...document.questions.slice(index + 1)],
-  };
+  return { ...document, questions: list.duplicateQuestion(document.questions, id, copyId) };
 }
 
 /** The draft without `id`, and what Undo needs to put it back where it was. */
@@ -73,61 +29,23 @@ export function removeQuestion(
   document: FormDocument,
   id: string,
 ): { readonly document: FormDocument; readonly removed?: { readonly question: FormQuestion; readonly index: number } } {
-  const index = document.questions.findIndex((question) => question.id === id);
-  const question = document.questions[index];
-  if (question === undefined) return { document };
-  return {
-    document: { ...document, questions: document.questions.filter((each) => each.id !== id) },
-    removed: { question, index },
-  };
+  const { questions, removed } = list.removeQuestion(document.questions, id);
+  return removed === undefined ? { document } : { document: { ...document, questions }, removed };
 }
 
-/**
- * A removed question back at its place (Undo). Its key is made free again,
- * and its filing dropped if another question took that attribute meanwhile.
- */
+/** A removed question back at its place (Undo), its key made free and its filing dropped if taken meanwhile. */
 export function restoreQuestion(document: FormDocument, question: FormQuestion, index: number): FormDocument {
-  if (document.questions.some((each) => each.id === question.id)) return document;
-  const taken = document.questions.some(
-    (each) => question.filedOn !== undefined && each.filedOn?.attributeId === question.filedOn.attributeId,
-  );
-  const { filedOn, ...rest } = question;
-  const back: FormQuestion = {
-    ...rest,
-    key: freeKey(question.key, keysOf(document)),
-    ...(filedOn === undefined || taken ? {} : { filedOn }),
-  };
-  const at = Math.min(index, document.questions.length);
-  return { ...document, questions: [...document.questions.slice(0, at), back, ...document.questions.slice(at)] };
+  return { ...document, questions: list.restoreQuestion(document.questions, question, index) };
 }
 
 /** The draft with `id` moved to `index`. */
 export function moveQuestion(document: FormDocument, id: string, index: number): FormDocument {
-  const moving = document.questions.find((question) => question.id === id);
-  if (moving === undefined) return document;
-  const rest = document.questions.filter((question) => question.id !== id);
-  const at = Math.max(0, Math.min(index, rest.length));
-  return { ...document, questions: [...rest.slice(0, at), moving, ...rest.slice(at)] };
-}
-
-/** What a question's editor changes in one go. `filedOn: null` is Not filed. */
-export interface QuestionChange {
-  readonly label?: string;
-  readonly answerType?: AnswerType;
-  readonly choices?: readonly string[];
-  readonly placeholder?: string;
-  readonly required?: boolean;
-  readonly filedOn?: string | null;
-  /** Show when (spec 0043): new conditions, or null to always show it. */
-  readonly showWhen?: FormQuestion['showWhen'] | null;
+  return { ...document, questions: list.moveQuestion(document.questions, id, index) };
 }
 
 /**
- * The draft with one question changed. A label change also changes the key
- * of a question that never went live (so answers are stored under a word
- * from the question). Filing on an attribute another question uses moves it
- * here, leaving the other Not filed. A choice type gets its first empty
- * choice when it has none.
+ * The draft with one question changed (`changeQuestion` in the shared editor): a key that changes with its label is
+ * followed by Show when and by the form's routing rules (spec 0043).
  */
 export function changeQuestion(
   document: FormDocument,
@@ -135,88 +53,38 @@ export function changeQuestion(
   change: QuestionChange,
   liveIds: ReadonlySet<string> = new Set(),
 ): FormDocument {
-  const moving = change.filedOn ?? undefined;
-  const questions = document.questions.map((question): FormQuestion => {
-    if (question.id !== id) {
-      if (moving !== undefined && question.filedOn?.attributeId === moving) {
-        const { filedOn: _gone, ...rest } = question;
-        return rest;
-      }
-      return question;
-    }
-    const { filedOn, showWhen: shownWhen, ...rest } = question;
-    const showWhen = change.showWhen === null ? undefined : (change.showWhen ?? shownWhen);
-    const label = change.label ?? question.label;
-    const answerType = change.answerType ?? question.answerType;
-    const key =
-      change.label !== undefined && !liveIds.has(question.id)
-        ? freeKey(keyFromLabel(label) === '' ? 'question' : keyFromLabel(label), keysOf(document, question.id))
-        : question.key;
-    const choices =
-      change.choices !== undefined
-        ? [...change.choices]
-        : CHOICE_TYPES.includes(answerType) && question.choices === undefined
-          ? []
-          : question.choices;
-    const filing =
-      change.filedOn === null ? undefined : change.filedOn === undefined ? filedOn?.attributeId : change.filedOn;
-    return {
-      ...rest,
-      key,
-      label,
-      answerType,
-      ...(choices === undefined ? {} : { choices }),
-      ...(change.placeholder !== undefined
-        ? { placeholder: change.placeholder }
-        : question.placeholder === undefined
-          ? {}
-          : { placeholder: question.placeholder }),
-      required: change.required ?? question.required,
-      ...(filing === undefined ? {} : { filedOn: { objectRole: 'main' as const, attributeId: filing } }),
-      ...(showWhen === undefined ? {} : { showWhen }),
-    };
-  });
-  // A question whose key changed with its label: conditions that read it follow (spec 0043).
-  const before = document.questions.find((question) => question.id === id)?.key;
-  const after = questions.find((question) => question.id === id)?.key;
-  return before === undefined || after === undefined || before === after
-    ? { ...document, questions }
-    : renameKey({ ...document, questions }, before, after);
+  return withQuestions(document, list.changeQuestion(document.questions, id, change, liveIds));
+}
+
+/**
+ * The draft with a new list of questions: each key a question changed is followed by the routing rules too, so a
+ * rule never reads a key that is gone. The shared editor changes the list; this keeps the rest of the form in step.
+ */
+export function withQuestions(document: FormDocument, questions: readonly FormQuestion[]): FormDocument {
+  const renames = list.renamedKeys(document.questions, questions);
+  const next: FormDocument = { ...document, questions: [...questions] };
+  return renames.reduce((each, [from, to]) => renameRouting(each, from, to), next);
 }
 
 /** The document with every condition reading `from` reading `to` instead: Show when and routing rules alike. */
 export function renameKey(document: FormDocument, from: string, to: string): FormDocument {
-  const follow = <T extends { readonly rules: readonly { readonly key: string }[] }>(when: T): T => ({
-    ...when,
-    rules: when.rules.map((condition) => (condition.key === from ? { ...condition, key: to } : condition)),
-  });
+  return renameRouting({ ...document, questions: list.renameShowWhen(document.questions, from, to) }, from, to);
+}
+
+/** The document with every routing rule's condition reading `from` reading `to` instead. */
+function renameRouting(document: FormDocument, from: string, to: string): FormDocument {
   return {
     ...document,
-    questions: document.questions.map((question) =>
-      question.showWhen === undefined ? question : { ...question, showWhen: follow(question.showWhen) },
-    ),
-    routing: { rules: document.routing.rules.map((rule) => ({ ...rule, when: follow(rule.when) })) },
+    routing: {
+      rules: document.routing.rules.map((rule) => ({
+        ...rule,
+        when: {
+          ...rule.when,
+          rules: rule.when.rules.map((condition) => (condition.key === from ? { ...condition, key: to } : condition)),
+        },
+      })),
+    },
   };
-}
-
-/** The attributes a question of `answerType` may be filed on, in their order. */
-export function fittingAttributes(
-  attributes: readonly FormAttributeChoice[],
-  answerType: AnswerType,
-): readonly FormAttributeChoice[] {
-  return attributes.filter((attribute) => fitsAttribute(answerType, attribute.type));
-}
-
-/** Where a question's answers go, as its closed card says it: "Person › Budget band", or Not filed. */
-export function filedLine(
-  question: FormQuestion,
-  objectName: string,
-  attributes: readonly FormAttributeChoice[],
-): string {
-  const id = question.filedOn?.attributeId;
-  if (id === undefined) return strings.notFiled;
-  const attribute = attributes.find((each) => each.attributeId === id);
-  return attribute === undefined ? strings.goneAttribute : strings.filedLine(objectName, attribute.title);
 }
 
 /** Whether `question` is the email question the form matches people by: it can't be deleted. */
@@ -231,89 +99,19 @@ export function isMatchQuestion(document: FormDocument, question: FormQuestion):
  * the first publish's prefill.
  */
 export function fileByLabel(document: FormDocument, attributes: readonly FormAttributeChoice[]): FormDocument {
-  const used = new Set(document.questions.flatMap((question) => question.filedOn?.attributeId ?? []));
-  const plain = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '');
-  const questions = document.questions.map((question): FormQuestion => {
-    if (question.filedOn !== undefined) return question;
-    const names = [plain(question.label), plain(question.key)];
-    const match = attributes.find(
-      (attribute) =>
-        attribute.canWrite &&
-        !used.has(attribute.attributeId) &&
-        fitsAttribute(question.answerType, attribute.type) &&
-        names.includes(plain(attribute.title)),
-    );
-    if (match === undefined) return question;
-    used.add(match.attributeId);
-    return { ...question, filedOn: { objectRole: 'main', attributeId: match.attributeId } };
-  });
-  return { ...document, questions };
+  return { ...document, questions: list.fileByLabel(document.questions, attributes) };
 }
 
-/** An attribute the form will create on its target object for a question that has none to file onto. */
-export interface PlannedAttribute {
-  readonly questionId: string;
-  readonly title: string;
-  readonly type: 'text' | 'email' | 'phone' | 'url' | 'number' | 'select' | 'checkbox';
-  /** A select's options, from the question's own choices. */
-  readonly choices: readonly string[];
-}
-
-/** The attribute type a question's answer type makes: the first fit in `FILES_ONTO`, a select for choices. */
-function plannedType(answerType: AnswerType): PlannedAttribute['type'] {
-  const first = FILES_ONTO[answerType][0];
-  switch (first) {
-    case 'email':
-    case 'phone':
-    case 'url':
-    case 'number':
-    case 'select':
-    case 'checkbox':
-      return first;
-    default:
-      return 'text';
-  }
-}
-
-/** A title no existing attribute (or earlier plan) has, by name ignoring case: "Budget", then "Budget 2". */
-function freeTitle(wanted: string, taken: ReadonlySet<string>): string {
-  const lower = (text: string) => text.trim().toLowerCase();
-  if (!taken.has(lower(wanted))) return wanted;
-  for (let n = 2; ; n += 1) {
-    const candidate = `${wanted} ${String(n)}`;
-    if (!taken.has(lower(candidate))) return candidate;
-  }
-}
-
-/**
- * The attributes to create for the questions still unfiled once `fileByLabel` has matched what exists: a labelled,
- * non file question gets one titled from its label, typed from its answer type, with a select carrying its choices.
- * Empty while the form keeps submissions only (`isFiling` false).
- */
+/** The attributes the publish will create for the form's unfiled questions (`planNewAttributes` in the shared editor). */
 export function planNewAttributes(
   document: FormDocument,
   attributes: readonly FormAttributeChoice[],
   isFiling: boolean,
 ): readonly PlannedAttribute[] {
-  if (!isFiling) return [];
-  const taken = new Set(attributes.map((attribute) => attribute.title.trim().toLowerCase()));
-  const plans: PlannedAttribute[] = [];
-  for (const question of document.questions) {
-    const label = question.label.trim();
-    if (question.filedOn !== undefined || label === '' || question.answerType === 'file') continue;
-    const title = freeTitle(label, taken);
-    taken.add(title.toLowerCase());
-    plans.push({
-      questionId: question.id,
-      title,
-      type: plannedType(question.answerType),
-      choices: CHOICE_TYPES.includes(question.answerType)
-        ? (question.choices ?? []).filter((choice) => choice.trim() !== '')
-        : [],
-    });
-  }
-  return plans;
+  return list.planNewAttributes(document.questions, attributes, isFiling);
 }
+
+export { filedLine, fittingAttributes, type PlannedAttribute, type QuestionChange } from '../questions/questions.ts';
 
 /** The target's attributes as the publish check reads them. */
 export function publishAttributesOf(target: FormTargetChoices): ReadonlyMap<string, PublishAttribute> {
