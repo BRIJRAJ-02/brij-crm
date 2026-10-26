@@ -55,6 +55,7 @@ import {
 } from './prefs.ts';
 import { needsRead, pageEnded } from './reads.ts';
 import { refusalLine } from './refusal.ts';
+import { guessCountry } from '../country.ts';
 import { strings } from './strings.ts';
 import {
   addDays,
@@ -164,7 +165,14 @@ export function BookingPage({
     let isCurrent = true;
     client.prefill(publicKey, handoff).then(
       (answer) => {
-        if (isCurrent && (answer.name !== undefined || answer.email !== undefined)) setHanded(answer);
+        if (
+          isCurrent &&
+          (answer.name !== undefined ||
+            answer.email !== undefined ||
+            answer.answers !== undefined ||
+            answer.skip !== undefined)
+        )
+          setHanded(answer);
       },
       () => undefined,
     );
@@ -463,6 +471,8 @@ function Booking({
   readonly onEnded: (state: 'gone' | 'closed') => void;
 }) {
   const [zone, setZone] = useState(chosen.zone ?? detected);
+  // The visitor's country, guessed once, for a phone or country question of the page's own (spec 0057).
+  const [countryGuess] = useState(guessCountry);
   const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
   // The view the host set the page to open in. The facts are read without a schema, so an API that doesn't send it
   // yet reads as Month, the view every page had before this was a setting.
@@ -693,6 +703,7 @@ function Booking({
         ...(needsPhone ? { phone: values.phone } : {}),
         ...(values.guests.length === 0 ? {} : { guests: [...values.guests] }),
         ...(values.note === '' ? {} : { note: values.note }),
+        ...(Object.keys(values.answers).length === 0 ? {} : { answers: { ...values.answers } }),
         company_url: values.trap,
         startedAt,
         ...(handoff === undefined ? {} : { prefill: handoff }),
@@ -964,8 +975,19 @@ function Booking({
 
   // The details step (spec 0025) draws over the whole card, its heading row too: the month stays underneath and
   // keeps the card its size, so the step moves nothing but its own content in, from the end, and Back from the start.
+  // The page's own questions, less any a form's hand off already answered onto the same attribute (AC-5713).
+  const handedSkip = prefill?.skip ?? [];
+  const asked = (page.questions ?? []).filter((question) => !handedSkip.includes(question.key));
   const detailsProps = {
     needsPhone: page.location.type === 'phone',
+    // The page's own questions (spec 0057), after the note; a page with none draws nothing more (AC-5704).
+    ...(asked.length === 0
+      ? {}
+      : {
+          questions: asked,
+          ...(countryGuess === undefined ? {} : { countryGuess }),
+          ...(prefill?.answers === undefined ? {} : { prefillAnswers: prefill.answers }),
+        }),
     ...(known === undefined ? (prefill === undefined ? {} : { prefill }) : { prefill: known }),
     onBack: () => {
       setStep({ step: 'pick', attempt: '', back: true });

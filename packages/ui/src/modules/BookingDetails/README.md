@@ -17,15 +17,17 @@ New. Form submits a record's attribute values and shows refusals by attribute; t
 />
 ```
 
-`onSubmit` answers `{ kind: 'done' }`, `{ kind: 'invalid', fields, message }` (errors by `name`, `email`, `phone` or `guest-<n>`) or `{ kind: 'failed', message }`. In `guest-<n>`, n counts the guests sent, blanks left out, and the form moves the error to that guest's row. When no field in `fields` is one the form draws an error on (a time zone, a phone the page never asked for, the note, the guest list as a whole), `message` goes in the line above the buttons instead (without one, "That did not go through. Try again in a moment."), and everything typed stays. The heading takes focus as the step arrives, so a phone keeps its keyboard down.
+A page with its own questions (spec 0057) passes `questions` (the hosted form's `PublicQuestion`s): they follow the note, drawn by the hosted form's `Question` (the same control per answer type), shown by Show when and checked with `checkAnswers` before anything is sent, so a visitor sees the message the server would give. `prefillAnswers` starts some filled in (a form's hand off), `countryGuess` a phone's code. What they answered goes in `values.answers`, by question key, the questions showing only. A refusal on a question comes back as `answers.<key>`.
+
+`onSubmit` answers `{ kind: 'done' }`, `{ kind: 'invalid', fields, message }` (errors by `name`, `email`, `phone`, `guest-<n>` or `answers.<key>`) or `{ kind: 'failed', message }`. In `guest-<n>`, n counts the guests sent, blanks left out, and the form moves the error to that guest's row. When no field in `fields` is one the form draws an error on (a time zone, a phone the page never asked for, the note, the guest list as a whole), `message` goes in the line above the buttons instead (without one, "That did not go through. Try again in a moment."), and everything typed stays. The heading takes focus as the step arrives, so a phone keeps its keyboard down.
 
 ## States
 
-Empty, prefilled, with guests, a phone page, invalid, sending (Confirm pending, Back off), failed.
+Empty, prefilled, with guests, a phone page, with questions (one shown by an earlier answer), invalid, sending (Confirm pending, Back off), failed.
 
 ## Keyboard
 
-Tab through the fields, Add guests, each guest's Remove, the note, Back and Confirm. Enter in a field sends.
+Tab through the fields, Add guests, each guest's Remove, the note, the page's questions, Back and Confirm. Enter in a field sends.
 
 ## Differences from the artifact
 
