@@ -63,6 +63,8 @@ const READS: ReadonlySet<string> = new Set([
   'profile.pageChoices',
   // The forms the caller may place on the page (spec 0052, AC-5213): their own, read only.
   'profile.formChoices',
+  // Add to Wallet (spec 0055): the address to save their own page from, made and never stored.
+  'profile.walletLink',
   'deletedWorkspace.deleted',
   'access.mine',
   // Settings › History's Workspace changes (spec 0046).

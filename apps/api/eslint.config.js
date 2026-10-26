@@ -38,6 +38,9 @@ export default server({
     'src/realtime/signed-out.ts',
     'src/realtime/wake.ts',
     'src/mail/mailpit.ts',
+    // The pass's band, drawn by this deployment's own picture route: the origin comes from the environment and
+    // the handle is the caller's own, checked against `HANDLE_PATTERN` before the route reaches the door.
+    'src/wallet/wallet.ts',
     // One provider's API, at its own constant addresses.
     'src/auth/google-photo.ts',
     'src/calendar/google.ts',
