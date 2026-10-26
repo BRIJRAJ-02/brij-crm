@@ -327,6 +327,46 @@ export const MeetingsAddPerson: Story = {
   },
 };
 
+/**
+ * A meeting a booking made (spec 0057): the visitor's answers to the page's questions under it, the first three, and
+ * how many more are on the booking. A long answer keeps to the excerpt's lines.
+ */
+const BOOKED_ENTRIES: readonly ActivityEntry[] = [
+  {
+    id: 'm6',
+    kind: 'meeting',
+    at: '2026-10-13T09:00:00.000Z',
+    actor: ADA,
+    title: 'Intro call with Grace Hopper',
+    startsAt: '2026-10-13T09:00:00.000Z',
+    endsAt: '2026-10-13T09:30:00.000Z',
+    attendees: [{ email: 'grace@navy.example', name: 'Grace Hopper', response: 'accepted', match: 'unknown' }],
+    answers: [
+      { label: 'Team size', text: '2 to 10' },
+      { label: 'Budget', text: 'Under 5k' },
+      {
+        label: 'What would you like to talk about?',
+        text: 'Moving our whole sales pipeline off spreadsheets before the next quarter, and how the forms and booking pages fit into that, with a look at routing leads to the right person on the team.',
+      },
+      { label: 'How did you hear about us?', text: 'A friend' },
+    ],
+  },
+];
+
+export const MeetingWithAnswers: Story = {
+  render: () => (
+    <Stage height="grid">
+      <ActivityFeed label="Activity" entries={arraySource(BOOKED_ENTRIES, (entry) => entry.id)} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const [booked] = await canvas.findAllByRole('article');
+    await expect(booked).toHaveAccessibleDescription(/Team size: 2 to 10/);
+    await expect(booked).toHaveAccessibleDescription(/1 more answer on the booking/);
+    await expect(canvas.queryByText(/A friend/)).not.toBeInTheDocument();
+  },
+};
+
 /** Tab moves from the entry into its linked names, and on out of the feed. */
 export const LinksKeyboard: Story = {
   args: { entries: arraySource(SAMPLE_LINK_ACTIVITY, (entry) => entry.id) },

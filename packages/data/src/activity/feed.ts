@@ -116,6 +116,8 @@ export type ActivityEntryShape =
       readonly attendees: readonly MeetingAttendeeShape[];
       readonly videoUrl?: string;
       readonly detailsHidden: boolean;
+      /** A meeting a booking made: the visitor's answers to its page's questions (spec 0057), label then words. */
+      readonly answers?: readonly { readonly label: string; readonly text: string }[];
     })
   | (EntryBase & {
       /** A form submission that touched the record (spec 0023): the form is the actor, with what it did. */
@@ -297,6 +299,7 @@ export function toActivityEntry(item: ActivityItem, context: EntryContext): Acti
       }),
       ...(meeting.videoUrl === undefined ? {} : { videoUrl: meeting.videoUrl }),
       detailsHidden: meeting.detailsHidden,
+      ...(item.answers === undefined || item.answers.length === 0 ? {} : { answers: item.answers }),
     };
   }
   if (item.kind !== 'change' && item.kind !== 'links') return undefined;
