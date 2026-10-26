@@ -62,7 +62,6 @@ jobs:
           REPO: ${{ github.repository }}
           EVENT: ${{ github.event_name }}
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
-          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_EVENT: ${{ github.event.workflow_run.event }}
           PUSH_SHA: ${{ github.sha }}
         run: |
@@ -82,9 +81,21 @@ jobs:
           # These run only when the change touched packages/ui (`needs.changes` in ci.yml), so on any other change
           # they are skipped rather than green. Reading skipped as "not passed" meant the fast path declined every
           # time the library was untouched, which is most changes, so the path never once fired (26 October 2026).
-          # They are listed apart rather than loosening the rule for all nine: a flow shard skipped because an
+          # They are read apart rather than by loosening the rule for all nine: a flow shard skipped because an
           # earlier job failed must never read as a pass.
-          IF_UI_CHANGED=("stories (chromium)" "stories (firefox)" "stories (webkit)" "visual")
+          #
+          # A skipped matrix job reports one check run, under the name as written in ci.yml with the browser still
+          # unexpanded, and never the three browsers. Waiting for the three was waiting for names that would never
+          # arrive, so the path still declined every time, fifteen minutes later (27 October 2026). `settled_ui`
+          # below reads either shape: all three browsers, or the one skipped matrix. The name is matched by its
+          # shape rather than written out, so Actions doesn't read it as an expression of this job's own.
+          settled_ui() {
+            grep -Fxq "visual" <<< "$1" || return 1
+            grep -Fxq "stories (chromium)" <<< "$1" \
+              && grep -Fxq "stories (firefox)" <<< "$1" \
+              && grep -Fxq "stories (webkit)" <<< "$1" && return 0
+            grep -qE '^stories \(.*matrix\.browser' <<< "$1"
+          }
           if [ "$EVENT" = push ]; then
             sha="$PUSH_SHA"
             echo "sha=$sha" >> "$GITHUB_OUTPUT"
@@ -111,9 +122,7 @@ jobs:
                 fi
                 grep -Fxq "$name" <<< "$passed" || waiting="$waiting $name"
               done
-              for name in "${IF_UI_CHANGED[@]}"; do
-                grep -Fxq "$name" <<< "$settled" || waiting="$waiting $name"
-              done
+              settled_ui "$settled" || waiting="$waiting the library's jobs"
               [ -z "$waiting" ] && break
               if [ "$SECONDS" -ge "$deadline" ]; then
                 echo "$sha is still waiting on$waiting, so main's own CI run will trigger the deploy."
@@ -129,7 +138,27 @@ jobs:
           fi
           sha="$RUN_SHA"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          if [ "$RUN_CONCLUSION" != success ] || [ "$RUN_EVENT" != push ]; then
+          if [ "$RUN_EVENT" != push ]; then
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Not the run's own conclusion. That is red when a single flow shard is, and the flows stopped holding
+          # the deploy above; reading the whole run put them back in its way through this door, so a browser that
+          # failed to install still stood between a fix and production (27 October 2026). The same jobs decide
+          # here as on the push path, read once, since CI has finished by the time this runs.
+          runs=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
+            -q '.check_runs[] | "\(.conclusion)\t\(.name)"' || true)
+          passed=$(grep -E '^success\s' <<< "$runs" | cut -f2- | sort -u || true)
+          settled=$(grep -E '^(success|skipped)\s' <<< "$runs" | cut -f2- | sort -u || true)
+          for name in "${REQUIRED[@]}"; do
+            if ! grep -Fxq "$name" <<< "$passed"; then
+              echo "$sha hasn't passed \"$name\", so it doesn't deploy."
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          if ! settled_ui "$settled"; then
+            echo "$sha hasn't settled the library's jobs, so it doesn't deploy."
             echo "go=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
