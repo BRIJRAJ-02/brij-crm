@@ -17,6 +17,7 @@ import {
   AppShell,
   AppShellContext,
   Avatar,
+  FileLinksContext,
   GRID_SHORTCUTS,
   Menu,
   MenuItem,
@@ -384,70 +385,74 @@ export function WorkspaceFrame({
       openCustomise,
     ],
   );
+  // A stored file's download address in this workspace (a form's file answer): the api checks the member on each.
+  const fileHref = useMemo(() => (fileId: string) => data.files.downloadPath(slug, fileId), [data, slug]);
   return (
-    <AppShell
-      topBar={topBar}
-      viewBar={viewBar}
-      toolbar={toolbar}
-      {...(viewKey === undefined ? {} : { viewKey })}
-      // A calendar that stopped syncing says so on every page (spec 0024, AC-619).
-      // Not on Calendars itself, where the stopped calendar's own row offers Reconnect (the owner, 21 Oct); that
-      // page is a tab of Bookings since 25 October 2026, so the tab is what the check reads.
-      banner={isMissing || isOnCalendars ? undefined : <CalendarBanner data={data} slug={slug} />}
-      sidebar={sidebar}
-    >
-      {children}
-      {workspaceName !== undefined && (
-        <LeaveDialog
-          data={data}
-          slug={slug}
-          workspaceName={workspaceName}
-          isOpen={isConfirmingLeave}
-          onClose={() => {
-            setConfirmingLeave(false);
-          }}
-        />
-      )}
-      <SignOutDialog
-        isOpen={isConfirmingSignOut}
-        isBusy={isSigningOut}
-        failure={signOutFailure}
-        onSignOut={signOut}
-        onClose={() => {
-          setConfirmingSignOut(false);
-        }}
-      />
-      {hasCustomised && nav !== undefined && (
-        <Suspense fallback={null}>
-          <LazyCustomiseSidebarDialog
+    <FileLinksContext.Provider value={fileHref}>
+      <AppShell
+        topBar={topBar}
+        viewBar={viewBar}
+        toolbar={toolbar}
+        {...(viewKey === undefined ? {} : { viewKey })}
+        // A calendar that stopped syncing says so on every page (spec 0024, AC-619).
+        // Not on Calendars itself, where the stopped calendar's own row offers Reconnect (the owner, 21 Oct); that
+        // page is a tab of Bookings since 25 October 2026, so the tab is what the check reads.
+        banner={isMissing || isOnCalendars ? undefined : <CalendarBanner data={data} slug={slug} />}
+        sidebar={sidebar}
+      >
+        {children}
+        {workspaceName !== undefined && (
+          <LeaveDialog
             data={data}
             slug={slug}
-            nav={nav}
-            objects={objects}
-            isOpen={isCustomising}
-            onOpenChange={setCustomising}
+            workspaceName={workspaceName}
+            isOpen={isConfirmingLeave}
+            onClose={() => {
+              setConfirmingLeave(false);
+            }}
           />
-        </Suspense>
-      )}
-      <ShortcutHelp
-        isOpen={isHelpOpen}
-        onOpenChange={setHelpOpen}
-        groups={[
-          {
-            title: strings.shortcutsEverywhere,
-            shortcuts: [
-              { label: commandStrings.openMenu, keys: COMMAND_MENU_KEYS },
-              { label: commandStrings.openSearch, keys: SEARCH_KEYS },
-              { label: strings.undoShortcut, keys: UNDO_KEYS },
-              { label: strings.openSettings, keys: SETTINGS_KEYS },
-              { label: strings.toggleRail, keys: RAIL_KEYS },
-              { label: strings.showShortcuts, keys: ['?'] },
-            ],
-          },
-          GRID_SHORTCUTS,
-        ]}
-      />
-    </AppShell>
+        )}
+        <SignOutDialog
+          isOpen={isConfirmingSignOut}
+          isBusy={isSigningOut}
+          failure={signOutFailure}
+          onSignOut={signOut}
+          onClose={() => {
+            setConfirmingSignOut(false);
+          }}
+        />
+        {hasCustomised && nav !== undefined && (
+          <Suspense fallback={null}>
+            <LazyCustomiseSidebarDialog
+              data={data}
+              slug={slug}
+              nav={nav}
+              objects={objects}
+              isOpen={isCustomising}
+              onOpenChange={setCustomising}
+            />
+          </Suspense>
+        )}
+        <ShortcutHelp
+          isOpen={isHelpOpen}
+          onOpenChange={setHelpOpen}
+          groups={[
+            {
+              title: strings.shortcutsEverywhere,
+              shortcuts: [
+                { label: commandStrings.openMenu, keys: COMMAND_MENU_KEYS },
+                { label: commandStrings.openSearch, keys: SEARCH_KEYS },
+                { label: strings.undoShortcut, keys: UNDO_KEYS },
+                { label: strings.openSettings, keys: SETTINGS_KEYS },
+                { label: strings.toggleRail, keys: RAIL_KEYS },
+                { label: strings.showShortcuts, keys: ['?'] },
+              ],
+            },
+            GRID_SHORTCUTS,
+          ]}
+        />
+      </AppShell>
+    </FileLinksContext.Provider>
   );
 }
 

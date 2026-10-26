@@ -294,3 +294,38 @@ export const formSubmissionRecords = pgTable(
     check('form_submission_records_role', sql`${t.role} in ('main', 'person', 'company', 'deal', 'entry')`),
   ],
 );
+
+/**
+ * A file a visitor uploaded to a public form (#32): kept in the blob store under `pathname`, bound here to its
+ * workspace and form, and to its submission once one takes it (`submission_id`). Unguessable ids, never listed.
+ * `submission_id` and `form_id` carry no foreign key on purpose: a deleted submission or form must leave the row
+ * behind so the daily cleanup can remove the stored file too (`uploads` phase), which a cascade would hide.
+ */
+export const formUploads = pgTable(
+  'form_uploads',
+  {
+    workspaceId: workspaceId(),
+    id: uuid('id')
+      .notNull()
+      .default(sql`gen_random_uuid()`),
+    formId: uuid('form_id').notNull(),
+    /** Where the file lives in the store: `forms/<workspace>/<form>/<id>.<ext>`. */
+    pathname: text('pathname').notNull(),
+    /** The visitor's file name, made safe (`sanitiseFileName`). */
+    name: text('name').notNull(),
+    size: integer('size').notNull(),
+    contentType: text('content_type').notNull(),
+    /** Set once a submission took the file. */
+    submissionId: uuid('submission_id'),
+    /** The uploader's address, hashed with a salt: abuse review only. */
+    ipHash: text('ip_hash'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'form_uploads_pkey', columns: [t.workspaceId, t.id] }),
+    // The cleanup's unattached files, oldest first, and a form's recent uploads (the per form cap).
+    index('form_uploads_by_form').on(t.workspaceId, t.formId, t.createdAt),
+    index('form_uploads_by_submission').on(t.workspaceId, t.submissionId),
+    check('form_uploads_size', sql`${t.size} >= 0 and ${t.size} <= 10485760`),
+  ],
+);

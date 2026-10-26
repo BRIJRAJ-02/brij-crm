@@ -87,6 +87,9 @@ const vendorSdks = {
         // Mail: only apps/api/src/mail/resend.ts; email templates (React Email)
         // only in packages/emails/src/react-email.ts, the templates' one wrapper.
         'resend',
+        // Files: only apps/api/src/storage/blob.ts (the private Vercel Blob store behind form uploads).
+        '@vercel/blob',
+        '@vercel/blob/*',
         'react-email',
         '@react-email/*',
         '@aws-sdk/*',

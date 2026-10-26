@@ -28,15 +28,20 @@
 // 6. `exports`: export files past their 7 days (spec 0023), chunks and all.
 // 7. `imports` (spec 0040, AC-1145): an import's staged rows and outcomes once
 //    its undo window has closed, and imports never started after 24 hours.
+// 8. `uploads` (#32): files visitors uploaded to forms that no submission took within a day, or whose
+//    submission is gone, removed from the blob store and then their rows, 100 a batch. Skipped where the host
+//    has no store to remove from (the rows then wait).
 // The outbox is no phase: the fan out prunes it once for every workspace.
 // Its result holds the totals per phase; `done` counts every row it removed.
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
 import { pruneNavRows } from '../../navigation/navigation.ts';
+import { UPLOAD_KEPT_HOURS } from '@crm/contracts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../registry.ts';
+import type { UploadStore } from '../../forms/uploads.ts';
 import { ENDINGS } from '../runner.ts';
 import { FINISHED_KEPT, tryEnqueue } from '../service.ts';
 
@@ -68,6 +73,7 @@ const PHASES = [
   'requeue',
   'exports',
   'imports',
+  'uploads',
 ] as const;
 
 /** How long a booking page's view counts are kept (spec 0047, AC-1628): a year, by day. */
@@ -115,6 +121,8 @@ const Totals = z.object({
   exports: Count.default(0),
   /** Import rows past their undo window, and imports never started (spec 0040); 0 in an older checkpoint. */
   imports: Count.default(0),
+  /** Form upload files removed from the store (#32); 0 in an older checkpoint. */
+  uploads: Count.default(0),
 });
 type Totals = z.infer<typeof Totals>;
 
@@ -136,6 +144,7 @@ const NO_TOTALS: Totals = {
   requeued: 0,
   exports: 0,
   imports: 0,
+  uploads: 0,
 };
 
 /**
@@ -195,6 +204,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   requeued: totals.requeued + (more.requeued ?? 0),
   exports: totals.exports + (more.exports ?? 0),
   imports: totals.imports + (more.imports ?? 0),
+  uploads: totals.uploads + (more.uploads ?? 0),
 });
 
 /** Phase 1: one purge batch; the phase ends with the first batch that comes back short. */
@@ -560,12 +570,54 @@ async function oldImports(context: WriteContext, at: Checkpoint, limit: number):
 /** How many unstarted imports one batch deletes: each cascades to up to 100,000 staged rows. */
 const IMPORTS_BATCH = 2;
 
+/** How many orphaned upload files one batch removes. */
+const UPLOADS_BATCH = 100;
+
+/** How long an upload waits for its submission: `UPLOAD_KEPT_HOURS`, as an interval. */
+const UPLOAD_WAIT = `${String(UPLOAD_KEPT_HOURS)} hours`;
+
+/**
+ * Phase 8 (#32): uploads no submission took within a day, or whose submission is gone (a deleted submission leaves
+ * its upload row on purpose). The files go from the store first, then the rows, in one transaction: a store that
+ * fails rolls the rows back and the job retries, and a file already gone is no error. Without a store the phase
+ * does nothing and the rows wait.
+ */
+async function orphanUploads(
+  context: WriteContext,
+  at: Checkpoint,
+  store: UploadStore | undefined,
+): Promise<StepOutcome> {
+  const { tx, scope } = context;
+  if (store === undefined) return outcome(nextPhase(at, at.totals), at, at.totals, 0);
+  const orphans = await tx.execute<{ id: string; pathname: string }>(sql`
+    select u.id::text, u.pathname from form_uploads u
+    where u.workspace_id = ${scope.workspaceId} and (
+      (u.submission_id is null and u.created_at < now() - ${UPLOAD_WAIT}::interval)
+      or (u.submission_id is not null and not exists (
+        select 1 from form_submissions s where s.workspace_id = u.workspace_id and s.id = u.submission_id))
+    )
+    order by u.created_at limit ${UPLOADS_BATCH}
+    for update skip locked
+  `);
+  if (orphans.rows.length > 0) {
+    await store.remove(orphans.rows.map((row) => row.pathname));
+    const ids = JSON.stringify(orphans.rows.map((row) => row.id));
+    await tx.execute(sql`
+      delete from form_uploads
+      where workspace_id = ${scope.workspaceId} and id in (select jsonb_array_elements_text(${ids}::jsonb)::uuid)
+    `);
+  }
+  const removed = orphans.rows.length;
+  const totals = plus(at.totals, { uploads: removed });
+  return outcome(removed === UPLOADS_BATCH ? { ...at, totals } : nextPhase(at, totals), at, totals, removed);
+}
+
 /**
  * The daily cleanup's kind. `queue` is the worker's (which jobs have a
  * queue row); the api registers the kind without one, to show and refuse to
  * cancel its jobs, and never runs a step.
  */
-export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceParams> {
+export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): KindDefinition<MaintenanceParams> {
   return defineKind<MaintenanceParams>({
     kind: MAINTENANCE_DAILY,
     lane: 'heavy',
@@ -605,6 +657,8 @@ export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceP
           return expiredExports(context, at);
         case 'imports':
           return oldImports(context, at, limit);
+        case 'uploads':
+          return orphanUploads(context, at, uploads);
       }
     },
   });

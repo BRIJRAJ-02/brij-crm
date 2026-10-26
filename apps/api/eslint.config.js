@@ -23,6 +23,8 @@ export default server({
       ],
     },
     { files: ['src/mail/resend.ts'], allow: ['resend'] },
+    // Form file uploads (#32): Vercel Blob only here.
+    { files: ['src/storage/blob.ts'], allow: ['@vercel/blob'] },
     // The job runners (spec 0008): Graphile Worker only here.
     { files: ['src/jobs/graphile.ts'], allow: ['graphile-worker'] },
   ],

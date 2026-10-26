@@ -90,7 +90,7 @@ export interface QuestionsSectionProps {
 }
 
 /** The answer types a question may take now (file questions wait for file attachments). */
-const TYPE_ITEMS = ANSWER_TYPES.filter((type) => type !== 'file').map((type) => ({
+const TYPE_ITEMS = ANSWER_TYPES.map((type) => ({
   id: type,
   label: strings.answerTypes[type],
   icon: TYPE_ICONS[type],

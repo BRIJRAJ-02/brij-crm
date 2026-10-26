@@ -14,6 +14,7 @@ import { createToasts } from '../provider/toasts.tsx';
 import { FormLoading, FormMessage, HostedForm, type HostedFormMode, type HostedFormProps } from './HostedForm.tsx';
 
 export type { HostedFormMode, HostedSubmission, HostedSubmitOutcome } from './HostedForm.tsx';
+export type { HostedUpload, HostedUploadOutcome, HostedUploadedFile, HostedRemoveUpload } from './files.ts';
 
 /** How a hosted form is drawn and where its answers go. */
 export type HostedFormOptions = Omit<HostedFormProps, 'form'>;

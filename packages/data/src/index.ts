@@ -5497,6 +5497,11 @@ export function createDataLayer({
       /** A new export id (UUID v7). */
       newId: () => mintId(),
     },
+    files: {
+      /** Where a stored file (a form's file answer) downloads from: the api checks the member and the file on each. */
+      downloadPath: (workspace: string, fileId: string): string =>
+        `/api/files/${encodeURIComponent(fileId)}?workspace=${encodeURIComponent(workspace)}`,
+    },
     jobs: {
       /**
        * A workspace's background jobs for `scope` (`mine`, or `all` for

@@ -21,6 +21,11 @@ export interface CheckedForm {
   >[];
 }
 
+/** A file answer as the page sends it: the id of an upload the server holds. */
+export interface FileAnswer {
+  readonly fileId: string;
+}
+
 /** A phone answer: the number in E.164 and the country whose code was picked. */
 export interface PhoneAnswer {
   readonly number: string;
@@ -29,11 +34,12 @@ export interface PhoneAnswer {
 
 /** The outcome: the answers in their canonical shapes, by key, or each failing question's message by key. */
 export type AnswerCheck =
-  | { readonly ok: true; readonly answers: Readonly<Record<string, string | boolean | PhoneAnswer>> }
+  | { readonly ok: true; readonly answers: Readonly<Record<string, string | boolean | PhoneAnswer | FileAnswer>> }
   | { readonly ok: false; readonly fields: Readonly<Record<string, string>> };
 
 const EMAIL = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
 const NUMBER = /^-?\d+(\.\d+)?$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const E164 = /^\+[1-9]\d{6,14}$/;
 
 /** A web address as typed, made absolute: `acme.com` becomes `https://acme.com`. Undefined when it isn't one. */
@@ -63,6 +69,8 @@ export function isBlank(value: unknown): boolean {
   if (value === undefined || value === null) return true;
   if (typeof value === 'string') return value.trim() === '';
   if (typeof value === 'object') {
+    // A file answer is held as the upload it names.
+    if (typeof (value as { readonly fileId?: unknown }).fileId === 'string') return false;
     const { number, country } = value as { readonly number?: unknown; readonly country?: unknown };
     if (typeof number !== 'string') return true;
     const code = typeof country === 'string' ? DIAL_CODES.get(country) : undefined;
@@ -87,7 +95,7 @@ function checkOne(
   choiceKeys: readonly string[] | undefined,
   raw: unknown,
   words: FormStrings,
-): { value?: string | boolean | PhoneAnswer; error?: string } {
+): { value?: string | boolean | PhoneAnswer | FileAnswer; error?: string } {
   switch (answerType) {
     case 'short_text':
       return typeof raw === 'string' && /[\r\n]/.test(raw.trim())
@@ -142,8 +150,13 @@ function checkOne(
       const compact = number.replace(/[\s().-]/g, '');
       return E164.test(compact) ? { value: { number: compact, country } } : { error: words.phone };
     }
-    case 'file':
-      return { error: words.fileLater };
+    case 'file': {
+      // The upload's id, as the page holds it; the server swaps it for the stored file.
+      const id = typeof raw === 'object' && raw !== null ? (raw as { readonly fileId?: unknown }).fileId : raw;
+      return typeof id === 'string' && UUID.test(id)
+        ? { value: { fileId: id.toLowerCase() } }
+        : { error: words.fileInvalid };
+    }
   }
 }
 
@@ -156,7 +169,7 @@ function checkOne(
  */
 export function checkAnswers(form: CheckedForm, answers: Readonly<Record<string, unknown>>): AnswerCheck {
   const words = formStrings(form.language);
-  const values: Record<string, string | boolean | PhoneAnswer> = {};
+  const values: Record<string, string | boolean | PhoneAnswer | FileAnswer> = {};
   const fields: Record<string, string> = {};
   for (const question of form.questions) {
     // A question whose Show when doesn't hold over the answers kept so far is skipped: never required, never kept.

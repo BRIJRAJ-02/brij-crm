@@ -142,7 +142,6 @@ export const strings = {
     country: 'Country',
     file: 'File',
   } satisfies Record<AnswerType, string>,
-  fileLater: 'File questions arrive with file attachments.',
 
   // First publish
   setUpTitle: 'Set up your form',

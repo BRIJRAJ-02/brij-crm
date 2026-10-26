@@ -585,6 +585,19 @@ export {
   UNKNOWN_SUBMISSION,
 } from './forms/submissions.ts';
 export {
+  attachUploads,
+  claimUploads,
+  discardUpload,
+  prepareUpload,
+  readUpload,
+  registerUpload,
+  UNKNOWN_FILE,
+  UPLOADS_OPEN_PER_FORM,
+  type ReadableUpload,
+  type RegisterUpload,
+  type UploadStore,
+} from './forms/uploads.ts';
+export {
   chooseOwner,
   FORMS_PROCESS,
   formsProcess,

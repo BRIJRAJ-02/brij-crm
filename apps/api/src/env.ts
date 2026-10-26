@@ -548,6 +548,10 @@ export const ApiEnv = z
     // The salt client addresses are hashed with for the form rate limits and abuse review (rotating it only resets
     // rate limit history). Required outside local; locally a fixed placeholder stands in.
     FORMS_IP_SALT: optional(z.string().min(32, 'FORMS_IP_SALT must be at least 32 characters.')),
+    // Vercel Blob (#32): the read write token of the private store `brij-crm-forms`, which holds the files visitors
+    // upload to public forms. Optional everywhere: unset, a form's upload answers 503 and nothing else changes, so a
+    // host without the store still boots. Vercel sets it when the store is connected to the project.
+    BLOB_READ_WRITE_TOKEN: optional(z.string().min(20, 'BLOB_READ_WRITE_TOKEN is the Vercel Blob read write token.')),
     // The origin hosted form pages are served from, when it differs from APP_URL (it defaults to APP_URL).
     FORMS_PUBLIC_ORIGIN: optional(z.url()),
     // The origin the public booking addresses are served from (`/<handle>`, `/<handle>/<slug>`, `/b/<key>`), when it
@@ -720,6 +724,8 @@ export const WorkerEnv = z
     RESEND_API_KEY: optional(z.string()),
     MAIL_FROM: optional(sender),
     MAILPIT_URL: optional(z.url()),
+    // The blob store the daily cleanup removes orphaned form uploads from (#32); unset, that phase waits.
+    BLOB_READ_WRITE_TOKEN: optional(z.string().min(20, 'BLOB_READ_WRITE_TOKEN is the Vercel Blob read write token.')),
     // The background jobs' runners (spec 0008): `on` or `off`. Unset is `on` locally and in previews and `off` in
     // production, where Graphile's LISTEN and poll would keep Neon's compute awake until milestone 3's sleep lands.
     JOBS_RUNNER: optional(z.enum(['on', 'off'])),

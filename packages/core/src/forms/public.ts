@@ -8,6 +8,7 @@
 import {
   BOOKING_COUNTDOWN,
   checkAnswers,
+  formStrings,
   hiddenFacts,
   storedContext,
   SubmitBody,
@@ -20,7 +21,7 @@ import {
 import { schema, type WorkspaceTx } from '@crm/db';
 import { createHmac } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { refuse, refuseAll } from '../engine/refusals.ts';
+import { isRefusal, refuse, refuseAll } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -28,6 +29,7 @@ import { pagePath } from '../booking/handles.ts';
 import { startJob } from '../jobs/service.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { FORMS_PROCESS } from './process.ts';
+import { attachUploads, claimUploads } from './uploads.ts';
 import { routeSubmission, storedRoute, submissionDecision } from '../routing/forms.ts';
 import { loadForm, loadVersions, publicFormOf, workspacePublicKey, type FormRow } from './shared.ts';
 import {
@@ -297,6 +299,15 @@ function answersHash(key: string, formId: string, answers: Readonly<Record<strin
     .digest('hex');
 }
 
+/** Whether a submission with this idempotency key is already stored for the form. */
+async function storedAttempt(tx: WorkspaceTx, formId: string, key: string): Promise<boolean> {
+  const [first] = await tx
+    .select({ id: formSubmissions.id })
+    .from(formSubmissions)
+    .where(and(eq(formSubmissions.formId, formId), eq(formSubmissions.idempotencyKey, key)));
+  return first !== undefined;
+}
+
 /** How many submissions to this form in the last day carried exactly these answers (at most 3 are counted). */
 async function repeatsOf(tx: WorkspaceTx, workspaceId: string, formId: string, hash: string): Promise<number> {
   const result = await tx.execute<{ repeats: number }>(sql`
@@ -367,8 +378,13 @@ export async function submitForm(
       let answers: Readonly<Record<string, unknown>>;
       let judged: SpamJudgement;
       let hash: string | undefined;
+      let claimedIds: readonly string[] = [];
       if (bot.verdict === 'spam') {
-        answers = Object.fromEntries(Object.entries(body.answers).filter(([key]) => known.has(key)));
+        // A spam submission keeps no file answers: no upload is attached to it, so the cleanup removes the file.
+        const fileKeys = new Set(rendered.questions.filter((q) => q.answerType === 'file').map((q) => q.key));
+        answers = Object.fromEntries(
+          Object.entries(body.answers).filter(([key]) => known.has(key) && !fileKeys.has(key)),
+        );
         judged = bot;
       } else {
         const checked = checkAnswers(rendered, body.answers);
@@ -381,10 +397,25 @@ export async function submitForm(
           if (first !== undefined) throw refuseAll([first, ...rest]);
         }
         answers = checked.ok ? checked.answers : {};
+        // Hashed as the visitor sent them (a file as its upload id), so a retry hashes the same as the first try.
+        const sent = answers;
+        try {
+          const claimed = await claimUploads(tx, {
+            formId: form.id,
+            questions: rendered.questions,
+            answers,
+            invalid: formStrings(rendered.language).fileInvalid,
+          });
+          answers = claimed.answers;
+          claimedIds = claimed.ids;
+        } catch (error) {
+          // A retry of a submission that was stored: its files are attached already, and the insert below answers as a replay.
+          if (!isRefusal(error) || !(await storedAttempt(tx, form.id, body.idempotencyKey))) throw error;
+        }
         hash =
-          Object.keys(answers).length === 0 || input.answersKey === undefined
+          Object.keys(sent).length === 0 || input.answersKey === undefined
             ? undefined
-            : answersHash(input.answersKey, form.id, answers);
+            : answersHash(input.answersKey, form.id, sent);
         const content = scoreContent({
           questions: rendered.questions,
           answers,
@@ -445,6 +476,7 @@ export async function submitForm(
         );
         return { next: again, verdict: judged.verdict, replayed: true };
       }
+      await attachUploads(tx, { submissionId: row.id, ids: claimedIds });
       if (state === 'received') {
         await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
       }

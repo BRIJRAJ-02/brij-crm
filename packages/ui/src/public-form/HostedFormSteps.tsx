@@ -87,6 +87,8 @@ export function HostedFormSteps({
   prefill,
   onSubmit,
   onRedirect,
+  onUpload,
+  onRemoveUpload,
   now = Date.now,
   logo = TIMEFIX_LOGO,
 }: HostedFormStepsProps) {
@@ -102,6 +104,8 @@ export function HostedFormSteps({
     prefill,
     onSubmit,
     onRedirect,
+    onUpload,
+    onRemoveUpload,
     now,
     // A refusal for an earlier step goes back to it, where its errors show.
     onRefused: (keys) => {
@@ -242,6 +246,7 @@ export function HostedFormSteps({
                   countryGuess={countryGuess}
                   countryNames={state.countryNames}
                   onChange={(value) => state.change(question, value)}
+                  files={state.files}
                   isLabelHidden={isOpen}
                 />
               </QuestionSlot>

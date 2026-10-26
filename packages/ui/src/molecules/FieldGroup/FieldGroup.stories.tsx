@@ -153,3 +153,20 @@ export const Live: Story = {
     await expect(canvas.getByRole('group', { name: 'Records' })).toHaveAttribute('aria-live', 'polite');
   },
 };
+
+/** `error`: what is wrong with the content, in the danger colour under it, and part of the group's description. */
+export const WithError: Story = {
+  args: { label: 'Your CV', error: 'Add this.' },
+  render: (args) => (
+    <Stage>
+      <FieldGroup {...args}>
+        <Button variant="secondary" size="sm">
+          Choose a file
+        </Button>
+      </FieldGroup>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveTextContent('Add this.');
+  },
+};
