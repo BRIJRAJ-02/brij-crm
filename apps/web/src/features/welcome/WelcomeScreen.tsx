@@ -60,6 +60,8 @@ export interface WelcomeScreenProps {
   readonly leaveTo?: { readonly slug: string; readonly name: string } | undefined;
   /** The roles Invite your team offers and the one rows start with; undefined when unread (everyone as a member). */
   readonly inviteRoles?: { readonly roles: readonly RoleOption[]; readonly defaultRole: string } | undefined;
+  /** The handle of the link page made with the workspace (26 Oct 2026), said on Invite your team; undefined unread. */
+  readonly linkPageHandle?: string | undefined;
 }
 
 /**
@@ -77,6 +79,7 @@ export function WelcomeScreen({
   calendarResult,
   leaveTo,
   inviteRoles,
+  linkPageHandle,
 }: WelcomeScreenProps) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -302,7 +305,13 @@ export function WelcomeScreen({
           />
         )}
         {step === 'invite' && workspace !== undefined && (
-          <InviteStep data={data} slug={workspace.slug} roles={inviteRoles} onDone={afterInvite} />
+          <InviteStep
+            data={data}
+            slug={workspace.slug}
+            roles={inviteRoles}
+            onDone={afterInvite}
+            handle={linkPageHandle}
+          />
         )}
         {step === 'calendar' && (
           <CalendarStep result={calendarResult} onConnect={connect} isConnecting={isConnecting} onFinish={finish} />

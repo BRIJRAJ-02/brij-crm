@@ -1,10 +1,11 @@
 // Brief
 // Purpose: Home's "Your link page" card (spec 0051, AC-5121 to AC-5123): the QR code that opens the person's page.
-// Main task: show the page to someone (scan the code, Copy link, Open), or save the code as a PNG to print.
+// Main task: show the page to someone (scan the code, Copy link, Open), or save the code as a PNG to print. Every
+// membership's page is made with it (26 Oct 2026), so the card says Live; the claim note is only for one not made.
 // Leaves out: editing the page (Edit opens the editor) and its figures (phase 3). Loaded with its own chunk, so
 // neither it nor the QR library is in the app's first load.
 import type { DataLayer, MyProfile } from '@crm/data';
-import { Button, ButtonLink, Card, CopyButton, EmptyState, QrCode, Skeleton } from '@crm/ui';
+import { Badge, Button, ButtonLink, Card, CopyButton, EmptyState, QrCode, Skeleton } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { publicProfileUrl } from '../booking/links.ts';
@@ -122,9 +123,12 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
         ? {}
         : { description: strings.inWorkspace(read.profile.workspaceName) })}
       actions={
-        <ButtonLink variant="ghost" href={linkPageHref(slug)}>
-          {strings.edit}
-        </ButtonLink>
+        <>
+          <Badge text={strings.live} dot="green" />
+          <ButtonLink variant="ghost" href={linkPageHref(slug)}>
+            {strings.edit}
+          </ButtonLink>
+        </>
       }
       footer={
         <>

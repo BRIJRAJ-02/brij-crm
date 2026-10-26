@@ -13,7 +13,10 @@ export const homeStrings = {
   showQr: 'Show QR code',
   /** Saves the page to the person's own wallet, so they can show its code without opening the app. */
   addToWallet: 'Add to Wallet',
-  noHandle: 'Claim your address to get a link page',
+  /** Every membership gets its page made with it (26 Oct 2026): the badge beside the title says so. */
+  live: 'Live',
+  /** Only when the page couldn't be made with the membership (the daily cleanup tries again). */
+  noHandle: 'Pick a handle to get your link page',
   noHandleText: 'Pick a handle in your profile, and your page and its QR code are ready at once.',
   goToProfile: 'Go to Profile',
   failed: 'Your link page didn’t load',

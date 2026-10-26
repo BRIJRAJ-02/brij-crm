@@ -24,6 +24,14 @@ export const strings = {
   yourName: 'Your name',
   nameMissing: 'Enter your name, or skip this step.',
 
+  /** The link page made with the workspace (26 Oct 2026), said on Invite your team. */
+  linkPageLive: 'Your link page is live',
+  linkPageAt: 'Find it at',
+  linkPageNext: 'Add your links and booking pages, then share it.',
+  linkPageCopy: 'Copy link',
+  linkPageCopied: 'Link copied',
+  linkPageEdit: 'Edit link page',
+
   inviteTitle: 'Invite your team',
   inviteDescription: 'They get an email with a link to join.',
   noEmails: 'Add an email address, or skip this step.',

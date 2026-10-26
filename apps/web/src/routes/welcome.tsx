@@ -42,13 +42,22 @@ export const Route = createFileRoute('/welcome')({
             ([access, roles]) => ({ actor: access.role, roles }),
             () => undefined,
           );
-    const [calendarSync, roleRead] = await Promise.all([calendarRead, rolesRead]);
+    // The link page made with the workspace (26 Oct 2026), said on Invite your team: its handle, or nothing.
+    const handleRead =
+      made === undefined
+        ? Promise.resolve(undefined)
+        : context.data.profile.get(made.slug).then(
+            (profile) => profile.handle,
+            () => undefined,
+          );
+    const [calendarSync, roleRead, linkPageHandle] = await Promise.all([calendarRead, rolesRead, handleRead]);
     return {
       user: me.user,
       calendarSync,
       workspace: landing.workspace,
       leaveTo: deps.another ? home : undefined,
       roleRead,
+      linkPageHandle,
     };
   },
   pendingComponent: () => (
@@ -61,7 +70,7 @@ export const Route = createFileRoute('/welcome')({
 });
 
 function WelcomeRoute() {
-  const { user, calendarSync, workspace, leaveTo, roleRead } = Route.useLoaderData();
+  const { user, calendarSync, workspace, leaveTo, roleRead, linkPageHandle } = Route.useLoaderData();
   const allowed = roleRead === undefined ? [] : invitableRoles(roleRead.actor);
   const options = roleRead?.roles.roles.filter((each) => each.builtIn !== undefined && allowed.includes(each.builtIn));
   const inviteRoles =
@@ -83,6 +92,7 @@ function WelcomeRoute() {
       calendarResult={calendar}
       leaveTo={leaveTo}
       inviteRoles={inviteRoles}
+      linkPageHandle={linkPageHandle}
     />
   );
 }

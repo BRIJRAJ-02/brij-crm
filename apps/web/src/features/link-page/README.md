@@ -24,6 +24,8 @@ A view of Profile's (its trail reads Settings › Account › Profile › Link p
 - **Archived**: a Card under the blocks while there are any, each with Restore (back to the end) and Delete.
 - **Saving**: through `data.linkPage` only (optimistic, in order, put back with a toast and Try again on a refusal).
 
+Every membership's handle and empty page are made with the membership (26 Oct 2026: making a workspace, an invitation, the invite link or an approved request to join; `crm_ensure_public_profile`, migration 0115), so the no handle state is rare: only a page that couldn't be made then (the daily cleanup's `link_pages` phase tries again). Home's Your link page card says Live (Badge with a green dot) beside Edit.
+
 States: no handle (claim one first, Go to Profile), loading (the route's pending page: the Card's tiled skeleton rows and the phone's page skeleton), failed (one row with Try again), empty (a quiet row, and the phone's empty page), and the limits.
 
 ## The registry (`registry.tsx`)
