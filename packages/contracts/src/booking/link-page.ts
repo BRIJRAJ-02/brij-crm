@@ -300,7 +300,16 @@ const Stored = {
 
 /** One block as the editor reads it: its fields, its id, and for a booking page, the page's facts when it has any. */
 export const ProfileItem = z.discriminatedUnion('kind', [
-  ProfileLinkBlock.extend({ ...Stored, url: z.string(), hue: z.enum(HUES) }),
+  ProfileLinkBlock.extend({
+    ...Stored,
+    url: z.string(),
+    hue: z.enum(HUES),
+    /**
+     * Set when the link names one of our own pages that is not in this workspace any more (a slug reused, a page
+     * moved, spec 0056, AC-5612): visitors are not sent there, and the editor says so.
+     */
+    outsideWorkspace: z.literal(true).optional(),
+  }),
   ProfileHeadingBlock.extend(Stored),
   ProfilePageBlock.extend({ ...Stored, page: ProfilePageFacts.optional() }),
   ProfileContactBlock.extend(Stored),

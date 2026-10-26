@@ -15,7 +15,7 @@ import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
 import { submitForm } from '../forms/public.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { updateMyMemberProfile } from '../members/profile.ts';
-import { saveProfileItem } from '../profile/items.ts';
+import { readProfileItems, saveProfileItem } from '../profile/items.ts';
 import { testScope } from '../testing.ts';
 import { createBookingPage } from './pages.ts';
 import { readLinkPage } from './public.ts';
@@ -165,6 +165,16 @@ describe('a link on a link page', () => {
     expect(names).toContain('Own');
     expect(names).not.toContain('Sneaky');
     expect(stays.id).toBeDefined();
+    // The editor marks it, in the same words as nothing else, and leaves the link to its own page unmarked.
+    const marked = (await readProfileItems(acme.scope, { publicOrigins: origins })).items.flatMap((item) =>
+      item.kind === 'link' ? [[item.title, item.outsideWorkspace === true] as const] : [],
+    );
+    expect(marked).toEqual(
+      expect.arrayContaining([
+        ['Own', false],
+        ['Sneaky', true],
+      ]),
+    );
   });
 });
 

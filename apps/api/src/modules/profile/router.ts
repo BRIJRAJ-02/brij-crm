@@ -35,9 +35,12 @@ async function extrasOf(context: RequestContext & SessionContext): Promise<Profi
       ? 'linked'
       : 'unlinked'
     : undefined;
+  // The directory's names for the workspaces this account belongs to, so a link page elsewhere can be named.
+  const memberships = await context.identity.workspacesOf(user.id);
   return {
     ...(picture === undefined ? {} : { image: myPicturePath(picture.version) }),
     ...(google === undefined ? {} : { google }),
+    workspaceNames: new Map(memberships.map((workspace) => [workspace.id, workspace.name])),
   };
 }
 
@@ -78,7 +81,9 @@ export const profileRouter = member.profile.router({
     );
   }),
   // The link page (spec 0051): the caller's own blocks, in every workspace the same, never another person's.
-  items: member.profile.items.handler(({ context }) => readProfileItems(context.scope)),
+  items: member.profile.items.handler(({ context }) =>
+    readProfileItems(context.scope, { publicOrigins: context.publicOrigins }),
+  ),
   counts: member.profile.counts.handler(async ({ context }) => {
     const counts = await readProfileCounts(context.scope);
     return { ...counts, presses: [...counts.presses] };
@@ -149,11 +154,17 @@ export const profileRouter = member.profile.router({
     ),
   ),
   orderItems: member.profile.orderItems.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => orderProfileItems(context.scope, input.ids)),
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      orderProfileItems(context.scope, input.ids, { publicOrigins: context.publicOrigins }),
+    ),
   ),
   archiveItem: member.profile.archiveItem.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      archiveProfileItem(context.scope, { id: input.id, archived: input.archived }),
+      archiveProfileItem(
+        context.scope,
+        { id: input.id, archived: input.archived },
+        { publicOrigins: context.publicOrigins },
+      ),
     ),
   ),
   deleteItem: member.profile.deleteItem.handler(({ context, input }) =>

@@ -89,6 +89,9 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
   return (
     <Card
       title={strings.title}
+      {...(read.profile.workspaceName === undefined
+        ? {}
+        : { description: strings.inWorkspace(read.profile.workspaceName) })}
       actions={
         <ButtonLink variant="ghost" href={linkPageHref(slug)}>
           {strings.edit}

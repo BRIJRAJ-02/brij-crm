@@ -109,8 +109,15 @@ export const MyProfile = z.object({
    * first when not. Absent where Google sign in is off.
    */
   google: z.enum(['linked', 'unlinked']).optional(),
-  /** Their handle, the same in every workspace; absent until they pick one. */
+  /** The name of the workspace the profile is read in, for the one line that says whose link page this is (spec 0056). */
+  workspaceName: z.string().optional(),
+  /** Their handle in this workspace (each workspace has its own, spec 0056); absent until they pick one. */
   handle: z.string().optional(),
+  /**
+   * The other workspaces they belong to where they already have a link page (spec 0056, AC-5618): only workspaces
+   * they are an active member of, named by the directory. Absent when there are none.
+   */
+  otherLinkPages: z.array(z.object({ workspaceId: Uuid, workspaceName: z.string() })).optional(),
   /** A free handle from their name, for the field's first value while they have none. */
   suggestedHandle: z.string().optional(),
   /** Their one line bio on their public profile. */

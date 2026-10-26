@@ -13,7 +13,7 @@ import { and, eq } from 'drizzle-orm';
 import { checkScope } from '../access/mint.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
-import { publicProfilesOf, savePublicProfile, suggestHandle } from '../booking/handles.ts';
+import { profileHandlesOf, publicProfilesOf, savePublicProfile, suggestHandle } from '../booking/handles.ts';
 import { isPictureHidden, savePictureHidden } from '../booking/picture-choice.ts';
 import { checkedSocialLinks, sameSocialLinks, saveSocialLinks, socialLinksOfUser } from '../booking/socials.ts';
 import { touched } from '../engine/definitions.ts';
@@ -29,6 +29,11 @@ export interface ProfileExtras {
   readonly image?: string | undefined;
   /** Whether the account has Google linked, for Sync Google photo; undefined where Google sign in is off. */
   readonly google?: 'linked' | 'unlinked' | undefined;
+  /**
+   * The names of the workspaces the account belongs to, by id, from the directory (spec 0056, AC-5618): the only way
+   * to name a workspace the caller is not in right now, since a workspace's own row is another one's to read.
+   */
+  readonly workspaceNames?: ReadonlyMap<string, string> | undefined;
 }
 
 /** The caller's member id, or a refusal: only a member has a profile. */
@@ -69,6 +74,7 @@ async function readProfile(
       timeZone: members.timeZone,
       avatarUrl: members.avatarUrl,
       workspaceTimeZone: workspaces.timeZone,
+      workspaceName: workspaces.name,
     })
     .from(members)
     .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
@@ -85,11 +91,23 @@ async function readProfile(
   // The person's choice; a member with no identity of their own has none to make.
   const pictureHidden = userId === undefined ? undefined : await isPictureHidden(tx, userId);
   const socials = userId === undefined ? undefined : await socialLinksOfUser(tx, userId);
+  // The person's link pages in their other workspaces, named from the directory: only ones they still belong to.
+  const others =
+    userId === undefined || held !== undefined
+      ? []
+      : (await profileHandlesOf(tx, userId)).flatMap((each) => {
+          const workspaceName = extras.workspaceNames?.get(each.workspaceId);
+          return each.workspaceId === scope.workspaceId || workspaceName === undefined
+            ? []
+            : [{ workspaceId: each.workspaceId, workspaceName }];
+        });
   return {
     memberId,
     name: row.name,
     email: row.email,
     workspaceTimeZone: row.workspaceTimeZone,
+    workspaceName: row.workspaceName,
+    ...(others.length === 0 ? {} : { otherLinkPages: others }),
     ...(row.timeZone === null ? {} : { timeZone: row.timeZone }),
     ...(image === undefined ? {} : { image }),
     ...(extras.google === undefined ? {} : { google: extras.google }),

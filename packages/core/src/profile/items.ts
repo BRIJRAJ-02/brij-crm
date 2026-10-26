@@ -197,7 +197,7 @@ async function formFactsOf(entries: readonly OwnedFormEntry[]): Promise<FactsByF
   return facts;
 }
 
-function itemOf(row: ItemRow, facts: BlockFacts): ProfileItem | undefined {
+function itemOf(row: ItemRow, facts: BlockFacts, outside: ReadonlySet<string> = new Set()): ProfileItem | undefined {
   const data = typeof row.data === 'object' && row.data !== null ? row.data : {};
   const stored = {
     id: row.id,
@@ -225,7 +225,13 @@ function itemOf(row: ItemRow, facts: BlockFacts): ProfileItem | undefined {
       ...(found === undefined || found.workspaceId !== row.workspace_id ? {} : { form: found.facts }),
     };
   } else if (row.kind === 'link') {
-    candidate = { hue: 'blue', ...data, kind: 'link', ...stored };
+    candidate = {
+      hue: 'blue',
+      ...data,
+      kind: 'link',
+      ...stored,
+      ...(outside.has(row.id) ? { outsideWorkspace: true } : {}),
+    };
   } else {
     candidate = { ...data, kind: row.kind, ...stored };
   }
@@ -257,24 +263,47 @@ async function factsForRows(scope: EngineScope, rows: readonly ItemRow[]): Promi
   };
 }
 
-/** Both lists, read in one transaction, with their pages' facts. */
-async function readAll(scope: EngineScope, owner: string): Promise<ProfileItems> {
-  const [live, archived] = await inWorkspace(scope, async (tx) => [
-    await readRows(tx, owner, scope.workspaceId, false),
-    await readRows(tx, owner, scope.workspaceId, true),
-  ]);
+/** Whether the options name any of our own origins, which is what makes an address one of ours to check. */
+interface AddressOptions {
+  readonly publicOrigins?: readonly string[];
+}
+
+/** Both lists, read in one transaction, with their pages' facts and the links that have left the workspace. */
+async function readAll(scope: EngineScope, owner: string, options: AddressOptions = {}): Promise<ProfileItems> {
+  const origins = options.publicOrigins ?? [];
+  const [live, archived, outside] = await inWorkspace(scope, async (tx) => {
+    const liveRows = await readRows(tx, owner, scope.workspaceId, false);
+    const archivedRows = await readRows(tx, owner, scope.workspaceId, true);
+    // A link to one of our own pages that no longer resolves in this workspace (AC-5612), marked for the editor.
+    const gone = new Set<string>();
+    if (origins.length > 0) {
+      for (const row of [...liveRows, ...archivedRows]) {
+        const url =
+          row.kind === 'link' && typeof row.data === 'object' && row.data !== null && 'url' in row.data
+            ? row.data.url
+            : undefined;
+        if (
+          typeof url === 'string' &&
+          (await workspaceAddressProblem(tx, scope.workspaceId, url, origins)) !== undefined
+        ) {
+          gone.add(row.id);
+        }
+      }
+    }
+    return [liveRows, archivedRows, gone] as const;
+  });
   const facts = await factsForRows(scope, [...live, ...archived]);
   const items = (rows: readonly ItemRow[]) =>
     rows.flatMap((row) => {
-      const item = itemOf(row, facts);
+      const item = itemOf(row, facts, outside);
       return item === undefined ? [] : [item];
     });
   return { items: items(live), archived: items(archived) };
 }
 
 /** The caller's link page: its live blocks in order, and its archived ones, newest first (the editor's read). */
-export async function readProfileItems(scope: EngineScope): Promise<ProfileItems> {
-  return readAll(scope, ownerOf(scope));
+export async function readProfileItems(scope: EngineScope, options: AddressOptions = {}): Promise<ProfileItems> {
+  return readAll(scope, ownerOf(scope), options);
 }
 
 /**
@@ -553,7 +582,11 @@ export async function saveProfileItem(
  * Sets the caller's whole order at once (AC-5116): `ids` must be exactly their live blocks, each once. An order from
  * a tab that missed a change is `CONFIG_INVALID`, and the editor puts its rows back. Answers both lists.
  */
-export async function orderProfileItems(scope: EngineScope, ids: readonly string[]): Promise<ProfileItems> {
+export async function orderProfileItems(
+  scope: EngineScope,
+  ids: readonly string[],
+  options: AddressOptions = {},
+): Promise<ProfileItems> {
   const owner = ownerOf(scope);
   if (ids.length === 0 || !ids.every((id) => isUuid(id))) {
     throw refuse('CONFIG_INVALID', 'Your link page changed somewhere else. It now shows the latest order.');
@@ -571,7 +604,7 @@ export async function orderProfileItems(scope: EngineScope, ids: readonly string
       throw refusalOf(error);
     }
   });
-  return readAll(scope, owner);
+  return readAll(scope, owner, options);
 }
 
 /**
@@ -581,6 +614,7 @@ export async function orderProfileItems(scope: EngineScope, ids: readonly string
 export async function archiveProfileItem(
   scope: EngineScope,
   input: { readonly id: string; readonly archived: boolean },
+  options: AddressOptions = {},
 ): Promise<ProfileItems> {
   const owner = ownerOf(scope);
   const found = await inWorkspace(scope, async (tx) => {
@@ -594,7 +628,7 @@ export async function archiveProfileItem(
     }
   });
   if (!found) throw refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
-  return readAll(scope, owner);
+  return readAll(scope, owner, options);
 }
 
 /** Deletes one block for good (AC-5106; the editor asks first). */

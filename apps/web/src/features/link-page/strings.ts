@@ -34,10 +34,10 @@ export const strings = {
   addItem: 'Add item',
   addHint: 'It goes to the end of the section. Drag it anywhere afterwards.',
   newSection: 'New section',
-  // Shown only when the person's booking pages come from more than one workspace, which is when the grouping
-  // needs explaining and the privacy question comes up.
-  workspacesNote:
-    'Booking pages from another workspace keep their own section. Nobody visiting the page sees which workspace a page came from.',
+  /** Leads a link's row when it names one of our own pages that is not in this workspace (spec 0056, AC-5612). */
+  notInWorkspace: 'Not in this workspace',
+  /** The one quiet line that says whose page this is: each workspace has its own (spec 0056, AC-5617). */
+  inWorkspace: (name: string) => `Your link page in ${name}.`,
   addLink: 'Link',
   addLinkText: 'A website, a profile, an email or a phone number',
   addPage: 'Booking page',

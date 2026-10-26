@@ -72,10 +72,14 @@ export const strings = {
   profileTitle: 'Profile',
   /** The public profile on Profile (22 Oct 2026): the handle booking addresses start with, and a bio. */
   publicProfileSection: 'Public profile',
-  publicProfileText: 'Your booking pages live at your handle, and so does a page listing your public ones.',
+  publicProfileText:
+    'Your booking pages in this workspace live at your handle here, and so does a page listing your public ones.',
   handle: 'Handle',
   handleNew: 'Suggested from your name. Claim it, or change it and save. Your pages keep their /b/ links until then.',
-  handleKept: 'The same in every workspace. If you change it, your old address keeps working.',
+  handleKept: 'Your handle in this workspace. If you change it, your old address keeps working.',
+  /** Under the claim note when they already have a link page in another workspace of theirs (spec 0056, AC-5618). */
+  otherLinkPages: (names: readonly string[]) =>
+    `You already have a link page in ${new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(names)}. Each workspace has its own.`,
   handleFix: 'Fix your handle first.',
   claimHandle: 'Claim',
   bio: 'Bio',

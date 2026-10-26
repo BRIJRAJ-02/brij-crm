@@ -108,6 +108,14 @@ describe('a handle', () => {
     const other = await person('Ada', ada.userId);
     // The other workspace has no handle of hers yet; the claim note shows there.
     expect((await getMyProfile(other.scope)).handle).toBeUndefined();
+    // And says, quietly, that they already have a page in the workspace that holds one (spec 0056, AC-5618): only a
+    // workspace they belong to, named by the directory the api reads, so nobody else's is ever named.
+    const names = new Map([[ada.workspaceId, 'Acme']]);
+    expect((await getMyProfile(other.scope, { workspaceNames: names })).otherLinkPages).toEqual([
+      { workspaceId: ada.workspaceId, workspaceName: 'Acme' },
+    ]);
+    expect((await getMyProfile(other.scope)).otherLinkPages).toBeUndefined();
+    expect((await getMyProfile(ada.scope, { workspaceNames: names })).otherLinkPages).toBeUndefined();
     // The same word can't be taken twice, not even by the same person in another workspace (AC-5601).
     expect(await refusalOf(updateMyMemberProfile(other.scope, { handle }))).toBe('SLUG_TAKEN');
     const second = fresh('ada-work');

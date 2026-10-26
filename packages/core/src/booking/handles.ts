@@ -127,6 +127,25 @@ export async function pagePath(
   return bookingPagePath({ handle, slug: page.slug, publicKey: page.publicKey });
 }
 
+interface HandlesOfRow extends Record<string, unknown> {
+  readonly workspace_id: string;
+  readonly handle: string;
+}
+
+/**
+ * The handles a person holds now, one per workspace they are still an active member of (`crm_profile_handles_of`),
+ * for the one line that says they already have a link page elsewhere (spec 0056, AC-5618).
+ */
+export async function profileHandlesOf(
+  tx: WorkspaceTx,
+  userId: string,
+): Promise<readonly { readonly workspaceId: string; readonly handle: string }[]> {
+  const found = await tx.execute<HandlesOfRow>(
+    sql`select workspace_id::text as workspace_id, handle from crm_profile_handles_of(${userId}::uuid)`,
+  );
+  return found.rows.map((row) => ({ workspaceId: row.workspace_id, handle: row.handle }));
+}
+
 interface SlugRow extends Record<string, unknown> {
   readonly slug: string;
 }
