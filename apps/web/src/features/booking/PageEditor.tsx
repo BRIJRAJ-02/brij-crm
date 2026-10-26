@@ -8,13 +8,16 @@
 // The hours are a schedule's (spec 0035, AC-965): the tab picks one of the owner's and edits its week and days off in
 // place (the owner, 22 Oct 2026, like Calendly's and Cal.com's event Availability tab), saved by the same Save.
 // A round robin page (spec 0029, AC-732) adds Hosts: its fixed hosts, its rotations, and who reschedules go to.
-// Leaves out: questions and the deal step (milestone 2), collective members, and the profile's order (pages keep the
+// Questions (spec 0057): the form builder's own section, shared, under an Add to the CRM switch; a question with nothing
+// to file onto gets its People attribute on Save, with Undo, as a form's publish does.
+// Leaves out: the deal step (milestone 2), collective members, and the profile's order (pages keep the
 // order they were made in until the Links list can be reordered by drag).
 import {
   isDataError,
   type BookingPageSettings,
   type BookingPageView,
   type DataLayer,
+  type FormTargetChoices,
   type MemberSummary,
   type ScheduleView,
   type PublicSocialLink,
@@ -44,6 +47,7 @@ import {
   Select,
   SettingsRow,
   Skeleton,
+  Switch,
   TabPanel,
   Tabs,
   Tooltip,
@@ -52,9 +56,14 @@ import {
   type SelectItem,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
-import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { QuestionsSection } from '../questions/QuestionsSection.tsx';
+import { changeQuestion, planNewAttributes, type Questions } from '../questions/questions.ts';
+import { questionsProblem } from '@crm/data/forms';
+import { archiveMadeAttributes, createPlannedAttributes, type MadeAttribute } from '../questions/attributes.ts';
+import { strings as questionStrings } from '../questions/strings.ts';
 import { linkPageHref } from '../link-page/nav-strings.ts';
 import { profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
@@ -117,7 +126,12 @@ export interface PageEditorProps {
   readonly tab: PageTab;
   /** Shows another tab: the route puts it in `?tab=`. */
   readonly onTabChange: (tab: PageTab) => void;
+  /** Where the page's answers may be filed (spec 0057): People and its attributes; absent when the read failed. */
+  readonly targets?: FormTargetChoices;
 }
+
+/** The most questions a booking page asks (spec 0057, AC-5701: the contracts' `BOOKING_QUESTIONS_MAX`). */
+const QUESTIONS_MAX = 20;
 
 const LOCATIONS = ['video', 'address', 'phone', 'custom'] as const;
 
@@ -152,6 +166,8 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   isPrivate: 'page',
   showSocials: 'page',
   defaultView: 'page',
+  questions: 'questions',
+  fileToCrm: 'questions',
   title: 'meeting',
   durations: 'meeting',
   location: 'meeting',
@@ -197,6 +213,8 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   defaultView: page.defaultView,
   profileSection: page.profileSection,
   profilePosition: page.profilePosition,
+  questions: page.questions,
+  fileToCrm: page.fileToCrm,
 });
 
 /** Why a slug can't be sent, in plain words, or undefined when it can. */
@@ -228,8 +246,16 @@ export function PageEditor({
   recordFields,
   tab,
   onTabChange,
+  targets: loadedTargets,
 }: PageEditorProps) {
   const [page, setPage] = useState(loaded);
+  // Where answers may be filed (spec 0057): read again once Save adds attributes, or Undo archives them.
+  // Undefined when the read failed: the Questions tab says so, with Try again, rather than offering nowhere to file.
+  const [targets, setTargets] = useState<FormTargetChoices | undefined>(loadedTargets);
+  const choices: FormTargetChoices = useMemo(() => targets ?? { items: [] }, [targets]);
+  const [isReadingTargets, setReadingTargets] = useState(false);
+  // Adding attributes needs `schema.manage`; without it a question with nothing to file onto stays with the booking.
+  const canBuild = useCan('schema.manage');
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   // A page the reader can't change shows as it is, every control read only, with no Save.
@@ -356,6 +382,128 @@ export function PageEditor({
   };
   const [isDeleting, setDeleting] = useState(false);
 
+  // The questions Save gives a People attribute, with no prompt (spec 0057, AC-5707): the same planning a form's
+  // publish uses, offered only to someone who may add attributes, while the page files into the CRM.
+  const plannedFor = (questions: Questions, fileToCrm: boolean) =>
+    planNewAttributes(questions, choices.items, canBuild && !isLocked && fileToCrm && choices.objectId !== undefined);
+  const readTargets = () => {
+    setReadingTargets(true);
+    return data.bookingPages.attributes(slug, page.id).then(
+      (read) => {
+        setReadingTargets(false);
+        setTargets(read);
+      },
+      () => setReadingTargets(false),
+    );
+  };
+  // The questions' problem a Save found (a missing label, a choice question with no choices, a Show when that reads a
+  // later question, a filing that no longer fits), as a form's publish finds it: shown on its question until fixed.
+  const [problemAsked, setProblemAsked] = useState(false);
+  const questionProblem = useMemo(
+    () =>
+      questionsProblem(
+        draft.questions,
+        new Map(
+          choices.items.map((item) => [
+            item.attributeId,
+            {
+              id: item.attributeId,
+              title: item.title,
+              type: item.type,
+              objectName: choices.objectName ?? '',
+              // A filing the page already had isn't this writer's choice: the server keeps it as it is.
+              canWrite:
+                item.canWrite || page.questions.some((question) => question.filedOn?.attributeId === item.attributeId),
+            },
+          ]),
+        ),
+      ),
+    [draft.questions, choices, page.questions],
+  );
+  const shownProblem =
+    problemAsked && questionProblem?.questionId !== undefined
+      ? { questionId: questionProblem.questionId, message: questionProblem.message }
+      : undefined;
+  const liveQuestionIds = useMemo(() => new Set(page.questions.map((question) => question.id)), [page.questions]);
+  // Attributes Save made whose page save hasn't landed yet: the next save that does offers their Undo.
+  const madePending = useRef<readonly MadeAttribute[]>([]);
+  // The questions as last saved, for Undo: it unfiles from what the page holds now, never from a copy taken earlier.
+  const savedQuestions = useRef(page.questions);
+  useEffect(() => {
+    savedQuestions.current = page.questions;
+  }, [page.questions]);
+  // Save with the planned attributes made first: each question is filed onto its own, then the page saves, and a
+  // toast offers Undo (unfile them, archive the attributes). One that couldn't be made leaves its question unfiled,
+  // and a toast says so.
+  const saveWithAttributes = (patch: Partial<BookingPageSettings>) => {
+    const objectId = choices.objectId;
+    const plans = patch.questions === undefined ? [] : plannedFor(patch.questions, draft.fileToCrm);
+    if (objectId === undefined || patch.questions === undefined || plans.length === 0) {
+      save(patch);
+      return;
+    }
+    const asked = patch.questions;
+    setSaving(true);
+    setFailure(undefined);
+    createPlannedAttributes(data, slug, objectId, plans).then(
+      (made) => {
+        setSaving(false);
+        const questions = made.reduce(
+          (list, each) => changeQuestion(list, each.questionId, { filedOn: each.attributeId }),
+          asked,
+        );
+        setDraft((current) => ({
+          ...current,
+          questions: made.reduce(
+            (list, each) => changeQuestion(list, each.questionId, { filedOn: each.attributeId }),
+            current.questions,
+          ),
+        }));
+        const missed = plans.filter((plan) => !made.some((each) => each.questionId === plan.questionId));
+        if (missed.length > 0) {
+          toasts.toast({
+            tone: 'danger',
+            message: questionStrings.notCreated(
+              missed.map((plan) => plan.title),
+              choices.objectName ?? '',
+            ),
+          });
+        }
+        madePending.current = [...madePending.current, ...made];
+        save({ ...patch, questions });
+        if (made.length > 0) void readTargets();
+      },
+      () => {
+        setSaving(false);
+        save(patch);
+      },
+    );
+  };
+  // Undo for attributes Save made: the questions go back to unfiled, in the draft and in what the page holds now,
+  // saved at once, and the attributes are archived. A refused save puts the draft's filings back.
+  const undoAttributes = (made: readonly MadeAttribute[]) => {
+    const unfile = (list: Questions) => [
+      ...made.reduce((each, one) => changeQuestion(each, one.questionId, { filedOn: null }), list),
+    ];
+    const refile = (list: Questions) => [
+      ...made.reduce((each, one) => changeQuestion(each, one.questionId, { filedOn: one.attributeId }), list),
+    ];
+    setDraft((current) => ({ ...current, questions: unfile(current.questions) }));
+    data.bookingPages.update(slug, page.id, { questions: unfile(savedQuestions.current) }).then(
+      (next) => {
+        setPage(next);
+        setDraft((current) => draftAfterSave(settingsOf(next), current));
+        archiveMadeAttributes(data, slug, made).then(readTargets, () =>
+          toasts.toast({ tone: 'danger', message: strings.somethingWrong }),
+        );
+      },
+      () => {
+        setDraft((current) => ({ ...current, questions: refile(current.questions) }));
+        toasts.toast({ tone: 'danger', message: questionStrings.undoFailed });
+      },
+    );
+  };
+
   const save = (patch: Partial<BookingPageSettings>) => {
     if (isSaving || Object.keys(patch).length === 0) return;
     setSaving(true);
@@ -369,6 +517,16 @@ export function PageEditor({
         setChipsError(undefined);
         // Saved is said for the groups' save; Pause and Resume say theirs in a toast with Undo.
         const { status } = patch;
+        // The attributes this save filed onto, made just before it (or before an earlier save that failed).
+        const made = patch.questions === undefined ? [] : madePending.current;
+        if (made.length > 0) {
+          madePending.current = [];
+          toasts.toast({
+            tone: 'success',
+            message: questionStrings.createdAttributes(made.length, choices.objectName ?? ''),
+            action: { label: questionStrings.undo, onAction: () => undoAttributes(made) },
+          });
+        }
         if (status === undefined) setJustSaved(true);
         else
           toasts.toast({
@@ -452,6 +610,7 @@ export function PageEditor({
       draft.durations.length === 0 ||
       isWhereMissing ||
       chipsError !== undefined,
+    questions: refusedTab === 'questions' || shownProblem !== undefined,
     hosts: refusedTab === 'hosts',
     hours: refusedTab === 'hours' || (isWeekDirty && !week.isValid),
     limits: refusedTab === 'limits',
@@ -459,6 +618,7 @@ export function PageEditor({
   const tabLabel: Readonly<Record<PageTab, string>> = {
     page: strings.page,
     meeting: strings.meeting,
+    questions: questionStrings.questions,
     hosts: strings.hostsTab,
     hours: strings.hours,
     limits: strings.limits,
@@ -602,7 +762,14 @@ export function PageEditor({
                                 : strings.fixPage,
                             })}
                         onSave={() => {
-                          if (isPageDirty) save(dirty);
+                          // A question that would break the public page waits, shown on its tab, as a form's publish does.
+                          if (isPageDirty && dirty.questions !== undefined && questionProblem !== undefined) {
+                            setProblemAsked(true);
+                            onTabChange('questions');
+                            return;
+                          }
+                          setProblemAsked(false);
+                          if (isPageDirty) saveWithAttributes(dirty);
                           if (isWeekDirty) week.save();
                         }}
                         onDiscard={() => {
@@ -887,6 +1054,54 @@ export function PageEditor({
                       />
                     </>
                   )}
+                  {shown === 'questions' && (
+                    <>
+                      {/* The same switch a form's Settings has, in its words: it applies to every booking. */}
+                      <Card title={strings.crmTitle}>
+                        <Switch
+                          label={strings.addToCrm}
+                          description={strings.addToCrmLine}
+                          isSelected={draft.fileToCrm}
+                          isReadOnly={isLocked}
+                          onChange={(fileToCrm) => change({ fileToCrm })}
+                        />
+                      </Card>
+                      {targets === undefined && !isLocked && (
+                        <Callout
+                          tone="danger"
+                          title={strings.targetsFailedTitle}
+                          actions={
+                            <Button onPress={() => void readTargets()} isPending={isReadingTargets}>
+                              {strings.tryAgain}
+                            </Button>
+                          }
+                        >
+                          {strings.targetsFailed}
+                        </Callout>
+                      )}
+                      {draft.questions.length > 0 && <Callout tone="info">{strings.chatAsksNone}</Callout>}
+                      <QuestionsSection
+                        questions={draft.questions}
+                        onChange={(update) => {
+                          setJustSaved(false);
+                          setDraft((current) => ({ ...current, questions: [...update(current.questions)] }));
+                        }}
+                        max={QUESTIONS_MAX}
+                        holder={questionStrings.pageHolder}
+                        keptWith="booking"
+                        attributes={choices.items}
+                        {...(choices.objectName === undefined ? {} : { objectName: choices.objectName })}
+                        isFilingOff={!draft.fileToCrm}
+                        // Saved questions keep their keys (answers already stored under them); new ones follow their label.
+                        liveIds={liveQuestionIds}
+                        newId={() => crypto.randomUUID()}
+                        toasts={toasts}
+                        canCreate={canBuild}
+                        isReadOnly={isLocked}
+                        {...(shownProblem === undefined ? {} : { problem: shownProblem })}
+                      />
+                    </>
+                  )}
                   {isTeam && shown === 'hosts' && (
                     <>
                       <HostsCard
@@ -1097,6 +1312,7 @@ export interface PageEditorPendingProps {
 const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
   page: [strings.details, strings.sharing, socialsStrings.title],
   meeting: [strings.meeting, strings.location, strings.calendarSection],
+  questions: [strings.crmTitle, questionStrings.questions],
   hosts: [rotationStrings.hosts, routingStrings.routing],
   hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff],
   limits: [strings.limitGroups.buffers, strings.limitGroups.window, strings.limitGroups.pace],
@@ -1113,6 +1329,7 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
   const label: Readonly<Record<PageTab, string>> = {
     page: strings.page,
     meeting: strings.meeting,
+    questions: questionStrings.questions,
     hosts: strings.hostsTab,
     hours: strings.hours,
     limits: strings.limits,

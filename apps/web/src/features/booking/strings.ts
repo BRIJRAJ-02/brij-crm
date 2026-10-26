@@ -115,6 +115,16 @@ export const strings = {
   /** The three views, each named as the page's own switch names it. */
   opensInViews: { month: 'Month', list: 'List', chat: 'Book by chat' },
   meeting: 'Meeting',
+  /** The Questions tab's switch (spec 0057, AC-5708), in a form's words: it applies to every booking. */
+  crmTitle: 'CRM',
+  addToCrm: 'Add each booking to the CRM',
+  addToCrmLine:
+    'Every booking finds or adds the person who booked, and their company, and files their answers on them. Off, the answers stay with the booking.',
+  targetsFailedTitle: 'Where answers go didn’t load',
+  targetsFailed: 'People’s fields couldn’t be read, so questions can’t be filed onto them right now.',
+  tryAgain: 'Try again',
+  /** Book by chat (spec 0042) doesn't ask the page's questions yet (spec 0057 follow up). */
+  chatAsksNone: 'Visitors who book by chat aren’t asked these questions yet.',
   durations: 'Durations',
   location: 'Location',
   locations: { video: 'Video', address: 'In person', phone: 'Phone', custom: 'Somewhere else' },

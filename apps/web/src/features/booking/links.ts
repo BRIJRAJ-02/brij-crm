@@ -9,7 +9,7 @@ export const linksHref = (slug: string) => `/w/${slug}/captures/links`;
 export const newLinkOnlyPageHref = (slug: string) => `/w/${slug}/captures/links?new=link-only`;
 
 /** The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only. */
-export const PAGE_TABS = ['page', 'meeting', 'hosts', 'hours', 'limits'] as const;
+export const PAGE_TABS = ['page', 'meeting', 'questions', 'hosts', 'hours', 'limits'] as const;
 /** One of the editor's tabs, as `?tab=` holds it. */
 export type PageTab = (typeof PAGE_TABS)[number];
 
