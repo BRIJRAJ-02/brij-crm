@@ -15,7 +15,7 @@ import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
 import { submitForm } from '../forms/public.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { updateMyMemberProfile } from '../members/profile.ts';
-import { readProfileItems, saveProfileItem } from '../profile/items.ts';
+import { archiveProfileItem, importProfileLinks, readProfileItems, saveProfileItem } from '../profile/items.ts';
 import { testScope } from '../testing.ts';
 import { createBookingPage } from './pages.ts';
 import { readLinkPage } from './public.ts';
@@ -175,6 +175,72 @@ describe('a link on a link page', () => {
         ['Sneaky', true],
       ]),
     );
+  });
+});
+
+describe('the other ways a link reaches a page (security review)', () => {
+  it('keeps an imported row naming another workspace’s page behind, and never restores one to the page', async () => {
+    const { acme, home } = await setup();
+    const [foreignUrl = ''] = foreign(home);
+    const imported = await importProfileLinks(
+      acme.scope,
+      {
+        id: newId(),
+        source: 'https://linktr.ee/ada',
+        rows: [
+          { title: 'Theirs', url: foreignUrl },
+          { title: 'Mine', url: 'https://ada.dev' },
+        ],
+        skipped: [],
+      },
+      { publicOrigins: origins },
+    );
+    expect(imported.import.made).toBe(1);
+    expect(imported.import.skipped).toEqual([{ title: 'Theirs', url: foreignUrl, reason: 'not-in-workspace' }]);
+    // A link that came to name another workspace's page while archived stays archived.
+    const held = await saveProfileItem(
+      acme.scope,
+      { id: newId(), block: { kind: 'link', title: 'Later', url: 'https://ada.dev/later' } },
+      { publicOrigins: origins },
+    );
+    await archiveProfileItem(acme.scope, { id: held.id, archived: true }, { publicOrigins: origins });
+    await testQuery(ownerUrl, `update auth.profile_items set data = $2 where id = $1`, [
+      held.id,
+      JSON.stringify({ title: 'Later', url: foreignUrl, hue: 'blue' }),
+    ]);
+    expect(
+      await refusalOf(archiveProfileItem(acme.scope, { id: held.id, archived: false }, { publicOrigins: origins })),
+    ).toEqual({ code: 'CONFIG_INVALID', message: REFUSAL });
+  });
+
+  it('never cuts the public page short when a block among the first page is skipped', async () => {
+    const { acme, home } = await setup();
+    const userId = acme.scope.access.principal.kind === 'member' ? (acme.scope.access.principal.userId ?? '') : '';
+    // Clear the page, then 25 links with one stray among the first twenty.
+    await testQuery(ownerUrl, `delete from auth.profile_items where user_id = $1 and workspace_id = $2`, [
+      userId,
+      acme.workspaceId,
+    ]);
+    for (let n = 0; n < 25; n += 1) {
+      const url = n === 3 ? (foreign(home)[0] ?? '') : `https://ada.dev/${String(n)}`;
+      await testQuery(
+        ownerUrl,
+        `insert into auth.profile_items (id, user_id, workspace_id, kind, position, data) values ($1, $2, $3, 'link', $4, $5)`,
+        [newId(), userId, acme.workspaceId, n, JSON.stringify({ title: `Link ${String(n)}`, url, hue: 'blue' })],
+      );
+    }
+    const first = await readLinkPage(await enterLinkPage({ db }, acme.handle, { max: 21, publicOrigins: origins }));
+    expect(first.items).toHaveLength(19);
+    expect(first.next).toBeDefined();
+    const [position, id] = (first.next ?? '').split('.');
+    const rest = await readLinkPage(
+      await enterLinkPage({ db }, acme.handle, {
+        max: 21,
+        publicOrigins: origins,
+        after: { position: Number(position), id: id ?? '' },
+      }),
+    );
+    expect(rest.items).toHaveLength(5);
   });
 });
 

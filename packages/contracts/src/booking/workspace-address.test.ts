@@ -24,12 +24,20 @@ describe('parseWorkspaceAddress (spec 0056, AC-5610)', () => {
     });
   });
 
-  it('is nothing for another site, a look alike origin, another scheme or port, and a path that is no page', () => {
+  it('reads http, another port and a trailing dot as the same host, since ours send them on to https', () => {
+    for (const address of [
+      'http://timefix.com/b/abc123',
+      'https://timefix.com:8443/b/abc123',
+      'https://TIMEFIX.com./b/abc123',
+    ]) {
+      expect(parseWorkspaceAddress(address, origins), address).toEqual({ kind: 'booking_key', key: 'abc123' });
+    }
+  });
+
+  it('is nothing for another site, a look alike host, and a path that is no page', () => {
     for (const address of [
       'https://example.com/b/abc123',
       'https://timefix.com.evil.dev/b/abc123',
-      'http://timefix.com/b/abc123',
-      'https://timefix.com:8443/b/abc123',
       'https://timefix.com/sign-in',
       'https://timefix.com/w/acme/home',
       'https://timefix.com/',

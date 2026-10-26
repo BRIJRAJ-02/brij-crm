@@ -360,7 +360,14 @@ export function createApp({
   // The public booking pages may be served from their own origin (BOOKING_PUBLIC_ORIGIN): their writes come from there.
   const bookingOrigin = new URL(env.BOOKING_PUBLIC_ORIGIN ?? env.APP_URL).origin;
   // Our own public origins: an address on one that names a booking page, form or handle stays in one workspace.
-  const publicOrigins = [...new Set([new URL(env.APP_URL).origin, formsOrigin, bookingOrigin])];
+  const publicOrigins = [
+    ...new Set([
+      new URL(env.APP_URL).origin,
+      formsOrigin,
+      bookingOrigin,
+      ...(env.PUBLIC_ALIAS_ORIGINS ?? []).map((origin) => new URL(origin).origin),
+    ]),
+  ];
   // The app and API share one origin, so a write from anywhere else is refused.
   app.use('*', async (c, next) => {
     if (SAFE_METHODS.has(c.req.method)) return next();

@@ -1011,6 +1011,11 @@ export async function enterLinkPage(
   readonly rows: readonly LinkPageRow[];
   readonly pages: readonly OwnedPageEntry[];
   readonly forms: readonly OwnedFormEntry[];
+  /**
+   * The blocks among `rows` a visitor must not be shown (spec 0056, AC-5607, AC-5612). `rows` stays whole, so the
+   * page's cursor and whether there is more are worked out over what was read, never cut short by a skipped block.
+   */
+  readonly skipped: ReadonlySet<string>;
 }> {
   // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
   const owner = await handleOwner(deps.db, handle, { withSocials: true });
@@ -1022,12 +1027,14 @@ export async function enterLinkPage(
     ),
   );
   const rows = await withinWorkspace(deps, owner, found.rows, query.publicOrigins ?? []);
+  const shown = new Set(rows.map((row) => row.id));
+  const skipped = new Set(found.rows.flatMap((row) => (shown.has(row.id) ? [] : [row.id])));
   const pageIds = rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
   const pages = (await enterOwnedPages(deps, owner.userId, owner.workspaceId, pageIds)).filter((entry) => entry.isLive);
   // A form block's form, the same way and under the same rule: only one a visitor may open now (AC-5214).
   const formIds = rows.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : []));
   const forms = (await enterOwnedForms(deps, owner.userId, owner.workspaceId, formIds)).filter((entry) => entry.isLive);
-  return { owner, rows, pages, forms };
+  return { owner, rows: found.rows, pages, forms, skipped };
 }
 
 /**

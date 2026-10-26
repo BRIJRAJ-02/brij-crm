@@ -371,6 +371,9 @@ export const ApiEnv = z
     // The operator console (spec 0047): its super admins, and the marketing sites whose beacon is kept.
     OPERATOR_EMAILS: optional(operatorEmails),
     SITE_ORIGINS: optional(origins),
+    // Other hosts that serve or forward to our public pages (a second domain, a host alias), so a link or a redirect
+    // through one is checked like our own (spec 0056, AC-5610). Comma separated origins.
+    PUBLIC_ALIAS_ORIGINS: optional(origins),
     // Mail: Resend when its key is set, else Mailpit (local only).
     RESEND_API_KEY: optional(z.string()),
     MAIL_FROM: optional(sender),

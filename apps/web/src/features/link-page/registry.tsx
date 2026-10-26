@@ -199,7 +199,7 @@ function shownAddress(url: string): string {
   return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
 }
 
-/** How a block's row reads; a booking page names its workspace only when the person's pages come from several. */
+/** How a block's row reads; a link to one of our pages outside this workspace leads with saying so, and is off. */
 export function rowWords(item: ProfileItem): BlockRowWords {
   if (item.kind === 'link') {
     return item.outsideWorkspace === true

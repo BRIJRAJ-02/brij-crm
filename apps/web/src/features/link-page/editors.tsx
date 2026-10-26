@@ -246,7 +246,12 @@ export function LinkEditor({
             setUrl(next);
             if (problems.url !== undefined) setProblems({ ...problems, url: undefined });
           }}
-          {...(problems.url === undefined ? {} : { error: problems.url })}
+          {...(problems.url !== undefined
+            ? { error: problems.url }
+            : editing?.outsideWorkspace === true && url === editing.url
+              ? // Said at once, before a save the server would refuse (spec 0056, AC-5612).
+                { error: strings.notInWorkspaceFix }
+              : {})}
         />
         <Field
           label={strings.linkTitle}

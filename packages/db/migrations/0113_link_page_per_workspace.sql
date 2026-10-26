@@ -27,7 +27,7 @@
 -- (ties: the earliest membership; none: the earliest membership), a membership that is still active ahead of one
 -- that is not. Their page and form items from any other workspace are deleted with their presses, and the line
 -- counted in the deploy log is the only trace. Every other workspace starts with no handle and an empty page. Every
--- step is guarded, so the migration can run twice. Postgres 17 compatible. Any change to these roles or functions goes
+-- data step is guarded on `workspace_id is null`, so the backfill run again changes nothing. Postgres 17 compatible. Any change to these roles or functions goes
 -- through security-access-reviewer.
 set local lock_timeout = '5s';
 --> statement-breakpoint
@@ -42,6 +42,10 @@ alter table "auth"."profile_view_days" add column if not exists "workspace_id" u
 -- Items: their workspace is the page's, so every kind carries one. A page or form item already does.
 alter table "auth"."profile_items" alter column "workspace_id" drop not null;
 --> statement-breakpoint
+-- 0104's rule (a workspace only beside a page or a form) would refuse the backfill's first link: it goes before the
+-- backfill, and the rule that replaces it is added once every row has its workspace.
+alter table "auth"."profile_items" drop constraint if exists "profile_items_target";
+--> statement-breakpoint
 -- The backfill, as the owner and past row level security: a role it would filter fails here rather than backfilling
 -- nothing, like 0067, 0082, 0086 and 0098.
 set local row_security = off;
@@ -51,6 +55,7 @@ declare
   moved integer;
   gone_items integer := 0;
   gone_people integer := 0;
+  gone integer;
 begin
   create temporary table if not exists link_page_home (user_id uuid primary key, workspace_id uuid) on commit drop;
   insert into link_page_home (user_id, workspace_id)
@@ -98,16 +103,19 @@ begin
   -- A person with no membership at all has no workspace to hold a page: their rows go (the account never had a
   -- workspace, so it never had a link page worth keeping).
   delete from auth.profile_items where workspace_id is null;
+  get diagnostics gone = row_count;
+  gone_people := gone_people + gone;
   delete from auth.profile_views where workspace_id is null;
   delete from auth.profile_view_days where workspace_id is null;
   delete from auth.public_profiles where workspace_id is null;
   delete from auth.public_handles where workspace_id is null;
-  get diagnostics gone_people = row_count;
+  get diagnostics gone = row_count;
+  gone_people := gone_people + gone;
 
   -- The places close up where a deleted item left a gap.
   update auth.profile_items i set position = (r.n - 1)::smallint
   from (
-    select p.id, row_number() over (partition by p.user_id order by p.position, p.id) as n
+    select p.id, row_number() over (partition by p.user_id, p.workspace_id order by p.position, p.id) as n
     from auth.profile_items p where p.archived_at is null
   ) r
   where i.id = r.id and i.position is distinct from (r.n - 1)::smallint;
@@ -496,7 +504,8 @@ begin
 end;
 $$;
 --> statement-breakpoint
--- The current handle, bio and look of each person named in ONE workspace, or no row for one with no handle there.
+-- The current handle, bio and look of each person named in ONE workspace, or no row for one with no handle there or
+-- who is no longer an active member of it (their pages then fall back to /b/<key>).
 create function crm_public_profiles_of(owners uuid[], workspace uuid)
   returns table (user_id uuid, handle text, bio text, theme jsonb, indexable boolean)
   language sql
@@ -507,7 +516,8 @@ begin atomic
   select p.user_id, p.handle, p.bio, p.theme, p.indexable
   from auth.public_profiles p
   where p.user_id = any (crm_public_profiles_of.owners)
-    and p.workspace_id = crm_public_profiles_of.workspace;
+    and p.workspace_id = crm_public_profiles_of.workspace
+    and public.crm_workspace_member(p.user_id, p.workspace_id);
 end;
 --> statement-breakpoint
 -- The membership a handle names, by its current or an old handle: the person and workspace, current handle, bio,

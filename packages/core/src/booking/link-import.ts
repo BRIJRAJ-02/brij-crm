@@ -37,7 +37,8 @@ export function isImportableHost(url: URL): boolean {
 }
 
 /** Why a row the page had is not a link we can make. */
-export type ImportSkip = 'no-address' | 'not-web' | 'the-page-itself' | 'repeated' | 'past-limit' | 'no-title';
+export type ImportSkip =
+  'no-address' | 'not-web' | 'the-page-itself' | 'repeated' | 'past-limit' | 'no-title' | 'not-in-workspace';
 
 /** A row we can make: a title and where it goes. */
 export interface ImportedRow {

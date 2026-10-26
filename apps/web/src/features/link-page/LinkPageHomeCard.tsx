@@ -115,7 +115,13 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
         </p>
         <p>{strings.scan}</p>
       </QrCode>
-      <ShareLinkPageModal address={address} handle={handle} isOpen={isShowing} onClose={() => setShowing(false)} />
+      <ShareLinkPageModal
+        address={address}
+        handle={handle}
+        workspaceName={read.profile.workspaceName}
+        isOpen={isShowing}
+        onClose={() => setShowing(false)}
+      />
     </Card>
   );
 }

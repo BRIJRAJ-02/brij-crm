@@ -473,6 +473,8 @@ export async function readLinkPage(
     readonly rows: readonly LinkPageRow[];
     readonly pages: readonly OwnedPageEntry[];
     readonly forms: readonly OwnedFormEntry[];
+    /** Blocks read but never shown (spec 0056): another workspace's, or a link that has left this one. */
+    readonly skipped?: ReadonlySet<string>;
   },
   query: { readonly search?: string } = {},
 ): Promise<PublicProfile> {
@@ -533,6 +535,7 @@ export async function readLinkPage(
   const formWorkspaces = new Map(found.forms.map((entry) => [entry.formId, entry.scope.workspaceId]));
   const formKeys = new Map(found.forms.map((entry) => [entry.formId, entry.key]));
   const items = listed.flatMap((row) => {
+    if (found.skipped?.has(row.id) === true) return [];
     if (row.kind === 'page' && (row.page_id === null || where.get(row.page_id) !== row.workspace_id)) return [];
     if (row.kind === 'form' && (row.form_id === null || formWorkspaces.get(row.form_id) !== row.workspace_id)) {
       return [];

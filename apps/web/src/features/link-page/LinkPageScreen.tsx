@@ -150,7 +150,7 @@ export function LinkPageScreen({ linkPage, slug, profile }: LinkPageScreenProps)
       page={{
         topBar: (
           <TopBar title={strings.title} icon="id-card">
-            {handle === undefined ? undefined : <HeaderActions handle={handle} />}
+            {handle === undefined ? undefined : <HeaderActions handle={handle} workspaceName={profile.workspaceName} />}
           </TopBar>
         ),
         body:
@@ -179,7 +179,13 @@ export function LinkPageScreen({ linkPage, slug, profile }: LinkPageScreenProps)
  * The header's actions, as the owner's design draws them: the page's address as a pill that opens it, and Share,
  * which opens the one Share modal (the QR, the address and the two ways to go on; Home's card opens the same one).
  */
-function HeaderActions({ handle }: { readonly handle: string }) {
+function HeaderActions({
+  handle,
+  workspaceName,
+}: {
+  readonly handle: string;
+  readonly workspaceName?: string | undefined;
+}) {
   const address = publicProfileUrl(handle);
   const shown = address.replace(/^https?:\/\//, '');
   const [isSharing, setSharing] = useState(false);
@@ -198,7 +204,13 @@ function HeaderActions({ handle }: { readonly handle: string }) {
       <Button icon="upload" onPress={() => setSharing(true)}>
         {strings.share}
       </Button>
-      <ShareLinkPageModal address={address} handle={handle} isOpen={isSharing} onClose={() => setSharing(false)} />
+      <ShareLinkPageModal
+        address={address}
+        handle={handle}
+        workspaceName={workspaceName}
+        isOpen={isSharing}
+        onClose={() => setSharing(false)}
+      />
     </>
   );
 }

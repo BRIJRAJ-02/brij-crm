@@ -16,13 +16,15 @@ export interface ShareLinkPageModalProps {
   readonly address: string;
   /** The person's handle, which names the saved file. */
   readonly handle: string;
+  /** The workspace the page belongs to, said once above the code, so a badge is printed for the right one (AC-5617). */
+  readonly workspaceName?: string | undefined;
   /** Kept mounted while it closes, so the Modal's own exit plays. */
   readonly isOpen: boolean;
   readonly onClose: () => void;
 }
 
 /** Share your link page: the QR code, the address to copy, Download QR code and Open page. */
-export function ShareLinkPageModal({ address, handle, isOpen, onClose }: ShareLinkPageModalProps) {
+export function ShareLinkPageModal({ address, handle, workspaceName, isOpen, onClose }: ShareLinkPageModalProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const codeRef = useRef<SVGSVGElement>(null);
   const [isSaving, setSaving] = useState(false);
@@ -56,7 +58,7 @@ export function ShareLinkPageModal({ address, handle, isOpen, onClose }: ShareLi
       }
     >
       <QrCode ref={codeRef} value={address} label={strings.qrLabel} size="fill" />
-      <p>{strings.scan}</p>
+      <p>{workspaceName === undefined ? strings.scan : `${strings.inWorkspace(workspaceName)} ${strings.scan}`}</p>
       <Field label={strings.address} isLabelHidden variant="copy" icon="link" value={shown} copyLabel={strings.copy} />
     </Modal>
   );

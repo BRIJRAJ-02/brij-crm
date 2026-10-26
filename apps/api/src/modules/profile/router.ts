@@ -132,12 +132,16 @@ export const profileRouter = member.profile.router({
     if (!fetched.ok) throw apiError('CONFIG_INVALID', IMPORT_UNREAD);
     const page = readImportedPage(new TextDecoder().decode(fetched.bytes), source);
     return commitWrite(context, { mutationId: input.mutationId }, () =>
-      importProfileLinks(context.scope, {
-        id: input.id,
-        source: source.href,
-        rows: page.rows,
-        skipped: page.skipped,
-      }),
+      importProfileLinks(
+        context.scope,
+        {
+          id: input.id,
+          source: source.href,
+          rows: page.rows,
+          skipped: page.skipped,
+        },
+        { publicOrigins: context.publicOrigins },
+      ),
     );
   }),
   saveItem: member.profile.saveItem.handler(({ context, input }) =>

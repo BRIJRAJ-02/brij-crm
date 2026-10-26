@@ -54,6 +54,28 @@ async function inWorkspace(name: string, workspace: string, userId: string) {
 const page = (scope: ReturnType<typeof testScope>, title: string) =>
   createBookingPage(scope, { id: newId(), title, timeZone: 'Europe/London', settings: {} });
 
+/** The migration's statements before its backfill, cut out of the file, each run as it stands. */
+function beforeBackfill(): string {
+  const text = readFileSync(
+    new URL('../../../db/migrations/0113_link_page_per_workspace.sql', import.meta.url),
+    'utf8',
+  );
+  const from = text.indexOf("set local lock_timeout = '5s';");
+  const to = text.indexOf('do $$\ndeclare\n  moved integer;');
+  return text
+    .slice(from, to)
+    .split('--> statement-breakpoint')
+    .map((each) =>
+      each
+        .replace(/^\s*--.*$/gm, '')
+        .trim()
+        .replace(/;$/, ''),
+    )
+    .filter((each) => each !== '' && !each.startsWith('set local lock_timeout'))
+    .map((each) => `execute $pre$${each}$pre$;`)
+    .join('\n  ');
+}
+
 /** The migration's backfill block, cut out of the file: its declarations and body, to run nested. */
 function backfillBlock(): string {
   const text = readFileSync(
@@ -104,7 +126,10 @@ begin
   alter table auth.profile_views alter column workspace_id drop not null;
   alter table auth.profile_view_days drop constraint profile_view_days_pkey;
   alter table auth.profile_view_days alter column workspace_id drop not null;
+  -- The rule 0104 left, as a database before this migration holds it: the migration's own statements drop it.
   alter table auth.profile_items drop constraint profile_items_target;
+  alter table auth.profile_items add constraint profile_items_target
+    check ((workspace_id is null) = (page_id is null and form_id is null)) not valid;
   delete from auth.profile_items where user_id = '${userId}';
   delete from auth.public_profiles where user_id = '${userId}';
   delete from auth.public_handles where user_id = '${userId}';
@@ -117,6 +142,7 @@ begin
     ('${newId()}', '${userId}', 'page', 3, '{}', '${busy.workspaceId}', '${one.id}');
   insert into auth.profile_views (user_id, day, visitor, views) values ('${userId}', '${day}', '${visitor}', 2);
   insert into auth.profile_view_days (user_id, day, views, visitors) values ('${userId}', '${day}', 2, 1);
+  ${beforeBackfill()}
   ${backfillBlock()};
   select json_build_object(
     'handles', (select json_agg(workspace_id::text) from auth.public_handles where user_id = '${userId}'),

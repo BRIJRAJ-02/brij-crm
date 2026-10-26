@@ -618,6 +618,20 @@ export async function archiveProfileItem(
 ): Promise<ProfileItems> {
   const owner = ownerOf(scope);
   const found = await inWorkspace(scope, async (tx) => {
+    // A link restored to the page is checked as a new one is (spec 0056, AC-5610): one that now names a page outside
+    // this workspace stays archived.
+    if (!input.archived) {
+      const origins = options.publicOrigins ?? [];
+      const row = (await readRows(tx, owner, scope.workspaceId, true)).find((each) => each.id === input.id);
+      const url =
+        row?.kind === 'link' && typeof row.data === 'object' && row.data !== null && 'url' in row.data
+          ? row.data.url
+          : undefined;
+      if (typeof url === 'string' && origins.length > 0) {
+        const problem = await workspaceAddressProblem(tx, scope.workspaceId, url, origins);
+        if (problem !== undefined) throw refuse('CONFIG_INVALID', problem);
+      }
+    }
     try {
       const answer = await tx.execute<{ found: boolean }>(
         sql`select crm_archive_profile_item(${owner}::uuid, ${scope.workspaceId}::uuid, ${input.id}::uuid, ${input.archived}) as found`,
@@ -733,14 +747,34 @@ export async function importProfileLinks(
     readonly rows: readonly { readonly title: string; readonly url: string }[];
     readonly skipped: readonly SkippedImportRow[];
   },
+  options: AddressOptions = {},
 ): Promise<ProfileLinkImportResult> {
   const owner = ownerOf(scope);
-  const blocks = input.rows.map((row, index) => ({
+  // A row naming one of our own pages outside this workspace never lands (spec 0056, AC-5610): it stays behind,
+  // shown with why, like every other row the import could not make.
+  const origins = options.publicOrigins ?? [];
+  const foreign =
+    origins.length === 0
+      ? new Set<number>()
+      : await inWorkspace(scope, async (tx) => {
+          const found = new Set<number>();
+          for (const [index, row] of input.rows.entries()) {
+            if ((await workspaceAddressProblem(tx, scope.workspaceId, row.url, origins)) !== undefined)
+              found.add(index);
+          }
+          return found;
+        });
+  const kept = input.rows.filter((_, index) => !foreign.has(index));
+  const left = input.rows.flatMap((row, index) =>
+    foreign.has(index) ? [{ title: row.title, url: row.url, reason: 'not-in-workspace' as const }] : [],
+  );
+  const blocks = kept.map((row, index) => ({
     id: newId(),
     // The hue ring runs over the import itself, so one import's rows read as a set rather than all one colour.
     data: { title: row.title, url: row.url, hue: nextHue(index) },
   }));
-  const skipped = input.skipped.map((row) => SkippedImportRow.parse(row));
+  // At most 100 kept, as the row's own check allows.
+  const skipped = [...left, ...input.skipped].slice(0, 100).map((row) => SkippedImportRow.parse(row));
   const made = await inWorkspace(scope, async (tx) => {
     try {
       const answered = await tx.execute<{ existed: boolean; made: number }>(
