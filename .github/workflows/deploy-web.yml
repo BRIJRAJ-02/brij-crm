@@ -66,7 +66,17 @@ jobs:
         run: |
           set -euo pipefail
           # These must be green on the commit. Nothing else may stand in for them.
-          REQUIRED=("check" "flows (1/4)" "flows (2/4)" "flows (3/4)" "flows (4/4)")
+          #
+          # The flows were here too, and a deploy took about twenty minutes (the owner, 26 October 2026). They are
+          # the slowest job by far, and four runs in one evening died installing a browser without ever reaching a
+          # test, so a flaky apt mirror stood between a fix and production. They still run on every push; they
+          # just no longer hold the deploy. `check` and `ui` run side by side and settle in about four minutes,
+          # which is what shipping a change costs now.
+          #
+          # What that trades: a flow failure is found after the deploy rather than before, and the answer is
+          # `vercel rollback`, which takes seconds. That is the right trade while the product has no customers to
+          # protect. Put the flows back the moment it has them.
+          REQUIRED=("check" "ui")
           # These run only when the change touched packages/ui (`needs.changes` in ci.yml), so on any other change
           # they are skipped rather than green. Reading skipped as "not passed" meant the fast path declined every
           # time the library was untouched, which is most changes, so the path never once fired (26 October 2026).
@@ -76,24 +86,40 @@ jobs:
           if [ "$EVENT" = push ]; then
             sha="$PUSH_SHA"
             echo "sha=$sha" >> "$GITHUB_OUTPUT"
-            runs=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
-              -q '.check_runs[] | "\(.conclusion)\t\(.name)"')
-            # `|| true`: no line of a kind is an empty list, not a failure, and `set -e` would end the job.
-            passed=$(grep -E '^success\s' <<< "$runs" | cut -f2- | sort -u || true)
-            settled=$(grep -E '^(success|skipped)\s' <<< "$runs" | cut -f2- | sort -u || true)
-            for name in "${REQUIRED[@]}"; do
-              if ! grep -Fxq "$name" <<< "$passed"; then
-                echo "$sha hasn't passed \"$name\" yet, so main's own CI run will trigger the deploy."
+            # This run starts with the push, before a single job has finished, so it waits for the ones it needs
+            # rather than reading once and declining (the owner, 26 October 2026). Reading once meant the only
+            # thing that could ever trigger a deploy was CI finishing in full, flows and all, which is the twenty
+            # minutes this change exists to remove. It gives up after fifteen, which is longer than every job it
+            # waits on has ever taken; CI finishing is then the second route, as before.
+            deadline=$((SECONDS + 900))
+            while true; do
+              runs=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
+                -q '.check_runs[] | "\(.conclusion)\t\(.name)"' || true)
+              # `|| true`: no line of a kind is an empty list, not a failure, and `set -e` would end the job.
+              passed=$(grep -E '^success\s' <<< "$runs" | cut -f2- | sort -u || true)
+              settled=$(grep -E '^(success|skipped)\s' <<< "$runs" | cut -f2- | sort -u || true)
+              # A job that ended any other way is never going to pass on this commit, so stop waiting for it.
+              failed=$(grep -E '^(failure|cancelled|timed_out|action_required)\s' <<< "$runs" | cut -f2- | sort -u || true)
+              waiting=''
+              for name in "${REQUIRED[@]}"; do
+                if grep -Fxq "$name" <<< "$failed"; then
+                  echo "$sha failed \"$name\", so it doesn't deploy."
+                  echo "go=false" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                grep -Fxq "$name" <<< "$passed" || waiting="$waiting $name"
+              done
+              for name in "${IF_UI_CHANGED[@]}"; do
+                grep -Fxq "$name" <<< "$settled" || waiting="$waiting $name"
+              done
+              [ -z "$waiting" ] && break
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "$sha is still waiting on$waiting, so main's own CI run will trigger the deploy."
                 echo "go=false" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-            done
-            for name in "${IF_UI_CHANGED[@]}"; do
-              if ! grep -Fxq "$name" <<< "$settled"; then
-                echo "$sha hasn't settled \"$name\" yet, so main's own CI run will trigger the deploy."
-                echo "go=false" >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
+              echo "Waiting on$waiting"
+              sleep 20
             done
             echo "$sha already passed every required job, so it deploys now."
             echo "go=true" >> "$GITHUB_OUTPUT"
