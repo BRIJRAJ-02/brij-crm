@@ -200,11 +200,13 @@ describe('handle addresses (22 Oct 2026)', () => {
     const refused = await failure(() => save({ kind: 'link', title: 'Bad', url: 'javascript:alert(1)' }));
     expect(refused.code).toBe('INPUT_INVALID');
     const { items } = await m.client.profile.items({ workspace: m.slug });
-    expect(items.map((item) => item.kind)).toEqual(['page', 'page', 'link', 'heading']);
-    const [first, other] = items;
+    // One page block, not two: a link page belongs to one workspace now (spec 0056), so the page made in the
+    // second workspace is placed on that workspace's own link page and never on this one.
+    expect(items.map((item) => item.kind)).toEqual(['page', 'link', 'heading']);
+    const [first] = items;
     await m.client.profile.orderItems({
       workspace: m.slug,
-      ids: [site.id, heading.id, first?.id ?? '', other?.id ?? ''],
+      ids: [site.id, heading.id, first?.id ?? ''],
       mutationId: newId(),
     });
     // An order that misses a block is refused, and changes nothing.
@@ -223,7 +225,6 @@ describe('handle addresses (22 Oct 2026)', () => {
       ['link', 'LinkedIn'],
       ['heading', 'Meet me'],
       ['page', 'Quick chat'],
-      ['page', 'Brijraj'],
     ]);
     expect(body.items[0]).toMatchObject({ url: 'https://linkedin.com/in/ada', mark: 'linkedin' });
     // A search answers the matches flat.

@@ -729,7 +729,6 @@ describe('every definer asks for an active member of the workspace (spec 0056, A
       ['crm_save_profile_indexable($1, $2, $3)', [user, elsewhere, false]],
       // The share image moved onto the membership with the rest (spec 0055's picture, migration 0114).
       ['crm_save_profile_share_image($1, $2, null, null)', [user, elsewhere]],
-      ['crm_place_profile_page($1, $2, $3)', [user, elsewhere, newId()]],
     ];
     for (const [call, args] of writes) {
       await expect(testQuery(appUrl, `select ${call}`, args), call).rejects.toThrow(/PROFILE_NOT_MEMBER/);
@@ -743,6 +742,11 @@ describe('every definer asks for an active member of the workspace (spec 0056, A
     ]) {
       expect(await testQuery(appUrl, `select * from ${call}`, [user, elsewhere]), call).toEqual([]);
     }
+    // Placing a page is a side effect of making one, so for a workspace the person is not in it writes nothing
+    // rather than failing the write that caused it. It belongs in neither list above: it does not refuse, and it
+    // answers no rows, so what it must not do is leave anything behind.
+    await testQuery(appUrl, 'select crm_place_profile_page($1, $2, $3)', [user, elsewhere, newId()]);
+    expect(await testQuery(appUrl, 'select * from crm_profile_items($1, $2)', [user, elsewhere])).toEqual([]);
     // A person who is not the owner of this workspace's page reads nothing of it either.
     expect(await testQuery(appUrl, 'select * from crm_profile_items($1, $2)', [randomUUID(), ada.workspaceId])).toEqual(
       [],
