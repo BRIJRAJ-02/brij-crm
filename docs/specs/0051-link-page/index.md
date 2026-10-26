@@ -240,13 +240,13 @@ Tracer Bullet: slice 1 is one thin thread through every layer, and each slice af
 
 ## Follow-up
 
-Named, not built here:
+Named, not built here. Two of these have been built since, in spec 0055, and say so below:
 
 - **Themes and appearance**: a background, a button shape, a font pair and a colour, as Linktree's Appearance tab offers.
 - **A store**: anything that takes money on the page.
 - **Mailing list and newsletter items**: an email capture block that feeds a list or an outside provider.
 - **Remember who you met**: the event feature Anish described, where a visitor adds a photo and a note after meeting someone and both sides keep it. It needs its own spec: it writes on the visitor's side, which nothing on this page does today.
-- **Favicons for links**: fetched once by the api, stored in R2 (#32) and served from our own origin, so a link to a site with no social mark can still carry its own icon without touching the policy.
-- **Server rendered meta and an OG card** for `/<handle>`, so a shared link previews with the person's name and picture.
+- **Favicons for links**: built since, in spec 0055, and not the way this line first guessed. Nothing is stored and no bucket is involved: the api fetches a site's own icon when a page asks for it, through the one hardened outside door, and answers the bytes from our own origin with a day of cache. The path carries a version taken from the link's address, so a changed address is a new path and a stale icon cannot linger. R2 (#32) is not a dependency of this.
+- **Server rendered meta and an OG card** for `/<handle>`, so a shared link previews with the person's name and picture. Built since, in spec 0055, with a picture the owner may choose instead of the drawn one.
 - **A second contact card** or several, for a person who hands out a work card and a personal one.
 - **Collections**, the Linktree idea of a group of links that opens on its own page.
