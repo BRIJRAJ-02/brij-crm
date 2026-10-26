@@ -51,7 +51,9 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
   });
   await page.getByRole('button', { name: 'New note' }).click();
   await expect(page).toHaveURL(/\?note=new$/);
-  const window = page.getByRole('dialog');
+  // The note's own window, told apart by the editor inside it: a menu's popover is a dialog too, and one still
+  // fading out makes a bare `getByRole('dialog')` match two (26 October 2026).
+  const window = page.getByRole('dialog').filter({ has: page.getByRole('textbox', { name: 'Note' }) });
   await expect(window).toBeVisible();
   const editor = window.getByRole('textbox', { name: 'Note' });
   await expect(editor).toBeVisible();
@@ -78,7 +80,7 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
   await expect(page.getByText('added a note')).toBeVisible();
   await page.getByRole('link', { name: /Kickoff call/ }).click();
   await expect(page).toHaveURL(new RegExp(`note=${noteId}`));
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(window).toBeVisible();
 
   // A second browser with the note open: it shows the version saved here, with the notice.
   const other = await browser.newContext({ viewport: page.viewportSize() ?? { width: 1280, height: 800 } });
@@ -106,16 +108,16 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
   await page.getByRole('tab', { name: /Notes/ }).click();
   await list.getByRole('row', { name: /Kickoff call/ }).click();
   const confirm = page.getByRole('alertdialog', { name: 'Delete Kickoff call?' });
-  await page.getByRole('dialog').getByRole('button', { name: 'More actions' }).click();
+  await window.getByRole('button', { name: 'More actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete note' }).click();
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: /Cancel/ }).click();
   await expect(confirm).toHaveCount(0);
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.getByRole('dialog').getByRole('button', { name: 'More actions' }).click();
+  await expect(window).toBeVisible();
+  await window.getByRole('button', { name: 'More actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete note' }).click();
   await confirm.getByRole('button', { name: 'Delete note' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(window).toHaveCount(0);
   await expect(list.getByRole('row', { name: /Kickoff call/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(list.getByRole('row', { name: /Kickoff call/ })).toBeVisible();
@@ -129,7 +131,7 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
     .getByRole('row', { name: /Send the contract/ })
     .first()
     .click();
-  await page.getByRole('dialog').getByRole('button', { name: 'More actions' }).click();
+  await window.getByRole('button', { name: 'More actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete task' }).click();
   await expect(tasks.getByRole('row', { name: /Send the contract/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Undo' }).click();
