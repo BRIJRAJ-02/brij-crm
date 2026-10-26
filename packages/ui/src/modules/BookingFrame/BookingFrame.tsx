@@ -279,6 +279,13 @@ export interface BookingFootProps {
   /** Where "Claim your free page" goes (`claimPageHref` with the same page); leave it off for the wordmark alone. */
   readonly claimHref?: string;
   readonly logo?: ProductLogo;
+  /**
+   * Which wordmark to draw, where the page pins its own look rather than following the visitor's (the link page,
+   * whose owner chooses light or dark: spec 0054). Left out, the mark follows the visitor's app or system choice,
+   * which is right for a booking or form page and wrong for a page with a look of its own: a light page read on a
+   * phone in dark mode drew the white mark on white and showed nothing (the owner, 26 October 2026).
+   */
+  readonly scheme?: 'light' | 'dark';
 }
 
 /** "Powered by Timefix", tagged with the page it sits on, and "Claim your free page" for a visitor we don't know. */
@@ -287,13 +294,26 @@ export function BookingFoot({
   page = 'booking_page',
   claimHref,
   logo = TIMEFIX_LOGO,
+  scheme,
 }: BookingFootProps) {
   return (
     <footer className={styles.foot} data-placement={placement}>
       <a className={styles.brand} href={poweredByHref(page)} rel="noopener noreferrer">
         <span className={styles.powered}>{strings.poweredBy}</span>
-        <img className={styles.wordmark} data-scheme="light" src={logo.light} alt={strings.product} />
-        <img className={styles.wordmark} data-scheme="dark" src={logo.dark} alt={strings.product} />
+        {scheme === undefined ? (
+          <>
+            <img className={styles.wordmark} data-scheme="light" src={logo.light} alt={strings.product} />
+            <img className={styles.wordmark} data-scheme="dark" src={logo.dark} alt={strings.product} />
+          </>
+        ) : (
+          // Pinned: one mark, drawn whatever the visitor's own setting is, so the page's look decides.
+          <img
+            className={styles.wordmark}
+            data-scheme="pinned"
+            src={scheme === 'dark' ? logo.dark : logo.light}
+            alt={strings.product}
+          />
+        )}
       </a>
       {claimHref !== undefined && (
         <a className={styles.claim} href={claimHref} rel="noopener noreferrer">

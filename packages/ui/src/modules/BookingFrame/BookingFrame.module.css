@@ -433,7 +433,8 @@
     inline-size: auto;
   }
 
-  /* One wordmark per theme: dark ink on light, white on dark, the other out of the tree. */
+  /* One wordmark per theme: dark ink on light, white on dark, the other out of the tree. A page that pins its
+     own look sends one mark instead (`scheme`), and none of the rules below touch it. */
   .wordmark[data-scheme='dark'] {
     display: none;
   }

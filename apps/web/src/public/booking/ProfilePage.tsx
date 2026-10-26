@@ -102,8 +102,14 @@ function folderInAddress(): string | undefined {
   return /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(named) ? named : undefined;
 }
 
-/** The page's foot: "Powered by Timefix", tagged as the profile, and Claim your free page. */
-const foot = <BookingFoot page="booking_profile" claimHref={claimPageHref('booking_profile')} />;
+/**
+ * The page's foot: "Powered by Timefix", tagged as the profile, and Claim your free page. The mark is pinned to
+ * the look its owner picked, not the visitor's own (26 October 2026): a light page read on a phone in dark mode
+ * drew the white mark on white, so the foot showed "POWERED BY" over nothing.
+ */
+const footOf = (mode: 'light' | 'dark') => (
+  <BookingFoot page="booking_profile" claimHref={claimPageHref('booking_profile')} scheme={mode} />
+);
 
 /** The link page: the person, then their blocks a page at a time, with a search once there are many. */
 export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
@@ -269,7 +275,8 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   }
   // While loading: the person's and the blocks' own shapes at once (this is the page's first paint, so there is no
   // content for a skeleton to flash in front of), so nothing moves when they arrive.
-  if (loaded.state === 'loading') return <LinkPage foot={foot} />;
+  if (loaded.state === 'loading')
+    return <LinkPage foot={<BookingFoot page="booking_profile" claimHref={claimPageHref('booking_profile')} />} />;
 
   const { profile, items } = loaded;
   const current = profile.handle;
@@ -308,7 +315,7 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
         );
       }}
       {...(isSearching ? { summary: strings.matches(blocks.length) } : {})}
-      foot={foot}
+      foot={footOf(profile.theme.mode)}
       // A press is counted by a beacon (AC-5125): the navigation never waits for it.
       onPress={(id) => client.press(current, id)}
       {...(isLong

@@ -606,7 +606,8 @@ function Blocks({
       // owner, 25 October 2026). ProfilePage draws the same footer live. Its "Claim your free page" link is left
       // out here: it is for a visitor without a page, not for the person whose page this is, and `claimPageHref`
       // lives on the public pages' own entry, which the app's bundle has no reason to pull in.
-      foot={<BookingFoot page="booking_profile" />}
+      // The phone beside the editor shows the look being picked, so its mark follows that, not the app's theme.
+      foot={<BookingFoot page="booking_profile" scheme={theme.mode} />}
       person={{
         name: profile.name.trim() || handle,
         id: handle,
