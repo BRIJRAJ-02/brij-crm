@@ -1,7 +1,15 @@
 // The api's sign in and mail variables (spec 0005): what each environment
 // must set, and what an unset or empty one means.
 import { describe, expect, it } from 'vitest';
-import { ApiEnv, LOCAL_CENTRIFUGO_API_KEY, LOCAL_CENTRIFUGO_TOKEN_SECRET, wakesOnUse, WorkerEnv } from './env.ts';
+import {
+  ApiEnv,
+  appleWalletSettings,
+  googleWalletSettings,
+  LOCAL_CENTRIFUGO_API_KEY,
+  LOCAL_CENTRIFUGO_TOKEN_SECRET,
+  wakesOnUse,
+  WorkerEnv,
+} from './env.ts';
 
 const local = {
   APP_ENV: 'local',
@@ -513,5 +521,56 @@ describe('calendar sync (spec 0024)', () => {
     expect(problems({ ...local, ...outlook, MICROSOFT_TENANT: 'not/a tenant' })).toEqual(['MICROSOFT_TENANT']);
     expect(WorkerEnv.parse({ ...worker, ...outlook }).calendar?.microsoft?.clientId).toBe('app');
     expect(workerProblems({ ...worker, ...on, CALENDAR_OUTLOOK: 'on' })).toHaveLength(2);
+  });
+});
+
+describe('Add to Wallet (spec 0055)', () => {
+  // A certificate's shape is all this needs: nothing here signs anything.
+  const pem = (label: string) => `-----BEGIN ${label}-----\nQUJD\n-----END ${label}-----\n`;
+  const apple = {
+    WALLET_PASSES: 'on',
+    APPLE_WALLET_PASS_TYPE_ID: 'pass.com.timefix.linkpage',
+    APPLE_WALLET_TEAM_ID: 'CTN525SR6P',
+    APPLE_WALLET_CERTIFICATE: pem('CERTIFICATE'),
+    APPLE_WALLET_KEY: pem('PRIVATE KEY'),
+    APPLE_WALLET_WWDR: pem('CERTIFICATE'),
+  };
+
+  // The one this file exists for (26 October 2026): the five Apple variables were declared on the interface and
+  // not on the schema, so the parse dropped every one of them and the button was never drawn in production. A
+  // settings function tested on a hand made object walks straight past that, so this parses first, as the app does.
+  it('keeps every Apple variable through the parse, which is where they were being lost', () => {
+    const env = ApiEnv.parse({ ...local, ...apple });
+    expect(env.APPLE_WALLET_PASS_TYPE_ID).toBe('pass.com.timefix.linkpage');
+    expect(env.APPLE_WALLET_TEAM_ID).toBe('CTN525SR6P');
+    expect(env.APPLE_WALLET_CERTIFICATE).toContain('BEGIN CERTIFICATE');
+    expect(env.APPLE_WALLET_KEY).toContain('BEGIN PRIVATE KEY');
+    expect(env.APPLE_WALLET_WWDR).toContain('BEGIN CERTIFICATE');
+    expect(appleWalletSettings(env)?.teamId).toBe('CTN525SR6P');
+  });
+
+  it('is off without the switch, and off with it but nothing behind it', () => {
+    const { WALLET_PASSES: _off, ...noSwitch } = apple;
+    expect(appleWalletSettings(ApiEnv.parse({ ...local, ...noSwitch }))).toBeUndefined();
+    expect(appleWalletSettings(ApiEnv.parse({ ...local, WALLET_PASSES: 'on' }))).toBeUndefined();
+    expect(googleWalletSettings(ApiEnv.parse({ ...local, WALLET_PASSES: 'on' }))).toBeUndefined();
+  });
+
+  it("refuses a pass type or a team that cannot be Apple's", () => {
+    expect(problems({ ...local, ...apple, APPLE_WALLET_PASS_TYPE_ID: 'com.timefix.linkpage' })).toEqual([
+      'APPLE_WALLET_PASS_TYPE_ID',
+    ]);
+    expect(problems({ ...local, ...apple, APPLE_WALLET_TEAM_ID: 'too-short' })).toEqual(['APPLE_WALLET_TEAM_ID']);
+  });
+
+  it("keeps Google's four through the parse too, since they sat beside the lost ones", () => {
+    const env = ApiEnv.parse({
+      ...local,
+      WALLET_PASSES: 'on',
+      GOOGLE_WALLET_ISSUER_ID: '3388000000012345678',
+      GOOGLE_WALLET_CLIENT_EMAIL: 'passes@timefix.iam.gserviceaccount.com',
+      GOOGLE_WALLET_PRIVATE_KEY: pem('PRIVATE KEY'),
+    });
+    expect(googleWalletSettings(env)?.issuerId).toBe('3388000000012345678');
   });
 });

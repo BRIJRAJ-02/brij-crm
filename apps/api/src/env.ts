@@ -252,6 +252,21 @@ const walletFields = {
       .trim()
       .regex(/^[A-Za-z0-9_-]{1,64}$/, 'GOOGLE_WALLET_CLASS is one word.'),
   ),
+  APPLE_WALLET_PASS_TYPE_ID: optional(
+    z
+      .string()
+      .trim()
+      .regex(/^pass\.[A-Za-z0-9][A-Za-z0-9.-]{1,120}$/, 'APPLE_WALLET_PASS_TYPE_ID starts with `pass.`.'),
+  ),
+  APPLE_WALLET_TEAM_ID: optional(
+    z
+      .string()
+      .trim()
+      .regex(/^[A-Z0-9]{10}$/, 'APPLE_WALLET_TEAM_ID is the ten character team id.'),
+  ),
+  APPLE_WALLET_CERTIFICATE: optional(z.string().min(1)),
+  APPLE_WALLET_KEY: optional(z.string().min(1)),
+  APPLE_WALLET_WWDR: optional(z.string().min(1)),
 };
 
 /** The wallet variables as parsed, before they are checked together. */
