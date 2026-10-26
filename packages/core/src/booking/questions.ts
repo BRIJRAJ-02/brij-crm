@@ -37,6 +37,9 @@ export async function peopleObjectId(tx: WorkspaceTx): Promise<string | undefine
 /** The api slug of the person's email, which the booking writes itself: no question files onto it (AC-5703). */
 const VISITOR_EMAIL_SLUG = 'email_addresses';
 
+/** What a save refuses a question set to overwrite with: a booking page only fills an empty value. */
+const ONLY_FILL = 'A booking page only fills empty fields: anyone can type an email, so it never overwrites one.';
+
 /** What a save refuses a question's filing with, naming nothing about the attribute it asked for. */
 const NOT_FILEABLE = 'A question can only be filed onto a field of People you can change.';
 
@@ -55,6 +58,11 @@ export async function checkPageQuestions(
   questions: BookingQuestions,
   before: BookingQuestions = [],
 ): Promise<void> {
+  // A booking page only fills an empty value (owner, 26 Oct 2026): the visitor's email is unverified, so a booking
+  // never overwrites what a person's record already holds.
+  if (questions.some((question) => question.update === 'always')) {
+    throw refuseOn('CONFIG_INVALID', ONLY_FILL, 'questions');
+  }
   const kept = new Set(
     before.flatMap((question) =>
       question.filedOn === undefined ? [] : [`${question.id}:${question.filedOn.attributeId}`],
@@ -147,6 +155,14 @@ export async function questionTargets(tx: WorkspaceTx, scope: EngineScope): Prom
   return { ...choices, items: choices.items.filter((item) => item.attributeId !== email?.id) };
 }
 
+/**
+ * Whether Book by chat is off for a page (owner, 26 Oct 2026): chat asks no questions, so a page with a required one
+ * books only through its form. A page whose questions are all optional keeps chat, which skips them.
+ */
+export function chatIsOff(questions: BookingQuestions): boolean {
+  return questions.some((question) => question.required);
+}
+
 /** A page's questions as its public page draws them (AC-5709): never where an answer is filed. */
 export function publicQuestionsOf(questions: BookingQuestions): readonly PublicQuestion[] {
   return questions.map(publicQuestionOf);
@@ -193,7 +209,8 @@ export async function fileBookingAnswers(
   if (!input.kept.some((answer) => answer.attributeId !== undefined)) return [...input.kept];
   const filed = await fileOntoRecord(context, {
     recordId: input.personId,
-    questions: input.questions,
+    // Fill only, whatever is stored (a page saved before the rule): a booking never overwrites a person's value.
+    questions: input.questions.map((question) => ({ ...question, update: 'fill' as const })),
     attributes: await loadAttributes(context.tx, input.people),
     answers: input.answers,
   });

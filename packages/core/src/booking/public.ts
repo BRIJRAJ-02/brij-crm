@@ -78,7 +78,14 @@ import { writeAssignment } from '../rotation/ledger.ts';
 import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } from '../rotation/team.ts';
 import { buildBookingIcs } from './ics.ts';
 import { matchVisitor } from './visitor.ts';
-import { bookingAnswersOf, fileBookingAnswers, handedOver, peopleObjectId, publicQuestionsOf } from './questions.ts';
+import {
+  bookingAnswersOf,
+  chatIsOff,
+  fileBookingAnswers,
+  handedOver,
+  peopleObjectId,
+  publicQuestionsOf,
+} from './questions.ts';
 import { MAX_RESCHEDULES } from './change.ts';
 import {
   allowFor,
@@ -238,7 +245,8 @@ export async function getPublicBookingPage(
       hostTimeZone: page.availability.timeZone,
       windowDays: page.windowDays,
       // The view the host chose, beside the rest of the facts, so the page's first paint is already that view.
-      defaultView: page.defaultView,
+      // A page with a required question books through its form only: chat is off, so it never opens there.
+      defaultView: page.defaultView === 'chat' && chatIsOff(page.questions) ? 'month' : page.defaultView,
       ...(team === undefined ? {} : { team: await teamAvatars(tx, team) }),
       // Once the owner has a handle, a plain `/b/<key>` visit moves to `/<handle>/<slug>`.
       ...(path.startsWith('/b/') ? {} : { path }),
@@ -610,6 +618,9 @@ function checkedAnswers(
   isChat: boolean,
   skip: readonly string[],
 ): Readonly<Record<string, string | boolean | PhoneAnswer>> {
+  if (isChat && chatIsOff(page.questions)) {
+    throw refuse('BOOKING_CLOSED', 'This page asks a few questions first. Pick a time on the calendar to book.');
+  }
   if (page.questions.length === 0 || isChat) return {};
   const asked = page.questions.filter((question) => !skip.includes(question.key));
   const checked = checkAnswers({ language: 'en', questions: asked }, input.answers ?? {});

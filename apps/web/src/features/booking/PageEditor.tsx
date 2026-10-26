@@ -424,6 +424,8 @@ export function PageEditor({
     problemAsked && questionProblem?.questionId !== undefined
       ? { questionId: questionProblem.questionId, message: questionProblem.message }
       : undefined;
+  // A required question turns Book by chat off for the page (owner, 26 Oct 2026): chat asks no questions.
+  const isChatOff = draft.questions.some((question) => question.required);
   const liveQuestionIds = useMemo(() => new Set(page.questions.map((question) => question.id)), [page.questions]);
   // Attributes Save made whose page save hasn't landed yet: the next save that does offers their Undo.
   const madePending = useRef<readonly MadeAttribute[]>([]);
@@ -819,7 +821,13 @@ export function PageEditor({
                           >
                             <Radio value="month">{strings.opensInViews.month}</Radio>
                             <Radio value="list">{strings.opensInViews.list}</Radio>
-                            <Radio value="chat">{strings.opensInViews.chat}</Radio>
+                            <Radio
+                              value="chat"
+                              isDisabled={isChatOff}
+                              {...(isChatOff ? { description: strings.chatOffRequired } : {})}
+                            >
+                              {strings.opensInViews.chat}
+                            </Radio>
                           </RadioGroup>
                         </FieldGroup>
                       </Card>
@@ -1079,7 +1087,9 @@ export function PageEditor({
                           {strings.targetsFailed}
                         </Callout>
                       )}
-                      {draft.questions.length > 0 && <Callout tone="info">{strings.chatAsksNone}</Callout>}
+                      {draft.questions.length > 0 && (
+                        <Callout tone="info">{isChatOff ? strings.chatOffRequired : strings.chatAsksNone}</Callout>
+                      )}
                       <QuestionsSection
                         questions={draft.questions}
                         onChange={(update) => {

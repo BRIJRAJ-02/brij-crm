@@ -476,14 +476,17 @@ function Booking({
   const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
   // The view the host set the page to open in. The facts are read without a schema, so an API that doesn't send it
   // yet reads as Month, the view every page had before this was a setting.
-  const opensIn = viewOf(page.defaultView) ?? 'month';
+  // A page with a required question books through its form only (owner, 26 Oct 2026): no Chat, which asks none.
+  const isChatOff = (page.questions ?? []).some((question) => question.required);
+  const hostView = viewOf(page.defaultView) ?? 'month';
+  const opensIn = isChatOff && hostView === 'chat' ? 'month' : hostView;
   // The view this opens in (owner, 25 Oct 2026): what was chosen on this page before, else the host's own default,
   // which came with the page's facts. Read once, as the card is first drawn, so the page never paints and swaps.
   // A page whose entry has been pushed out opens in its host's default again, never in nothing.
   const [picked, setView] = useState<SlotView>(() => savedView(addressPath) ?? opensIn);
   // The editor's preview is inert, so nothing inside it switches the view: it reads the host's setting straight from
   // the page, and the choice they haven't saved yet shows the moment they pick it. A visitor keeps their own.
-  const view = isEditorPreview ? opensIn : picked;
+  const view = isEditorPreview ? opensIn : isChatOff && picked === 'chat' ? 'month' : picked;
   // The view this page opens in, kept under the address the visit began at, so a later visit's loading shape holds
   // the place the page will take.
   useEffect(() => {
@@ -1085,7 +1088,9 @@ function Booking({
       segments={[
         { value: 'month', label: strings.month, icon: 'calendar', isIconOnly: true },
         { value: 'list', label: strings.list, icon: 'list', isIconOnly: true },
-        { value: 'chat', label: strings.chat, icon: 'message-square', isIconOnly: true },
+        ...(isChatOff
+          ? []
+          : [{ value: 'chat', label: strings.chat, icon: 'message-square' as const, isIconOnly: true }]),
       ]}
     />
   );

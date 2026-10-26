@@ -158,55 +158,93 @@ describe('a booking page’s questions (spec 0057)', () => {
     expect(after?.answers?.[0]?.label).toBe('Your role');
   });
 
-  it('fills only an empty value, and overwrites with always (AC-5712)', async () => {
+  it('only ever fills an empty value: always is refused on save, and a stored one fills (owner, 26 Oct 2026)', async () => {
     const w = await workspace();
+    const title = w.attribute('people.job_title');
     const person = await createRecord(w.owner, {
       objectId: w.objects.people ?? '',
       values: {
         [w.attribute('people.name')]: { firstName: 'Lin' },
         [w.attribute('people.email_addresses')]: ['lin@acme.example'],
-        [w.attribute('people.job_title')]: 'Founder',
+        [title]: 'Founder',
       },
     });
-    const fill = await createBookingPage(
+    const page = await createBookingPage(
       w.owner,
-      {
-        id: newId(),
-        title: 'Fill',
-        timeZone: 'UTC',
-        settings: { questions: questionsOn(w.attribute('people.job_title')) },
-      },
+      { id: newId(), title: 'Fill', timeZone: 'UTC', settings: { questions: questionsOn(title) } },
       NOW,
     );
-    const fillEntry = await enterBookingPage({ db }, fill.publicKey);
+    expect(
+      await refusalOf(
+        updateBookingPage(w.owner, { pageId: page.id, settings: { questions: questionsOn(title, 'always') } }),
+      ),
+    ).toEqual([expect.objectContaining({ code: 'CONFIG_INVALID', field: 'questions' })]);
+    // A page stored with `always` before the rule still only fills.
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(
+        sql`update booking_pages set questions = ${JSON.stringify(questionsOn(title, 'always'))}::jsonb where id = ${page.id}::uuid`,
+      ),
+    );
+    const entry = await enterBookingPage({ db }, page.publicKey);
+    // Anyone may type a known customer's email: their filled Job title stays as it was.
     await bookPublicSlot(
-      fillEntry,
+      entry,
       deps,
       bookInput({ email: 'lin@acme.example', answers: { role: 'CTO', budget: 'Under 5k' } }),
     );
     expect(await jobTitleOf(w, person.recordId)).toBe('Founder');
-
-    const always = await createBookingPage(
-      w.owner,
-      {
-        id: newId(),
-        title: 'Always',
-        timeZone: 'UTC',
-        settings: { questions: questionsOn(w.attribute('people.job_title'), 'always') },
-      },
-      NOW,
-    );
-    const alwaysEntry = await enterBookingPage({ db }, always.publicKey);
+    // An empty one is filled.
     await bookPublicSlot(
-      alwaysEntry,
+      entry,
       deps,
       bookInput({
         start: '2026-11-02T10:00:00.000Z',
-        email: 'lin@acme.example',
+        email: 'new@acme.example',
         answers: { role: 'CTO', budget: 'Under 5k' },
       }),
     );
-    expect(await jobTitleOf(w, person.recordId)).toBe('CTO');
+    const [, second] = await listBookings(w.owner, { pageId: page.id, when: 'upcoming' }, NOW);
+    expect(await jobTitleOf(w, second?.personRecordId)).toBe('CTO');
+  });
+
+  it('turns Book by chat off for a page with a required question, and keeps it, skipping them, when all are optional', async () => {
+    const w = await workspace();
+    const required = await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'Required',
+        timeZone: 'UTC',
+        settings: { questions: questionsOn(w.attribute('people.job_title')), defaultView: 'chat' },
+      },
+      NOW,
+    );
+    const requiredEntry = await enterBookingPage({ db }, required.publicKey);
+    expect((await getPublicBookingPage(requiredEntry)).defaultView).toBe('month');
+    const chat = [{ role: 'visitor' as const, text: 'Monday at 9' }];
+    expect(await refusalOf(bookPublicSlot(requiredEntry, deps, bookInput(), [], undefined, { chat }))).toEqual([
+      expect.objectContaining({ code: 'BOOKING_CLOSED' }),
+    ]);
+
+    const optional = await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'Optional',
+        timeZone: 'UTC',
+        settings: {
+          questions: questionsOn(w.attribute('people.job_title')).map((question) => ({ ...question, required: false })),
+          defaultView: 'chat',
+        },
+      },
+      NOW,
+    );
+    const optionalEntry = await enterBookingPage({ db }, optional.publicKey);
+    expect((await getPublicBookingPage(optionalEntry)).defaultView).toBe('chat');
+    await bookPublicSlot(optionalEntry, deps, bookInput({ start: '2026-11-02T11:00:00.000Z' }), [], undefined, {
+      chat,
+    });
+    expect(await listBookings(w.owner, { pageId: optional.id, when: 'upcoming' }, NOW)).toHaveLength(1);
   });
 
   it('finds and makes no records, and keeps the answers, on a page kept out of the CRM (AC-5708)', async () => {
