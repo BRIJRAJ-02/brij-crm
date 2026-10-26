@@ -117,6 +117,11 @@ export const strings = {
   whereItGoesExample: 'Point a Job title question at Job title, and each person who answers gets it on their record.',
   notFiled: 'Not filed, kept with the submission',
   notFiledShort: 'Not filed',
+  willCreate: (title: string, objectName: string) => `Creates “${title}” on ${objectName}`,
+  willCreateShort: (title: string) => `Creates “${title}”`,
+  cantCreate: 'You can’t add attributes, so this stays with the submission.',
+  createdAttributes: (count: number, objectName: string) =>
+    count === 1 ? `Added 1 attribute to ${objectName}.` : `Added ${String(count)} attributes to ${objectName}.`,
   takenBy: (label: string) => `Used by “${label}”; choosing it moves it here`,
   cantWrite: 'You can’t write to this',
   mustAnswer: 'Visitors must answer',

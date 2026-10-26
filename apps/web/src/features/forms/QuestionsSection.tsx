@@ -44,6 +44,7 @@ import {
   filedLine,
   fittingAttributes,
   isMatchQuestion,
+  planNewAttributes,
   moveQuestion,
   removeQuestion,
   restoreQuestion,
@@ -86,6 +87,8 @@ export interface QuestionsSectionProps {
   readonly problem?: { readonly questionId: string; readonly message: string };
   /** A question to open and bring into view as the screen shows (a link from Settings' map of where answers go). */
   readonly focusQuestionId?: string;
+  /** Whether the member may add attributes: an unfiled question is then filed onto a new one when the form is published. */
+  readonly canCreate?: boolean;
   readonly isReadOnly: boolean;
 }
 
@@ -119,6 +122,16 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     [open, refused, problem],
   );
 
+  // Unfiled questions the publish will give an attribute: each says so until it exists.
+  const planned = useMemo(
+    () =>
+      new Map(
+        planNewAttributes(draft, attributes, objectName !== undefined && props.canCreate === true && !isReadOnly).map(
+          (plan) => [plan.questionId, plan.title],
+        ),
+      ),
+    [draft, attributes, objectName, props.canCreate, isReadOnly],
+  );
   const isFull = draft.questions.length >= FORM_QUESTIONS_MAX;
   const opened = (id: string) => {
     setOpen((before) => new Set([...before, id]));
@@ -178,7 +191,12 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     ...(objectName === undefined
       ? {}
       : {
-          filed: question.filedOn === undefined ? strings.notFiledShort : filedLine(question, objectName, attributes),
+          filed:
+            question.filedOn === undefined
+              ? planned.has(question.id)
+                ? strings.willCreateShort(planned.get(question.id) ?? '')
+                : strings.notFiledShort
+              : filedLine(question, objectName, attributes),
         }),
     ...(question.showWhen === undefined
       ? {}
@@ -276,6 +294,9 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             draft={draft}
             attributes={attributes}
             isFiling={objectName !== undefined}
+            {...(objectName === undefined ? {} : { objectName })}
+            {...(planned.has(id) ? { willCreate: planned.get(id) ?? '' } : {})}
+            canCreate={props.canCreate === true}
             isReadOnly={isReadOnly}
             // A question just added, or one a publish refused, takes focus and comes into view.
             isJustAdded={justAdded === id || problem?.questionId === id}
@@ -357,6 +378,10 @@ interface QuestionEditorProps {
   readonly attributes: readonly FormAttributeChoice[];
   /** The form adds submissions to the CRM, so Where it goes shows; a form that keeps them only files nothing. */
   readonly isFiling: boolean;
+  readonly objectName?: string;
+  /** The title of the attribute publishing will create for this question, when it will. */
+  readonly willCreate?: string;
+  readonly canCreate: boolean;
   readonly isReadOnly: boolean;
   /** Just added: its Question field takes focus, and the card scrolls into view. */
   readonly isJustAdded: boolean;
@@ -372,6 +397,9 @@ function QuestionEditor({
   draft,
   attributes,
   isFiling,
+  objectName,
+  willCreate,
+  canCreate,
   isReadOnly,
   isJustAdded,
   problem,
@@ -455,7 +483,16 @@ function QuestionEditor({
             </InfoTip>
           }
           items={[
-            { id: 'none', label: strings.notFiled },
+            {
+              id: 'none',
+              label:
+                willCreate === undefined || objectName === undefined
+                  ? strings.notFiled
+                  : strings.willCreate(willCreate, objectName),
+              ...(!canCreate && question.label.trim() !== '' && question.filedOn === undefined
+                ? { description: strings.cantCreate }
+                : {}),
+            },
             ...fitting.map((attribute) => {
               const holder = usedBy.get(attribute.attributeId);
               return {

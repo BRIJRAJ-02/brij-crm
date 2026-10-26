@@ -10,6 +10,7 @@ import {
   isMatchQuestion,
   isRedirectAddress,
   moveQuestion,
+  planNewAttributes,
   publishStart,
   removeQuestion,
   restoreQuestion,
@@ -233,5 +234,45 @@ describe('the first publish’s start', () => {
 
   it('keeps the form’s key when the name makes no address', () => {
     expect(publishStart('!!', 'form-dnbptb')).toEqual({ name: '!!', address: 'form-dnbptb' });
+  });
+});
+
+describe('planNewAttributes', () => {
+  const doc = (questions: FormDocument['questions']): FormDocument => ({ ...base, questions });
+  const ask = (id: string, label: string, answerType: FormDocument['questions'][number]['answerType'], extra = {}) => ({
+    id,
+    key: id,
+    label,
+    answerType,
+    required: false,
+    update: 'fill' as const,
+    ...extra,
+  });
+
+  it('types from the answer type and carries a select its choices', () => {
+    const plans = planNewAttributes(
+      doc([ask('a', 'Website', 'website'), ask('b', 'Size', 'dropdown', { choices: ['S', ' ', 'L'] })]),
+      [],
+      true,
+    );
+    expect(plans.map((plan) => [plan.title, plan.type, plan.choices])).toEqual([
+      ['Website', 'url', []],
+      ['Size', 'select', ['S', 'L']],
+    ]);
+  });
+
+  it('numbers a title an attribute or an earlier plan has, ignoring case', () => {
+    const taken = [
+      { attributeId: BUDGET, title: 'budget', type: 'number', isRequired: false, isUnique: false, canWrite: true },
+    ] as const;
+    const plans = planNewAttributes(doc([ask('a', 'Budget', 'number'), ask('b', 'BUDGET', 'number')]), taken, true);
+    expect(plans.map((plan) => plan.title)).toEqual(['Budget 2', 'BUDGET 3']);
+  });
+
+  it('skips filed, unlabelled and file questions, and plans nothing when keeping submissions only', () => {
+    const filed = ask('a', 'Name', 'short_text', { filedOn: { objectRole: 'main', attributeId: NAME } });
+    const all = doc([filed, ask('b', ' ', 'short_text'), ask('c', 'CV', 'file'), ask('d', 'Notes', 'long_text')]);
+    expect(planNewAttributes(all, [], true).map((plan) => [plan.title, plan.type])).toEqual([['Notes', 'text']]);
+    expect(planNewAttributes(all, [], false)).toEqual([]);
   });
 });

@@ -34,7 +34,16 @@ import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteFormDialog } from './FormConfirms.tsx';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
-import { draftGap, fileByLabel, publishAttributesOf, sameDocument, savableDraft, statusOf } from './draft.ts';
+import {
+  changeQuestion,
+  draftGap,
+  fileByLabel,
+  planNewAttributes,
+  publishAttributesOf,
+  sameDocument,
+  savableDraft,
+  statusOf,
+} from './draft.ts';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { PublishDialog } from './PublishDialog.tsx';
@@ -206,6 +215,69 @@ export function FormEditor(props: FormEditorProps) {
   const liveIds = useMemo(() => new Set(form.live?.questions.map((question) => question.id) ?? []), [form.live]);
   const preview = useMemo(() => previewOf(draft, { key: form.publicKey }), [draft, form.publicKey]);
 
+  // Gives each unfiled, labelled question an attribute on the target object, with no prompt: files the question
+  // onto it, and offers Undo (unfile, archive). Answers the draft to publish; a failure leaves the question unfiled.
+  const createMissingAttributes = async (): Promise<{
+    readonly document: FormDocument;
+    readonly choices: FormTargetChoices;
+  }> => {
+    const objectId = target.objectId;
+    const plans = planNewAttributes(draft, target.items, canBuild && canManage && objectId !== undefined);
+    if (objectId === undefined || plans.length === 0) return { document: draft, choices: target };
+    const made: { questionId: string; attributeId: string }[] = [];
+    let next = draft;
+    for (const plan of plans) {
+      // A hidden attribute may hold the title already: the server says SLUG_TAKEN, and a numbered title goes next.
+      for (let n = 1; n <= 5; n += 1) {
+        const title = n === 1 ? plan.title : `${plan.title} ${String(n)}`;
+        try {
+          const attribute = await data.attributes.create(slug, {
+            id: data.attributes.newId(),
+            objectId,
+            title,
+            type: plan.type,
+            ...(plan.type === 'select'
+              ? {
+                  options: plan.choices.map((label) => ({
+                    id: data.attributes.newId(),
+                    label,
+                    hue: 'gray' as const,
+                  })),
+                }
+              : {}),
+          });
+          made.push({ questionId: plan.questionId, attributeId: attribute.id });
+          next = changeQuestion(next, plan.questionId, { filedOn: attribute.id });
+          break;
+        } catch (error: unknown) {
+          if (!(isDataError(error) && error.code === 'SLUG_TAKEN')) break;
+        }
+      }
+    }
+    if (made.length === 0) return { document: draft, choices: target };
+    setDraft(next);
+    latest.current = next;
+    const choices = await data.forms.attributes(slug, form.id);
+    setTarget(choices);
+    toasts.toast({
+      tone: 'success',
+      message: strings.createdAttributes(made.length, target.objectName ?? ''),
+      action: {
+        label: strings.undo,
+        onAction: () => {
+          setDraft((before) =>
+            made.reduce((document, each) => changeQuestion(document, each.questionId, { filedOn: null }), before),
+          );
+          Promise.all(made.map((each) => data.attributes.archive(slug, each.attributeId))).then(
+            () => data.forms.attributes(slug, form.id).then(setTarget, failed),
+            failed,
+          );
+        },
+      },
+    });
+    return { document: next, choices };
+  };
+
   const publish = () => {
     setProblem(undefined);
     // A Settings field still being typed never goes live half done: Settings shows what it needs beside the field.
@@ -222,6 +294,19 @@ export function FormEditor(props: FormEditorProps) {
       if (tab !== 'settings') void navigate({ href: formHref(slug, form.id, 'settings') });
       return;
     }
+    // Questions with no attribute to file onto get one first, with no prompt; the check and publish then read it.
+    if (planNewAttributes(draft, target.items, canBuild && canManage && target.objectId !== undefined).length === 0) {
+      publishChecked(draft, target);
+      return;
+    }
+    setPublishing(true);
+    createMissingAttributes().then(({ document, choices }) => {
+      setPublishing(false);
+      publishChecked(document, choices);
+    }, failed);
+  };
+
+  const publishChecked = (draft: FormDocument, target: FormTargetChoices) => {
     const attributes = publishAttributesOf(target);
     // The first publish names the form and its address in its dialog; the questions are checked first.
     const found = publishProblem({
@@ -486,6 +571,7 @@ export function FormEditor(props: FormEditorProps) {
               liveIds={liveIds}
               newId={() => data.forms.newId()}
               toasts={toasts}
+              canCreate={canBuild}
               isReadOnly={!canManage}
               {...(shown?.questionId === undefined
                 ? {}

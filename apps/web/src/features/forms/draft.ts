@@ -11,6 +11,7 @@ import type {
 } from '@crm/data';
 import {
   CHOICE_TYPES,
+  FILES_ONTO,
   FORM_SLUG,
   fitsAttribute,
   freeKey,
@@ -247,6 +248,71 @@ export function fileByLabel(document: FormDocument, attributes: readonly FormAtt
     return { ...question, filedOn: { objectRole: 'main', attributeId: match.attributeId } };
   });
   return { ...document, questions };
+}
+
+/** An attribute the form will create on its target object for a question that has none to file onto. */
+export interface PlannedAttribute {
+  readonly questionId: string;
+  readonly title: string;
+  readonly type: 'text' | 'email' | 'phone' | 'url' | 'number' | 'select' | 'checkbox';
+  /** A select's options, from the question's own choices. */
+  readonly choices: readonly string[];
+}
+
+/** The attribute type a question's answer type makes: the first fit in `FILES_ONTO`, a select for choices. */
+function plannedType(answerType: AnswerType): PlannedAttribute['type'] {
+  const first = FILES_ONTO[answerType][0];
+  switch (first) {
+    case 'email':
+    case 'phone':
+    case 'url':
+    case 'number':
+    case 'select':
+    case 'checkbox':
+      return first;
+    default:
+      return 'text';
+  }
+}
+
+/** A title no existing attribute (or earlier plan) has, by name ignoring case: "Budget", then "Budget 2". */
+function freeTitle(wanted: string, taken: ReadonlySet<string>): string {
+  const lower = (text: string) => text.trim().toLowerCase();
+  if (!taken.has(lower(wanted))) return wanted;
+  for (let n = 2; ; n += 1) {
+    const candidate = `${wanted} ${String(n)}`;
+    if (!taken.has(lower(candidate))) return candidate;
+  }
+}
+
+/**
+ * The attributes to create for the questions still unfiled once `fileByLabel` has matched what exists: a labelled,
+ * non file question gets one titled from its label, typed from its answer type, with a select carrying its choices.
+ * Empty while the form keeps submissions only (`isFiling` false).
+ */
+export function planNewAttributes(
+  document: FormDocument,
+  attributes: readonly FormAttributeChoice[],
+  isFiling: boolean,
+): readonly PlannedAttribute[] {
+  if (!isFiling) return [];
+  const taken = new Set(attributes.map((attribute) => attribute.title.trim().toLowerCase()));
+  const plans: PlannedAttribute[] = [];
+  for (const question of document.questions) {
+    const label = question.label.trim();
+    if (question.filedOn !== undefined || label === '' || question.answerType === 'file') continue;
+    const title = freeTitle(label, taken);
+    taken.add(title.toLowerCase());
+    plans.push({
+      questionId: question.id,
+      title,
+      type: plannedType(question.answerType),
+      choices: CHOICE_TYPES.includes(question.answerType)
+        ? (question.choices ?? []).filter((choice) => choice.trim() !== '')
+        : [],
+    });
+  }
+  return plans;
 }
 
 /** The target's attributes as the publish check reads them. */
