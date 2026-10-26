@@ -74,12 +74,15 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
       # twelve again (26 October 2026). A hit is sound by construction: turbo keys a task on its inputs, so a
       # cached answer is the one this commit would have produced. The key carries the commit, which makes every
       # run its own entry, and the prefix restores the newest entry before it.
+      # This file is in the key as well, because turbo hashes a package's own files and not the runner around
+      # them: the database the suites talk to is a service declared here, so changing its major would otherwise
+      # restore answers proved against the old one. Changing this file starts a fresh line of entries.
       - uses: actions/cache@v6
         with:
           path: .turbo
-          key: turbo-${{ github.job }}-${{ runner.os }}-${{ github.sha }}
+          key: turbo-${{ github.job }}-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}-${{ github.sha }}
           restore-keys: |
-            turbo-${{ github.job }}-${{ runner.os }}-
+            turbo-${{ github.job }}-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}-
       # Every step below runs even when one before it failed, so one push shows every red check at once.
       - run: pnpm check
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
@@ -201,12 +204,15 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
       # twelve again (26 October 2026). A hit is sound by construction: turbo keys a task on its inputs, so a
       # cached answer is the one this commit would have produced. The key carries the commit, which makes every
       # run its own entry, and the prefix restores the newest entry before it.
+      # This file is in the key as well, because turbo hashes a package's own files and not the runner around
+      # them: the database the suites talk to is a service declared here, so changing its major would otherwise
+      # restore answers proved against the old one. Changing this file starts a fresh line of entries.
       - uses: actions/cache@v6
         with:
           path: .turbo
-          key: turbo-${{ github.job }}-${{ runner.os }}-${{ github.sha }}
+          key: turbo-${{ github.job }}-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}-${{ github.sha }}
           restore-keys: |
-            turbo-${{ github.job }}-${{ runner.os }}-
+            turbo-${{ github.job }}-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}-
       - run: pnpm exec turbo run test --continue --filter='!@crm/ui' --filter='!@crm/core'
 
   # The engine's suite alone: its 70,000 and 200,000 link tests are heavy for a small runner, and its count
