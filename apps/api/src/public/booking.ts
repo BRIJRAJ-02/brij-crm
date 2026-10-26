@@ -132,8 +132,10 @@ import {
   type VisitorDeps,
 } from './visitor.ts';
 
-/** The largest booking body read: a name, an email, a few short fields. */
+/** The largest guest change body read: a name, an email, a few short fields. */
 export const BOOKING_BODY_LIMIT_BYTES = 16 * 1024;
+/** The largest booking body read: the visitor's details and up to 20 answers to the page's questions (spec 0057), as a form's submit. */
+export const BOOK_BODY_LIMIT_BYTES = 64 * 1024;
 /** The largest chat turn read: 40 lines of 500 characters, each character at most 6 bytes as JSON (AC-1520). */
 export const CHAT_BODY_LIMIT_BYTES = 128 * 1024;
 
@@ -867,10 +869,13 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       const entry = await enterBookingPage({ db }, key);
       const handoff = handoffFor(entry, c.req.query('p'));
       // The name and email come from the stored submission, never from the link.
-      const visitor = handoff === undefined ? {} : await readHandoffPrefill(entry, handoff.submissionId);
+      const visitor: PublicPrefill = handoff === undefined ? {} : await readHandoffPrefill(entry, handoff.submissionId);
+      // The page's own questions a form answered (spec 0057, AC-5713) ride along: the same stored submission, same token.
       const prefill: PublicPrefill = {
         ...(visitor.name === undefined ? {} : { name: visitor.name }),
         ...(visitor.email === undefined ? {} : { email: visitor.email }),
+        ...(visitor.answers === undefined ? {} : { answers: visitor.answers }),
+        ...(visitor.skip === undefined ? {} : { skip: visitor.skip }),
       };
       return ok(prefill);
     } catch (error) {
@@ -1056,7 +1061,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   app.use(
     '/public/booking/:publicKey/book',
     bodyLimit({
-      maxSize: BOOKING_BODY_LIMIT_BYTES,
+      maxSize: BOOK_BODY_LIMIT_BYTES,
       onError: () => answer('PAYLOAD_TOO_LARGE', 'This request is larger than a booking needs.'),
     }),
   );

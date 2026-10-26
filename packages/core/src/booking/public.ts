@@ -17,11 +17,14 @@
 //    their email, in a savepoint, so a record refusal never loses the booking.
 // 4. After the commit, the calendar event (three tries); a booking whose event
 //    failed stays confirmed and is marked for the host.
-import { handoffSubmission, handoffVisitor } from '../forms/public.ts';
+import { handoffAnswers, handoffSubmission, handoffVisitor } from '../forms/public.ts';
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   bookingPicturePath,
+  checkAnswers,
+  type FileAnswer,
+  type PhoneAnswer,
   PROFILE_PAGE_SIZE,
   linkIconPath,
   profilePicturePath,
@@ -44,6 +47,7 @@ import type {
   PublicChatLine,
   PublicManagedBooking,
   PublicBookingPage,
+  PublicPrefill,
   PublicLocation,
   PublicSlots,
   PublicSlotsQuery,
@@ -57,7 +61,7 @@ import { isPictureHidden } from './picture-choice.ts';
 import { publicSocialsOf } from './socials.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
+import { postgresError, refuse, refuseAll, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { BookingCalendar, BusyReader } from './calendar.ts';
 import {
@@ -78,6 +82,14 @@ import { writeAssignment } from '../rotation/ledger.ts';
 import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } from '../rotation/team.ts';
 import { buildBookingIcs } from './ics.ts';
 import { matchVisitor } from './visitor.ts';
+import {
+  bookingAnswersOf,
+  chatIsOff,
+  fileBookingAnswers,
+  handedOver,
+  peopleObjectId,
+  publicQuestionsOf,
+} from './questions.ts';
 import { MAX_RESCHEDULES } from './change.ts';
 import {
   allowFor,
@@ -237,11 +249,14 @@ export async function getPublicBookingPage(
       hostTimeZone: page.availability.timeZone,
       windowDays: page.windowDays,
       // The view the host chose, beside the rest of the facts, so the page's first paint is already that view.
-      defaultView: page.defaultView,
+      // A page with a required question books through its form only: chat is off, so it never opens there.
+      defaultView: page.defaultView === 'chat' && chatIsOff(page.questions) ? 'month' : page.defaultView,
       ...(team === undefined ? {} : { team: await teamAvatars(tx, team) }),
       // Once the owner has a handle, a plain `/b/<key>` visit moves to `/<handle>/<slug>`.
       ...(path.startsWith('/b/') ? {} : { path }),
       ...(team === undefined ? await shownSocials(tx, page) : {}),
+      // The page's own questions (spec 0057, AC-5709); a page with none sends nothing new (AC-5704).
+      ...(page.questions.length === 0 ? {} : { questions: [...publicQuestionsOf(page.questions)] }),
     };
     return { facts, pictureUser: pictures === undefined ? undefined : await shownPictureOwner(tx, page) };
   });
@@ -633,6 +648,50 @@ function checkDuration(page: PageRecord, duration: number): void {
   }
 }
 
+/**
+ * The visitor's answers to the page's own questions (spec 0057, AC-5710), checked with forms' `checkAnswers` against
+ * the questions as they are now: each in its canonical shape, by key, anything else dropped. A missing required answer
+ * or a wrong value refuses the booking, each on its question as `answers.<key>`, and nothing is booked. A booking made
+ * by chat (spec 0042) is asked no questions, so it keeps none and is never refused for them.
+ */
+/**
+ * A booking page can't ask for a file (`BookingQuestions`' own check refuses the answer type), so the shared
+ * checker's wider answer never carries one here. Dropped rather than cast: if a page ever does take a file, the
+ * booking keeps the rest instead of storing an upload id nothing downstream reads.
+ */
+function withoutFiles(
+  answers: Readonly<Record<string, string | boolean | FileAnswer | PhoneAnswer>>,
+): Readonly<Record<string, string | boolean | PhoneAnswer>> {
+  const kept: Record<string, string | boolean | PhoneAnswer> = {};
+  for (const [key, value] of Object.entries(answers)) {
+    if (typeof value === 'object' && 'fileId' in value) continue;
+    kept[key] = value;
+  }
+  return kept;
+}
+
+function checkedAnswers(
+  page: PageRecord,
+  input: PublicBookInput,
+  isChat: boolean,
+  skip: readonly string[],
+): Readonly<Record<string, string | boolean | PhoneAnswer>> {
+  if (isChat && chatIsOff(page.questions)) {
+    throw refuse('BOOKING_CLOSED', 'This page asks a few questions first. Pick a time on the calendar to book.');
+  }
+  if (page.questions.length === 0 || isChat) return {};
+  const asked = page.questions.filter((question) => !skip.includes(question.key));
+  const checked = checkAnswers({ language: 'en', questions: asked }, input.answers ?? {});
+  if (checked.ok) return withoutFiles(checked.answers);
+  const [first, ...rest] = Object.entries(checked.fields).map(([key, message]) => ({
+    code: 'ATTRIBUTE_VALUE_INVALID' as const,
+    message,
+    field: `answers.${key}`,
+  }));
+  if (first === undefined) return {};
+  throw refuseAll([first, ...rest]);
+}
+
 /** The page's slots of one length in the range (AC-629, AC-631), start and end only. */
 export async function readPublicSlots(
   entry: BookingEntry,
@@ -824,7 +883,12 @@ export async function bookPublicSlot(
   // 1. The page, the length, a retry, and who it books.
   type First =
     | { readonly again: Booked }
-    | { readonly page: PageRecord; readonly memberIds: readonly string[]; readonly team: Team | undefined };
+    | {
+        readonly page: PageRecord;
+        readonly memberIds: readonly string[];
+        readonly team: Team | undefined;
+        readonly answers: Readonly<Record<string, string | boolean | PhoneAnswer>>;
+      };
   const first = await inWorkspace(entry.scope, async (tx): Promise<First> => {
     const page = await loadPage(tx, entry.pageId);
     const again = page === undefined ? undefined : await replay(tx, page);
@@ -834,13 +898,21 @@ export async function bookPublicSlot(
     if (live.location.type === 'phone' && (input.phone ?? '').trim() === '') {
       throw refuseOn('VALUE_REQUIRED', 'Give a number to call you on.', 'phone');
     }
+    // A form's hand off already answered some questions onto the same attribute: those aren't asked (AC-5713).
+    const skip =
+      link === undefined || live.questions.length === 0
+        ? []
+        : handedOver(live.questions, await handoffAnswers(tx, link.submissionId, live.id), entry.people).skip;
+    const answers = checkedAnswers(live, input, options.chat !== undefined, skip);
     const team = await loadTeam(tx, live);
     const memberIds = team === undefined ? await membersOf(tx, live) : teamMemberIds(team);
     if (team === undefined) pickHost(live, memberIds);
-    return { page: live, memberIds, team };
+    return { page: live, memberIds, team, answers };
   });
   if ('again' in first) return first.again;
-  const { page, memberIds, team } = first;
+  const { page, memberIds, team, answers } = first;
+  // What the booking keeps of them, with each question's label as it is now (spec 0057, AC-5711).
+  const kept = bookingAnswersOf(page.questions, answers);
   if (team !== undefined && memberIds.length === 0) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
 
   // 2. The calendars, outside any lock: the day around the slot, read fresh.
@@ -971,7 +1043,7 @@ export async function bookPublicSlot(
             visitorName: input.name,
             visitorEmail: input.email,
             visitorTimeZone: input.timeZone,
-            answers: answersOf(input, options.chat),
+            answers: { ...answersOf(input, options.chat), ...(kept.length === 0 ? {} : { questions: kept }) },
             ...(submissionId === undefined ? {} : { submissionId }),
             manageTokenHash: tokenHash,
             manageTokenDerived: true,
@@ -1019,25 +1091,58 @@ export async function bookPublicSlot(
       }
       // The visitor's records, under a lock on their email, in a savepoint: a refusal keeps the booking. On a round
       // robin page, a person or company made now is the assigned host's (AC-744); one that exists keeps its owner.
-      await lockKey(tx, `booking:email:${workspaceId}:${input.email}`);
-      const matched = await context.perRecord((step) =>
-        matchVisitor(
-          step,
-          { people: entry.people, companies: entry.companies },
-          {
-            name: input.name,
-            email: input.email,
-            timeZone: input.timeZone,
-            // The first rotation's pick: the member the round robin assigned it to.
-            ...(chosen?.picks[0] === undefined ? {} : { ownerMemberId: chosen.picks[0].memberId }),
-          },
-        ),
-      );
-      if (matched.ok && (matched.value.personId !== undefined || matched.value.companyId !== undefined)) {
-        await tx
-          .update(bookings)
-          .set({ personRecordId: matched.value.personId ?? null, companyRecordId: matched.value.companyId ?? null })
-          .where(eq(bookings.id, bookingId));
+      // A page that keeps bookings out of the CRM finds and makes no records (spec 0057, AC-5708). The filed answers
+      // go onto the person in the same savepoint (AC-5712), each one the record refuses kept and marked not saved.
+      if (page.fileToCrm) {
+        await lockKey(tx, `booking:email:${workspaceId}:${input.email}`);
+        const matched = await context.perRecord(async (step) => {
+          const visitor = await matchVisitor(
+            step,
+            { people: entry.people, companies: entry.companies },
+            {
+              name: input.name,
+              email: input.email,
+              timeZone: input.timeZone,
+              // The first rotation's pick: the member the round robin assigned it to.
+              ...(chosen?.picks[0] === undefined ? {} : { ownerMemberId: chosen.picks[0].memberId }),
+            },
+          );
+          const filed =
+            visitor.personId === undefined || kept.length === 0
+              ? kept
+              : await fileBookingAnswers(step, {
+                  people: entry.people,
+                  personId: visitor.personId,
+                  questions: page.questions,
+                  answers,
+                  kept,
+                });
+          return { visitor, filed };
+        });
+        if (matched.ok) {
+          const { visitor, filed } = matched.value;
+          if (visitor.personId !== undefined || visitor.companyId !== undefined || filed !== kept) {
+            await tx
+              .update(bookings)
+              .set({
+                personRecordId: visitor.personId ?? null,
+                companyRecordId: visitor.companyId ?? null,
+                ...(filed === kept
+                  ? {}
+                  : { answers: sql`jsonb_set(${bookings.answers}, '{questions}', ${JSON.stringify(filed)}::jsonb)` }),
+              })
+              .where(eq(bookings.id, bookingId));
+          }
+        } else if (kept.some((answer) => answer.attributeId !== undefined)) {
+          // The person couldn't be matched or made: the filed answers stay with the booking, not saved.
+          const unsaved = kept.map((answer) =>
+            answer.attributeId === undefined ? answer : { ...answer, saved: false },
+          );
+          await tx
+            .update(bookings)
+            .set({ answers: sql`jsonb_set(${bookings.answers}, '{questions}', ${JSON.stringify(unsaved)}::jsonb)` })
+            .where(eq(bookings.id, bookingId));
+        }
       }
       return {
         bookingId,
@@ -1147,12 +1252,22 @@ function storedAnswers(answers: unknown): { readonly note?: string; readonly gue
  * booking page's prefill: read from the stored submission in this page's
  * workspace, never from the link. Empty for a submission that isn't there.
  */
-export async function readHandoffPrefill(
-  entry: BookingEntry,
-  submissionId: string,
-): Promise<{ readonly name?: string; readonly email?: string }> {
+export async function readHandoffPrefill(entry: BookingEntry, submissionId: string): Promise<PublicPrefill> {
   checkEntry(entry);
-  return inWorkspace(entry.scope, (tx) => handoffVisitor(tx, submissionId, entry.pageId));
+  return inWorkspace(entry.scope, async (tx) => {
+    const visitor = await handoffVisitor(tx, submissionId, entry.pageId);
+    const page = await loadPage(tx, entry.pageId);
+    if (page === undefined || page.questions.length === 0) return visitor;
+    // The page's own questions (spec 0057, AC-5713): what the form answered onto the same attribute isn't asked, and
+    // what it answered by the same key starts filled in. Read from the stored submission only, as the name is.
+    const people = entry.people === '' ? await peopleObjectId(tx) : entry.people;
+    const { skip, answers } = handedOver(page.questions, await handoffAnswers(tx, submissionId, entry.pageId), people);
+    return {
+      ...visitor,
+      ...(Object.keys(answers).length === 0 ? {} : { answers }),
+      ...(skip.length === 0 ? {} : { skip: [...skip] }),
+    };
+  });
 }
 
 /** A daily visitor id (spec 0047, AC-1626): 32 lowercase hex digits, an HMAC the api made; never an address. */

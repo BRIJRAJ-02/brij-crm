@@ -7,14 +7,12 @@ import {
   isDataError,
   type JobView,
   type ObjectSummary,
-  type SubmissionAnswer,
   type SubmissionPage,
   type SubmissionState,
   type SubmissionSummary,
   type SubmissionView,
 } from '@crm/data';
 import {
-  AttributeDisplay,
   Menu,
   MenuItem,
   MenuTrigger,
@@ -40,10 +38,10 @@ import {
 // eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
 import { StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
-import { FileValue, PhoneValue } from '@crm/contracts/values';
+import { AnswerList, answerText } from '../questions/AnswerList.tsx';
 import { answerFiling } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
@@ -113,21 +111,6 @@ function stateLabel(submission: SubmissionSummary, isFiling: boolean): string {
 function stateHue(submission: SubmissionSummary, isFiling: boolean): 'gray' | 'green' | 'orange' | 'red' {
   if (submission.state === 'processed' && submission.crm.state !== 'linked') return isFiling ? 'gray' : 'green';
   return STATE_HUES[submission.state];
-}
-
-/** An answer as words: text, Yes or No, a phone's number, a file's name. */
-function answerText(answer: SubmissionAnswer): string {
-  const { value } = answer;
-  if (answer.answerType === 'file') {
-    const file = FileValue.safeParse(value);
-    return file.success ? file.data.name : '';
-  }
-  if (typeof value === 'boolean') return value ? strings.yes : strings.no;
-  if (typeof value === 'string') return value;
-  if (typeof value === 'object' && value !== null && typeof (value as { number?: unknown }).number === 'string') {
-    return (value as { number: string }).number;
-  }
-  return '';
 }
 
 /** The filter, the table, Show more, and the open submission in a Panel. */
@@ -729,64 +712,6 @@ export function SubmissionsTab({
 }
 
 /**
- * An answer's value as the panel shows it: a phone through the field set, spaced for reading; everything else as
- * its words, which wrap whole. An email or a website stays plain text, never a link, since a visitor typed it.
- */
-function answerValue(answer: SubmissionAnswer): ReactNode {
-  const text = answerText(answer);
-  if (text === '') return strings.noAnswer;
-  if (answer.answerType === 'file') {
-    // The stored file through the field set: its icon and name, a download link the api checks on every open.
-    const file = FileValue.safeParse(answer.value);
-    if (!file.success) return text;
-    return (
-      <AttributeDisplay
-        attribute={{
-          id: answer.questionId,
-          name: answer.label,
-          type: 'file',
-          allowMultiple: false,
-          isRequired: false,
-          isUnique: false,
-          isReadOnly: true,
-        }}
-        value={file.data}
-        surface="panel"
-      />
-    );
-  }
-  if (answer.answerType !== 'phone') return text;
-  // A phone the field set can read is a stored { number, country }; anything else shows as its words.
-  const phone = PhoneValue.safeParse(answer.value);
-  if (!phone.success) return text;
-  return (
-    <AttributeDisplay
-      attribute={{
-        id: answer.questionId,
-        name: answer.label,
-        type: 'phone',
-        allowMultiple: false,
-        isRequired: false,
-        isUnique: false,
-        isReadOnly: true,
-      }}
-      value={phone.data}
-      surface="panel"
-    />
-  );
-}
-
-/** The answers worth copying (an email, a phone, a website), with what copying gives: a phone's full number. */
-const COPYABLE: ReadonlySet<string> = new Set(['email', 'phone', 'website']);
-
-/** What copying an answer copies, and its button's name. */
-function answerCopy(answer: SubmissionAnswer): { readonly value: string; readonly label: string } | undefined {
-  if (!COPYABLE.has(answer.answerType)) return undefined;
-  const text = answerText(answer);
-  return text === '' ? undefined : { value: text, label: strings.copyAnswer(answer.label) };
-}
-
-/**
  * One submission, every row stacked the same way: what went wrong when it did, its answers in question order
  * (filing said once for the section, the exceptions marked), the records it touched, and where it came from.
  */
@@ -814,18 +739,9 @@ function SubmissionDetail({
         headingLevel={3}
         {...(filing.note === undefined ? {} : { meta: filing.note })}
       >
-        <DescriptionList
-          layout="stacked"
-          items={submission.answers.map((answer) => {
-            const copy = answerCopy(answer);
-            return {
-              id: answer.questionId,
-              term: filing.marked.has(answer.questionId) ? `${answer.label} · ${filing.mark}` : answer.label,
-              description: answerValue(answer),
-              ...(answerText(answer) === '' ? { isPlaceholder: true } : {}),
-              ...(copy === undefined ? {} : { copy }),
-            };
-          })}
+        <AnswerList
+          answers={submission.answers}
+          markOf={(answer) => (filing.marked.has(answer.questionId) ? filing.mark : undefined)}
         />
       </FieldGroup>
       {(submission.records.length > 0 || submission.crm.state === 'filing') && (

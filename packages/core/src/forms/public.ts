@@ -196,6 +196,40 @@ export async function handoffVisitor(
 }
 
 /**
+ * What a hand off's submission answered (spec 0057, AC-5713), for the booking page `pageId` its form sends visitors on
+ * to only: each answered question's key, its answer, and the attribute it was filed on with the form's target object.
+ * Empty for any other page.
+ */
+export async function handoffAnswers(
+  tx: WorkspaceTx,
+  submissionId: string,
+  pageId: string,
+): Promise<
+  readonly {
+    readonly key: string;
+    readonly value: unknown;
+    readonly filedOn?: { objectId: string; attributeId: string };
+  }[]
+> {
+  const found = await handedOff(tx, submissionId, pageId);
+  if (found === undefined) return [];
+  const answers =
+    typeof found.answers === 'object' && found.answers !== null ? (found.answers as Record<string, unknown>) : {};
+  const objectId = found.document.targets.main?.objectId;
+  return found.document.questions.flatMap((question) => {
+    if (!Object.hasOwn(answers, question.key)) return [];
+    const attributeId = question.filedOn?.attributeId;
+    return [
+      {
+        key: question.key,
+        value: answers[question.key],
+        ...(attributeId === undefined || objectId === undefined ? {} : { filedOn: { objectId, attributeId } }),
+      },
+    ];
+  });
+}
+
+/**
  * What a hand off's submission gave, as page `pageId`'s routing rules read it (spec 0043, AC-1608): its answers by
  * question key and the visit's hidden fields as `hidden.<name>`; empty for any other page.
  */

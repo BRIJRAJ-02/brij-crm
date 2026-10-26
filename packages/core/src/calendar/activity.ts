@@ -11,6 +11,7 @@ import { ACTIVITY_RANKS, activityKey, type ActivityItem } from '@crm/contracts';
 import { boundSql, toMillis } from '../engine/activity-sources.ts';
 import type { ActivityBound, ActivitySource } from '../engine/activity.ts';
 import { meetingViews, micros } from './meetings.ts';
+import { answerWords, shownAnswers } from '../booking/questions.ts';
 
 /** The loose half of the bound, which the index on the start can use. */
 const nearBound = (after?: ActivityBound) =>
@@ -38,10 +39,38 @@ export const meetingSource: ActivitySource = async ({ tx, scope, record, after, 
       )
     ).map((view) => [view.id, view]),
   );
+  // A meeting a booking made carries the visitor's answers (spec 0057, AC-5714): one read for the page's meetings.
+  const ids = rows.rows.map((row) => row.meeting_id);
+  const booked =
+    ids.length === 0
+      ? []
+      : (
+          await tx.execute<{ meeting_id: string; answers: unknown }>(sql`
+            select b.meeting_id::text as meeting_id, b.answers
+            from bookings b
+            where b.meeting_id = any(array(select jsonb_array_elements_text(${JSON.stringify(ids)}::jsonb))::uuid[])
+              and b.answers ? 'questions'
+          `)
+        ).rows;
+  const shown = await shownAnswers(
+    tx,
+    scope.access,
+    booked.map((each) => each.answers),
+  );
+  const answersByMeeting = new Map(
+    booked.map((each) => [
+      each.meeting_id,
+      shown(each.answers).flatMap((answer) => {
+        const text = answerWords(answer.value);
+        return text === '' ? [] : [{ label: answer.label, text }];
+      }),
+    ]),
+  );
   const entries = rows.rows.flatMap((row): ActivityItem[] => {
     const meeting = views.get(row.meeting_id);
     if (meeting === undefined) return [];
     const id = `meeting:${row.meeting_id}`;
+    const answers = meeting.detailsHidden ? [] : (answersByMeeting.get(row.meeting_id) ?? []);
     return [
       {
         id,
@@ -51,6 +80,7 @@ export const meetingSource: ActivitySource = async ({ tx, scope, record, after, 
         itemId: row.meeting_id,
         title: meeting.title,
         meeting,
+        ...(answers.length === 0 ? {} : { answers }),
       },
     ];
   });

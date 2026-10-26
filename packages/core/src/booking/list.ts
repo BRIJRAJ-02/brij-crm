@@ -29,6 +29,7 @@ import { inputInvalid } from '../engine/refusals.ts';
 import { blockOccurrences } from './blocks.ts';
 import { handLinkOf, linkedRecords, linksOf, seenLinks } from './links.ts';
 import { shownAsEvent } from './owned.ts';
+import { shownAnswers } from './questions.ts';
 
 const { bookingPages, bookings, members } = schema;
 
@@ -96,8 +97,11 @@ function itemOf(
   },
   seen: ReadonlySet<string>,
   linked: ReadonlyMap<string, RecordRefDisplay>,
+  answersOf: (stored: unknown) => BookingListItem['answers'],
 ): BookingListItem {
   const place = BookingLocation.safeParse(location);
+  // The answers to the page's own questions (spec 0057, AC-5714), those the reader may see.
+  const answers = answersOf(row.answers) ?? [];
   return {
     id: row.id,
     pageId: row.pageId,
@@ -122,6 +126,7 @@ function itemOf(
       : {}),
     reschedules: row.reschedules,
     ...guestsAndNote(row.answers),
+    ...(answers.length === 0 ? {} : { answers }),
     eventFailed: row.eventFailedAt !== null,
     createdAt: row.createdAt.toISOString(),
     ...(hostStatus === undefined || hostStatus === null || hostStatus === 'active' ? {} : { hostRemoved: true }),
@@ -167,7 +172,12 @@ export async function listWorkspaceBookings(
       scope.access,
       rows.map(({ booking }) => booking),
     );
-    return rows.map((row) => itemOf(row, seen, linked));
+    const answers = await shownAnswers(
+      tx,
+      scope.access,
+      rows.map(({ booking }) => booking.answers),
+    );
+    return rows.map((row) => itemOf(row, seen, linked, answers));
   });
 }
 
@@ -305,7 +315,12 @@ export async function readBookingsCalendar(
       scope.access,
       rows.map(({ booking }) => booking),
     );
-    return { bookings: rows.map((row) => itemOf(row, seen, linked)), events, busy, blocks: [...blocks] };
+    const answers = await shownAnswers(
+      tx,
+      scope.access,
+      rows.map(({ booking }) => booking.answers),
+    );
+    return { bookings: rows.map((row) => itemOf(row, seen, linked, answers)), events, busy, blocks: [...blocks] };
   });
 }
 
@@ -408,10 +423,15 @@ export async function listMeetings(
       scope.access,
       rows.map(({ booking }) => booking),
     );
+    const answers = await shownAnswers(
+      tx,
+      scope.access,
+      rows.map(({ booking }) => booking.answers),
+    );
     const bookingItems: Listed[] = rows.map((row) => ({
       at: row.booking.startsAt.toISOString(),
       id: row.booking.id,
-      item: { kind: 'booking', booking: itemOf(row, seen, linked) },
+      item: { kind: 'booking', booking: itemOf(row, seen, linked, answers) },
     }));
 
     // The reader's own calendar events, from the calendars on their week (and the panel's pick).

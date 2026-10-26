@@ -165,7 +165,7 @@ function valueFor(
 /** The options a document's choice questions file onto, loaded once for every submission it files. */
 export async function optionsFor(
   tx: WorkspaceTx,
-  document: FormDocument,
+  document: Pick<FormDocument, 'questions'>,
   attributes: ReadonlyMap<string, AttributeDef>,
 ): Promise<ReadonlyMap<string, readonly { id: string; label: string }[]>> {
   const filedSelects = document.questions.flatMap((question) => {
@@ -177,9 +177,12 @@ export async function optionsFor(
   return liveOptions(tx, filedSelects);
 }
 
-/** The answers a version's questions file on live attributes, as each attribute takes them now (no I/O). */
+/**
+ * The answers a version's questions file on live attributes, as each attribute takes them now (no I/O). A booking
+ * page's questions (spec 0057) are planned here too.
+ */
 export function plan(
-  document: FormDocument,
+  document: Pick<FormDocument, 'questions'>,
   attributes: ReadonlyMap<string, AttributeDef>,
   options: ReadonlyMap<string, readonly { id: string; label: string }[]>,
   answers: Readonly<Record<string, unknown>>,
@@ -281,6 +284,65 @@ async function writeSkipping<T>(
     }
   }
   return { ok: false, failure: 'The record couldn’t be written.' };
+}
+
+/** What filing answers onto a record ended as: the questions whose answers it planned, and each one refused, and why. */
+export interface FiledOnto {
+  readonly planned: readonly string[];
+  readonly refused: readonly { readonly questionId: string; readonly message: string }[];
+}
+
+/**
+ * Files answers onto a record already matched or made (spec 0057, AC-5712: a booking's person), through the same
+ * write a submission's filing uses: planned onto live attributes (`plan`), each by its question's `update` rule
+ * (`fill` only an empty value, `always` overwrites, `mergedValue`), written in its own savepoint by `writeSkipping`,
+ * which drops a value the record refuses and keeps the rest. A write refused for a reason no answer explains refuses
+ * every answer it held. Never throws for a refusal, so the caller's write (the booking) stands.
+ */
+export async function fileOntoRecord(
+  context: WriteContext,
+  input: {
+    readonly recordId: string;
+    readonly questions: FormDocument['questions'];
+    readonly attributes: ReadonlyMap<string, AttributeDef>;
+    readonly answers: Readonly<Record<string, unknown>>;
+  },
+): Promise<FiledOnto> {
+  const document = { questions: input.questions };
+  const options = await optionsFor(context.tx, document, input.attributes);
+  const { planned, refused } = plan(document, input.attributes, options, input.answers);
+  const ids = planned.map((each) => each.questionId);
+  if (planned.length === 0) return { planned: ids, refused };
+  const { changes } = await changesFor(context.tx, input.recordId, planned, undefined, undefined);
+  if (changes.size === 0) return { planned: ids, refused };
+  const written = await writeSkipping(context, changes, (inner, given) =>
+    updateRecord(inner, {
+      recordId: input.recordId,
+      values: Object.fromEntries(Object.entries(given).map(([id, value]) => [id, { value }])),
+    }),
+  );
+  if (!written.ok) {
+    return {
+      planned: ids,
+      refused: [
+        ...refused,
+        ...planned
+          .filter((each) => changes.has(each.attribute.id))
+          .map((each) => ({ questionId: each.questionId, message: written.failure })),
+      ],
+    };
+  }
+  const questionOf = new Map(planned.map((each) => [each.attribute.id, each.questionId]));
+  return {
+    planned: ids,
+    refused: [
+      ...refused,
+      ...written.skipped.flatMap((refusal) => {
+        const questionId = refusal.attributeId === undefined ? undefined : questionOf.get(refusal.attributeId);
+        return questionId === undefined ? [] : [{ questionId, message: refusal.message }];
+      }),
+    ],
+  };
 }
 
 /** A submission row as processing reads it, under its lock. */

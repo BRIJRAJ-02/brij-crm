@@ -8,6 +8,11 @@
     inline-size: 100%;
   }
 
+  /* One of the page's own questions (spec 0057): its control sits in the column as any field does. */
+  .question {
+    display: contents;
+  }
+
   .heading {
     margin: 0;
     color: var(--text);

@@ -64,6 +64,11 @@ export const ActivityItem = z.object({
   excerpt: z.string().optional(),
   isDone: z.boolean().optional(),
   meeting: MeetingView.optional(),
+  /**
+   * A meeting a booking made (spec 0057, AC-5714): the visitor's answers to the booking page's own questions, label
+   * then answer as words, those the reader may see. Absent for any other entry.
+   */
+  answers: z.array(z.object({ label: z.string(), text: z.string() })).optional(),
   /** A submission entry (spec 0023): the form, and what the submission did to this record. */
   formId: Uuid.optional(),
   action: z.enum(['created', 'updated', 'matched', 'linked']).optional(),

@@ -13,7 +13,7 @@ import {
   type SubmissionState,
   type SubmissionView,
 } from '@crm/data';
-import { previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
+import { FORM_QUESTIONS_MAX, previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
 import {
   Button,
   Callout,
@@ -34,15 +34,28 @@ import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteFormDialog } from './FormConfirms.tsx';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
-import { draftGap, fileByLabel, publishAttributesOf, sameDocument, savableDraft, statusOf } from './draft.ts';
+import {
+  changeQuestion,
+  draftGap,
+  fileByLabel,
+  isMatchQuestion,
+  planNewAttributes,
+  publishAttributesOf,
+  sameDocument,
+  savableDraft,
+  statusOf,
+  withQuestions,
+} from './draft.ts';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { PublishDialog } from './PublishDialog.tsx';
-import { QuestionsSection } from './QuestionsSection.tsx';
+import { QuestionsSection } from '../questions/QuestionsSection.tsx';
+import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
 import { firstRefusal, saveFailureMessage } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
 import { useJobFollower } from './followJobs.ts';
 import { strings } from './strings.ts';
+import { strings as questionStrings } from '../questions/strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { FormToolbarSlot } from './toolbarSlot.ts';
 import { SubmissionsTab } from './SubmissionsTab.tsx';
@@ -206,6 +219,44 @@ export function FormEditor(props: FormEditorProps) {
   const liveIds = useMemo(() => new Set(form.live?.questions.map((question) => question.id) ?? []), [form.live]);
   const preview = useMemo(() => previewOf(draft, { key: form.publicKey }), [draft, form.publicKey]);
 
+  // Gives each unfiled, labelled question an attribute on the target object, with no prompt: files the question
+  // onto it, and offers Undo (unfile, archive). Answers the draft to publish; a failure leaves the question unfiled.
+  const createMissingAttributes = async (): Promise<{
+    readonly document: FormDocument;
+    readonly choices: FormTargetChoices;
+  }> => {
+    const objectId = target.objectId;
+    const plans = planNewAttributes(draft, target.items, canBuild && canManage && objectId !== undefined);
+    if (objectId === undefined || plans.length === 0) return { document: draft, choices: target };
+    const made = await createPlannedAttributes(data, slug, objectId, plans);
+    if (made.length === 0) return { document: draft, choices: target };
+    const next = made.reduce(
+      (document, each) => changeQuestion(document, each.questionId, { filedOn: each.attributeId }),
+      draft,
+    );
+    setDraft(next);
+    latest.current = next;
+    const choices = await data.forms.attributes(slug, form.id);
+    setTarget(choices);
+    toasts.toast({
+      tone: 'success',
+      message: strings.createdAttributes(made.length, target.objectName ?? ''),
+      action: {
+        label: strings.undo,
+        onAction: () => {
+          setDraft((before) =>
+            made.reduce((document, each) => changeQuestion(document, each.questionId, { filedOn: null }), before),
+          );
+          archiveMadeAttributes(data, slug, made).then(
+            () => data.forms.attributes(slug, form.id).then(setTarget, failed),
+            failed,
+          );
+        },
+      },
+    });
+    return { document: next, choices };
+  };
+
   const publish = () => {
     setProblem(undefined);
     // A Settings field still being typed never goes live half done: Settings shows what it needs beside the field.
@@ -222,6 +273,19 @@ export function FormEditor(props: FormEditorProps) {
       if (tab !== 'settings') void navigate({ href: formHref(slug, form.id, 'settings') });
       return;
     }
+    // Questions with no attribute to file onto get one first, with no prompt; the check and publish then read it.
+    if (planNewAttributes(draft, target.items, canBuild && canManage && target.objectId !== undefined).length === 0) {
+      publishChecked(draft, target);
+      return;
+    }
+    setPublishing(true);
+    createMissingAttributes().then(({ document, choices }) => {
+      setPublishing(false);
+      publishChecked(document, choices);
+    }, failed);
+  };
+
+  const publishChecked = (draft: FormDocument, target: FormTargetChoices) => {
     const attributes = publishAttributesOf(target);
     // The first publish names the form and its address in its dialog; the questions are checked first.
     const found = publishProblem({
@@ -479,13 +543,25 @@ export function FormEditor(props: FormEditorProps) {
             )}
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
-              draft={draft}
-              onChange={setDraft}
+              questions={draft.questions}
+              onChange={(update) => {
+                setDraft((before) => withQuestions(before, update(before.questions)));
+              }}
+              max={FORM_QUESTIONS_MAX}
+              holder={questionStrings.formHolder}
+              keptWith="submission"
+              locked={{
+                ids: new Set(
+                  draft.questions.filter((question) => isMatchQuestion(draft, question)).map((question) => question.id),
+                ),
+                reason: strings.emailStays,
+              }}
               attributes={target.items}
               objectName={target.objectName}
               liveIds={liveIds}
               newId={() => data.forms.newId()}
               toasts={toasts}
+              canCreate={canBuild}
               isReadOnly={!canManage}
               {...(shown?.questionId === undefined
                 ? {}

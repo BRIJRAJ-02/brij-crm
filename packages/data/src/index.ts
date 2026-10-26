@@ -54,6 +54,7 @@ import type {
   FormDocument,
   FormStatus,
   FormSummary,
+  FormTargetChoices,
   FormView,
   PublishFormInput,
   SaveFormDraftInput,
@@ -299,6 +300,7 @@ export type {
   ApiRefusal,
   AttributeValidation,
   BookingAvailability,
+  BookingAnswer,
   BookingListItem,
   PublicSlots,
   BookingLocation,
@@ -3171,6 +3173,12 @@ export function createDataLayer({
         await bookingPageLists.view(workspace).ready();
         return bookingPageLists.items(workspace) ?? [];
       },
+      /**
+       * Where a page's answers may be filed (spec 0057, AC-5706): People and the attributes a question may go onto,
+       * with whether the reader may write each. `NOT_FOUND` for a page the reader may not change.
+       */
+      attributes: (workspace: string, pageId: string): Promise<FormTargetChoices> =>
+        call((options) => api.bookingPages.attributes({ workspace, pageId }, options)),
       /** One page. `NOT_FOUND` for one the reader may not change. */
       get: (workspace: string, pageId: string): Promise<BookingPageView> =>
         call((options) => api.bookingPages.get({ workspace, pageId }, options)).then((page) => {

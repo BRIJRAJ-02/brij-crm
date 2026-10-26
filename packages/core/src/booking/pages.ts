@@ -15,6 +15,7 @@ import {
   type BookingView,
   type CreateBookingPageInput,
   type DeleteBookingPageInput,
+  type FormTargetChoices,
   type GetBookingPageInput,
   type ListBookingsInput,
   type ProfileOrder,
@@ -46,6 +47,7 @@ import { linksOf, seenLinks } from './links.ts';
 import { lockKey } from './locks.ts';
 import { ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
+import { checkPageQuestions, questionsSeenBy, questionTargets, withHiddenFilings } from './questions.ts';
 
 const { bookingPageMembers, bookingPageRotations, bookingPages, bookings, members, rotations } = schema;
 
@@ -175,6 +177,7 @@ function viewOf(
   hosts: TeamHosts | undefined,
   handle: string | undefined,
   unseen: UnseenRule,
+  seen: (questions: PageRecord['questions']) => PageRecord['questions'],
 ): BookingPageView {
   return {
     id: page.id,
@@ -204,6 +207,9 @@ function viewOf(
     defaultView: page.defaultView,
     profileSection: page.profileSection,
     profilePosition: page.profilePosition,
+    // A filing onto a field hidden from the reader is absent, not even its id (spec 0057, as the rules below).
+    questions: seen(page.questions),
+    fileToCrm: page.fileToCrm,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
     ...(hosts === undefined ? {} : { hosts }),
     // Hidden means absent (spec 0009): a rule over a field the reader can't see isn't sent, not even its id.
@@ -245,6 +251,7 @@ export async function listBookingPages(
       scope.access,
       pages.flatMap((page) => page.routingRules ?? []),
     );
+    const seen = await questionsSeenBy(tx, scope.access);
     return pages.map((page) =>
       viewOf(
         scope,
@@ -253,6 +260,7 @@ export async function listBookingPages(
         hosts.get(page.id),
         page.ownerUserId === null ? undefined : handles.get(page.ownerUserId)?.handle,
         unseen,
+        seen,
       ),
     );
   });
@@ -276,7 +284,23 @@ async function viewWithCounts(tx: WorkspaceTx, scope: EngineScope, page: PageRec
   const counts = await monthCounts(tx, [page.id], now);
   const hosts = await pageHosts(tx, [page]);
   const unseen = await unseenRules(tx, scope.access, page.routingRules ?? []);
-  return viewOf(scope, page, counts.get(page.id) ?? 0, hosts.get(page.id), await ownerHandle(tx, page), unseen);
+  const seen = await questionsSeenBy(tx, scope.access);
+  return viewOf(scope, page, counts.get(page.id) ?? 0, hosts.get(page.id), await ownerHandle(tx, page), unseen, seen);
+}
+
+/**
+ * Where a page's answers may be filed (spec 0057, AC-5706): People and its attributes, as the reader may write them,
+ * for a page they may change; NOT_FOUND otherwise.
+ */
+export async function bookingPageAttributes(
+  scope: EngineScope,
+  input: Pick<GetBookingPageInput, 'pageId'>,
+): Promise<FormTargetChoices> {
+  requirePermission(scope, 'booking.manage');
+  return inWorkspace(scope, async (tx) => {
+    await pageToChange(tx, scope, input.pageId, false);
+    return questionTargets(tx, scope);
+  });
 }
 
 /** The page owner's handle, when they have one: the page's address is then `/<handle>/<slug>`. */
@@ -491,8 +515,11 @@ export async function createBookingPage(
       defaultView: given.defaultView ?? 'month',
       profileSection: given.profileSection ?? null,
       profilePosition: given.profilePosition ?? (await nextProfilePosition(tx, owner)),
+      questions: given.questions ?? [],
+      fileToCrm: given.fileToCrm ?? true,
     };
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
+    await checkPageQuestions(tx, scope, settings.questions);
     const by = actorRow(scope.actor);
     try {
       const [row] = await tx
@@ -526,6 +553,8 @@ export async function createBookingPage(
           defaultView: settings.defaultView,
           profileSection: settings.profileSection,
           profilePosition: settings.profilePosition,
+          questions: settings.questions,
+          fileToCrm: settings.fileToCrm,
           createdByType: by.type,
           createdById: by.id,
           createdByMemberId: by.memberId,
@@ -549,7 +578,15 @@ export async function createBookingPage(
       const [page] = await pagesOf(tx, [row]);
       if (page === undefined) throw new Error('The booking page was not created.');
       // A personal page has no rules.
-      return viewOf(scope, page, 0, undefined, await ownerHandle(tx, page), NONE_UNSEEN);
+      return viewOf(
+        scope,
+        page,
+        0,
+        undefined,
+        await ownerHandle(tx, page),
+        NONE_UNSEEN,
+        await questionsSeenBy(tx, scope.access),
+      );
     } catch (error) {
       throw slugRefusal(error) ?? error;
     }
@@ -586,6 +623,13 @@ export async function updateBookingPage(
     if (settings.scheduleId !== undefined && settings.scheduleId !== null) {
       await checkPageSchedule(tx, page.ownerMemberId, settings.scheduleId);
     }
+    // The questions as the writer sent them, with the filings a field hidden from them kept, then checked: what changed
+    // against the writer's own access (spec 0057, AC-5717), the rest as a form's publish checks it.
+    const questions =
+      settings.questions === undefined
+        ? undefined
+        : withHiddenFilings(page.questions, settings.questions, await questionsSeenBy(tx, scope.access));
+    if (questions !== undefined) await checkPageQuestions(tx, scope, questions, page.questions);
     if (input.hosts !== undefined) {
       if (page.kind !== 'round_robin') {
         throw refuseOn('CONFIG_INVALID', 'Only a round robin page books from rotations.', 'hosts');
@@ -648,6 +692,8 @@ export async function updateBookingPage(
           ...(settings.defaultView === undefined ? {} : { defaultView: settings.defaultView }),
           ...(settings.profileSection === undefined ? {} : { profileSection: settings.profileSection }),
           ...(settings.profilePosition === undefined ? {} : { profilePosition: settings.profilePosition }),
+          ...(questions === undefined ? {} : { questions }),
+          ...(settings.fileToCrm === undefined ? {} : { fileToCrm: settings.fileToCrm }),
           ...(routing === undefined ? {} : { routing }),
           updatedAt: sql`now()`,
           updatedByType: by.type,

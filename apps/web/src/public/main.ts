@@ -10,6 +10,7 @@
 import '@crm/ui/styles.css';
 import { createPublicFormClient, loadCaptcha } from '@crm/data/public-form';
 import { mountFormLoading, mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
+import { guessCountry } from './country.ts';
 import { contextFromFrame, contextOfPage, hiddenOf } from './context.ts';
 import { closeOnEscape, embedOf, framedUrl, isOwnBookingPath, reportHeight, type PostToHost } from './frame.ts';
 
@@ -47,19 +48,6 @@ const loading = mountFormLoading(root, mode);
 // The loading card has a height of its own, so a site's frame is sized to it at once rather than clipping it
 // until the form arrives.
 let stopHeight = postHeight(root.lastElementChild);
-
-/** The visitor's country, guessed from the browser's language (en-GB is GB), for phone and country questions. */
-function guessCountry(): string | undefined {
-  for (const language of navigator.languages) {
-    try {
-      const region = new Intl.Locale(language).maximize().region;
-      if (region !== undefined && /^[A-Z]{2}$/.test(region)) return region;
-    } catch {
-      // A language tag the browser can't read: try the next.
-    }
-  }
-  return undefined;
-}
 
 /** Where this visit came from: the site's page an embed passed along, or this page itself. */
 function contextNow() {

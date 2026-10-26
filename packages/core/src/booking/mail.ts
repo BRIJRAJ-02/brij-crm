@@ -25,6 +25,7 @@ import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { addedLaterOf, guestsOf } from './change.ts';
 import { buildBookingIcs } from './ics.ts';
+import { answerWords, storedBookingAnswers } from './questions.ts';
 import type { BookingMailKind } from './mail-queue.ts';
 import { loadPage } from './slots.ts';
 import { pagePath } from './handles.ts';
@@ -202,6 +203,28 @@ export async function prepareBookingMail(
     const where = whereOf(page.location, row.videoUrl, phone, { kind: 'guest', hostName });
     const whereForHost = whereOf(page.location, row.videoUrl, phone, { kind: 'host' });
     const guests = guestsOf(row.answers);
+    // The page's own questions (spec 0057, AC-5714). An email is read by whoever it reaches, outside any member's
+    // field rules, so an answer filed onto a People field stays on the record (where those rules apply) and the
+    // email says how many; the answers kept with the booking only are written out, label then words.
+    const stored = storedBookingAnswers(row.answers);
+    const filedCount = stored.filter((each) => each.attributeId !== undefined).length;
+    const answerRows = [
+      ...stored.flatMap((each) => {
+        const words = each.attributeId === undefined ? answerWords(each.value) : '';
+        return words === '' ? [] : [{ label: each.label, value: words }];
+      }),
+      ...(filedCount === 0
+        ? []
+        : [
+            {
+              label: 'On their record',
+              value:
+                filedCount === 1
+                  ? '1 more answer, saved on their person in Timefix.'
+                  : `${String(filedCount)} more answers, saved on their person in Timefix.`,
+            },
+          ]),
+    ];
     const addedLater = addedLaterOf(row.answers);
     /** A guest's calendar file on a move or cancel: when no calendar event invited them, they have only ours. */
     const guestFile = (method: 'REQUEST' | 'CANCEL', guest: string) =>
@@ -342,6 +365,8 @@ export async function prepareBookingMail(
                 ...(guests.length === 0 ? [] : [{ label: 'Guests', value: guests.join(', ') }]),
                 { label: 'Where', value: whereForHost },
                 ...(note === undefined ? [] : [{ label: 'Note', value: note }]),
+                // The page's own questions (spec 0057, AC-5714), label then answer; drawn as text, never markup.
+                ...answerRows,
               ],
               button: { label: 'Open Bookings', url: bookingsUrl },
               why: hostWhy,

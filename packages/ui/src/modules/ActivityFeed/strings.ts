@@ -60,6 +60,11 @@ export const strings = {
   responses: { declined: 'declined', tentative: 'maybe', needs_action: 'no reply' },
   /** A meeting's video link. */
   joinVideo: 'Join video call',
+  /** One of a booked meeting's answers (spec 0057): "Budget: Under 5k". */
+  answerLine: (label: string, text: string) => `${label}: ${text}`,
+  /** Past the first three: "2 more answers on the booking". */
+  moreAnswers: (count: number) =>
+    count === 1 ? '1 more answer on the booking' : `${String(count)} more answers on the booking`,
   /** An attendee the CRM doesn't know (spec 0024, AC-609). */
   addPerson: 'Add as person',
   addingPerson: 'Adding',

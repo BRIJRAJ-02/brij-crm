@@ -1,0 +1,80 @@
+// Every word the question editor shows (spec 0023, 0023-experience.md, Questions; spec 0057), in one place: a form's
+// builder and a booking page's editor draw the same section. Where the two say something different (what an
+// unfiled answer is kept with), each has its own line.
+import type { AnswerType } from '@crm/data';
+
+export const strings = {
+  questions: 'Questions',
+  addQuestion: 'Add a question',
+  questionMenu: 'More question actions',
+  addFromPresets: 'Add from presets',
+  closeAll: 'Close all questions',
+  /** Add a question's tooltip at the most the list holds: "A form holds at most 30 questions." */
+  tooManyQuestions: (holder: string, max: number) => `${holder} holds at most ${String(max)} questions.`,
+  formHolder: 'A form',
+  pageHolder: 'A booking page',
+  question: 'Question',
+  questionPlaceholder: 'What do you want to ask?',
+  untitledQuestion: 'Untitled question',
+  answerType: 'Answer type',
+  choices: 'Choices',
+  placeholder: 'Placeholder',
+  placeholderHint: 'Shown until they type',
+  whereItGoes: 'Where it goes',
+  /** Where it goes' InfoTip on a question. */
+  whereItGoesHelp:
+    'The field on the record that this answer fills in. Not filed keeps the answer on the submission only.',
+  whereItGoesExample: 'Point a Job title question at Job title, and each person who answers gets it on their record.',
+  notFiled: 'Not filed, kept with the submission',
+  notFiledShort: 'Not filed',
+  willCreate: (title: string, objectName: string) => `Creates “${title}” on ${objectName}`,
+  willCreateShort: (title: string) => `Creates “${title}”`,
+  cantCreate: 'You can’t add attributes, so this stays with the submission.',
+  /** Save couldn't make some planned attributes: those questions stay unfiled. */
+  notCreated: (titles: readonly string[], objectName: string) =>
+    titles.length === 1
+      ? `Couldn’t add “${titles[0] ?? ''}” to ${objectName}, so its answers stay with the booking.`
+      : `Couldn’t add ${String(titles.length)} attributes to ${objectName}, so their answers stay with the booking.`,
+  undoFailed: 'Couldn’t undo that. The questions are still filed.',
+  createdAttributes: (count: number, objectName: string) =>
+    count === 1 ? `Added 1 attribute to ${objectName}.` : `Added ${String(count)} attributes to ${objectName}.`,
+  takenBy: (label: string) => `Used by “${label}”; choosing it moves it here`,
+  cantWrite: 'You can’t write to this',
+  mustAnswer: 'Visitors must answer',
+  duplicateQuestion: 'Duplicate',
+  deleteQuestion: 'Delete',
+  questionDeleted: (label: string) => `Deleted “${label}”.`,
+  questionDeletedFiled: (label: string, filed: string) => `Deleted “${label}”. Its answers went to ${filed}.`,
+  undo: 'Undo',
+  filedLine: (objectName: string, title: string) => `${objectName} › ${title}`,
+  goneAttribute: 'An attribute that no longer exists',
+  answerTypes: {
+    short_text: 'Short text',
+    long_text: 'Long text',
+    email: 'Email',
+    phone: 'Phone',
+    website: 'Website',
+    number: 'Number',
+    dropdown: 'Dropdown',
+    choice: 'Choice',
+    checkbox: 'Checkbox',
+    yes_no: 'Yes or no',
+    country: 'Country',
+    file: 'File',
+  } satisfies Record<AnswerType, string>,
+
+  // An answer as a panel shows it
+  /** Names an answer's copy button. */
+  copyAnswer: (label: string) => `Copy ${label}`,
+  /** An answer left empty. */
+  noAnswer: 'No answer',
+  yes: 'Yes',
+  no: 'No',
+  /** Marks a booking's answers the person record didn't take (spec 0057, AC-5712). */
+  notSavedMark: 'Not saved',
+  notFiledBooking: 'Not filed, kept with the booking',
+  whereItGoesHelpBooking:
+    'The field on the person who booked that this answer fills in. Not filed keeps it with the booking only.',
+  cantCreateBooking: 'You can’t add attributes, so this stays with the booking.',
+  offCrm: 'Turn on Add to the CRM to file answers on the person.',
+} as const;

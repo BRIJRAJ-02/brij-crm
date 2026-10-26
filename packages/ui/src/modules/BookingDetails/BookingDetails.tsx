@@ -1,7 +1,17 @@
-import { HONEYPOT_IGNORE_ATTRIBUTES, HONEYPOT_INPUT_NAME } from '@crm/contracts/forms';
-import { useEffect, useId, useRef, useState } from 'react';
+import {
+  checkAnswers,
+  formStrings,
+  HONEYPOT_IGNORE_ATTRIBUTES,
+  HONEYPOT_INPUT_NAME,
+  visibleQuestions,
+  type PublicQuestion,
+} from '@crm/contracts/forms';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { countriesIn } from '../../lib/countries.ts';
 import { Field } from '../../molecules/Field/Field.tsx';
+import { answerOf, focusQuestion, Question } from '../../public-form/Question.tsx';
+import { prefillAnswer } from '../../public-form/use-hosted-form.ts';
 import styles from './BookingDetails.module.css';
 import { strings } from './strings.ts';
 
@@ -14,6 +24,11 @@ export interface BookingDetailsValues {
   /** More people to invite, by email, blanks left out. */
   readonly guests: readonly string[];
   readonly note: string;
+  /**
+   * The answers to the page's own questions (spec 0057), by question key, as forms send them: only the questions
+   * showing, each in the shape `checkAnswers` takes. Empty on a page that asks none.
+   */
+  readonly answers: Readonly<Record<string, unknown>>;
   /** The honeypot: a person never fills it. */
   readonly trap: string;
 }
@@ -23,7 +38,7 @@ export type BookingDetailsOutcome =
   | { readonly kind: 'done' }
   /**
    * Errors by field: `name`, `email`, `phone`, `guest-<n>` (the n-th guest
-   * sent, blanks left out). `message` is the answer's own sentence, said in
+   * sent, blanks left out), `answers.<key>` (a question's). `message` is the answer's own sentence, said in
    * the line above the buttons when none of `fields` is one the form draws.
    */
   | { readonly kind: 'invalid'; readonly fields: Readonly<Record<string, string>>; readonly message?: string }
@@ -38,9 +53,27 @@ export interface BookingDetailsProps {
   readonly prefill?: { readonly name?: string; readonly email?: string };
   /** The most guests a booking takes. */
   readonly maxGuests?: number;
+  /**
+   * The page's own questions (spec 0057, AC-5709), drawn after the note with the hosted form's controls and checked
+   * with its `checkAnswers`; Show when decides which show. None draws nothing more (AC-5704).
+   */
+  readonly questions?: readonly PublicQuestion[];
+  /** Answers handed over by a form (AC-5713), by question key: each starts its question filled in. */
+  readonly prefillAnswers?: Readonly<Record<string, string>>;
+  /** The visitor's country, guessed: a phone question's code and a country question's start. */
+  readonly countryGuess?: string;
   readonly onBack: () => void;
   readonly onSubmit: (values: BookingDetailsValues) => Promise<BookingDetailsOutcome>;
 }
+
+/** The field a question's error is on, before its key: the server names it the same way. */
+const ANSWER_FIELD = 'answers.';
+
+/** No questions, held once so a page that asks none draws and checks nothing more. */
+const NO_QUESTIONS: readonly PublicQuestion[] = [];
+
+/** The language a booking page speaks: its own words are English, and its questions' checks speak the same. */
+const WORDS = formStrings('en');
 
 /** A rough email shape; the server checks it properly. */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -55,13 +88,20 @@ function drawnErrors(
   fields: Readonly<Record<string, string>>,
   needsPhone: boolean,
   sentRows: readonly number[],
+  shownKeys: ReadonlySet<string>,
 ): Record<string, string> {
   const drawn: Record<string, string> = {};
   for (const [field, message] of Object.entries(fields)) {
     const guest = /^guest-(\d+)$/.exec(field);
     const row = guest === null ? undefined : sentRows[Number(guest[1])];
     if (row !== undefined) drawn[`guest-${String(row)}`] ??= message;
-    else if (field === 'name' || field === 'email' || (field === 'phone' && needsPhone)) drawn[field] = message;
+    else if (
+      field === 'name' ||
+      field === 'email' ||
+      (field === 'phone' && needsPhone) ||
+      (field.startsWith(ANSWER_FIELD) && shownKeys.has(field.slice(ANSWER_FIELD.length)))
+    )
+      drawn[field] = message;
   }
   return drawn;
 }
@@ -73,13 +113,40 @@ function drawnErrors(
  * field with the first one focused, and anything else in one line above the
  * buttons. A prefilled visitor sees "Booking as Ada. Not you?".
  */
-export function BookingDetails({ needsPhone = false, prefill, maxGuests = 10, onBack, onSubmit }: BookingDetailsProps) {
+export function BookingDetails({
+  needsPhone = false,
+  prefill,
+  maxGuests = 10,
+  questions = NO_QUESTIONS,
+  prefillAnswers,
+  countryGuess,
+  onBack,
+  onSubmit,
+}: BookingDetailsProps) {
   const [name, setName] = useState(prefill?.name ?? '');
   const [email, setEmail] = useState(prefill?.email ?? '');
   const [phone, setPhone] = useState('');
   const [guests, setGuests] = useState<readonly string[]>([]);
   const [note, setNote] = useState('');
   const [trap, setTrap] = useState('');
+  const countryNames = useMemo(
+    () => new Map(countriesIn('en').map((country) => [country.code, country.name] as const)),
+    [],
+  );
+  // Each question's answer as its control holds it: a form's hand off fills in what it asked by the same key.
+  const [held, setHeld] = useState<Readonly<Record<string, unknown>>>(() =>
+    Object.fromEntries(
+      questions.flatMap((question) => {
+        // As a hosted form takes a prefill: words for a text question, a choice by its words or key, nothing else.
+        const given = prefillAnswer(question, prefillAnswers?.[question.key]);
+        return given === undefined ? [] : [[question.key, given]];
+      }),
+    ),
+  );
+  // What each question sends, and which show now (Show when reads only earlier questions, as on a form).
+  const given = Object.fromEntries(questions.map((question) => [question.key, answerOf(question, held[question.key])]));
+  const shown = questions.length === 0 ? new Set<string>() : visibleQuestions(questions, given);
+  const showing = questions.filter((question) => shown.has(question.key));
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const [line, setLine] = useState('');
   const [isBusy, setBusy] = useState(false);
@@ -103,14 +170,29 @@ export function BookingDetails({ needsPhone = false, prefill, maxGuests = 10, on
     guests.forEach((guest, index) => {
       if (guest.trim() !== '' && !EMAIL.test(guest.trim())) found[`guest-${String(index)}`] = strings.guestInvalid;
     });
+    // The questions showing, checked as the server will (its Show when already decided here).
+    if (showing.length > 0) {
+      const visible = showing.map(({ showWhen: _decided, ...question }) => question);
+      const checked = checkAnswers({ language: 'en', questions: visible }, given);
+      if (!checked.ok) {
+        for (const [key, message] of Object.entries(checked.fields)) found[`${ANSWER_FIELD}${key}`] = message;
+      }
+    }
     return found;
   };
   const showErrors = (found: Readonly<Record<string, string>>) => {
     setErrors(found);
-    const first = ['name', 'email', ...guests.map((_, index) => `guest-${String(index)}`), 'phone'].find(
-      (field) => found[field] !== undefined,
-    );
-    if (first !== undefined) focusField(first);
+    const first = [
+      'name',
+      'email',
+      ...guests.map((_, index) => `guest-${String(index)}`),
+      'phone',
+      ...showing.map((question) => `${ANSWER_FIELD}${question.key}`),
+    ].find((field) => found[field] !== undefined);
+    if (first?.startsWith(ANSWER_FIELD) === true) {
+      const key = first.slice(ANSWER_FIELD.length);
+      globalThis.requestAnimationFrame(() => focusQuestion(form.current, key));
+    } else if (first !== undefined) focusField(first);
   };
   const clear = (field: string) => {
     if (errors[field] === undefined) return;
@@ -137,6 +219,7 @@ export function BookingDetails({ needsPhone = false, prefill, maxGuests = 10, on
       phone: phone.trim(),
       guests: typed.filter((guest) => guest !== ''),
       note: note.trim(),
+      answers: Object.fromEntries(showing.map((question) => [question.key, given[question.key]])),
       trap,
     }).then(
       (outcome) => {
@@ -146,7 +229,7 @@ export function BookingDetails({ needsPhone = false, prefill, maxGuests = 10, on
           setLine(outcome.message);
           return;
         }
-        const drawn = drawnErrors(outcome.fields, needsPhone, sentRows);
+        const drawn = drawnErrors(outcome.fields, needsPhone, sentRows, shown);
         // A refusal on nothing the form draws still says why, in the line, so the visitor isn't left guessing.
         if (Object.keys(drawn).length > 0) showErrors(drawn);
         else setLine(outcome.message === undefined || outcome.message === '' ? strings.failed : outcome.message);
@@ -289,13 +372,33 @@ export function BookingDetails({ needsPhone = false, prefill, maxGuests = 10, on
       )}
       <Field
         label={strings.note}
-        hint={strings.optional}
+        // Beside the page's own questions, the note says it is optional as they do; alone, it keeps its hint.
+        {...(questions.length === 0 ? { hint: strings.optional } : { labelAside: WORDS.optional })}
         name="note"
         isMultiline
         maxLength={2000}
         value={note}
         onChange={setNote}
       />
+      {showing.map((question) => {
+        const field = `${ANSWER_FIELD}${question.key}`;
+        return (
+          <div key={question.key} className={styles.question} data-question={question.key}>
+            <Question
+              question={question}
+              words={WORDS}
+              value={held[question.key]}
+              error={errors[field]}
+              countryGuess={countryGuess}
+              countryNames={countryNames}
+              onChange={(value) => {
+                setHeld((current) => ({ ...current, [question.key]: value }));
+                clear(field);
+              }}
+            />
+          </div>
+        );
+      })}
       <div className={styles.trap} aria-hidden="true">
         <label htmlFor={trapId}>{strings.trap}</label>
         <input

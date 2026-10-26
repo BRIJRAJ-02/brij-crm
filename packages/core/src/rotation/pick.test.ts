@@ -133,6 +133,8 @@ function teamPage(over: Partial<PageRecord> = {}): PageRecord {
     isDeleted: false,
     isPrivate: false,
     showSocials: true,
+    questions: [],
+    fileToCrm: true,
     profileSection: null,
     profilePosition: 0,
     createdAt: at('2026-10-01T00:00:00Z'),

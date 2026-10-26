@@ -1,5 +1,6 @@
 // Every word the forms screens show (spec 0023, 0023-experience.md), in one place.
-import type { AnswerType, FormStatus, SubmissionState } from '@crm/data';
+import type { FormStatus, SubmissionState } from '@crm/data';
+import { strings as questionStrings } from '../questions/strings.ts';
 
 const count = (n: number, one: string, many: string) => `${new Intl.NumberFormat().format(n)} ${n === 1 ? one : many}`;
 
@@ -96,52 +97,9 @@ export const strings = {
   rounded: 'Rounded corners',
   square: 'Square corners',
 
-  // Questions
-  questions: 'Questions',
-  addQuestion: 'Add a question',
-  questionMenu: 'More question actions',
-  addFromPresets: 'Add from presets',
-  closeAll: 'Close all questions',
-  tooManyQuestions: 'A form holds at most 30 questions.',
-  question: 'Question',
-  questionPlaceholder: 'What do you want to ask?',
-  untitledQuestion: 'Untitled question',
-  answerType: 'Answer type',
-  choices: 'Choices',
-  placeholder: 'Placeholder',
-  placeholderHint: 'Shown until they type',
-  whereItGoes: 'Where it goes',
-  /** Where it goes' InfoTip on a question. */
-  whereItGoesHelp:
-    'The field on the record that this answer fills in. Not filed keeps the answer on the submission only.',
-  whereItGoesExample: 'Point a Job title question at Job title, and each person who answers gets it on their record.',
-  notFiled: 'Not filed, kept with the submission',
-  notFiledShort: 'Not filed',
-  takenBy: (label: string) => `Used by “${label}”; choosing it moves it here`,
-  cantWrite: 'You can’t write to this',
-  mustAnswer: 'Visitors must answer',
-  duplicateQuestion: 'Duplicate',
-  deleteQuestion: 'Delete',
+  // Questions: the shared editor's words (`features/questions/strings.ts`), and the form's own
+  ...questionStrings,
   emailStays: 'The email question stays while the form files onto People: it is how a submission becomes a person.',
-  questionDeleted: (label: string) => `Deleted “${label}”.`,
-  questionDeletedFiled: (label: string, filed: string) => `Deleted “${label}”. Its answers went to ${filed}.`,
-  undo: 'Undo',
-  filedLine: (objectName: string, title: string) => `${objectName} › ${title}`,
-  goneAttribute: 'An attribute that no longer exists',
-  answerTypes: {
-    short_text: 'Short text',
-    long_text: 'Long text',
-    email: 'Email',
-    phone: 'Phone',
-    website: 'Website',
-    number: 'Number',
-    dropdown: 'Dropdown',
-    choice: 'Choice',
-    checkbox: 'Checkbox',
-    yes_no: 'Yes or no',
-    country: 'Country',
-    file: 'File',
-  } satisfies Record<AnswerType, string>,
 
   // First publish
   setUpTitle: 'Set up your form',
@@ -452,10 +410,6 @@ export const strings = {
   deleteSubmissionAction: 'Delete submission',
   /** Marks the answers not saved on the record, when some were. */
   notSavedMark: 'Not saved',
-  /** Names an answer's copy button. */
-  copyAnswer: (label: string) => `Copy ${label}`,
-  /** An answer left empty. */
-  noAnswer: 'No answer',
   /** After Answers, once for the section: what went to the CRM. */
   answersKeptOnly: 'Not added to the CRM',
   answersNotInCrm: 'Not in the CRM',
@@ -464,8 +418,6 @@ export const strings = {
   answersSomeSaved: (saved: number, total: number) => `${String(saved)} of ${String(total)} saved on the record`,
   /** Under Records while the job adds it. */
   answersFiling: 'Adding it to the CRM now.',
-  yes: 'Yes',
-  no: 'No',
   released: 'Released. It is being processed.',
   markedSpam: 'Marked as spam.',
   retried: 'Processing it again.',

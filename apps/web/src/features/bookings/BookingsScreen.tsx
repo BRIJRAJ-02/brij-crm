@@ -102,6 +102,8 @@ import {
   weekOf,
 } from './week.ts';
 import { useFirstDay } from '../workspace/first-day.ts';
+import { AnswerList } from '../questions/AnswerList.tsx';
+import { strings as questionStrings } from '../questions/strings.ts';
 
 export type { BookingsTab };
 export type { BookingsSearch };
@@ -409,6 +411,28 @@ function BookingCard({
                   icon: 'message-square' as const,
                   label: strings.note,
                   value: strings.quoted(booking.note),
+                },
+              ]),
+          // The answers to the page's own questions (spec 0057, AC-5714), label then answer as a submission shows them,
+          // the ones the person record didn't take marked.
+          ...(booking.answers === undefined || booking.answers.length === 0
+            ? []
+            : [
+                {
+                  id: 'answers',
+                  icon: 'file-text' as const,
+                  label: strings.answers,
+                  value: strings.answerCount(booking.answers.length),
+                  // Said once for the row when the person's record refused some, as a submission's panel says it.
+                  ...(booking.answers.some((answer) => answer.saved === false) ? { detail: strings.someNotSaved } : {}),
+                  children: (
+                    <AnswerList
+                      answers={booking.answers}
+                      markOf={(answer) =>
+                        'saved' in answer && answer.saved === false ? questionStrings.notSavedMark : undefined
+                      }
+                    />
+                  ),
                 },
               ]),
           ...(booking.chat === undefined

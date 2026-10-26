@@ -20,6 +20,7 @@ export {
   keyFromLabel,
   NO_PLACEHOLDER_TYPES,
   publishProblem,
+  questionsProblem,
   QUESTION_PRESETS,
   slugFromName,
   type PublishAttribute,

@@ -16,6 +16,10 @@
 export interface Prefill {
   readonly name?: string;
   readonly email?: string;
+  /** The form's answers to questions this page asks by the same key (spec 0057, AC-5713), as text. */
+  readonly answers?: Readonly<Record<string, string>>;
+  /** This page's questions the form already answered onto the same attribute (AC-5713): not asked again. */
+  readonly skip?: readonly string[];
 }
 
 /** The longest token read; anything longer is not ours. */

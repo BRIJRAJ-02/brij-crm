@@ -21,6 +21,7 @@ import { BookingAvailability, BookingLocation, BookingPageSettings, TimeZoneName
 import { Uuid, uuidV7 } from '../values/ids.ts';
 import { RecordRefDisplay } from '../values/options.ts';
 import { RoutingRules } from '../forms/routing.ts';
+import { FormTargetChoices, SubmissionAnswer } from '../forms/forms.ts';
 
 /** The most fixed hosts, rotations, and hosts in all, on one round robin page (spec 0037, AC-1319). */
 export const TEAM_HOSTS_MAX = { fixed: 7, rotations: 3, hosts: 8 } as const;
@@ -209,6 +210,11 @@ export const bookingPagesContract = {
   delete: oc.input(DeleteBookingPageInput).output(z.object({ pageId: Uuid })),
   /** The caller's own pages in their profile's new order, one write; the answer is every page it placed. */
   reorderProfile: oc.input(ReorderProfileInput).output(ProfileOrder),
+  /**
+   * Where a page's answers may be filed (spec 0057, AC-5706): the People object and its live attributes, with whether
+   * the reader may write each, as a form's Where it goes lists them.
+   */
+  attributes: oc.input(GetBookingPageInput).output(FormTargetChoices),
 };
 
 /** A member's default schedule's hours and days off (spec 0035: `schedules.*` is the full surface). */
@@ -232,6 +238,15 @@ export const UpdateMemberHoursInput = WorkspaceScoped.extend({
 export type UpdateMemberHoursInput = z.infer<typeof UpdateMemberHoursInput>;
 
 /**
+ * One answer to a booking page's question, as the booking keeps it (spec 0057, AC-5711): the question's key, label and
+ * type as they were when the visitor booked, so a later rename never changes what they answered, and its value. A
+ * filed one names its attribute; `saved: false` when the person record refused it (AC-5712), as a submission says.
+ */
+export const BookingAnswer = SubmissionAnswer.extend({ saved: z.boolean().optional() });
+/** One answer to a booking page's question. */
+export type BookingAnswer = z.infer<typeof BookingAnswer>;
+
+/**
  * A booking in Bookings, the workspace's list (spec 0025, AC-646): the
  * booking, its page's title and location, the meeting's video link once the
  * event has one, the visitor's guests and note, and why it was cancelled.
@@ -244,6 +259,11 @@ export const BookingListItem = BookingView.extend({
   note: z.string().optional(),
   /** The conversation, for a booking made by chat (spec 0042, AC-1522): who said each line and what. */
   chat: z.array(z.object({ role: z.enum(['visitor', 'assistant']), text: z.string() })).optional(),
+  /**
+   * The answers to the page's own questions (spec 0057, AC-5714), label then answer, in the page's order when booked.
+   * One filed on a field hidden from the reader is absent (hidden means absent).
+   */
+  answers: z.array(BookingAnswer).optional(),
   cancelReason: z.string().optional(),
   /** Who cancelled it: the guest from their page, the host, or the host's calendar. */
   cancelledBy: z.enum(['guest', 'host', 'calendar']).optional(),

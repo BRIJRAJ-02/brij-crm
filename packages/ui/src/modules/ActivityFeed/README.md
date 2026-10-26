@@ -46,3 +46,7 @@ Each entry is an article named by its line and described by its time and what ch
 ## Differences from the artifact
 
 The artifact's record page shows a short static timeline; this one is virtualised and takes its entries from a source. The artifact has no link entry and no inline layout yet: they arrive with the next publish.
+
+## A booked meeting's answers (spec 0057)
+
+A meeting entry may carry `answers`, label then words: the visitor's answers to the booking page's own questions, those the reader may see. The entry shows the first three as excerpt lines and says how many more are on the booking; the words are text, never markup. A private meeting the reader doesn't hold (`detailsHidden`) never carries them (the server leaves them out). Story: `MeetingWithAnswers`.

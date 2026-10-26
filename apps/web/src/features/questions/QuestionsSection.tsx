@@ -1,16 +1,9 @@
 // Brief
-// Purpose: the Form tab's questions (spec 0023, 0023-experience.md, Questions): cards closed until opened, each with its editor.
-// Main task: add, word, type, file, require, duplicate, delete (with Undo) and reorder the questions of the draft.
-// Leaves out: saving (the editor saves the draft quietly), the look and the words around the questions (Settings).
-import type { AnswerType, FormAttributeChoice, FormDocument, FormQuestion } from '@crm/data';
-import {
-  ANSWER_TYPES,
-  CHOICE_TYPES,
-  FORM_CHOICES_MAX,
-  FORM_QUESTIONS_MAX,
-  NO_PLACEHOLDER_TYPES,
-  QUESTION_PRESETS,
-} from '@crm/data/forms';
+// Purpose: a list of questions (spec 0023, 0023-experience.md, Questions), shared by a form's Form tab and a booking page's editor (spec 0057): cards closed until opened, each with its editor.
+// Main task: add, word, type, file, require, duplicate, delete (with Undo) and reorder the questions.
+// Leaves out: saving (each editor saves as it goes), the look and the words around the questions.
+import type { AnswerType, FormAttributeChoice, FormQuestion } from '@crm/data';
+import { ANSWER_TYPES, CHOICE_TYPES, FORM_CHOICES_MAX, NO_PLACEHOLDER_TYPES, QUESTION_PRESETS } from '@crm/data/forms';
 import {
   Button,
   Callout,
@@ -43,12 +36,13 @@ import {
   duplicateQuestion,
   filedLine,
   fittingAttributes,
-  isMatchQuestion,
+  planNewAttributes,
   moveQuestion,
   removeQuestion,
   restoreQuestion,
   type QuestionChange,
-} from './draft.ts';
+  type Questions,
+} from './questions.ts';
 import { strings } from './strings.ts';
 import { ConditionsEditor, firstConditions } from '../routing/ConditionsEditor.tsx';
 import { conditionsLine, questionFacts, storedShowWhen } from '../routing/facts.ts';
@@ -72,12 +66,25 @@ const TYPE_ICONS = {
 
 /** Props for the questions section. */
 export interface QuestionsSectionProps {
-  readonly draft: FormDocument;
-  readonly onChange: (next: FormDocument | ((before: FormDocument) => FormDocument)) => void;
+  readonly questions: Questions;
+  /** A change to the list, as a function of the list it applies to, so changes made quickly never undo each other. */
+  readonly onChange: (update: (before: Questions) => Questions) => void;
+  /** The most questions the list holds, and what holds it ("A form"), for Add a question's tooltip at the most. */
+  readonly max: number;
+  readonly holder: string;
+  /** What an unfiled answer stays with: a form's submission, or a booking. */
+  readonly keptWith: 'submission' | 'booking';
   /** The target object's attributes, the choices for Where it goes. */
   readonly attributes: readonly FormAttributeChoice[];
   /** The target object's name; absent while the form keeps its submissions only, when no answer is filed. */
   readonly objectName?: string;
+  /**
+   * Where it goes shows, off and at Not filed, with why: a booking page kept out of the CRM (spec 0057, AC-5708). Each
+   * question keeps where it was filed, so turning the CRM back on puts it back.
+   */
+  readonly isFilingOff?: boolean;
+  /** Questions that stay as they are (a form's match question): no delete, no type or filing change, and why. */
+  readonly locked?: { readonly ids: ReadonlySet<string>; readonly reason: string };
   /** Questions in the live version: their keys stay as they are. */
   readonly liveIds: ReadonlySet<string>;
   readonly newId: () => string;
@@ -86,6 +93,8 @@ export interface QuestionsSectionProps {
   readonly problem?: { readonly questionId: string; readonly message: string };
   /** A question to open and bring into view as the screen shows (a link from Settings' map of where answers go). */
   readonly focusQuestionId?: string;
+  /** Whether the member may add attributes: an unfiled question is then filed onto a new one when the form is published. */
+  readonly canCreate?: boolean;
   readonly isReadOnly: boolean;
 }
 
@@ -98,7 +107,17 @@ const TYPE_ITEMS = ANSWER_TYPES.map((type) => ({
 
 /** The questions: a header with the count and Add a question, then the cards. */
 export function QuestionsSection(props: QuestionsSectionProps) {
-  const { draft, onChange, attributes, objectName, liveIds, newId, toasts, problem, isReadOnly } = props;
+  const { questions, onChange, attributes, objectName, liveIds, newId, toasts, problem, isReadOnly } = props;
+  const isFilingOff = props.isFilingOff === true;
+  const isLocked = (question: FormQuestion) => props.locked?.ids.has(question.id) === true;
+  const words =
+    props.keptWith === 'booking'
+      ? {
+          notFiled: strings.notFiledBooking,
+          cantCreate: strings.cantCreateBooking,
+          help: strings.whereItGoesHelpBooking,
+        }
+      : { notFiled: strings.notFiled, cantCreate: strings.cantCreate, help: strings.whereItGoesHelp };
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [justAdded, setJustAdded] = useState<string | undefined>(undefined);
   // Questions whose choices list holds a refused edit (a repeated choice): marked, and kept open, until it is put right.
@@ -119,7 +138,20 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     [open, refused, problem],
   );
 
-  const isFull = draft.questions.length >= FORM_QUESTIONS_MAX;
+  // Unfiled questions the publish will give an attribute: each says so until it exists.
+  const planned = useMemo(
+    () =>
+      new Map(
+        planNewAttributes(
+          questions,
+          attributes,
+          objectName !== undefined && !isFilingOff && props.canCreate === true && !isReadOnly,
+        ).map((plan) => [plan.questionId, plan.title]),
+      ),
+    [questions, attributes, objectName, isFilingOff, props.canCreate, isReadOnly],
+  );
+  const isFull = questions.length >= props.max;
+  const tooMany = strings.tooManyQuestions(props.holder, props.max);
   const opened = (id: string) => {
     setOpen((before) => new Set([...before, id]));
     setJustAdded(id);
@@ -131,7 +163,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   const [focused, setFocused] = useState<string | undefined>(undefined);
   if (focusQuestionId !== focused) {
     setFocused(focusQuestionId);
-    if (focusQuestionId !== undefined && draft.questions.some((question) => question.id === focusQuestionId)) {
+    if (focusQuestionId !== undefined && questions.some((question) => question.id === focusQuestionId)) {
       setOpen((before) => new Set([...before, focusQuestionId]));
       setJustAdded(focusQuestionId);
     }
@@ -145,11 +177,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   };
 
   const remove = (question: FormQuestion) => {
-    onChange((before) => removeQuestion(before, question.id).document);
-    const index = draft.questions.findIndex((each) => each.id === question.id);
+    onChange((before) => removeQuestion(before, question.id).questions);
+    const index = questions.findIndex((each) => each.id === question.id);
     const name = question.label === '' ? strings.untitledQuestion : question.label;
     const filed =
-      question.filedOn === undefined || objectName === undefined
+      question.filedOn === undefined || objectName === undefined || isFilingOff
         ? undefined
         : filedLine(question, objectName, attributes);
     toasts.toast({
@@ -164,7 +196,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     });
   };
 
-  const items: readonly QuestionListItem[] = draft.questions.map((question) => ({
+  const items: readonly QuestionListItem[] = questions.map((question) => ({
     id: question.id,
     label: question.label,
     typeLabel: strings.answerTypes[question.answerType],
@@ -178,16 +210,18 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     ...(objectName === undefined
       ? {}
       : {
-          filed: question.filedOn === undefined ? strings.notFiledShort : filedLine(question, objectName, attributes),
+          filed:
+            question.filedOn === undefined || isFilingOff
+              ? planned.has(question.id)
+                ? strings.willCreateShort(planned.get(question.id) ?? '')
+                : strings.notFiledShort
+              : filedLine(question, objectName, attributes),
         }),
     ...(question.showWhen === undefined
       ? {}
       : {
           condition: routingStrings.shownWhen(
-            conditionsLine(
-              question.showWhen,
-              questionFacts(draft.questions.slice(0, draft.questions.indexOf(question))),
-            ),
+            conditionsLine(question.showWhen, questionFacts(questions.slice(0, questions.indexOf(question)))),
           ),
         }),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
@@ -202,7 +236,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             <>
               {isFull ? (
                 // Off at the most a form holds, and says so on hover and focus.
-                <Tooltip content={strings.tooManyQuestions}>
+                <Tooltip content={tooMany}>
                   <Button icon="plus" isDisabled>
                     {strings.addQuestion}
                   </Button>
@@ -221,11 +255,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                   }}
                 >
                   <SubmenuTrigger>
-                    <MenuItem
-                      icon="list-plus"
-                      isDisabled={isFull}
-                      {...(isFull ? { description: strings.tooManyQuestions } : {})}
-                    >
+                    <MenuItem icon="list-plus" isDisabled={isFull} {...(isFull ? { description: tooMany } : {})}>
                       {strings.addFromPresets}
                     </MenuItem>
                     <Menu
@@ -268,14 +298,20 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         });
       }}
       renderOpen={(id) => {
-        const question = draft.questions.find((each) => each.id === id);
+        const question = questions.find((each) => each.id === id);
         if (question === undefined) return null;
         return (
           <QuestionEditor
             question={question}
-            draft={draft}
+            questions={questions}
             attributes={attributes}
             isFiling={objectName !== undefined}
+            isFilingOff={isFilingOff}
+            isLocked={isLocked(question)}
+            words={words}
+            {...(objectName === undefined ? {} : { objectName })}
+            {...(planned.has(id) ? { willCreate: planned.get(id) ?? '' } : {})}
+            canCreate={props.canCreate === true}
             isReadOnly={isReadOnly}
             // A question just added, or one a publish refused, takes focus and comes into view.
             isJustAdded={justAdded === id || problem?.questionId === id}
@@ -290,7 +326,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         );
       }}
       renderFooterStart={(id) => {
-        const question = draft.questions.find((each) => each.id === id);
+        const question = questions.find((each) => each.id === id);
         if (question === undefined) return null;
         return (
           <Checkbox
@@ -304,7 +340,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         );
       }}
       renderFooter={(id) => {
-        const question = draft.questions.find((each) => each.id === id);
+        const question = questions.find((each) => each.id === id);
         if (question === undefined || isReadOnly) return null;
         return (
           <>
@@ -321,8 +357,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                 }}
               />
             </Tooltip>
-            {isMatchQuestion(draft, question) ? (
-              <LockReason reason={strings.emailStays} />
+            {props.locked !== undefined && isLocked(question) ? (
+              <LockReason reason={props.locked.reason} />
             ) : (
               <Tooltip content={strings.deleteQuestion}>
                 <Button
@@ -353,10 +389,20 @@ export function QuestionsSection(props: QuestionsSectionProps) {
 /** Props for one open question. */
 interface QuestionEditorProps {
   readonly question: FormQuestion;
-  readonly draft: FormDocument;
+  readonly questions: Questions;
   readonly attributes: readonly FormAttributeChoice[];
   /** The form adds submissions to the CRM, so Where it goes shows; a form that keeps them only files nothing. */
   readonly isFiling: boolean;
+  /** Where it goes shows off, at Not filed: a booking page kept out of the CRM. */
+  readonly isFilingOff: boolean;
+  /** A question that stays as it is: its type and filing can't change, and it has no Show when. */
+  readonly isLocked: boolean;
+  /** What an unfiled answer stays with, in the section's words. */
+  readonly words: { readonly notFiled: string; readonly cantCreate: string; readonly help: string };
+  readonly objectName?: string;
+  /** The title of the attribute publishing will create for this question, when it will. */
+  readonly willCreate?: string;
+  readonly canCreate: boolean;
   readonly isReadOnly: boolean;
   /** Just added: its Question field takes focus, and the card scrolls into view. */
   readonly isJustAdded: boolean;
@@ -369,9 +415,15 @@ interface QuestionEditorProps {
 /** One question open: Question, Answer type, Choices, Placeholder, Where it goes, Visitors must answer. */
 function QuestionEditor({
   question,
-  draft,
+  questions,
   attributes,
   isFiling,
+  isFilingOff,
+  isLocked,
+  words,
+  objectName,
+  willCreate,
+  canCreate,
   isReadOnly,
   isJustAdded,
   problem,
@@ -394,11 +446,10 @@ function QuestionEditor({
   const choices = question.choices ?? [];
   const fitting = fittingAttributes(attributes, question.answerType);
   const usedBy = new Map(
-    draft.questions
+    questions
       .filter((each) => each.id !== question.id && each.filedOn !== undefined)
       .map((each) => [each.filedOn?.attributeId ?? '', each.label === '' ? strings.untitledQuestion : each.label]),
   );
-  const isLocked = isMatchQuestion(draft, question);
 
   return (
     <>
@@ -445,17 +496,28 @@ function QuestionEditor({
           }}
         />
       )}
-      {!isLocked && <ShowWhenEditor question={question} draft={draft} isReadOnly={isReadOnly} onChange={onChange} />}
+      {!isLocked && (
+        <ShowWhenEditor question={question} questions={questions} isReadOnly={isReadOnly} onChange={onChange} />
+      )}
       {isFiling && (
         <Select
           label={strings.whereItGoes}
           info={
             <InfoTip label={strings.whereItGoes} example={strings.whereItGoesExample}>
-              {strings.whereItGoesHelp}
+              {words.help}
             </InfoTip>
           }
           items={[
-            { id: 'none', label: strings.notFiled },
+            {
+              id: 'none',
+              label:
+                willCreate === undefined || objectName === undefined || isFilingOff
+                  ? words.notFiled
+                  : strings.willCreate(willCreate, objectName),
+              ...(!isFilingOff && !canCreate && question.label.trim() !== '' && question.filedOn === undefined
+                ? { description: words.cantCreate }
+                : {}),
+            },
             ...fitting.map((attribute) => {
               const holder = usedBy.get(attribute.attributeId);
               return {
@@ -466,8 +528,10 @@ function QuestionEditor({
               };
             }),
           ]}
-          value={question.filedOn?.attributeId ?? 'none'}
+          value={isFilingOff ? 'none' : (question.filedOn?.attributeId ?? 'none')}
           isReadOnly={isReadOnly || isLocked}
+          isDisabled={isFilingOff}
+          {...(isFilingOff ? { hint: strings.offCrm } : {})}
           onChange={(id) => {
             onChange({ filedOn: id === null || id === 'none' ? null : id });
           }}
@@ -574,7 +638,7 @@ function ChoicesEditor({ choices, isReadOnly, onChange, onInvalidChange }: Choic
 /** Props for a question's Show when. */
 interface ShowWhenEditorProps {
   readonly question: FormQuestion;
-  readonly draft: FormDocument;
+  readonly questions: Questions;
   readonly isReadOnly: boolean;
   readonly onChange: (change: QuestionChange) => void;
 }
@@ -583,11 +647,11 @@ interface ShowWhenEditorProps {
  * Show when (spec 0043, AC-1615): off, a line saying the question always shows and Add a condition; on, its
  * conditions over the questions before it, and Always show it. A form's first question has nothing to read.
  */
-function ShowWhenEditor({ question, draft, isReadOnly, onChange }: ShowWhenEditorProps) {
+function ShowWhenEditor({ question, questions, isReadOnly, onChange }: ShowWhenEditorProps) {
   const earlier = questionFacts(
-    draft.questions.slice(
+    questions.slice(
       0,
-      draft.questions.findIndex((each) => each.id === question.id),
+      questions.findIndex((each) => each.id === question.id),
     ),
   );
   const { showWhen } = question;

@@ -108,6 +108,8 @@ export type ActivityEntry =
       readonly attendees: readonly MeetingAttendee[];
       readonly videoUrl?: string;
       readonly detailsHidden?: boolean;
+      /** A meeting a booking made: the visitor's answers to its page's questions (spec 0057), each as plain words. */
+      readonly answers?: readonly { readonly label: string; readonly text: string }[];
     })
   | (EntryBase & {
       /**
@@ -668,6 +670,9 @@ function AddPersonButton({ onAdd, nameId }: { readonly onAdd: () => Promise<void
   );
 }
 
+/** How many of a booked meeting's answers its entry shows (spec 0057). */
+const ANSWERS_SHOWN = 3;
+
 /** A meeting's detail: when, who comes (each one's chip, and their answer unless they accepted), and the video link. */
 function MeetingDetail({
   entry,
@@ -725,6 +730,16 @@ function MeetingDetail({
             <span>
               <Link href={entry.videoUrl}>{strings.joinVideo}</Link>
             </span>
+          )}
+          {/* The visitor's answers, label then answer: text only, never markup, since a visitor typed them. The first
+              few, so a long list never crowds the feed; the rest are on the booking. */}
+          {entry.answers?.slice(0, ANSWERS_SHOWN).map((answer, index) => (
+            <span key={`${answer.label}-${String(index)}`} className={styles.excerpt}>
+              {strings.answerLine(answer.label, answer.text)}
+            </span>
+          ))}
+          {entry.answers !== undefined && entry.answers.length > ANSWERS_SHOWN && (
+            <span className={styles.excerpt}>{strings.moreAnswers(entry.answers.length - ANSWERS_SHOWN)}</span>
           )}
         </>
       )}

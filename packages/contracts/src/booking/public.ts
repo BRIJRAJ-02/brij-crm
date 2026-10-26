@@ -10,6 +10,7 @@ import { Uuid } from '../values/ids.ts';
 import { PageTheme } from './page-theme.ts';
 import { PublicProfileItem } from './link-page.ts';
 import { SOCIAL_LINK_NETWORKS } from '../values/social-networks.ts';
+import { PublicQuestion } from '../forms/public.ts';
 
 /** A page's public key: 16 URL safe characters. */
 export const PublicKey = z.string().regex(/^[A-Za-z0-9_-]{16}$/, { error: 'That booking link isn’t right.' });
@@ -83,6 +84,11 @@ export const PublicBookingPage = z.object({
    * "Show my social links" on, absent when there are none. A team page names no host, so never has them (AC-754).
    */
   socials: z.array(PublicSocialLink).optional(),
+  /**
+   * The page's own questions, drawn after the note (spec 0057, AC-5709): what rendering needs (key, label, type,
+   * choices, required, show when), never where an answer is filed. Absent on a page that asks none (AC-5704).
+   */
+  questions: z.array(PublicQuestion).optional(),
 });
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;
@@ -325,6 +331,11 @@ export const PublicBookInput = z.object({
   startedAt: z.number().int().nonnegative().optional(),
   /** The signed hand off a form sent the visitor with (AC-1058): links the booking to that submission. */
   prefill: z.string().max(4096).optional(),
+  /**
+   * The answers to the page's own questions, by question key (spec 0057, AC-5710): checked on the server against the
+   * page's questions as they are at booking time, anything else dropped.
+   */
+  answers: z.record(z.string().max(40), z.unknown()).optional(),
 });
 /** A visitor's booking. */
 export type PublicBookInput = z.infer<typeof PublicBookInput>;
@@ -346,7 +357,17 @@ export type PublicBooking = z.infer<typeof PublicBooking>;
  * AC-642): the name and email a form handed over, read back only from a token
  * the server signed for this page and not yet expired; empty for anything else.
  */
-export const PublicPrefill = z.object({ name: z.string().optional(), email: z.string().optional() });
+export const PublicPrefill = z.object({
+  name: z.string().optional(),
+  email: z.string().optional(),
+  /**
+   * The form's answers to questions this page asks by the same key (spec 0057, AC-5713), as text, so each starts
+   * filled in. One the form filed onto the same attribute is never asked again, so it is not here either.
+   */
+  answers: z.record(z.string(), z.string()).optional(),
+  /** The keys of this page's questions the form already answered onto the same attribute: they are not asked. */
+  skip: z.array(z.string()).optional(),
+});
 /** The name and email a form handed over. */
 export type PublicPrefill = z.infer<typeof PublicPrefill>;
 

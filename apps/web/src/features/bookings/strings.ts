@@ -91,6 +91,10 @@ export const strings = {
   timeZone: 'Their time zone',
   where: 'Where',
   note: 'Note',
+  /** A booking's answers to its page's own questions (spec 0057): the row's name and how many. */
+  answers: 'Answers',
+  answerCount: (count: number) => (count === 1 ? '1 answer' : `${String(count)} answers`),
+  someNotSaved: 'Those marked Not saved weren’t taken by the person’s record. They stay with the booking.',
   quoted: (note: string) => `“${note}”`,
   /** A booking made by chat on the booking page (spec 0042). */
   bookedHow: 'Booked',
