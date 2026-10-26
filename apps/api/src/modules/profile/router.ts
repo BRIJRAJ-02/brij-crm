@@ -137,11 +137,15 @@ export const profileRouter = member.profile.router({
   }),
   saveItem: member.profile.saveItem.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      saveProfileItem(context.scope, {
-        id: input.id,
-        block: input.block,
-        ...(input.isEdit === undefined ? {} : { isEdit: input.isEdit }),
-      }),
+      saveProfileItem(
+        context.scope,
+        {
+          id: input.id,
+          block: input.block,
+          ...(input.isEdit === undefined ? {} : { isEdit: input.isEdit }),
+        },
+        { publicOrigins: context.publicOrigins },
+      ),
     ),
   ),
   orderItems: member.profile.orderItems.handler(({ context, input }) =>

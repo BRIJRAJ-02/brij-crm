@@ -359,6 +359,8 @@ export function createApp({
   const formsOrigin = new URL(env.FORMS_PUBLIC_ORIGIN ?? env.APP_URL).origin;
   // The public booking pages may be served from their own origin (BOOKING_PUBLIC_ORIGIN): their writes come from there.
   const bookingOrigin = new URL(env.BOOKING_PUBLIC_ORIGIN ?? env.APP_URL).origin;
+  // Our own public origins: an address on one that names a booking page, form or handle stays in one workspace.
+  const publicOrigins = [...new Set([new URL(env.APP_URL).origin, formsOrigin, bookingOrigin])];
   // The app and API share one origin, so a write from anywhere else is refused.
   app.use('*', async (c, next) => {
     if (SAFE_METHODS.has(c.req.method)) return next();
@@ -427,6 +429,7 @@ export function createApp({
         mailer,
         outsideFetch,
         appUrl: env.APP_URL,
+        publicOrigins,
         // Only the limiter's one call, so a member handler holds nothing else of global identity at run time.
         limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
         mayStartWorkspace: (email) => signupAllowlist.allows(email),
@@ -497,6 +500,7 @@ export function createApp({
     limiter: formLimiter,
     tickets,
     publicOrigin: formsOrigin,
+    publicOrigins,
     ipSalt,
     answersKey: createHmac('sha256', ipSalt).update('crm-answers-hash-v1').digest('hex'),
     handoffKey: formsHandoffKey,
@@ -537,6 +541,7 @@ export function createApp({
   mountPublicBooking(app, {
     db,
     handoffKey: formsHandoffKey,
+    publicOrigins,
     calendar: {
       busy: bookingBusy,
       events: booking.events,

@@ -50,6 +50,8 @@ export interface PublicFormsDeps {
   readonly tickets: TicketBook;
   /** The origin hosted pages (and the embed's frame) are served from. */
   readonly publicOrigin: string;
+  /** Our own public origins, so a redirect to another workspace's page is never followed (spec 0056, AC-5612). */
+  readonly publicOrigins: readonly string[];
   readonly recaptchaSiteKey?: string;
   /** The salt client addresses are hashed with. */
   readonly ipSalt: string;
@@ -266,6 +268,7 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
               signed: from.signed,
               emailOverLimit,
               answersKey: deps.answersKey,
+              publicOrigins: deps.publicOrigins,
               ...(ipHash === undefined ? {} : { ipHash }),
               ...(handoffKey === undefined ? {} : { signHandoff: (handoff) => signHandoff(handoffKey, handoff) }),
             },

@@ -29,6 +29,7 @@ import {
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { enterOwnForms, enterOwnPages, ownUserId, type OwnedFormEntry, type OwnedPageEntry } from '../access/door.ts';
+import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { isUuid, newId } from '../engine/ids.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -492,6 +493,7 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
 export async function saveProfileItem(
   scope: EngineScope,
   input: { readonly id: string; readonly block: ProfileBlock; readonly isEdit?: boolean },
+  options: { readonly publicOrigins?: readonly string[] } = {},
 ): Promise<ProfileItem> {
   const owner = ownerOf(scope);
   const parsed = ProfileBlock.safeParse(input.block);
@@ -516,6 +518,12 @@ export async function saveProfileItem(
     if (entry === undefined) throw refuse('NOT_FOUND', NOT_IN_WORKSPACE);
   }
   const row = await inWorkspace(scope, async (tx) => {
+    // A link to one of our own pages stays inside this workspace (spec 0056, AC-5610): another workspace's page, and
+    // one that is nowhere, are refused alike. A link to any other site is untouched.
+    if (block.kind === 'link') {
+      const problem = await workspaceAddressProblem(tx, scope.workspaceId, block.url, options.publicOrigins ?? []);
+      if (problem !== undefined) throw refuseOn('CONFIG_INVALID', problem, 'url');
+    }
     // The live blocks only when they are needed: an edit's existence, or a new link's colour.
     const needsRows = input.isEdit === true || (block.kind === 'link' && block.hue === undefined);
     const live = needsRows ? await readRows(tx, owner, scope.workspaceId, false) : [];

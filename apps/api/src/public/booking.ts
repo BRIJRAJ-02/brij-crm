@@ -133,6 +133,8 @@ export const CHAT_BODY_LIMIT_BYTES = 128 * 1024;
 
 /** What the public booking routes serve with. */
 export interface PublicBookingServices {
+  /** Our own public origins: a link on a link page to another workspace's page is left out (spec 0056, AC-5612). */
+  readonly publicOrigins?: readonly string[];
   readonly db: Database;
   readonly calendar: BookingCalendar & { readonly busy: BusyReader & { readonly fresh?: BusyReader } };
   readonly limiter: PublicLimiter;
@@ -479,6 +481,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
           : { after: { position: Number(position), id } }),
         // One more than a page, so the answer knows there is more; every live block for a search.
         max: search === undefined ? PROFILE_PAGE_SIZE + 1 : PROFILE_LIMITS.items + 1,
+        ...(services.publicOrigins === undefined ? {} : { publicOrigins: services.publicOrigins }),
       });
       const page = await readLinkPage(found, search === undefined ? {} : { search });
       // One view per page load (its first page, with no `q` at all: a cleared search sends an empty one), never a

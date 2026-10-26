@@ -10,6 +10,7 @@
 // unknown address, a workspace the user isn't in, a removed member, a deleted
 // workspace and a role the code doesn't know are all refused the same way, so
 // nothing leaks whether a workspace exists.
+import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { createHash } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@crm/db';
@@ -1004,7 +1005,7 @@ export interface LinkPageRow extends Record<string, unknown> {
 export async function enterLinkPage(
   deps: { readonly db: Database },
   handle: string,
-  query: { readonly after?: ProfileCursor; readonly max: number },
+  query: { readonly after?: ProfileCursor; readonly max: number; readonly publicOrigins?: readonly string[] },
 ): Promise<{
   readonly owner: HandleOwner;
   readonly rows: readonly LinkPageRow[];
@@ -1020,12 +1021,43 @@ export async function enterLinkPage(
       sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${after?.position ?? 0}::smallint, ${after?.id ?? null}::uuid, ${query.max}::integer)`,
     ),
   );
-  const pageIds = found.rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
+  const rows = await withinWorkspace(deps, owner, found.rows, query.publicOrigins ?? []);
+  const pageIds = rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
   const pages = (await enterOwnedPages(deps, owner.userId, owner.workspaceId, pageIds)).filter((entry) => entry.isLive);
   // A form block's form, the same way and under the same rule: only one a visitor may open now (AC-5214).
-  const formIds = found.rows.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : []));
+  const formIds = rows.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : []));
   const forms = (await enterOwnedForms(deps, owner.userId, owner.workspaceId, formIds)).filter((entry) => entry.isLive);
-  return { owner, rows: found.rows, pages, forms };
+  return { owner, rows, pages, forms };
+}
+
+/**
+ * The blocks of a link page that stay inside its own workspace (spec 0056, AC-5607, AC-5612): a page or form block
+ * whose own workspace is another one is skipped (a stray row can never leak), and so is a link to one of our own
+ * pages that has since come to name another workspace's, or none. A link to any other site is untouched.
+ */
+async function withinWorkspace(
+  deps: { readonly db: Database },
+  owner: HandleOwner,
+  rows: readonly LinkPageRow[],
+  origins: readonly string[],
+): Promise<readonly LinkPageRow[]> {
+  const own = rows.filter(
+    (row) => (row.kind !== 'page' && row.kind !== 'form') || row.workspace_id === owner.workspaceId,
+  );
+  if (origins.length === 0 || !own.some((row) => row.kind === 'link')) return own;
+  const kept = await deps.db.withWorkspace(owner.workspaceId, async (tx) => {
+    const verdicts = new Map<string, boolean>();
+    for (const row of own) {
+      const url =
+        row.kind === 'link' && typeof row.data === 'object' && row.data !== null && 'url' in row.data
+          ? row.data.url
+          : undefined;
+      if (typeof url !== 'string') continue;
+      verdicts.set(row.id, (await workspaceAddressProblem(tx, owner.workspaceId, url, origins)) === undefined);
+    }
+    return verdicts;
+  });
+  return own.filter((row) => kept.get(row.id) !== false);
 }
 
 /** A visitor as spec 0047 mints it: the day's HMAC, 32 lowercase hex digits. */
