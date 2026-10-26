@@ -3,6 +3,7 @@
 // asked. A decline sends nothing.
 import type { JoinApprovedEmail, JoinRequestEmail } from '@crm/contracts/emails';
 import { workspaceOf, type Template } from '../template.ts';
+import { linkPageBlocks } from './welcome.ts';
 
 /** Someone at the workspace's domain asked to join. */
 export const joinRequest: Template<JoinRequestEmail> = (params, context) => {
@@ -28,12 +29,16 @@ export const joinApproved: Template<JoinApprovedEmail> = (params, context) => {
   const workspace = workspaceOf(context);
   return {
     subject: `You’ve joined ${workspace} on Timefix`,
-    preheader: `Your request to join ${workspace} was approved.`,
+    preheader:
+      params.linkPage === undefined
+        ? `Your request to join ${workspace} was approved.`
+        : `Your request to join ${workspace} was approved. Your link page is live too.`,
     eyebrow: workspace,
     heading: `Welcome to ${workspace}`,
     blocks: [
       { type: 'paragraph', text: `Your request to join ${workspace} was approved. You’re a member now.` },
       { type: 'button', label: `Open ${workspace}`, url: context.link(params.openPath) },
+      ...(params.linkPage === undefined ? [] : linkPageBlocks(params.linkPage, context)),
     ],
     why: `You got this email because you asked to join ${workspace}.`,
   };

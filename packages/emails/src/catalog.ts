@@ -9,6 +9,7 @@ import { bookingCalendarRemoved, calendarDisconnected, signInAlert } from './tem
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
 import { importFinished } from './templates/team.ts';
+import { workspaceWelcome } from './templates/welcome.ts';
 
 /** One queued kind of email. */
 export interface CatalogEntry<K extends EmailKind> {
@@ -118,6 +119,14 @@ export const CATALOG: Catalog = {
       skipped: 12,
       failed: 0,
       resultPath: '/w/acme/objects/people',
+    },
+  },
+  workspace_welcome: {
+    template: workspaceWelcome,
+    medium: 'email_invite',
+    sample: {
+      openPath: '/w/acme',
+      linkPage: { handle: 'ada-lovelace', editPath: '/w/acme/link-page' },
     },
   },
 };

@@ -184,6 +184,9 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
           systemScope: (workspaceId: string) => systemScope(db, workspaceId),
           mailer,
           appOrigin: new URL(env.APP_URL).origin,
+          ...(env.BOOKING_PUBLIC_ORIGIN === undefined
+            ? {}
+            : { publicOrigin: new URL(env.BOOKING_PUBLIC_ORIGIN).origin }),
           linkKey: emailLinkKey(env),
           log,
         };

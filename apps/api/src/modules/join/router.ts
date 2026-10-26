@@ -1,6 +1,7 @@
 import {
   decideJoinRequest,
   getWorkspaceDomains,
+  linkPageEditPath,
   listJoinable,
   listJoinRequests,
   newId,
@@ -70,14 +71,24 @@ async function mailAdmins(
 
 /** Tells the person their request was approved, once it committed. A failure is logged: they are in either way. */
 async function mailApproved(
-  context: Pick<RequestContext, 'mailer' | 'appUrl' | 'requestId'>,
+  context: Pick<RequestContext, 'mailer' | 'appUrl' | 'bookingOrigin' | 'requestId'>,
   decision: JoinDecision,
 ): Promise<void> {
   if (!decision.approved) return;
   try {
     const message = await renderJoinApproved(
-      { openPath: `/w/${decision.slug}` },
-      { appOrigin: new URL(context.appUrl).origin, workspaceName: decision.workspaceName },
+      {
+        openPath: `/w/${decision.slug}`,
+        // Their link page, made with the membership (26 Oct 2026).
+        ...(decision.handle === undefined
+          ? {}
+          : { linkPage: { handle: decision.handle, editPath: linkPageEditPath(decision.slug) } }),
+      },
+      {
+        appOrigin: new URL(context.appUrl).origin,
+        workspaceName: decision.workspaceName,
+        publicOrigin: context.bookingOrigin,
+      },
     );
     await context.mailer.send({ to: decision.email, ...message });
   } catch (error) {

@@ -3,6 +3,7 @@ import { PublicBio, PublicHandle } from '../profile.ts';
 import {
   bookingPagePath,
   handleAddressOf,
+  handleBaseFor,
   handleFromName,
   handleProblem,
   HANDLE_PATTERN,
@@ -101,6 +102,24 @@ describe('handles', () => {
     expect(PublicBio.safeParse('two\nlines').success).toBe(false);
     expect(PublicBio.safeParse('x'.repeat(161)).success).toBe(false);
     expect(HANDLE_PATTERN.test('ada')).toBe(true);
+  });
+});
+
+describe('handleBaseFor', () => {
+  it.each([
+    ['Ada Lovelace', 'ada@example.com', 'ada-lovelace'],
+    ['  Zoë  O’Brien ', 'zoe@example.com', 'zoe-o-brien'],
+    ['Jo', 'jo.smith+crm@example.com', 'jo-smith'],
+    ['Renée Zoë', 'r@example.com', 'renee-zoe'],
+    ['李雷', 'lilei@example.com', 'lilei'],
+    ['', 'ab@example.com', 'ab-me'],
+    ['Settings', 'settings@example.com', 'settings-me'],
+    ['Settings', 'grace@example.com', 'grace'],
+    ['a'.repeat(60), 'x@example.com', 'a'.repeat(40)],
+  ])('%s <%s> gives %s', (name, email, handle) => {
+    const base = handleBaseFor(name, email);
+    expect(base).toBe(handle);
+    expect(handleProblem(base)).toBeUndefined();
   });
 });
 

@@ -415,6 +415,37 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(job.result).toMatchObject({ cleanup: { views: 2 } });
   });
 
+  it('makes the link page a membership’s own transaction didn’t make, once (26 Oct 2026)', async () => {
+    const t = await team([]);
+    const userId = randomUUID();
+    const stem = `lin-${userId.slice(0, 8)}`;
+    await testQuery(ownerUrl, `insert into auth."user" (id, name, email) values ($1, $2, $3)`, [
+      userId,
+      stem.replace('-', ' '),
+      `${userId}@example.com`,
+    ]);
+    await testQuery(
+      ownerUrl,
+      `insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type)
+       values ($1, $2, $3, $4, $5, 'member', 'system', 'system')`,
+      [t.workspaceId, newId(), userId, stem.replace('-', ' '), `${userId}@example.com`],
+    );
+    const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    const pages = await testQuery<{ handle: string }>(
+      ownerUrl,
+      'select handle from auth.public_profiles where user_id = $1 and workspace_id = $2',
+      [userId, t.workspaceId],
+    );
+    expect(pages).toEqual([{ handle: stem }]);
+    const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
+    expect(job.result).toMatchObject({ cleanup: { linkPages: 1 } });
+    // The next day finds it made, and makes nothing.
+    const next = await cleanUp(t.workspaceId, '2026-10-16');
+    const again = await getJob(systemScope(db, t.workspaceId), registry(), next.jobId);
+    expect(again.result).toMatchObject({ cleanup: { linkPages: 0 } });
+  });
+
   it('removes notifications done more than 90 days ago, and keeps newer done, read and unread ones (spec 0038)', async () => {
     const t = await team([]);
     // One notification a task: a member has one per task assignment.

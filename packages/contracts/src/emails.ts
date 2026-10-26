@@ -181,9 +181,28 @@ export const JoinRequestEmail = z.strictObject({
 /** A request to join, to a workspace's owners and admins. */
 export type JoinRequestEmail = z.infer<typeof JoinRequestEmail>;
 
+/**
+ * A membership's link page (26 Oct 2026): its handle, made the moment the membership was, so the welcome says
+ * where the page lives (`/<handle>`, which the app's origin sends on to the public one) and where to edit it.
+ */
+export const LinkPageEmailPart = z.strictObject({
+  /** The handle alone: the email writes the address from it and the public origin. */
+  handle: z
+    .string()
+    .min(3)
+    .max(40)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  /** The link page editor (`/w/<slug>/link-page`). */
+  editPath: AppPath,
+});
+/** A membership's link page, as a welcome names it. */
+export type LinkPageEmailPart = z.infer<typeof LinkPageEmailPart>;
+
 /** An approved request to join (spec 0031, AC-820), to the person who asked: the button into the workspace. */
 export const JoinApprovedEmail = z.strictObject({
   openPath: AppPath,
+  /** Their link page in the workspace, made with the membership; absent when it couldn't be made yet. */
+  linkPage: LinkPageEmailPart.optional(),
 });
 /** An approved request to join. */
 export type JoinApprovedEmail = z.infer<typeof JoinApprovedEmail>;
@@ -242,6 +261,21 @@ export const ImportFinishedEmail = z.strictObject({
 /** An import has finished. */
 export type ImportFinishedEmail = z.infer<typeof ImportFinishedEmail>;
 
+/**
+ * Welcome to a workspace (26 Oct 2026), to a new member once their membership exists (they made the workspace, or
+ * accepted an invitation or the invite link): the button into it, and their link page, live already, with its
+ * address and where to edit it. Once per membership. An approved request to join says the same in its own email.
+ */
+export const WorkspaceWelcomeEmail = z.strictObject({
+  openPath: AppPath,
+  /** They made the workspace themselves (first run), rather than joining someone else's. */
+  created: z.boolean().optional(),
+  /** Their link page; absent when it couldn't be made yet (the daily cleanup makes it later). */
+  linkPage: LinkPageEmailPart.optional(),
+});
+/** Welcome to a workspace. */
+export type WorkspaceWelcomeEmail = z.infer<typeof WorkspaceWelcomeEmail>;
+
 /** Every email with a template, and its params' schema. The sign in code is drawn on its own (`renderSignInCode`). */
 export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
@@ -251,6 +285,7 @@ export const EMAIL_PARAMS = {
   member_invite: MemberInviteEmail,
   sign_in_alert: SignInAlertEmail,
   import_finished: ImportFinishedEmail,
+  workspace_welcome: WorkspaceWelcomeEmail,
 } as const;
 
 /** A kind of email with a template. */
@@ -274,6 +309,7 @@ export const QUEUED_EMAIL_KINDS = [
   'calendar_disconnected',
   'booking_calendar_removed',
   'import_finished',
+  'workspace_welcome',
 ] as const satisfies readonly EmailKind[];
 /** A kind that goes through the workspace email queue. */
 export const QueuedEmailKind = z.enum(QUEUED_EMAIL_KINDS);

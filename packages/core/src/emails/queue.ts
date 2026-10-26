@@ -18,6 +18,7 @@ import {
   type FormSubmissionEmail,
   type ImportFinishedEmail,
   type QueuedEmailKind,
+  type WorkspaceWelcomeEmail,
 } from '@crm/contracts/emails';
 import type { WorkspaceTx } from '@crm/db';
 
@@ -242,6 +243,22 @@ export function queueImportFinished(
   return queueEmail(tx, {
     kind: 'import_finished',
     ids: [input.importId],
+    to: { memberId: input.memberId },
+    params: input.params,
+  });
+}
+
+/**
+ * Welcome to a workspace (26 Oct 2026), to the new member: once per membership, with their link page when it was
+ * made. Queued in the transaction that made the membership.
+ */
+export function queueWorkspaceWelcome(
+  tx: WorkspaceTx,
+  input: { readonly memberId: string; readonly params: WorkspaceWelcomeEmail },
+): Promise<QueuedEmail> {
+  return queueEmail(tx, {
+    kind: 'workspace_welcome',
+    ids: [input.memberId],
     to: { memberId: input.memberId },
     params: input.params,
   });

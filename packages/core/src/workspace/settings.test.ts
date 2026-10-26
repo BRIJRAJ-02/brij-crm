@@ -486,7 +486,9 @@ describe('the purge (AC-823)', () => {
     ]);
     const queued = await testQuery<{ id: string }>(
       ownerUrl,
+      // The calendar runs only: the owner's welcome email (26 Oct 2026) is queued for the workspace too.
       `select payload->>'connectionId' as id from graphile_worker._private_jobs where payload->>'workspaceId' = $1
+         and payload->>'connectionId' is not null
        order by run_at`,
       [t.workspaceId],
     );

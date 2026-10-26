@@ -29,6 +29,8 @@ export interface EmailTaskDeps {
   readonly mailer: Mailer | undefined;
   /** The app's origin, for every link and the logo. */
   readonly appOrigin: string;
+  /** Where handle pages are served (`BOOKING_PUBLIC_ORIGIN`), for a link page's address written in an email. */
+  readonly publicOrigin?: string;
   /** The key preferences links are signed with (`emailLinkKey`, the api derives the same). */
   readonly linkKey: EmailLinkKey;
   readonly log: {
@@ -113,6 +115,7 @@ export async function runEmail(deps: EmailTaskDeps, payload: unknown, attempt: E
   try {
     drawn = await renderEmail(email.kind, email.params, {
       appOrigin: deps.appOrigin,
+      ...(deps.publicOrigin === undefined ? {} : { publicOrigin: deps.publicOrigin }),
       workspaceName: email.workspaceName,
       ...(link === undefined ? {} : { preferencesUrl: preferencesUrl(deps, link, email.createdAt) }),
     });

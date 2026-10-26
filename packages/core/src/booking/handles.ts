@@ -1,7 +1,14 @@
 // Handles (owner decision, 22 Oct 2026): a person's public profile at `/<handle>` and each booking page at
 // `/<handle>/<slug>`. Handles live in schema auth (migration 0086), out of the app role's reach; these are its only
 // ways there, each one of crm_handle's definer functions, run inside the caller's workspace transaction.
-import { bookingPagePath, DEFAULT_PAGE_THEME, handleFromName, HANDLE_MAX, PageTheme } from '@crm/contracts';
+import {
+  bookingPagePath,
+  DEFAULT_PAGE_THEME,
+  handleBaseFor,
+  handleFromName,
+  HANDLE_MAX,
+  PageTheme,
+} from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { sql } from 'drizzle-orm';
 import { isUuid } from '../engine/ids.ts';
@@ -99,6 +106,36 @@ interface HeldRow extends Record<string, unknown> {
 async function isHeld(tx: WorkspaceTx, handle: string): Promise<boolean> {
   const found = await tx.execute<HeldRow>(sql`select crm_handle_taken(${handle}) as held`);
   return found.rows[0]?.held === true;
+}
+
+interface EnsuredRow extends Record<string, unknown> {
+  readonly handle: string | null;
+}
+
+/**
+ * The membership's link page, made the moment the membership is (26 Oct 2026, the owner: "create link page
+ * automatically as soon as someone signs up"): their handle in the workspace, the one they hold or a new one from
+ * their name (else their email's first part, `handleBaseFor`) made unique with a short number, and an empty page
+ * behind it (`crm_ensure_public_profile`). Runs under its own savepoint in the caller's transaction and never
+ * throws: a membership never fails because of its link page. Undefined when none was made (not an active member,
+ * 20 handles held, every try taken, or a failure); the daily cleanup tries again.
+ */
+export async function ensureLinkPage(
+  tx: WorkspaceTx,
+  member: { readonly userId: string; readonly workspaceId: string; readonly name: string; readonly email: string },
+): Promise<string | undefined> {
+  if (!isUuid(member.userId) || !isUuid(member.workspaceId)) return undefined;
+  const base = handleBaseFor(member.name, member.email);
+  try {
+    return await tx.transaction(async (savepoint) => {
+      const found = await savepoint.execute<EnsuredRow>(
+        sql`select crm_ensure_public_profile(${member.userId}::uuid, ${member.workspaceId}::uuid, ${base}) as handle`,
+      );
+      return found.rows[0]?.handle ?? undefined;
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 /** A free handle from a name, for the field's first value: the name's, else it with -2, -3 … up to -9; else none. */

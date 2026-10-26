@@ -141,6 +141,36 @@ export function handleFromName(name: string): string {
   return long.slice(0, HANDLE_MAX).replace(/-+$/g, '');
 }
 
+/** A text as a handle's letters: lowercase, accents dropped, hyphens for anything else, at most 40, maybe empty. */
+function handleLetters(text: string): string {
+  return (
+    text
+      .toLowerCase()
+      .normalize('NFKD')
+      // The accents NFKD split off go, so "Renée" is `renee`, not `rene-e` (migration 0115's backfill does the same).
+      .replace(/[\u0300-\u036f]+/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, HANDLE_MAX)
+      .replace(/-+$/g, '')
+  );
+}
+
+/**
+ * The handle a new membership's link page starts from (26 Oct 2026, the owner: "create link page automatically as
+ * soon as someone signs up"): their name's letters ("Ada Lovelace" gives `ada-lovelace`); when the name gives fewer
+ * than 3 or a reserved word, the email's part before the `@` (a `+tag` dropped); when neither does, the name padded
+ * as `handleFromName` pads it. Always a valid handle. The database makes it unique with a short number.
+ */
+export function handleBaseFor(name: string, email: string): string {
+  const fromName = handleLetters(name);
+  if (fromName.length >= HANDLE_MIN && !isReservedHandle(fromName)) return fromName;
+  const local = email.split('@')[0]?.split('+')[0] ?? '';
+  const fromEmail = handleLetters(local);
+  if (fromEmail.length >= HANDLE_MIN && !isReservedHandle(fromEmail)) return fromEmail;
+  return handleFromName(fromName === '' ? local : name);
+}
+
 /** What a public booking address is: a profile (`/<handle>`), or one page (`/<handle>/<slug>`). */
 export type HandleAddress =
   | { readonly kind: 'profile'; readonly handle: string }

@@ -606,6 +606,8 @@ export {
   PROCESS_GAVE_UP,
   type Assignment,
 } from './forms/process.ts';
+// A new membership's link page (26 Oct 2026): the editor's path its approval email links to.
+export { linkPageEditPath } from './members/welcome.ts';
 // Queued email (the emails lane): one `emails` row and its queue row in the caller's transaction, ids only on the queue.
 export {
   emailKey,

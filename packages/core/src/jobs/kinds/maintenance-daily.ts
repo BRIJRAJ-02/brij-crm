@@ -18,6 +18,8 @@
 // 1f. `views` (spec 0047): booking page view rows past a year.
 // 1g. `profile_counts` (spec 0051, AC-5128): link page views and presses past
 //    a year, the person's rather than the workspace's, through a definer.
+// 1h. `link_pages` (26 Oct 2026): every active member with a sign in and no link page here gets one, as the
+//    membership's own transaction would have made it (`ensureLinkPage`): the retry for one that failed there.
 // 2. `expired`: jobs left `ready` past their hour end `cancelled` with
 //    `JOB_EXPIRED` (the queue row at the expiry normally does it first).
 // 3. `items`: the items of jobs that finished since the last cleanup, all
@@ -38,6 +40,7 @@ import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
 import { pruneNavRows } from '../../navigation/navigation.ts';
 import { UPLOAD_KEPT_HOURS } from '@crm/contracts';
+import { ensureLinkPage, publicProfilesOf } from '../../booking/handles.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../registry.ts';
@@ -67,6 +70,7 @@ const PHASES = [
   'notifications',
   'views',
   'profile_counts',
+  'link_pages',
   'expired',
   'items',
   'jobs',
@@ -113,6 +117,10 @@ const Totals = z.object({
   views: Count.default(0),
   // Added by spec 0051: link page view and press rows past a year.
   profileCounts: Count.default(0),
+  // Added 26 Oct 2026: the link pages a membership's own transaction didn't make.
+  linkPages: Count.default(0),
+  /** Members it tried and still couldn't make a page for (20 handles held, a failure): tried again tomorrow. */
+  linkPagesMissed: Count.default(0),
   expired: Count,
   items: Count,
   jobs: Count,
@@ -138,6 +146,8 @@ const NO_TOTALS: Totals = {
   notifications: 0,
   views: 0,
   profileCounts: 0,
+  linkPages: 0,
+  linkPagesMissed: 0,
   expired: 0,
   items: 0,
   jobs: 0,
@@ -198,6 +208,8 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   notifications: totals.notifications + (more.notifications ?? 0),
   views: totals.views + (more.views ?? 0),
   profileCounts: totals.profileCounts + (more.profileCounts ?? 0),
+  linkPages: totals.linkPages + (more.linkPages ?? 0),
+  linkPagesMissed: totals.linkPagesMissed + (more.linkPagesMissed ?? 0),
   expired: totals.expired + (more.expired ?? 0),
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
@@ -330,6 +342,49 @@ async function oldProfileCounts(context: WriteContext, at: Checkpoint, limit: nu
   const count = swept.rows[0]?.gone ?? 0;
   const totals = plus(at.totals, { profileCounts: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/** How many members one `link_pages` batch looks at: few, since each page made holds its person's lock to commit. */
+const LINK_PAGE_BATCH = 25;
+
+/**
+ * Phase 1h (26 Oct 2026): the active members with a sign in, `LINK_PAGE_BATCH` at a time by id, and a link page
+ * made for each one who has none here (`ensureLinkPage`, which never throws and answers nothing for one it can't
+ * make, such as a person holding 20 handles). Tried again tomorrow for any still without one.
+ */
+async function missingLinkPages(context: WriteContext, at: Checkpoint): Promise<StepOutcome> {
+  const { tx, scope } = context;
+  const found = await tx.execute<{ id: string; user_id: string; name: string; email: string }>(sql`
+    select id::text, user_id::text, name, email from members
+    where workspace_id = ${scope.workspaceId} and status = 'active' and user_id is not null
+      ${at.after === undefined ? sql`` : sql`and id > ${at.after}::uuid`}
+    order by id limit ${LINK_PAGE_BATCH}
+  `);
+  const held = await publicProfilesOf(
+    tx,
+    scope.workspaceId,
+    found.rows.map((row) => row.user_id),
+  );
+  let made = 0;
+  let missed = 0;
+  for (const row of found.rows) {
+    if (held.has(row.user_id)) continue;
+    const handle = await ensureLinkPage(tx, {
+      userId: row.user_id,
+      workspaceId: scope.workspaceId,
+      name: row.name,
+      email: row.email,
+    });
+    if (handle === undefined) missed += 1;
+    else made += 1;
+  }
+  const totals = plus(at.totals, { linkPages: made, linkPagesMissed: missed });
+  const last = found.rows.at(-1)?.id;
+  const next =
+    found.rows.length === LINK_PAGE_BATCH && last !== undefined
+      ? { ...at, totals, after: last }
+      : nextPhase(at, totals);
+  return outcome(next, at, totals, made);
 }
 
 /** Phase 2: ends jobs left `ready` past their hour, as the queue row at their expiry would, with their events. */
@@ -645,6 +700,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return oldPageViews(context, at, limit);
         case 'profile_counts':
           return oldProfileCounts(context, at, limit);
+        case 'link_pages':
+          return missingLinkPages(context, at);
         case 'expired':
           return expired(context, at, limit);
         case 'items':

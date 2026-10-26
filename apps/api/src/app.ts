@@ -464,6 +464,7 @@ export function createApp({
         outsideFetch,
         appUrl: env.APP_URL,
         publicOrigins,
+        bookingOrigin,
         // Only the limiter's one call, so a member handler holds nothing else of global identity at run time.
         limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
         mayStartWorkspace: (email) => signupAllowlist.allows(email),

@@ -38,6 +38,7 @@ import { can, isRole } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { touched } from '../engine/definitions.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
+import { welcomeMember } from './welcome.ts';
 
 const { invitations, members, workspaces } = schema;
 
@@ -793,6 +794,15 @@ export async function acceptInvite(
         },
         options.source,
       );
+      // Their link page, made with the membership, and the welcome that says where it lives (26 Oct 2026).
+      await welcomeMember(tx, {
+        memberId,
+        userId: user.id,
+        workspaceId: scope.workspaceId,
+        slug: held.slug,
+        name,
+        email,
+      });
       // Everyone's member list reads them in (spec 0007, AC-82).
       context.record({ members: [memberId] });
       return { ...opened, memberId };
@@ -852,6 +862,14 @@ async function joinByLink(
     { id: user.id, name: user.name, email, ...(user.typedName === undefined ? {} : { typedName: user.typedName }) },
     held.role,
   );
+  await welcomeMember(tx, {
+    memberId,
+    userId: user.id,
+    workspaceId: scope.workspaceId,
+    slug: held.slug,
+    name: joinerName(user.typedName, user.name, email),
+    email,
+  });
   // The link stays open for the next person; its uses count up to its most.
   await tx
     .update(invitations)

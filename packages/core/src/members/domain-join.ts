@@ -26,9 +26,11 @@ import { checkId, newId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import { actorRow, type EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { ensureLinkPage } from '../booking/handles.ts';
 import { writeAudit } from './audit.ts';
 import {
   addJoiner,
+  joinerName,
   checkActingNow,
   checkInvites,
   checkSeats,
@@ -364,6 +366,11 @@ export interface JoinDecision {
   readonly name: string;
   readonly workspaceName: string;
   readonly slug: string;
+  /**
+   * Their link page's handle in the workspace (26 Oct 2026), made with the membership, for the approval email;
+   * absent on a decline, for someone already in who has none, or when it couldn't be made yet.
+   */
+  readonly handle?: string;
 }
 
 /**
@@ -473,6 +480,13 @@ export async function decideJoinRequest(
         );
         context.record({ members: [memberId] });
       }
+      // Their link page (26 Oct 2026): the one they hold here, or one made now. The approval email says where it is.
+      const handle = await ensureLinkPage(tx, {
+        userId: request.userId,
+        workspaceId: scope.workspaceId,
+        name: joinerName(undefined, request.name, request.email),
+        email: request.email,
+      });
       await tx
         .update(joinRequests)
         .set({ status: 'approved', memberId, ...decided })
@@ -489,7 +503,7 @@ export async function decideJoinRequest(
         },
         options.source,
       );
-      return decision;
+      return handle === undefined ? decision : { ...decision, handle };
     },
     hooks,
   );

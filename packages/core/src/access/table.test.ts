@@ -233,6 +233,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // parser that turns one of their pages into rows. HTML in, rows out — no scope, no database, no network.
   'isImportableHost',
   'readImportedPage',
+  // A new membership's link page (26 Oct 2026): the editor's path, pure, for the approval email.
+  'linkPageEditPath',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;

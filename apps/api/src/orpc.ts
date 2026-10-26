@@ -118,6 +118,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * booking page, form or handle may only name one of the writer's own workspace (spec 0056, AC-5610).
    */
   publicOrigins: readonly string[];
+  /** Where handle pages are served (`BOOKING_PUBLIC_ORIGIN`, else the app's): a link page's address in an email. */
+  bookingOrigin: string;
   /**
    * The cross instance limiter (`auth.rate_limit`, through the identity
    * store), and only that piece of identity, so a member handler can limit

@@ -21,6 +21,7 @@ import { reachMilestone, type ReachedMilestone } from '../milestones/milestones.
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from './scope.ts';
 import { runWrite, type AfterWrite } from './write.ts';
+import { welcomeMember } from '../members/welcome.ts';
 
 const { attributes, members, workspaceCounters, workspaces } = schema;
 
@@ -205,6 +206,18 @@ export async function createUserWorkspace(
     const reachedAt = await reachMilestone(tx, input.id, 'workspace_created');
     milestones = reachedAt === undefined ? [] : [{ milestone: 'workspace_created', workspaceId: input.id, reachedAt }];
   };
+  // Their link page and welcome email (26 Oct 2026), after the directory rows: in this transaction, never failing it.
+  const welcome: AfterWrite = async (_change, tx) => {
+    await welcomeMember(tx, {
+      memberId,
+      userId: input.firstMember.userId,
+      workspaceId: input.id,
+      slug: input.slug,
+      name: input.firstMember.name.trim(),
+      email: input.firstMember.email,
+      created: true,
+    });
+  };
   // The answers go in with the member, by hand: the app may insert only these three columns.
   const given = input.onboarding;
   const answers =
@@ -230,6 +243,7 @@ export async function createUserWorkspace(
     await insertWorkspace(db, input, { workspaceId: input.id, memberId }, [
       directory,
       reached,
+      welcome,
       ...onboarding,
       ...hooks,
     ]);

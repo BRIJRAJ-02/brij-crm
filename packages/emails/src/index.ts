@@ -48,6 +48,7 @@ export type {
   MemberInviteEmail,
   NotificationsEmail,
   WorkspaceDeletedEmail,
+  WorkspaceWelcomeEmail,
 } from '@crm/contracts/emails';
 
 /** What drawing an email needs besides its params, filled in by its sender at send time. */
@@ -58,13 +59,16 @@ export interface EmailContext {
   readonly workspaceName?: string;
   /** The reader's email preferences page: required for an optional kind (one with a topic), ignored otherwise. */
   readonly preferencesUrl?: string;
+  /** Where the public pages are served (`BOOKING_PUBLIC_ORIGIN`), for a link page's address written as text. */
+  readonly publicOrigin?: string;
 }
 
-/** A template's context from an email's: the workspace, and app paths joined to the app's origin. */
-function templateContext(context: EmailContext): TemplateContext {
+/** A template's context from an email's: the workspace, app paths joined to the app's origin, the public host. */
+function templateContext(context: Omit<EmailContext, 'preferencesUrl'>): TemplateContext {
   return {
     ...(context.workspaceName === undefined ? {} : { workspaceName: context.workspaceName }),
     link: (path) => appUrl(context.appOrigin, path),
+    publicHost: new URL(context.publicOrigin ?? context.appOrigin).host,
   };
 }
 
@@ -206,13 +210,13 @@ export async function renderJoinRequest(
 /** An approved request to join (spec 0031, AC-820), to the person who asked, tagged `email_invite`. */
 export async function renderJoinApproved(
   params: JoinApprovedEmail,
-  context: { readonly appOrigin: string; readonly workspaceName: string },
+  context: { readonly appOrigin: string; readonly workspaceName: string; readonly publicOrigin?: string },
 ): Promise<RenderedEmail> {
   const parsed = JoinApprovedEmail.parse(params);
-  return renderDocument(
-    joinApproved(parsed, { workspaceName: context.workspaceName, link: (path) => appUrl(context.appOrigin, path) }),
-    { appOrigin: context.appOrigin, medium: 'email_invite' },
-  );
+  return renderDocument(joinApproved(parsed, templateContext(context)), {
+    appOrigin: context.appOrigin,
+    medium: 'email_invite',
+  });
 }
 
 /** A deleted workspace (spec 0031, AC-823), to one of its active members, tagged `email_invite`. */

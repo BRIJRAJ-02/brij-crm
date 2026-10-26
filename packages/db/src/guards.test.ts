@@ -170,6 +170,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_email', owner: 'crm_queue' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_enqueue_notification_email', owner: 'crm_queue' },
+      { name: 'crm_ensure_public_profile', owner: 'crm_handle' },
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
       // The forms a person may place on their link page (spec 0052, migration 0104).
       { name: 'crm_form_owner_forms', owner: 'crm_form_lookup' },
@@ -251,6 +252,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_notification_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      // A plpgsql body: it tries a handle, then the next, and raises PROFILE_HANDLE_BASE.
+      { name: 'crm_ensure_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_form_owner_forms', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_handle_owner', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -480,6 +483,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // Whether a handle is held, and a person's handles by workspace (spec 0056, migration 0113).
         'crm_handle_taken',
         'crm_profile_handles_of',
+        // A link page made for every membership (26 Oct 2026, migration 0115).
+        'crm_ensure_public_profile',
       ],
       [
         'crm_save_public_profile(uuid, uuid, text, text)',
@@ -508,10 +513,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_profile_share_image(uuid, uuid)',
         'crm_handle_taken(text)',
         'crm_profile_handles_of(uuid)',
+        'crm_ensure_public_profile(uuid, uuid, text)',
       ],
       // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
       // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 26 }, () => 'app'),
+      Array.from({ length: 27 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',

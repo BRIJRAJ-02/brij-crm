@@ -305,7 +305,7 @@ export const workspaceAddresses = auth.table(
  * address `/<handle>` of their profile and `/<handle>/<slug>` of each booking page. Keyed by the handle alone, so
  * it is unique across every workspace, and an old handle keeps finding its person (the public page then moves to
  * the current one); none is freed while its person exists. Written only through `crm_save_public_profile`
- * (migration 0086).
+ * (migration 0086) and `crm_ensure_public_profile`, which makes a new membership's first one (migration 0115).
  */
 export const publicHandles = auth.table(
   'public_handles',

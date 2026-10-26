@@ -8,6 +8,11 @@ export interface TemplateContext {
   readonly workspaceName?: string;
   /** An app path as a full link on the app's own origin. */
   readonly link: (path: string) => string;
+  /**
+   * The host the public pages are written with (`timefix.com`), for an address shown as text only: its link is
+   * still an app path (`/<handle>`), which the app's origin sends on. Unset, the app's own host.
+   */
+  readonly publicHost?: string;
 }
 
 /** A template: its params and context in, the email's words out. */
