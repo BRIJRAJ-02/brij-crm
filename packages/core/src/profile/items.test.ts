@@ -701,3 +701,49 @@ describe('a link page', () => {
     expect(await refusalOf(enterLinkPage({ db }, fresh('nobody'), { max: 5 }))).toMatchObject({ code: 'NOT_FOUND' });
   });
 });
+
+describe('every definer asks for an active member of the workspace (spec 0056, AC-5601, AC-5613)', () => {
+  it('refuses a write, and answers nothing to a read, for a workspace the person is not in', async () => {
+    const ada = await person('Ada');
+    const mine = await add(ada.scope, link('Mine', 'https://ada.dev'));
+    await add(ada.scope, { kind: 'heading', title: 'Hello' });
+    const elsewhere = randomUUID();
+    const user = ada.userId;
+    const writes: readonly (readonly [string, readonly unknown[]])[] = [
+      ['crm_save_public_profile($1, $2, $3, $4)', [user, elsewhere, fresh('nobody'), '']],
+      [
+        'crm_save_profile_item($1, $2, $3, $4, $5, null, null)',
+        [user, elsewhere, newId(), 'link', '{"title":"x","url":"https://x.dev"}'],
+      ],
+      ['crm_order_profile_items($1, $2, $3::uuid[])', [user, elsewhere, `{${mine.id}}`]],
+      ['crm_archive_profile_item($1, $2, $3, true)', [user, elsewhere, mine.id]],
+      ['crm_delete_profile_item($1, $2, $3)', [user, elsewhere, mine.id]],
+      [
+        'crm_import_profile_links($1, $2, $3, $4, $5::jsonb, $6::jsonb)',
+        [user, elsewhere, newId(), 'https://linktr.ee/x', '[]', '[]'],
+      ],
+      [
+        'crm_save_profile_theme($1, $2, $3::jsonb)',
+        [user, elsewhere, '{"ground":"plain","hue":"blue","mode":"light","shape":"soft","fill":"plain","font":"sans"}'],
+      ],
+      ['crm_save_profile_indexable($1, $2, $3)', [user, elsewhere, false]],
+    ];
+    for (const [call, args] of writes) {
+      await expect(testQuery(appUrl, `select ${call}`, args), call).rejects.toThrow(/PROFILE_NOT_MEMBER/);
+    }
+    // The reads answer no row, whatever the id of the person's items.
+    for (const call of [
+      'crm_profile_items($1, $2)',
+      'crm_profile_items_archived($1, $2)',
+      'crm_profile_items_public($1, $2, 0::smallint, null::uuid, 50)',
+    ]) {
+      expect(await testQuery(appUrl, `select * from ${call}`, [user, elsewhere]), call).toEqual([]);
+    }
+    // A person who is not the owner of this workspace's page reads nothing of it either.
+    expect(await testQuery(appUrl, 'select * from crm_profile_items($1, $2)', [randomUUID(), ada.workspaceId])).toEqual(
+      [],
+    );
+    // The page itself is untouched.
+    expect((await readProfileItems(ada.scope)).items.map((item) => item.id)).toContain(mine.id);
+  });
+});

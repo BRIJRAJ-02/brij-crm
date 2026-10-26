@@ -215,6 +215,29 @@ describe('a form’s redirects', () => {
   });
 });
 
+describe('a form’s booking target (AC-5613)', () => {
+  it('refuses another workspace’s booking page as the after step and as a routing rule’s, through row level security', async () => {
+    const { acme, home } = await setup();
+    const save = (changes: Partial<FormDocument>) =>
+      saveFormDraft(
+        acme.scope,
+        { formId: acme.form.id, document: { ...acme.form.draft, ...changes }, expectedRevision: acme.form.revision },
+        [],
+        { publicOrigins: origins },
+      );
+    const after = await refusalOf(
+      save({ after: { kind: 'booking', bookingPageId: home.booking.id, countdownSeconds: 5, message: '' } }),
+    );
+    expect(after?.code).toBe('CONFIG_INVALID');
+    const book: RoutingRule = {
+      id: 'book',
+      when: { join: 'all', rules: [{ key: 'size', op: 'more_than', value: '50' }] },
+      then: { kind: 'book', bookingPageId: home.booking.id, message: '' },
+    };
+    expect((await refusalOf(save({ routing: { rules: [book] } })))?.code).toBe('CONFIG_INVALID');
+  });
+});
+
 describe('a form’s thank you', () => {
   it('answers its own message, never a redirect to another workspace’s page that was kept before (AC-5612)', async () => {
     const { acme, home } = await setup();
