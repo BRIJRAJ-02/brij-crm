@@ -363,7 +363,7 @@ export const publicProfiles = auth.table(
       )`,
     ),
     foreignKey({ name: 'public_profiles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
-    // The handle is one this same membership holds (migration 0112).
+    // The handle is one this same membership holds (migration 0113).
     foreignKey({
       name: 'public_profiles_membership_fk',
       columns: [t.handle, t.userId, t.workspaceId],

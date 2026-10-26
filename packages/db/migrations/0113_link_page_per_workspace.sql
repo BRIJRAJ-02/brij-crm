@@ -114,7 +114,7 @@ begin
 
   select count(*) into moved from link_page_home;
   if moved > 0 or gone_items > 0 then
-    raise notice '0112_link_page_per_workspace: % people moved to one workspace, % cross-workspace page/form items removed, % rows without a membership removed',
+    raise notice '0113_link_page_per_workspace: % people moved to one workspace, % cross-workspace page/form items removed, % rows without a membership removed',
       moved, gone_items, gone_people;
   end if;
 end

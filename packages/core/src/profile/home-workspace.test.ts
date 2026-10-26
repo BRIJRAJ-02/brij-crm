@@ -1,4 +1,4 @@
-// Migration 0112's backfill (spec 0056, AC-5614 to AC-5616), against the real Postgres: a person with handles, a
+// Migration 0113's backfill (spec 0056, AC-5614 to AC-5616), against the real Postgres: a person with handles, a
 // profile, blocks and views from before the migration (no workspace on any of them) ends up with all of it in ONE
 // home workspace, the one where they hold the most live Public pages, with the other workspace's page blocks deleted,
 // the places closed up, and a second run changing nothing.
@@ -57,7 +57,7 @@ const page = (scope: ReturnType<typeof testScope>, title: string) =>
 /** The migration's backfill block, cut out of the file: its declarations and body, to run nested. */
 function backfillBlock(): string {
   const text = readFileSync(
-    new URL('../../../db/migrations/0112_link_page_per_workspace.sql', import.meta.url),
+    new URL('../../../db/migrations/0113_link_page_per_workspace.sql', import.meta.url),
     'utf8',
   );
   const marker = 'do $$\ndeclare\n  moved integer;';
@@ -76,7 +76,7 @@ interface Outcome {
   readonly again: unknown;
 }
 
-describe('the backfill of migration 0112', () => {
+describe('the backfill of migration 0113', () => {
   it('moves a person’s page to the workspace where they hold the most live Public pages, and deletes the rest', async () => {
     const userId = randomUUID();
     const quiet = await inWorkspace('Ada', 'Quiet', userId);

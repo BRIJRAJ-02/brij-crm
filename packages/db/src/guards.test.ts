@@ -214,7 +214,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_profile_counts', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
-      // Whether a person is an active member of a workspace: crm_handle's definers ask it (spec 0056, migration 0112).
+      // Whether a person is an active member of a workspace: crm_handle's definers ask it (spec 0056, migration 0113).
       { name: 'crm_workspace_member', owner: 'crm_booking_lookup' },
       { name: 'crm_workspaces_by_domain', owner: 'crm_domain_lookup' },
       { name: 'crm_workspaces_to_purge', owner: 'crm_purge' },
@@ -468,7 +468,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_profile_indexable',
         // Bringing a link in bio page across (spec 0055, migration 0109).
         'crm_import_profile_links',
-        // Whether a handle is held, and a person's handles by workspace (spec 0056, migration 0112).
+        // Whether a handle is held, and a person's handles by workspace (spec 0056, migration 0113).
         'crm_handle_taken',
         'crm_profile_handles_of',
       ],
@@ -1876,7 +1876,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
     // for access, since whether a visitor sees the page is still the booking lookup's call.
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
       'profile_items',
-      // A link page is one workspace's (spec 0056, migration 0112): its handles, profile and counted views name it.
+      // A link page is one workspace's (spec 0056, migration 0113): its handles, profile and counted views name it.
       'profile_view_days',
       'profile_views',
       'public_handles',

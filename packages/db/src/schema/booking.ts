@@ -303,7 +303,7 @@ export const bookingPageMembers = pgTable(
  * current one, and up to 20 old ones, which keep finding the page (the public page moves to the current address).
  * Kept only by the trigger crm_booking_page_slugs_keep (0087) on `booking_pages`: a page that is deleted or changes
  * hands loses its old slugs, and its rows go with it when it is purged. `booking_page_slugs_owner_slug` keeps a slug
- * one page of a person holds or held from any other page of theirs, in the same workspace (spec 0056, migration 0112), so an old link never finds
+ * one page of a person holds or held from any other page of theirs, in the same workspace (spec 0056, migration 0113), so an old link never finds
  * a different page; the same page may take it back.
  */
 export const bookingPageSlugs = pgTable(
