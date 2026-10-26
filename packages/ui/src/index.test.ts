@@ -77,6 +77,7 @@ describe('@crm/ui', () => {
       'FileDrop',
       'FileIcon',
       'FileItem',
+      'FileLinksContext',
       'FilterBuilder',
       'FilterChip',
       'FloatingBar',
@@ -240,6 +241,7 @@ describe('@crm/ui', () => {
       'suggestionOptionId',
       'typeLabelOf',
       'useDelayedLoading',
+      'useFileHref',
       'useFormatSettings',
       'useKeyboardPlatform',
     ]);
