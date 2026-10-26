@@ -24,6 +24,7 @@ Ported from the artifact's Radio card (version 8). Roles, plans, export formats 
 - `labelAside` puts a quiet word after the label, such as "(optional)" on a public form: `text-tertiary`, on the same line, and part of the group's accessible name.
 
 - `variant="cards"` draws each choice as a bordered card in a grid two wide (one on a phone), the chosen one on the accent's soft fill, with `icon` before its label: a handful of choices that each start a different job, where picking one is the first step of the form under it (the link page's Add item, 25 October 2026). Why a variant and not a new component: it is the same group, the same keyboard and the same `description`, only drawn as cards; TileGrid lays out Cards, which are not form controls, and ChoiceChips is multiple choice.
+- In `variant="cards"` the whole card picks the choice, not only the circle and the label: the control reaches the card's edges through a stretched pseudo-element, so the description and the padding around it are inside the hit area, and the hover fill covers the card. The control is still the RadioButton, so the accessible name, the keyboard and the focus ring are exactly as they are in `plain`. A press on the line under the title did nothing before (the owner, 26 October 2026); the Cards story asks the browser what is under that point rather than dispatching a click, which would not exercise it.
 - `icon` on a Radio draws a glyph before its label. It is only read with `variant="cards"`, where the card has room for it.
 
 ## States

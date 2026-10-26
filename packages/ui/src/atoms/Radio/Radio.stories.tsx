@@ -154,5 +154,13 @@ export const Cards: Story = {
     const page = canvas.getByRole('radio', { name: /Booking page/ });
     await userEvent.click(page);
     await expect(page).toBeChecked();
+    // The whole card picks it, not only the circle and the title: a press on the line under the title, which is
+    // where somebody reading the choices has their pointer, used to land on nothing (the owner, 26 October 2026).
+    // Asked of the browser rather than by clicking, because what is under a point is the question: the control
+    // reaches the card's edges through a stretched pseudo-element, which no dispatched click would exercise.
+    const description = canvas.getByText('Your details, saved to their phone');
+    const box = description.getBoundingClientRect();
+    const under = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    await expect(under?.closest('label')).toBe(canvas.getByRole('radio', { name: /Contact card/ }).closest('label'));
   },
 };

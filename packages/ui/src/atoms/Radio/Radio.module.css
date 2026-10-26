@@ -26,6 +26,7 @@
   }
 
   .choices[data-variant='cards'] .field {
+    position: relative;
     box-sizing: border-box;
     gap: var(--space-2);
     block-size: 100%;
@@ -64,6 +65,21 @@
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* The whole card picks it, which is what a bordered box this size promises: the description and the padding
+     around the label were outside the hit area, so a press on the words under the title did nothing (the owner,
+     26 October 2026). The control is still the RadioButton, so the name, the keyboard and the focus ring are
+     unchanged; its own box just reaches the card's edges, which is also what makes the hover fill the card. */
+  .choices[data-variant='cards'] .radio {
+    position: static;
+  }
+
+  .choices[data-variant='cards'] .radio::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-md);
   }
 
   .circle {
