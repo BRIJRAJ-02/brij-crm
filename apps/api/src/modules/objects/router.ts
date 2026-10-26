@@ -19,6 +19,7 @@ export const objectsRouter = member.objects.router({
           apiSlug: input.apiSlug,
           icon: input.icon,
           hue: input.hue,
+          attributes: input.attributes,
         },
         hooks,
       ),

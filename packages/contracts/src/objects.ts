@@ -7,6 +7,7 @@ import { Hue } from './values/hues.ts';
 import { ObjectIcon } from './values/object-icons.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
+import { PickerAttributeType } from './attributes.ts';
 
 /**
  * One object: its id, its address in URLs and the API (`apiSlug`,
@@ -60,6 +61,16 @@ export const CreateObjectInput = WorkspaceScoped.extend({
   apiSlug: z.string().max(100, { error: 'Keep the API name to 100 characters.' }).optional(),
   icon: ObjectIcon,
   hue: Hue,
+  /** First attributes beside Name, in order, made with the object in one transaction (at most 30). */
+  attributes: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1, 'Name the attribute.').max(100, 'Use at most 100 characters.'),
+        type: PickerAttributeType,
+      }),
+    )
+    .max(30, 'Start with at most 30 attributes.')
+    .optional(),
   mutationId: Uuid,
 });
 /** A new object. */

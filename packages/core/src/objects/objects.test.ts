@@ -131,6 +131,37 @@ describe('creating an object (AC-223, AC-244, AC-245)', () => {
     expect(made.primaryAttributeId).toBe(primary?.id);
   });
 
+  it('makes its first attributes in the same transaction, in order, and none of it when one is refused', async () => {
+    const { scope } = await workspace();
+    const made = await createObject(scope, {
+      ...projects(),
+      attributes: [
+        { title: 'Due date', type: 'date' },
+        { title: 'Budget', type: 'currency' },
+      ],
+    });
+    const own = (await listObjectAttributes(scope, made.id)).filter((attribute) => !attribute.isSystem);
+    expect(own.map((attribute) => [attribute.title, attribute.type])).toEqual([
+      ['Name', 'text'],
+      ['Due date', 'date'],
+      ['Budget', 'currency'],
+    ]);
+    // Two with one API name: the second is refused and the object is not made.
+    const refused = projects();
+    await refusalOf(
+      createObject(scope, {
+        ...refused,
+        singularName: 'Other',
+        pluralName: 'Others',
+        attributes: [
+          { title: 'Notes', type: 'text' },
+          { title: 'notes', type: 'text' },
+        ],
+      }),
+    );
+    expect((await listObjects(scope)).some((object) => object.id === refused.id)).toBe(false);
+  });
+
   it('answers the same object for the same id again, writing nothing twice; another actor gets ID_TAKEN', async () => {
     const { scope } = await workspace();
     const input = projects();

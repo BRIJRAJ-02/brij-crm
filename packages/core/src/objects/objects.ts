@@ -5,9 +5,9 @@
 // the scope the access door made.
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { ObjectSummary } from '@crm/contracts';
-import { HUES, OBJECT_ICONS, toApiSlug, type Hue, type ObjectIcon } from '@crm/contracts/values';
+import { HUES, OBJECT_ICONS, toApiSlug, type AttributeType, type Hue, type ObjectIcon } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { defineObject, reorderObject, setObjectArchived, updateObject } from '../engine/definitions.ts';
+import { defineObjectWithAttributes, reorderObject, setObjectArchived, updateObject } from '../engine/definitions.ts';
 import { checkId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -125,6 +125,8 @@ export interface CreateObjectInput {
   readonly apiSlug?: string | undefined;
   readonly icon: string;
   readonly hue: string;
+  /** First attributes beside Name, in order, made in the same transaction (the title's API name is derived). */
+  readonly attributes?: readonly { readonly title: string; readonly type: AttributeType }[] | undefined;
 }
 
 /**
@@ -143,7 +145,7 @@ export async function createObject(
 ): Promise<ObjectSummary> {
   requirePermission(scope, 'schema.manage');
   const apiSlug = input.apiSlug ?? toApiSlug(input.pluralName, 'object');
-  const made = await defineObject(
+  const made = await defineObjectWithAttributes(
     scope,
     {
       id: input.id,
@@ -153,6 +155,10 @@ export async function createObject(
       icon: input.icon,
       hue: input.hue,
     },
+    (input.attributes ?? []).map((attribute) => {
+      const title = attribute.title.trim();
+      return { title, type: attribute.type, apiSlug: toApiSlug(title, 'attribute') };
+    }),
     hooks,
   );
   return readObject(scope, made.objectId);
