@@ -239,6 +239,11 @@ export interface PlannedAttribute {
   readonly type: 'text' | 'email' | 'phone' | 'url' | 'number' | 'select' | 'checkbox';
   /** A select's options, from the question's own choices. */
   readonly choices: readonly string[];
+  /**
+   * Made unique: the object a form files onto matches each submission on its one unique email, so an object with
+   * none can never take a form (27 October 2026). The email question's own attribute becomes that match.
+   */
+  readonly isUnique?: boolean;
 }
 
 /** The attribute type a question's answer type makes: the first fit in `FILES_ONTO`, a select for choices. */
@@ -269,8 +274,16 @@ function freeTitle(wanted: string, taken: ReadonlySet<string>): string {
 
 /**
  * The attributes to create for the questions still unfiled: a labelled, non file question gets one titled from its
- * label, typed from its answer type, with a select carrying its choices. Empty while nothing is filed (`isFiling`
- * false: a form that keeps submissions only, a booking page kept out of the CRM, a reader who can't add attributes).
+ * label,
+ * typed from its answer type, with a select carrying its choices. Empty while nothing is filed (`isFiling` false: a
+ * form that keeps submissions only, a booking page kept out of the CRM, a reader who can't add attributes).
+ *
+ * A file question gets none: a file answer only files onto a file attribute, and the picker doesn't make those
+ * (`PICKER_TYPES`), so there is nothing to create. It stays with the submission, and says so.
+ *
+ * The first email plan on an object with no unique email of its own is made unique, because that is what the object
+ * then matches submissions on. Without it a form could create the email attribute it needs and still refuse to
+ * publish, since the match it asks for would never exist.
  */
 export function planNewAttributes(
   questions: Questions,
@@ -279,19 +292,24 @@ export function planNewAttributes(
 ): readonly PlannedAttribute[] {
   if (!isFiling) return [];
   const taken = new Set(attributes.map((attribute) => attribute.title.trim().toLowerCase()));
+  let needsMatch = !attributes.some((attribute) => attribute.isUnique && attribute.type === 'email');
   const plans: PlannedAttribute[] = [];
   for (const question of questions) {
     const label = question.label.trim();
     if (question.filedOn !== undefined || label === '' || question.answerType === 'file') continue;
     const title = freeTitle(label, taken);
     taken.add(title.toLowerCase());
+    const type = plannedType(question.answerType);
+    const isMatch = type === 'email' && needsMatch;
+    if (isMatch) needsMatch = false;
     plans.push({
       questionId: question.id,
       title,
-      type: plannedType(question.answerType),
+      type,
       choices: CHOICE_TYPES.includes(question.answerType)
         ? (question.choices ?? []).filter((choice) => choice.trim() !== '')
         : [],
+      ...(isMatch ? { isUnique: true } : {}),
     });
   }
   return plans;

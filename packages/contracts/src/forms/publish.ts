@@ -25,6 +25,8 @@ export interface PublishInput {
   readonly document: Pick<FormDocument, 'questions' | 'targets'> & { readonly routing?: FormDocument['routing'] };
   /** The main object's live attributes, by id (archived and deleted ones absent). */
   readonly attributes: ReadonlyMap<string, PublishAttribute>;
+  /** The main object's name, for the sentences that name it; "People" when it isn't given. */
+  readonly objectName?: string;
 }
 
 /** The first problem: a stable code, the sentence, and the question it is about. */
@@ -216,20 +218,31 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
   const { questions, targets } = input.document;
   if (targets.main !== undefined) {
     const match = targets.main.matchAttributeId;
+    const where = input.objectName ?? 'People';
     const emailQuestion = questions.find(
       (question) => question.answerType === 'email' && match !== undefined && question.filedOn?.attributeId === match,
     );
     if (emailQuestion === undefined) {
+      // Three ways to have no match, and they are not the same thing to be told (the owner, 27 October 2026). The
+      // old sentence said "Keep an email question" to someone looking straight at the email question they had, and
+      // called every object a person.
+      const anyEmail = questions.find((question) => question.answerType === 'email');
+      if (anyEmail === undefined) {
+        return {
+          code: 'EMAIL_MISSING',
+          message: `Add an email question. It is how a submission finds the ${where} record it belongs to, instead of adding a new one each time.`,
+        };
+      }
       return {
         code: 'EMAIL_MISSING',
-        message: 'Keep an email question. It is how a submission becomes a person in Timefix.',
+        message: `File the email question on ${where}. It is how a submission finds the record it belongs to, instead of adding a new one each time.`,
+        questionId: anyEmail.id,
       };
     }
     if (!emailQuestion.required) {
       return {
         code: 'EMAIL_MISSING',
-        message:
-          'Make the email question one visitors must answer. It is how a submission becomes a person in Timefix.',
+        message: `Make the email question one visitors must answer. It is how a submission finds the ${where} record it belongs to.`,
         questionId: emailQuestion.id,
       };
     }

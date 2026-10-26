@@ -185,7 +185,18 @@ describe('FormDocument and publishProblem (AC-655)', () => {
     expect(check({ slug: 'A' })).toBe('The address needs 2 to 40 lowercase letters, numbers or hyphens.');
     const without = { ...document, questions: document.questions.filter((question) => question.key !== 'email') };
     expect(check({ document: without })).toBe(
-      'Keep an email question. It is how a submission becomes a person in Timefix.',
+      'Add an email question. It is how a submission finds the People record it belongs to, instead of adding a new one each time.',
+    );
+    // An email question that is there but files nowhere is a different thing to be told, and it names the object it
+    // would have to be filed on rather than calling every object a person (27 October 2026).
+    const unfiled = {
+      ...document,
+      questions: document.questions.map((question) =>
+        question.key === 'email' ? { ...question, filedOn: undefined } : question,
+      ),
+    };
+    expect(check({ document: unfiled, objectName: 'Graphic Designers' })).toBe(
+      'File the email question on Graphic Designers. It is how a submission finds the record it belongs to, instead of adding a new one each time.',
     );
     const unlabelled = {
       ...document,

@@ -30,6 +30,7 @@ export async function createPlannedAttributes(
           objectId,
           title,
           type: plan.type,
+          ...(plan.isUnique === true ? { isUnique: true } : {}),
           ...(plan.type === 'select'
             ? {
                 options: plan.choices.map((label) => ({

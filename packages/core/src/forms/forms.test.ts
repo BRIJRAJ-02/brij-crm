@@ -12,6 +12,7 @@ import { createDatabase, type Database } from '@crm/db';
 import { enterPublicForm } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
 import { createAttribute, editAttribute } from '../attributes/attributes.ts';
+import { createObject } from '../objects/objects.ts';
 import { bookingTargetProblem, createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { getActivity } from '../engine/activity.ts';
 import { newId } from '../engine/ids.ts';
@@ -36,6 +37,7 @@ import {
   rotateFormSecret,
   saveFormDraft,
   setFormStatus,
+  setFormTarget,
   updateFormSettings,
 } from './forms.ts';
 import { processSubmission } from './process.ts';
@@ -243,6 +245,49 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     expect(await refusalOf(publishForm(w.scope, { formId: created.id, expectedRevision: saved.revision }))).toEqual([
       expect.objectContaining({ code: 'CONFIG_INVALID', message: 'Every question needs a label.', field: 'phone' }),
     ]);
+  });
+
+  it('works out the match again when its own object is asked for after an email attribute is added', async () => {
+    // The owner, 27 October 2026: a form sent to an object with no unique email could never be published, because
+    // the match was worked out once, when the object was chosen, and adding the attribute afterwards changed
+    // nothing. The builder now adds it and asks for the same object again; that has to be when the match is found.
+    const w = await workspace();
+    const designers = await createObject(w.scope, {
+      id: newId(),
+      singularName: 'Graphic Designer',
+      pluralName: 'Graphic Designers',
+      icon: 'inbox',
+      hue: 'blue',
+    });
+    const created = await createForm(w.scope, { id: newId(), name: 'Apply', mainObjectId: designers.id });
+    expect(created.draft.targets.main).toEqual({ objectId: designers.id });
+    expect(created.draft.questions.find((each) => each.key === 'email')?.filedOn).toBeUndefined();
+
+    const email = await createAttribute(w.scope, {
+      objectId: designers.id,
+      id: newId(),
+      title: 'Work email',
+      type: 'email',
+      isUnique: true,
+    });
+    const again = await setFormTarget(w.scope, {
+      formId: created.id,
+      mainObjectId: designers.id,
+      expectedRevision: created.revision,
+    });
+    expect(again.draft.targets.main).toEqual({ objectId: designers.id, matchAttributeId: email.id });
+    expect(again.draft.questions.find((each) => each.key === 'email')?.filedOn?.attributeId).toBe(email.id);
+    expect(again.revision).toBeGreaterThan(created.revision);
+    const live = await publishForm(w.scope, { formId: created.id, expectedRevision: again.revision });
+    expect(live.liveVersionNumber).toBe(1);
+
+    // Asked for once more with nothing new under it, it writes nothing: the same revision comes back.
+    const unchanged = await setFormTarget(w.scope, {
+      formId: created.id,
+      mainObjectId: designers.id,
+      expectedRevision: live.revision,
+    });
+    expect(unchanged.revision).toBe(live.revision);
   });
 
   it('refuses a publish filing onto a field the publisher can only read, naming it (AC-546)', async () => {

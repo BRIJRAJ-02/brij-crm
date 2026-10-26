@@ -956,6 +956,15 @@ function unfiled(question: FormQuestion): FormQuestion {
 }
 
 /**
+ * Whether pointing a form at the object it already has left the draft exactly as it was: the same questions, filed
+ * the same way, matching on the same attribute. Both documents are built from the same draft a few lines apart, so
+ * their keys are written in the same order and comparing them as text is enough.
+ */
+function sameDraft(before: FormDocument, after: FormDocument): boolean {
+  return JSON.stringify(before) === JSON.stringify(after);
+}
+
+/**
  * Points a form's draft at another object, or at none (the first publish's
  * "Where the answers go", and Settings' "Add each submission to the CRM"):
  * its questions keep their filing where the new object has that attribute (a
@@ -978,7 +987,10 @@ export async function setFormTarget(
       if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
       checkRevision(form, input.expectedRevision);
       const objectId = input.mainObjectId === null ? null : checkId(input.mainObjectId, UNKNOWN_OBJECT);
-      if (objectId === form.mainObjectId) return viewOf(tx, scope, form);
+      // The object a form already files onto is not a no-op (27 October 2026). Its attributes may have moved under
+      // the draft since it was chosen: the builder creates the ones its questions need and then asks for the same
+      // object again, and that is the moment the match has to be worked out afresh. Nothing is written below when
+      // the draft comes out unchanged, so asking again still costs no version.
       if (form.draftVersionId === null) throw new Error('A form always has a draft version.');
       const draft = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
       if (draft === undefined) throw new Error('The draft version went away.');
@@ -998,6 +1010,7 @@ export async function setFormTarget(
           targets: { main: { objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) } },
         };
       }
+      if (objectId === form.mainObjectId && sameDraft(draft.document, document)) return viewOf(tx, scope, form);
       await tx.update(forms).set({ mainObjectId: objectId }).where(eq(forms.id, form.id));
       await writeDraft(tx, scope, { ...form, mainObjectId: objectId }, document);
       const moved = await loadForm(tx, form.id);

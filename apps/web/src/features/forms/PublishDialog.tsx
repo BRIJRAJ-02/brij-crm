@@ -15,6 +15,8 @@ import { Button, Callout, Field, Modal, Select } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { changeQuestion, fileByLabel, fittingAttributes, publishAttributesOf, publishStart } from './draft.ts';
+import { createPlannedAttributes } from '../questions/attributes.ts';
+import { planNewAttributes } from '../questions/questions.ts';
 import { firstRefusal } from './refusals.ts';
 import { embedSnippet } from './snippets.ts';
 import { strings } from './strings.ts';
@@ -50,6 +52,8 @@ const BUILT_TYPE: Readonly<Record<AnswerType, 'text' | 'email' | 'phone' | 'url'
     checkbox: 'checkbox',
     yes_no: 'checkbox',
     country: 'text',
+    // A file answer only files onto a file attribute, and the picker makes none, so a file question is left out of
+    // a built object entirely rather than given a text attribute it can never be filed on (27 October 2026).
     file: 'text',
   };
 
@@ -140,6 +144,14 @@ export function PublishDialog(props: PublishDialogProps) {
 
   const unfiled = draft.questions.filter((question) => question.filedOn === undefined);
   const isKeptOnly = draft.targets.main === undefined;
+  // What Publish will make for the questions with nowhere to go, so the dialog says it before it happens rather
+  // than showing a bare "Not filed" for a question it is about to file (27 October 2026).
+  const planned = new Map(
+    planNewAttributes(draft.questions, target.items, canBuild && !isKeptOnly).map((plan) => [
+      plan.questionId,
+      plan.title,
+    ]),
+  );
 
   // Build one out of this form: an object named after it, one attribute per unfiled question (the email unique).
   const build = async () => {
@@ -156,6 +168,7 @@ export function PublishDialog(props: PublishDialogProps) {
       });
       const made = new Map<string, string>();
       for (const question of draft.questions) {
+        if (question.answerType === 'file') continue;
         const attribute = await data.attributes.create(slug, {
           id: data.attributes.newId(),
           objectId: object.id,
@@ -186,19 +199,55 @@ export function PublishDialog(props: PublishDialogProps) {
     }
   };
 
-  const goLive = () => {
+  /**
+   * Gives every unfiled, labelled question an attribute on the chosen object, as the editor's own Publish does, and
+   * then asks for that object again so the match is worked out over the attributes that now exist.
+   *
+   * The editor creates them before this dialog opens, against whatever the form pointed at then. Step 2 lets the
+   * object be changed, and changing it left those questions with nowhere to go and no way to make anywhere: a form
+   * sent to an object with no email attribute could not be published at all, and said only "Keep an email question"
+   * about a question that was already there (the owner, 27 October 2026).
+   */
+  const fileTheRest = async (): Promise<{ readonly document: FormDocument; readonly choices: FormTargetChoices }> => {
+    const objectId = draft.targets.main?.objectId;
+    const plans = planNewAttributes(draft.questions, target.items, canBuild && objectId !== undefined);
+    if (objectId === undefined || plans.length === 0) return { document: draft, choices: target };
+    const made = await createPlannedAttributes(data, slug, objectId, plans);
+    if (made.length === 0) return { document: draft, choices: target };
+    onDraftChange(
+      made.reduce((document, each) => changeQuestion(document, each.questionId, { filedOn: each.attributeId }), draft),
+    );
+    const revision = await flush();
+    const view = await data.forms.setTarget(slug, form.id, objectId, revision);
+    const choices = await data.forms.attributes(slug, form.id);
+    onTargetChange(view, choices);
+    return { document: view.draft, choices };
+  };
+
+  const goLive = async () => {
+    setBusy('publish');
+    setError(undefined);
+    let ready: { readonly document: FormDocument; readonly choices: FormTargetChoices };
+    try {
+      ready = await fileTheRest();
+    } catch (failure) {
+      setBusy(undefined);
+      setError(firstRefusal(failure).message);
+      return;
+    }
+    const { document, choices } = ready;
     const problem = publishProblem({
       name: name.trim(),
       slug: address,
-      document: draft,
-      attributes: publishAttributesOf(target),
+      document,
+      attributes: publishAttributesOf(choices),
+      ...(choices.objectName === undefined ? {} : { objectName: choices.objectName }),
     });
     if (problem !== undefined) {
+      setBusy(undefined);
       setError(problem.message);
       return;
     }
-    setBusy('publish');
-    setError(undefined);
     flush()
       .then((revision) =>
         data.forms.publish(slug, form.id, { expectedRevision: revision, name: name.trim(), slug: address }),
@@ -262,7 +311,7 @@ export function PublishDialog(props: PublishDialogProps) {
             <Button
               key="publish"
               variant="primary"
-              onPress={goLive}
+              onPress={() => void goLive()}
               isPending={busy === 'publish'}
               isDisabled={busy !== undefined}
             >
@@ -340,7 +389,13 @@ export function PublishDialog(props: PublishDialogProps) {
                 key={question.id}
                 label={question.label === '' ? strings.untitledQuestion : question.label}
                 items={[
-                  { id: 'none', label: strings.notFiled },
+                  {
+                    id: 'none',
+                    label:
+                      planned.get(question.id) === undefined || target.objectName === undefined
+                        ? strings.notFiled
+                        : strings.willCreate(planned.get(question.id) ?? '', target.objectName),
+                  },
                   ...fittingAttributes(target.items, question.answerType).map((attribute) => ({
                     id: attribute.attributeId,
                     label: `${target.objectName} · ${attribute.title}`,
@@ -362,7 +417,8 @@ export function PublishDialog(props: PublishDialogProps) {
                 ? strings.building
                 : strings.buildObjectButton(
                     name.trim() === '' ? strings.untitledForm : name.trim(),
-                    draft.questions.length,
+                    // What it will really make: a file question gets no attribute, so it is not counted.
+                    draft.questions.filter((question) => question.answerType !== 'file').length,
                   )}
             </Button>
           )}
