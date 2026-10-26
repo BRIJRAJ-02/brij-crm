@@ -72,11 +72,11 @@ async function slugsOf(workspaceId: string, pageId: string): Promise<readonly st
   return found.rows.map((row) => row.slug);
 }
 
-/** The page `/<handle>/<slug>` names for the person, by crm_booking_page_by_address, from no workspace. */
-async function addressed(userId: string, slug: string) {
+/** The page `/<handle>/<slug>` names for the person in one workspace, by crm_booking_page_by_address (spec 0056). */
+async function addressed(userId: string, workspaceId: string, slug: string) {
   const found = await db.withWorkspace(randomUUID(), (tx) =>
     tx.execute<{ workspace_id: string; page_id: string }>(
-      sql`select workspace_id::text, page_id::text from crm_booking_page_by_address(${userId}::uuid, ${slug})`,
+      sql`select workspace_id::text, page_id::text from crm_booking_page_by_address(${userId}::uuid, ${workspaceId}::uuid, ${slug})`,
     ),
   );
   return found.rows;
@@ -119,29 +119,43 @@ describe('booking_page_slugs', () => {
     expect(await slugsOf(a.workspaceId, pageId)).toEqual(['intro']);
     await rename(a.workspaceId, pageId, 'meet');
     expect(await slugsOf(a.workspaceId, pageId)).toEqual(['intro', 'meet']);
-    expect(await addressed(userId, 'intro')).toEqual([{ workspace_id: a.workspaceId, page_id: pageId }]);
-    expect(await addressed(userId, 'meet')).toEqual([{ workspace_id: a.workspaceId, page_id: pageId }]);
-    expect(await addressed(userId, 'never')).toEqual([]);
+    expect(await addressed(userId, a.workspaceId, 'intro')).toEqual([{ workspace_id: a.workspaceId, page_id: pageId }]);
+    expect(await addressed(userId, a.workspaceId, 'meet')).toEqual([{ workspace_id: a.workspaceId, page_id: pageId }]);
+    expect(await addressed(userId, a.workspaceId, 'never')).toEqual([]);
   });
 
-  it('refuses an old slug to another page of the person’s in any workspace, and lets its own page take it back', async () => {
+  it('refuses an old slug to another page of the person’s in the same workspace, and lets its own page take it back', async () => {
     const userId = await person();
     const a = await workspaceOf(userId);
-    const b = await workspaceOf(userId);
     const one = await pageIn(a, 'intro');
     await rename(a.workspaceId, one, 'meet');
-    await expect(pageIn(b, 'intro')).rejects.toMatchObject({
+    await expect(pageIn(a, 'intro')).rejects.toMatchObject({
       cause: { code: '23505', constraint: 'booking_page_slugs_owner_slug' },
     });
-    const two = await pageIn(b, 'other');
-    await expect(rename(b.workspaceId, two, 'intro')).rejects.toMatchObject({
+    const two = await pageIn(a, 'other');
+    await expect(rename(a.workspaceId, two, 'intro')).rejects.toMatchObject({
       cause: { code: '23505', constraint: 'booking_page_slugs_owner_slug' },
     });
     await rename(a.workspaceId, one, 'intro');
-    expect(await addressed(userId, 'meet')).toEqual([{ workspace_id: a.workspaceId, page_id: one }]);
+    expect(await addressed(userId, a.workspaceId, 'meet')).toEqual([{ workspace_id: a.workspaceId, page_id: one }]);
     // Another person may use the same slug.
     const bob = await workspaceOf(await person());
     await pageIn(bob, 'meet');
+  });
+
+  it('lets a slug repeat across a person’s workspaces, each address naming exactly one page (spec 0056, AC-5608)', async () => {
+    const userId = await person();
+    const a = await workspaceOf(userId);
+    const b = await workspaceOf(userId);
+    const inA = await pageIn(a, 'intro');
+    const inB = await pageIn(b, 'intro');
+    await rename(a.workspaceId, inA, 'meet');
+    // The old slug stays with A's page for A's address, and B's own `intro` is a different address.
+    expect(await addressed(userId, a.workspaceId, 'intro')).toEqual([{ workspace_id: a.workspaceId, page_id: inA }]);
+    expect(await addressed(userId, b.workspaceId, 'intro')).toEqual([{ workspace_id: b.workspaceId, page_id: inB }]);
+    expect(await addressed(userId, a.workspaceId, 'meet')).toEqual([{ workspace_id: a.workspaceId, page_id: inA }]);
+    // A workspace's address never finds another workspace's page.
+    expect(await addressed(userId, b.workspaceId, 'meet')).toEqual([]);
   });
 
   it('keeps at most 20 old slugs, the one left longest ago going first', async () => {
@@ -154,7 +168,7 @@ describe('booking_page_slugs', () => {
     expect(kept).not.toContain('slug-0');
     expect(kept).not.toContain('slug-1');
     expect(kept).toContain('slug-2');
-    expect(await addressed(userId, 'slug-0')).toEqual([]);
+    expect(await addressed(userId, a.workspaceId, 'slug-0')).toEqual([]);
     // A slug past the cap is free again.
     await pageIn(a, 'slug-0');
   });
@@ -168,7 +182,7 @@ describe('booking_page_slugs', () => {
       tx.execute(sql`update booking_pages set deleted_at = now() where id = ${deleted}`),
     );
     expect(await slugsOf(a.workspaceId, deleted)).toEqual([]);
-    expect(await addressed(userId, 'gone')).toEqual([]);
+    expect(await addressed(userId, a.workspaceId, 'gone')).toEqual([]);
     await pageIn(a, 'gone');
 
     const handed = await pageIn(a, 'handed');
@@ -182,7 +196,7 @@ describe('booking_page_slugs', () => {
       await tx.execute(sql`update booking_pages set owner_member_id = ${other} where id = ${handed}`);
     });
     expect(await slugsOf(a.workspaceId, handed)).toEqual(['handed-now']);
-    expect(await addressed(userId, 'handed')).toEqual([]);
+    expect(await addressed(userId, a.workspaceId, 'handed')).toEqual([]);
 
     const purged = await pageIn(a, 'purged');
     await rename(a.workspaceId, purged, 'purged-now');
@@ -202,12 +216,12 @@ describe('booking_page_slugs', () => {
     );
     const pageId = await pageIn({ workspaceId: a.workspaceId, memberId }, 'intro');
     await rename(a.workspaceId, pageId, 'meet');
-    expect(await addressed(userId, 'intro')).toEqual([{ workspace_id: a.workspaceId, page_id: pageId }]);
+    expect(await addressed(userId, a.workspaceId, 'intro')).toEqual([{ workspace_id: a.workspaceId, page_id: pageId }]);
     await db.withWorkspace(a.workspaceId, (tx) =>
       tx.execute(sql`update members set status = 'removed', left_at = now() where id = ${memberId}`),
     );
-    expect(await addressed(userId, 'intro')).toEqual([]);
-    expect(await addressed(userId, 'meet')).toEqual([]);
+    expect(await addressed(userId, a.workspaceId, 'intro')).toEqual([]);
+    expect(await addressed(userId, a.workspaceId, 'meet')).toEqual([]);
   });
 
   it('takes no row but the page’s current slug under its owner, and lets the app change only when', async () => {

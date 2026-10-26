@@ -308,11 +308,14 @@ export const publicHandles = auth.table(
   {
     handle: text('handle').notNull(),
     userId: uuid('user_id').notNull(),
+    /** The one workspace this handle, and the link page behind it, belong to (spec 0056, AC-5601). */
+    workspaceId: uuid('workspace_id').notNull(),
     createdAt: createdAt(),
   },
   (t) => [
     primaryKey({ name: 'public_handles_pkey', columns: [t.handle] }),
-    index('public_handles_user').on(t.userId),
+    index('public_handles_user_workspace').on(t.userId, t.workspaceId),
+    uniqueIndex('public_handles_membership').on(t.handle, t.userId, t.workspaceId),
     check(
       'public_handles_shape',
       sql`${t.handle} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.handle}) between 3 and 40`,
@@ -321,11 +324,12 @@ export const publicHandles = auth.table(
   ],
 );
 
-/** A person's public profile (booking addresses): their current handle and a one line bio. */
+/** A person's public profile in ONE workspace (spec 0056): their current handle there and a one line bio. */
 export const publicProfiles = auth.table(
   'public_profiles',
   {
     userId: uuid('user_id').notNull(),
+    workspaceId: uuid('workspace_id').notNull(),
     handle: text('handle').notNull(),
     bio: text('bio').notNull().default(''),
     /** The link page's look (spec 0054): six names from closed sets, never a colour or a size. */
@@ -339,7 +343,7 @@ export const publicProfiles = auth.table(
     updatedAt: updatedAt(),
   },
   (t) => [
-    primaryKey({ name: 'public_profiles_pkey', columns: [t.userId] }),
+    primaryKey({ name: 'public_profiles_pkey', columns: [t.userId, t.workspaceId] }),
     uniqueIndex('public_profiles_handle').on(t.handle),
     check('public_profiles_bio', sql`char_length(${t.bio}) <= 160`),
     check(
@@ -359,10 +363,11 @@ export const publicProfiles = auth.table(
       )`,
     ),
     foreignKey({ name: 'public_profiles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    // The handle is one this same membership holds (migration 0112).
     foreignKey({
-      name: 'public_profiles_handle_fk',
-      columns: [t.handle],
-      foreignColumns: [publicHandles.handle],
+      name: 'public_profiles_membership_fk',
+      columns: [t.handle, t.userId, t.workspaceId],
+      foreignColumns: [publicHandles.handle, publicHandles.userId, publicHandles.workspaceId],
     }),
   ],
 );
@@ -387,7 +392,8 @@ export const profileItems = auth.table(
     data: jsonb('data')
       .notNull()
       .default(sql`'{}'::jsonb`),
-    workspaceId: uuid('workspace_id'),
+    /** The workspace whose link page this block is on (spec 0056, AC-5604): every kind carries one. */
+    workspaceId: uuid('workspace_id').notNull(),
     pageId: uuid('page_id'),
     /** Set only for `kind = 'form'`, always beside `workspaceId` (spec 0052, AC-5213). */
     formId: uuid('form_id'),
@@ -404,7 +410,7 @@ export const profileItems = auth.table(
     check('profile_items_position', sql`${t.position} between 0 and 999`),
     check('profile_items_placed', sql`(${t.archivedAt} is null) = (${t.position} is not null)`),
     check('profile_items_data', sql`jsonb_typeof(${t.data}) = 'object' and pg_column_size(${t.data}) <= 16384`),
-    check('profile_items_target', sql`(${t.workspaceId} is null) = (${t.pageId} is null and ${t.formId} is null)`),
+    check('profile_items_target', sql`(${t.kind} = 'page') = (${t.pageId} is not null)`),
     check('profile_items_form', sql`(${t.kind} = 'form') = (${t.formId} is not null)`),
     check('profile_items_page', sql`${t.kind} <> 'page' or ${t.pageId} is not null`),
     check(
@@ -418,13 +424,13 @@ export const profileItems = auth.table(
       .on(t.userId, t.workspaceId, t.formId)
       .where(sql`${t.kind} = 'form' and ${t.archivedAt} is null`),
     uniqueIndex('profile_items_contact_once')
-      .on(t.userId)
+      .on(t.userId, t.workspaceId)
       .where(sql`${t.kind} = 'contact' and ${t.archivedAt} is null`),
     uniqueIndex('profile_items_heading_once')
-      .on(t.userId, sql`lower(btrim(${t.data} ->> 'title'))`)
+      .on(t.userId, t.workspaceId, sql`lower(btrim(${t.data} ->> 'title'))`)
       .where(sql`${t.kind} = 'heading' and ${t.archivedAt} is null`),
     index('profile_items_archived')
-      .on(t.userId, t.archivedAt)
+      .on(t.userId, t.workspaceId, t.archivedAt)
       .where(sql`${t.archivedAt} is not null`),
   ],
 );
@@ -438,6 +444,7 @@ export const profileViews = auth.table(
   'profile_views',
   {
     userId: uuid('user_id').notNull(),
+    workspaceId: uuid('workspace_id').notNull(),
     day: date('day', { mode: 'string' }).notNull(),
     visitor: text('visitor').notNull(),
     views: integer('views').notNull().default(1),
@@ -445,7 +452,7 @@ export const profileViews = auth.table(
     lastAt: timestamptz('last_at').notNull().defaultNow(),
   },
   (t) => [
-    primaryKey({ name: 'profile_views_pkey', columns: [t.userId, t.day, t.visitor] }),
+    primaryKey({ name: 'profile_views_pkey', columns: [t.userId, t.workspaceId, t.day, t.visitor] }),
     foreignKey({ name: 'profile_views_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     // The cleanup's pick, oldest days first.
     index('profile_views_day').on(t.day),
@@ -529,12 +536,13 @@ export const profileViewDays = auth.table(
   'profile_view_days',
   {
     userId: uuid('user_id').notNull(),
+    workspaceId: uuid('workspace_id').notNull(),
     day: date('day', { mode: 'string' }).notNull(),
     views: integer('views').notNull().default(0),
     visitors: integer('visitors').notNull().default(0),
   },
   (t) => [
-    primaryKey({ name: 'profile_view_days_pkey', columns: [t.userId, t.day] }),
+    primaryKey({ name: 'profile_view_days_pkey', columns: [t.userId, t.workspaceId, t.day] }),
     foreignKey({ name: 'profile_view_days_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete(
       'cascade',
     ),
