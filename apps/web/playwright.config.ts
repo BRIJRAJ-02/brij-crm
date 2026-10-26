@@ -19,6 +19,12 @@ export default defineConfig({
     // FLOW_BASE_URL points the flows at another running app (a second checkout on another port).
     baseURL: process.env.FLOW_BASE_URL ?? 'http://localhost:5173',
     trace: 'retain-on-failure',
+    // The flows run as a person who asked for less movement sees the app (26 October 2026). The library already
+    // honours that setting: fades stay, movement goes. A panel that slides in is a moving target, and clicking one
+    // mid slide is what Playwright calls unstable, so a flow would fail on the animation rather than on the app
+    // (`booking-chat.flow.ts`'s View chat, twice tonight). What each flow checks is behaviour; the motion itself is
+    // held by the library's own stories and screenshots.
+    reducedMotion: 'reduce',
   },
   // The flows at a desktop width and at a phone's, where the sidebar folds to its rail.
   projects: [
