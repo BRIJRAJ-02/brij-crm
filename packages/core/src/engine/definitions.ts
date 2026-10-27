@@ -11,6 +11,8 @@ import {
   HUES,
   isReservedSlug,
   OBJECT_ICONS,
+  ANONYMOUS,
+  isUnfillableRequired,
   OPTION_DEFAULT_TYPES,
   parseAttributeValue,
   REQUIRED_NEEDS_AN_OPTION,
@@ -28,7 +30,7 @@ import { ARCHIVED_BY, loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { writeRules } from '../validation/rules.ts';
 import { seedDefaultView } from '../views/seed.ts';
-import { filedBy, liveFormsOn, someNames } from '../forms/dependencies.ts';
+import { breakageNames, filedBy, isPeopleObject, liveFormsOn, livePagesOn } from '../forms/dependencies.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
@@ -613,6 +615,18 @@ export async function insertAttribute(
     if (fallback !== undefined) {
       await tx.update(attributes).set({ defaultValue: fallback }).where(eq(attributes.id, row.id));
     }
+    // A field made required with nothing to fill it breaks a live form exactly as turning Required on does
+    // (security review, 27 October 2026): the same refusal, one code path earlier.
+    if (
+      fallback === undefined &&
+      'objectId' in parent &&
+      isUnfillableRequired(
+        { type: input.type, isRequired: input.isRequired ?? false, isSystem: false, defaultValue },
+        ANONYMOUS,
+      )
+    ) {
+      await checkLiveFormsFill(tx, scope.access, { id: row.id, objectId: parent.objectId, title: input.title.trim() });
+    }
     // Its first rules (spec 0013): the row is new to this write, so nobody else holds it yet.
     const ruled =
       input.rules === undefined || input.rules.length === 0
@@ -903,7 +917,7 @@ export async function updateAttribute(
       if (becomingATrap) checkRequiredHasAFallback(attribute.type, true, false, firstOption === undefined ? 0 : 1);
       const fallback = firstOptionDefault(attribute.type, becomingATrap, false, firstOption);
       // Still a wall after the fallback (a text field, say): no live form could make a record any more.
-      if (becomingATrap && fallback === undefined) await checkLiveFormsFill(tx, attribute);
+      if (becomingATrap && fallback === undefined) await checkLiveFormsFill(tx, context.scope.access, attribute);
       const turningOn = input.isUnique === true && !attribute.isUnique && attribute.archivedAt === null;
       const turningOff = input.isUnique === false && attribute.isUnique;
       if (turningOn) await fillUniqueKeys(tx, attribute, context.scope.access);
@@ -984,9 +998,9 @@ export async function archiveAttribute(
         .where(eq(objects.primaryAttributeId, attribute.id));
       if (primary !== undefined)
         throw refuse('CONFIG_INVALID', "A record's name attribute can't be archived.", attribute.id);
-      await checkNotAMatch(tx, attribute);
       const far = await farEnd(tx, attribute);
       const ends = far === undefined ? [attribute] : [attribute, far];
+      await checkNotAMatch(tx, context.scope.access, ends);
       const live = ends.filter((end) => end.archivedAt === null);
       for (const end of live) if (end.isUnique) await clearUniqueKeys(tx, end.id);
       if (live.length > 0) {
@@ -1009,43 +1023,88 @@ export async function archiveAttribute(
 }
 
 /**
- * Refuses archiving the attribute a live form matches its submissions on (27
- * October 2026). The form keeps working to look at: nothing in its document
- * changes, and every question still files. But the match answer is dropped
- * with the archived attribute (`plan`), so `matchKey` finds nothing and every
- * submission takes the create branch — a new record for the same person,
- * every time, with nobody told. Refused here, naming the forms, since this is
- * the moment someone can still choose otherwise.
+ * How a count of live forms reads when none of them may be named.
  */
-async function checkNotAMatch(tx: WorkspaceTx, attribute: AttributeDef): Promise<void> {
-  if (attribute.objectId === null || attribute.archivedAt !== null) return;
-  const live = await liveFormsOn(tx, attribute.objectId);
-  const matching = live.filter((form) => form.document.targets.main?.matchAttributeId === attribute.id);
-  if (matching.length === 0) return;
-  const names = someNames(matching.map((form) => form.name));
-  throw refuse(
-    'CONFIG_INVALID',
-    `${attribute.title} is how ${names} ${matching.length === 1 ? 'finds' : 'find'} the record a submission belongs to. Archiving it would make every submission add a new record instead. Point ${matching.length === 1 ? 'that form' : 'those forms'} at another field first, or pause ${matching.length === 1 ? 'it' : 'them'}.`,
-    attribute.id,
-  );
+const FORMS = (count: number) => `${String(count)} live forms`;
+const A_FORM = 'A live form';
+
+/**
+ * Refuses archiving the attribute a live form matches its submissions on, or
+ * the one a live booking page finds its visitor by (27 October 2026). Both
+ * keep working to look at: nothing in the form or the page changes, and every
+ * question still files. But the match answer is dropped with the archived
+ * attribute (`plan`), so `matchKey` finds nothing and every submission takes
+ * the create branch — a new record for the same person, every time, with
+ * nobody told; a booking page's `answersRecord` gives up and the answers go
+ * unsaved. Refused here, which is the moment someone can still choose
+ * otherwise. A form the caller may not see is counted, never named.
+ */
+async function checkNotAMatch(tx: WorkspaceTx, access: Access, ends: readonly AttributeDef[]): Promise<void> {
+  for (const attribute of ends) {
+    if (attribute.objectId === null || attribute.archivedAt !== null) continue;
+    const live = await liveFormsOn(tx, access, attribute.objectId);
+    const matching = live.filter((form) => form.document.targets.main?.matchAttributeId === attribute.id);
+    // A page finds its visitor by the object's first unique email, worked out afresh at every booking.
+    const pages =
+      attribute.isUnique && attribute.type === 'email' && (await isFirstUniqueEmail(tx, attribute))
+        ? await livePagesOn(tx, attribute.objectId, await isPeopleObject(tx, attribute.objectId))
+        : [];
+    const count = matching.length + pages.length;
+    if (count === 0) continue;
+    const named = [
+      ...matching.flatMap((form) => (form.name === undefined ? [] : [form.name])),
+      ...pages.flatMap((page) => (page.title === undefined ? [] : [page.title])),
+    ];
+    const subject = breakageNames(named, count - named.length, A_FORM, FORMS);
+    throw refuse(
+      'CONFIG_INVALID',
+      `${attribute.title} is how ${subject} ${count === 1 ? 'finds' : 'find'} the record a submission belongs to. Archiving it would make every submission add a new record instead. Point ${count === 1 ? 'that one' : 'those'} at another field first, or pause ${count === 1 ? 'it' : 'them'}.`,
+      attribute.id,
+    );
+  }
+}
+
+/** Whether this is the object's first unique email, the one a booking page matches its visitor on. */
+async function isFirstUniqueEmail(tx: WorkspaceTx, attribute: AttributeDef): Promise<boolean> {
+  if (attribute.objectId === null) return false;
+  const [first] = await tx
+    .select({ id: attributes.id })
+    .from(attributes)
+    .where(
+      and(
+        eq(attributes.objectId, attribute.objectId),
+        eq(attributes.isUnique, true),
+        eq(attributes.type, 'email'),
+        isNull(attributes.archivedAt),
+      ),
+    )
+    .orderBy(asc(attributes.position), asc(attributes.createdAt), asc(attributes.id))
+    .limit(1);
+  return first?.id === attribute.id;
 }
 
 /**
- * Refuses turning Required on for an attribute no live form fills (27 October
- * 2026). The form's own publish check covers this before it goes live; this
- * is the other direction, where the form was fine and the field changed under
- * it. Only forms taking submissions right now count, and only when nothing
- * else fills the field, so the refusal always names a real break.
+ * Refuses making an attribute required when a live form has no question for
+ * it (27 October 2026). The form's own publish check covers this before it
+ * goes live; this is the other direction, where the form was fine and the
+ * field changed under it. Run wherever a field can become a wall: made
+ * required, turned required, or restored into that state. A form the caller
+ * may not see is counted, never named.
  */
-async function checkLiveFormsFill(tx: WorkspaceTx, attribute: AttributeDef): Promise<void> {
-  if (attribute.objectId === null || attribute.archivedAt !== null) return;
-  const live = await liveFormsOn(tx, attribute.objectId);
+async function checkLiveFormsFill(
+  tx: WorkspaceTx,
+  access: Access,
+  attribute: { readonly id: string; readonly objectId: string | null; readonly title: string },
+): Promise<void> {
+  if (attribute.objectId === null) return;
+  const live = await liveFormsOn(tx, access, attribute.objectId);
   const broken = live.filter((form) => !filedBy(form.document).has(attribute.id));
   if (broken.length === 0) return;
-  const names = someNames(broken.map((form) => form.name));
+  const named = broken.flatMap((form) => (form.name === undefined ? [] : [form.name]));
+  const subject = breakageNames(named, broken.length - named.length, A_FORM, FORMS);
   throw refuseOn(
     'CONFIG_INVALID',
-    `${names} ${broken.length === 1 ? 'is live and has no question for' : 'are live and have no question for'} ${attribute.title}, so every submission would fail. Add ${broken.length === 1 ? 'a question' : 'questions'} for it, give it a default, or pause ${broken.length === 1 ? 'that form' : 'those forms'} first.`,
+    `${subject} ${broken.length === 1 ? 'is live and has no question for' : 'are live and have no question for'} ${attribute.title}, so every submission would fail. Add ${broken.length === 1 ? 'a question' : 'questions'} for it, give it a default, or pause ${broken.length === 1 ? 'that form' : 'those forms'} first.`,
     'isRequired',
   );
 }
@@ -1093,6 +1152,13 @@ export async function restoreAttribute(
       const far = await farEnd(tx, attribute);
       const ends = far === undefined ? [attribute] : [attribute, far];
       const archived = ends.filter((end) => end.archivedAt !== null);
+      // Archive, submissions pass, restore, submissions fail: a required end with nothing to fill it is a wall
+      // again the moment it comes back (security review, 27 October 2026).
+      for (const end of archived) {
+        if (isUnfillableRequired({ ...end, defaultValue: end.defaultValue }, ANONYMOUS)) {
+          await checkLiveFormsFill(tx, context.scope.access, end);
+        }
+      }
       for (const end of archived) if (end.isUnique) await fillUniqueKeys(tx, end, context.scope.access);
       if (archived.length > 0) {
         await tx
@@ -1197,6 +1263,25 @@ export async function updateObject(scope: EngineScope, input: ObjectUpdate, hook
   );
 }
 
+/**
+ * Refuses archiving an object a form is taking submissions onto (27 October
+ * 2026). An archived object takes no new records (`liveObject`), so every
+ * submission would fail on a sentence written for a member looking at
+ * settings — "That object is archived. Restore it first." — shown to a
+ * visitor who had just filled the form in. Refused here, naming the forms,
+ * which is the moment someone can still pause them instead.
+ */
+async function checkNoLiveForms(tx: WorkspaceTx, access: Access, objectId: string): Promise<void> {
+  const live = await liveFormsOn(tx, access, objectId);
+  if (live.length === 0) return;
+  const named = live.flatMap((form) => (form.name === undefined ? [] : [form.name]));
+  const subject = breakageNames(named, live.length - named.length, A_FORM, FORMS);
+  throw refuse(
+    'CONFIG_INVALID',
+    `${subject} ${live.length === 1 ? 'is' : 'are'} live and files submissions here, and an archived object takes no new records. Pause ${live.length === 1 ? 'that form' : 'those forms'} first, or send ${live.length === 1 ? 'it' : 'them'} to another object.`,
+  );
+}
+
 /** Archives or restores an object. Its records stay; an archived object takes no new records. */
 export async function setObjectArchived(
   scope: EngineScope,
@@ -1211,6 +1296,7 @@ export async function setObjectArchived(
   await runWrite(
     scope,
     async ({ tx, ...context }) => {
+      if (input.archived) await checkNoLiveForms(tx, context.scope.access, input.objectId.toLowerCase());
       const updated = await tx
         .update(objects)
         .set({ archivedAt: input.archived ? sql`coalesce(${objects.archivedAt}, now())` : null, ...touched(scope) })

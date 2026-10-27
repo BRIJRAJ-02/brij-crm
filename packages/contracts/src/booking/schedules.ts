@@ -41,7 +41,15 @@ const QUARTER_HOUR_MESSAGE = 'Use times on the quarter hour, such as 09:15.';
 export const NO_HOURS_AT_ALL =
   'Open at least one time on one day. A page booking by this schedule would offer no times at all.';
 
-/** Whether a week has no bookable time at all: every day empty, and no override opening one. */
+/**
+ * Whether a week has no bookable time at all: every day empty. A date
+ * override still counts as hours, so "closed all week except 24 December"
+ * saves. Known soft edge: an override whose date has passed counts too, so a
+ * schedule whose only open date was last year still saves and offers nothing.
+ * Checking that needs today's date in the schedule's zone, which this pure
+ * schema has no business knowing; the slot engine already shows the host an
+ * empty calendar, and the empty week was the case worth refusing.
+ */
 export function hasNoHours(hours: { readonly weekly: Record<string, readonly unknown[]> }): boolean {
   return WEEKDAYS.every((day) => (hours.weekly[day] ?? []).length === 0);
 }

@@ -246,6 +246,73 @@ describe('a required field nothing can fill (27 October 2026)', () => {
     expect(refusal?.message).toContain('add a new record');
   });
 
+  it('counts a live form the editor can’t see, and refuses without naming it', async () => {
+    // A published form whose draft was repointed elsewhere is hidden from someone who can't see that object
+    // (`canSeeForm`), so the refusal counts it and says "A live form" (security review, 27 October 2026).
+    const w = await designers();
+    const form = await applyForm(w);
+    await publishForm(w.scope, { formId: form.formId, expectedRevision: form.revision });
+    const studio = await createAttribute(w.scope, {
+      objectId: w.object.id,
+      id: newId(),
+      title: 'Studio',
+      type: 'text',
+    });
+    // Its draft now keeps submissions only, so seeing the form needs forms.manage, which this key hasn't.
+    await w.query(sql`update forms set main_object_id = null where id = ${form.formId}::uuid`);
+    const key = rescope(w.scope, { actor: { type: 'api_key', id: newId() }, scopes: ['schema.manage', 'data.write'] });
+    const [refusal] = await refusalOf(editAttribute(key, { attributeId: studio.id, isRequired: true }));
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID', field: 'isRequired' });
+    expect(refusal?.message).not.toContain('Apply');
+    expect(refusal?.message).toContain('A live form');
+
+    // The owner, who may see it, reads its name.
+    const [named] = await refusalOf(editAttribute(w.scope, { attributeId: studio.id, isRequired: true }));
+    expect(named?.message).toContain('Apply');
+  });
+
+  it('refuses making a field required at creation, and restoring one into that state', async () => {
+    // The two paths around `updateAttribute` that set the same trap (security review, 27 October 2026).
+    const w = await designers();
+    const form = await applyForm(w);
+    await publishForm(w.scope, { formId: form.formId, expectedRevision: form.revision });
+    const [onCreate] = await refusalOf(
+      createAttribute(w.scope, {
+        objectId: w.object.id,
+        id: newId(),
+        title: 'Lead source',
+        type: 'text',
+        isRequired: true,
+      }),
+    );
+    expect(onCreate).toMatchObject({ code: 'CONFIG_INVALID', field: 'isRequired' });
+    expect(onCreate?.message).toContain('Lead source');
+
+    // Archive, submissions pass, restore, submissions fail again: the restore is refused too.
+    const source = await createAttribute(w.scope, {
+      objectId: w.object.id,
+      id: newId(),
+      title: 'Channel',
+      type: 'text',
+    });
+    await w.query(sql`update attributes set is_required = true where id = ${source.id}::uuid`);
+    await archiveAttributes(w.scope, { attributeId: source.id });
+    const [onRestore] = await refusalOf(restoreAttributes(w.scope, { attributeId: source.id }));
+    expect(onRestore).toMatchObject({ code: 'CONFIG_INVALID', field: 'isRequired' });
+    expect(onRestore?.message).toContain('Channel');
+  });
+
+  it('refuses archiving an object a live form files onto', async () => {
+    const w = await designers();
+    const form = await applyForm(w);
+    await publishForm(w.scope, { formId: form.formId, expectedRevision: form.revision });
+    const { archiveObject } = await import('../objects/objects.ts');
+    const [refusal] = await refusalOf(archiveObject(w.scope, { objectId: w.object.id }));
+    expect(refusal?.code).toBe('CONFIG_INVALID');
+    expect(refusal?.message).toContain('Apply');
+    expect(refusal?.message).toContain('takes no new records');
+  });
+
   it('refuses archiving the last live option of a required field, which would bring the trap back', async () => {
     const w = await designers();
     const options = await w.query<{ id: string }>(
