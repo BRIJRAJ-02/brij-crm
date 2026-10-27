@@ -91,25 +91,39 @@ test.describe('the core loop by keyboard', () => {
     // A primary's edge is already blue, so its ring is the 1px outline just outside it, not the faint halo alone.
     expect(await create.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
     await page.keyboard.press('Enter');
-    // Invite your team: the first row's email has focus; Tab on to Skip for now, and Enter.
-    await expect(page.getByRole('heading', { level: 1, name: 'Invite your team' })).toBeVisible({
+    // Your booking page: its meeting name has focus, already filled; Enter goes on.
+    await expect(page.getByRole('heading', { level: 1, name: 'Your booking page' })).toBeVisible({
       timeout: WORKSPACE_MADE_MS,
     });
-    await focusedWithRing(page, page.getByRole('textbox', { name: 'Email', exact: true }), 'Email');
-    await tabTo(page, page.getByRole('button', { name: 'Skip for now' }));
+    await focusedWithRing(page, page.getByLabel('Meeting name'), 'Meeting name');
     await page.keyboard.press('Enter');
-    // Where calendar sync is on, the calendar step's first button has focus: Tab on to Skip for now, and Enter.
+    // Your link page: its link has focus; one is typed where none was suggested, and Enter goes on.
+    await expect(page.getByRole('heading', { level: 1, name: 'Your link page' })).toBeVisible({
+      timeout: WORKSPACE_MADE_MS,
+    });
+    const link = page.getByLabel('Your link');
+    await focusedWithRing(page, link, 'Your link');
+    if ((await link.inputValue()) === '') await page.keyboard.type(`${slug}-me`);
+    await page.keyboard.press('Enter');
+    // Where calendar sync is on, the calendar step's first button has focus: Tab on to go without one, and Enter.
     const calendar = page.getByRole('heading', { level: 1, name: 'Connect your calendar' });
+    const invite = page.getByRole('heading', { level: 1, name: 'Invite your team' });
     await expect
-      .poll(async () => /\/home$/.test(page.url()) || (await calendar.isVisible()), {
-        timeout: WORKSPACE_MADE_MS,
-      })
+      .poll(async () => (await invite.isVisible()) || (await calendar.isVisible()), { timeout: WORKSPACE_MADE_MS })
       .toBe(true);
     if (await calendar.isVisible()) {
       await focusedWithRing(page, page.getByRole('button', { name: 'Connect Google Calendar' }), 'Connect Google');
-      await tabTo(page, page.getByRole('button', { name: 'Skip for now' }));
+      await tabTo(page, page.getByRole('button', { name: 'Continue without a calendar' }));
       await page.keyboard.press('Enter');
     }
+    // Invite your team, the one step that skips: the first row's email has focus; Tab on to Skip for now, and Enter.
+    await expect(invite).toBeVisible({ timeout: WORKSPACE_MADE_MS });
+    await focusedWithRing(page, page.getByRole('textbox', { name: 'Email', exact: true }), 'Email');
+    await tabTo(page, page.getByRole('button', { name: 'Skip for now' }));
+    await page.keyboard.press('Enter');
+    // You're live: Go to dashboard has focus, and Enter opens the workspace.
+    await focusedWithRing(page, page.getByRole('button', { name: 'Go to dashboard' }), 'Go to dashboard');
+    await page.keyboard.press('Enter');
     // The workspace opens on Home (owner, 21 October 2026), its title focused; People is a row away.
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
     await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeFocused();

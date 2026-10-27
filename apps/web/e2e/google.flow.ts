@@ -11,7 +11,7 @@
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { skipCalendarStep } from './people.ts';
+import { finishFirstRun } from './people.ts';
 
 /** Making a workspace writes its standard objects in one transaction; on a busy machine that takes a while. */
 const WORKSPACE_MADE_MS = 30_000;
@@ -89,7 +89,7 @@ test('signs a new person in with Google, makes their workspace, and Google opens
   await expect(page.getByLabel('Workspace name')).toHaveValue(`Grace’s workspace`);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await skipCalendarStep(page);
+  await finishFirstRun(page);
   // The workspace opens on Home (owner, 21 October 2026).
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
   await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
@@ -123,7 +123,7 @@ test('a deep link opened while signed out comes back after Google', async ({ pag
   await page.getByRole('button', { name: 'Skip', exact: true }).click();
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await skipCalendarStep(page);
+  await finishFirstRun(page);
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
   await page.context().clearCookies();
 

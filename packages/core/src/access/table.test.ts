@@ -233,6 +233,12 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // A person's own account picture from our origin (23 Oct 2026): which of Google's pictures to serve, and its
   // version, from the session's user; pure, no scope.
   'servedPicture',
+  // An uploaded picture (27 Oct 2026): its path under the owner's own id, its `user.image` value read back only for
+  // that owner, and which picture to serve, an upload or Google's; pure, no scope.
+  'personPicture',
+  'storedPictureImage',
+  'storedPictureOf',
+  'storedPicturePath',
   // Reading somebody else's link in bio page (spec 0055, AC-5524, AC-5525): the hosts we will read and the
   // parser that turns one of their pages into rows. HTML in, rows out — no scope, no database, no network.
   'isImportableHost',

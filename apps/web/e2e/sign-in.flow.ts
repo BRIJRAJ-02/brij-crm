@@ -12,7 +12,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { codeFor } from './mailpit.ts';
-import { skipCalendarStep } from './people.ts';
+import { finishFirstRun } from './people.ts';
 
 /** Making a workspace writes its standard objects in one transaction; on a busy machine that takes a while. */
 const WORKSPACE_MADE_MS = 30_000;
@@ -106,7 +106,7 @@ async function newWorkspace(page: Page, email: string, name: string, slug: strin
   await page.getByLabel('Workspace name').fill(name);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await skipCalendarStep(page);
+  await finishFirstRun(page);
   // The workspace opens on Home (owner, 21 October 2026); People is a row away.
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'People' }).click();
@@ -243,7 +243,7 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   // Create workspace (past the calendar step where calendar sync is on) lands on Home (owner, 21 October 2026), with focus on its title; People is a row away, and
   // opens empty with focus on its title.
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await skipCalendarStep(page);
+  await finishFirstRun(page);
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
   await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeFocused();
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'People' }).click();
@@ -370,7 +370,7 @@ test('says each refusal on its field and drops it as the field changes, so one p
   await expect(address).not.toHaveAttribute('aria-invalid');
   await expect(page.getByText('Available', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await skipCalendarStep(page);
+  await finishFirstRun(page);
   // The workspace opens on Home (owner, 21 October 2026).
   await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/home$`), { timeout: WORKSPACE_MADE_MS });
 });

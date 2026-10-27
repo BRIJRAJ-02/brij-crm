@@ -131,7 +131,7 @@ describe('a personal page’s host picture', () => {
     const version = pictureVersion(ada.userId, GOOGLE);
     expect(facts.hostImage).toBe(`/api/public/booking/${page.publicKey}/picture?v=${version}`);
     expect(JSON.stringify(facts)).not.toContain('googleusercontent');
-    expect(await readPagePicture(entry, pictures)).toEqual({ url: new URL(SIZED), version });
+    expect(await readPagePicture(entry, pictures)).toEqual({ kind: 'google', url: new URL(SIZED), version });
     // Without the reader (the chat's own read), no picture is named.
     expect((await getPublicBookingPage(entry)).hostImage).toBeUndefined();
   });
@@ -193,7 +193,11 @@ describe('a profile’s picture', () => {
     const version = pictureVersion(ada.userId, GOOGLE);
     expect(profile.image).toBe(`/api/public/profiles/${handle}/picture?v=${version}`);
     expect(JSON.stringify(profile)).not.toContain('googleusercontent');
-    expect(readProfilePicture(await findHandleOwner({ db }, handle))).toEqual({ url: new URL(SIZED), version });
+    expect(readProfilePicture(await findHandleOwner({ db }, handle))).toEqual({
+      kind: 'google',
+      url: new URL(SIZED),
+      version,
+    });
   });
 
   it('names none without a Google picture, and a handle no one holds is NOT_FOUND', async () => {
@@ -293,7 +297,7 @@ describe('a person who keeps their picture off their public pages (owner ask A12
     expect((await getPublicBookingPage(again, counting)).hostImage).toBe(
       `/api/public/booking/${page.publicKey}/picture?v=${version}`,
     );
-    expect(await readPagePicture(again, counting)).toEqual({ url: new URL(SIZED), version });
+    expect(await readPagePicture(again, counting)).toEqual({ kind: 'google', url: new URL(SIZED), version });
     expect((await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }))).image).toBe(
       `/api/public/profiles/${handle}/picture?v=${version}`,
     );

@@ -57,31 +57,59 @@ export async function checkScreen(page: Page, name: string): Promise<void> {
 }
 
 /**
- * After Create workspace, first run asks to invite the team, then (where calendar sync is on) for a calendar (spec
- * 0036): Skip for now on each opens the workspace, on Home. This waits for whichever comes and goes on to Home.
+ * After Create workspace, first run's other steps (spec 0036; 27 October 2026), none of them skippable but the last:
+ * Your booking page (its prefilled meeting kept), Your link page (the suggested link kept, else one made from the
+ * workspace's address), Connect your calendar where sync is on (Continue without a calendar), Invite your team (Skip
+ * for now), then You're live, whose Go to dashboard opens the workspace on Home. This takes each as it comes.
  */
-export async function skipCalendarStep(page: Page): Promise<void> {
-  const invite = page.getByRole('heading', { level: 1, name: 'Invite your team' });
-  const calendar = page.getByRole('heading', { level: 1, name: 'Connect your calendar' });
-  const settled = async () => /\/home$/.test(page.url()) || (await invite.isVisible()) || (await calendar.isVisible());
-  await expect
-    .poll(settled, { timeout: WORKSPACE_MADE_MS, message: 'Home, or first run’s invite or calendar step' })
-    .toBe(true);
-  if (await invite.isVisible()) {
-    await page.getByRole('button', { name: 'Skip for now' }).click();
+export async function finishFirstRun(page: Page): Promise<void> {
+  const heading = (name: string) => page.getByRole('heading', { level: 1, name });
+  const steps = {
+    booking: heading('Your booking page'),
+    handle: heading('Your link page'),
+    calendar: heading('Connect your calendar'),
+    invite: heading('Invite your team'),
+    done: heading('You’re live'),
+  };
+  const current = async (): Promise<keyof typeof steps | 'home' | undefined> => {
+    if (/\/home$/.test(page.url())) return 'home';
+    for (const [name, locator] of Object.entries(steps)) {
+      if (await locator.isVisible()) return name as keyof typeof steps;
+    }
+    return undefined;
+  };
+  let last: string | undefined;
+  for (;;) {
+    let step: Awaited<ReturnType<typeof current>>;
     await expect
-      .poll(async () => /\/home$/.test(page.url()) || (await calendar.isVisible()), {
-        timeout: WORKSPACE_MADE_MS,
-        message: 'Home, or first run’s calendar step',
-      })
+      .poll(
+        async () => {
+          step = await current();
+          return step !== undefined && step !== last;
+        },
+        { timeout: WORKSPACE_MADE_MS, message: `first run’s next step after ${last ?? 'Create workspace'}` },
+      )
       .toBe(true);
+    if (step === undefined || step === 'home') return;
+    last = step;
+    if (step === 'booking') await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    if (step === 'handle') {
+      const link = page.getByLabel('Your link');
+      if ((await link.inputValue()) === '') {
+        const slug = /\/w\/([^/?]+)/.exec(page.url())?.[1] ?? `p${String(Date.now())}`;
+        await link.fill(`${slug}-${String(Date.now()).slice(-5)}`);
+      }
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    }
+    if (step === 'calendar') await page.getByRole('button', { name: 'Continue without a calendar' }).click();
+    if (step === 'invite') await page.getByRole('button', { name: 'Skip for now' }).click();
+    if (step === 'done') await page.getByRole('button', { name: 'Go to dashboard' }).click();
   }
-  if (await calendar.isVisible()) await page.getByRole('button', { name: 'Skip for now' }).click();
 }
 
 /**
  * First run (spec 0036) from its first step: Your name as `name`, then Your workspace at `slug` (its name following
- * yours), then past the calendar step where there is one, landing on Home.
+ * yours), then the rest of first run (`finishFirstRun`), landing on Home.
  */
 export async function firstRun(page: Page, slug: string, name = 'Ada Lovelace'): Promise<void> {
   await expect(page).toHaveURL(/\/welcome$/);
@@ -89,7 +117,7 @@ export async function firstRun(page: Page, slug: string, name = 'Ada Lovelace'):
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await skipCalendarStep(page);
+  await finishFirstRun(page);
 }
 
 /**
