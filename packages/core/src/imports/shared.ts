@@ -11,9 +11,10 @@ import {
   type ImportCounts,
   type ImportView,
 } from '@crm/contracts';
+import { BY_MEMBER, isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { can, objectLevel } from '../access/policy.ts';
-import { attributeLevel } from '../access/visibility.ts';
+import { attributeLevel, attributeVisible } from '../access/visibility.ts';
 import { checkId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -178,6 +179,8 @@ export function checkSettings(
 ): void {
   const taken = new Set<string>();
   const whole = new Set<string>();
+  /** Every attribute a column fills, by part or whole: what a required field needs one of. */
+  const mapped = new Set<string>();
   for (const column of settings.columns) {
     const target = column.target;
     if (target === undefined) continue;
@@ -198,16 +201,59 @@ export function checkSettings(
     if (clash)
       throw refuse('CONFIG_INVALID', `${attribute.title} takes one column. Choose another for “${column.header}”.`);
     taken.add(key);
+    mapped.add(target.attributeId);
     if (target.part === undefined) whole.add(target.attributeId);
     else taken.add(`${target.attributeId}:part`);
   }
   if (taken.size === 0) throw refuse('CONFIG_INVALID', 'Match at least one column to an attribute.');
+  // An import that makes records hits the same wall a form's publish refuses (27 October 2026): a required field
+  // nothing fills would refuse every new row, after the whole file was uploaded and mapped.
+  if (settings.onNoMatch === 'create') checkRequiredColumns(scope, attributes, mapped);
   if (settings.matchAttributeId !== undefined) {
     const match = attributes.get(settings.matchAttributeId);
     if (match === undefined || !match.isUnique || !UNIQUE_TYPES.includes(match.type) || !whole.has(match.id)) {
       throw refuse('CONFIG_INVALID', 'Find records by a unique attribute that a column is matched to.');
     }
   }
+}
+
+/**
+ * Refuses an import that would create records onto an object with a required
+ * field nothing fills and no column matched to it (27 October 2026): every
+ * new row would fail the same way, so it is said once, before the run, rather
+ * than row by row afterwards. A member runs an import, so a Current user
+ * default does fill itself here (`BY_MEMBER`). A field hidden from them is
+ * counted but never named (spec 0009, AC-144).
+ */
+function checkRequiredColumns(
+  scope: EngineScope,
+  attributes: ReadonlyMap<string, AttributeDef>,
+  mapped: ReadonlySet<string>,
+): void {
+  const walls = [...attributes.values()].filter(
+    (attribute) => !isArchivedNow(attribute) && !mapped.has(attribute.id) && isUnfillableRequired(attribute, BY_MEMBER),
+  );
+  if (walls.length === 0) return;
+  const named = walls
+    .filter((attribute) => attributeVisible(scope.access, attribute))
+    .map((attribute) => attribute.title);
+  const hidden = walls.length - named.length;
+  const subjects = [
+    ...named,
+    ...(hidden === 0 ? [] : [hidden === 1 ? 'one field you can’t see' : `${String(hidden)} fields you can’t see`]),
+  ];
+  const one = subjects.length === 1;
+  const subject = one
+    ? (subjects[0] ?? '')
+    : `${subjects.slice(0, -1).join(', ')} and ${subjects[subjects.length - 1] ?? ''}`;
+  const fix =
+    named.length === 0
+      ? `Ask a workspace admin to give ${one ? 'it a default' : 'them defaults'} or make ${one ? 'it' : 'them'} optional.`
+      : `Match a column to ${one ? 'it' : 'them'}, or give ${one ? 'it a default' : 'them defaults'}.`;
+  throw refuse(
+    'CONFIG_INVALID',
+    `${subject} ${one ? 'is' : 'are'} required, and no column fills ${one ? 'it' : 'them'}, so no new record could be made. ${fix}`,
+  );
 }
 
 /** The permission message for undoing someone else's import, kept with the others. */

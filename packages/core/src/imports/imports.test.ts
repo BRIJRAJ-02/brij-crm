@@ -11,6 +11,7 @@ import { testQuery } from '@crm/db/testing';
 import { afterAll, describe, expect, inject, it } from 'vitest';
 import type { RuleSource } from '../access/door.ts';
 import { NO_RULES, type AccessRules } from '../access/policy.ts';
+import { createAttribute } from '../attributes/attributes.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { createRecord, getRecords, setRecordValues } from '../engine/records.ts';
@@ -283,6 +284,50 @@ describe('imports (AC-1117 to AC-1127)', () => {
     expect(await refusalOf(create(rescope(w.member, { rules: readOnly }), w.settings()))).toMatchObject({
       code: 'FORBIDDEN',
     });
+  });
+
+  it('refuses an import that creates records onto an object with a required field no column fills', async () => {
+    // The same wall a form's publish and a booking page's save refuse (27 October 2026): every new row would
+    // fail for the same field, so it is said once, before the file is staged.
+    const w = await world();
+    const status = await createAttribute(w.owner, {
+      objectId: w.people,
+      id: newId(),
+      title: 'Status',
+      type: 'status',
+      isRequired: true,
+      options: [{ id: newId(), label: 'New', hue: 'blue' }],
+    });
+    // The state production was in: required, with no default at all.
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update attributes set default_value = null where id = ${status.id}::uuid`),
+    );
+    const create = (settings: ImportSettings) =>
+      createImport(w.owner, {
+        id: newId(),
+        objectId: w.people,
+        fileName: 'a.csv',
+        rowCount: 1,
+        errorRows: 0,
+        settings,
+      });
+    const refusal = await refusalOf(create(w.settings()));
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID' });
+    expect(refusal.message).toContain('Status is required');
+    expect(refusal.message).toContain('no column fills it');
+
+    // An import that only fills records it matches never creates one, so it is let through.
+    const matchOnly = await create(w.settings({ onNoMatch: 'skip' }));
+    expect(matchOnly.id).toBeDefined();
+
+    // And so is one with a column matched to the field.
+    const mapped = await create(
+      w.settings({
+        onNoMatch: 'create',
+        columns: [...w.settings().columns, { header: 'Status', target: { attributeId: status.id } }],
+      }),
+    );
+    expect(mapped.id).toBeDefined();
   });
 
   it('holds the limits: rows past the file, a staged row too large, a fourth unfinished import', async () => {

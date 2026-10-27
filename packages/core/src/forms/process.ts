@@ -20,6 +20,7 @@
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { fitsAttribute, type EngineRefusal, type FormDocument } from '@crm/contracts';
+import { isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue } from '../engine/columns.ts';
 import { insertRecord, updateRecord } from '../engine/records.ts';
@@ -29,6 +30,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { enterAsForm } from '../access/door.ts';
 import { formAccess } from '../access/policy.ts';
+import { attributeVisible } from '../access/visibility.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition } from '../jobs/registry.ts';
 import { liveOptions, loadForm, loadVersions, type FormRow } from './shared.ts';
 import { parseAttributeInput } from '../engine/parse-value.ts';
@@ -348,14 +350,59 @@ type Written<T> =
   | { readonly ok: false; readonly failure: string };
 
 /**
+ * The sentence a write refused for a required field nobody filled ends as
+ * (the owner, 27 October 2026: "A required field isn't asked by this form"
+ * named nothing, so finding it took a support round trip). `fields` are the
+ * fields that could be it, already filtered to the ones this message's reader
+ * may see (`namableWalls`); with none of them it stays the old sentence,
+ * which says what happened without naming a field it shouldn't.
+ */
+export function requiredFieldFailure(fields: readonly string[]): string {
+  if (fields.length === 0) {
+    return 'A required field isn’t asked by this form, so the record couldn’t be created. Add a question for it and publish.';
+  }
+  const one = fields.length === 1;
+  const list = one ? (fields[0] ?? '') : `${fields.slice(0, -1).join(', ')} and ${fields[fields.length - 1] ?? ''}`;
+  return `${list} ${one ? 'is' : 'are'} required, and no question fills ${one ? 'it' : 'them'}, so the record couldn’t be created. Add ${one ? 'a question' : 'questions'} for ${one ? 'it' : 'them'}, or give the ${one ? 'field a default' : 'fields defaults'}.`;
+}
+
+/**
+ * The fields a `VALUE_REQUIRED` refusal with no attribute could be about, by
+ * title, for the sentence a submission's failure keeps. Only required fields
+ * of the target object that nothing fills and that the write never sent, and
+ * only those the triggering principal may see: the form narrows itself to its
+ * own mapping (`formAccess` marks every other field hidden), so the writer's
+ * own view would name nothing, while a member filing by hand sees exactly
+ * what their access allows.
+ */
+export function namableWalls(
+  scope: EngineScope,
+  attributes: ReadonlyMap<string, AttributeDef>,
+  sent: ReadonlySet<string>,
+): readonly string[] {
+  const byMember = scope.actor.type === 'member';
+  return [...attributes.values()]
+    .filter(
+      (attribute) =>
+        !isArchivedNow(attribute) &&
+        !sent.has(attribute.id) &&
+        isUnfillableRequired(attribute, { byMember }) &&
+        attributeVisible(scope.access, attribute),
+    )
+    .map((attribute) => attribute.title);
+}
+
+/**
  * Runs a record write under its own savepoint, dropping each value the
  * engine refuses (naming its attribute) and trying again with the rest
- * (AC-565). A refusal that names no attribute of the write ends it.
+ * (AC-565). A refusal that names no attribute of the write ends it, with
+ * `walls` naming the required fields it could have been about.
  */
 async function writeSkipping<T>(
   context: WriteContext,
   values: ReadonlyMap<string, unknown>,
   write: (inner: WriteContext, values: Readonly<Record<string, unknown>>) => Promise<T>,
+  walls: readonly string[] = [],
 ): Promise<Written<T>> {
   const remaining = new Map(values);
   const skipped: EngineRefusal[] = [];
@@ -370,9 +417,7 @@ async function writeSkipping<T>(
       const hidden = first?.code === 'VALUE_REQUIRED' && first.attributeId === undefined;
       return {
         ok: false,
-        failure: hidden
-          ? 'A required field isn’t asked by this form, so the record couldn’t be created. Add a question for it and publish.'
-          : (first?.message ?? 'The record couldn’t be written.'),
+        failure: hidden ? requiredFieldFailure(walls) : (first?.message ?? 'The record couldn’t be written.'),
       };
     }
     for (const refusal of named) {
@@ -577,8 +622,11 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
     if (owner !== undefined && ownerValue !== undefined) {
       values.set(owner.id, owner.isMulti ? [ownerValue] : ownerValue);
     }
-    const written = await writeSkipping(writer, values, (inner, given) =>
-      insertRecord(inner, { objectId, values: given }),
+    const written = await writeSkipping(
+      writer,
+      values,
+      (inner, given) => insertRecord(inner, { objectId, values: given }),
+      namableWalls(context.scope, attributes, new Set(values.keys())),
     );
     if (!written.ok) {
       return { kind: 'failed', failure: written.failure, refused, assignment: notFiled(form, assignment) };

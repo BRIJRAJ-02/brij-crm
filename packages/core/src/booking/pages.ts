@@ -49,6 +49,7 @@ import { ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 import {
   checkAnswersObject,
+  checkPageCanGoLive,
   checkPageQuestions,
   questionsSeenBy,
   questionTargets,
@@ -532,6 +533,10 @@ export async function createBookingPage(
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
     if (settings.answersObjectId !== null) await checkAnswersObject(tx, scope, settings.answersObjectId);
     await checkPageQuestions(tx, scope, settings.questions, [], settings.answersObjectId);
+    // A new page is live at once, so the wall a form's publish refuses is refused here (27 October 2026).
+    if (settings.status === 'live') {
+      await checkPageCanGoLive(tx, scope, settings.questions, settings.answersObjectId);
+    }
     const by = actorRow(scope.actor);
     try {
       const [row] = await tx
@@ -656,6 +661,10 @@ export async function updateBookingPage(
       sent === undefined ? undefined : moved ? refiledOnto(sent, await attributeIdsOf(tx, target)) : sent;
     if (questions !== undefined) {
       await checkPageQuestions(tx, scope, questions, moved ? [] : page.questions, target);
+    }
+    // Only on the way to live: a page already live onto such an object keeps working, and its other settings save.
+    if (settings.status === 'live' && page.status !== 'live') {
+      await checkPageCanGoLive(tx, scope, questions ?? page.questions, target);
     }
     if (input.hosts !== undefined) {
       if (page.kind !== 'round_robin') {

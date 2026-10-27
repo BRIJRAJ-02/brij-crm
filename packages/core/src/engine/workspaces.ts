@@ -94,7 +94,13 @@ async function insertWorkspace(
             standard: { key: standardKey, templateVersion: STANDARD_TEMPLATE_VERSION },
           });
           for (const { options, defaultFirstOption, ...attribute } of standard.attributes) {
-            const { attributeId } = await insertAttribute(context, { ...attribute, objectId });
+            // The template writes an attribute's options next, and its own default below (`defaultFirstOption`),
+            // so a required select or status isn't the trap `insertAttribute` otherwise refuses.
+            const { attributeId } = await insertAttribute(
+              context,
+              { ...attribute, objectId },
+              { optionsFollow: (options ?? []).length > 0 },
+            );
             const optionIds: string[] = [];
             for (const option of options ?? []) {
               optionIds.push((await insertOption(context, { attributeId, ...option })).optionId);

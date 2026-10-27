@@ -11,7 +11,9 @@ import {
   HUES,
   isReservedSlug,
   OBJECT_ICONS,
+  OPTION_DEFAULT_TYPES,
   parseAttributeValue,
+  REQUIRED_NEEDS_AN_OPTION,
   type ApiSlugKind,
   type AttributeType,
   type ValidationRuleInput,
@@ -321,6 +323,39 @@ async function checkDefaultMembers(tx: WorkspaceTx, type: AttributeType, fallbac
   }
 }
 
+/**
+ * Refuses a select or status attribute that would be required with nothing to
+ * fill it (the owner, 27 October 2026). Such an attribute makes every create
+ * with nobody at the keyboard fail — a form submission, a booking page's
+ * answers, an import row — long after the field was made, and with the
+ * visitor's whole form already typed in. The caller has already tried to give
+ * it the first option as its default (`firstOptionDefault`); reaching here
+ * means there was no option to take, so there is nothing to fall back on.
+ * Refused on `isRequired`, the switch the writer just flicked.
+ */
+function checkRequiredHasAFallback(type: AttributeType, isRequired: boolean, hasDefault: boolean, options: number) {
+  if (!isRequired || hasDefault || !OPTION_DEFAULT_TYPES.includes(type) || options > 0) return;
+  throw refuseOn('CONFIG_INVALID', REQUIRED_NEEDS_AN_OPTION, 'isRequired');
+}
+
+/**
+ * The default a required select or status attribute is given when it has
+ * none: its first option, exactly as the standard template's Deal Stage
+ * carries one (`defaultFirstOption`, `standard-v1.ts`). Undefined when the
+ * attribute needs no help. Preferred over refusing the write: the owner meant
+ * "every record has a stage", and the first stage is the one they would pick.
+ */
+function firstOptionDefault(
+  type: AttributeType,
+  isRequired: boolean,
+  hasDefault: boolean,
+  firstOptionId: string | undefined,
+): { readonly kind: 'static'; readonly value: string } | undefined {
+  if (!isRequired || hasDefault || !OPTION_DEFAULT_TYPES.includes(type) || firstOptionId === undefined)
+    return undefined;
+  return { kind: 'static', value: firstOptionId };
+}
+
 /** Takes the workspace counters row's lock for the rest of the write: object creates and moves take turns on it. */
 async function lockCounters(tx: WorkspaceTx, scope: EngineScope): Promise<void> {
   const [locked] = await tx
@@ -511,7 +546,7 @@ async function earlierAttribute(
 export async function insertAttribute(
   context: WriteContext,
   input: AttributeInput,
-  internal: { readonly reference?: boolean } = {},
+  internal: { readonly reference?: boolean; readonly optionsFollow?: boolean } = {},
 ): Promise<InsertedAttribute> {
   const { tx, scope } = context;
   const parent = parentOf(input);
@@ -527,6 +562,10 @@ export async function insertAttribute(
   const config = parseConfig(input.type, input.config);
   const defaultValue = parseDefault(input.type, input.isMulti ?? false, input.defaultValue);
   const options = checkInitialOptions(scope, input);
+  // Required with nothing to fall back on: refused here rather than at every submission (27 October 2026). The
+  // standard template writes its options in a second step and sets its own default, and says so (`optionsFollow`).
+  const optionCount = options.length + (internal.optionsFollow === true ? 1 : 0);
+  checkRequiredHasAFallback(input.type, input.isRequired ?? false, defaultValue !== null, optionCount);
   // The parent's row lock first: a replay is found under it, before the room check would count it twice.
   await lockAttributeParent(tx, parent);
   const id = input.id?.toLowerCase();
@@ -567,7 +606,12 @@ export async function insertAttribute(
       })
       .returning({ id: attributes.id });
     if (row === undefined) throw new Error('The attribute was not created.');
-    if (options.length > 0) await insertInitialOptions(tx, scope, row.id, input.type, options);
+    const optionIds = options.length === 0 ? [] : await insertInitialOptions(tx, scope, row.id, input.type, options);
+    // A required select or status starts on its first option, as the template's Deal Stage does.
+    const fallback = firstOptionDefault(input.type, input.isRequired ?? false, defaultValue !== null, optionIds[0]);
+    if (fallback !== undefined) {
+      await tx.update(attributes).set({ defaultValue: fallback }).where(eq(attributes.id, row.id));
+    }
     // Its first rules (spec 0013): the row is new to this write, so nobody else holds it yet.
     const ruled =
       input.rules === undefined || input.rules.length === 0
@@ -625,21 +669,25 @@ async function insertInitialOptions(
   attributeId: string,
   type: AttributeType,
   options: readonly InitialOption[],
-): Promise<void> {
+): Promise<readonly string[]> {
   try {
-    await tx.insert(attributeOptions).values(
-      options.map((option, position) => ({
-        ...(option.id === undefined ? {} : { id: option.id.toLowerCase() }),
-        workspaceId: scope.workspaceId,
-        attributeId,
-        label: option.label.trim(),
-        hue: option.hue,
-        position,
-        outcome: type === 'status' ? (option.outcome ?? 'open') : null,
-        targetTimeInStage: option.targetTimeInStage ?? null,
-        ...audit(scope),
-      })),
-    );
+    const made = await tx
+      .insert(attributeOptions)
+      .values(
+        options.map((option, position) => ({
+          ...(option.id === undefined ? {} : { id: option.id.toLowerCase() }),
+          workspaceId: scope.workspaceId,
+          attributeId,
+          label: option.label.trim(),
+          hue: option.hue,
+          position,
+          outcome: type === 'status' ? (option.outcome ?? 'open') : null,
+          targetTimeInStage: option.targetTimeInStage ?? null,
+          ...audit(scope),
+        })),
+      )
+      .returning({ id: attributeOptions.id, position: attributeOptions.position });
+    return [...made].sort((a, b) => a.position - b.position).map((option) => option.id);
   } catch (error) {
     const pg = postgresError(error);
     if (pg?.code === '23505' && pg.constraint === 'attribute_options_pkey') {
@@ -791,6 +839,18 @@ async function lockWithPair(tx: WorkspaceTx, attributeId: string): Promise<void>
     .for('update');
 }
 
+/** The first live option of a select or status attribute, in its order, or undefined (none, or another type). */
+async function firstLiveOption(tx: WorkspaceTx, attribute: AttributeDef): Promise<string | undefined> {
+  if (!OPTION_DEFAULT_TYPES.includes(attribute.type)) return undefined;
+  const [option] = await tx
+    .select({ id: attributeOptions.id })
+    .from(attributeOptions)
+    .where(and(eq(attributeOptions.attributeId, attribute.id), isNull(attributeOptions.archivedAt)))
+    .orderBy(asc(attributeOptions.position), asc(attributeOptions.id))
+    .limit(1);
+  return option?.id;
+}
+
 /** Changes an attribute's title, description, required, unique, settings or default (AC-10, AC-11). */
 export async function updateAttribute(
   scope: EngineScope,
@@ -828,6 +888,19 @@ export async function updateAttribute(
           ? undefined
           : parseDefault(attribute.type, attribute.isMulti, input.defaultValue);
       if (defaultValue !== undefined) await checkDefaultMembers(tx, attribute.type, defaultValue);
+      // Turning Required on, or clearing the default of a required field, must leave something to fill it
+      // (27 October 2026). An attribute already in that state is left exactly as it is: no edit of its title
+      // refuses, and no write silently changes anyone's data.
+      const required = input.isRequired ?? attribute.isRequired;
+      const stored = defaultValue === undefined ? attribute.defaultValue : defaultValue;
+      const becomingATrap =
+        required &&
+        (stored === null || stored === undefined) &&
+        ((input.isRequired === true && !attribute.isRequired) ||
+          (defaultValue === null && attribute.defaultValue !== null && attribute.defaultValue !== undefined));
+      const firstOption = becomingATrap ? await firstLiveOption(tx, attribute) : undefined;
+      if (becomingATrap) checkRequiredHasAFallback(attribute.type, true, false, firstOption === undefined ? 0 : 1);
+      const fallback = firstOptionDefault(attribute.type, becomingATrap, false, firstOption);
       const turningOn = input.isUnique === true && !attribute.isUnique && attribute.archivedAt === null;
       const turningOff = input.isUnique === false && attribute.isUnique;
       if (turningOn) await fillUniqueKeys(tx, attribute, context.scope.access);
@@ -847,7 +920,7 @@ export async function updateAttribute(
           ...(input.isRequired === undefined ? {} : { isRequired: input.isRequired }),
           ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
           ...(input.config === undefined ? {} : { config: parseConfig(attribute.type, input.config) }),
-          ...(defaultValue === undefined ? {} : { defaultValue }),
+          ...(fallback !== undefined ? { defaultValue: fallback } : defaultValue === undefined ? {} : { defaultValue }),
           ...touched(scope),
         })
         .where(eq(attributes.id, attribute.id));

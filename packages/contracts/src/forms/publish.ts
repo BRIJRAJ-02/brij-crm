@@ -17,11 +17,18 @@ export interface PublishAttribute {
   readonly objectName: string;
   readonly canWrite: boolean;
   /**
-   * The object refuses a record without it, and nothing else fills it (no default, and not a checkbox, which is
-   * false until ticked). A form that never asks for it can't make a record at all, so publishing says so instead
-   * of letting every submission fail (27 October 2026).
+   * The object refuses a record without it, and nothing else fills it (`isUnfillableRequired` in
+   * `@crm/contracts/values`: no default, not a checkbox, and not a Current user default, which fills nothing for a
+   * visitor). A form that never asks for it can't make a record at all, so publishing says so instead of letting
+   * every submission fail (27 October 2026).
    */
   readonly isRequired?: boolean;
+  /**
+   * Whether the publisher may see this attribute. False for one hidden from them, which the check still counts —
+   * a hidden required field stops every submission just the same — but never names (security review: the
+   * refusal would otherwise tell them a field's title they have no access to). Absent means they may see it.
+   */
+  readonly canSee?: boolean;
 }
 
 /** What publishing checks. */
@@ -210,14 +217,6 @@ export function questionsProblem(
 }
 
 /**
- * The first problem that stops a draft going live, or undefined when it can.
- * In order: the name, the address, an email question filed on the match
- * attribute (how a submission becomes a person; not asked of a form that
- * keeps its submissions only), each question's label, choices
- * and filing (gone, a type that doesn't fit, or an attribute the publisher
- * can't write), and file questions, which wait for file attachments (#32).
- */
-/**
  * A field the object insists on that no question fills (27 October 2026, the owner: every submission failed with
  * "A required field isn't asked by this form"). Named here, before the form goes live, rather than once a visitor
  * has typed everything in.
@@ -232,19 +231,40 @@ function requiredNotAsked(input: PublishInput): PublishProblem | undefined {
   const missing = [...input.attributes.values()].filter(
     (attribute) => attribute.isRequired === true && !filled.has(attribute.id),
   );
-  const [first] = missing;
-  if (first === undefined) return undefined;
-  const names = missing.map((attribute) => attribute.title);
+  if (missing.length === 0) return undefined;
   const where = input.objectName ?? 'People';
+  // Hidden means unnamed (spec 0009, AC-144): the publisher is told a field stops them, never which one.
+  const named = missing.filter((attribute) => attribute.canSee !== false).map((attribute) => attribute.title);
+  const hidden = missing.length - named.length;
+  const subjects = [
+    ...named,
+    ...(hidden === 0 ? [] : [hidden === 1 ? 'one field you can’t see' : `${String(hidden)} fields you can’t see`]),
+  ];
+  const one = subjects.length === 1;
+  const subject = one
+    ? (subjects[0] ?? '')
+    : `${subjects.slice(0, -1).join(', ')} and ${subjects[subjects.length - 1] ?? ''}`;
+  // Only hidden fields: the publisher can do nothing about them themselves, so the sentence sends them to someone who can.
+  const fix =
+    named.length === 0
+      ? `Ask a workspace admin to give ${one ? 'it a default' : 'them defaults'} or make ${one ? 'it' : 'them'} optional.`
+      : one
+        ? 'Add a question for it, or make the field optional.'
+        : 'Add questions for them, or make the fields optional.';
   return {
     code: 'REQUIRED_MISSING',
-    message:
-      names.length === 1
-        ? `${first.title} is required on ${where}, and no question fills it, so no submission could become a record. Add a question for it, or make the field optional.`
-        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] ?? ''} are required on ${where}, and no question fills them, so no submission could become a record. Add questions for them, or make the fields optional.`,
+    message: `${subject} ${one ? 'is' : 'are'} required on ${where}, and no question fills ${one ? 'it' : 'them'}, so no submission could become a record. ${fix}`,
   };
 }
 
+/**
+ * The first problem that stops a draft going live, or undefined when it can.
+ * In order: the name, the address, an email question filed on the match
+ * attribute (how a submission becomes a person; not asked of a form that
+ * keeps its submissions only), each question's label, choices
+ * and filing (gone, a type that doesn't fit, or an attribute the publisher
+ * can't write), and file questions, which wait for file attachments (#32).
+ */
 export function publishProblem(input: PublishInput): PublishProblem | undefined {
   if (input.name.trim() === '') return { code: 'NAME_MISSING', message: 'Give the form a name.' };
   if (!FORM_SLUG.test(input.slug)) {
