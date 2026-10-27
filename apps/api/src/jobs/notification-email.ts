@@ -65,20 +65,34 @@ export async function runNotificationEmail(deps: NotificationEmailTaskDeps, payl
     appOrigin: deps.appOrigin,
     workspaceName: prepared.workspaceName,
   });
-  // Claimed before it goes, so a task that sent and then failed never sends the same email on its retry.
-  await markEmailed(prepared.scope, prepared.ids);
+  // The send's key, ids only: the member and the oldest notification it carries, which a retry reads again. So
+  // the email goes before the notifications are claimed, and a send that reached the service but looked like it
+  // failed here is dropped by the service rather than sent twice. Claiming first used to lose the mentions for
+  // good: giving them back is itself a write, and when that write failed the rows stayed claimed, so the retry
+  // found nothing due and logged that it skipped.
+  const key = `notifications/${memberId}/${prepared.ids[0] ?? 'none'}${digest ? '/digest' : ''}`;
   const failure = await deps.mailer
-    .send({ to: prepared.to.email, subject: email.subject, html: email.html, text: email.text })
+    .send({
+      to: prepared.to.email,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+      idempotencyKey: key,
+    })
     .then(
       () => undefined,
       // The error's class only: a message can quote the recipient.
       (error: unknown) => (error instanceof Error ? error.name : 'unknown'),
     );
   if (failure !== undefined) {
-    await releaseEmailed(prepared.scope, prepared.ids, { digest });
+    // Nothing to give back but the day's digest: the notifications were never claimed.
+    if (digest) await releaseEmailed(prepared.scope, [], { digest });
     deps.log.warn('notification.email.failed', { workspaceId, memberId, error: failure });
     throw new Error('A notifications email failed to send; the worker log has its member id.');
   }
+  // Sent: claimed now, so they never go in another email. A failure here throws for a retry, whose send the mail
+  // service drops under the same key.
+  await markEmailed(prepared.scope, prepared.ids);
   // At most 20 a time: the rest go in the next email, queued now (one waiting email per member, keyed). After a
   // digest that is the ordinary email, so kinds whose email is off wait for tomorrow's digest (never lost).
   if (prepared.hasMore) await queueNextEmail(prepared.scope);

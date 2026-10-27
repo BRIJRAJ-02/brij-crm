@@ -115,6 +115,30 @@ describe('the booking email task', () => {
     ).rejects.toThrow('A booking email failed to send; the worker log has its booking id.');
   });
 
+  it('keys every send so a retry after a timeout never sends twice', async () => {
+    const b = await booked();
+    // Every message of the kind fails, so the task throws and Graphile tries again. A send that in truth
+    // reached the mail service must carry the same key the second time round, or the guest gets it twice.
+    const tried: MailMessage[] = [];
+    const first: Mailer = {
+      transport: 'mailpit',
+      send(message) {
+        tried.push(message);
+        return Promise.reject(new Error('timed out'));
+      },
+    };
+    await expect(
+      runBookingMail(depsWith(first), { workspaceId: b.workspaceId, bookingId: b.bookingId, kind: 'confirmed' }),
+    ).rejects.toThrow();
+    const keys = tried.map((mail) => mail.idempotencyKey);
+    const second = fakeMailer();
+    await runBookingMail(depsWith(second), { workspaceId: b.workspaceId, bookingId: b.bookingId, kind: 'confirmed' });
+    expect(second.sent.map((mail) => mail.idempotencyKey)).toEqual(keys);
+    // Each recipient of the batch gets a key of its own, so one key never covers another's message.
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys.every((key) => key !== undefined && !key.includes('@'))).toBe(true);
+  });
+
   it('drops the email when mail is off, and ignores a payload that isn’t ours', async () => {
     const b = await booked();
     const logged: string[] = [];

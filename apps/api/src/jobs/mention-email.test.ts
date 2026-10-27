@@ -142,6 +142,26 @@ describe('a mention’s email', () => {
     expect(await w.queued()).toEqual([]);
   });
 
+  it('is never lost when the send fails: it is still due, and its retry is keyed', async () => {
+    const w = await world();
+    await w.mention();
+    // The send fails, so nothing is claimed and the mention is still due. Claiming before the send used to lose
+    // it for good whenever giving it back failed in turn: the retry then found nothing and logged that it skipped.
+    const down: Mailer = { transport: 'mailpit', send: () => Promise.reject(new Error('timed out')) };
+    await expect(w.send(down)).rejects.toThrow('A notifications email failed to send');
+    const mailer = fakeMailer();
+    await w.send(mailer);
+    expect(mailer.sent.map((message) => message.to)).toEqual(['bea@example.com']);
+    expect(mailer.sent[0]?.text).toContain('Ada mentioned you');
+    // Keyed by ids alone, so a send that in truth reached the service is dropped there, not sent again.
+    const key = mailer.sent[0]?.idempotencyKey;
+    expect(key).toMatch(/^notifications\//);
+    expect(key?.includes('@')).toBe(false);
+    // Sent now, so it is claimed: another run sends nothing.
+    await w.send(mailer);
+    expect(mailer.sent).toHaveLength(1);
+  });
+
   it('in a comment that names the member twice is one job, one email and one line in it', async () => {
     const w = await world();
     await createComment(w.ada, {

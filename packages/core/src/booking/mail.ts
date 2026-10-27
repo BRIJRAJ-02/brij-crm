@@ -78,6 +78,14 @@ export interface PreparedMail {
   readonly uninvited?: readonly string[];
   /** Why nothing is sent, when nothing is. */
   readonly skipped?: string;
+  /**
+   * When the booking was last written, as epoch milliseconds: the send's
+   * idempotency key, with the booking id and the kind. A retry of a send that
+   * went through but looked like it failed (a timeout) reads the same booking
+   * and keys the same, so nobody gets it twice; a later send of the same kind
+   * (a second reschedule) follows a write, so it keys differently and goes.
+   */
+  readonly stamp?: number;
 }
 
 /** "Monday 2 November 2026, 9:00 AM to 9:30 AM, London time (GMT)", in `zone`. */
@@ -182,6 +190,7 @@ export async function prepareBookingMail(
     const hostName =
       names.length <= 1 ? (host?.name ?? 'Your host') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`;
     const { kind } = input;
+    const stamp = row.updatedAt.getTime();
     const cancelled = row.status === 'cancelled';
     const isTeam = page.kind === 'round_robin';
 
@@ -372,7 +381,7 @@ export async function prepareBookingMail(
               why: hostWhy,
               ...ics('REQUEST', everyone),
             }));
-        return { messages: [toVisitor, ...toHost, ...invitations(false)], invited: newGuests };
+        return { messages: [toVisitor, ...toHost, ...invitations(false)], invited: newGuests, stamp };
       }
       case 'guests': {
         // Invited, then taken off on the guest page: told once, with a cancelled file where ours invited them. Told
@@ -393,7 +402,7 @@ export async function prepareBookingMail(
           why: `You got this email because ${row.visitorName} had added this address to ${page.title}.`,
           ...guestFile('CANCEL', guest),
         }));
-        return { messages: [...invitations(true), ...removals], invited: newGuests, uninvited: removed };
+        return { messages: [...invitations(true), ...removals], invited: newGuests, uninvited: removed, stamp };
       }
       case 'moved': {
         const toVisitor: BookingMail = {
@@ -446,7 +455,7 @@ export async function prepareBookingMail(
               why: hostWhy,
               ...ics('REQUEST', everyone),
             }));
-        return { messages: [toVisitor, ...toGuests, ...toHost], invited: [] };
+        return { messages: [toVisitor, ...toGuests, ...toHost], invited: [], stamp };
       }
       case 'cancelled': {
         if (!cancelled) return { messages: [], invited: [], skipped: 'not cancelled' };
@@ -490,7 +499,7 @@ export async function prepareBookingMail(
               why: hostWhy,
               ...ics('CANCEL', everyone),
             }));
-        return { messages: [toVisitor, ...toGuests, ...toHost], invited: [] };
+        return { messages: [toVisitor, ...toGuests, ...toHost], invited: [], stamp };
       }
       case 'host_changed':
         // Not an email: the worker writes the new organiser's calendar event (`remakeEvent`).
@@ -586,7 +595,7 @@ export async function prepareBookingMail(
           // Off the calendar the file put it in: a cancel for this host alone.
           ...ics('CANCEL', [{ name: each.name, email: each.email }]),
         }));
-        return { messages: [toVisitor, ...toCame, ...toLeft], invited: [] };
+        return { messages: [toVisitor, ...toCame, ...toLeft], invited: [], stamp };
       }
       case 'reminder_24h':
       case 'reminder_1h': {

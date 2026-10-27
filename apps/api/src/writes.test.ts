@@ -230,7 +230,11 @@ async function outboxOf(workspaceId: string): Promise<OutboxRow[]> {
 
 type Member = Awaited<ReturnType<typeof memberWithWorkspace>>;
 
-/** An import of one Job title column into People, made through the API (its own write first, unless it is the case's). */
+/**
+ * An import of a Name and a Job title column into People, made through the API (its own write first, unless it is
+ * the case's). Name is there because People's Name is required with no default, and an import that creates
+ * records is refused when no column fills a required field.
+ */
 async function importOf(m: Member, mutationId = newId()): Promise<string> {
   const id = newId();
   await m.client.imports.create({
@@ -241,7 +245,10 @@ async function importOf(m: Member, mutationId = newId()): Promise<string> {
     rowCount: 1,
     errorRows: 0,
     settings: {
-      columns: [{ header: 'Job title', target: { attributeId: m.attribute('job_title') } }],
+      columns: [
+        { header: 'Name', target: { attributeId: m.attribute('name'), part: 'first' } },
+        { header: 'Job title', target: { attributeId: m.attribute('job_title') } },
+      ],
       onMatch: 'skip',
       onNoMatch: 'create',
     },
@@ -256,7 +263,7 @@ async function stagedImportOf(m: Member): Promise<string> {
   await m.client.imports.stage({
     workspace: m.slug,
     importId,
-    rows: [{ rowNumber: 2, values: { [m.attribute('job_title')]: 'Engineer' } }],
+    rows: [{ rowNumber: 2, values: { [m.attribute('job_title')]: 'Engineer', [m.attribute('name')]: 'Ada' } }],
     mutationId: newId(),
   });
   return importId;
@@ -1588,7 +1595,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.imports.stage({
       workspace: m.slug,
       importId,
-      rows: [{ rowNumber: 2, values: { [m.attribute('job_title')]: 'Engineer' } }],
+      rows: [{ rowNumber: 2, values: { [m.attribute('job_title')]: 'Engineer', [m.attribute('name')]: 'Ada' } }],
       mutationId,
     });
     return [];
