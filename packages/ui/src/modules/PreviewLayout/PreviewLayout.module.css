@@ -136,10 +136,15 @@
     block-size: max(var(--size-panel), calc(100dvh - 2 * var(--size-bar) - 3 * var(--space-16)));
   }
 
-  /* On its own, with no heading row: the phone takes whatever room its container gives it (first run's split
-     card), rather than measuring itself against the window's bars, which aren't there. */
+  /* On its own, with no heading row: the phone sits as one composed object in the room its container gives it
+     (first run's split card), centred with air around it, rather than a slab running edge to edge down the panel
+     (the owner, 27 October 2026: "the left side is too big", "mobile screens are too long"). The height it is
+     held to keeps it a phone rather than a column, however tall the window is. */
   .preview[data-place='bare'] {
     block-size: 100%;
+    max-block-size: 100%;
+    justify-content: center;
+    padding-block: calc(2 * var(--space-32));
   }
 
   /* In the sheet, the window less its bar and the sheet's own. */
@@ -184,6 +189,13 @@
     justify-content: center;
     align-self: stretch;
     min-block-size: 0;
+  }
+
+  /* On its own the stage is only as tall as the phone it holds, so the phone keeps a phone's shape however tall
+     the window is, instead of stretching into a column. */
+  .preview[data-place='bare'] .stage {
+    flex: 0 1 auto;
+    max-block-size: var(--size-page-card);
   }
 
   /* The phone: its outline at the scaled size, the page inside laid out at the phone's own size. */

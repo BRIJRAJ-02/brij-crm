@@ -2,6 +2,7 @@
 // steps show, where Back goes, and what the search keeps.
 import { describe, expect, it } from 'vitest';
 import {
+  DONE,
   isConnectResult,
   nextStep,
   previousStep,
@@ -65,6 +66,17 @@ describe('first run’s steps', () => {
     expect(shownStep('calendar', true, false, steps)).toBe('calendar');
     const done = welcomeSteps(false, false, { booking: true });
     expect(shownStep(undefined, true, false, done)).toBe('handle');
+  });
+
+  it('end on the end, which is never counted as a step', () => {
+    // It is nothing to do, so it is not in the list "Step N of M" counts.
+    expect(welcomeSteps(true)).not.toContain(DONE);
+    expect(nextStep(welcomeSteps(true), 'invite')).toBeUndefined();
+    // Asking for it lands on it, once the workspace exists.
+    expect(shownStep(DONE, true)).toBe(DONE);
+    expect(shownStep(DONE, false)).toBe('about');
+    // And it survives the address.
+    expect(welcomeSearch({ step: 'done', workspace: 'acme' })).toEqual({ step: DONE, workspace: 'acme' });
   });
 
   it('start another workspace at Your workspace (spec 0031)', () => {

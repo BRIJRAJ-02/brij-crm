@@ -17,21 +17,28 @@ export function isConnectResult(value: unknown): value is ConnectResult {
 /**
  * First run's steps, in order: Your name (`about`), Your workspace, Your
  * booking page (`booking`), Your link page (`handle`), Connect your calendar,
- * Invite your team. The booking page comes first, so the link page it goes on
- * has something on it by the time its owner sees it (the owner, 27 October
- * 2026). (About you, the questionnaire, was taken out on 22 October 2026
+ * Invite your team, then the end (`done`). The booking page comes first, so
+ * the link page it goes on has something on it by the time its owner sees it
+ * (the owner, 27 October 2026). (About you, the questionnaire, was taken out on 22 October 2026
  * by the owner, to cut friction; an old `?step=details` link starts at Your
  * name.) Your link and Your booking page were added on 27 October 2026, when
  * the owner asked that first run set the link page and the booking page up
  * rather than let them be skipped: Timefix is a page and a booking page, so
  * first run makes both.
  */
-export type WelcomeStep = 'about' | 'workspace' | 'booking' | 'handle' | 'calendar' | 'invite';
+export type WelcomeStep = 'about' | 'workspace' | 'booking' | 'handle' | 'calendar' | 'invite' | 'done';
 
 const STEPS: readonly WelcomeStep[] = ['about', 'workspace', 'booking', 'handle', 'calendar', 'invite'];
 
-/** The steps that come once the workspace exists. */
-const AFTER_WORKSPACE: readonly WelcomeStep[] = ['booking', 'handle', 'calendar', 'invite'];
+/**
+ * The end (27 October 2026): what first run made, with the address to copy
+ * and open, before the workspace. Not one of `STEPS`, since it is nothing to
+ * do: it is never counted, and "Step N of M" doesn't show on it.
+ */
+export const DONE: WelcomeStep = 'done';
+
+/** The steps that come once the workspace exists, and the end after them. */
+const AFTER_WORKSPACE: readonly WelcomeStep[] = ['booking', 'handle', 'calendar', 'invite', 'done'];
 
 /** True for a step that only makes sense once the workspace exists. */
 export function needsWorkspace(step: WelcomeStep): boolean {
@@ -95,7 +102,9 @@ export interface WelcomeSearch {
 export function welcomeSearch(search: Record<string, unknown>): WelcomeSearch {
   const { step, workspace, calendar, another } = search;
   return {
-    ...(typeof step === 'string' && (STEPS as readonly string[]).includes(step) ? { step: step as WelcomeStep } : {}),
+    ...(typeof step === 'string' && ([...STEPS, DONE] as readonly string[]).includes(step)
+      ? { step: step as WelcomeStep }
+      : {}),
     ...(typeof workspace === 'string' && SLUG_RULE.test(workspace) ? { workspace } : {}),
     ...(isConnectResult(calendar) ? { calendar } : {}),
     ...(another === 1 || another === '1' || another === true ? { another: true as const } : {}),
@@ -118,6 +127,8 @@ export function shownStep(
 ): WelcomeStep {
   const after = steps.filter(needsWorkspace);
   if (hasWorkspace) {
+    // The end is never in `steps` (it is nothing to do), so it is allowed on its own.
+    if (asked === DONE) return DONE;
     if (asked !== undefined && after.includes(asked)) return asked;
     // Every list keeps Invite your team, so there is always one step left to land on.
     return after[0] ?? 'invite';

@@ -44,7 +44,8 @@
 
   /* The split screen (owner, 22 October 2026): two panels edge to edge, the full height of the window, with no
      card, border or margin around them. On a phone the task's panel is the whole screen and the preview is left
-     out; from bp-page-compact up the task takes about 42% and the preview the rest. */
+     out; from bp-page-compact up the task takes about a third and the preview the rest (the owner, 27 October
+     2026: the task's panel was too wide for what it holds, one column of fields). */
   .screen {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -65,14 +66,17 @@
     background: var(--surface);
   }
 
-  /* The task's column. It starts at an offset from the window's height alone, a little above the middle on a
-     wide screen and a fixed step under the mark on a phone, so it holds still between steps and as a refusal
-     makes it taller (centred on its own height, the form jumped under the pointer). */
+  /* The task's column, centred in the room left between the mark and the foot (the owner, 27 October 2026:
+     "center align the left content"). It was held at a fixed offset from the window's height so it couldn't move
+     between steps, which left every short step sitting well above the middle. `min-block-size` keeps a floor
+     under it, so a refusal growing the form moves it by half of what it added rather than jumping a screen. */
   .task {
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
+    min-block-size: var(--size-panel);
     padding-block: calc(2 * var(--space-32)) var(--space-32);
   }
 
@@ -92,7 +96,7 @@
 
   @media (width >= 1024px) {
     .screen {
-      grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+      grid-template-columns: minmax(0, 36fr) minmax(0, 64fr);
       block-size: 100dvh;
       min-block-size: 0;
     }
@@ -100,10 +104,6 @@
     .panel {
       overflow-y: auto;
       padding: var(--space-32) calc(2 * var(--space-24));
-    }
-
-    .task {
-      padding-block-start: max(calc(2 * var(--space-32)), calc((100dvh - var(--size-page-card)) / 2 - var(--size-bar)));
     }
 
     /* The preview's panel, on its own surface (surface-sunken: a tint in light, a step down in dark, so the

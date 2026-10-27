@@ -19,6 +19,7 @@ import { handleBaseFor } from '@crm/contracts/handles';
 import { AboutStep } from './AboutStep.tsx';
 import { BookingPagePreview } from './BookingPagePreview.tsx';
 import { BookingStep } from './BookingStep.tsx';
+import { DoneStep } from './DoneStep.tsx';
 import { HandleStep } from './HandleStep.tsx';
 import { LinkPagePreview } from './LinkPagePreview.tsx';
 import { memberZone } from '../booking/zone.ts';
@@ -28,7 +29,15 @@ import { clearDraft, readDraft, saveDraft } from './draft.ts';
 import { addressCandidates } from '../address/address.ts';
 import { memberNameFor, suggestedWorkspaceName } from './names.ts';
 import { refusalsOf, type WelcomeRefusal } from './refusals.ts';
-import { needsWorkspace, nextStep, previousStep, welcomeSteps, type ConnectResult, type WelcomeStep } from './steps.ts';
+import {
+  DONE,
+  needsWorkspace,
+  nextStep,
+  previousStep,
+  welcomeSteps,
+  type ConnectResult,
+  type WelcomeStep,
+} from './steps.ts';
 import { strings } from './strings.ts';
 import { useAddress } from '../address/useAddress.ts';
 import { WorkspaceStep } from './WorkspaceStep.tsx';
@@ -43,6 +52,7 @@ const COPY: Readonly<Record<WelcomeStep, { readonly title: string; readonly desc
   handle: { title: strings.handleTitle, description: strings.handleDescription },
   booking: { title: strings.bookingTitle, description: strings.bookingDescription },
   invite: { title: strings.inviteTitle, description: strings.inviteDescription },
+  done: { title: strings.doneTitle, description: strings.doneDescription },
   calendar: { title: strings.calendarTitle, description: strings.calendarDescription },
 };
 
@@ -54,6 +64,7 @@ const FOCUS: Readonly<Record<WelcomeStep, WorkspacePreviewFocus>> = {
   booking: 'workspace',
   invite: 'workspace',
   calendar: 'calendar',
+  done: 'workspace',
 };
 
 /**
@@ -62,7 +73,7 @@ const FOCUS: Readonly<Record<WelcomeStep, WorkspacePreviewFocus>> = {
  * where its address is handed over. Your booking page shows that page
  * instead (the owner, 27 October 2026).
  */
-const PAGE_PREVIEW: readonly WelcomeStep[] = ['handle', 'invite'];
+const PAGE_PREVIEW: readonly WelcomeStep[] = ['handle', 'invite', 'done'];
 
 /** Props for first run. */
 export interface WelcomeScreenProps {
@@ -228,11 +239,10 @@ export function WelcomeScreen({
   const openWorkspace = () => {
     if (workspace !== undefined) void navigate({ to: '/w/$slug', params: { slug: workspace.slug }, replace: true });
   };
-  // The step after this one, or, after the last, the workspace itself.
+  // The step after this one, or, after the last, the end, which opens the workspace itself.
   const after = (finished: WelcomeStep) => {
     const next = nextStep(steps, finished);
-    if (next === undefined) openWorkspace();
-    else goTo(next);
+    goTo(next ?? DONE);
   };
 
   const create = () => {
@@ -351,7 +361,7 @@ export function WelcomeScreen({
         eyebrow={
           <>
             {back !== undefined && <Button variant="ghost" icon="arrow-left" label={strings.back} onPress={goBack} />}
-            {steps.length > 1 && (
+            {steps.length > 1 && step !== DONE && (
               <Steps
                 variant="count"
                 label={strings.steps}
@@ -451,6 +461,7 @@ export function WelcomeScreen({
             }}
           />
         )}
+        {step === DONE && handle !== '' && <DoneStep handle={handle} onGo={openWorkspace} />}
         {step === 'invite' && workspace !== undefined && (
           <InviteStep
             data={data}

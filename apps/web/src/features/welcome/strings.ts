@@ -50,6 +50,15 @@ export const strings = {
   /** Under the fields: where the page lands, so nothing about it is a surprise. */
   bookingNote: 'It opens straight away, and you can change its hours and questions afterwards.',
 
+  /** The end (27 October 2026): what first run made, before the workspace opens. */
+  doneTitle: 'You’re live',
+  doneDescription: 'Your link page is up, with your booking page on it. Share the address and people can book you.',
+  doneLink: 'Your link',
+  doneCopy: 'Copy link',
+  doneCopied: 'Link copied',
+  doneOpen: 'Open your page',
+  doneGo: 'Go to Timefix',
+
   inviteTitle: 'Invite your team',
   inviteDescription: 'They get an email with a link to join.',
   noEmails: 'Add an email address, or skip this step.',
