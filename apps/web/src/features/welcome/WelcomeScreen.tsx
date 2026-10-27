@@ -87,8 +87,11 @@ export interface WelcomeScreenProps {
   readonly linkPageHandle?: string | undefined;
   /** A free handle made from their name, the first value of Your link's field. */
   readonly suggestedHandle?: string | undefined;
-  /** They already have a booking page, so Your booking page isn't asked for. */
-  readonly hasBookingPage?: boolean;
+  /**
+   * The live booking pages this workspace already has, newest first: they draw on the link page beside the steps,
+   * and having any means Your booking page isn't asked for.
+   */
+  readonly bookingPages?: readonly { readonly id: string; readonly title: string; readonly minutes: number }[];
 }
 
 /**
@@ -108,7 +111,7 @@ export function WelcomeScreen({
   inviteRoles,
   linkPageHandle,
   suggestedHandle,
-  hasBookingPage = false,
+  bookingPages = [],
 }: WelcomeScreenProps) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -146,6 +149,9 @@ export function WelcomeScreen({
   const [pageMinutes, setPageMinutes] = useState(DEFAULT_MINUTES);
   const [isCreatingPage, setCreatingPage] = useState(false);
   const [pageRefusals, setPageRefusals] = useState<readonly WelcomeRefusal[]>([]);
+  // The page made in this run: the loader doesn't read again on a step change, so the link page beside the later
+  // steps would otherwise lose the page that was just made.
+  const [madePage, setMadePage] = useState<{ readonly title: string; readonly minutes: number } | undefined>(undefined);
   const [isSignOutOpen, setSignOutOpen] = useState(false);
   const [isSigningOut, setSigningOut] = useState(false);
   const [signOutFailure, setSignOutFailure] = useState<string | undefined>(undefined);
@@ -187,7 +193,13 @@ export function WelcomeScreen({
   // Another workspace skips what is known about the person, so its count is its own ("Step 1 of 2").
   // What was already done when first run opened, held still: the list, and so "Step N of M", must not shrink
   // under the person as they do the very steps it counts.
-  const [done] = useState(() => ({ booking: hasBookingPage }));
+  const [done] = useState(() => ({ booking: bookingPages.length > 0 }));
+  // What the link page beside the steps shows: while Your booking page is open, the page being named; after it,
+  // the one just made followed by the ones that were already there.
+  const previewPages =
+    step === 'booking'
+      ? [{ id: 'draft', title: pageTitle, minutes: pageMinutes }]
+      : [...(madePage === undefined ? [] : [{ id: 'made', ...madePage }]), ...bookingPages];
   const steps = welcomeSteps(calendarSync, leaveTo !== undefined, done);
   const back = leaveTo === undefined ? previousStep(step) : undefined;
   // The step this one was reached from by Continue: Back then goes back through the browser's history, so the
@@ -290,6 +302,7 @@ export function WelcomeScreen({
       .then(
         () => {
           setCreatingPage(false);
+          setMadePage({ title: pageTitle.trim(), minutes: pageMinutes });
           after('booking');
         },
         (failure: unknown) => {
@@ -354,12 +367,7 @@ export function WelcomeScreen({
           step === 'booking' ? (
             <BookingPagePreview name={shownName} title={pageTitle} minutes={pageMinutes} />
           ) : PAGE_PREVIEW.includes(step) ? (
-            <LinkPagePreview
-              name={shownName}
-              id={claimedHandle ?? user.id}
-              handle={handle}
-              page={{ title: pageTitle, minutes: pageMinutes }}
-            />
+            <LinkPagePreview name={shownName} id={claimedHandle ?? user.id} handle={handle} pages={previewPages} />
           ) : (
             <WorkspacePreview
               workspaceName={workspace?.name ?? name}
@@ -451,7 +459,6 @@ export function WelcomeScreen({
             onDone={() => {
               after('invite');
             }}
-            handle={claimedHandle}
           />
         )}
       </AuthLayout>

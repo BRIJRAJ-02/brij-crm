@@ -52,16 +52,20 @@ export const Route = createFileRoute('/welcome')({
             (profile) => ({ handle: profile.handle, suggested: profile.suggestedHandle }),
             () => undefined,
           );
-    // Someone who already has a booking page (another workspace, spec 0031) is never asked to make a second one.
-    // A read that fails leaves the step in: making a page is the safe way to be wrong.
+    // Someone who already has a booking page (another workspace, spec 0031) is never asked to make a second one,
+    // and the pages they have show on the link page beside the steps. A read that fails leaves the step in and the
+    // page bare: making a page is the safe way to be wrong.
     const pagesRead =
       made === undefined
-        ? Promise.resolve(false)
+        ? Promise.resolve([])
         : context.data.bookingPages.list(made.slug).then(
-            (pages) => pages.length > 0,
-            () => false,
+            (pages) =>
+              pages
+                .filter((page) => page.status === 'live')
+                .map((page) => ({ id: page.id, title: page.title, minutes: page.durations[0] ?? 30 })),
+            () => [],
           );
-    const [calendarSync, roleRead, profile, hasBookingPage] = await Promise.all([
+    const [calendarSync, roleRead, profile, bookingPages] = await Promise.all([
       calendarRead,
       rolesRead,
       profileRead,
@@ -75,7 +79,7 @@ export const Route = createFileRoute('/welcome')({
       roleRead,
       linkPageHandle: profile?.handle,
       suggestedHandle: profile?.suggested,
-      hasBookingPage,
+      bookingPages,
     };
   },
   pendingComponent: () => (
@@ -88,7 +92,7 @@ export const Route = createFileRoute('/welcome')({
 });
 
 function WelcomeRoute() {
-  const { user, calendarSync, workspace, leaveTo, roleRead, linkPageHandle, suggestedHandle, hasBookingPage } =
+  const { user, calendarSync, workspace, leaveTo, roleRead, linkPageHandle, suggestedHandle, bookingPages } =
     Route.useLoaderData();
   const allowed = roleRead === undefined ? [] : invitableRoles(roleRead.actor);
   const options = roleRead?.roles.roles.filter((each) => each.builtIn !== undefined && allowed.includes(each.builtIn));
@@ -110,7 +114,7 @@ function WelcomeRoute() {
         workspace !== undefined,
         another === true,
         // The person's own steps, so one they have already done is never shown again.
-        welcomeSteps(calendarSync, another === true, { booking: hasBookingPage }),
+        welcomeSteps(calendarSync, another === true, { booking: bookingPages.length > 0 }),
       )}
       calendarSync={calendarSync}
       workspace={workspace}
@@ -119,7 +123,7 @@ function WelcomeRoute() {
       inviteRoles={inviteRoles}
       linkPageHandle={linkPageHandle}
       suggestedHandle={suggestedHandle}
-      hasBookingPage={hasBookingPage}
+      bookingPages={bookingPages}
     />
   );
 }

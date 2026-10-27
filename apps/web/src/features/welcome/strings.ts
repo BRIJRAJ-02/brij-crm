@@ -24,15 +24,6 @@ export const strings = {
   yourName: 'Your name',
   nameMissing: 'Enter your name.',
 
-  /**
-   * The link page made with the workspace (26 Oct 2026), said on Invite your team. Live from the moment it exists
-   * and unlisted until its owner says otherwise (27 Oct 2026).
-   */
-  linkPageReady: 'Your link page is live',
-  linkPageAt: 'It is at',
-  linkPageNext: 'Anyone with the address can open it. Search engines aren’t told about it until you say so.',
-  linkPageEdit: 'Edit link page',
-
   handleTitle: 'Your link page',
   handleDescription: 'One address for everything you share. Your booking page is already on it.',
   handleLabel: 'Your link',

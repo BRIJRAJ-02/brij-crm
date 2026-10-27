@@ -17,8 +17,8 @@ export interface LinkPagePreviewProps {
   readonly id: string;
   /** The link as typed, without the host; empty until they type one. */
   readonly handle: string;
-  /** The booking page as it is being named, once Your booking page is the step. */
-  readonly page?: { readonly title: string; readonly minutes: number } | undefined;
+  /** The booking pages on it: the ones that exist, and the one being named while Your booking page is the step. */
+  readonly pages?: readonly { readonly id: string; readonly title: string; readonly minutes: number }[];
 }
 
 /**
@@ -26,23 +26,25 @@ export interface LinkPagePreviewProps {
  * booking page's row once it has a name. Inert and never on the public
  * origin, like the editor's own phone.
  */
-export function LinkPagePreview({ name, id, handle, page }: LinkPagePreviewProps) {
+export function LinkPagePreview({ name, id, handle, pages = [] }: LinkPagePreviewProps) {
   const host = publicBookingHost();
   const label = `${host}/${handle}`;
-  const title = page?.title.trim() ?? '';
-  const blocks: readonly LinkPageBlock[] =
-    page === undefined || title === ''
+  // A page with no name yet is left off: an empty row would read as a page that exists and has none.
+  const blocks: readonly LinkPageBlock[] = pages.flatMap((page) => {
+    const title = page.title.trim();
+    return title === ''
       ? []
       : [
           {
-            kind: 'page',
-            id: 'welcome-page',
+            kind: 'page' as const,
+            id: page.id,
             title,
             // Nothing is pressable here, so the address is only what the row reads as.
             href: `/${handle}`,
             facts: strings.bookingLengthLabel(page.minutes),
           },
         ];
+  });
   return (
     // The same phone the booking page's preview and the editors use, so first run's two pages read alike.
     <PhonePreview>
