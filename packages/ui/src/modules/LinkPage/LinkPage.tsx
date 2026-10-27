@@ -149,6 +149,12 @@ export interface LinkPageProps {
   /** In place of the blocks when there are none: an EmptyState. */
   readonly empty?: ReactNode;
   /**
+   * Quiet placeholder rows after the blocks (27 October 2026), for a preview of a page its owner is still making:
+   * they say what the page will hold without pretending anything is on it yet. Decoration, out of the
+   * accessibility tree, and never drawn on the page itself — only where `caption` can say what they are.
+   */
+  readonly ghosts?: number;
+  /**
    * The folded section a visitor has open, by its heading's id (AC-5417). One at a time: the address holds exactly
    * one, so the back button closes the section it opened and a shared link opens the section it names. Left out,
    * the page keeps the open one itself, which is what the editor's preview and the stories want.
@@ -801,6 +807,7 @@ export function LinkPage({
   toolbar,
   summary,
   empty,
+  ghosts = 0,
   after,
   foot,
   isPreview = false,
@@ -937,7 +944,7 @@ export function LinkPage({
               </li>
             ))}
           </ul>
-        ) : groups.length === 0 ? (
+        ) : groups.length === 0 && ghosts === 0 ? (
           empty
         ) : (
           <div className={styles.blocks}>
@@ -951,6 +958,23 @@ export function LinkPage({
                 {...(group.heading === undefined ? {} : { heading: group.heading })}
               />
             ))}
+            {ghosts > 0 && (
+              // Places for blocks that aren't there yet: decoration, so nothing here is read out or reachable.
+              <ul className={styles.list} aria-hidden="true">
+                {Array.from({ length: ghosts }, (_, index) => (
+                  <li key={index} className={styles.item}>
+                    <span className={styles.block} data-ghost="">
+                      <LinkPageTile />
+                      <span className={styles.text}>
+                        <span className={styles.title}>
+                          <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
+                        </span>
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
         {after}

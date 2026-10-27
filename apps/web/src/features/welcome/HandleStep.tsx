@@ -3,8 +3,11 @@
 // of theirs starts with, claimed here rather than left for Settings.
 // Main task: take the suggested link or type another, then Claim your link; the server has the last word on a
 // taken one, which lands on the field.
-// Leaves out: the bio, the picture, the look and the blocks (the link page editor), and a skip: Timefix is a link.
+// Also, optional: a link or two to put on the page, since a page with one booking page on it is a thin page.
+// Leaves out: the bio, the picture, the look, sections and ordering (the link page editor), and a skip: Timefix
+// is a link.
 import { Field, Form } from '@crm/ui';
+import { LinksFields, type LinkDraft } from './LinksFields.tsx';
 import { handleProblem, HANDLE_MAX } from '@crm/contracts/handles';
 import { useState } from 'react';
 import { addressAsTyped } from '../address/address.ts';
@@ -25,6 +28,9 @@ export interface HandleStepProps {
   readonly refusals: readonly WelcomeRefusal[];
   /** Claims it: called once the link passes the rule here. */
   readonly onClaim: () => void;
+  /** The optional links to put on the page, as typed. */
+  readonly links: readonly LinkDraft[];
+  readonly onLinks: (links: readonly LinkDraft[]) => void;
 }
 
 /**
@@ -32,7 +38,7 @@ export interface HandleStepProps {
  * Claim your link (Enter). The page beside the step shows the address as it
  * is typed, so the thing being named is on screen while it is named.
  */
-export function HandleStep({ handle, onHandle, isClaiming, refusals, onClaim }: HandleStepProps) {
+export function HandleStep({ handle, onHandle, isClaiming, refusals, onClaim, links, onLinks }: HandleStepProps) {
   const [problems, setProblems] = useState<readonly WelcomeRefusal[]>([]);
   const claim = () => {
     const wanted = handle.trim();
@@ -65,6 +71,7 @@ export function HandleStep({ handle, onHandle, isClaiming, refusals, onClaim }: 
           onHandle(addressAsTyped(next));
         }}
       />
+      <LinksFields rows={links} onRows={onLinks} isBusy={isClaiming} />
     </Form>
   );
 }

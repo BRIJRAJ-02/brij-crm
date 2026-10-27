@@ -75,6 +75,8 @@ Two rules worth knowing. `data-theme` is set to the owner's mode on this root, s
 - **`isPreview`** draws a plain region (no `main`), its content's height, `inert`: the editor's phone shows the page, and a press there never leaves the editor.
 - **`onPress`** hears a block pressed, for a counter's beacon; it never holds up the navigation.
 
+`ghosts` draws that many quiet placeholder rows after the blocks (27 October 2026): the row's shape with no border and no ground, out of the accessibility tree. It is for a preview of a page its owner is still making — first run's (spec 0036) — where a page with one booking page on it would otherwise read as the finished thing. The page itself never draws them.
+
 ## States
 
 Loading (no `person`: the hero's skeleton; no `blocks`: five block shaped places, the tile's and a title line's, so nothing moves when they arrive), a refused address (words, no link), empty (`empty` in the list's place), ready, a contact card, long words (titles, notes, names and bios wrap inside their card), with Show more, a search's count (`summary`, a status region mounted while a search is in play), the blocks alone, and the preview. Hover lifts a card to `surface-hover` and `border-strong` on fine pointers only; focus draws `shadow-focus`; there is no press shrink (house rule). The blocks arrive with a short fade and a `space-2` rise over `duration-popover`; reduced motion keeps the fade.

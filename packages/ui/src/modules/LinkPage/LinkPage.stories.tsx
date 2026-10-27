@@ -572,3 +572,22 @@ export const Testimonials: Story = {
     await expect(canvas.queryByRole('button', { name: /Priya Raman/ })).toBeNull();
   },
 };
+
+/**
+ * `ghosts`: places for blocks that aren't on the page yet, under the ones
+ * that are (first run's preview of a page still being made). The page itself
+ * never draws them.
+ */
+export const WithGhosts: Story = {
+  render: () => (
+    <Stage width="fill">
+      <LinkPage
+        isPreview
+        person={{ name: 'Ada Lovelace', id: 'ada' }}
+        address={{ label: 'timefix.com/ada', value: 'https://timefix.com/ada' }}
+        blocks={[{ kind: 'page', id: 'intro', title: 'Intro call', href: '/ada/intro', facts: '30 min' }]}
+        ghosts={3}
+      />
+    </Stage>
+  ),
+};

@@ -33,6 +33,13 @@ export const strings = {
   claiming: 'Claiming your link page',
   /** Over the phone beside the step, so the sketch reads as what it is. */
   handlePreview: 'Your link page',
+  /** The optional links on Your link page (27 October 2026): a head start on a page with one booking page on it. */
+  linksLabel: 'Add links (optional)',
+  linksHint: 'Your site, your socials, anything you share. You can add more and reorder them later.',
+  linkTitle: 'Title',
+  linkUrl: 'Address',
+  linkUrlPlaceholder: 'timefix.com',
+  linkAdd: 'Add another',
 
   bookingTitle: 'Your booking page',
   bookingDescription: 'A page people open to book time with you. It goes on your link page.',

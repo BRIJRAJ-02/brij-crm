@@ -450,6 +450,15 @@
       border-color var(--duration-hover) var(--ease-hover);
   }
 
+  /* A place for a block that isn't there yet (a preview of a page still being made): the row's shape, quieter,
+     with no border of its own, so it reads as room rather than as something on the page. */
+  .block[data-ghost] {
+    border-color: transparent;
+    background: none;
+    box-shadow: none;
+    opacity: var(--opacity-disabled);
+  }
+
   .block:focus-visible {
     box-shadow: var(--shadow-focus);
   }

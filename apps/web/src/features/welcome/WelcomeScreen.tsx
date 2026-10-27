@@ -21,6 +21,7 @@ import { BookingPagePreview } from './BookingPagePreview.tsx';
 import { BookingStep } from './BookingStep.tsx';
 import { DoneStep } from './DoneStep.tsx';
 import { HandleStep } from './HandleStep.tsx';
+import { EMPTY_LINK, filledLinks, type LinkDraft } from './LinksFields.tsx';
 import { LinkPagePreview } from './LinkPagePreview.tsx';
 import { memberZone } from '../booking/zone.ts';
 import { CalendarStep } from './CalendarStep.tsx';
@@ -41,6 +42,13 @@ import {
 import { strings } from './strings.ts';
 import { useAddress } from '../address/useAddress.ts';
 import { WorkspaceStep } from './WorkspaceStep.tsx';
+
+/**
+ * Places for blocks that aren't on the page yet, drawn under what is: a page
+ * with one booking page on it reads as a page still being made, not as the
+ * finished thing (27 October 2026). Each link that lands takes one of them.
+ */
+const PREVIEW_GHOSTS = 3;
 
 /** The length a first booking page offers until its owner changes it. */
 const DEFAULT_MINUTES = 30;
@@ -153,6 +161,10 @@ export function WelcomeScreen({
   const handle = typedHandle ?? claimedHandle ?? suggestedHandle ?? madeHandle;
   const [isClaiming, setClaiming] = useState(false);
   const [handleRefusals, setHandleRefusals] = useState<readonly WelcomeRefusal[]>([]);
+  // The optional links that go on the page with the handle (27 October 2026); one empty row to start.
+  const [links, setLinks] = useState<readonly LinkDraft[]>([EMPTY_LINK]);
+  // The ones that landed, so the page beside the later steps shows them.
+  const [savedLinks, setSavedLinks] = useState<readonly LinkDraft[]>([]);
   // Your booking page: its id is minted on the first try and sent again on every retry, so a lost answer leaves
   // one page, not two. Minted there rather than here, so no step before it asks the data layer for one.
   const pageId = useRef<string | undefined>(undefined);
@@ -281,9 +293,27 @@ export function WelcomeScreen({
     setClaiming(true);
     setHandleRefusals([]);
     data.profile.update(workspace.slug, { handle: wanted }).then(
-      (profile) => {
+      async (profile) => {
+        const claimed = profile.handle ?? wanted;
+        // The optional links go on the page behind the claim. They are a head start, not the point of the step,
+        // so one that won't save says so in a toast (the store's own) and the run goes on regardless.
+        const wantedLinks = filledLinks(links);
+        if (wantedLinks.length > 0) {
+          const store = await data.linkPage.load().catch(() => undefined);
+          if (store !== undefined) {
+            const stamp = new Date().toISOString();
+            for (const link of wantedLinks) {
+              const id = data.workspaces.newId();
+              const block = { kind: 'link' as const, title: link.title.trim(), url: link.url.trim() };
+              await store
+                .save(workspace.slug, id, block, { ...block, id, updatedAt: stamp, hue: 'blue' as const })
+                .catch(() => false);
+            }
+          }
+        }
         setClaiming(false);
-        setClaimedHandle(profile.handle ?? wanted);
+        setClaimedHandle(claimed);
+        setSavedLinks(wantedLinks);
         after('handle');
       },
       (failure: unknown) => {
@@ -377,7 +407,14 @@ export function WelcomeScreen({
           step === 'booking' ? (
             <BookingPagePreview name={shownName} title={pageTitle} minutes={pageMinutes} />
           ) : PAGE_PREVIEW.includes(step) ? (
-            <LinkPagePreview name={shownName} id={claimedHandle ?? user.id} handle={handle} pages={previewPages} />
+            <LinkPagePreview
+              name={shownName}
+              id={claimedHandle ?? user.id}
+              handle={handle}
+              pages={previewPages}
+              links={step === 'handle' ? links : savedLinks}
+              ghosts={PREVIEW_GHOSTS}
+            />
           ) : (
             <WorkspacePreview
               workspaceName={workspace?.name ?? name}
@@ -438,6 +475,8 @@ export function WelcomeScreen({
             isClaiming={isClaiming}
             refusals={handleRefusals}
             onClaim={claim}
+            links={links}
+            onLinks={setLinks}
           />
         )}
         {step === 'booking' && (

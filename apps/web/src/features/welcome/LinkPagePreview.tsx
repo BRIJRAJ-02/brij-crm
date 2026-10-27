@@ -19,6 +19,10 @@ export interface LinkPagePreviewProps {
   readonly handle: string;
   /** The booking pages on it: the ones that exist, and the one being named while Your booking page is the step. */
   readonly pages?: readonly { readonly id: string; readonly title: string; readonly minutes: number }[];
+  /** The optional links being typed, or the ones that landed: they draw under the booking pages, as the page has them. */
+  readonly links?: readonly { readonly title: string; readonly url: string }[];
+  /** Places for blocks that aren't there yet, so a page with one row on it doesn't read as the finished thing. */
+  readonly ghosts?: number;
 }
 
 /**
@@ -26,11 +30,11 @@ export interface LinkPagePreviewProps {
  * booking page's row once it has a name. Inert and never on the public
  * origin, like the editor's own phone.
  */
-export function LinkPagePreview({ name, id, handle, pages = [] }: LinkPagePreviewProps) {
+export function LinkPagePreview({ name, id, handle, pages = [], links = [], ghosts = 0 }: LinkPagePreviewProps) {
   const host = publicBookingHost();
   const label = `${host}/${handle}`;
   // A page with no name yet is left off: an empty row would read as a page that exists and has none.
-  const blocks: readonly LinkPageBlock[] = pages.flatMap((page) => {
+  const pageBlocks: readonly LinkPageBlock[] = pages.flatMap((page) => {
     const title = page.title.trim();
     return title === ''
       ? []
@@ -45,10 +49,31 @@ export function LinkPagePreview({ name, id, handle, pages = [] }: LinkPagePrevie
           },
         ];
   });
+  // A link with no title yet is left off, as a page with no name is: an empty row reads as a block that exists.
+  const linkBlocks: readonly LinkPageBlock[] = links.flatMap((link, index) =>
+    link.title.trim() === ''
+      ? []
+      : [
+          {
+            kind: 'link' as const,
+            id: `welcome-link-${String(index)}`,
+            title: link.title.trim(),
+            href: link.url.trim(),
+            hue: 'blue' as const,
+          },
+        ],
+  );
+  const blocks = [...pageBlocks, ...linkBlocks];
   return (
     // The same phone the booking page's preview and the editors use, so first run's two pages read alike.
     <PhonePreview>
-      <LinkPage isPreview person={{ name, id }} blocks={blocks} address={{ label, value: `https://${label}` }} />
+      <LinkPage
+        isPreview
+        person={{ name, id }}
+        blocks={blocks}
+        address={{ label, value: `https://${label}` }}
+        ghosts={Math.max(0, ghosts - linkBlocks.length)}
+      />
     </PhonePreview>
   );
 }
