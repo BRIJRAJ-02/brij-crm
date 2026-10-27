@@ -196,6 +196,7 @@ export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEdi
               profile={profile}
               handle={handle}
               isEditing={isEditing}
+              onEditing={onEditing}
             />
           ),
       }}
@@ -252,14 +253,10 @@ function HeaderActions({
       <Button icon="upload" onPress={share}>
         {strings.share}
       </Button>
-      {/* The one way in and out of the builder: the page itself opens on what it is for, sharing it. */}
-      {isEditing ? (
+      {/* Edit page lives on the page's own card; the bar carries only the way back out of the builder. */}
+      {isEditing && (
         <Button variant="primary" icon="check" onPress={() => onEditing(false)}>
           {strings.doneEditing}
-        </Button>
-      ) : (
-        <Button variant="primary" icon="pencil" onPress={() => onEditing(true)}>
-          {strings.editPageAction}
         </Button>
       )}
       <ShareLinkPageModal
@@ -281,6 +278,7 @@ function Blocks({
   profile,
   handle,
   isEditing,
+  onEditing,
 }: {
   readonly data: DataLayer;
   readonly linkPage: LinkPageStore;
@@ -288,6 +286,7 @@ function Blocks({
   readonly profile: MyProfile;
   readonly handle: string;
   readonly isEditing: boolean;
+  readonly onEditing: (isEditing: boolean) => void;
 }) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -767,6 +766,7 @@ function Blocks({
           isPublic={madePublic || profile.isPublic !== false}
           onPublic={() => setMadePublic(true)}
           isEmpty={state.status === 'ready' && items.length === 0}
+          onEdit={() => onEditing(true)}
         />
       </PreviewLayout>
     );

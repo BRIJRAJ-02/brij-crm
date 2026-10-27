@@ -4,7 +4,7 @@
 // Main task: share the page in a message or across a table; Edit page is the one way into the editor.
 // Leaves out: the blocks, the look and sharing settings, which Edit page opens; and the figures (phase 3).
 import type { DataLayer } from '@crm/data';
-import { Badge, Button, ButtonLink, Card, DescriptionList, Field, QrCode } from '@crm/ui';
+import { Badge, Button, ButtonLink, Card, DescriptionList, Field, FieldGroup, QrCode, Separator } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { homeStrings } from './home-strings.ts';
@@ -27,10 +27,21 @@ export interface LinkPageOverviewProps {
   readonly onPublic: () => void;
   /** The page holds nothing yet, so it is still worth saying what a link page is for. */
   readonly isEmpty: boolean;
+  /** Opens the builder: the one way in, in the card's own header, as the design draws it. */
+  readonly onEdit: () => void;
 }
 
 /** Share online and Share in person, or the private page's one way out of being private. */
-export function LinkPageOverview({ data, slug, handle, address, isPublic, onPublic, isEmpty }: LinkPageOverviewProps) {
+export function LinkPageOverview({
+  data,
+  slug,
+  handle,
+  address,
+  isPublic,
+  onPublic,
+  isEmpty,
+  onEdit,
+}: LinkPageOverviewProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const codeRef = useRef<SVGSVGElement>(null);
   const [isSaving, setSaving] = useState(false);
@@ -50,43 +61,61 @@ export function LinkPageOverview({ data, slug, handle, address, isPublic, onPubl
       <Card
         title={strings.yourPage}
         description={strings.promise}
-        actions={<Badge text={homeStrings.private} dot="gray" />}
+        actions={
+          <>
+            <Badge text={homeStrings.private} dot="gray" />
+            <Button variant="primary" icon="pencil" onPress={onEdit}>
+              {strings.editPageAction}
+            </Button>
+          </>
+        }
       >
         <PrivatePage data={data} slug={slug} address={address} onPublic={onPublic} />
       </Card>
     );
   }
+  // One framed card holding both ways to share, as the owner's artboard draws it: the page is one thing to hand
+  // out, not a column of settings. Each way is a titled section inside it, with a rule between them.
   return (
     <>
-      {isEmpty && (
-        <Card title={strings.whyTitle}>
-          <DescriptionList layout="stacked" items={[...strings.whyPoints]} />
-        </Card>
-      )}
       <Card
-        title={strings.shareOnline}
+        title={strings.yourPage}
         description={strings.promise}
-        footerNote={strings.pasteItAnywhere}
-        footer={
-          <ButtonLink href={address} isExternal icon="arrow-up-right">
-            {homeStrings.open}
-          </ButtonLink>
+        actions={
+          <>
+            <Badge text={homeStrings.live} dot="green" />
+            <Button variant="primary" icon="pencil" onPress={onEdit}>
+              {strings.editPageAction}
+            </Button>
+          </>
         }
       >
-        <Field
-          label={strings.yourAddress}
-          variant="copy"
-          icon="link"
-          value={shown}
-          copyLabel={shareStrings.copy}
-          isLabelHidden
-        />
-      </Card>
-      <Card
-        title={strings.shareInPerson}
-        description={strings.scanIt}
-        footer={
-          <>
+        <FieldGroup
+          tone="heading"
+          headingLevel={3}
+          label={strings.shareOnline}
+          hint={strings.pasteItAnywhere}
+          action={
+            <ButtonLink variant="ghost" size="sm" href={address} isExternal icon="arrow-up-right">
+              {homeStrings.open}
+            </ButtonLink>
+          }
+        >
+          <Field
+            label={strings.yourAddress}
+            variant="copy"
+            icon="link"
+            value={shown}
+            copyLabel={shareStrings.copy}
+            isLabelHidden
+          />
+        </FieldGroup>
+        <Separator />
+        <FieldGroup tone="heading" headingLevel={3} label={strings.shareInPerson} hint={strings.scanIt}>
+          <QrCode ref={codeRef} value={address} label={shareStrings.qrLabel} size="sm">
+            <p>
+              <strong>{shown}</strong>
+            </p>
             <Button icon="download" isPending={isSaving} onPress={download}>
               {strings.downloadCode}
             </Button>
@@ -95,15 +124,14 @@ export function LinkPageOverview({ data, slug, handle, address, isPublic, onPubl
                 {homeStrings.addToWallet}
               </ButtonLink>
             )}
-          </>
-        }
-      >
-        <QrCode ref={codeRef} value={address} label={shareStrings.qrLabel} size="sm">
-          <p>
-            <strong>{shown}</strong>
-          </p>
-        </QrCode>
+          </QrCode>
+        </FieldGroup>
       </Card>
+      {isEmpty && (
+        <Card title={strings.whyTitle}>
+          <DescriptionList layout="stacked" items={[...strings.whyPoints]} />
+        </Card>
+      )}
     </>
   );
 }
