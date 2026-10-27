@@ -1,5 +1,3 @@
-export { brandImages, passImages, writePass, type PassInput, type PassImages } from './profile/pass.ts';
-export { type PassSigningKeys } from './profile/pkcs7.ts';
 // Domain services, shared by the api and the worker. No HTTP in here.
 // One folder per feature; the access door (spec 0005, thin #9) is `access/`.
 export { getSystemStatus, type SystemDeps } from './system/status.ts';

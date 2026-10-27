@@ -64,7 +64,8 @@ import {
 } from './public/picture.ts';
 import { createOutsideFetch, type OutsideFetch } from './public/outside.ts';
 import { createFaviconFetch, type FaviconFetch } from './public/favicon.ts';
-import { createApplePass, createWalletLinks } from './wallet/wallet.ts';
+import { createWalletLinks } from './wallet/wallet.ts';
+import { createApplePass } from './public/apple-pass.ts';
 import { mountWalletPass } from './public/wallet.ts';
 import { EMAIL_UNSUBSCRIBE_PATH, mountEmailPreferences } from './public/email-preferences.ts';
 import { emailLinkKey } from './email-link.ts';
