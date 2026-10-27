@@ -301,20 +301,21 @@ describe('first run’s steps', () => {
     expect(fake.created[0]).not.toHaveProperty('onboarding');
     expect(router.state.location.search).toEqual({ step: 'booking', workspace: 'ada' });
     expect(page.getByRole('button', { name: 'Back' }).query()).toBeNull();
-    await page.getByRole('textbox', { name: 'What are you offering?' }).fill('Intro call');
+    // It starts named, so Continue alone would make it; this one is named and made 45 minutes long.
+    await expect.element(page.getByRole('textbox', { name: 'Meeting name' })).toHaveValue('Intro call');
     // The segment's own label takes the press, as it does everywhere the control is used.
     await page.getByText('45 min', { exact: true }).click();
-    await page.getByRole('button', { name: 'Create booking page' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
     await expect.poll(() => fake.pages).toEqual([{ workspace: 'ada', id: PAGE_ID, title: 'Intro call', minutes: 45 }]);
 
     // Your link page: the handle, and the optional links that go on with it.
     await expect.element(page.getByRole('heading', { level: 1, name: 'Your link page' })).toBeVisible();
     await expect.element(page.getByText('Step 4 of 6')).toBeVisible();
-    await page.getByRole('textbox', { name: 'Title' }).fill('My site');
-    await page.getByRole('textbox', { name: 'Address' }).fill('ada.example');
-    await page.getByRole('button', { name: 'Claim your link page' }).click();
+    // One address per link; its title comes from the address until it is renamed in the editor.
+    await page.getByRole('textbox', { name: 'Link 1' }).fill('https://www.ada.example/');
+    await page.getByRole('button', { name: 'Continue' }).click();
     await expect.poll(() => fake.handles).toEqual([{ workspace: 'ada', handle: 'ada-lovelace' }]);
-    await expect.poll(() => fake.savedLinks.map((link) => link.title)).toEqual(['My site']);
+    await expect.poll(() => fake.savedLinks.map((link) => link.title)).toEqual(['ada.example']);
 
     await expect.element(page.getByRole('heading', { level: 1, name: 'Connect your calendar' })).toBeVisible();
     await expect.element(page.getByText('Step 5 of 6')).toBeVisible();
@@ -326,7 +327,7 @@ describe('first run’s steps', () => {
     expect(page.getByRole('button', { name: /^Role for/ }).query()).toBeNull();
     // Nothing typed: said above the rows, focus on the first.
     await page.getByRole('button', { name: 'Invite', exact: true }).click();
-    await expect.element(page.getByText('Add an email address, or skip this step.')).toBeVisible();
+    await expect.element(page.getByText('Add an email, or skip for now.')).toBeVisible();
     await expect.element(page.getByRole('textbox', { name: 'Email' })).toHaveFocus();
     // A pasted list splits into rows, a mail client's names dropped; the plus and Enter add more.
     await page.getByRole('textbox', { name: 'Email' }).fill('Ada <ADA@acme.com>, grace@acme.com');
@@ -347,8 +348,8 @@ describe('first run’s steps', () => {
     await expect.element(page.getByRole('heading', { level: 1, name: 'You’re live' })).toBeVisible();
     expect(router.state.location.search).toEqual({ step: 'done', workspace: 'ada' });
     expect(page.getByText(/^Step \d+ of/).query()).toBeNull();
-    await expect.element(page.getByRole('button', { name: 'Go to Timefix' })).toHaveFocus();
-    await page.getByRole('button', { name: 'Go to Timefix' }).click();
+    await expect.element(page.getByRole('button', { name: 'Go to dashboard' })).toHaveFocus();
+    await page.getByRole('button', { name: 'Go to dashboard' }).click();
     await expect.poll(() => router.state.location.pathname).toBe('/w/ada');
   });
 

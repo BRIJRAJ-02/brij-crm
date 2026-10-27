@@ -20,66 +20,64 @@ export const strings = {
   signOut: 'Sign out',
 
   aboutTitle: 'Your name',
-  aboutDescription: 'How your team sees you in Timefix.',
+  aboutDescription: 'How people see you on your pages.',
   yourName: 'Your name',
   nameMissing: 'Enter your name.',
   /** The photo on Your name (27 October 2026): a Google account's is the only one until file storage (#32). */
-  usePhoto: 'Use your Google photo',
+  usePhoto: 'Add your Google photo',
   changePhoto: 'Change photo',
 
   handleTitle: 'Your link page',
-  handleDescription: 'One address for everything you share. Your booking page is already on it.',
+  handleDescription: 'One link for everything you share.',
   handleLabel: 'Your link',
-  handleHint: '3 to 40 lowercase letters, digits and dashes.',
   handleMissing: 'Pick a link.',
-  claim: 'Claim your link page',
-  claiming: 'Claiming your link page',
+  claim: 'Continue',
+  claiming: 'Saving',
   /** Over the phone beside the step, so the sketch reads as what it is. */
   handlePreview: 'Your link page',
   /** The optional links on Your link page (27 October 2026): a head start on a page with one booking page on it. */
-  linksLabel: 'Add links (optional)',
-  linksHint: 'Your site, your socials, anything you share. You can add more and reorder them later.',
-  linkTitle: 'Title',
-  linkUrl: 'Address',
-  linkUrlPlaceholder: 'timefix.com',
-  linkAdd: 'Add another',
+  linksLabel: 'Links (optional)',
+  /** Each row's name for screen readers: the rows share one visible label. */
+  linkLabel: (n: number) => `Link ${String(n)}`,
+  linkPlaceholder: 'yoursite.com',
+  linkAdd: 'Add link',
 
   bookingTitle: 'Your booking page',
-  bookingDescription: 'A page people open to book time with you. It goes on your link page.',
-  bookingName: 'What are you offering?',
+  bookingDescription: 'Where people pick a time with you.',
+  bookingName: 'Meeting name',
   bookingNamePlaceholder: 'Intro call',
   bookingNameMissing: 'Name the meeting.',
-  bookingLength: 'How long is it?',
+  bookingLength: 'Length',
   /** Each length a first page may offer, in minutes; the page's editor offers the rest. */
   bookingLengths: [15, 30, 45, 60] as const,
   bookingLengthLabel: (minutes: number) => `${String(minutes)} min`,
   /** The sketch of the booking page beside the step: its own words, never a real page's. */
   previewChooseTime: 'Choose a time',
-  createPage: 'Create booking page',
-  creatingPage: 'Creating booking page',
-  /** Under the fields: where the page lands, so nothing about it is a surprise. */
-  bookingNote: 'It opens straight away, and you can change its hours and questions afterwards.',
+  createPage: 'Continue',
+  creatingPage: 'Creating',
+  /** Under the length: that nothing here is final. */
+  bookingNote: 'You can change this later.',
 
   /** The end (27 October 2026): what first run made, before the workspace opens. */
   doneTitle: 'You’re live',
-  doneDescription: 'Your link page is up, with your booking page on it. Share the address and people can book you.',
+  doneDescription: 'Share your link and people can book you.',
   doneLink: 'Your link',
   doneCopy: 'Copy link',
   doneCopied: 'Link copied',
   doneOpen: 'Open your page',
-  doneGo: 'Go to Timefix',
+  doneGo: 'Go to dashboard',
 
   inviteTitle: 'Invite your team',
-  inviteDescription: 'They get an email with a link to join.',
-  noEmails: 'Add an email address, or skip this step.',
+  inviteDescription: 'They’ll get an email to join.',
+  noEmails: 'Add an email, or skip for now.',
   invited: (count: number) =>
     count === 0 ? 'No invites sent.' : count === 1 ? 'Invite sent.' : `${String(count)} invites sent.`,
-  invitedText: 'You can invite more from Settings › Members.',
+  invitedText: 'Invite more any time from Settings.',
   inviteRefused: (emails: string) => `Already in the workspace: ${emails}`,
   inviteUnsent: (emails: string) => `Not sent yet, try again from Settings › Members: ${emails}`,
 
   workspaceTitle: 'Your workspace',
-  workspaceDescription: 'Your records live here. Name it for your team or company.',
+  workspaceDescription: 'Name it after your team or company.',
   anotherTitle: 'Create a workspace',
   anotherDescription: 'A new workspace starts empty, with you as its owner.',
   workspaceName: 'Workspace name',
@@ -105,7 +103,7 @@ export const strings = {
   slugInvalid: 'Use 3 to 40 lowercase letters and digits, with single dashes.',
 
   calendarTitle: 'Connect your calendar',
-  calendarDescription: 'Your meetings show on the people and companies you meet. Outlook is coming soon.',
+  calendarDescription: 'So people only book when you’re free.',
   connectGoogle: 'Connect Google Calendar',
   connectingGoogle: 'Opening Google',
   connectOutlook: 'Connect Outlook',

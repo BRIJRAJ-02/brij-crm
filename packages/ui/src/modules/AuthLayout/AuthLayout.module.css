@@ -77,7 +77,10 @@
     align-items: center;
     justify-content: center;
     min-block-size: var(--size-panel);
-    padding-block: calc(2 * var(--space-32)) var(--space-32);
+
+    /* Even, so centring really centres: 64 over 32 pushed the column half the difference down the panel, which
+       read as off centre on every step (the owner, 27 October 2026). */
+    padding-block: var(--space-32);
   }
 
   /* The readable column the task and the footer share, so they start on one line. */

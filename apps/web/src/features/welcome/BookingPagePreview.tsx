@@ -1,11 +1,12 @@
 // Brief
-// Purpose: the page beside first run's Your booking page (27 October 2026): the booking page as a visitor will
-// see it, drawn from what the step has typed.
+// Purpose: the page beside first run's Your booking page (27 October 2026): the booking page as a visitor on a
+// desktop will see it, drawn from what the step has typed — the owner asked for the desktop view, with much more
+// in view than a phone holds.
 // Main task: show the meeting's name and its length on the page that will carry them, so the thing being made is
 // on screen while it is made.
 // Leaves out: real times (the hours aren't set yet), the location, the questions and the Book bar: it is a sketch
 // of the page, inert, and nothing here books anything.
-import { BookingFrame, MonthTiles, PhonePreview, SlotList } from '@crm/ui';
+import { BookingFrame, MonthTiles, SlotList } from '@crm/ui';
 import { useMemo } from 'react';
 import { strings } from './strings.ts';
 
@@ -64,39 +65,35 @@ export function BookingPagePreview({ name, title, minutes, image }: BookingPageP
         });
   const shown = title.trim() === '' ? strings.bookingNamePlaceholder : title.trim();
   return (
-    // The editors' own phone, so the page lays itself out as it does on a phone (the rail over the card) instead
-    // of being squeezed into half a panel. Decoration, like the workspace sketch beside the other steps: nothing
-    // in it is pressable or focusable, and it is out of the accessibility tree, since the frame draws a `main` of
-    // its own and the page already has one.
-    <PhonePreview>
-      <div inert aria-hidden="true">
-        <BookingFrame
-          isCompact
-          host={{ name, ...(image === undefined ? {} : { image }) }}
-          title={shown}
-          facts={[{ id: 'length', icon: 'clock', children: strings.bookingLengthLabel(minutes) }]}
-          heading={strings.previewChooseTime}
-          aside={
-            <SlotList
-              heading={chosenLabel}
-              slots={SAMPLE_TIMES.map((time) => ({ id: time, label: time, name: time }))}
-              value={undefined}
-              onChange={() => undefined}
-            />
-          }
-        >
-          <MonthTiles
-            month={month}
-            today={today}
-            openDays={openDays}
-            value={chosen}
+    // The page at its desktop width, anchored in the panel and cut by it, as the workspace sketch is. Decoration:
+    // nothing in it is pressable or focusable, and it is out of the accessibility tree, since the frame draws a
+    // `main` of its own and the page already has one.
+    <div inert aria-hidden="true">
+      <BookingFrame
+        host={{ name, ...(image === undefined ? {} : { image }) }}
+        title={shown}
+        facts={[{ id: 'length', icon: 'clock', children: strings.bookingLengthLabel(minutes) }]}
+        heading={strings.previewChooseTime}
+        aside={
+          <SlotList
+            heading={chosenLabel}
+            slots={SAMPLE_TIMES.map((time) => ({ id: time, label: time, name: time }))}
+            value={undefined}
             onChange={() => undefined}
-            onMonthChange={() => undefined}
-            canPrevious={false}
-            canNext={false}
           />
-        </BookingFrame>
-      </div>
-    </PhonePreview>
+        }
+      >
+        <MonthTiles
+          month={month}
+          today={today}
+          openDays={openDays}
+          value={chosen}
+          onChange={() => undefined}
+          onMonthChange={() => undefined}
+          canPrevious={false}
+          canNext={false}
+        />
+      </BookingFrame>
+    </div>
   );
 }

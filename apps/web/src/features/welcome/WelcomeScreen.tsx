@@ -21,7 +21,7 @@ import { BookingPagePreview } from './BookingPagePreview.tsx';
 import { BookingStep } from './BookingStep.tsx';
 import { DoneStep } from './DoneStep.tsx';
 import { HandleStep } from './HandleStep.tsx';
-import { EMPTY_LINK, filledLinks, type LinkDraft } from './LinksFields.tsx';
+import { filledLinks, titleFromUrl } from './LinksFields.tsx';
 import { LinkPagePreview } from './LinkPagePreview.tsx';
 import { memberZone } from '../booking/zone.ts';
 import { CalendarStep } from './CalendarStep.tsx';
@@ -169,13 +169,14 @@ export function WelcomeScreen({
   const [isClaiming, setClaiming] = useState(false);
   const [handleRefusals, setHandleRefusals] = useState<readonly WelcomeRefusal[]>([]);
   // The optional links that go on the page with the handle (27 October 2026); one empty row to start.
-  const [links, setLinks] = useState<readonly LinkDraft[]>([EMPTY_LINK]);
+  const [links, setLinks] = useState<readonly string[]>(['']);
   // The ones that landed, so the page beside the later steps shows them.
-  const [savedLinks, setSavedLinks] = useState<readonly LinkDraft[]>([]);
+  const [savedLinks, setSavedLinks] = useState<readonly string[]>([]);
   // Your booking page: its id is minted on the first try and sent again on every retry, so a lost answer leaves
   // one page, not two. Minted there rather than here, so no step before it asks the data layer for one.
   const pageId = useRef<string | undefined>(undefined);
-  const [pageTitle, setPageTitle] = useState('');
+  // Starts named, so Continue makes a page at once; a placeholder that looked like a value was refused as empty.
+  const [pageTitle, setPageTitle] = useState<string>(strings.bookingNamePlaceholder);
   const [pageMinutes, setPageMinutes] = useState(DEFAULT_MINUTES);
   const [isCreatingPage, setCreatingPage] = useState(false);
   const [pageRefusals, setPageRefusals] = useState<readonly WelcomeRefusal[]>([]);
@@ -311,7 +312,8 @@ export function WelcomeScreen({
             const stamp = new Date().toISOString();
             for (const link of wantedLinks) {
               const id = data.workspaces.newId();
-              const block = { kind: 'link' as const, title: link.title.trim(), url: link.url.trim() };
+              // Named from its address, as the page shows it until it is renamed in the editor.
+              const block = { kind: 'link' as const, title: titleFromUrl(link), url: link };
               await store
                 .save(workspace.slug, id, block, { ...block, id, updatedAt: stamp, hue: 'blue' as const })
                 .catch(() => false);
@@ -437,7 +439,10 @@ export function WelcomeScreen({
               handle={handle}
               {...(image === undefined ? {} : { image })}
               pages={previewPages}
-              links={step === 'handle' ? links : savedLinks}
+              links={filledLinks(step === 'handle' ? links : savedLinks).map((url) => ({
+                title: titleFromUrl(url),
+                url,
+              }))}
               ghosts={PREVIEW_GHOSTS}
             />
           ) : (

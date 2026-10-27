@@ -7,7 +7,7 @@
 // Leaves out: the bio, the picture, the look, sections and ordering (the link page editor), and a skip: Timefix
 // is a link.
 import { Field, Form } from '@crm/ui';
-import { LinksFields, type LinkDraft } from './LinksFields.tsx';
+import { LinksFields } from './LinksFields.tsx';
 import { handleProblem, HANDLE_MAX } from '@crm/contracts/handles';
 import { useState } from 'react';
 import { addressAsTyped } from '../address/address.ts';
@@ -29,8 +29,8 @@ export interface HandleStepProps {
   /** Claims it: called once the link passes the rule here. */
   readonly onClaim: () => void;
   /** The optional links to put on the page, as typed. */
-  readonly links: readonly LinkDraft[];
-  readonly onLinks: (links: readonly LinkDraft[]) => void;
+  readonly links: readonly string[];
+  readonly onLinks: (links: readonly string[]) => void;
 }
 
 /**
@@ -65,7 +65,6 @@ export function HandleStep({ handle, onHandle, isClaiming, refusals, onClaim, li
         isRequired
         maxLength={HANDLE_MAX}
         prefix={`${publicBookingHost()}/`}
-        hint={strings.handleHint}
         value={handle}
         onChange={(next) => {
           onHandle(addressAsTyped(next));
