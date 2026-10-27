@@ -33,14 +33,19 @@ export function createApplePass(settings: WalletSettings): ApplePassMaker | unde
     const name = person.name.trim() === '' ? person.handle : person.name;
     // Their card when they have one, else the least a card can be: the name the page shows.
     const card: ProfileContactCard = person.card ?? { fullName: name };
-    // `walletPageUrl` sets the source, medium and campaign; the one tag that says who saved this pass is set here.
-    const page = `${origin}/${encodeURIComponent(person.handle)}${person.shared === true ? '?utm_content=shared' : ''}`;
-    const hue: Hue = person.hue ?? 'blue';
+    // The address as the pass shows it, untagged: the pass writes the tags into the code itself, and a Page field
+    // carrying `?utm_source=…` is what the owner saw on the card (27 October 2026).
+    const page = `${origin}/${encodeURIComponent(person.handle)}`;
+    // The card is the brand's orange whatever colour their page is (the owner, 27 October 2026: keep that orange
+    // gradient as is). The page's hue dresses the page, not the thing people hand to each other.
+    const hue: Hue = 'orange';
     return writePass(
       {
         card,
         handle: person.handle,
-        pageUrl: walletPageUrl(page, 'apple_wallet'),
+        pageUrl: page,
+        // The code carries the tags, so a visit from a saved pass reads apart from one from a shared link.
+        codeUrl: `${walletPageUrl(page, 'apple_wallet')}${person.shared === true ? '&utm_content=shared' : ''}`,
         theme: { hue },
         serialNumber: person.handle,
         identity,

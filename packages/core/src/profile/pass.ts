@@ -75,8 +75,10 @@ function isWhite(text: Channels): boolean {
 export interface PassInput {
   readonly card: ProfileContactCard;
   readonly handle: string;
-  /** The page's own address, which the QR carries and the back links to. */
+  /** The page's own address, as the card shows it and the back links to: no tracking words (27 October 2026). */
   readonly pageUrl: string;
+  /** What the QR carries, when it differs: the same address tagged, so a visit from a pass is tellable. */
+  readonly codeUrl?: string;
   /** The look of their link page, so the pass is the colour their page is. */
   readonly theme: Pick<PageTheme, 'hue'>;
   /** Stable per person: Wallet replaces a pass with the same serial rather than keeping two. */
@@ -182,7 +184,7 @@ export function passJson(input: PassInput): string {
     barcodes: [
       {
         format: 'PKBarcodeFormatQR',
-        message: input.pageUrl,
+        message: input.codeUrl ?? input.pageUrl,
         messageEncoding: 'iso-8859-1',
         altText: shownAddress(input.pageUrl),
       },
