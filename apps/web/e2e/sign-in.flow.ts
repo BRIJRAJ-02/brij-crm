@@ -192,10 +192,13 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page).toHaveURL(/\/verify$/);
   await expect(page.getByText(email)).toBeVisible();
   await expect(page.getByLabel('Code')).toBeFocused();
+  // The column is centred on its own height (the owner, 27 October 2026), so a page a line taller or shorter sits a
+  // pixel or two off; a jump under the pointer would be far more than that.
   const verifyBox = await card.boundingBox();
-  expect(verifyBox && { x: verifyBox.x, y: verifyBox.y, width: verifyBox.width }).toEqual(
-    signInBox && { x: signInBox.x, y: signInBox.y, width: signInBox.width },
+  expect(verifyBox && { x: verifyBox.x, width: verifyBox.width }).toEqual(
+    signInBox && { x: signInBox.x, width: signInBox.width },
   );
+  expect(Math.abs((verifyBox?.y ?? 0) - (signInBox?.y ?? 0))).toBeLessThanOrEqual(4);
   await expect(page).toHaveTitle('Check your email · Timefix');
   await expect(page.getByRole('button', { name: 'Resend code' })).toBeDisabled();
   await expect(page.getByText(/You can resend the code in/)).toBeVisible();
@@ -329,7 +332,7 @@ test('says each refusal on its field and drops it as the field changes, so one p
   await page.getByLabel('Your name').fill('');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByLabel('Your name')).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.getByText('Enter your name, or skip this step.')).toBeVisible();
+  await expect(page.getByText('Enter your name.', { exact: true })).toBeVisible();
   await checkScreen(page, '4c-welcome-name-refused');
   await page.getByLabel('Your name').pressSequentially(`Zoë ${tag}`);
   await expect(page.getByLabel('Your name')).not.toHaveAttribute('aria-invalid');

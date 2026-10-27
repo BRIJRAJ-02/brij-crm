@@ -160,13 +160,16 @@ export function WelcomeScreen({
   const [photo, setPhoto] = useState<string | undefined>(user.image ?? image);
   const [isUploading, setUploading] = useState(false);
   const [photoFailure, setPhotoFailure] = useState<string | undefined>(undefined);
-  // Your link: the suggested handle until it is typed, then whatever was claimed.
-  const [claimedHandle, setClaimedHandle] = useState<string | undefined>(linkPageHandle);
+  // Your link: the handle the workspace made for them until it is typed, then whatever was claimed. Read from the
+  // props each render, never kept from the first: this screen mounts before the workspace (and its link page) exists,
+  // and a bare name taken from back then is often someone else's already.
+  const [claimedHandle, setClaimedHandle] = useState<string | undefined>(undefined);
   const [typedHandle, setTypedHandle] = useState<string | undefined>(undefined);
   // The field is never empty: the handle they hold, else the server's free suggestion, else one made here from
   // their name the same way the server makes it. A blank field would read as a step with nothing in it.
   const madeHandle = useMemo(() => handleBaseFor(shownName, user.email), [shownName, user.email]);
-  const handle = typedHandle ?? claimedHandle ?? suggestedHandle ?? madeHandle;
+  const heldHandle = claimedHandle ?? linkPageHandle;
+  const handle = typedHandle ?? heldHandle ?? suggestedHandle ?? madeHandle;
   const [isClaiming, setClaiming] = useState(false);
   const [handleRefusals, setHandleRefusals] = useState<readonly WelcomeRefusal[]>([]);
   // The optional links that go on the page with the handle (27 October 2026); one empty row to start.
@@ -451,7 +454,7 @@ export function WelcomeScreen({
           ) : PAGE_PREVIEW.includes(step) ? (
             <LinkPagePreview
               name={shownName}
-              id={claimedHandle ?? user.id}
+              id={heldHandle ?? user.id}
               handle={handle}
               {...(photo === undefined ? {} : { image: photo })}
               pages={previewPages}

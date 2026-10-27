@@ -119,8 +119,9 @@ test('a deep link opened while signed out comes back after Google', async ({ pag
   await page.goto('/sign-in');
   await continueWithGoogle(page);
   await expect(page).toHaveURL(/\/welcome$/);
-  // Skip Your name (Google's stands).
-  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  // Your name starts from Google's, and Continue keeps it (first run has no Skip, 27 October 2026).
+  await expect(page.getByLabel('Your name')).toHaveValue(person.name);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await finishFirstRun(page);

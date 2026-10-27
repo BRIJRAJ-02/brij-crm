@@ -147,6 +147,8 @@ async function renderWelcome(
   start = '/welcome',
   calendarSync = true,
   inviteRoles?: WelcomeScreenProps['inviteRoles'],
+  /** The handle the workspace's link page was made with, as the loader reads it once the workspace exists. */
+  heldHandle?: string,
 ): Promise<AnyRouter> {
   const toasts = createToasts();
   const rootRoute = createRootRoute();
@@ -167,6 +169,7 @@ async function renderWelcome(
           workspace={workspace}
           calendarResult={search.calendar}
           inviteRoles={inviteRoles}
+          linkPageHandle={workspace === undefined ? undefined : heldHandle}
         />
       );
     },
@@ -351,6 +354,19 @@ describe('first run’s steps', () => {
     await expect.element(page.getByRole('button', { name: 'Go to dashboard' })).toHaveFocus();
     await page.getByRole('button', { name: 'Go to dashboard' }).click();
     await expect.poll(() => router.state.location.pathname).toBe('/w/ada');
+  });
+
+  it('starts Your link with the handle the workspace made, which arrives after the screen first drew', async () => {
+    // A bare name is often taken already (a second Ada); the page made with the membership holds a free one.
+    const fake = fakeData();
+    await renderWelcome(fake.data, '/welcome?step=workspace', false, undefined, 'ada-lovelace-2');
+    await expect.element(page.getByText('Available', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Create workspace' }).click();
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Your booking page' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect.element(page.getByRole('textbox', { name: 'Your link' })).toHaveValue('ada-lovelace-2');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect.poll(() => fake.handles).toEqual([{ workspace: 'ada', handle: 'ada-lovelace-2' }]);
   });
 
   it('offers the roles the maker may invite as, each row starting as Member, one call per role', async () => {
