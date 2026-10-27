@@ -86,8 +86,8 @@ export const strings = {
   bioText: 'One line under your name on your page.',
   bioNeedsHandle: 'Claim a handle first: the bio shows on its page.',
   yourPage: 'Your page',
-  /** Under Your page while it is private (27 Oct 2026): made with the membership, not yet edited or shared. */
-  yourPagePrivate: 'Private. Only you can see it until you edit your link page or share it.',
+  /** Under Your page (27 Oct 2026): live from the moment the membership exists, and not listed by search engines. */
+  yourPagePrivate: 'Live, and not listed by search engines until you say so in Sharing.',
   copyLink: 'Copy link',
   /** Under their name beside the picture, when the picture is the one their Google account gave. */
   fromGoogle: 'From Google',

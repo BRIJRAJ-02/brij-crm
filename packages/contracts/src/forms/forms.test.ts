@@ -191,9 +191,7 @@ describe('FormDocument and publishProblem (AC-655)', () => {
     const fills = FormDocument.parse({
       ...document,
       questions: document.questions.map((question) =>
-        question.key === 'phone'
-          ? { ...question, filedOn: { objectRole: 'main', attributeId: BUDGET } }
-          : question,
+        question.key === 'phone' ? { ...question, filedOn: { objectRole: 'main', attributeId: BUDGET } } : question,
       ),
     });
     expect(check({ document: fills, attributes: needed })).not.toContain('is required on');

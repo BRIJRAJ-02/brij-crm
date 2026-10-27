@@ -32,7 +32,7 @@ export const joinApproved: Template<JoinApprovedEmail> = (params, context) => {
     preheader:
       params.linkPage === undefined
         ? `Your request to join ${workspace} was approved.`
-        : `Your request to join ${workspace} was approved. Your link page is ready too.`,
+        : `Your request to join ${workspace} was approved. Your link page is live too.`,
     eyebrow: workspace,
     heading: `Welcome to ${workspace}`,
     blocks: [

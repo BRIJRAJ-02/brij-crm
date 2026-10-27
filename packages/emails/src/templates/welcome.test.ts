@@ -5,7 +5,7 @@ import { renderEmail } from '../index.ts';
 const ORIGIN = 'https://app.example.com';
 
 describe('the welcome email', () => {
-  it('says the link page is ready and private, where it will be, and links only to its editor', async () => {
+  it('says the link page is live and unlisted, and links to it and to its editor', async () => {
     const email = await renderEmail(
       'workspace_welcome',
       { openPath: '/w/acme', linkPage: { handle: 'ada-lovelace', editPath: '/w/acme/link-page' } },
@@ -13,12 +13,13 @@ describe('the welcome email', () => {
     );
     expect(email.subject).toBe('Welcome to Acme on Timefix');
     expect(email.text).toContain(
-      'Your link page is ready. Only you can see it until you add something to it or share it.',
+      'Your link page is live. Anyone with its address can open it; search engines aren’t told about it until you say so.',
     );
     expect(email.text).toContain('timefix.com/ada-lovelace');
     expect(email.html).toContain(`href="${ORIGIN}/w/acme"`);
     // Private until they act: a link to it would open nothing, for them or for anyone they forward it to.
-    expect(email.html).not.toContain(`href="${ORIGIN}/ada-lovelace"`);
+    // Its address is linked now that the page answers from the moment it exists (27 October 2026).
+    expect(email.html).toContain(`href="${ORIGIN}/ada-lovelace"`);
     expect(email.html).toContain(`href="${ORIGIN}/w/acme/link-page"`);
     expect(email.html).not.toContain('href="https://timefix.com');
   });

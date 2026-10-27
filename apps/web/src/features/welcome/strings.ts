@@ -25,12 +25,12 @@ export const strings = {
   nameMissing: 'Enter your name, or skip this step.',
 
   /**
-   * The link page made with the workspace (26 Oct 2026), said on Invite your team. Private until its owner edits it
-   * or shares it (27 Oct 2026), so it is ready, not live, and there is no link to copy yet.
+   * The link page made with the workspace (26 Oct 2026), said on Invite your team. Live from the moment it exists
+   * and unlisted until its owner says otherwise (27 Oct 2026).
    */
-  linkPageReady: 'Your link page is ready',
-  linkPageAt: 'It will be at',
-  linkPageNext: 'Only you can see it until you add something to it or share it.',
+  linkPageReady: 'Your link page is live',
+  linkPageAt: 'It is at',
+  linkPageNext: 'Anyone with the address can open it. Search engines aren’t told about it until you say so.',
   linkPageEdit: 'Edit link page',
 
   inviteTitle: 'Invite your team',

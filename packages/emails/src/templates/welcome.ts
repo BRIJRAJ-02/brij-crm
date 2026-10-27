@@ -13,19 +13,23 @@ export function linkPageAddress(handle: string, context: TemplateContext): strin
   return `${context.publicHost ?? new URL(context.link('/')).host}/${handle}`;
 }
 
-/** What a welcome says about the link page: that it is ready and private, where it will be, and where to edit it. */
+/** What a welcome says about the link page: that it is live and unlisted, its address, and where to edit it. */
 export function linkPageBlocks(linkPage: LinkPageEmailPart, context: TemplateContext): readonly EmailBlock[] {
   return [
     {
       type: 'paragraph',
-      text: 'Your link page is ready. Only you can see it until you add something to it or share it.',
+      text: 'Your link page is live. Anyone with its address can open it; search engines aren’t told about it until you say so.',
     },
     {
       type: 'rows',
       layout: 'compact',
       rows: [
-        // Where it will be, with no link: it is private until they act, so it opens nothing yet.
-        { label: 'Your page', value: linkPageAddress(linkPage.handle, context) },
+        // Its address, linked: the page answers from the moment the membership exists (27 October 2026).
+        {
+          label: 'Your page',
+          value: linkPageAddress(linkPage.handle, context),
+          url: context.link(`/${linkPage.handle}`),
+        },
         { label: 'Edit your page', value: 'Add links, booking pages and forms', url: context.link(linkPage.editPath) },
       ],
     },
@@ -33,7 +37,7 @@ export function linkPageBlocks(linkPage: LinkPageEmailPart, context: TemplateCon
   ];
 }
 
-/** A new member is in: the button into the workspace, and their link page, ready and private. */
+/** A new member is in: the button into the workspace, and their link page, live and unlisted. */
 export const workspaceWelcome: Template<WorkspaceWelcomeEmail> = (params, context) => {
   const workspace = workspaceOf(context);
   const page = params.linkPage;
@@ -41,7 +45,7 @@ export const workspaceWelcome: Template<WorkspaceWelcomeEmail> = (params, contex
   const opening = made ? `${workspace} is ready.` : `You’re in ${workspace}.`;
   return {
     subject: `Welcome to ${workspace} on Timefix`,
-    preheader: page === undefined ? opening : `${opening} Your link page is ready too.`,
+    preheader: page === undefined ? opening : `${opening} Your link page is live too.`,
     eyebrow: workspace,
     heading: `Welcome to ${workspace}`,
     blocks: [
