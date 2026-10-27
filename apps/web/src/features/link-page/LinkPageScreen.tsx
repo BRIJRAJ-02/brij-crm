@@ -766,6 +766,7 @@ function Blocks({
           address={publicProfileUrl(handle)}
           isPublic={madePublic || profile.isPublic !== false}
           onPublic={() => setMadePublic(true)}
+          isEmpty={state.status === 'ready' && items.length === 0}
         />
       </PreviewLayout>
     );

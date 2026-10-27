@@ -4,7 +4,7 @@
 // Main task: share the page in a message or across a table; Edit page is the one way into the editor.
 // Leaves out: the blocks, the look and sharing settings, which Edit page opens; and the figures (phase 3).
 import type { DataLayer } from '@crm/data';
-import { Badge, Button, ButtonLink, Card, Field, QrCode } from '@crm/ui';
+import { Badge, Button, ButtonLink, Card, DescriptionList, Field, QrCode } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { homeStrings } from './home-strings.ts';
@@ -25,10 +25,12 @@ export interface LinkPageOverviewProps {
   readonly isPublic: boolean;
   /** The page went public here, so the screen holding this knows without reading the profile again. */
   readonly onPublic: () => void;
+  /** The page holds nothing yet, so it is still worth saying what a link page is for. */
+  readonly isEmpty: boolean;
 }
 
 /** Share online and Share in person, or the private page's one way out of being private. */
-export function LinkPageOverview({ data, slug, handle, address, isPublic, onPublic }: LinkPageOverviewProps) {
+export function LinkPageOverview({ data, slug, handle, address, isPublic, onPublic, isEmpty }: LinkPageOverviewProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const codeRef = useRef<SVGSVGElement>(null);
   const [isSaving, setSaving] = useState(false);
@@ -56,6 +58,11 @@ export function LinkPageOverview({ data, slug, handle, address, isPublic, onPubl
   }
   return (
     <>
+      {isEmpty && (
+        <Card title={strings.whyTitle}>
+          <DescriptionList layout="stacked" items={[...strings.whyPoints]} />
+        </Card>
+      )}
       <Card
         title={strings.shareOnline}
         description={strings.promise}

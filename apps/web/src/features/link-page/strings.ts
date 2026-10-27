@@ -194,6 +194,14 @@ export const strings = {
   editPageAction: 'Edit page',
   doneEditing: 'Done',
   whatVisitorsSee: 'What visitors see',
+  // Shown only while the page holds nothing: it says what the page is for, and goes once they have built one,
+  // rather than asking to be dismissed (27 Oct 2026).
+  whyTitle: 'Why have a link page?',
+  whyPoints: [
+    { term: 'One link, not ten', description: 'Your booking, socials and work in one place, so nobody has to hunt.' },
+    { term: 'Get booked faster', description: 'People can pick a time with you straight from your page.' },
+    { term: 'Always up to date', description: 'Change a link once. Your bio, QR code and badge never go stale.' },
+  ],
   // The rows.
   heading: 'Section',
   bookingPage: 'Booking page',
