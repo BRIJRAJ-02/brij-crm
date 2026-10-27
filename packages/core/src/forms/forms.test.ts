@@ -714,12 +714,14 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     const live = await liveForm(w);
     await submit(live.publicKey, body({ name: 'Ada', email: 'needs@example.com' }));
     const timezone = w.attribute('people.timezone');
-    await editAttribute(w.scope, { attributeId: timezone, isRequired: true });
+    // Required with nothing to fill it, written straight to the row: settings refuses that edit while a form
+    // is live (27 October 2026), and this test is about what the filing does when it meets one already there.
+    await w.query(sql`update attributes set is_required = true where id = ${timezone}::uuid`);
     const [submission] = await submissionIds(w, live.id);
     if (submission === undefined) throw new Error('No submission.');
     await processNow(w, submission.id);
     expect((await getSubmission(w.scope, { submissionId: submission.id })).state).toBe('failed');
-    await editAttribute(w.scope, { attributeId: timezone, isRequired: false });
+    await w.query(sql`update attributes set is_required = false where id = ${timezone}::uuid`);
     expect((await retrySubmission(w.scope, registry, { submissionId: submission.id })).state).toBe('received');
     await processNow(w, submission.id);
     expect((await markSubmissionSpam(w.scope, { submissionId: submission.id })).state).toBe('spam');

@@ -28,6 +28,7 @@ import { ARCHIVED_BY, loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { writeRules } from '../validation/rules.ts';
 import { seedDefaultView } from '../views/seed.ts';
+import { filedBy, liveFormsOn, someNames } from '../forms/dependencies.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
@@ -901,6 +902,8 @@ export async function updateAttribute(
       const firstOption = becomingATrap ? await firstLiveOption(tx, attribute) : undefined;
       if (becomingATrap) checkRequiredHasAFallback(attribute.type, true, false, firstOption === undefined ? 0 : 1);
       const fallback = firstOptionDefault(attribute.type, becomingATrap, false, firstOption);
+      // Still a wall after the fallback (a text field, say): no live form could make a record any more.
+      if (becomingATrap && fallback === undefined) await checkLiveFormsFill(tx, attribute);
       const turningOn = input.isUnique === true && !attribute.isUnique && attribute.archivedAt === null;
       const turningOff = input.isUnique === false && attribute.isUnique;
       if (turningOn) await fillUniqueKeys(tx, attribute, context.scope.access);
@@ -981,6 +984,7 @@ export async function archiveAttribute(
         .where(eq(objects.primaryAttributeId, attribute.id));
       if (primary !== undefined)
         throw refuse('CONFIG_INVALID', "A record's name attribute can't be archived.", attribute.id);
+      await checkNotAMatch(tx, attribute);
       const far = await farEnd(tx, attribute);
       const ends = far === undefined ? [attribute] : [attribute, far];
       const live = ends.filter((end) => end.archivedAt === null);
@@ -1002,6 +1006,48 @@ export async function archiveAttribute(
     hooks,
   );
   return result;
+}
+
+/**
+ * Refuses archiving the attribute a live form matches its submissions on (27
+ * October 2026). The form keeps working to look at: nothing in its document
+ * changes, and every question still files. But the match answer is dropped
+ * with the archived attribute (`plan`), so `matchKey` finds nothing and every
+ * submission takes the create branch — a new record for the same person,
+ * every time, with nobody told. Refused here, naming the forms, since this is
+ * the moment someone can still choose otherwise.
+ */
+async function checkNotAMatch(tx: WorkspaceTx, attribute: AttributeDef): Promise<void> {
+  if (attribute.objectId === null || attribute.archivedAt !== null) return;
+  const live = await liveFormsOn(tx, attribute.objectId);
+  const matching = live.filter((form) => form.document.targets.main?.matchAttributeId === attribute.id);
+  if (matching.length === 0) return;
+  const names = someNames(matching.map((form) => form.name));
+  throw refuse(
+    'CONFIG_INVALID',
+    `${attribute.title} is how ${names} ${matching.length === 1 ? 'finds' : 'find'} the record a submission belongs to. Archiving it would make every submission add a new record instead. Point ${matching.length === 1 ? 'that form' : 'those forms'} at another field first, or pause ${matching.length === 1 ? 'it' : 'them'}.`,
+    attribute.id,
+  );
+}
+
+/**
+ * Refuses turning Required on for an attribute no live form fills (27 October
+ * 2026). The form's own publish check covers this before it goes live; this
+ * is the other direction, where the form was fine and the field changed under
+ * it. Only forms taking submissions right now count, and only when nothing
+ * else fills the field, so the refusal always names a real break.
+ */
+async function checkLiveFormsFill(tx: WorkspaceTx, attribute: AttributeDef): Promise<void> {
+  if (attribute.objectId === null || attribute.archivedAt !== null) return;
+  const live = await liveFormsOn(tx, attribute.objectId);
+  const broken = live.filter((form) => !filedBy(form.document).has(attribute.id));
+  if (broken.length === 0) return;
+  const names = someNames(broken.map((form) => form.name));
+  throw refuseOn(
+    'CONFIG_INVALID',
+    `${names} ${broken.length === 1 ? 'is live and has no question for' : 'are live and have no question for'} ${attribute.title}, so every submission would fail. Add ${broken.length === 1 ? 'a question' : 'questions'} for it, give it a default, or pause ${broken.length === 1 ? 'that form' : 'those forms'} first.`,
+    'isRequired',
+  );
 }
 
 /** The plural name of an object, for "Restore <Plural> first." */

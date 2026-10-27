@@ -15,7 +15,7 @@ import type { FormDocument } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { enterPublicForm } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
-import { createAttribute, editAttribute } from '../attributes/attributes.ts';
+import { archiveAttributes, createAttribute, editAttribute, restoreAttributes } from '../attributes/attributes.ts';
 import { createObject } from '../objects/objects.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -204,6 +204,46 @@ describe('a required field nothing can fill (27 October 2026)', () => {
     expect(refusal?.message).not.toContain('Status');
     expect(refusal?.message).toContain('one field you can’t see');
     expect(refusal?.message).toContain('Ask a workspace admin');
+  });
+
+  it('refuses turning Required on while a live form has no question for the field', async () => {
+    // The other direction from the publish check: the form was fine and the field changed under it.
+    const w = await designers();
+    const form = await applyForm(w);
+    const studio = await createAttribute(w.scope, {
+      objectId: w.object.id,
+      id: newId(),
+      title: 'Studio',
+      type: 'text',
+    });
+    // While the form is only a draft, nothing is posting to it, so the change is let through.
+    const required = await editAttribute(w.scope, { attributeId: studio.id, isRequired: true });
+    expect(required.isRequired).toBe(true);
+    await editAttribute(w.scope, { attributeId: studio.id, isRequired: false });
+
+    await publishForm(w.scope, { formId: form.formId, expectedRevision: form.revision });
+    const [refusal] = await refusalOf(editAttribute(w.scope, { attributeId: studio.id, isRequired: true }));
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID', field: 'isRequired' });
+    expect(refusal?.message).toContain('Apply');
+    expect(refusal?.message).toContain('Studio');
+  });
+
+  it('refuses archiving the field a live form matches its submissions on', async () => {
+    // Nothing in the form changes, so the break only shows as a second record for the same person, every time.
+    const w = await designers();
+    const form = await applyForm(w);
+    // A draft form holds nothing back.
+    const archived = await archiveAttributes(w.scope, { attributeId: w.email.id });
+    expect(archived.length).toBeGreaterThan(0);
+    await editAttribute(w.scope, { attributeId: w.email.id, title: 'Work email' });
+    const restored = await restoreAttributes(w.scope, { attributeId: w.email.id });
+    expect(restored.length).toBeGreaterThan(0);
+
+    await publishForm(w.scope, { formId: form.formId, expectedRevision: form.revision });
+    const [refusal] = await refusalOf(archiveAttributes(w.scope, { attributeId: w.email.id }));
+    expect(refusal?.code).toBe('CONFIG_INVALID');
+    expect(refusal?.message).toContain('Work email is how Apply finds');
+    expect(refusal?.message).toContain('add a new record');
   });
 
   it('refuses archiving the last live option of a required field, which would bring the trap back', async () => {
