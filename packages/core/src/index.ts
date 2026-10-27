@@ -245,6 +245,21 @@ export {
   type RemoveLinksInput,
 } from './records/links.ts';
 export {
+  CELL_NOT_WRITABLE,
+  copyFiledFile,
+  prepareRecordFile,
+  readRecordFile,
+  RECORD_FILES_PER_RECORD,
+  recordFilePath,
+  registerRecordFile,
+  TOO_MANY_RECORD_FILES,
+  UNKNOWN_RECORD_FILE,
+  type CopyFiledFile,
+  type ReadableRecordFile,
+  type RecordFileStore,
+  type RegisterRecordFile,
+} from './records/files.ts';
+export {
   getView,
   listViews,
   saveViewQuery,

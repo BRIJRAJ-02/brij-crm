@@ -496,3 +496,41 @@ export const sortKeys = pgTable(
       .where(sql`${t.entryId} is not null`),
   ],
 );
+
+/**
+ * A file a record's `file` cell holds (27 Oct 2026). The bytes live in the
+ * blob store under `pathname`, owned by the record: a form upload filed onto
+ * a cell is copied here, so the form's own copy keeps its own lifecycle and
+ * the daily cleanup never takes a record's bytes away with it.
+ *
+ * `record_id` and `attribute_id` carry no foreign key on purpose, for the
+ * same reason `form_uploads` carries none: a record erased or an attribute
+ * deleted must leave the row behind so the cleanup (`record_files` phase) can
+ * remove the stored file too, which a cascade would hide. The row goes
+ * lazily, once no live value and no history row on that cell names its id.
+ */
+export const recordFiles = pgTable(
+  'record_files',
+  {
+    workspaceId: workspaceId(),
+    id: uuid('id')
+      .notNull()
+      .default(sql`gen_random_uuid()`),
+    recordId: uuid('record_id').notNull(),
+    attributeId: uuid('attribute_id').notNull(),
+    /** Where the file lives in the store: `records/<workspace>/<record>/<id>.<ext>`. */
+    pathname: text('pathname').notNull(),
+    /** The file's name, made safe (`sanitiseFileName`). */
+    name: text('name').notNull(),
+    size: integer('size').notNull(),
+    contentType: text('content_type').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'record_files_pkey', columns: [t.workspaceId, t.id] }),
+    // The cleanup's sweep, oldest first, and a record's own files.
+    index('record_files_by_age').on(t.workspaceId, t.createdAt),
+    index('record_files_by_record').on(t.workspaceId, t.recordId, t.attributeId),
+    check('record_files_size', sql`${t.size} >= 0 and ${t.size} <= 10485760`),
+  ],
+);

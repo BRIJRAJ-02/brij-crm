@@ -179,6 +179,12 @@ export const ACCESS_TABLE = {
   // 13 Oct reference batch 4: a record's stage age, read as its timeline is.
   getStageSince: { data: 'read' },
   readTrashedRecord: { data: 'read' },
+  // A record's own files (27 Oct 2026): keyed on the record, never on the submission a file came from, so a filed
+  // file outlives its submission. The read refuses a record the member can't see and a field hidden from them; the
+  // two writes are the member's upload onto a cell they may write.
+  readRecordFile: { data: 'read' },
+  prepareRecordFile: { data: 'write' },
+  registerRecordFile: { data: 'write' },
   // The record picker's search (spec 0014): only records the reader may see.
   searchRecords: { data: 'read' },
   // A record page's related sections (spec 0014, milestone 3): only linked records the reader may see, on a side they may see.

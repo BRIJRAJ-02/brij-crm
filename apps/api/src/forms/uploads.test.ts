@@ -32,6 +32,12 @@ const store: FileStore = {
       contentType: found.contentType,
     });
   },
+  copy: (from, to) => {
+    const found = kept.get(from);
+    if (found === undefined) return Promise.reject(new Error('The file to copy is no longer stored.'));
+    kept.set(to, found);
+    return Promise.resolve();
+  },
   remove: (pathnames) => {
     for (const pathname of pathnames) kept.delete(pathname);
     return Promise.resolve();

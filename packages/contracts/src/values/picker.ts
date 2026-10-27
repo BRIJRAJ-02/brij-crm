@@ -24,7 +24,8 @@ export interface PickerType {
     | 'phone'
     | 'url'
     | 'location'
-    | 'actor_reference';
+    | 'actor_reference'
+    | 'file';
   /** Multi select: a select that holds several. */
   readonly isMulti: boolean;
   /** Shows "Allow multiple" (Member, Email, Phone). */
@@ -34,10 +35,11 @@ export interface PickerType {
 }
 
 /**
- * The fifteen types the picker offers, in this order (AC-228). Multi select is
- * a select with `isMulti`; Member is `actor_reference`; Link is `url`. Domain,
- * personal name, timestamp, interaction, file and record reference are not
- * offered (#15 adds Relationship through its own entry).
+ * The sixteen types the picker offers, in this order (AC-228, widened from
+ * fifteen when record files arrived, 27 Oct 2026). Multi select is a select
+ * with `isMulti`; Member is `actor_reference`; Link is `url`. Domain,
+ * personal name, timestamp, interaction and record reference are not offered
+ * (#15 adds Relationship through its own entry).
  */
 export const PICKER_TYPES: readonly PickerType[] = [
   { key: 'text', type: 'text', isMulti: false, allowsMultiple: false, allowsUnique: true },
@@ -55,6 +57,7 @@ export const PICKER_TYPES: readonly PickerType[] = [
   { key: 'link', type: 'url', isMulti: false, allowsMultiple: false, allowsUnique: true },
   { key: 'location', type: 'location', isMulti: false, allowsMultiple: false, allowsUnique: false },
   { key: 'member', type: 'actor_reference', isMulti: false, allowsMultiple: true, allowsUnique: false },
+  { key: 'file', type: 'file', isMulti: false, allowsMultiple: false, allowsUnique: false },
 ];
 
 /** What a status stage means: still open, won or lost. */

@@ -96,7 +96,8 @@ export type ListAttributesInput = z.infer<typeof ListAttributesInput>;
  * The attribute types the type picker makes (spec 0012, AC-228): the types
  * behind `PICKER_TYPES`, Multi select being a `select` with `isMulti`, Link a
  * `url` and Member an `actor_reference`. Record references are made only
- * through a relationship (#15).
+ * through a relationship (#15). File arrived with record files (27 Oct
+ * 2026), so a form's file question has an attribute to file onto.
  */
 export const PickerAttributeType = z.enum([
   'text',
@@ -113,6 +114,7 @@ export const PickerAttributeType = z.enum([
   'url',
   'location',
   'actor_reference',
+  'file',
 ]);
 /** An attribute type the picker makes. */
 export type PickerAttributeType = z.infer<typeof PickerAttributeType>;

@@ -164,6 +164,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // `submitForm` already opened under its public form scope, so they take a tx and never a scope of their own.
   'claimUploads',
   'attachUploads',
+  // A record's own files (27 Oct 2026): the copy runs inside the write's own transaction, under the scope that
+  // write already opened, and the path builder is pure.
+  'copyFiledFile',
+  'recordFilePath',
   // The visitor a form hands to a booking page, read from its answers: a pure helper, no scope.
   'visitorOf',
   // A workspace's public key for a snippet's tagging: a one way digest of its id, no scope.
@@ -734,6 +738,19 @@ async function dataWorld() {
         tx.execute<{ id: string }>(sql`select id::text from form_submissions where form_id = ${form.id}`),
       )
     ).rows[0]?.id ?? '';
+  // A Resume field on People, with a file already attached to the pilot's cell (27 Oct 2026), so the record file
+  // services have something real to be refused.
+  const resume = (
+    await core.defineAttribute(owner, { objectId: people, apiSlug: 'resume', title: 'Resume', type: 'file' })
+  ).attributeId;
+  const recordFileId = core.newId();
+  await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute(
+      sql`insert into record_files (workspace_id, id, record_id, attribute_id, pathname, name, size, content_type)
+          values (${workspaceId}::uuid, ${recordFileId}::uuid, ${recordId}::uuid, ${resume}::uuid,
+            ${core.recordFilePath(workspaceId, recordId, recordFileId, '.pdf')}, 'cv.pdf', 1024, 'application/pdf')`,
+    ),
+  );
   return {
     owner,
     hidden,
@@ -742,6 +759,8 @@ async function dataWorld() {
     formId: form.id,
     submissionId,
     fileId,
+    resume,
+    recordFileId,
     name: attribute('name'),
     jobTitle: attribute('job_title'),
     company: attribute('company'),
@@ -915,6 +934,23 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
     core.getStageSince(scope, { recordId: world.recordId, attributeId: world.stage }),
   ),
   readTrashedRecord: refused('NOT_FOUND', (scope, world) => core.readTrashedRecord(scope, world.trashedId)),
+  // A record's own file (27 Oct 2026): keyed on the record, so a record the reader can't see hides its files too,
+  // and attaching one needs write on the object and the field.
+  readRecordFile: refused('NOT_FOUND', (scope, world) => core.readRecordFile(scope, { fileId: world.recordFileId })),
+  prepareRecordFile: refused('FORBIDDEN', (scope, world) =>
+    core.prepareRecordFile(scope, { recordId: world.recordId, attributeId: world.resume }),
+  ),
+  registerRecordFile: refused('FORBIDDEN', (scope, world) =>
+    core.registerRecordFile(scope, {
+      recordId: world.recordId,
+      attributeId: world.resume,
+      fileId: core.newId(),
+      pathname: 'records/x/y/z.pdf',
+      name: 'cv.pdf',
+      size: 1,
+      contentType: 'application/pdf',
+    }),
+  ),
   // The record picker's search (spec 0014): an object the reader can't see is absent.
   searchRecords: refused('NOT_FOUND', (scope, world) =>
     core.searchRecords(scope, { objectId: world.people, query: '' }),

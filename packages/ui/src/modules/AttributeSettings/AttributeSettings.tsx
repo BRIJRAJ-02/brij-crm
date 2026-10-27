@@ -119,7 +119,7 @@ export interface AttributeSettingsProps {
   readonly onOpenChange: (isOpen: boolean) => void;
   /** The attribute to edit; a new one is made when absent. */
   readonly attribute?: AttributeSettingsAttribute;
-  /** The picker's entries offered on create, by key (`PICKER_TYPES`), in the picker's order; all fifteen when absent. */
+  /** The picker's entries offered on create, by key (`PICKER_TYPES`), in the picker's order; all sixteen when absent. */
   readonly typeKeys?: readonly string[];
   /** On create, the picker's entry chosen at the start (`select` where a board needs one); the first offered when absent. */
   readonly initialTypeKey?: string;

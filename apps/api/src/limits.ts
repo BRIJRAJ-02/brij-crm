@@ -83,6 +83,17 @@ export const UPLOAD_LIMITS = {
 } as const satisfies Record<string, LimitRule>;
 
 /**
+ * A member attaching a file to a record's cell (27 Oct 2026): 30 a minute for
+ * one signed in person (a record page attaches one file at a time), and 20 a
+ * second across the instance, well under the public form's own ceiling, since
+ * these come from people we already know.
+ */
+export const RECORD_FILE_LIMITS = {
+  perMember: { max: 30, windowMs: 60_000 },
+  perInstance: { max: 20, windowMs: 1_000 },
+} as const satisfies Record<string, LimitRule>;
+
+/**
  * Fill tickets (spec 0023 spam follow-up): 30 a minute per address (a page
  * asks once per load and once per "Send another"), 200 a second across the
  * instance, and 5 submits per ticket

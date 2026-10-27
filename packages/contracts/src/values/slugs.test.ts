@@ -33,7 +33,7 @@ describe('toApiSlug (spec 0012, AC-245)', () => {
 });
 
 describe('the type picker and new options (AC-228, AC-230, AC-236)', () => {
-  it('offers exactly fifteen entries in the spec order', () => {
+  it('offers exactly sixteen entries in the spec order (File joined them on 27 Oct 2026)', () => {
     expect(PICKER_TYPES.map((entry) => entry.key)).toEqual([
       'text',
       'long_text',
@@ -50,6 +50,7 @@ describe('the type picker and new options (AC-228, AC-230, AC-236)', () => {
       'link',
       'location',
       'member',
+      'file',
     ]);
     expect(PICKER_TYPES.filter((entry) => entry.allowsMultiple).map((entry) => entry.key)).toEqual([
       'email',

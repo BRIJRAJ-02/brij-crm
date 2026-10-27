@@ -7,7 +7,7 @@ export { memberOnboarding, memberRole, memberStatus, members, workspaceCounters,
 export { attributes, lists, objects, relationshipCardinality, relationships } from './definitions.ts';
 export { attributeOptions, optionOutcome } from './options.ts';
 export { outbox, outboxKind } from './outbox.ts';
-export { listEntries, recordLinks, records, sortKeys, values } from './records.ts';
+export { listEntries, recordFiles, recordLinks, records, sortKeys, values } from './records.ts';
 export { jobItems, jobItemState, jobLane, jobs, jobStatus } from './jobs.ts';
 export { workspaceMilestones } from './milestones.ts';
 export { validationRuleKind, validationRules } from './validation.ts';

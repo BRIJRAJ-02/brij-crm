@@ -79,8 +79,15 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
   const registry = jobKinds({
     environment: env.APP_ENV,
     ...(options.queue === undefined ? {} : { queue: options.queue }),
-    // The daily cleanup removes form uploads nobody submitted (#32); without the store token that phase waits.
-    ...(env.BLOB_READ_WRITE_TOKEN === undefined ? {} : { uploads: createFileStore(env.BLOB_READ_WRITE_TOKEN) }),
+    // The daily cleanup removes form uploads nobody submitted (#32) and record files no cell names any more
+    // (27 Oct 2026), and filing copies a file answer's bytes into the record's own home with the same store;
+    // without the store token those phases wait and a file answer isn't filed.
+    ...(env.BLOB_READ_WRITE_TOKEN === undefined
+      ? {}
+      : (() => {
+          const store = createFileStore(env.BLOB_READ_WRITE_TOKEN);
+          return { uploads: store, files: store };
+        })()),
   });
   const runner = createJobRunner({
     db,

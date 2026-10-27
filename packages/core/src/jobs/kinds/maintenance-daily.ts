@@ -33,6 +33,10 @@
 // 8. `uploads` (#32): files visitors uploaded to forms that no submission took within a day, or whose
 //    submission is gone, removed from the blob store and then their rows, 100 a batch. Skipped where the host
 //    has no store to remove from (the rows then wait).
+// 9. `record_files` (27 Oct 2026): a record's own copy of a file, removed once no live value and no history row on
+//    its cell names its id, and the row is at least a day old (so a file just uploaded onto a cell, or just
+//    copied by filing, is never swept before its value lands). Lazy, exactly as `uploads` is: clearing a cell,
+//    overwriting it, trashing or restoring a record and value history never delete bytes themselves.
 // The outbox is no phase: the fan out prunes it once for every workspace.
 // Its result holds the totals per phase; `done` counts every row it removed.
 import { sql } from 'drizzle-orm';
@@ -45,6 +49,7 @@ import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../registry.ts';
 import type { UploadStore } from '../../forms/uploads.ts';
+import { findOrphanRecordFiles } from '../../records/files.ts';
 import { ENDINGS } from '../runner.ts';
 import { FINISHED_KEPT, tryEnqueue } from '../service.ts';
 
@@ -78,6 +83,7 @@ const PHASES = [
   'exports',
   'imports',
   'uploads',
+  'record_files',
 ] as const;
 
 /** How long a booking page's view counts are kept (spec 0047, AC-1628): a year, by day. */
@@ -131,6 +137,8 @@ const Totals = z.object({
   imports: Count.default(0),
   /** Form upload files removed from the store (#32); 0 in an older checkpoint. */
   uploads: Count.default(0),
+  /** Record files removed from the store (27 Oct 2026); 0 in an older checkpoint. */
+  recordFiles: Count.default(0),
 });
 type Totals = z.infer<typeof Totals>;
 
@@ -155,6 +163,7 @@ const NO_TOTALS: Totals = {
   exports: 0,
   imports: 0,
   uploads: 0,
+  recordFiles: 0,
 };
 
 /**
@@ -217,6 +226,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   exports: totals.exports + (more.exports ?? 0),
   imports: totals.imports + (more.imports ?? 0),
   uploads: totals.uploads + (more.uploads ?? 0),
+  recordFiles: totals.recordFiles + (more.recordFiles ?? 0),
 });
 
 /** Phase 1: one purge batch; the phase ends with the first batch that comes back short. */
@@ -668,6 +678,39 @@ async function orphanUploads(
 }
 
 /**
+ * Phase 9 (27 Oct 2026): a record's own copy of a file whose cell no longer names it, live or in history. Nothing
+ * deletes these bytes eagerly: a cleared or overwritten cell, a trashed record and a restore all leave the history
+ * row that names the id, and the file goes only once that row has gone too (an erase, a purge, or history past
+ * retention). The day's grace keeps a file just uploaded onto a cell, whose value is still being written, safe.
+ * The files go from the store first, then the rows, in one transaction, as `orphanUploads` does. Without a store
+ * the phase does nothing and the rows wait.
+ */
+async function orphanRecordFiles(
+  context: WriteContext,
+  at: Checkpoint,
+  store: UploadStore | undefined,
+): Promise<StepOutcome> {
+  const { tx, scope } = context;
+  if (store === undefined) return outcome(nextPhase(at, at.totals), at, at.totals, 0);
+  const orphans = await findOrphanRecordFiles(tx, {
+    workspaceId: scope.workspaceId,
+    limit: UPLOADS_BATCH,
+    graceHours: UPLOAD_KEPT_HOURS,
+  });
+  if (orphans.length > 0) {
+    await store.remove(orphans.map((row) => row.pathname));
+    const ids = JSON.stringify(orphans.map((row) => row.id));
+    await tx.execute(sql`
+      delete from record_files
+      where workspace_id = ${scope.workspaceId} and id in (select jsonb_array_elements_text(${ids}::jsonb)::uuid)
+    `);
+  }
+  const removed = orphans.length;
+  const totals = plus(at.totals, { recordFiles: removed });
+  return outcome(removed === UPLOADS_BATCH ? { ...at, totals } : nextPhase(at, totals), at, totals, removed);
+}
+
+/**
  * The daily cleanup's kind. `queue` is the worker's (which jobs have a
  * queue row); the api registers the kind without one, to show and refuse to
  * cancel its jobs, and never runs a step.
@@ -716,6 +759,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return oldImports(context, at, limit);
         case 'uploads':
           return orphanUploads(context, at, uploads);
+        case 'record_files':
+          return orphanRecordFiles(context, at, uploads);
       }
     },
   });

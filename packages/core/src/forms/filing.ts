@@ -53,6 +53,7 @@ import {
 } from './process.ts';
 import { canSeeForm, loadForm, loadVersions, type FormRow } from './shared.ts';
 import { lockRotation } from '../rotation/ledger.ts';
+import type { RecordFileStore } from '../records/files.ts';
 
 /** The Add to CRM job's name. */
 export const FORMS_FILE = 'forms.file';
@@ -190,6 +191,8 @@ async function fileBatch(
     readonly scope: SyncScope;
     readonly items: readonly { readonly position: number; readonly itemId: string }[];
     readonly checkpoint: unknown;
+    /** The blob store a file answer's bytes are copied into, so the record owns them (27 Oct 2026). */
+    readonly files?: RecordFileStore;
   },
 ): Promise<StepOutcome> {
   const { tx } = context;
@@ -258,6 +261,7 @@ async function fileBatch(
       ...withPrevious(assignmentOf(row.assignment)),
       // The member writes, through their own access: the mapping's answers only, into records they can see.
       writer: () => context,
+      ...(input.files === undefined ? {} : { files: input.files }),
       canUse: async (recordId) => (await seenBy(tx, context.scope, mapping.objectId, [recordId])).has(recordId),
     });
     if (filed.kind === 'failed') {
@@ -282,7 +286,7 @@ export const FormsFileParams = z.strictObject({ formId: z.uuid() });
 export type FormsFileParams = z.infer<typeof FormsFileParams>;
 
 /** `forms.file`: the member's, heavy lane, cancellable, 20 submissions a batch. */
-export function formsFile(): KindDefinition<FormsFileParams> {
+export function formsFile(files?: RecordFileStore): KindDefinition<FormsFileParams> {
   return defineKind<FormsFileParams>({
     kind: FORMS_FILE,
     lane: 'heavy',
@@ -299,6 +303,7 @@ export function formsFile(): KindDefinition<FormsFileParams> {
         scope: 'unfiled',
         items: items ?? [],
         checkpoint: job.checkpoint,
+        ...(files === undefined ? {} : { files }),
       }),
   });
 }
@@ -497,7 +502,7 @@ export type FormsSyncParams = z.infer<typeof FormsSyncParams>;
  * batch. Its snapshot walks the form's submissions in scope received up to
  * its start, by id; each batch files them as `forms.file` does.
  */
-export function formsSync(): KindDefinition<FormsSyncParams> {
+export function formsSync(files?: RecordFileStore): KindDefinition<FormsSyncParams> {
   return defineKind<FormsSyncParams>({
     kind: FORMS_SYNC,
     lane: 'heavy',
@@ -525,6 +530,7 @@ export function formsSync(): KindDefinition<FormsSyncParams> {
         scope: job.params.scope,
         items: items ?? [],
         checkpoint: job.checkpoint,
+        ...(files === undefined ? {} : { files }),
       }),
   });
 }

@@ -34,6 +34,8 @@ import { liveOptions, loadForm, loadVersions, type FormRow } from './shared.ts';
 import { parseAttributeInput } from '../engine/parse-value.ts';
 import { lockRotation } from '../rotation/ledger.ts';
 import { pickLeadOwner, recordLeadOwner, type LeadOwner } from '../rotation/owner.ts';
+import { copyFiledFile, type RecordFileStore } from '../records/files.ts';
+import { newId } from '../engine/ids.ts';
 
 const { formSubmissionRecords, formSubmissions, members } = schema;
 
@@ -212,6 +214,101 @@ export function plan(
     planned.push({ attribute, questionId: question.id, value: parsed.value, always: question.update === 'always' });
   }
   return { planned, refused };
+}
+
+/** What a file answer says when the blob store isn't configured, so its bytes can't be given a record's home. */
+export const NO_FILE_STORE = 'Files can’t be filed onto a record right now, so this answer stayed on the submission.';
+
+/** What a file answer says when the file it names is no longer in the store. */
+export const FILE_GONE = 'That file is no longer available, so it stayed on the submission.';
+
+/** One file answer's record-owned copy: planned before the write, made once the record's id is known. */
+interface FileToCopy {
+  readonly attributeId: string;
+  readonly fileId: string;
+  readonly from: string;
+  readonly name: string;
+  readonly size: number;
+  readonly contentType: string;
+}
+
+/** The `fileId` a file answer's value names, when it names one. */
+function fileIdOf(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const fileId = (value as { readonly fileId?: unknown }).fileId;
+  return typeof fileId === 'string' ? fileId : undefined;
+}
+
+/**
+ * Gives every planned file answer a new identity the record will own (the
+ * file's lifecycle belongs to the record from here, not to the submission).
+ * The bytes aren't copied yet: the record's id isn't known until it is
+ * written, so `copyFiledFile` runs after the write, in the same transaction.
+ * A file answer with no store, or whose upload row is gone, is dropped and
+ * said on its question, and the rest of the submission still lands (AC-565).
+ */
+async function rehomeFiles(
+  tx: WorkspaceTx,
+  planned: readonly Planned[],
+  store: RecordFileStore | undefined,
+): Promise<{
+  readonly planned: readonly Planned[];
+  readonly copies: readonly FileToCopy[];
+  readonly refused: readonly { questionId: string; message: string }[];
+}> {
+  const files = planned.filter((each) => each.attribute.type === 'file');
+  if (files.length === 0) return { planned, copies: [], refused: [] };
+  const refused: { questionId: string; message: string }[] = [];
+  const copies: FileToCopy[] = [];
+  const kept: Planned[] = [];
+  const wanted = files.flatMap((each) => {
+    const fileId = fileIdOf(each.value);
+    return fileId === undefined ? [] : [fileId];
+  });
+  const sources =
+    store === undefined || wanted.length === 0
+      ? new Map<string, { pathname: string; name: string; size: number; contentType: string }>()
+      : new Map(
+          (
+            await tx.execute<{ id: string; pathname: string; name: string; size: number; content_type: string }>(
+              sql`select id::text, pathname, name, size, content_type from form_uploads
+                  where id in (select jsonb_array_elements_text(${JSON.stringify(wanted)}::jsonb)::uuid)`,
+            )
+          ).rows.map((row) => [
+            row.id,
+            { pathname: row.pathname, name: row.name, size: row.size, contentType: row.content_type },
+          ]),
+        );
+  for (const each of planned) {
+    if (each.attribute.type !== 'file') {
+      kept.push(each);
+      continue;
+    }
+    if (store === undefined) {
+      refused.push({ questionId: each.questionId, message: NO_FILE_STORE });
+      continue;
+    }
+    const fileId = fileIdOf(each.value);
+    const source = fileId === undefined ? undefined : sources.get(fileId);
+    if (source === undefined) {
+      refused.push({ questionId: each.questionId, message: FILE_GONE });
+      continue;
+    }
+    const mine = newId();
+    copies.push({
+      attributeId: each.attribute.id,
+      fileId: mine,
+      from: source.pathname,
+      name: source.name,
+      size: source.size,
+      contentType: source.contentType,
+    });
+    kept.push({
+      ...each,
+      value: { fileId: mine, name: source.name, size: source.size, contentType: source.contentType },
+    });
+  }
+  return { planned: kept, copies, refused };
 }
 
 /** The normalised key the main record is matched on, from its planned answer (AC-557). */
@@ -406,6 +503,12 @@ export interface FileInput {
   readonly previous?: Assignment;
   /** The clock a rotation's pick reads (its window, caps and days off). */
   readonly now?: Date;
+  /**
+   * The blob store a file answer's bytes are copied into, so the record owns
+   * them (27 Oct 2026). Without it a file answer isn't filed and says so: it
+   * would otherwise name a stored file the form's own cleanup may remove.
+   */
+  readonly files?: RecordFileStore;
 }
 
 /** What filing into a record the member can't open says, without saying whose it is. */
@@ -421,7 +524,12 @@ export const HIDDEN_TARGET =
 export async function fileAnswers(context: WriteContext, input: FileInput): Promise<Filed> {
   const { tx } = context;
   const { form, document, attributes, objectId } = input;
-  const { planned, refused } = plan(document, attributes, input.options, input.answers);
+  const first = plan(document, attributes, input.options, input.answers);
+  // A file answer takes a new identity the record will own before anything is written; its bytes are copied once
+  // the record's id is known, below, in this same transaction.
+  const rehomed = await rehomeFiles(tx, first.planned, input.files);
+  const planned = rehomed.planned;
+  const refused = [...first.refused, ...rehomed.refused];
   const owner = ownerAttribute(attributes);
   // A rotation's lock comes before any match key's (bookings take it first too), held to commit. A batch takes it
   // before its first submission's row (`fileBatch`), so this is the same lock taken again there.
@@ -461,8 +569,11 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   let action: 'created' | 'updated' | 'matched';
   let skipped: readonly EngineRefusal[] = [];
   let gaveOwner: boolean;
+  /** The attributes the write was asked for: a file's bytes are copied only for one the record really took. */
+  let requested: ReadonlySet<string>;
   if (matchedId === undefined) {
     const values = new Map<string, unknown>(planned.map((each) => [each.attribute.id, each.value]));
+    requested = new Set(values.keys());
     if (owner !== undefined && ownerValue !== undefined) {
       values.set(owner.id, owner.isMulti ? [ownerValue] : ownerValue);
     }
@@ -479,6 +590,7 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   } else {
     recordId = matchedId;
     const values = await changesFor(tx, recordId, planned, owner, ownerValue);
+    requested = new Set(values.changes.keys());
     gaveOwner = values.gaveOwner;
     if (values.changes.size === 0) {
       action = 'matched';
@@ -495,6 +607,19 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
       skipped = written.skipped;
       gaveOwner = gaveOwner && ownerTaken(skipped);
       action = Object.values(written.value).some((result) => result.versionId !== undefined) ? 'updated' : 'matched';
+    }
+  }
+
+  // The record's own copy of every file answer it took: the bytes, then the row, both inside this transaction, so
+  // a store that fails rolls the whole filing back and the job retries (as the cleanup's own removal does).
+  const store = input.files;
+  if (store !== undefined && rehomed.copies.length > 0) {
+    const refusedIds = new Set(
+      skipped.flatMap((refusal) => (refusal.attributeId === undefined ? [] : [refusal.attributeId])),
+    );
+    for (const copy of rehomed.copies) {
+      if (!requested.has(copy.attributeId) || refusedIds.has(copy.attributeId)) continue;
+      await copyFiledFile(tx, store, { ...copy, workspaceId: context.scope.workspaceId, recordId });
     }
   }
 
@@ -687,6 +812,7 @@ export async function processSubmission(
   context: WriteContext,
   submissionId: string,
   now: Date = new Date(),
+  files?: RecordFileStore,
 ): Promise<void> {
   const { tx } = context;
   const found = await tx.execute<SubmissionRow>(sql`
@@ -717,6 +843,7 @@ export async function processSubmission(
     options: await optionsFor(tx, document, attributes),
     ...withPrevious(assignmentOf(submission.assignment)),
     now,
+    ...(files === undefined ? {} : { files }),
     // The form acts with exactly its mapping: the answered attributes and, when it gives one, the owner.
     writer: (writable) =>
       actingAs(
@@ -788,7 +915,7 @@ export async function settle(
  * cancelled, 5 tries with the lane's backoff, then the submission ends
  * `failed` with a reason a member can act on (AC-566).
  */
-export function formsProcess(): KindDefinition<FormsProcessParams> {
+export function formsProcess(files?: RecordFileStore): KindDefinition<FormsProcessParams> {
   return defineKind<FormsProcessParams>({
     kind: FORMS_PROCESS,
     lane: 'light',
@@ -800,7 +927,7 @@ export function formsProcess(): KindDefinition<FormsProcessParams> {
     batchSize: 1,
     sample: { submissionId: '0199f0a0-0000-7000-8000-000000000001' },
     async step(context, { job }) {
-      await processSubmission(context, job.params.submissionId);
+      await processSubmission(context, job.params.submissionId, new Date(), files);
       return { finished: true };
     },
     async onFailed(context, job) {
