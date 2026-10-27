@@ -16,7 +16,7 @@ import {
   readProfileCounts,
   readProfileItems,
   saveProfileItem,
-  servedPicture,
+  personPicture,
   updateMyMemberProfile,
   type ProfileExtras,
 } from '@crm/core';
@@ -31,7 +31,7 @@ import { sourceOf } from '../../source.ts';
  */
 async function extrasOf(context: RequestContext & SessionContext): Promise<ProfileExtras> {
   const { user } = context;
-  const picture = servedPicture(user.id, user.image);
+  const picture = personPicture(user.id, user.image);
   const google = context.auth.providers.google
     ? (await context.googleLinked(user.id))
       ? 'linked'

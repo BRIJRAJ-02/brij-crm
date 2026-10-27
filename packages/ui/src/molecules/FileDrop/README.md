@@ -16,6 +16,8 @@ New. Imports (#30) and file attributes (#32) take files the same way, and say up
 - A file of the wrong type or over the size is refused with a sentence on what to do; `onFiles` only gets files that pass.
 - `allowsMultiple` takes several at once; otherwise the first.
 
+- `variant="button"` (27 October 2026) is the browse button alone, `label` its words, with `isPending` while what was picked is on its way: for a picker beside the thing it changes, first run's avatar, where a drop area would draw the picture a second time. Same type and size checks, same refusal line under it. Why a variant, not a new component: it is FileDrop's own FileTrigger and checks with the drop area taken away; a second file picker would have checked files a second way.
+
 ## States
 
 - Its hint reads "Drag a file here, or browse" when it takes one file and "Drag files here, or browse" with `allowsMultiple` (QA, 22 October 2026).

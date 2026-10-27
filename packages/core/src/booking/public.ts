@@ -56,7 +56,7 @@ import type {
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry, HandleOwner, LinkPageRow, OwnedFormEntry, OwnedPageEntry } from '../access/door.ts';
 import { pagePath } from './handles.ts';
-import { servedPicture, type AccountPicture, type AccountPictureReader } from './picture.ts';
+import { personPicture, type AccountPictureReader, type PersonPicture } from './picture.ts';
 import { faviconSources, faviconVersion } from './favicon.ts';
 import { isPictureHidden } from './picture-choice.ts';
 import { publicSocialsOf } from './socials.ts';
@@ -264,7 +264,7 @@ export async function getPublicBookingPage(
     return { facts, pictureUser: pictures === undefined ? undefined : await shownPictureOwner(tx, page) };
   });
   if (pictures === undefined || pictureUser === undefined) return facts;
-  const picture = servedPicture(pictureUser, await pictures.pictureOf(pictureUser));
+  const picture = personPicture(pictureUser, await pictures.pictureOf(pictureUser));
   return picture === undefined ? facts : { ...facts, hostImage: bookingPicturePath(facts.publicKey, picture.version) };
 }
 
@@ -293,25 +293,25 @@ async function shownPictureOwner(tx: WorkspaceTx, page: PageRecord): Promise<str
 }
 
 /**
- * A personal page's host picture to serve (23 Oct 2026): the owner's account picture, when it is one of Google's
- * (`servedPicture`) and they show it, else undefined; a team page has none (AC-754). The same door and liveness as
+ * A personal page's host picture to serve (23 Oct 2026): the owner's picture, their upload or Google's
+ * (`personPicture`), when they show it, else undefined; a team page has none (AC-754). The same door and liveness as
  * the page's facts, so a picture shows only where the page does.
  */
 export async function readPagePicture(
   entry: BookingEntry,
   pictures: PublicPictureDeps,
-): Promise<AccountPicture | undefined> {
+): Promise<PersonPicture | undefined> {
   checkEntry(entry);
   const owner = await inWorkspace(entry.scope, async (tx) => shownPictureOwner(tx, await livePage(tx, entry)));
-  return owner === undefined ? undefined : servedPicture(owner, await pictures.pictureOf(owner));
+  return owner === undefined ? undefined : personPicture(owner, await pictures.pictureOf(owner));
 }
 
 /**
- * A handle's profile picture to serve: their account's, when one of Google's (`servedPicture`), else undefined.
+ * A handle's profile picture to serve: their upload or Google's (`personPicture`), else undefined.
  * `crm_handle_owner` answers no picture for a person who keeps it off their public pages (owner ask A124).
  */
-export function readProfilePicture(owner: HandleOwner): AccountPicture | undefined {
-  return servedPicture(owner.userId, owner.image);
+export function readProfilePicture(owner: HandleOwner): PersonPicture | undefined {
+  return personPicture(owner.userId, owner.image);
 }
 
 /**
@@ -322,7 +322,7 @@ export function readProfilePicture(owner: HandleOwner): AccountPicture | undefin
 export function readContactCard(found: { readonly owner: HandleOwner; readonly data: unknown }): {
   readonly card: ProfileContactCard;
   readonly handle: string;
-  readonly picture?: AccountPicture;
+  readonly picture?: PersonPicture;
 } {
   const data = typeof found.data === 'object' && found.data !== null ? found.data : {};
   const parsed = ProfileContactBlock.safeParse({ ...data, kind: 'contact' });

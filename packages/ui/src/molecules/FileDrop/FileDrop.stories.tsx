@@ -71,3 +71,27 @@ export const Disabled: Story = {
     </Stage>
   ),
 };
+
+/** `variant="button"`: the browse button alone, beside what it changes (first run's avatar). */
+export const AsButton: Story = {
+  args: { label: 'Upload photo', variant: 'button', acceptedTypes: ['image/jpeg', 'image/png', 'image/webp'] },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Upload photo' })).toBeEnabled();
+  },
+};
+
+/** The button variant while what was picked is on its way: it spins and takes no second press. */
+export const AsButtonPending: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Upload photo', variant: 'button', isPending: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+};

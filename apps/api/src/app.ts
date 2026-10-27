@@ -1,4 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { type ErrorCode, errorStatus, installPlainErrors } from '@crm/contracts';
 import {
   connectedCalendar,
@@ -8,7 +10,6 @@ import {
   enterWorkspace,
   jobKinds,
   NO_CALENDAR,
-  servedPicture,
   twoFactorRequiredBy,
   type BookingCalendar,
   type JobRegistry,
@@ -38,6 +39,8 @@ import { handoffKey } from './forms/handoff.ts';
 import { hashAddress, mountPublicForms } from './forms/public.ts';
 import { mountFormFiles } from './forms/uploads.ts';
 import { createFileStore, type FileStore } from './storage/blob.ts';
+import { createDiskFileStore } from './storage/disk.ts';
+import { mountMyPicture } from './me-picture.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
 import { bookingLinkKey } from './booking-link.ts';
@@ -56,12 +59,7 @@ import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
-import {
-  createPictureFetch,
-  pictureResponse,
-  PRIVATE_PICTURE_CACHE_CONTROL,
-  type PictureFetch,
-} from './public/picture.ts';
+import { createPictureFetch, createPictureLoader, type PictureFetch } from './public/picture.ts';
 import { createOutsideFetch, type OutsideFetch } from './public/outside.ts';
 import { createFaviconFetch, type FaviconFetch } from './public/favicon.ts';
 import { createWalletLinks } from './wallet/wallet.ts';
@@ -126,9 +124,6 @@ interface AppVariables {
 function errorResponse(code: ErrorCode, message: string): Response {
   return Response.json({ code, message }, { status: errorStatus(code) });
 }
-
-/** A person's own picture: 60 reads a minute each, in this process. */
-const MY_PICTURE_LIMIT = { max: 60, windowMs: 60_000 } as const;
 
 /** Work after the answer on a long running server: nothing holds it, and it runs on (it never rejects). */
 const RUNS_ON = (work: Promise<unknown>): void => {
@@ -319,6 +314,16 @@ export function createApp({
         }));
   // Account pictures from Google's picture hosts (23 Oct 2026), for the public pages and the person's own.
   const pictureFetch = services.pictureFetch ?? createPictureFetch();
+  // Where a person's uploaded picture is kept (27 Oct 2026): the private Blob store, or on a laptop with no token, a
+  // folder on its disk, so uploads can be tried locally. Anywhere else without a token, there is none (503).
+  const pictureFiles =
+    services.files ??
+    (env.BLOB_READ_WRITE_TOKEN !== undefined
+      ? createFileStore(env.BLOB_READ_WRITE_TOKEN)
+      : env.APP_ENV === 'local'
+        ? createDiskFileStore(join(tmpdir(), 'crm-local-files'))
+        : undefined);
+  const loadPicture = createPictureLoader(pictureFetch, pictureFiles);
   // A link block's own site icon (26 Oct 2026), for the public link page.
   const faviconFetch = services.faviconFetch ?? createFaviconFetch();
   // The key every booking's guest page token derives from, shared with the worker's emails.
@@ -616,7 +621,7 @@ export function createApp({
           log.warn('booking.picture.unread', errorFields(error));
           return undefined;
         }),
-      fetch: pictureFetch,
+      load: loadPicture,
     },
     favicons: faviconFetch,
     ...(services.now === undefined ? {} : { now: services.now }),
@@ -650,26 +655,14 @@ export function createApp({
     ...(services.now === undefined ? {} : { now: services.now }),
   });
 
-  // The signed in person's own picture (23 Oct 2026), for Settings › Profile: Google's, from our own origin (the
-  // app's policy loads nothing from Google), only its current version, kept in their browser alone.
-  const myPictureLimiter = createMemoryLimiter();
-  app.get('/me/picture', async (c) => {
-    const session = await auth.session(c.req.raw.headers, c.get('clientIp'));
-    if (session === undefined) return errorResponse('UNAUTHENTICATED', 'Sign in to continue.');
-    const picture = servedPicture(session.user.id, session.user.image);
-    if (picture === undefined || c.req.query('v') !== picture.version) {
-      return errorResponse('NOT_FOUND', 'There’s no picture here.');
-    }
-    const decision = myPictureLimiter(`me-picture:${session.user.id}`, MY_PICTURE_LIMIT);
-    if (!decision.allowed) return errorResponse('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');
-    const fetched = await pictureFetch(picture.url);
-    if (!fetched.ok) {
-      log.warn('me.picture.missed', { requestId: c.get('requestId'), reason: fetched.reason });
-      return errorResponse('NOT_FOUND', 'There’s no picture here.');
-    }
-    const answered = pictureResponse(fetched, PRIVATE_PICTURE_CACHE_CONTROL);
-    for (const cookie of session.setCookies) answered.headers.append('set-cookie', cookie);
-    return answered;
+  // The signed in person's own picture: theirs to read, and theirs to upload (27 Oct 2026).
+  mountMyPicture(app, {
+    auth,
+    identity,
+    files: pictureFiles,
+    load: loadPicture,
+    limiter: createMemoryLimiter(),
+    errorResponse,
   });
 
   // The caller's own link page as an Apple Wallet pass (26 Oct 2026). It lives under `public/` because it reads a

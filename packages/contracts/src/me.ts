@@ -10,6 +10,11 @@ export const SignedInUser = z.object({
   id: Uuid,
   name: z.string(),
   email: z.email(),
+  /**
+   * Their picture as our own origin serves it (`/api/me/picture?v=`), an upload or their Google account's; absent
+   * when they have none. Here so a screen with no workspace yet (first run's Your name) can draw it.
+   */
+  image: z.string().optional(),
 });
 /** The signed in person. */
 export type SignedInUser = z.infer<typeof SignedInUser>;

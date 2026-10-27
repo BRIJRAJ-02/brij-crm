@@ -6,7 +6,8 @@
 // and nothing else, before the first connection and after every redirect; a JPEG, PNG, WebP or GIF whose first
 // bytes say so; and 1 MB rather than the smaller default. The answer carries neither the Google URL nor anything
 // of the account.
-import { isPictureHost } from '@crm/core/public';
+import { isPictureHost, type PersonPicture } from '@crm/core/public';
+import type { FileStore } from '../storage/blob.ts';
 import { createOutsideFetch, type Lookup, type OutsideMiss } from './outside.ts';
 
 /** The longest a picture fetch may take, redirects included. */
@@ -108,4 +109,43 @@ export function pictureResponse(
       'x-robots-tag': 'noindex',
     },
   });
+}
+
+/** The type a stored picture's extension names: the one its bytes were checked against when it was kept. */
+const STORED_TYPES: Readonly<Record<string, PictureType>> = {
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
+
+/** The largest stored picture read back: the upload's own ceiling. */
+const STORED_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Loads a person's picture of either kind (27 Oct 2026): Google's through `fetch`, narrowed to Google's hosts, or
+ * their own upload from the private store. A stored one is checked again on the way out, its first bytes against the
+ * type its path names, so nothing but a picture is ever answered as one. Never throws.
+ */
+export type PictureLoad = (
+  picture: PersonPicture,
+  options?: { readonly types?: readonly PictureType[] },
+) => Promise<FetchedPicture>;
+
+/** The loader every picture route answers through; `files` absent, a stored picture is simply missing. */
+export function createPictureLoader(fetch: PictureFetch, files: FileStore | undefined): PictureLoad {
+  return async (picture, options) => {
+    if (picture.kind === 'google') return fetch(picture.url, options);
+    const type = STORED_TYPES[picture.path.split('.').at(-1) ?? ''];
+    if (type === undefined || files === undefined) return { ok: false, reason: 'url' };
+    if (options?.types !== undefined && !options.types.includes(type)) return { ok: false, reason: 'type' };
+    try {
+      const found = await files.get(picture.path);
+      if (found === undefined) return { ok: false, reason: 'status' };
+      if (found.size > STORED_MAX_BYTES) return { ok: false, reason: 'size' };
+      const bytes = new Uint8Array(await new Response(found.stream).arrayBuffer());
+      return startsAs(type, bytes) ? { ok: true, type, bytes } : { ok: false, reason: 'type' };
+    } catch {
+      return { ok: false, reason: 'network' };
+    }
+  };
 }

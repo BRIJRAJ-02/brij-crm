@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button as AriaButton, DropZone, FileTrigger, Text } from 'react-aria-components';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { formatFileSize } from '../FileItem/FileItem.tsx';
@@ -25,6 +26,14 @@ export interface FileDropProps {
    */
   readonly preview?: { readonly src: string; readonly alt: string };
   readonly isDisabled?: boolean;
+  /**
+   * `zone` (the default) is the drop area with its browse button. `button` is the browse button alone, with
+   * `label` as its words, for a picker that sits beside what it changes (first run's avatar, 27 October 2026),
+   * where a drop area would draw the picture twice. Same checks, same refusal line; nothing to drop onto.
+   */
+  readonly variant?: 'zone' | 'button';
+  /** With `variant="button"`: what was picked is on its way, so the button spins and takes no second press. */
+  readonly isPending?: boolean;
 }
 
 function accepts(file: File, types: readonly string[] | undefined): boolean {
@@ -47,6 +56,8 @@ export function FileDrop({
   onFiles,
   preview,
   isDisabled = false,
+  variant = 'zone',
+  isPending = false,
 }: FileDropProps) {
   const { locale } = useFormatSettings();
   const [error, setError] = useState<string | undefined>(undefined);
@@ -70,6 +81,31 @@ export function FileDrop({
     acceptedTypes === undefined ? undefined : acceptedTypes.join(', '),
     maxSize === undefined ? undefined : strings.upTo(formatFileSize(maxSize, locale)),
   ].filter((part) => part !== undefined);
+  const refusal =
+    error === undefined ? undefined : (
+      <span className={styles.error} role="alert">
+        <Icon name="circle-alert" size="xs" />
+        {error}
+      </span>
+    );
+  if (variant === 'button') {
+    return (
+      <div className={styles.field}>
+        <FileTrigger
+          allowsMultiple={allowsMultiple}
+          {...(acceptedTypes === undefined ? {} : { acceptedFileTypes: [...acceptedTypes] })}
+          onSelect={(list) => {
+            if (list !== null) take([...list]);
+          }}
+        >
+          <Button icon="upload" isPending={isPending} isDisabled={isDisabled}>
+            {label}
+          </Button>
+        </FileTrigger>
+        {refusal}
+      </div>
+    );
+  }
   return (
     <div className={styles.field}>
       <DropZone
@@ -111,12 +147,7 @@ export function FileDrop({
         </span>
         {limits.length > 0 && <span className={styles.limits}>{limits.join(' · ')}</span>}
       </DropZone>
-      {error !== undefined && (
-        <span className={styles.error} role="alert">
-          <Icon name="circle-alert" size="xs" />
-          {error}
-        </span>
-      )}
+      {refusal}
     </div>
   );
 }

@@ -96,7 +96,7 @@ import {
   readProfilePicture,
   writeVcard,
   isPageHost,
-  type AccountPicture,
+  type PersonPicture,
   type AccountPictureReader,
   type BookingEntry,
   managedBookingIcs,
@@ -115,7 +115,7 @@ import type { WakeRelay } from '../realtime/wake.ts';
 import type { TicketBook } from '../forms/ticket.ts';
 import { handoffForPage } from '../forms/handoff.ts';
 import { BOOKING_LIMITS, botReason, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
-import { pictureResponse, PRIVATE_PICTURE_CACHE_CONTROL, type PictureFetch } from './picture.ts';
+import { pictureResponse, PRIVATE_PICTURE_CACHE_CONTROL, type PictureLoad } from './picture.ts';
 import { iconResponse, type FaviconFetch } from './favicon.ts';
 import { shareImageResponse } from './share-image.ts';
 import {
@@ -160,7 +160,7 @@ export interface PublicBookingServices {
    * A host's account picture (23 Oct 2026): `pictureOf` reads it through the identity login (a failure reads as
    * none), and `fetch` gets it from Google's picture hosts (`picture.ts`).
    */
-  readonly pictures: { readonly pictureOf: AccountPictureReader; readonly fetch: PictureFetch };
+  readonly pictures: { readonly pictureOf: AccountPictureReader; readonly load: PictureLoad };
   /** A link block's own site icon (26 Oct 2026): the site's favicon, fetched and answered from our origin. */
   readonly favicons: FaviconFetch;
   /** Knowing the visitor (spec 0028): sign in, the member door, and the guest leg where calendar sync is on. */
@@ -326,12 +326,12 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
    */
   const servePicture = async (
     c: Context<{ Variables: Variables }>,
-    picture: AccountPicture | undefined,
+    picture: PersonPicture | undefined,
     cacheControl?: string,
   ): Promise<Response> => {
-    // The whole query, exactly: anything added would miss the edge's copy and cost a fetch of Google each time.
+    // The whole query, exactly: anything added would miss the edge's copy and cost a fetch each time.
     if (picture === undefined || new URL(c.req.url).search !== `?v=${picture.version}`) return noPicture();
-    const fetched = await services.pictures.fetch(picture.url);
+    const fetched = await services.pictures.load(picture);
     if (fetched.ok) return pictureResponse(fetched, cacheControl);
     // Why, never the URL: it names the account.
     log.warn('booking.picture.missed', { requestId: c.get('requestId'), reason: fetched.reason });
@@ -597,7 +597,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       const fetched =
         contact.picture === undefined || !fetchesPicture
           ? undefined
-          : await services.pictures.fetch(contact.picture.url, { types: ['image/jpeg', 'image/png'] });
+          : await services.pictures.load(contact.picture, { types: ['image/jpeg', 'image/png'] });
       if (fetched?.ok === false) {
         log.warn('booking.vcard.picture_missed', { requestId: c.get('requestId'), reason: fetched.reason });
       }

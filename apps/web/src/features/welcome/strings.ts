@@ -23,9 +23,11 @@ export const strings = {
   aboutDescription: 'How people see you on your pages.',
   yourName: 'Your name',
   nameMissing: 'Enter your name.',
-  /** The photo on Your name (27 October 2026): a Google account's is the only one until file storage (#32). */
-  usePhoto: 'Add your Google photo',
+  /** The photo on Your name (27 October 2026), uploaded from their device. */
+  photoLabel: 'Photo (optional)',
+  usePhoto: 'Upload photo',
   changePhoto: 'Change photo',
+  photoUnreadable: 'That picture couldn’t be read. Try a JPEG or PNG.',
 
   handleTitle: 'Your link page',
   handleDescription: 'One link for everything you share.',

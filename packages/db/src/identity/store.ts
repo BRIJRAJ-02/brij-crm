@@ -320,6 +320,17 @@ export interface IdentityStore extends OperatorIdentity {
    * is never saved, and never replaced. True when it saved.
    */
   setUserImageFromGoogle(id: string, image: string): Promise<boolean>;
+  /**
+   * Saves a picture the person uploaded (27 Oct 2026) as theirs, over anything there was, Google's included: an
+   * upload is a choice they made, so it always wins, and a later Google sign in never replaces it (its rule above
+   * replaces only an empty picture or an older one of Google's). Only `stored:pictures/<their id>/<uuid>.<ext>` is
+   * taken. Answers the picture there was before, so the api can drop an older upload from the store; undefined when
+   * nothing saved.
+   */
+  setUserImageFromUpload(
+    id: string,
+    image: string,
+  ): Promise<{ readonly saved: true; readonly previous: string | undefined } | undefined>;
   /** Whether the user has a Google account linked (it signs in with Google). Reads no token. */
   hasGoogleAccount(id: string): Promise<boolean>;
   /**
@@ -807,6 +818,28 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         )
         .returning({ id: user.id });
       return saved.length > 0;
+    },
+
+    async setUserImageFromUpload(id, image) {
+      if (!UUID.test(id)) return undefined;
+      const lowered = id.toLowerCase();
+      // The exact shape the api writes, under this person's own id, so nothing else ever lands in the column here.
+      const shape = new RegExp(`^stored:pictures/${lowered}/[0-9a-f-]{36}\\.(jpg|png|webp)$`);
+      if (!shape.test(image)) return undefined;
+      return db.transaction(async (tx) => {
+        const [before] = await tx
+          .select({ image: user.image })
+          .from(user)
+          .where(eq(user.id, id))
+          .for('update')
+          .limit(1);
+        if (before === undefined) return undefined;
+        await tx
+          .update(user)
+          .set({ image, updatedAt: sql`now()` })
+          .where(eq(user.id, id));
+        return { saved: true as const, previous: before.image ?? undefined };
+      });
     },
 
     async hasGoogleAccount(id) {

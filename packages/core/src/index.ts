@@ -148,7 +148,15 @@ export {
   saveProfileItem,
 } from './profile/items.ts';
 // A person's own account picture from our origin (23 Oct 2026): only Google's account pictures, with their version.
-export { servedPicture, type AccountPicture } from './booking/picture.ts';
+export {
+  personPicture,
+  servedPicture,
+  storedPictureImage,
+  storedPictureOf,
+  storedPicturePath,
+  type AccountPicture,
+  type PersonPicture,
+} from './booking/picture.ts';
 export {
   acceptInvite,
   getInviteLink,

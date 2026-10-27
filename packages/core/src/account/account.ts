@@ -2,6 +2,7 @@
 // workspaces they are in, and making their first workspace. These run before
 // any workspace is chosen, so they never build a member's scope; the engine's
 // workspace bootstrap builds its own system scope.
+import { personPicture } from '../booking/picture.ts';
 import type { CreateWorkspaceInput, CreatedWorkspace, Me, SlugAvailability } from '@crm/contracts';
 import type { Database, IdentityStore } from '@crm/db';
 import { enterWorkspace, type DoorLog, type DoorSession, type RuleSource } from '../access/door.ts';
@@ -13,6 +14,8 @@ export interface AccountUser {
   readonly id: string;
   readonly name: string;
   readonly email: string;
+  /** Their picture as `user.image` holds it: Google's URL, or `stored:` and an upload's path. */
+  readonly image?: string | null | undefined;
 }
 
 /**
@@ -31,8 +34,15 @@ export async function getMe(
     deps.identity.lastWorkspaceOf(user.id),
   ]);
   const lastWorkspaceId = workspaces.some((workspace) => workspace.id === last) ? last : undefined;
+  const picture = personPicture(user.id, user.image ?? undefined);
   return {
-    user: { id: user.id, name: user.name, email: user.email },
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      // Our own path to it, never `user.image` itself: that names Google's address or the store's (27 Oct 2026).
+      ...(picture === undefined ? {} : { image: `/api/me/picture?v=${picture.version}` }),
+    },
     workspaces: workspaces.map(({ id, slug, name }) => ({ id, slug, name })),
     ...(lastWorkspaceId === undefined ? {} : { lastWorkspaceId }),
     isOperator,

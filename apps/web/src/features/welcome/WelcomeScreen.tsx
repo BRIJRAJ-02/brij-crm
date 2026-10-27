@@ -19,6 +19,7 @@ import { handleBaseFor } from '@crm/contracts/handles';
 import { AboutStep } from './AboutStep.tsx';
 import { BookingPagePreview } from './BookingPagePreview.tsx';
 import { BookingStep } from './BookingStep.tsx';
+import { squarePhoto } from './photo.ts';
 import { DoneStep } from './DoneStep.tsx';
 import { HandleStep } from './HandleStep.tsx';
 import { filledLinks, titleFromUrl } from './LinksFields.tsx';
@@ -111,8 +112,6 @@ export interface WelcomeScreenProps {
    * and having any means Your booking page isn't asked for.
    */
   readonly bookingPages?: readonly { readonly id: string; readonly title: string; readonly minutes: number }[];
-  /** Google sign in is set up here: without it, there is no way to take a photo from an account. */
-  readonly hasGoogle?: boolean;
   /** Their account photo, as our own origin serves it: it draws on the pages the steps preview. */
   readonly image?: string;
 }
@@ -135,7 +134,6 @@ export function WelcomeScreen({
   linkPageHandle,
   suggestedHandle,
   bookingPages = [],
-  hasGoogle = false,
   image,
 }: WelcomeScreenProps) {
   const navigate = useNavigate();
@@ -158,7 +156,10 @@ export function WelcomeScreen({
   const [isCreating, setCreating] = useState(false);
   const [refusals, setRefusals] = useState<readonly WelcomeRefusal[]>([]);
   const [isConnecting, setConnecting] = useState(false);
-  const [isOpeningGoogle, setOpeningGoogle] = useState(false);
+  // Their photo: the account's (me.get answers it before any workspace exists), then whatever they upload here.
+  const [photo, setPhoto] = useState<string | undefined>(user.image ?? image);
+  const [isUploading, setUploading] = useState(false);
+  const [photoFailure, setPhotoFailure] = useState<string | undefined>(undefined);
   // Your link: the suggested handle until it is typed, then whatever was claimed.
   const [claimedHandle, setClaimedHandle] = useState<string | undefined>(linkPageHandle);
   const [typedHandle, setTypedHandle] = useState<string | undefined>(undefined);
@@ -364,15 +365,30 @@ export function WelcomeScreen({
   };
 
   /**
-   * Your name's photo (27 October 2026): there is no upload yet (file storage, #32), so the one photo a person
-   * can have is their Google account's. It leaves for Google, links the account if it isn't, and comes back here.
+   * Your name's photo (27 October 2026), uploaded straight from their device: its middle square drawn again (which
+   * leaves a phone photo's location behind, `photo.ts`), then sent. It replaces any photo they had, everywhere.
    */
-  const useGooglePhoto = () => {
-    if (isOpeningGoogle) return;
-    setOpeningGoogle(true);
-    data.auth.syncGooglePhoto('/welcome').catch(() => {
-      setOpeningGoogle(false);
-    });
+  const uploadPhoto = (file: File) => {
+    if (isUploading) return;
+    setUploading(true);
+    setPhotoFailure(undefined);
+    squarePhoto(file)
+      .then(
+        (square) => data.profile.uploadPicture(square),
+        () => {
+          throw new Error(strings.photoUnreadable);
+        },
+      )
+      .then(
+        (path) => {
+          setUploading(false);
+          if (path !== undefined) setPhoto(path);
+        },
+        (failure: unknown) => {
+          setUploading(false);
+          setPhotoFailure(isDataError(failure) || failure instanceof Error ? failure.message : strings.somethingWrong);
+        },
+      );
   };
 
   const connect = () => {
@@ -430,14 +446,14 @@ export function WelcomeScreen({
               name={shownName}
               title={pageTitle}
               minutes={pageMinutes}
-              {...(image === undefined ? {} : { image })}
+              {...(photo === undefined ? {} : { image: photo })}
             />
           ) : PAGE_PREVIEW.includes(step) ? (
             <LinkPagePreview
               name={shownName}
               id={claimedHandle ?? user.id}
               handle={handle}
-              {...(image === undefined ? {} : { image })}
+              {...(photo === undefined ? {} : { image: photo })}
               pages={previewPages}
               links={filledLinks(step === 'handle' ? links : savedLinks).map((url) => ({
                 title: titleFromUrl(url),
@@ -482,10 +498,10 @@ export function WelcomeScreen({
             onMemberName={setMemberName}
             shownName={shownName}
             userId={user.id}
-            canUseGooglePhoto={hasGoogle}
-            isOpeningGoogle={isOpeningGoogle}
-            onUseGooglePhoto={useGooglePhoto}
-            {...(image === undefined ? {} : { image })}
+            onPhoto={uploadPhoto}
+            isUploading={isUploading}
+            {...(photoFailure === undefined ? {} : { photoFailure })}
+            {...(photo === undefined ? {} : { image: photo })}
             onContinue={() => {
               after('about');
             }}

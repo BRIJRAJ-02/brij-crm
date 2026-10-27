@@ -44,7 +44,13 @@ export {
 // The link page's contact card as a vCard (spec 0051, AC-5114).
 export { writeVcard, type VcardPhoto } from './profile/vcard.ts';
 // A host's account picture (23 Oct 2026): only Google's picture hosts, so the api's fetch goes nowhere else.
-export { isPictureHost, pictureVersion, type AccountPicture, type AccountPictureReader } from './booking/picture.ts';
+export {
+  isPictureHost,
+  pictureVersion,
+  type AccountPicture,
+  type AccountPictureReader,
+  type PersonPicture,
+} from './booking/picture.ts';
 // What a picture's own bytes say it is: every image taken from outside is decided here, never by a claimed type.
 export { imageTypeOf, type ImageType } from './booking/image-type.ts';
 

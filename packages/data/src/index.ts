@@ -4118,6 +4118,29 @@ export function createDataLayer({
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
     profile: {
+      /**
+       * Uploads their own picture (27 Oct 2026): the bytes as the request body, already squared and drawn again by
+       * the screen, which leaves a photo's location behind. It replaces any picture they had, Google's included, in
+       * every workspace. Answers its path (`/api/me/picture?v=`). Rejects with a DataError: `INPUT_INVALID` (not a
+       * JPEG, PNG or WebP), `PAYLOAD_TOO_LARGE`, `RATE_LIMITED`, `API_UNAVAILABLE` (no store, or offline).
+       */
+      async uploadPicture(file: Blob): Promise<string | undefined> {
+        const response = await fetch(new URL('/api/me/picture', origin).href, {
+          method: 'POST',
+          headers: { 'content-type': file.type },
+          body: file,
+          credentials: 'include',
+        }).catch((error: unknown) => {
+          throw toDataError(error);
+        });
+        const body: unknown = await response.json().catch(() => undefined);
+        const answer = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+        if (!response.ok) throw toDataError({ ...answer, status: response.status });
+        // Who they are now carries the new picture; the members' lists name it too.
+        me = undefined;
+        members.clear();
+        return typeof answer.image === 'string' ? answer.image : undefined;
+      },
       /** Reads the profile now (the route's loader); whether their picture shows comes with it, held below. */
       get: (workspace: string): Promise<MyProfile> => pictureChoice.read(workspace),
       /** Whether their picture shows on their booking pages and profile (owner ask A124), as the screen holds it. */
