@@ -27,6 +27,11 @@ export interface PublicProfileRow {
    * or absent when they have set none. The bytes are never read with the profile: only the path's version is.
    */
   readonly shareImageVersion?: string;
+  /**
+   * Whether the link page is public yet (27 Oct 2026). A page made with a membership starts private, and shows the
+   * first time its owner edits it or shares its link (`showLinkPage`).
+   */
+  readonly isShown: boolean;
 }
 
 interface ProfileRow extends Record<string, unknown> {
@@ -36,6 +41,7 @@ interface ProfileRow extends Record<string, unknown> {
   readonly theme: unknown;
   readonly indexable: boolean;
   readonly share_image_version: string | null;
+  readonly shown: boolean;
 }
 
 /**
@@ -50,7 +56,7 @@ export async function publicProfilesOf(
   const ids = [...new Set(userIds.filter((id): id is string => id !== null && id !== undefined && isUuid(id)))];
   if (ids.length === 0) return new Map();
   const found = await tx.execute<ProfileRow>(
-    sql`select user_id::text as user_id, handle, bio, theme, indexable, share_image_version from crm_public_profiles_of(${`{${ids.join(',')}}`}::uuid[], ${workspaceId}::uuid)`,
+    sql`select user_id::text as user_id, handle, bio, theme, indexable, share_image_version, shown from crm_public_profiles_of(${`{${ids.join(',')}}`}::uuid[], ${workspaceId}::uuid)`,
   );
   return new Map(
     found.rows.map((row) => [
@@ -61,9 +67,27 @@ export async function publicProfilesOf(
         theme: PageTheme.safeParse(row.theme).data ?? DEFAULT_PAGE_THEME,
         indexable: row.indexable,
         ...(typeof row.share_image_version === 'string' ? { shareImageVersion: row.share_image_version } : {}),
+        isShown: row.shown,
       },
     ]),
   );
+}
+
+interface ShownRow extends Record<string, unknown> {
+  readonly shown: boolean;
+}
+
+/**
+ * Makes the person's link page in this workspace public, once (`crm_show_public_profile`, 27 Oct 2026): the first
+ * time they edit it or share its link. A page made with their membership is private until then, since an address
+ * made from their name, showing their name and photo, is not one they ever asked for. True when the page is public
+ * after this (now or already); false when they have no page here. It never makes a page private again.
+ */
+export async function showLinkPage(tx: WorkspaceTx, userId: string, workspaceId: string): Promise<boolean> {
+  const found = await tx.execute<ShownRow>(
+    sql`select crm_show_public_profile(${userId}::uuid, ${workspaceId}::uuid) as shown`,
+  );
+  return found.rows[0]?.shown === true;
 }
 
 /** The constraint a handle another person holds (or held) is refused on. */

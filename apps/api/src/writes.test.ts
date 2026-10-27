@@ -586,6 +586,12 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.profile.setIndexable({ workspace: m.slug, indexable: false, mutationId });
     return [{ kind: 'members', item_ids: [me.memberId] }];
   },
+  // Sharing the link page makes it public (27 Oct 2026): one column in schema auth, no outbox row of its own.
+  'profile.show': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.show({ workspace: m.slug, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
   // The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511): one column in schema auth,
   // so no outbox row of its own. The smallest real PNG there is, so the bytes pass their own signature check.
   'profile.setShareImage': async (m, mutationId) => {
@@ -2146,6 +2152,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookingPages.reorderProfile': 2,
   'profile.saveTheme': 2,
   'profile.setIndexable': 2,
+  'profile.show': 2,
   'profile.setShareImage': 2,
   'profile.orderItems': 2,
   'profile.archiveItem': 2,

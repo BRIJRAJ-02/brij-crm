@@ -3,9 +3,9 @@
 // Main task: an address per row (the plus or Enter adds the next, a pasted list splits into rows), each with its role
 // where roles were read, then Invite ("Invite 2 people"), or Skip for now; then on to the calendar step or the workspace.
 // Leaves out: the list of open invitations and the invite link (Settings › Members holds those).
-// Also says, once, where the link page made with the workspace lives (26 Oct 2026), with Copy and Edit.
+// Also says, once, where the link page made with the workspace will be (26 Oct 2026), private until they act, with Edit.
 import type { DataLayer, RoleOption } from '@crm/data';
-import { Button, ButtonLink, Callout, CopyButton, Form, InviteRows } from '@crm/ui';
+import { Button, ButtonLink, Callout, Form, InviteRows } from '@crm/ui';
 import { useEffect, useRef } from 'react';
 import { strings as inviteStrings } from '../settings/members-strings.ts';
 import { useInvite } from '../settings/useInvite.tsx';
@@ -27,31 +27,23 @@ export interface InviteStepProps {
 }
 
 /**
- * The link page made with the workspace: live already, its address, Copy link, and Edit link page in a new tab, so
- * first run stays where it is (what was typed, and the steps still to come).
+ * The link page made with the workspace: its address and Edit link page in a new tab, so first run stays where it is
+ * (what was typed, and the steps still to come). Private until they edit it or share it (27 Oct 2026), so there is
+ * no Copy link: the address would open nothing for whoever it was sent to.
  */
-function LinkPageLive({ handle, slug }: { readonly handle: string; readonly slug: string }) {
+function LinkPageReady({ handle, slug }: { readonly handle: string; readonly slug: string }) {
   const address = publicProfileUrl(handle);
-  const shown = useRef<HTMLElement>(null);
   return (
     <Callout
-      tone="success"
-      title={strings.linkPageLive}
+      tone="info"
+      title={strings.linkPageReady}
       actions={
-        <>
-          <CopyButton
-            value={address}
-            label={strings.linkPageCopy}
-            announcement={strings.linkPageCopied}
-            sourceRef={shown}
-          />
-          <ButtonLink variant="ghost" href={linkPageHref(slug)} isExternal icon="arrow-up-right">
-            {strings.linkPageEdit}
-          </ButtonLink>
-        </>
+        <ButtonLink variant="ghost" href={linkPageHref(slug)} isExternal icon="arrow-up-right">
+          {strings.linkPageEdit}
+        </ButtonLink>
       }
     >
-      {strings.linkPageAt} <strong ref={shown}>{address.replace(/^https?:\/\//, '')}</strong>. {strings.linkPageNext}
+      {strings.linkPageAt} <strong>{address.replace(/^https?:\/\//, '')}</strong>. {strings.linkPageNext}
     </Callout>
   );
 }
@@ -75,7 +67,7 @@ export function InviteStep({ data, slug, roles, onDone, handle }: InviteStepProp
     if (sent !== undefined) next.current?.focus();
   }, [sent]);
 
-  const linkPage = handle === undefined ? undefined : <LinkPageLive handle={handle} slug={slug} />;
+  const linkPage = handle === undefined ? undefined : <LinkPageReady handle={handle} slug={slug} />;
 
   if (sent !== undefined) {
     return (

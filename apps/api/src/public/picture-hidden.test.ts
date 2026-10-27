@@ -57,8 +57,11 @@ afterAll(async () => {
   await db.close();
 });
 
-/** A request as a visitor's browser sends it through the edge, with no session: `path` under `/api/public/`. */
-function visit(path: string, body?: unknown) {
+/**
+ * A request as a visitor's browser sends it through the edge: `path` under `/api/public/`, with no session unless a
+ * `cookie` is given (the page's owner, signed in).
+ */
+function visit(path: string, body?: unknown, cookie?: string) {
   return app.request(path.startsWith('/api/') ? path : `/api/public/${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers: {
@@ -67,6 +70,7 @@ function visit(path: string, body?: unknown) {
       'content-type': 'application/json',
       [ORIGIN_HEADER]: APP_URL,
       origin: APP_URL,
+      ...(cookie === undefined ? {} : { cookie }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
@@ -79,8 +83,8 @@ async function read(path: string, body?: unknown): Promise<{ readonly status: nu
 }
 
 /** Everything a picture answer says: status, the headers a browser or the edge reads, and the body. */
-async function pictureAnswer(path: string) {
-  const answer = await visit(path);
+async function pictureAnswer(path: string, cookie?: string) {
+  const answer = await visit(path, undefined, cookie);
   return {
     status: answer.status,
     type: answer.headers.get('content-type'),
@@ -229,5 +233,39 @@ describe('Hide my photo on booking pages (owner ask A124)', () => {
     );
     expect(outside.code).toBe('NOT_FOUND');
     expect((await bea.m.client.profile.get({ workspace: bea.m.slug })).pictureHidden).toBe(true);
+  });
+});
+
+// The owner, 27 Oct 2026: a link page made with a membership is private until its owner edits or shares it. Its
+// picture is theirs alone to see, and the edge never keeps it for anyone else.
+describe('a private link page’s picture', () => {
+  it('answers a stranger as a handle nobody holds, and its owner privately', async () => {
+    const m = await memberWithWorkspace(app);
+    const [user] = await testQuery<{ id: string }>(ownerUrl, `select id::text from auth."user" where email = $1`, [
+      m.email,
+    ]);
+    if (user === undefined) throw new Error('The signed in person has no account.');
+    await testQuery(ownerUrl, `update auth."user" set image = $1 where id = $2`, [GOOGLE, user.id]);
+    const profile = await m.client.profile.get({ workspace: m.slug });
+    expect(profile.isPublic).toBe(false);
+    const handle = profile.handle;
+    if (handle === undefined) throw new Error('No link page was made with the membership.');
+    const picture = `/api/public/profiles/${handle}/picture?v=${pictureVersion(user.id, GOOGLE)}`;
+    const nobody = await pictureAnswer(`/api/public/profiles/nobody-${newId().slice(-8)}/picture?v=000000000000`);
+    expect(nobody.status).toBe(404);
+
+    const before = fetched.length;
+    expect(await pictureAnswer(picture)).toEqual(nobody);
+    expect((await read(`handles/${handle}`)).status).toBe(404);
+    expect(fetched.length).toBe(before);
+
+    const own = await pictureAnswer(picture, m.cookie);
+    expect(own.status).toBe(200);
+    expect(own.cache).toBe('private, max-age=3600');
+
+    await m.client.profile.show({ workspace: m.slug, mutationId: newId() });
+    const shown = await pictureAnswer(picture);
+    expect(shown.status).toBe(200);
+    expect(shown.cache).toContain('public');
   });
 });

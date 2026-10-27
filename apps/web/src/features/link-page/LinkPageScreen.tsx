@@ -66,6 +66,8 @@ import {
   type ChosenFacts,
 } from './registry.tsx';
 import { ImportLinksModal } from './ImportLinksModal.tsx';
+import { homeStrings } from './home-strings.ts';
+import { showLinkPage } from './show.ts';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 import { strings } from './strings.ts';
 
@@ -155,7 +157,9 @@ export function LinkPageScreen({ data, linkPage, slug, profile }: LinkPageScreen
       page={{
         topBar: (
           <TopBar title={strings.title} icon="id-card">
-            {handle === undefined ? undefined : <HeaderActions handle={handle} workspaceName={profile.workspaceName} />}
+            {handle === undefined ? undefined : (
+              <HeaderActions data={data} slug={slug} handle={handle} workspaceName={profile.workspaceName} />
+            )}
           </TopBar>
         ),
         body:
@@ -183,17 +187,33 @@ export function LinkPageScreen({ data, linkPage, slug, profile }: LinkPageScreen
 /**
  * The header's actions, as the owner's design draws them: the page's address as a pill that opens it, and Share,
  * which opens the one Share modal (the QR, the address and the two ways to go on; Home's card opens the same one).
+ * Share also makes the page public (27 Oct 2026): a page made with a membership is private until its owner edits it
+ * or shares it, and a code handed to somebody has to open for them.
  */
 function HeaderActions({
+  data,
+  slug,
   handle,
   workspaceName,
 }: {
+  readonly data: DataLayer;
+  readonly slug: string;
   readonly handle: string;
   readonly workspaceName?: string | undefined;
 }) {
+  const { toasts } = useRouteContext({ from: '__root__' });
   const address = publicProfileUrl(handle);
   const shown = address.replace(/^https?:\/\//, '');
   const [isSharing, setSharing] = useState(false);
+  const share = () => {
+    setSharing(true);
+    showLinkPage(data, slug).then(
+      (isPublic) => {
+        if (!isPublic) toasts.toast({ tone: 'danger', message: homeStrings.makePublicFailed });
+      },
+      () => toasts.toast({ tone: 'danger', message: homeStrings.makePublicFailed }),
+    );
+  };
   return (
     <>
       <ButtonLink
@@ -206,7 +226,7 @@ function HeaderActions({
       >
         {shown}
       </ButtonLink>
-      <Button icon="upload" onPress={() => setSharing(true)}>
+      <Button icon="upload" onPress={share}>
         {strings.share}
       </Button>
       <ShareLinkPageModal

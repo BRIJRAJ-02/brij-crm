@@ -376,7 +376,11 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
             />
           </SettingsRow>
           {profile.handle !== undefined && (
-            <SettingsRow title={strings.yourPage} control="field">
+            <SettingsRow
+              title={strings.yourPage}
+              control="field"
+              {...(profile.isPublic === false ? { description: strings.yourPagePrivate } : {})}
+            >
               <Field
                 label={strings.yourPage}
                 isLabelHidden

@@ -352,6 +352,11 @@ export const publicProfiles = auth.table(
     shareImage: bytea('share_image'),
     shareImageType: text('share_image_type'),
     shareImageVersion: text('share_image_version'),
+    /**
+     * When the link page first went public, or null while it hasn't (27 Oct 2026). A page made with a membership
+     * starts private, and its owner editing it or sharing its link shows it (`crm_show_public_profile`).
+     */
+    shownAt: timestamptz('shown_at'),
     updatedAt: updatedAt(),
   },
   (t) => [

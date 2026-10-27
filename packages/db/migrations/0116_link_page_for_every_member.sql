@@ -14,14 +14,28 @@
 --   else is 22023 PROFILE_HANDLE_BASE. It answers NULL too unless `workspace` is the transaction's own
 --   (`app.workspace_id`, as withWorkspace() sets it), so code running in one workspace can never make a page in
 --   another. One person's claims queue on the advisory lock `crm_save_public_profile` takes, so the two never race.
--- * The backfill: every active member with a sign in, in a workspace that exists, who has no page there yet, gets
---   one, its base made here the way `handleBaseFor` makes it (their name's letters, else their email's part before
---   the @, padded with -me when short or reserved; the reserved words are copied as of today). It calls the same
---   definer with each row's workspace set as the transaction's, so it is idempotent: a second run finds every page
---   made and changes nothing. A row it can't make a page for (an account gone, a lock it waited too long for) is
---   counted in the deploy log and left to the daily cleanup, never failing the deploy. Postgres 17 compatible.
+-- * No backfill here (27 Oct 2026, the security review): pages made in this migration would be served by the code
+--   still running until this deploy replaces it, which shows every page, private or not, and the edge would keep
+--   what it fetched. The daily cleanup's `link_pages` phase makes the missing ones once the gate is live.
+-- * Private until its owner acts (the owner, 27 Oct 2026: "private until edited or shared"). A page made for someone
+--   who never asked for one must not publish their name and Google photo at an address made from their name.
+--   `auth.public_profiles.shown_at` is when the page first went public, null while it hasn't. Every page that exists
+--   before this migration was claimed by its person and is already public, so each gets `shown_at` now; pages
+--   `crm_ensure_public_profile` makes start with none. `crm_handle_owner` and `crm_public_profiles_of`
+--   answer `shown` (the readers decide what a private page answers: its link page and its extras nothing, its
+--   booking pages exactly as before, since those the person made themself), and `crm_show_public_profile(owner,
+--   workspace)`, a crm_handle definer for crm_app, sets `shown_at` once, for an active member's own page in the
+--   transaction's own workspace only. The app calls it when the owner edits their page or shares its link.
 -- Any change to these roles or functions goes through security-access-reviewer.
 set local lock_timeout = '5s';
+--> statement-breakpoint
+alter table auth.public_profiles add column if not exists shown_at timestamptz;
+--> statement-breakpoint
+-- Every page before this one was claimed by its own person: public already, and staying so.
+update auth.public_profiles set shown_at = pg_catalog.now() where shown_at is null;
+--> statement-breakpoint
+-- Only `crm_show_public_profile` writes it, and only from null to now: crm_handle gets the one column, like 0108's.
+grant update (shown_at) on auth.public_profiles to crm_handle;
 --> statement-breakpoint
 grant crm_handle to current_user with inherit false, set true;
 --> statement-breakpoint
@@ -70,8 +84,9 @@ begin
     on conflict (handle) do nothing;
     get diagnostics made = row_count;
     if made = 1 then
-      insert into auth.public_profiles (user_id, workspace_id, handle, indexable)
-      values (owner, workspace, candidate, false);
+      -- Private (shown_at null) and unlisted until its owner edits it or shares its link.
+      insert into auth.public_profiles (user_id, workspace_id, handle, indexable, shown_at)
+      values (owner, workspace, candidate, false, null);
       return candidate;
     end if;
   end loop;
@@ -79,98 +94,120 @@ begin
 end;
 $$;
 --> statement-breakpoint
+-- Whether the page is public now joins what each reader answers; their bodies are 0114's otherwise unchanged.
+drop function crm_public_profiles_of(uuid[], uuid);
+--> statement-breakpoint
+drop function crm_handle_owner(text);
+--> statement-breakpoint
+-- The current handle, bio and look of each person named in ONE workspace, and whether their page is public yet, or
+-- no row for one with no handle there or who is no longer an active member of it (their pages then fall back to
+-- /b/<key>).
+create function crm_public_profiles_of(owners uuid[], workspace uuid)
+  returns table (user_id uuid, handle text, bio text, theme jsonb, indexable boolean, share_image_version text,
+    shown boolean)
+  language sql
+  stable
+  security definer
+  set search_path = pg_catalog, pg_temp
+begin atomic
+  select p.user_id, p.handle, p.bio, p.theme, p.indexable, p.share_image_version, p.shown_at is not null
+  from auth.public_profiles p
+  where p.user_id = any (crm_public_profiles_of.owners)
+    and p.workspace_id = crm_public_profiles_of.workspace
+    and public.crm_workspace_member(p.user_id, p.workspace_id);
+end;
+--> statement-breakpoint
+-- The membership a handle names, by its current or an old handle: the person and workspace, current handle, bio,
+-- name, picture (unless hidden), look, whether search engines may list it and whether the page is public yet, never
+-- an email. No row unless that person is still an active member of that workspace (AC-5603). A private page still
+-- answers its row: the handle names the person's booking pages too, and those stay up; the reader that draws the
+-- link page itself is what answers nothing for a page that isn't shown.
+create function crm_handle_owner(wanted text)
+  returns table (user_id uuid, workspace_id uuid, handle text, bio text, name text, image text, theme jsonb,
+    indexable boolean, share_image_version text, shown boolean)
+  language sql
+  stable
+  security definer
+  set search_path = pg_catalog, pg_temp
+  rows 1
+begin atomic
+  select p.user_id, p.workspace_id, p.handle, p.bio, u.name,
+    case when coalesce(k.picture_hidden, false) then null else u.image end,
+    p.theme, p.indexable, p.share_image_version, p.shown_at is not null
+  from auth.public_handles h
+  join auth.public_profiles p on p.user_id = h.user_id and p.workspace_id = h.workspace_id
+  join auth."user" u on u.id = h.user_id
+  left join auth.user_prefs k on k.user_id = h.user_id
+  where h.handle = crm_handle_owner.wanted
+    and public.crm_workspace_member(h.user_id, h.workspace_id)
+  limit 1;
+end;
+--> statement-breakpoint
+-- Makes `owner`'s page in `workspace` public, once: the first time they edit it or share its link. True when it is
+-- public after the call (now or already), false when there is no page to show, they aren't an active member there,
+-- or `workspace` isn't the transaction's own (`app.workspace_id`), so code in one workspace can never publish a page
+-- in another. Never makes a page private again: nothing here unpublishes.
+create function crm_show_public_profile(owner uuid, workspace uuid)
+  returns boolean
+  language plpgsql
+  security definer
+  set search_path = pg_catalog, pg_temp
+as $$
+declare
+  found_it boolean;
+begin
+  if workspace is distinct from nullif(pg_catalog.current_setting('app.workspace_id', true), '')::uuid then
+    return false;
+  end if;
+  if not public.crm_workspace_member(owner, workspace) then
+    return false;
+  end if;
+  update auth.public_profiles p set shown_at = pg_catalog.now()
+  where p.user_id = owner and p.workspace_id = workspace and p.shown_at is null;
+  select true into found_it from auth.public_profiles p where p.user_id = owner and p.workspace_id = workspace;
+  return coalesce(found_it, false);
+end;
+$$;
+--> statement-breakpoint
+revoke all on function crm_public_profiles_of(uuid[], uuid) from public;
+--> statement-breakpoint
+grant execute on function crm_public_profiles_of(uuid[], uuid) to crm_app;
+--> statement-breakpoint
+revoke all on function crm_handle_owner(text) from public;
+--> statement-breakpoint
+grant execute on function crm_handle_owner(text) to crm_app;
+--> statement-breakpoint
+revoke all on function crm_show_public_profile(uuid, uuid) from public;
+--> statement-breakpoint
+grant execute on function crm_show_public_profile(uuid, uuid) to crm_app;
+--> statement-breakpoint
 revoke all on function crm_ensure_public_profile(uuid, uuid, text) from public;
 --> statement-breakpoint
 grant execute on function crm_ensure_public_profile(uuid, uuid, text) to crm_app;
---> statement-breakpoint
--- The backfill below calls it as this login, for this migration only (revoked again at its end).
-do $$
-begin
-  execute pg_catalog.format('grant execute on function crm_ensure_public_profile(uuid, uuid, text) to %I', session_user);
-end
-$$;
---> statement-breakpoint
-reset role;
---> statement-breakpoint
--- As the owner and past row level security, like 0113's backfill: a role it would filter fails here rather than
--- backfilling nothing.
-set local row_security = off;
---> statement-breakpoint
-do $$
-declare
-  kept constant text[] := array['about', 'account', 'accounts', 'admin', 'api', 'app', 'apps', 'assets', 'auth',
-    'availability', 'b', 'billing', 'blog', 'book', 'booking', 'bookings', 'brand', 'calendar', 'callback', 'cancel',
-    'captures', 'contact', 'dashboard', 'demo', 'developers', 'docs', 'download', 'edit', 'email',
-    'email-preferences', 'embed', 'f', 'favicon', 'form', 'forms', 'health', 'help', 'home', 'inbox', 'index',
-    'integrations', 'invite', 'join', 'legal', 'links', 'login', 'logout', 'mail', 'manage', 'manifest', 'new', 'null',
-    'oauth', 'objects', 'pricing', 'privacy', 'profile', 'public', 'reschedule', 'robots', 'root', 'schedule',
-    'search', 'security', 'settings', 'sign-in', 'sign-out', 'sign-up', 'signin', 'signup', 'sitemap', 'static',
-    'status', 'support', 'team', 'terms', 'theme-boot', 'timefix', 'two-factor', 'undefined', 'user', 'users',
-    'verify', 'w', 'webhooks', 'welcome', 'www'];
-  joined record;
-  from_name text;
-  from_email text;
-  base text;
-  made integer := 0;
-  missed integer := 0;
-  handle text;
-begin
-  for joined in
-    select m.user_id, m.workspace_id, m.name, m.email
-    from public.members m
-    join public.workspaces w on w.id = m.workspace_id
-    join auth."user" u on u.id = m.user_id
-    where m.status = 'active' and m.user_id is not null and w.deleted_at is null
-      and not exists (select 1 from auth.public_profiles p where p.user_id = m.user_id and p.workspace_id = m.workspace_id)
-    order by m.created_at, m.id
-  loop
-    -- handleBaseFor: lowercase, accents dropped, hyphens for anything else, at most 40.
-    from_name := pg_catalog.rtrim(pg_catalog.left(pg_catalog.btrim(pg_catalog.regexp_replace(
-      pg_catalog.regexp_replace(normalize(pg_catalog.lower(coalesce(joined.name, '')), NFKD), '[\u0300-\u036f]+', '', 'g'),
-      '[^a-z0-9]+', '-', 'g'), '-'), 40), '-');
-    from_email := pg_catalog.rtrim(pg_catalog.left(pg_catalog.btrim(pg_catalog.regexp_replace(
-      pg_catalog.regexp_replace(normalize(pg_catalog.lower(pg_catalog.split_part(pg_catalog.split_part(coalesce(joined.email, ''), '@', 1), '+', 1)), NFKD),
-      '[\u0300-\u036f]+', '', 'g'), '[^a-z0-9]+', '-', 'g'), '-'), 40), '-');
-    if pg_catalog.char_length(from_name) >= 3 and not from_name = any (kept) then
-      base := from_name;
-    elsif pg_catalog.char_length(from_email) >= 3 and not from_email = any (kept) then
-      base := from_email;
-    else
-      base := case when from_name = '' then coalesce(nullif(from_email, ''), 'me') else from_name end;
-      if pg_catalog.char_length(base) < 3 or base = any (kept) then
-        base := base || '-me';
-      end if;
-      base := pg_catalog.rtrim(pg_catalog.left(base, 40), '-');
-    end if;
-    begin
-      perform pg_catalog.set_config('app.workspace_id', joined.workspace_id::text, true);
-      handle := public.crm_ensure_public_profile(joined.user_id, joined.workspace_id, base);
-    exception when others then
-      handle := null;
-    end;
-    if handle is null then
-      missed := missed + 1;
-    else
-      made := made + 1;
-    end if;
-  end loop;
-  perform pg_catalog.set_config('app.workspace_id', '', true);
-  if made > 0 or missed > 0 then
-    raise notice '0116_link_page_for_every_member: % link pages made, % memberships left without one', made, missed;
-  end if;
-end
-$$;
---> statement-breakpoint
-set local role crm_handle;
---> statement-breakpoint
-do $$
-begin
-  execute pg_catalog.format('revoke execute on function crm_ensure_public_profile(uuid, uuid, text) from %I', session_user);
-end
-$$;
 --> statement-breakpoint
 reset role;
 --> statement-breakpoint
 revoke create on schema public from crm_handle;
 --> statement-breakpoint
 revoke crm_handle from current_user;
+--> statement-breakpoint
+do $$
+declare
+  one text;
+begin
+  foreach one in array array[
+    'public.crm_public_profiles_of(uuid[], uuid)',
+    'public.crm_handle_owner(text)',
+    'public.crm_show_public_profile(uuid, uuid)',
+    'public.crm_ensure_public_profile(uuid, uuid, text)'
+  ] loop
+    if pg_catalog.pg_get_userbyid((select p.proowner from pg_proc p where p.oid = one::regprocedure)) <> 'crm_handle'
+      or not (select p.prosecdef from pg_proc p where p.oid = one::regprocedure)
+      or not has_function_privilege('crm_app', one, 'EXECUTE')
+      or has_function_privilege('crm_identity', one, 'EXECUTE')
+      or has_function_privilege('public', one, 'EXECUTE') then
+      raise exception '0116_link_page_for_every_member: % is not crm_handle''s definer for crm_app alone', one;
+    end if;
+  end loop;
+end
+$$;

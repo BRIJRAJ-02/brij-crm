@@ -13,7 +13,13 @@ import { and, eq } from 'drizzle-orm';
 import { checkScope } from '../access/mint.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
-import { profileHandlesOf, publicProfilesOf, savePublicProfile, suggestHandle } from '../booking/handles.ts';
+import {
+  profileHandlesOf,
+  publicProfilesOf,
+  savePublicProfile,
+  showLinkPage,
+  suggestHandle,
+} from '../booking/handles.ts';
 import { isPictureHidden, savePictureHidden } from '../booking/picture-choice.ts';
 import { checkedSocialLinks, sameSocialLinks, saveSocialLinks, socialLinksOfUser } from '../booking/socials.ts';
 import { touched } from '../engine/definitions.ts';
@@ -110,7 +116,7 @@ async function readProfile(
     bio: held?.bio ?? '',
     ...(pictureHidden === undefined ? {} : { pictureHidden }),
     ...(socials === undefined ? {} : { socials: [...socials] }),
-    ...(held === undefined ? {} : { theme: held.theme, indexable: held.indexable }),
+    ...(held === undefined ? {} : { theme: held.theme, indexable: held.indexable, isPublic: held.isShown }),
     // The picture a pasted link to their page shows instead of the drawn card (AC-5511): the path our own origin
     // serves it from, so the editor draws exactly what a visitor's link preview will.
     ...(held?.shareImageVersion === undefined
@@ -214,6 +220,13 @@ export async function updateMyMemberProfile(
         }
       }
       if (Object.keys(after).length === 0) return now;
+      // An edit of what the link page says makes it public (27 Oct 2026). A name or time zone alone doesn't, since
+      // first run sets those for everyone and a page made with a membership stays private until its owner acts; nor
+      // does hiding their photo, which is someone asking for less of themself to show, not for the page to go up.
+      const userId = selfUserId(scope);
+      if (userId !== undefined && ['handle', 'bio', 'socials'].some((field) => field in after)) {
+        await showLinkPage(tx, userId, scope.workspaceId);
+      }
       if (after.name !== undefined || 'timeZone' in after) {
         await tx
           .update(members)
@@ -237,4 +250,14 @@ export async function updateMyMemberProfile(
     hooks,
   );
   return result;
+}
+
+/**
+ * Makes the caller's own link page public (27 Oct 2026): what sharing its link does, since a page made with a
+ * membership is private until its owner edits it or shares it. False when they have no page in this workspace.
+ */
+export async function showMyLinkPage(scope: EngineScope): Promise<{ readonly isPublic: boolean }> {
+  const userId = selfUserId(scope);
+  if (userId === undefined) return { isPublic: false };
+  return { isPublic: await inWorkspace(scope, (tx) => showLinkPage(tx, userId, scope.workspaceId)) };
 }

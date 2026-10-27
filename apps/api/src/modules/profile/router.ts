@@ -10,6 +10,7 @@ import {
   saveProfileTheme,
   saveProfileShareImage,
   setProfileIndexable,
+  showMyLinkPage,
   listProfilePageChoices,
   orderProfileItems,
   readProfileCounts,
@@ -98,6 +99,10 @@ export const profileRouter = member.profile.router({
       url: wallet({ handle: me.handle, name: me.name, ...(me.bio === '' ? {} : { bio: me.bio }) }),
     };
   }),
+  /** Sharing its link makes the caller's own link page public (27 Oct 2026); editing it already has. */
+  show: member.profile.show.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () => showMyLinkPage(context.scope)),
+  ),
   counts: member.profile.counts.handler(async ({ context }) => {
     const counts = await readProfileCounts(context.scope);
     return { ...counts, presses: [...counts.presses] };

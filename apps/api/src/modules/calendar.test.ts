@@ -645,6 +645,12 @@ describe('a deleted workspace, and what each notice did (spec 0031, AC-823; spec
       },
     );
     const { app: racing } = signInApp({ db, identity }, {}, { calendar: slow, wakeRelay: () => (pokes += 1) });
+    // The jobs the workspace already had: making one queues its welcome email (26 Oct 2026), which is no part of this.
+    const jobsOf = () =>
+      testQuery(ownerUrl, `select id from graphile_worker._private_jobs where payload->>'workspaceId' = $1`, [
+        m.workspace.id,
+      ]);
+    const before = await jobsOf();
     const started = await navigate(racing, `/api/calendar/google/start?workspace=${m.slug}`, m.cookie);
     const state = new URL(started.headers.get('location') ?? '').searchParams.get('state') ?? '';
     const logs = captureLogs();
@@ -666,12 +672,8 @@ describe('a deleted workspace, and what each notice did (spec 0031, AC-823; spec
       m.workspace.id,
     ]);
     expect(stored).toEqual([]);
-    const queued = await testQuery(
-      ownerUrl,
-      `select 1 from graphile_worker._private_jobs where payload->>'workspaceId' = $1`,
-      [m.workspace.id],
-    );
-    expect(queued).toEqual([]);
+    // The refused connect queued nothing of its own.
+    expect(await jobsOf()).toEqual(before);
   });
 
   it('logs what each notice matched and did, with our ids and never its token', async () => {

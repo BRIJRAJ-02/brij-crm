@@ -1,5 +1,7 @@
 // Welcome to a workspace (26 Oct 2026), and the link page every membership gets with it: the owner's "we need to
-// create link page automatically as soon as someone signs up and also mention". The address is written with the
+// create link page automatically as soon as someone signs up and also mention". The page is private until its owner
+// edits it or shares it (27 Oct 2026), so the email says where it will be and how it goes public, and gives no link
+// to it: the address would open nothing for them, or for anyone they forwarded it to. The address is written with the
 // public host (`timefix.com/ada`) and links through the app's own origin (`/ada`), which sends it on, so the email
 // never carries a link off the app's origin.
 import type { LinkPageEmailPart, WorkspaceWelcomeEmail } from '@crm/contracts/emails';
@@ -11,22 +13,19 @@ export function linkPageAddress(handle: string, context: TemplateContext): strin
   return `${context.publicHost ?? new URL(context.link('/')).host}/${handle}`;
 }
 
-/** What a welcome says about the link page: that it is live, where, and where to change it. */
+/** What a welcome says about the link page: that it is ready and private, where it will be, and where to edit it. */
 export function linkPageBlocks(linkPage: LinkPageEmailPart, context: TemplateContext): readonly EmailBlock[] {
   return [
     {
       type: 'paragraph',
-      text: 'Your link page is live. Add your links and booking pages, then share it.',
+      text: 'Your link page is ready. Only you can see it until you add something to it or share it.',
     },
     {
       type: 'rows',
       layout: 'compact',
       rows: [
-        {
-          label: 'Your page',
-          value: linkPageAddress(linkPage.handle, context),
-          url: context.link(`/${linkPage.handle}`),
-        },
+        // Where it will be, with no link: it is private until they act, so it opens nothing yet.
+        { label: 'Your page', value: linkPageAddress(linkPage.handle, context) },
         { label: 'Edit your page', value: 'Add links, booking pages and forms', url: context.link(linkPage.editPath) },
       ],
     },
@@ -34,7 +33,7 @@ export function linkPageBlocks(linkPage: LinkPageEmailPart, context: TemplateCon
   ];
 }
 
-/** A new member is in: the button into the workspace, and their link page, live already. */
+/** A new member is in: the button into the workspace, and their link page, ready and private. */
 export const workspaceWelcome: Template<WorkspaceWelcomeEmail> = (params, context) => {
   const workspace = workspaceOf(context);
   const page = params.linkPage;
@@ -42,7 +41,7 @@ export const workspaceWelcome: Template<WorkspaceWelcomeEmail> = (params, contex
   const opening = made ? `${workspace} is ready.` : `You’re in ${workspace}.`;
   return {
     subject: `Welcome to ${workspace} on Timefix`,
-    preheader: page === undefined ? opening : `${opening} Your link page is live too.`,
+    preheader: page === undefined ? opening : `${opening} Your link page is ready too.`,
     eyebrow: workspace,
     heading: `Welcome to ${workspace}`,
     blocks: [

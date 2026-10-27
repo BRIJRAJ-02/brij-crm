@@ -101,6 +101,10 @@ export interface LinkPageApi {
     readonly workspace: string;
     readonly wallet: 'apple_wallet' | 'google_wallet';
   }) => Promise<{ readonly url: string } | { readonly off: true }>;
+  readonly show: (input: {
+    readonly workspace: string;
+    readonly mutationId: string;
+  }) => Promise<{ readonly isPublic: boolean }>;
   readonly importLinks: (input: {
     readonly workspace: string;
     readonly id: string;
@@ -178,6 +182,10 @@ interface ProfileProcedures {
     input: { workspace: string; wallet: 'apple_wallet' | 'google_wallet' },
     options: { signal?: AbortSignal },
   ) => Promise<{ url: string } | { off: true }>;
+  readonly show: (
+    input: { workspace: string; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<{ isPublic: boolean }>;
   readonly importLinks: (
     input: { workspace: string; id: string; url: string; mutationId: string },
     options: { signal?: AbortSignal },
@@ -779,6 +787,15 @@ export function createLinkPageStore(deps: LinkPageDeps) {
         throw toDataError(error);
       }),
     /**
+     * Makes the caller's own page public (27 Oct 2026), as they share its link: a page made with their membership is
+     * private until they edit it or share it. Editing shows it already; this is for copying the link, showing its
+     * code and saving it to a wallet. Never makes it private again.
+     */
+    show: (workspace: string): Promise<{ readonly isPublic: boolean }> =>
+      deps.api.show({ workspace, mutationId: deps.mintId() }).catch((error: unknown) => {
+        throw toDataError(error);
+      }),
+    /**
      * Brings one link in bio page across (spec 0055, AC-5524): `id` is the import's own, so sending the same one
      * again adds nothing twice. Every row lands hidden, and the answer says what it made and what it could not.
      */
@@ -825,6 +842,7 @@ export function openLinkPage(given: {
       setIndexable: (input) => call((options) => profile.setIndexable(input, options)),
       setShareImage: (input) => call((options) => profile.setShareImage(input, options)),
       walletLink: (input) => call((options) => profile.walletLink(input, options)),
+      show: (input) => call((options) => profile.show(input, options)),
       importLinks: (input) => call((options) => profile.importLinks(input, options)),
       saveItem: (input) => call((options) => profile.saveItem(input, options)),
       orderItems: (input) => call((options) => profile.orderItems({ ...input, ids: [...input.ids] }, options)),
@@ -896,6 +914,8 @@ export function openLinkPage(given: {
       workspace: string,
       wallet: 'apple_wallet' | 'google_wallet',
     ): Promise<{ readonly url: string } | { readonly off: true }> => store.walletLink(workspace, wallet),
+    /** Makes the caller's own page public as they share it (27 Oct 2026); never makes it private again. */
+    show: (workspace: string): Promise<{ readonly isPublic: boolean }> => store.show(workspace),
     /** The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511); none goes back to drawn. */
     setShareImage: (
       workspace: string,

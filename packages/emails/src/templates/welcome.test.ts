@@ -5,17 +5,20 @@ import { renderEmail } from '../index.ts';
 const ORIGIN = 'https://app.example.com';
 
 describe('the welcome email', () => {
-  it('says the link page is live at its public address, linked through the app', async () => {
+  it('says the link page is ready and private, where it will be, and links only to its editor', async () => {
     const email = await renderEmail(
       'workspace_welcome',
       { openPath: '/w/acme', linkPage: { handle: 'ada-lovelace', editPath: '/w/acme/link-page' } },
       { appOrigin: ORIGIN, workspaceName: 'Acme', publicOrigin: 'https://timefix.com' },
     );
     expect(email.subject).toBe('Welcome to Acme on Timefix');
-    expect(email.text).toContain('Your link page is live.');
+    expect(email.text).toContain(
+      'Your link page is ready. Only you can see it until you add something to it or share it.',
+    );
     expect(email.text).toContain('timefix.com/ada-lovelace');
     expect(email.html).toContain(`href="${ORIGIN}/w/acme"`);
-    expect(email.html).toContain(`href="${ORIGIN}/ada-lovelace"`);
+    // Private until they act: a link to it would open nothing, for them or for anyone they forward it to.
+    expect(email.html).not.toContain(`href="${ORIGIN}/ada-lovelace"`);
     expect(email.html).toContain(`href="${ORIGIN}/w/acme/link-page"`);
     expect(email.html).not.toContain('href="https://timefix.com');
   });

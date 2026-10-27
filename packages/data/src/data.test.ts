@@ -493,6 +493,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setIndexable: os.profile.setIndexable.handler(notServed),
       setShareImage: os.profile.setShareImage.handler(notServed),
       walletLink: os.profile.walletLink.handler(notServed),
+      show: os.profile.show.handler(notServed),
       importLinks: os.profile.importLinks.handler(notServed),
       saveItem: os.profile.saveItem.handler(notServed),
       orderItems: os.profile.orderItems.handler(notServed),

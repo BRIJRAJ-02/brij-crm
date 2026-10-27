@@ -1,7 +1,9 @@
 // Brief
 // Purpose: Home's "Your link page" card (spec 0051, AC-5121 to AC-5123): the QR code that opens the person's page.
 // Main task: show the page to someone (scan the code, Copy link, Open), or save the code as a PNG to print. Every
-// membership's page is made with it (26 Oct 2026), so the card says Live; the claim note is only for one not made.
+// membership's page is made with it (26 Oct 2026) and stays private until its owner edits or shares it (27 Oct
+// 2026): until then the card says Private, offers Make it public and a Preview only they can see, and draws no code
+// to scan, since a code nobody else can open is a broken promise. The claim note is only for a page not made.
 // Leaves out: editing the page (Edit opens the editor) and its figures (phase 3). Loaded with its own chunk, so
 // neither it nor the QR library is in the app's first load.
 import type { DataLayer, MyProfile } from '@crm/data';
@@ -12,6 +14,7 @@ import { publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
 import { homeStrings as strings } from './home-strings.ts';
 import { linkPageHref } from './nav-strings.ts';
+import { showLinkPage } from './show.ts';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 
 /** Props for the card. */
@@ -27,6 +30,8 @@ type Read =
 /** The person's profile, through the data layer: its handle decides what the card shows. */
 function useProfile(data: DataLayer, slug: string) {
   const [read, setRead] = useState<Read>({ status: 'loading' });
+  // Made public here: the profile read already held says private, and reading it again would only say what this knows.
+  const [madePublic, setMadePublic] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let isCurrent = true;
@@ -44,6 +49,8 @@ function useProfile(data: DataLayer, slug: string) {
   }, [data, slug, attempt]);
   return {
     read,
+    isPublic: madePublic || (read.status === 'ready' && read.profile.isPublic !== false),
+    madePublic: () => setMadePublic(true),
     retry: () => {
       setRead({ status: 'loading' });
       setAttempt((was) => was + 1);
@@ -81,9 +88,10 @@ function useWalletLink(data: DataLayer, slug: string): string | undefined {
 
 /** Your link page: its QR code, its address, Copy link, Open, and the code large in a Modal to save. */
 export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
-  const { data } = useRouteContext({ from: '__root__' });
-  const { read, retry } = useProfile(data, slug);
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const { read, retry, isPublic, madePublic } = useProfile(data, slug);
   const [isShowing, setShowing] = useState(false);
+  const [isPublishing, setPublishing] = useState(false);
   const wallet = useWalletLink(data, slug);
   if (read.status === 'loading') {
     return (
@@ -116,12 +124,58 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
   }
   const address = publicProfileUrl(handle);
   const shown = address.replace(/^https?:\/\//, '');
+  const workspace =
+    read.profile.workspaceName === undefined ? {} : { description: strings.inWorkspace(read.profile.workspaceName) };
+  if (!isPublic) {
+    const publish = () => {
+      setPublishing(true);
+      showLinkPage(data, slug)
+        .then((isNow) => {
+          if (!isNow) throw new Error('No page to show.');
+          madePublic();
+          toasts.toast({ tone: 'success', message: strings.madePublic });
+        })
+        .catch(() => toasts.toast({ tone: 'danger', message: strings.makePublicFailed }))
+        .finally(() => setPublishing(false));
+    };
+    return (
+      <Card
+        title={strings.title}
+        {...workspace}
+        actions={
+          <>
+            <Badge text={strings.private} dot="gray" />
+            <ButtonLink variant="ghost" href={linkPageHref(slug)}>
+              {strings.edit}
+            </ButtonLink>
+          </>
+        }
+      >
+        <EmptyState
+          layout="row"
+          icon="lock"
+          title={strings.privateTitle}
+          actions={
+            <>
+              <Button variant="primary" isPending={isPublishing} onPress={publish}>
+                {strings.makePublic}
+              </Button>
+              {/* Their own page as only they can see it: signed in, the public page answers its owner. */}
+              <ButtonLink href={address} isExternal icon="arrow-up-right">
+                {strings.preview}
+              </ButtonLink>
+            </>
+          }
+        >
+          {strings.privateText(shown)}
+        </EmptyState>
+      </Card>
+    );
+  }
   return (
     <Card
       title={strings.title}
-      {...(read.profile.workspaceName === undefined
-        ? {}
-        : { description: strings.inWorkspace(read.profile.workspaceName) })}
+      {...workspace}
       actions={
         <>
           <Badge text={strings.live} dot="green" />

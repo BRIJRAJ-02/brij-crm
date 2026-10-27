@@ -214,6 +214,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
+      // Private until its owner acts (27 Oct 2026, migration 0116).
+      { name: 'crm_show_public_profile', owner: 'crm_handle' },
       { name: 'crm_social_links_of', owner: 'crm_handle' },
       { name: 'crm_sweep_profile_counts', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
@@ -302,6 +304,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         atomic: true,
       },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it checks the workspace and the membership before it writes.
+      { name: 'crm_show_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_social_links_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it answers how many rows past the year it removed.
       { name: 'crm_sweep_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -483,8 +487,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // Whether a handle is held, and a person's handles by workspace (spec 0056, migration 0113).
         'crm_handle_taken',
         'crm_profile_handles_of',
-        // A link page made for every membership (26 Oct 2026, migration 0115).
+        // A link page made for every membership (26 Oct 2026, migration 0116).
         'crm_ensure_public_profile',
+        'crm_show_public_profile',
       ],
       [
         'crm_save_public_profile(uuid, uuid, text, text)',
@@ -514,10 +519,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_handle_taken(text)',
         'crm_profile_handles_of(uuid)',
         'crm_ensure_public_profile(uuid, uuid, text)',
+        'crm_show_public_profile(uuid, uuid)',
       ],
       // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
       // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 27 }, () => 'app'),
+      Array.from({ length: 28 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -2110,6 +2116,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth.public_profiles.share_image UPDATE',
       'auth.public_profiles.share_image_type UPDATE',
       'auth.public_profiles.share_image_version UPDATE',
+      'auth.public_profiles.shown_at UPDATE',
       // The look of their page (spec 0054, migration 0105): one more column, and only through
       // crm_save_profile_theme. This line is the whole of what that spec widened.
       'auth.public_profiles.theme UPDATE',

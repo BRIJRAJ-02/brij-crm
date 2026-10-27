@@ -115,7 +115,7 @@ import type { WakeRelay } from '../realtime/wake.ts';
 import type { TicketBook } from '../forms/ticket.ts';
 import { handoffForPage } from '../forms/handoff.ts';
 import { BOOKING_LIMITS, botReason, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
-import { pictureResponse, type PictureFetch } from './picture.ts';
+import { pictureResponse, PRIVATE_PICTURE_CACHE_CONTROL, type PictureFetch } from './picture.ts';
 import { iconResponse, type FaviconFetch } from './favicon.ts';
 import { shareImageResponse } from './share-image.ts';
 import {
@@ -327,11 +327,12 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   const servePicture = async (
     c: Context<{ Variables: Variables }>,
     picture: AccountPicture | undefined,
+    cacheControl?: string,
   ): Promise<Response> => {
     // The whole query, exactly: anything added would miss the edge's copy and cost a fetch of Google each time.
     if (picture === undefined || new URL(c.req.url).search !== `?v=${picture.version}`) return noPicture();
     const fetched = await services.pictures.fetch(picture.url);
-    if (fetched.ok) return pictureResponse(fetched);
+    if (fetched.ok) return pictureResponse(fetched, cacheControl);
     // Why, never the URL: it names the account.
     log.warn('booking.picture.missed', { requestId: c.get('requestId'), reason: fetched.reason });
     return noPicture();
@@ -365,7 +366,16 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     ]);
     if (refused !== undefined) return refused;
     try {
-      return await servePicture(c, readProfilePicture(await findHandleOwner({ db }, handle)));
+      // A private link page's picture is its owner's alone (27 Oct 2026): anyone else is answered as for a handle
+      // nobody holds, and the owner's own copy is kept by their browser only, never by the edge, so it can't be
+      // handed to the next person who asks for the same address.
+      const viewer = await signedInAs(c);
+      const owner = await findHandleOwner({ db }, handle, viewer === undefined ? {} : { viewer });
+      return await servePicture(
+        c,
+        readProfilePicture(owner),
+        owner.isShown ? undefined : PRIVATE_PICTURE_CACHE_CONTROL,
+      );
     } catch (error) {
       return refusalAnswer(error);
     }
@@ -543,7 +553,11 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     const [position, id] = query.data.after?.split('.') ?? [];
     const search = query.data.q === undefined || query.data.q === '' ? undefined : query.data.q;
     try {
+      // The signed in person, so an owner sees their own page while it is still private (27 Oct 2026). The answer
+      // is never cached (`ok` sends no-store), so the owner's read is never anyone else's.
+      const viewer = await signedInAs(c);
       const found = await enterLinkPage({ db }, c.req.param('handle'), {
+        ...(viewer === undefined ? {} : { viewer }),
         ...(search !== undefined || position === undefined || id === undefined
           ? {}
           : { after: { position: Number(position), id } }),
@@ -574,7 +588,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     const refused = limited([[`booking:vcard:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.vcardsPerAddress]]);
     if (refused !== undefined) return refused;
     try {
-      const contact = readContactCard(await enterContactCard({ db }, handle));
+      const viewer = await signedInAs(c);
+      const contact = readContactCard(await enterContactCard({ db }, handle, viewer === undefined ? {} : { viewer }));
       // The handle's own budget bounds the fetches of Google: past it, the card goes without its picture.
       const fetchesPicture =
         contact.picture !== undefined &&

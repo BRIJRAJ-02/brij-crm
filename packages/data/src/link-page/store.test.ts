@@ -60,6 +60,7 @@ function harness(first: ProfileItems = { items: [link('a'), link('b')], archived
     pageChoices: () => wait('pageChoices'),
     setShareImage: () => wait('setShareImage'),
     walletLink: () => wait('walletLink'),
+    show: () => wait('show'),
     formChoices: () => wait('formChoices'),
     saveTheme: ({ theme }) => Promise.resolve(theme),
     setIndexable: ({ indexable }) => Promise.resolve({ indexable }),

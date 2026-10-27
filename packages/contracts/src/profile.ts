@@ -141,6 +141,11 @@ export const MyProfile = z.object({
   /** Whether search engines may show their link page (spec 0055, AC-5506); absent with no handle. */
   indexable: z.boolean().optional(),
   /**
+   * Whether their link page is public yet (27 Oct 2026); absent with no handle. A page made with a membership is
+   * private, seen only by its owner, until they first edit it or share its link.
+   */
+  isPublic: z.boolean().optional(),
+  /**
    * The picture a pasted link to their page shows instead of the card we draw (spec 0055, AC-5511): the path our
    * own origin serves it from, absent when they have set none (and with no handle, since there is no page).
    */
@@ -290,4 +295,9 @@ export const profileContract = {
     .output(z.object({ url: z.string() }).or(z.object({ off: z.literal(true) }))),
   /** The link page's figures (spec 0051, AC-5127): views, visitors and each block's presses over 30 days. */
   counts: oc.input(WorkspaceScoped).output(ProfileCounts),
+  /**
+   * Makes the caller's own link page public (27 Oct 2026), asked as they share its link (copy it, show its code,
+   * save it to a wallet). Editing the page shows it too, with no call of its own. Never makes it private again.
+   */
+  show: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(z.object({ isPublic: z.boolean() })),
 };

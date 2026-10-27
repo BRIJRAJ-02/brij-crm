@@ -131,7 +131,7 @@ export {
   type UpdatedWorkspace,
   type WorkspaceDeletion,
 } from './workspace/settings.ts';
-export { getMyProfile, updateMyMemberProfile, type ProfileExtras } from './members/profile.ts';
+export { getMyProfile, showMyLinkPage, updateMyMemberProfile, type ProfileExtras } from './members/profile.ts';
 // The link page's blocks (spec 0051): the caller's own, in schema auth, through crm_handle's definers.
 export {
   archiveProfileItem,

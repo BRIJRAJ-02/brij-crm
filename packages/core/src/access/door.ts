@@ -646,6 +646,7 @@ interface HandleOwnerRow extends Record<string, unknown> {
   readonly theme: unknown;
   readonly indexable: boolean;
   readonly share_image_version: string | null;
+  readonly shown: boolean;
 }
 
 /** The person a handle names (current or old): their identity, current handle, and what their profile shows. */
@@ -676,6 +677,11 @@ export interface HandleOwner {
    * or absent when they have set none. The bytes are never read with the profile: only the path's version is.
    */
   readonly shareImageVersion?: string;
+  /**
+   * Whether their link page is public yet (27 Oct 2026). A page made with a membership starts private and shows
+   * when its owner first edits it or shares its link. `shownOwner` is how the link page's readers ask.
+   */
+  readonly isShown: boolean;
 }
 
 /** The person `handle` names, or undefined: a malformed or reserved handle reads nothing. */
@@ -687,7 +693,7 @@ async function handleOwner(
   if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle)) return undefined;
   return db.withWorkspace(NO_WORKSPACE, async (tx) => {
     const found = await tx.execute<HandleOwnerRow>(
-      sql`select user_id::text as user_id, workspace_id::text as workspace_id, handle, bio, name, image, theme, indexable, share_image_version from crm_handle_owner(${handle})`,
+      sql`select user_id::text as user_id, workspace_id::text as workspace_id, handle, bio, name, image, theme, indexable, share_image_version, shown from crm_handle_owner(${handle})`,
     );
     const [row] = found.rows;
     if (row === undefined) return undefined;
@@ -703,16 +709,42 @@ async function handleOwner(
       theme: PageTheme.safeParse(row.theme).data ?? DEFAULT_PAGE_THEME,
       indexable: row.indexable,
       ...(typeof row.share_image_version === 'string' ? { shareImageVersion: row.share_image_version } : {}),
+      isShown: row.shown,
     };
   });
+}
+
+/** Who is reading a link page: the signed in person, when there is one, so an owner sees their own private page. */
+export interface LinkPageViewer {
+  readonly viewer?: string;
+}
+
+/**
+ * The person `handle` names, for their link page and what hangs off it (its blocks, contact card, picture, share
+ * image, pass and press counts), or undefined (27 Oct 2026). A page made with a membership is private until its
+ * owner edits it or shares its link, and a private page answers exactly as a handle nobody holds does, to everyone
+ * but its owner. Booking addresses under the same handle don't come through here: those pages the person made.
+ */
+async function shownOwner(
+  db: Database,
+  handle: string,
+  options: { readonly withSocials?: boolean } & LinkPageViewer = {},
+): Promise<HandleOwner | undefined> {
+  const owner = await handleOwner(db, handle, options.withSocials === true ? { withSocials: true } : {});
+  if (owner === undefined) return undefined;
+  return owner.isShown || (options.viewer !== undefined && owner.userId === options.viewer) ? owner : undefined;
 }
 
 /**
  * The person a handle names, current or old (`crm_handle_owner`: no email), for their profile's picture (23 Oct
  * 2026). A handle no one holds, malformed or reserved, is NOT_FOUND. Exported only from `@crm/core/public`.
  */
-export async function findHandleOwner(deps: { readonly db: Database }, handle: string): Promise<HandleOwner> {
-  const owner = await handleOwner(deps.db, handle);
+export async function findHandleOwner(
+  deps: { readonly db: Database },
+  handle: string,
+  options: LinkPageViewer = {},
+): Promise<HandleOwner> {
+  const owner = await shownOwner(deps.db, handle, options);
   if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
   return owner;
 }
@@ -1034,10 +1066,13 @@ export async function enterShareImage(
 export async function enterLinkBlocks(
   deps: { readonly db: Database },
   handle: string,
-  query: { readonly after?: ProfileCursor; readonly max: number },
+  query: { readonly after?: ProfileCursor; readonly max: number } & LinkPageViewer,
 ): Promise<{ readonly owner: HandleOwner; readonly rows: readonly LinkPageRow[] }> {
   // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
-  const owner = await handleOwner(deps.db, handle, { withSocials: true });
+  const owner = await shownOwner(deps.db, handle, {
+    withSocials: true,
+    ...(query.viewer === undefined ? {} : { viewer: query.viewer }),
+  });
   if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
   const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
@@ -1057,7 +1092,11 @@ export async function enterLinkBlocks(
 export async function enterLinkPage(
   deps: { readonly db: Database },
   handle: string,
-  query: { readonly after?: ProfileCursor; readonly max: number; readonly publicOrigins?: readonly string[] },
+  query: {
+    readonly after?: ProfileCursor;
+    readonly max: number;
+    readonly publicOrigins?: readonly string[];
+  } & LinkPageViewer,
 ): Promise<{
   readonly owner: HandleOwner;
   readonly rows: readonly LinkPageRow[];
@@ -1070,7 +1109,10 @@ export async function enterLinkPage(
   readonly skipped: ReadonlySet<string>;
 }> {
   // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
-  const owner = await handleOwner(deps.db, handle, { withSocials: true });
+  const owner = await shownOwner(deps.db, handle, {
+    withSocials: true,
+    ...(query.viewer === undefined ? {} : { viewer: query.viewer }),
+  });
   if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
   const after = query.after !== undefined && isUuid(query.after.id) ? query.after : undefined;
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
@@ -1154,7 +1196,8 @@ export async function countItemPress(
   options: { readonly signedInAs?: string } = {},
 ): Promise<void> {
   if (!isUuid(itemId) || !PROFILE_VISITOR.test(visitor)) return;
-  const owner = await handleOwner(deps.db, handle);
+  // A private page has no visitors to count: only its owner can see it, and their presses never count.
+  const owner = await shownOwner(deps.db, handle);
   // The owner's own presses (signed in on this site) aren't a visitor's.
   if (owner === undefined || owner.userId === options.signedInAs) return;
   await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
@@ -1173,8 +1216,9 @@ export async function countItemPress(
 export async function enterContactCard(
   deps: { readonly db: Database },
   handle: string,
+  options: LinkPageViewer = {},
 ): Promise<{ readonly owner: HandleOwner; readonly data: unknown }> {
-  const owner = await handleOwner(deps.db, handle);
+  const owner = await shownOwner(deps.db, handle, options);
   const missing = () => refuse('NOT_FOUND', 'There’s no contact card here.');
   if (owner === undefined) throw missing();
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>

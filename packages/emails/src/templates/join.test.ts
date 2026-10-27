@@ -22,13 +22,13 @@ describe('the join emails', () => {
     expect(email.html).toContain(`href="${ORIGIN}/w/acme"`);
   });
 
-  it('says their link page is live, written on the public host and linked through the app', async () => {
+  it('says their link page is ready, written on the public host, with only its editor linked', async () => {
     const email = await renderJoinApproved(
       { openPath: '/w/acme', linkPage: { handle: 'grace-hopper', editPath: '/w/acme/link-page' } },
       { appOrigin: ORIGIN, workspaceName: 'Acme', publicOrigin: 'https://timefix.com' },
     );
     expect(email.text).toContain('timefix.com/grace-hopper');
-    expect(email.html).toContain(`href="${ORIGIN}/grace-hopper"`);
+    expect(email.html).not.toContain(`href="${ORIGIN}/grace-hopper"`);
     expect(email.html).toContain(`href="${ORIGIN}/w/acme/link-page"`);
     expect(email.html).not.toContain('href="https://timefix.com');
   });
