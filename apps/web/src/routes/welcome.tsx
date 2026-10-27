@@ -2,7 +2,7 @@ import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
 import { signInHref } from '../features/auth/redirect.ts';
-import { shownStep, welcomeLanding, welcomeSearch } from '../features/welcome/steps.ts';
+import { shownStep, welcomeLanding, welcomeSearch, welcomeSteps } from '../features/welcome/steps.ts';
 import { invitableRoles } from '../features/settings/members.ts';
 import { strings } from '../features/welcome/strings.ts';
 import { WelcomeScreen } from '../features/welcome/WelcomeScreen.tsx';
@@ -11,7 +11,8 @@ import { homeWorkspace } from '../features/workspace/home.ts';
 // First run (spec 0036), for a signed in person: signed out goes to /sign-in
 // (and comes back here). Before the workspace exists, someone who already has
 // one goes to it. After, `?workspace=` names the one just made, for Invite
-// your team and the calendar step (only where calendar sync is set up); a workspace
+// your team, Your link, Your booking page and the calendar step (only where
+// calendar sync is set up); a workspace
 // that isn't theirs is passed over. `?step=` picks the step and changes
 // without a new load; a new `?workspace=` loads again. `?another=1` (the
 // workspace menu's Create workspace, spec 0031) keeps the steps open for
@@ -42,22 +43,39 @@ export const Route = createFileRoute('/welcome')({
             ([access, roles]) => ({ actor: access.role, roles }),
             () => undefined,
           );
-    // The link page made with the workspace (26 Oct 2026), said on Invite your team: its handle, or nothing.
-    const handleRead =
+    // The link page made with the workspace (26 Oct 2026): the handle Your link claims, or the one already held,
+    // and a free one to start its field with.
+    const profileRead =
       made === undefined
         ? Promise.resolve(undefined)
         : context.data.profile.get(made.slug).then(
-            (profile) => profile.handle,
+            (profile) => ({ handle: profile.handle, suggested: profile.suggestedHandle }),
             () => undefined,
           );
-    const [calendarSync, roleRead, linkPageHandle] = await Promise.all([calendarRead, rolesRead, handleRead]);
+    // Someone who already has a booking page (another workspace, spec 0031) is never asked to make a second one.
+    // A read that fails leaves the step in: making a page is the safe way to be wrong.
+    const pagesRead =
+      made === undefined
+        ? Promise.resolve(false)
+        : context.data.bookingPages.list(made.slug).then(
+            (pages) => pages.length > 0,
+            () => false,
+          );
+    const [calendarSync, roleRead, profile, hasBookingPage] = await Promise.all([
+      calendarRead,
+      rolesRead,
+      profileRead,
+      pagesRead,
+    ]);
     return {
       user: me.user,
       calendarSync,
       workspace: landing.workspace,
       leaveTo: deps.another ? home : undefined,
       roleRead,
-      linkPageHandle,
+      linkPageHandle: profile?.handle,
+      suggestedHandle: profile?.suggested,
+      hasBookingPage,
     };
   },
   pendingComponent: () => (
@@ -70,7 +88,8 @@ export const Route = createFileRoute('/welcome')({
 });
 
 function WelcomeRoute() {
-  const { user, calendarSync, workspace, leaveTo, roleRead, linkPageHandle } = Route.useLoaderData();
+  const { user, calendarSync, workspace, leaveTo, roleRead, linkPageHandle, suggestedHandle, hasBookingPage } =
+    Route.useLoaderData();
   const allowed = roleRead === undefined ? [] : invitableRoles(roleRead.actor);
   const options = roleRead?.roles.roles.filter((each) => each.builtIn !== undefined && allowed.includes(each.builtIn));
   const inviteRoles =
@@ -86,13 +105,21 @@ function WelcomeRoute() {
     <WelcomeScreen
       data={data}
       user={user}
-      step={shownStep(step, workspace !== undefined, another === true)}
+      step={shownStep(
+        step,
+        workspace !== undefined,
+        another === true,
+        // The person's own steps, so one they have already done is never shown again.
+        welcomeSteps(calendarSync, another === true, { booking: hasBookingPage }),
+      )}
       calendarSync={calendarSync}
       workspace={workspace}
       calendarResult={calendar}
       leaveTo={leaveTo}
       inviteRoles={inviteRoles}
       linkPageHandle={linkPageHandle}
+      suggestedHandle={suggestedHandle}
+      hasBookingPage={hasBookingPage}
     />
   );
 }

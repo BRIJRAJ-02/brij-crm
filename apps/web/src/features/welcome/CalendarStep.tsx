@@ -1,6 +1,8 @@
 // Brief
 // Purpose: first run's Connect your calendar (spec 0036): meetings onto the people and companies a new member meets.
-// Main task: Connect Google Calendar (to Google and back here), or Skip for now; then into the workspace.
+// Main task: Connect Google Calendar (to Google and back here), or go on without one; then the last step.
+// Only Invite your team skips (the owner, 27 October 2026); this step can't be forced, since the connecting
+// happens at Google, so its way on says what it does rather than offering a skip.
 // Leaves out: choosing calendars and sharing (Settings › Calendars), and Outlook until spec 0024 milestone 4.
 import { Button, Callout, Tooltip } from '@crm/ui';
 import { useEffect, useRef } from 'react';
@@ -15,15 +17,15 @@ export interface CalendarStepProps {
   readonly onConnect: () => void;
   /** The browser is on its way to Google. */
   readonly isConnecting: boolean;
-  /** Opens the workspace: Continue once connected, or Skip for now. */
+  /** Goes on to the last step: Continue once connected, or without a calendar. */
   readonly onFinish: () => void;
 }
 
 /**
  * Connect your calendar: what the last connect came back with, then Connect
  * Google Calendar (Google Calendar's mark), Connect Outlook (off: the step's
- * description says it is coming soon) and Skip for now; once connected,
- * Continue. Focus starts on the first button that works, so Enter does the
+ * description says it is coming soon) and Continue without a calendar; once
+ * connected, Continue. Focus starts on the first button that works, so Enter does the
  * step.
  */
 export function CalendarStep({ result, onConnect, isConnecting, onFinish }: CalendarStepProps) {
@@ -65,7 +67,7 @@ export function CalendarStep({ result, onConnect, isConnecting, onFinish }: Cale
             </Button>
           </Tooltip>
           <Button variant="ghost" size="lg" isFullWidth="center" onPress={onFinish}>
-            {strings.skipCalendar}
+            {strings.calendarLater}
           </Button>
         </>
       )}

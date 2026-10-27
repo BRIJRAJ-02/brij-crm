@@ -22,7 +22,7 @@ export const strings = {
   aboutTitle: 'Your name',
   aboutDescription: 'How your team sees you in Timefix.',
   yourName: 'Your name',
-  nameMissing: 'Enter your name, or skip this step.',
+  nameMissing: 'Enter your name.',
 
   /**
    * The link page made with the workspace (26 Oct 2026), said on Invite your team. Live from the moment it exists
@@ -32,6 +32,32 @@ export const strings = {
   linkPageAt: 'It is at',
   linkPageNext: 'Anyone with the address can open it. Search engines aren’t told about it until you say so.',
   linkPageEdit: 'Edit link page',
+
+  handleTitle: 'Your link page',
+  handleDescription: 'One address for everything you share. Your booking page is already on it.',
+  handleLabel: 'Your link',
+  handleHint: '3 to 40 lowercase letters, digits and dashes.',
+  handleMissing: 'Pick a link.',
+  claim: 'Claim your link page',
+  claiming: 'Claiming your link page',
+  /** Over the phone beside the step, so the sketch reads as what it is. */
+  handlePreview: 'Your link page',
+
+  bookingTitle: 'Your booking page',
+  bookingDescription: 'A page people open to book time with you. It goes on your link page.',
+  bookingName: 'What are you offering?',
+  bookingNamePlaceholder: 'Intro call',
+  bookingNameMissing: 'Name the meeting.',
+  bookingLength: 'How long is it?',
+  /** Each length a first page may offer, in minutes; the page's editor offers the rest. */
+  bookingLengths: [15, 30, 45, 60] as const,
+  bookingLengthLabel: (minutes: number) => `${String(minutes)} min`,
+  /** The sketch of the booking page beside the step: its own words, never a real page's. */
+  previewChooseTime: 'Choose a time',
+  createPage: 'Create booking page',
+  creatingPage: 'Creating booking page',
+  /** Under the fields: where the page lands, so nothing about it is a surprise. */
+  bookingNote: 'It opens straight away, and you can change its hours and questions afterwards.',
 
   inviteTitle: 'Invite your team',
   inviteDescription: 'They get an email with a link to join.',
@@ -75,6 +101,8 @@ export const strings = {
   connectOutlook: 'Connect Outlook',
   outlookSoon: 'Outlook is coming soon.',
   skipCalendar: 'Skip for now',
+  /** The calendar step's way on without connecting: it isn't a skip, since nothing here can be forced. */
+  calendarLater: 'Continue without a calendar',
   opening: 'Opening your workspace',
   /** What a connect that came back with `?calendar=` says. */
   results: {

@@ -1,8 +1,9 @@
 // Brief
 // Purpose: first run's Your name (spec 0036): the name a new person's team sees, beside their initials.
-// Main task: type your name (Google's is there already) and Continue, or Skip.
+// Main task: type your name (Google's is there already) and Continue. There is no Skip (the owner, 27 October
+// 2026): a name is one field, and every page this run makes carries it.
 // Leaves out: a photo until file storage arrives (the initials stand in), and anything about the workspace.
-import { Avatar, Button, Field, Form } from '@crm/ui';
+import { Avatar, Field, Form } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -25,11 +26,10 @@ export interface AboutStepProps {
   /** Seeds the avatar's hue, the person's own everywhere. */
   readonly userId: string;
   readonly onContinue: () => void;
-  readonly onSkip: () => void;
 }
 
-/** Your name: the initials that follow the name, "Your name", Continue (Enter), and Skip. */
-export function AboutStep({ memberName, onMemberName, shownName, userId, onContinue, onSkip }: AboutStepProps) {
+/** Your name: the initials that follow the name, "Your name" and Continue (Enter). */
+export function AboutStep({ memberName, onMemberName, shownName, userId, onContinue }: AboutStepProps) {
   const [refusals, setRefusals] = useState<readonly AboutRefusal[]>([]);
   return (
     <Form<AboutRefusal>
@@ -44,11 +44,6 @@ export function AboutStep({ memberName, onMemberName, shownName, userId, onConti
         setRefusals([]);
         onContinue();
       }}
-      actions={
-        <Button variant="ghost" size="lg" isFullWidth="center" onPress={onSkip}>
-          {strings.skip}
-        </Button>
-      }
     >
       <Avatar name={shownName} id={userId} size="xl" isDecorative />
       <Field

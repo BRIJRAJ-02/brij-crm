@@ -15,30 +15,59 @@ export function isConnectResult(value: unknown): value is ConnectResult {
 }
 
 /**
- * First run's steps, in order: Your name (`about`), Your workspace, Invite
- * your team, Connect your calendar. (About you, the questionnaire, was taken
- * out on 22 October 2026 by the owner, to cut friction; an old `?step=details`
- * link starts at Your name.)
+ * First run's steps, in order: Your name (`about`), Your workspace, Your
+ * booking page (`booking`), Your link page (`handle`), Connect your calendar,
+ * Invite your team. The booking page comes first, so the link page it goes on
+ * has something on it by the time its owner sees it (the owner, 27 October
+ * 2026). (About you, the questionnaire, was taken out on 22 October 2026
+ * by the owner, to cut friction; an old `?step=details` link starts at Your
+ * name.) Your link and Your booking page were added on 27 October 2026, when
+ * the owner asked that first run set the link page and the booking page up
+ * rather than let them be skipped: Timefix is a page and a booking page, so
+ * first run makes both.
  */
-export type WelcomeStep = 'about' | 'workspace' | 'invite' | 'calendar';
+export type WelcomeStep = 'about' | 'workspace' | 'booking' | 'handle' | 'calendar' | 'invite';
 
-const STEPS: readonly WelcomeStep[] = ['about', 'workspace', 'invite', 'calendar'];
+const STEPS: readonly WelcomeStep[] = ['about', 'workspace', 'booking', 'handle', 'calendar', 'invite'];
 
 /** The steps that come once the workspace exists. */
-const AFTER_WORKSPACE: readonly WelcomeStep[] = ['invite', 'calendar'];
+const AFTER_WORKSPACE: readonly WelcomeStep[] = ['booking', 'handle', 'calendar', 'invite'];
+
+/** True for a step that only makes sense once the workspace exists. */
+export function needsWorkspace(step: WelcomeStep): boolean {
+  return AFTER_WORKSPACE.includes(step);
+}
+
+/** What the person already has, so first run doesn't ask for it twice. */
+export interface WelcomeDone {
+  /** They have a booking page already: Your booking page is done. */
+  readonly booking?: boolean;
+}
 
 /**
- * The steps this deployment shows: Connect your calendar only where calendar
- * sync is set up (AC-1204). Another workspace (spec 0031) starts at Your
- * workspace, so the steps about the person are left out of its count.
+ * The steps this deployment shows for this person: Connect your calendar only
+ * where calendar sync is set up (AC-1204), and Your booking page only while
+ * they have none. Your link is always asked: a handle is made with every
+ * membership (26 Oct 2026), so the step is where its owner sees the one they
+ * were given and takes it or changes it, rather than finding it later in
+ * Settings. Another workspace (spec 0031) starts at Your workspace, so the
+ * steps about the person are left out of its count.
  */
-export function welcomeSteps(calendarSync: boolean, another = false): readonly WelcomeStep[] {
-  return STEPS.filter((step) => (calendarSync || step !== 'calendar') && (!another || step !== 'about'));
+export function welcomeSteps(calendarSync: boolean, another = false, done: WelcomeDone = {}): readonly WelcomeStep[] {
+  return STEPS.filter((step) => {
+    if (step === 'calendar' && !calendarSync) return false;
+    if (step === 'about' && another) return false;
+    if (step === 'booking' && done.booking === true) return false;
+    return true;
+  });
 }
 
 /**
  * The step Back returns to, or undefined: the first step has none, and once
- * the workspace exists the steps before it are done (AC-1209).
+ * the workspace exists the steps before it are done (AC-1209). Nothing after
+ * the workspace has a Back either: each of those steps makes something
+ * (a handle, a page, a calendar, invitations), so going back would mean
+ * undoing it.
  */
 export function previousStep(step: WelcomeStep): WelcomeStep | undefined {
   return step === 'workspace' ? 'about' : undefined;
@@ -51,8 +80,8 @@ export function nextStep(steps: readonly WelcomeStep[], step: WelcomeStep): Welc
 }
 
 /**
- * First run's search: the step, the workspace once it is made (the calendar
- * step needs it), and what a calendar connect came back with (`?calendar=`).
+ * First run's search: the step, the workspace once it is made (every step
+ * after it needs it), and what a calendar connect came back with (`?calendar=`).
  */
 export interface WelcomeSearch {
   readonly step?: WelcomeStep;
@@ -74,15 +103,28 @@ export function welcomeSearch(search: Record<string, unknown>): WelcomeSearch {
 }
 
 /**
- * The step to show: once the workspace is made, Invite your team or the
- * calendar step (the only steps after it); before, the step asked for, never
- * one that needs the workspace; Your name when none is asked for.
+ * The step to show: once the workspace is made, the step asked for when this
+ * person still has it to do, else the first one they do (Your booking page,
+ * then Your link page, then the calendar, then Invite your team); before the
+ * workspace, the step asked for, never one that needs the workspace; Your
+ * name when none is asked for. `steps` is this person's own list, so a step
+ * they have already done is never shown again.
  */
-export function shownStep(asked: WelcomeStep | undefined, hasWorkspace: boolean, another = false): WelcomeStep {
-  if (hasWorkspace) return asked === 'calendar' ? 'calendar' : 'invite';
+export function shownStep(
+  asked: WelcomeStep | undefined,
+  hasWorkspace: boolean,
+  another = false,
+  steps: readonly WelcomeStep[] = STEPS,
+): WelcomeStep {
+  const after = steps.filter(needsWorkspace);
+  if (hasWorkspace) {
+    if (asked !== undefined && after.includes(asked)) return asked;
+    // Every list keeps Invite your team, so there is always one step left to land on.
+    return after[0] ?? 'invite';
+  }
   // Another workspace (spec 0031): the person is known already, so it starts at Your workspace.
   if (another) return 'workspace';
-  return asked === undefined || AFTER_WORKSPACE.includes(asked) ? 'about' : asked;
+  return asked === undefined || needsWorkspace(asked) ? 'about' : asked;
 }
 
 /** Where `/welcome` goes for a signed in person: first run's steps (with the workspace just made), or a workspace. */
@@ -90,9 +132,9 @@ export type WelcomeLanding<W> =
   { readonly kind: 'steps'; readonly workspace: W | undefined } | { readonly kind: 'open'; readonly slug: string };
 
 /**
- * Where `/welcome` goes: the calendar step for `asked` only when it is one of
- * the person's own workspaces and calendar sync is on; else, for someone with
- * a workspace, that workspace (or their first); else the steps from the
+ * Where `/welcome` goes: the steps after the workspace for `asked` only when
+ * it is one of the person's own workspaces; else, for someone with a
+ * workspace, that workspace (or their first); else the steps from the
  * start. A workspace that isn't theirs is passed over, never shown. `home`
  * is the one to open (spec 0031: the last opened, else the oldest), and
  * `another` keeps the steps open for someone making another workspace.
@@ -104,7 +146,7 @@ export function welcomeLanding<W extends { readonly slug: string }>(
   another = false,
 ): WelcomeLanding<W> {
   const made = asked === undefined ? undefined : workspaces.find((each) => each.slug === asked);
-  // Invite your team always follows the workspace, so the one just made keeps the steps open.
+  // Your booking page always follows the workspace, so the one just made keeps the steps open.
   if (made !== undefined) return { kind: 'steps', workspace: made };
   if (another) return { kind: 'steps', workspace: undefined };
   return home === undefined ? { kind: 'steps', workspace: undefined } : { kind: 'open', slug: home.slug };

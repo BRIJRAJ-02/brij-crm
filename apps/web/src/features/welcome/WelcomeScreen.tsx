@@ -2,8 +2,10 @@
 // Purpose: first run (spec 0036): a new person says who they are, names their workspace and may connect a calendar,
 // or (spec 0031) someone with a workspace makes another, starting at Your workspace,
 // watching the workspace take shape beside each step.
-// Main task: Your name, Your workspace (Create workspace), Invite your team, then Connect your calendar, into the
-// workspace. Leaves out: a photo (file storage), templates, and a questionnaire (taken out 22 October 2026).
+// Main task: Your name, Your workspace (Create workspace), Your link, Your booking page, Connect your calendar
+// and Invite your team, into the workspace. Your link and Your booking page can't be skipped (the owner, 27
+// October 2026): a link page and something to book are the product, so first run makes both.
+// Leaves out: a photo (file storage), templates, and a questionnaire (taken out 22 October 2026).
 import { isDataError, type DataLayer, type RoleOption, type SignedInUser, type WorkspaceSummary } from '@crm/data';
 import { AuthLayout, Button, ButtonLink, Steps, WorkspacePreview, type WorkspacePreviewFocus } from '@crm/ui';
 import { useNavigate, useRouter } from '@tanstack/react-router';
@@ -13,33 +15,54 @@ import { SignOutDialog } from '../auth/SignOutDialog.tsx';
 import { strings as authStrings } from '../auth/strings.ts';
 import { focusPage } from '../navigation/focus.ts';
 import { PRODUCT_LOGO } from '../../brand.ts';
+import { handleBaseFor } from '@crm/contracts/handles';
 import { AboutStep } from './AboutStep.tsx';
+import { BookingPagePreview } from './BookingPagePreview.tsx';
+import { BookingStep } from './BookingStep.tsx';
+import { HandleStep } from './HandleStep.tsx';
+import { LinkPagePreview } from './LinkPagePreview.tsx';
+import { memberZone } from '../booking/zone.ts';
 import { CalendarStep } from './CalendarStep.tsx';
 import { InviteStep } from './InviteStep.tsx';
 import { clearDraft, readDraft, saveDraft } from './draft.ts';
 import { addressCandidates } from '../address/address.ts';
 import { memberNameFor, suggestedWorkspaceName } from './names.ts';
 import { refusalsOf, type WelcomeRefusal } from './refusals.ts';
-import { nextStep, previousStep, welcomeSteps, type ConnectResult, type WelcomeStep } from './steps.ts';
+import { needsWorkspace, nextStep, previousStep, welcomeSteps, type ConnectResult, type WelcomeStep } from './steps.ts';
 import { strings } from './strings.ts';
 import { useAddress } from '../address/useAddress.ts';
 import { WorkspaceStep } from './WorkspaceStep.tsx';
+
+/** The length a first booking page offers until its owner changes it. */
+const DEFAULT_MINUTES = 30;
 
 /** Each step's title and the line under it. */
 const COPY: Readonly<Record<WelcomeStep, { readonly title: string; readonly description: string }>> = {
   about: { title: strings.aboutTitle, description: strings.aboutDescription },
   workspace: { title: strings.workspaceTitle, description: strings.workspaceDescription },
+  handle: { title: strings.handleTitle, description: strings.handleDescription },
+  booking: { title: strings.bookingTitle, description: strings.bookingDescription },
   invite: { title: strings.inviteTitle, description: strings.inviteDescription },
   calendar: { title: strings.calendarTitle, description: strings.calendarDescription },
 };
 
-/** The part of the preview each step is about. */
+/** The part of the workspace sketch each step that shows it is about. */
 const FOCUS: Readonly<Record<WelcomeStep, WorkspacePreviewFocus>> = {
   about: 'person',
   workspace: 'workspace',
+  handle: 'person',
+  booking: 'workspace',
   invite: 'workspace',
   calendar: 'calendar',
 };
+
+/**
+ * The steps whose preview is the person's own link page rather than the
+ * workspace sketch: the one that names it, and Invite your team, which is
+ * where its address is handed over. Your booking page shows that page
+ * instead (the owner, 27 October 2026).
+ */
+const PAGE_PREVIEW: readonly WelcomeStep[] = ['handle', 'invite'];
 
 /** Props for first run. */
 export interface WelcomeScreenProps {
@@ -60,8 +83,12 @@ export interface WelcomeScreenProps {
   readonly leaveTo?: { readonly slug: string; readonly name: string } | undefined;
   /** The roles Invite your team offers and the one rows start with; undefined when unread (everyone as a member). */
   readonly inviteRoles?: { readonly roles: readonly RoleOption[]; readonly defaultRole: string } | undefined;
-  /** The handle of the link page made with the workspace (26 Oct 2026), said on Invite your team; undefined unread. */
+  /** The handle of the link page made with the workspace (26 Oct 2026), once claimed; undefined until Your link. */
   readonly linkPageHandle?: string | undefined;
+  /** A free handle made from their name, the first value of Your link's field. */
+  readonly suggestedHandle?: string | undefined;
+  /** They already have a booking page, so Your booking page isn't asked for. */
+  readonly hasBookingPage?: boolean;
 }
 
 /**
@@ -80,6 +107,8 @@ export function WelcomeScreen({
   leaveTo,
   inviteRoles,
   linkPageHandle,
+  suggestedHandle,
+  hasBookingPage = false,
 }: WelcomeScreenProps) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -101,6 +130,22 @@ export function WelcomeScreen({
   const [isCreating, setCreating] = useState(false);
   const [refusals, setRefusals] = useState<readonly WelcomeRefusal[]>([]);
   const [isConnecting, setConnecting] = useState(false);
+  // Your link: the suggested handle until it is typed, then whatever was claimed.
+  const [claimedHandle, setClaimedHandle] = useState<string | undefined>(linkPageHandle);
+  const [typedHandle, setTypedHandle] = useState<string | undefined>(undefined);
+  // The field is never empty: the handle they hold, else the server's free suggestion, else one made here from
+  // their name the same way the server makes it. A blank field would read as a step with nothing in it.
+  const madeHandle = useMemo(() => handleBaseFor(shownName, user.email), [shownName, user.email]);
+  const handle = typedHandle ?? claimedHandle ?? suggestedHandle ?? madeHandle;
+  const [isClaiming, setClaiming] = useState(false);
+  const [handleRefusals, setHandleRefusals] = useState<readonly WelcomeRefusal[]>([]);
+  // Your booking page: its id is minted on the first try and sent again on every retry, so a lost answer leaves
+  // one page, not two. Minted there rather than here, so no step before it asks the data layer for one.
+  const pageId = useRef<string | undefined>(undefined);
+  const [pageTitle, setPageTitle] = useState('');
+  const [pageMinutes, setPageMinutes] = useState(DEFAULT_MINUTES);
+  const [isCreatingPage, setCreatingPage] = useState(false);
+  const [pageRefusals, setPageRefusals] = useState<readonly WelcomeRefusal[]>([]);
   const [isSignOutOpen, setSignOutOpen] = useState(false);
   const [isSigningOut, setSigningOut] = useState(false);
   const [signOutFailure, setSignOutFailure] = useState<string | undefined>(undefined);
@@ -140,17 +185,25 @@ export function WelcomeScreen({
   }, [step]);
 
   // Another workspace skips what is known about the person, so its count is its own ("Step 1 of 2").
-  const steps = welcomeSteps(calendarSync, leaveTo !== undefined);
+  // What was already done when first run opened, held still: the list, and so "Step N of M", must not shrink
+  // under the person as they do the very steps it counts.
+  const [done] = useState(() => ({ booking: hasBookingPage }));
+  const steps = welcomeSteps(calendarSync, leaveTo !== undefined, done);
   const back = leaveTo === undefined ? previousStep(step) : undefined;
   // The step this one was reached from by Continue: Back then goes back through the browser's history, so the
   // browser's own back button and ours agree.
   const cameFrom = useRef<WelcomeStep | undefined>(undefined);
-  const goTo = (next: WelcomeStep) => {
-    cameFrom.current = step;
-    void navigate({ to: '/welcome', search: { step: next } });
-  };
   // Another workspace keeps its own count (and its way back) through the steps after the workspace.
   const another = leaveTo === undefined ? {} : { another: true as const };
+  const goTo = (next: WelcomeStep) => {
+    cameFrom.current = step;
+    // The workspace stays in the address: every step after it needs it, and a move that dropped it would leave
+    // the route with nothing to show and send the person to their workspace instead (27 October 2026).
+    void navigate({
+      to: '/welcome',
+      search: { step: next, ...(workspace === undefined ? {} : { workspace: workspace.slug }), ...another },
+    });
+  };
   const goBack = () => {
     if (back === undefined) return;
     if (cameFrom.current === back) {
@@ -160,9 +213,14 @@ export function WelcomeScreen({
     }
     void navigate({ to: '/welcome', search: { step: back }, replace: true });
   };
-  const after = (done: WelcomeStep) => {
-    const next = nextStep(steps, done);
-    if (next !== undefined) goTo(next);
+  const openWorkspace = () => {
+    if (workspace !== undefined) void navigate({ to: '/w/$slug', params: { slug: workspace.slug }, replace: true });
+  };
+  // The step after this one, or, after the last, the workspace itself.
+  const after = (finished: WelcomeStep) => {
+    const next = nextStep(steps, finished);
+    if (next === undefined) openWorkspace();
+    else goTo(next);
   };
 
   const create = () => {
@@ -172,10 +230,14 @@ export function WelcomeScreen({
     data.workspaces.create({ id, name: name.trim(), slug, memberName: memberNameSent }).then(
       async ({ workspace: made }) => {
         clearDraft(storage);
-        // Invite your team loads with the new workspace before it shows, so the card goes straight to it.
-        const inviteStep = { to: '/welcome', search: { step: 'invite', workspace: made.slug, ...another } } as const;
-        await router.preloadRoute(inviteStep).catch(() => undefined);
-        void navigate({ ...inviteStep, replace: true });
+        // The first step after the workspace loads with it before it shows, so the card goes straight there.
+        const firstAfter = steps.find(needsWorkspace) ?? 'invite';
+        const nextStepHref = {
+          to: '/welcome',
+          search: { step: firstAfter, workspace: made.slug, ...another },
+        } as const;
+        await router.preloadRoute(nextStepHref).catch(() => undefined);
+        void navigate({ ...nextStepHref, replace: true });
       },
       (failure: unknown) => {
         // Someone else's workspace has this id (vanishingly rare): the next try gets a new one.
@@ -186,17 +248,57 @@ export function WelcomeScreen({
     );
   };
 
-  const afterInvite = () => {
-    if (workspace === undefined) return;
-    if (!calendarSync) {
-      void navigate({ to: '/w/$slug', params: { slug: workspace.slug }, replace: true });
-      return;
-    }
-    void navigate({
-      to: '/welcome',
-      search: { step: 'calendar', workspace: workspace.slug, ...another },
-      replace: true,
-    });
+  /**
+   * Your link: claims the handle, which names the link page made with the
+   * workspace and every booking page under it. A taken one comes back on the
+   * field; the server has the last word, so nothing is checked as it is typed.
+   */
+  const claim = () => {
+    if (workspace === undefined || isClaiming) return;
+    const wanted = handle.trim();
+    setClaiming(true);
+    setHandleRefusals([]);
+    data.profile.update(workspace.slug, { handle: wanted }).then(
+      (profile) => {
+        setClaiming(false);
+        setClaimedHandle(profile.handle ?? wanted);
+        after('handle');
+      },
+      (failure: unknown) => {
+        setClaiming(false);
+        setHandleRefusals(refusalsOf(failure));
+      },
+    );
+  };
+
+  /**
+   * Your booking page: one page with its name and one length, booking by the
+   * person's default schedule. It joins the end of the link page by itself
+   * (spec 0051), so nothing here puts it there.
+   */
+  const createPage = () => {
+    if (workspace === undefined || isCreatingPage) return;
+    setCreatingPage(true);
+    setPageRefusals([]);
+    data.bookingPages
+      .create(workspace.slug, {
+        id: (pageId.current ??= data.bookingPages.newId()),
+        title: pageTitle.trim(),
+        timeZone: memberZone(data, workspace.slug),
+        settings: { durations: [pageMinutes], scheduleId: null },
+      })
+      .then(
+        () => {
+          setCreatingPage(false);
+          after('booking');
+        },
+        (failure: unknown) => {
+          // Someone else's page has this id (vanishingly rare): the next try gets a new one.
+          if (isDataError(failure) && failure.code === 'ID_TAKEN') pageId.current = data.bookingPages.newId();
+          setCreatingPage(false);
+          setPageRefusals(refusalsOf(failure));
+        },
+      );
   };
 
   const connect = () => {
@@ -204,9 +306,6 @@ export function WelcomeScreen({
     setConnecting(true);
     // The browser goes to the API, which sends it on to Google's consent and back to this step.
     window.location.assign(data.calendar.connectUrl(workspace.slug, 'welcome'));
-  };
-  const finish = () => {
-    if (workspace !== undefined) void navigate({ to: '/w/$slug', params: { slug: workspace.slug }, replace: true });
   };
 
   const signOut = () => {
@@ -250,13 +349,26 @@ export function WelcomeScreen({
           </>
         }
         preview={
-          <WorkspacePreview
-            workspaceName={workspace?.name ?? name}
-            workspaceId={workspace?.id ?? id}
-            personName={shownName}
-            personId={user.id}
-            focus={FOCUS[step]}
-          />
+          // The two steps that make the link page, and the one that hands its address over, show the page itself;
+          // the rest show the workspace taking shape.
+          step === 'booking' ? (
+            <BookingPagePreview name={shownName} title={pageTitle} minutes={pageMinutes} />
+          ) : PAGE_PREVIEW.includes(step) ? (
+            <LinkPagePreview
+              name={shownName}
+              id={claimedHandle ?? user.id}
+              handle={handle}
+              page={{ title: pageTitle, minutes: pageMinutes }}
+            />
+          ) : (
+            <WorkspacePreview
+              workspaceName={workspace?.name ?? name}
+              workspaceId={workspace?.id ?? id}
+              personName={shownName}
+              personId={user.id}
+              focus={FOCUS[step]}
+            />
+          )
         }
         account={user.email}
         footer={
@@ -288,9 +400,6 @@ export function WelcomeScreen({
             onContinue={() => {
               after('about');
             }}
-            onSkip={() => {
-              after('about');
-            }}
           />
         )}
         {step === 'workspace' && (
@@ -304,17 +413,46 @@ export function WelcomeScreen({
             onCreate={create}
           />
         )}
+        {step === 'handle' && (
+          <HandleStep
+            handle={handle}
+            onHandle={setTypedHandle}
+            isClaiming={isClaiming}
+            refusals={handleRefusals}
+            onClaim={claim}
+          />
+        )}
+        {step === 'booking' && (
+          <BookingStep
+            title={pageTitle}
+            onTitle={setPageTitle}
+            minutes={pageMinutes}
+            onMinutes={setPageMinutes}
+            isCreating={isCreatingPage}
+            refusals={pageRefusals}
+            onCreate={createPage}
+          />
+        )}
+        {step === 'calendar' && (
+          <CalendarStep
+            result={calendarResult}
+            onConnect={connect}
+            isConnecting={isConnecting}
+            onFinish={() => {
+              after('calendar');
+            }}
+          />
+        )}
         {step === 'invite' && workspace !== undefined && (
           <InviteStep
             data={data}
             slug={workspace.slug}
             roles={inviteRoles}
-            onDone={afterInvite}
-            handle={linkPageHandle}
+            onDone={() => {
+              after('invite');
+            }}
+            handle={claimedHandle}
           />
-        )}
-        {step === 'calendar' && (
-          <CalendarStep result={calendarResult} onConnect={connect} isConnecting={isConnecting} onFinish={finish} />
         )}
       </AuthLayout>
       <SignOutDialog

@@ -108,5 +108,17 @@ export const isNotOlder = (
 export const publicBookingUrl = (page: Pick<BookingPageView, 'handle' | 'slug' | 'publicKey' | 'isPrivate'>) =>
   `${publicBookingOrigin()}${publicBookingPath(page)}`;
 
+/**
+ * The public origin's host alone ("timefix.com"), for a field that shows the
+ * address a visitor reads rather than the whole URL (first run's Your link).
+ */
+export function publicBookingHost(): string {
+  try {
+    return new URL(publicBookingOrigin()).host;
+  } catch {
+    return '';
+  }
+}
+
 /** A person's public profile, `/<handle>`, on the public booking origin. */
 export const publicProfileUrl = (handle: string) => `${publicBookingOrigin()}/${encodeURIComponent(handle)}`;
