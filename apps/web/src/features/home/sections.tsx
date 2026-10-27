@@ -1,15 +1,14 @@
 // Home's sections, in the order Home shows them (spec 0041). A new feature
 // adds one entry here: its key, its width, who gets it, and its component,
 // which reads its own data and draws its own loading, empty and error states.
+//
+// Home shows two cards, Today and Your link page (the owner, 27 October 2026), with Finish setting up above them
+// while a workspace still has steps left. My tasks, Recently viewed, New captures, Team today and This week came off;
+// their components are still in sections/, so bringing one back is putting its entry back here.
 import type { HomeSection } from './registry.ts';
-import { CapturesSection } from './sections/CapturesSection.tsx';
 import { homeStrings as linkPageStrings } from '../link-page/home-strings.ts';
 import { LinkPageSection } from './sections/LinkPageSection.tsx';
-import { MetricsSection } from './sections/MetricsSection.tsx';
-import { RecentSection } from './sections/RecentSection.tsx';
 import { SetupSection } from './sections/SetupSection.tsx';
-import { TasksSection } from './sections/TasksSection.tsx';
-import { TeamSection } from './sections/TeamSection.tsx';
 import { TodaySection } from './sections/TodaySection.tsx';
 
 /** Home's registry. */
@@ -24,23 +23,6 @@ export const HOME_SECTIONS: readonly HomeSection[] = [
     Component: SetupSection,
   },
   { id: 'today', title: 'Today', width: 'half', isVisible: () => true, Component: TodaySection },
-  { id: 'tasks', title: 'My tasks', width: 'half', isVisible: () => true, Component: TasksSection },
-  { id: 'recent', title: 'Recently viewed', width: 'half', isVisible: () => true, Component: RecentSection },
-  {
-    id: 'captures',
-    title: 'New captures',
-    width: 'half',
-    isVisible: ({ permissions }) => permissions.includes('forms.manage'),
-    Component: CapturesSection,
-  },
-  {
-    id: 'team',
-    title: 'Team today',
-    width: 'half',
-    // One member is not a team, and the read is behind Bookings.
-    isVisible: ({ members, permissions }) => members.length > 1 && permissions.includes('booking.manage'),
-    Component: TeamSection,
-  },
   {
     id: 'linkPage',
     title: linkPageStrings.title,
@@ -50,5 +32,4 @@ export const HOME_SECTIONS: readonly HomeSection[] = [
     isHideable: true,
     Component: LinkPageSection,
   },
-  { id: 'metrics', title: 'This week', width: 'full', isVisible: () => true, Component: MetricsSection },
 ];
