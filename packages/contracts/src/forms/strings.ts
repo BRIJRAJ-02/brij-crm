@@ -39,6 +39,8 @@ export interface FormStrings {
   readonly fileInvalid: string;
   /** The file question's drop area: what it asks for. */
   readonly fileChoose: string;
+  /** Under a file question in the builder's preview, where the drop area is drawn but off (27 October 2026). */
+  readonly filePreview: string;
   /** Said politely once a file is in, and once one is taken off. */
   readonly fileUploaded: (name: string) => string;
   readonly fileRemoved: (name: string) => string;
@@ -120,6 +122,7 @@ const EN: FormStrings = {
   dialCode: 'Country code',
   fileInvalid: 'Upload the file again.',
   fileChoose: 'Choose a file',
+  filePreview: 'Visitors choose their file here once the form is published. The preview doesn’t take one.',
   fileUploaded: (name) => `${name} uploaded.`,
   fileRemoved: (name) => `${name} removed.`,
   fileBusy: 'Wait for the file to finish uploading, then send.',

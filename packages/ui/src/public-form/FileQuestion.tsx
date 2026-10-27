@@ -85,7 +85,12 @@ export function FileQuestion({ questionKey, label, words, value, error, files, o
       });
   };
   return (
-    <FieldGroup label={label} {...(error === undefined ? {} : { error })}>
+    <FieldGroup
+      label={label}
+      {...(error === undefined ? {} : { error })}
+      // Off in the builder's preview, and said so: a dimmed drop area alone reads as broken (27 October 2026).
+      {...(files === undefined ? { hint: words.filePreview } : {})}
+    >
       <div ref={box} data-question-files={questionKey}>
         {held !== undefined && (
           <FileItem
