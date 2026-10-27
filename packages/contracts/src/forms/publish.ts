@@ -16,6 +16,12 @@ export interface PublishAttribute {
   /** The object's singular name, for "Person · Budget band". */
   readonly objectName: string;
   readonly canWrite: boolean;
+  /**
+   * The object refuses a record without it, and nothing else fills it (no default, and not a checkbox, which is
+   * false until ticked). A form that never asks for it can't make a record at all, so publishing says so instead
+   * of letting every submission fail (27 October 2026).
+   */
+  readonly isRequired?: boolean;
 }
 
 /** What publishing checks. */
@@ -40,6 +46,7 @@ export interface PublishProblem {
     | 'FILING_GONE'
     | 'FILING_MISFIT'
     | 'FILING_FORBIDDEN'
+    | 'REQUIRED_MISSING'
     | 'SHOW_WHEN_INVALID'
     | 'ROUTING_INVALID';
   readonly message: string;
@@ -210,6 +217,34 @@ export function questionsProblem(
  * and filing (gone, a type that doesn't fit, or an attribute the publisher
  * can't write), and file questions, which wait for file attachments (#32).
  */
+/**
+ * A field the object insists on that no question fills (27 October 2026, the owner: every submission failed with
+ * "A required field isn't asked by this form"). Named here, before the form goes live, rather than once a visitor
+ * has typed everything in.
+ */
+function requiredNotAsked(input: PublishInput): PublishProblem | undefined {
+  if (input.document.targets.main === undefined) return undefined;
+  const filled = new Set(
+    input.document.questions.flatMap((question) =>
+      question.filedOn === undefined ? [] : [question.filedOn.attributeId],
+    ),
+  );
+  const missing = [...input.attributes.values()].filter(
+    (attribute) => attribute.isRequired === true && !filled.has(attribute.id),
+  );
+  const [first] = missing;
+  if (first === undefined) return undefined;
+  const names = missing.map((attribute) => attribute.title);
+  const where = input.objectName ?? 'People';
+  return {
+    code: 'REQUIRED_MISSING',
+    message:
+      names.length === 1
+        ? `${first.title} is required on ${where}, and no question fills it, so no submission could become a record. Add a question for it, or make the field optional.`
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] ?? ''} are required on ${where}, and no question fills them, so no submission could become a record. Add questions for them, or make the fields optional.`,
+  };
+}
+
 export function publishProblem(input: PublishInput): PublishProblem | undefined {
   if (input.name.trim() === '') return { code: 'NAME_MISSING', message: 'Give the form a name.' };
   if (!FORM_SLUG.test(input.slug)) {
@@ -247,6 +282,8 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
       };
     }
   }
+  const missing = requiredNotAsked(input);
+  if (missing !== undefined) return missing;
   const problem = questionsProblem(
     questions,
     input.attributes,

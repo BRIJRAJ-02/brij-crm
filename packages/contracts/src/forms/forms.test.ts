@@ -179,6 +179,27 @@ describe('FormDocument and publishProblem (AC-655)', () => {
     );
   });
 
+  // The owner, 27 October 2026: every submission on a Graphic Designers form failed with "A required field isn't
+  // asked by this form", after the visitor had filled the whole thing in. Publishing says it first.
+  it('refuses a draft whose object insists on a field no question fills', () => {
+    const needed = new Map(attributes);
+    needed.set(BUDGET, { ...attributes.get(BUDGET), isRequired: true, canWrite: true } as PublishAttribute);
+    expect(check({ attributes: needed, objectName: 'Graphic Designers' })).toBe(
+      'Budget band is required on Graphic Designers, and no question fills it, so no submission could become a record. Add a question for it, or make the field optional.',
+    );
+    // Filed by a question, so the form can fill it: nothing to say.
+    const fills = {
+      ...document,
+      questions: document.questions.map((question) =>
+        question.key === 'phone' ? { ...question, filedOn: { objectId: PEOPLE, attributeId: BUDGET } } : question,
+      ),
+    };
+    expect(check({ document: fills, attributes: needed })).not.toContain('is required on');
+    // A form that keeps its submissions only files nothing, so no field of any object can stop it.
+    const kept = FormDocument.parse({ questions: defaultQuestions({}), targets: {} });
+    expect(check({ document: kept, attributes: needed })).toBeUndefined();
+  });
+
   it('passes a good draft, and names the first problem otherwise', () => {
     expect(check({})).toBeUndefined();
     expect(check({ name: ' ' })).toBe('Give the form a name.');

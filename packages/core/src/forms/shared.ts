@@ -201,6 +201,13 @@ export async function publishAttributes(
         type: attribute.type,
         objectName: name,
         canWrite: writesObject && fieldLevel(access, { id: attribute.id, objectId }) === 'write',
+        // Required with nothing else to fill it: a checkbox is false until ticked, and a default fills itself.
+        ...(attribute.isRequired &&
+        !attribute.isSystem &&
+        attribute.type !== 'checkbox' &&
+        (attribute.defaultValue === null || attribute.defaultValue === undefined)
+          ? { isRequired: true }
+          : {}),
       },
     ]),
   );
