@@ -192,17 +192,21 @@ export function passJson(input: PassInput): string {
     // comes out flat (26 October 2026).
     eventTicket: {
       headerFields: [],
-      // Their name, large, with what they do as its label: the one line someone reads across a table.
-      primaryFields: [{ key: 'name', label: card.jobTitle ?? '', value: card.fullName }],
+      // Their name, large, and nothing above it. A label there would be empty on most cards (a job title is
+      // optional, and few people fill one in), and an empty label over a name reads as a missing field rather
+      // than as room (owner's call, 27 October 2026). What they do is a field below, where a blank one simply
+      // isn't drawn.
+      primaryFields: [{ key: 'name', value: card.fullName }],
       // Only what a card always has. A name, an email and the page are the three a person fills in without
       // being asked; a phone is often blank, and a row that is blank on most cards makes every card look
-      // unfinished, so the phone goes on the back with everything else (27 October 2026).
+      // unfinished, so the phone goes on the back with everything else.
       secondaryFields: fieldOf('email', 'Email', emails[0]),
       auxiliaryFields: [
         ...fieldOf('page', 'Page', shownAddress(input.pageUrl)),
-        ...fieldOf('company', 'Company', card.company),
+        ...fieldOf('role', 'Role', card.jobTitle ?? card.company),
       ],
       backFields: [
+        ...(card.jobTitle === undefined ? [] : fieldOf('company', 'Company', card.company)),
         ...phones.map((phone, at) => ({ key: `phone${String(at + 1)}`, label: 'Phone', value: phone })),
         ...emails.slice(1).map((email, at) => ({ key: `email${String(at + 2)}`, label: 'Email', value: email })),
         ...websites.map((website, at) => ({ key: `website${String(at + 1)}`, label: 'Website', value: website })),
