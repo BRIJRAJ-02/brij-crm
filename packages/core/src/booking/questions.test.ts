@@ -10,6 +10,8 @@ import { enterBookingPage } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
+import { createAttribute } from '../attributes/attributes.ts';
+import { createObject } from '../objects/objects.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import { NO_CALENDAR } from './calendar.ts';
@@ -327,6 +329,120 @@ describe('where a question may be filed (AC-5703, AC-5706, AC-5717)', () => {
     const ids = targets.items.map((item) => item.attributeId);
     expect(ids).toContain(w.attribute('people.job_title'));
     expect(ids).not.toContain(w.attribute('people.email_addresses'));
+  });
+});
+
+describe('a page that files onto another object (booking answers parity, 27 Oct 2026)', () => {
+  /** A "Graphic Designers" object with a unique Work email and a Studio text field. */
+  async function designers(w: Awaited<ReturnType<typeof workspace>>, withEmail = true) {
+    const object = await createObject(w.owner, {
+      id: newId(),
+      singularName: 'Graphic Designer',
+      pluralName: 'Graphic Designers',
+      icon: 'inbox',
+      hue: 'blue',
+    });
+    const email = withEmail
+      ? await createAttribute(w.owner, {
+          objectId: object.id,
+          id: newId(),
+          title: 'Work email',
+          type: 'email',
+          isUnique: true,
+        })
+      : undefined;
+    const studio = await createAttribute(w.owner, {
+      objectId: object.id,
+      id: newId(),
+      title: 'Studio',
+      type: 'text',
+    });
+    return { id: object.id, email, studio };
+  }
+
+  const askStudio = (attributeId: string): BookingQuestions => [
+    {
+      id: 'studio',
+      key: 'studio',
+      label: 'Your studio',
+      answerType: 'short_text',
+      required: false,
+      update: 'fill',
+      filedOn: { objectRole: 'main', attributeId },
+    },
+  ];
+
+  it('files the answers onto a record of that object, matched by the visitor’s email', async () => {
+    const w = await workspace();
+    const object = await designers(w);
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'Portfolio', timeZone: 'UTC' }, NOW);
+    const pointed = await updateBookingPage(w.owner, {
+      pageId: page.id,
+      settings: { answersObjectId: object.id },
+    });
+    expect(pointed.answersObjectId).toBe(object.id);
+    // Where it goes now lists the object's own fields, its match email left out.
+    const targets = await bookingPageAttributes(w.owner, { pageId: page.id });
+    expect(targets.objectId).toBe(object.id);
+    const offered = targets.items.map((item) => item.attributeId);
+    expect(offered).toContain(object.studio.id);
+    expect(offered).not.toContain(object.email?.id);
+
+    await updateBookingPage(w.owner, { pageId: page.id, settings: { questions: askStudio(object.studio.id) } });
+    const entry = await enterBookingPage({ db }, page.publicKey);
+    await bookPublicSlot(entry, deps, bookInput({ answers: { studio: 'Bauhaus' } }));
+
+    // The booking still has its Person; the answer is on the designer the email found or made.
+    const [booking] = await listBookings(w.owner, { pageId: page.id, when: 'upcoming' }, NOW);
+    expect(booking?.personRecordId).toBeDefined();
+    const filed = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ text_value: string }>(
+        sql`select v.text_value from "values" v join records r on r.id = v.record_id
+            where r.object_id = ${object.id}::uuid and v.attribute_id = ${object.studio.id}::uuid and v.active_until is null`,
+      ),
+    );
+    expect(filed.rows.map((row) => row.text_value)).toEqual(['Bauhaus']);
+    const [listed] = await listWorkspaceBookings(w.owner, { when: 'upcoming' }, NOW);
+    expect(listed?.answers?.[0]).toEqual(expect.objectContaining({ key: 'studio', saved: true }));
+
+    // A second booking by the same visitor finds the same designer rather than making another.
+    await bookPublicSlot(entry, deps, bookInput({ start: '2026-11-02T10:00:00.000Z', answers: { studio: 'Other' } }));
+    const made = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`select 1 from records where object_id = ${object.id}::uuid and deleted_at is null`),
+    );
+    expect(made.rows).toHaveLength(1);
+  });
+
+  it('refuses an object a visitor can’t be matched on, saying what is missing', async () => {
+    const w = await workspace();
+    const object = await designers(w, false);
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'No email', timeZone: 'UTC' }, NOW);
+    expect(
+      await refusalOf(updateBookingPage(w.owner, { pageId: page.id, settings: { answersObjectId: object.id } })),
+    ).toEqual([expect.objectContaining({ code: 'CONFIG_INVALID', field: 'answersObjectId' })]);
+    expect((await getBookingPage(w.owner, { pageId: page.id }, NOW)).answersObjectId).toBeNull();
+  });
+
+  it('clears the filings the new object has no field for, keeping the questions', async () => {
+    const w = await workspace();
+    const object = await designers(w);
+    const page = await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'Moved',
+        timeZone: 'UTC',
+        settings: { questions: questionsOn(w.attribute('people.job_title')) },
+      },
+      NOW,
+    );
+    const moved = await updateBookingPage(w.owner, { pageId: page.id, settings: { answersObjectId: object.id } });
+    expect(moved.questions.map((question) => question.key)).toEqual(['role', 'budget']);
+    expect(moved.questions.every((question) => question.filedOn === undefined)).toBe(true);
+    // And back to People leaves them unfiled too, not pointing at the designer's fields.
+    const back = await updateBookingPage(w.owner, { pageId: page.id, settings: { answersObjectId: null } });
+    expect(back.answersObjectId).toBeNull();
+    expect(back.questions.every((question) => question.filedOn === undefined)).toBe(true);
   });
 });
 

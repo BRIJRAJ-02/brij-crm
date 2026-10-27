@@ -28,6 +28,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { auditColumns, id, timestamptz, workspaceId } from './common.ts';
 import { actorConstraints, members } from './workspaces.ts';
+import { objects } from './definitions.ts';
 
 /** A `tstzrange`, read and written as Postgres' text form (`["2026-10-19 09:45:00+00","2026-10-19 10:45:00+00")`). */
 /** Every meeting length a page may offer, as a Postgres array literal: 5 to 480 minutes in steps of 5 (contracts' `BookingDuration`). */
@@ -84,6 +85,12 @@ export const bookingPages = pgTable(
      * AC-5708, migration 0114): on by default, which is what every page did before.
      */
     fileToCrm: boolean('file_to_crm').notNull().default(true),
+    /**
+     * The object the page's answers are filed onto (booking answers parity, migration 0117): null is the
+     * workspace's People, which is what every page did before, so nothing is backfilled. The booking still matches
+     * or makes the visitor's Person; only where the answers land moves.
+     */
+    answersObjectId: uuid('answers_object_id'),
     /** A team page's routing rules (spec 0043, AC-1608): `RoutingRules`, tried at each booking. */
     routing: jsonb('routing').notNull().default({ rules: [] }),
     /** `{ mode: 'create' | 'move_open', stageOptionId }` (milestone 2). */
@@ -142,6 +149,11 @@ export const bookingPages = pgTable(
       name: 'booking_pages_owner',
       columns: [t.workspaceId, t.ownerMemberId],
       foreignColumns: [members.workspaceId, members.id],
+    }),
+    foreignKey({
+      name: 'booking_pages_answers_object',
+      columns: [t.workspaceId, t.answersObjectId],
+      foreignColumns: [objects.workspaceId, objects.id],
     }),
     uniqueIndex('booking_pages_public_key').on(t.publicKey),
     uniqueIndex('booking_pages_slug')

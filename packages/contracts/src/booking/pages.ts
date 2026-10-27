@@ -242,7 +242,11 @@ export type UpdateMemberHoursInput = z.infer<typeof UpdateMemberHoursInput>;
  * type as they were when the visitor booked, so a later rename never changes what they answered, and its value. A
  * filed one names its attribute; `saved: false` when the person record refused it (AC-5712), as a submission says.
  */
-export const BookingAnswer = SubmissionAnswer.extend({ saved: z.boolean().optional() });
+export const BookingAnswer = SubmissionAnswer.extend({
+  saved: z.boolean().optional(),
+  /** The object the attribute belongs to, for a filed one: absent means the workspace's People, as every page filed before. */
+  objectId: Uuid.optional(),
+});
 /** One answer to a booking page's question. */
 export type BookingAnswer = z.infer<typeof BookingAnswer>;
 

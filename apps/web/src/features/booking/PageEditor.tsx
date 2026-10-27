@@ -8,8 +8,9 @@
 // The hours are a schedule's (spec 0035, AC-965): the tab picks one of the owner's and edits its week and days off in
 // place (the owner, 22 Oct 2026, like Calendly's and Cal.com's event Availability tab), saved by the same Save.
 // A round robin page (spec 0029, AC-732) adds Hosts: its fixed hosts, its rotations, and who reschedules go to.
-// Questions (spec 0057): the form builder's own section, shared, under an Add to the CRM switch; a question with nothing
-// to file onto gets its People attribute on Save, with Undo, as a form's publish does.
+// Questions (spec 0057): the form builder's own section, shared, under a Where the answers go picker (the page's
+// object, People unless it names another, booking answers parity 27 Oct 2026); a question with nothing to file onto
+// gets an attribute on that object on Save, with Undo, as a form's publish does.
 // Leaves out: the deal step (milestone 2), collective members, and the profile's order (pages keep the
 // order they were made in until the Links list can be reordered by drag).
 import {
@@ -19,6 +20,7 @@ import {
   type DataLayer,
   type FormTargetChoices,
   type MemberSummary,
+  type ObjectSummary,
   type ScheduleView,
   type PublicSocialLink,
   type SchedulesView,
@@ -126,8 +128,10 @@ export interface PageEditorProps {
   readonly tab: PageTab;
   /** Shows another tab: the route puts it in `?tab=`. */
   readonly onTabChange: (tab: PageTab) => void;
-  /** Where the page's answers may be filed (spec 0057): People and its attributes; absent when the read failed. */
+  /** Where the page's answers may be filed (spec 0057): its object's attributes; absent when the read failed. */
   readonly targets?: FormTargetChoices;
+  /** The workspace's objects, for the Questions tab's "Where the answers go" picker; none leaves it out. */
+  readonly objects?: readonly ObjectSummary[];
 }
 
 /** The most questions a booking page asks (spec 0057, AC-5701: the contracts' `BOOKING_QUESTIONS_MAX`). */
@@ -167,7 +171,8 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   showSocials: 'page',
   defaultView: 'page',
   questions: 'questions',
-  fileToCrm: 'questions',
+  answersObjectId: 'questions',
+  fileToCrm: 'meeting',
   title: 'meeting',
   durations: 'meeting',
   location: 'meeting',
@@ -215,6 +220,7 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   profilePosition: page.profilePosition,
   questions: page.questions,
   fileToCrm: page.fileToCrm,
+  answersObjectId: page.answersObjectId,
 });
 
 /** Why a slug can't be sent, in plain words, or undefined when it can. */
@@ -247,6 +253,7 @@ export function PageEditor({
   tab,
   onTabChange,
   targets: loadedTargets,
+  objects = [],
 }: PageEditorProps) {
   const [page, setPage] = useState(loaded);
   // Where answers may be filed (spec 0057): read again once Save adds attributes, or Undo archives them.
@@ -386,6 +393,46 @@ export function PageEditor({
   // publish uses, offered only to someone who may add attributes, while the page files into the CRM.
   const plannedFor = (questions: Questions, fileToCrm: boolean) =>
     planNewAttributes(questions, choices.items, canBuild && !isLocked && fileToCrm && choices.objectId !== undefined);
+  // Where the answers go (booking answers parity, 27 Oct 2026), in the shape the forms editor's target picker uses:
+  // the objects the person may write, People first. Null on the page means People, so a page made before this
+  // setting behaves exactly as it did.
+  const liveObjects = useMemo(
+    () => objects.filter((object) => !object.isArchived && object.access === 'write'),
+    [objects],
+  );
+  const peopleObject = liveObjects.find((object) => object.standardKey === 'people');
+  const answersObject = draft.answersObjectId ?? peopleObject?.id ?? null;
+  const answersObjectName =
+    liveObjects.find((object) => object.id === answersObject)?.pluralName ?? choices.objectName ?? '';
+  const [isMovingAnswers, setMovingAnswers] = useState(false);
+  // Changing it saves at once, as the forms editor's does: the server clears the filings the new object has no
+  // field for, and the page comes back with the questions to file again. The attribute choices are read afresh.
+  const moveAnswers = (objectId: string | null) => {
+    const next = objectId === null || objectId === peopleObject?.id ? null : objectId;
+    if (isMovingAnswers || next === (draft.answersObjectId ?? null)) return;
+    setMovingAnswers(true);
+    setFailure(undefined);
+    data.bookingPages.update(slug, page.id, { answersObjectId: next, questions: draft.questions }).then(
+      (saved) => {
+        setMovingAnswers(false);
+        setPage(saved);
+        setDraft((current) => ({
+          ...draftAfterSave(settingsOf(saved), current),
+          answersObjectId: saved.answersObjectId,
+          questions: saved.questions,
+        }));
+        void readTargets();
+        onNotice?.(strings.answersObjectMoved(liveObjects.find((each) => each.id === next)?.pluralName ?? ''));
+      },
+      (error: unknown) => {
+        setMovingAnswers(false);
+        toasts.toast({
+          tone: 'danger',
+          message: isDataError(error) ? error.message : strings.answersObjectFailed,
+        });
+      },
+    );
+  };
   const readTargets = () => {
     setReadingTargets(true);
     return data.bookingPages.attributes(slug, page.id).then(
@@ -1088,6 +1135,28 @@ export function PageEditor({
                         >
                           {strings.targetsFailed}
                         </Callout>
+                      )}
+                      {liveObjects.length > 0 && (
+                        <Card
+                          title={strings.answersObject}
+                          {...(answersObjectName === ''
+                            ? {}
+                            : { description: strings.answersObjectLine(answersObjectName) })}
+                          isBusy={isMovingAnswers}
+                        >
+                          <Select
+                            label={strings.answersObject}
+                            items={liveObjects.map((object) => ({
+                              id: object.id,
+                              label: object.pluralName,
+                              icon: object.icon,
+                            }))}
+                            value={answersObject}
+                            isReadOnly={isLocked}
+                            isDisabled={isMovingAnswers}
+                            onChange={moveAnswers}
+                          />
+                        </Card>
                       )}
                       {draft.questions.length > 0 && (
                         <Callout tone="info">{isChatOff ? strings.chatOffRequired : strings.chatAsksNone}</Callout>

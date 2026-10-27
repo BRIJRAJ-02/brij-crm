@@ -121,7 +121,14 @@ export const strings = {
   addToCrmLine:
     'Every booking finds or adds the person who booked, and their company, and files their answers on them. Off, the answers stay with the booking.',
   targetsFailedTitle: 'Where answers go didn’t load',
-  targetsFailed: 'People’s fields couldn’t be read, so questions can’t be filed onto them right now.',
+  targetsFailed: 'The object’s fields couldn’t be read, so questions can’t be filed onto them right now.',
+  /** The Questions tab's object picker (booking answers parity, 27 Oct 2026), in the forms editor's words. */
+  answersObject: 'Where the answers go',
+  answersObjectLine: (objectName: string) =>
+    `Each answer is filed on the ${objectName} record the person’s email finds or makes. The booking still adds them to People either way.`,
+  answersObjectMoved: (objectName: string) =>
+    `Answers now go to ${objectName}. Choose a field for each question again.`,
+  answersObjectFailed: 'That object couldn’t be used for the answers.',
   tryAgain: 'Try again',
   /** Book by chat (spec 0042) doesn't ask the page's questions yet (spec 0057 follow up). */
   chatAsksNone: 'Visitors who book by chat skip these questions, since they’re all optional.',

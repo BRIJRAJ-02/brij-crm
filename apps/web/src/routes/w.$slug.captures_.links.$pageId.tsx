@@ -27,12 +27,14 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
   shouldReload: ({ cause }) => cause !== 'stay',
   loader: async ({ context, params }) => {
     try {
-      const [page, mine, targets] = await Promise.all([
+      const [page, mine, targets, objects] = await Promise.all([
         context.data.bookingPages.get(params.slug, params.pageId),
         context.data.access.mine(params.slug),
-        // Where its questions' answers may be filed (spec 0057): People and its attributes, beside the page rather
+        // Where its questions' answers may be filed (spec 0057): the page's object and its attributes, beside the page rather
         // than after it; a failed read (a page the reader can't change) leaves none.
         context.data.bookingPages.attributes(params.slug, params.pageId).catch(() => undefined),
+        // The objects the Questions tab's "Where the answers go" picker offers; a failed read leaves it out.
+        context.data.objects.list(params.slug).catch(() => []),
         // The reader's calendars, primed so the editor's calendar note is in its first paint; a failed read just
         // leaves the note out.
         context.data.calendar
@@ -63,7 +65,7 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
         page.kind === 'round_robin' && page.canChange
           ? await readRecordFields(context.data, params.slug).catch(() => undefined)
           : undefined;
-      return { page, mayRead, ownerMember, people, fields, targets };
+      return { page, mayRead, ownerMember, people, fields, targets, objects };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') {
         return {
@@ -73,6 +75,7 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
           people: undefined,
           fields: undefined,
           targets: undefined,
+          objects: [],
         };
       }
       throw error;
@@ -146,7 +149,7 @@ function Missing({
 }
 
 function EditorRoute() {
-  const { page, mayRead, ownerMember, people, fields, targets } = Route.useLoaderData();
+  const { page, mayRead, ownerMember, people, fields, targets, objects } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { tab = 'page' } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -165,6 +168,7 @@ function EditorRoute() {
       {...(people === undefined ? {} : { people })}
       {...(fields === undefined ? {} : { recordFields: fields })}
       {...(targets === undefined ? {} : { targets })}
+      objects={objects}
       onNotice={(message) => toasts.toast({ tone: 'success', message })}
       tab={tab}
       // A tab change replaces the entry: Back leaves the editor rather than stepping through its tabs.

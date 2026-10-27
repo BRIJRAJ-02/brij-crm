@@ -188,12 +188,14 @@ describe('FormDocument and publishProblem (AC-655)', () => {
       'Budget band is required on Graphic Designers, and no question fills it, so no submission could become a record. Add a question for it, or make the field optional.',
     );
     // Filed by a question, so the form can fill it: nothing to say.
-    const fills = {
+    const fills = FormDocument.parse({
       ...document,
       questions: document.questions.map((question) =>
-        question.key === 'phone' ? { ...question, filedOn: { objectId: PEOPLE, attributeId: BUDGET } } : question,
+        question.key === 'phone'
+          ? { ...question, filedOn: { objectRole: 'main', attributeId: BUDGET } }
+          : question,
       ),
-    };
+    });
     expect(check({ document: fills, attributes: needed })).not.toContain('is required on');
     // A form that keeps its submissions only files nothing, so no field of any object can stop it.
     const kept = FormDocument.parse({ questions: defaultQuestions({}), targets: {} });

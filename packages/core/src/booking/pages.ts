@@ -47,7 +47,15 @@ import { linksOf, seenLinks } from './links.ts';
 import { lockKey } from './locks.ts';
 import { ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
-import { checkPageQuestions, questionsSeenBy, questionTargets, withHiddenFilings } from './questions.ts';
+import {
+  checkAnswersObject,
+  checkPageQuestions,
+  questionsSeenBy,
+  questionTargets,
+  refiledOnto,
+  attributeIdsOf,
+  withHiddenFilings,
+} from './questions.ts';
 
 const { bookingPageMembers, bookingPageRotations, bookingPages, bookings, members, rotations } = schema;
 
@@ -177,7 +185,7 @@ function viewOf(
   hosts: TeamHosts | undefined,
   handle: string | undefined,
   unseen: UnseenRule,
-  seen: (questions: PageRecord['questions']) => PageRecord['questions'],
+  seen: (questions: PageRecord['questions'], named?: string | null) => PageRecord['questions'],
 ): BookingPageView {
   return {
     id: page.id,
@@ -208,8 +216,9 @@ function viewOf(
     profileSection: page.profileSection,
     profilePosition: page.profilePosition,
     // A filing onto a field hidden from the reader is absent, not even its id (spec 0057, as the rules below).
-    questions: seen(page.questions),
+    questions: seen(page.questions, page.answersObjectId),
     fileToCrm: page.fileToCrm,
+    answersObjectId: page.answersObjectId,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
     ...(hosts === undefined ? {} : { hosts }),
     // Hidden means absent (spec 0009): a rule over a field the reader can't see isn't sent, not even its id.
@@ -289,7 +298,8 @@ async function viewWithCounts(tx: WorkspaceTx, scope: EngineScope, page: PageRec
 }
 
 /**
- * Where a page's answers may be filed (spec 0057, AC-5706): People and its attributes, as the reader may write them,
+ * Where a page's answers may be filed (spec 0057, AC-5706): the page's object (People unless it names another)
+ * and its attributes, as the reader may write them,
  * for a page they may change; NOT_FOUND otherwise.
  */
 export async function bookingPageAttributes(
@@ -298,8 +308,8 @@ export async function bookingPageAttributes(
 ): Promise<FormTargetChoices> {
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
-    await pageToChange(tx, scope, input.pageId, false);
-    return questionTargets(tx, scope);
+    const page = await pageToChange(tx, scope, input.pageId, false);
+    return questionTargets(tx, scope, page.answersObjectId);
   });
 }
 
@@ -517,9 +527,11 @@ export async function createBookingPage(
       profilePosition: given.profilePosition ?? (await nextProfilePosition(tx, owner)),
       questions: given.questions ?? [],
       fileToCrm: given.fileToCrm ?? true,
+      answersObjectId: given.answersObjectId ?? null,
     };
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
-    await checkPageQuestions(tx, scope, settings.questions);
+    if (settings.answersObjectId !== null) await checkAnswersObject(tx, scope, settings.answersObjectId);
+    await checkPageQuestions(tx, scope, settings.questions, [], settings.answersObjectId);
     const by = actorRow(scope.actor);
     try {
       const [row] = await tx
@@ -555,6 +567,7 @@ export async function createBookingPage(
           profilePosition: settings.profilePosition,
           questions: settings.questions,
           fileToCrm: settings.fileToCrm,
+          answersObjectId: settings.answersObjectId,
           createdByType: by.type,
           createdById: by.id,
           createdByMemberId: by.memberId,
@@ -623,13 +636,27 @@ export async function updateBookingPage(
     if (settings.scheduleId !== undefined && settings.scheduleId !== null) {
       await checkPageSchedule(tx, page.ownerMemberId, settings.scheduleId);
     }
+    // Where the answers are filed (booking answers parity, 27 Oct 2026): null is People, which is what every page
+    // did before. A page pointed at another object keeps its questions and loses the filings that object has no
+    // attribute for, exactly as a form's "Where the answers go" does; every filing is then checked afresh against
+    // the new object, since an attribute id belongs to one object.
+    const target = settings.answersObjectId === undefined ? page.answersObjectId : settings.answersObjectId;
+    const moved = settings.answersObjectId !== undefined && settings.answersObjectId !== page.answersObjectId;
+    if (moved && target !== null) await checkAnswersObject(tx, scope, target);
     // The questions as the writer sent them, with the filings a field hidden from them kept, then checked: what changed
     // against the writer's own access (spec 0057, AC-5717), the rest as a form's publish checks it.
-    const questions =
+    const seen = await questionsSeenBy(tx, scope.access);
+    const sent =
       settings.questions === undefined
-        ? undefined
-        : withHiddenFilings(page.questions, settings.questions, await questionsSeenBy(tx, scope.access));
-    if (questions !== undefined) await checkPageQuestions(tx, scope, questions, page.questions);
+        ? moved
+          ? page.questions
+          : undefined
+        : withHiddenFilings(page.questions, settings.questions, seen(page.questions, page.answersObjectId));
+    const questions =
+      sent === undefined ? undefined : moved ? refiledOnto(sent, await attributeIdsOf(tx, target)) : sent;
+    if (questions !== undefined) {
+      await checkPageQuestions(tx, scope, questions, moved ? [] : page.questions, target);
+    }
     if (input.hosts !== undefined) {
       if (page.kind !== 'round_robin') {
         throw refuseOn('CONFIG_INVALID', 'Only a round robin page books from rotations.', 'hosts');
@@ -694,6 +721,7 @@ export async function updateBookingPage(
           ...(settings.profilePosition === undefined ? {} : { profilePosition: settings.profilePosition }),
           ...(questions === undefined ? {} : { questions }),
           ...(settings.fileToCrm === undefined ? {} : { fileToCrm: settings.fileToCrm }),
+          ...(settings.answersObjectId === undefined ? {} : { answersObjectId: settings.answersObjectId }),
           ...(routing === undefined ? {} : { routing }),
           updatedAt: sql`now()`,
           updatedByType: by.type,

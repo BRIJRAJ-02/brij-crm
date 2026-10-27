@@ -125,6 +125,7 @@ export function pageOf(
     // Parsed again on the way out (spec 0057): a stored list the schema no longer takes reads as no questions.
     questions: BookingQuestions.safeParse(row.questions).data ?? [],
     fileToCrm: row.fileToCrm,
+    answersObjectId: row.answersObjectId,
     ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
     createdAt: row.createdAt,

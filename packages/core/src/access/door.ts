@@ -557,6 +557,11 @@ export interface BookingEntry {
   readonly companies: string;
 }
 
+/** The page's own answers object, read beside the standard ones so the booking may write it too; null means People. */
+interface PageObjectRow extends Record<string, unknown> {
+  readonly answers_object_id: string | null;
+}
+
 /**
  * The scope a visitor's booking acts with (spec 0025): the page found by its
  * public key (`crm_booking_page_by_key`, ids only), as the `booking` actor,
@@ -575,25 +580,32 @@ export async function enterBookingPage(deps: { readonly db: Database }, publicKe
   );
   const [row] = found.rows;
   if (row === undefined) throw missing();
-  const standard = await deps.db.withWorkspace(row.workspace_id, async (tx) => {
+  const read = await deps.db.withWorkspace(row.workspace_id, async (tx) => {
     const [workspace] = await tx
       .select({ id: workspaces.id })
       .from(workspaces)
       .where(and(eq(workspaces.id, row.workspace_id), isNull(workspaces.deletedAt)));
-    if (workspace === undefined) return [];
-    return tx
+    if (workspace === undefined) return { standard: [], answers: null };
+    const standard = await tx
       .select({ id: objects.id, key: objects.standardKey })
       .from(objects)
       .where(and(inArray(objects.standardKey, ['people', 'companies']), isNull(objects.archivedAt)));
+    // The object this page files its answers onto (booking answers parity): null is People, so nothing is added.
+    const found = await tx.execute<PageObjectRow>(
+      sql`select p.answers_object_id::text as answers_object_id from booking_pages p
+          join objects o on o.workspace_id = p.workspace_id and o.id = p.answers_object_id and o.archived_at is null
+          where p.id = ${row.page_id}::uuid`,
+    );
+    return { standard, answers: found.rows[0]?.answers_object_id ?? null };
   });
-  const people = standard.find((object) => object.key === 'people')?.id;
-  const companies = standard.find((object) => object.key === 'companies')?.id;
+  const people = read.standard.find((object) => object.key === 'people')?.id;
+  const companies = read.standard.find((object) => object.key === 'companies')?.id;
   if (people === undefined || companies === undefined) throw missing();
   const scope = mintScope({
     db: deps.db,
     workspaceId: row.workspace_id,
     actor: { type: 'booking', id: row.page_id },
-    access: bookingAccess(row.page_id, [people, companies]),
+    access: bookingAccess(row.page_id, [people, companies, ...(read.answers === null ? [] : [read.answers])]),
   });
   return { scope, pageId: row.page_id, people, companies };
 }

@@ -286,6 +286,13 @@ export const BookingPageSettings = z.object({
   /** The questions a visitor answers beside their name and email (spec 0057, AC-5701); none asks nothing more. */
   questions: BookingQuestions,
   /**
+   * The object a booking's answers are filed onto (booking answers parity, 27 Oct 2026): null is the workspace's
+   * People, which is what every page did and does by default. Another object needs a unique email attribute, so the
+   * visitor's email can find or make their record there the way a form does; one without is refused CONFIG_INVALID.
+   * The booking still matches or makes the visitor's Person either way: only the answers move.
+   */
+  answersObjectId: Uuid.nullable(),
+  /**
    * Whether a booking finds or makes the visitor's person and company and files the answers onto the person (spec
    * 0057, AC-5708): on by default, today's behaviour. Off, the booking keeps the answers and touches no record.
    */

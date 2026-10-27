@@ -42,6 +42,7 @@ import {
   type PublicProfile,
 } from '@crm/contracts';
 import type {
+  BookingAnswer,
   PublicBookInput,
   PublicBooking,
   PublicChatLine,
@@ -85,12 +86,14 @@ import { matchVisitor } from './visitor.ts';
 import {
   bookingAnswersOf,
   chatIsOff,
+  answersRecord,
   fileBookingAnswers,
   handedOver,
   peopleObjectId,
   publicQuestionsOf,
 } from './questions.ts';
 import { MAX_RESCHEDULES } from './change.ts';
+
 import {
   allowFor,
   handoffHosts,
@@ -902,7 +905,11 @@ export async function bookPublicSlot(
     const skip =
       link === undefined || live.questions.length === 0
         ? []
-        : handedOver(live.questions, await handoffAnswers(tx, link.submissionId, live.id), entry.people).skip;
+        : handedOver(
+            live.questions,
+            await handoffAnswers(tx, link.submissionId, live.id),
+            live.answersObjectId ?? entry.people,
+          ).skip;
     const answers = checkedAnswers(live, input, options.chat !== undefined, skip);
     const team = await loadTeam(tx, live);
     const memberIds = team === undefined ? await membersOf(tx, live) : teamMemberIds(team);
@@ -911,8 +918,11 @@ export async function bookPublicSlot(
   });
   if ('again' in first) return first.again;
   const { page, memberIds, team, answers } = first;
+  // Where this page files its answers (booking answers parity, 27 Oct 2026): the object it names, else People,
+  // which is what every page did before. The booking still matches or makes the visitor's Person either way.
+  const answersObject = page.answersObjectId ?? entry.people;
   // What the booking keeps of them, with each question's label as it is now (spec 0057, AC-5711).
-  const kept = bookingAnswersOf(page.questions, answers);
+  const kept = bookingAnswersOf(page.questions, answers, answersObject);
   if (team !== undefined && memberIds.length === 0) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
 
   // 2. The calendars, outside any lock: the day around the slot, read fresh.
@@ -1107,12 +1117,13 @@ export async function bookPublicSlot(
               ...(chosen?.picks[0] === undefined ? {} : { ownerMemberId: chosen.picks[0].memberId }),
             },
           );
+          // Onto the person, as every page did, when that is where this page files.
           const filed =
-            visitor.personId === undefined || kept.length === 0
+            answersObject !== entry.people || visitor.personId === undefined || kept.length === 0
               ? kept
               : await fileBookingAnswers(step, {
-                  people: entry.people,
-                  personId: visitor.personId,
+                  objectId: entry.people,
+                  recordId: visitor.personId,
                   questions: page.questions,
                   answers,
                   kept,
@@ -1120,7 +1131,30 @@ export async function bookPublicSlot(
           return { visitor, filed };
         });
         if (matched.ok) {
-          const { visitor, filed } = matched.value;
+          const { visitor } = matched.value;
+          // A page filing elsewhere ("Graphic Designers"): the visitor's record of that object, found or made by
+          // their email the way a form does it, in its own savepoint, so a refusal keeps the booking and the person.
+          const elsewhere =
+            answersObject === entry.people || kept.length === 0
+              ? undefined
+              : await context.perRecord(async (step) => {
+                  const recordId = await answersRecord(step, {
+                    objectId: answersObject,
+                    email: input.email,
+                    name: input.name,
+                    timeZone: input.timeZone,
+                  });
+                  return recordId === undefined
+                    ? kept
+                    : await fileBookingAnswers(step, {
+                        objectId: answersObject,
+                        recordId,
+                        questions: page.questions,
+                        answers,
+                        kept,
+                      });
+                });
+          const filed = elsewhere === undefined ? matched.value.filed : elsewhere.ok ? elsewhere.value : notSaved(kept);
           if (visitor.personId !== undefined || visitor.companyId !== undefined || filed !== kept) {
             await tx
               .update(bookings)
@@ -1135,9 +1169,7 @@ export async function bookPublicSlot(
           }
         } else if (kept.some((answer) => answer.attributeId !== undefined)) {
           // The person couldn't be matched or made: the filed answers stay with the booking, not saved.
-          const unsaved = kept.map((answer) =>
-            answer.attributeId === undefined ? answer : { ...answer, saved: false },
-          );
+          const unsaved = notSaved(kept);
           await tx
             .update(bookings)
             .set({ answers: sql`jsonb_set(${bookings.answers}, '{questions}', ${JSON.stringify(unsaved)}::jsonb)` })
@@ -1261,13 +1293,22 @@ export async function readHandoffPrefill(entry: BookingEntry, submissionId: stri
     // The page's own questions (spec 0057, AC-5713): what the form answered onto the same attribute isn't asked, and
     // what it answered by the same key starts filled in. Read from the stored submission only, as the name is.
     const people = entry.people === '' ? await peopleObjectId(tx) : entry.people;
-    const { skip, answers } = handedOver(page.questions, await handoffAnswers(tx, submissionId, entry.pageId), people);
+    const { skip, answers } = handedOver(
+      page.questions,
+      await handoffAnswers(tx, submissionId, entry.pageId),
+      page.answersObjectId ?? people,
+    );
     return {
       ...visitor,
       ...(Object.keys(answers).length === 0 ? {} : { answers }),
       ...(skip.length === 0 ? {} : { skip: [...skip] }),
     };
   });
+}
+
+/** The kept answers with every filed one marked not saved: the record it was bound for was never written. */
+function notSaved(kept: readonly BookingAnswer[]): BookingAnswer[] {
+  return kept.map((answer) => (answer.attributeId === undefined ? answer : { ...answer, saved: false }));
 }
 
 /** A daily visitor id (spec 0047, AC-1626): 32 lowercase hex digits, an HMAC the api made; never an address. */

@@ -3075,6 +3075,7 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     showSocials: true,
     questions: [],
     fileToCrm: true,
+    answersObjectId: null,
     defaultView: 'month',
     profileSection: null,
     profilePosition: 0,
