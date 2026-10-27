@@ -214,11 +214,11 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   // The right code signs in, pasted as an email shows it ("481 593": the space is dropped, never a digit);
   // with no workspace yet, /welcome.
   await page.getByLabel('Code').fill(`${code.slice(0, 3)} ${code.slice(3)}`);
-  // First run (spec 0036): Your name, with focus in its one field, counted as the first step.
+  // First run (spec 0036): Your name, with focus in its one field, counted as the first of five (six with a calendar).
   await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByLabel('Your name')).toBeFocused();
   await expect(page).toHaveTitle('Your name · Timefix');
-  await expect(page.getByText(/^Step 1 of [34]$/)).toBeVisible();
+  await expect(page.getByText(/^Step 1 of [56]$/)).toBeVisible();
   await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
   await checkScreen(page, '4-welcome-about');
 
