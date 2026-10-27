@@ -24,7 +24,9 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { rescope, testScope } from '../testing.ts';
+import { updateOption } from '../engine/options.ts';
 import { createForm, publishForm, saveFormDraft, setFormTarget } from './forms.ts';
+import { getSubmission } from './submissions.ts';
 import { processSubmission } from './process.ts';
 import { submitForm } from './public.ts';
 import type { CaptchaVerdict } from './spam.ts';
@@ -204,6 +206,19 @@ describe('a required field nothing can fill (27 October 2026)', () => {
     expect(refusal?.message).toContain('Ask a workspace admin');
   });
 
+  it('refuses archiving the last live option of a required field, which would bring the trap back', async () => {
+    const w = await designers();
+    const options = await w.query<{ id: string }>(
+      sql`select id::text from attribute_options where attribute_id = ${w.status.id}::uuid order by position`,
+    );
+    const [first, second] = options;
+    // Archiving one of two is fine: the other still fills the field.
+    await updateOption(w.scope, { optionId: second?.id ?? '', archived: true });
+    const [refusal] = await refusalOf(updateOption(w.scope, { optionId: first?.id ?? '', archived: true }));
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID', field: 'archived' });
+    expect(refusal?.message).toContain('Add at least one option');
+  });
+
   it('names the field when a form that was already live meets the trap at submission time', async () => {
     const w = await designers();
     const form = await applyForm(w);
@@ -226,7 +241,56 @@ describe('a required field nothing can fill (27 October 2026)', () => {
       sql`select state, failure from form_submissions where id = ${row?.id ?? ''}::uuid`,
     );
     expect(after?.state).toBe('failed');
-    expect(after?.failure).toContain('Status is required');
-    expect(after?.failure).not.toContain('A required field isn’t asked');
+    // Named for a reader who may see the field; the stored column names nothing (the test below).
+    const seen = await getSubmission(w.scope, { submissionId: row?.id ?? '' });
+    expect(seen.failure).toContain('Status is required');
+    expect(seen.failure).not.toContain('A required field isn’t asked');
+  });
+
+  it('stores the failure unnamed, and names the field only for a reader who may see it', async () => {
+    // The job runs as the system, which sees every field, so the stored sentence may name none of them
+    // (security review, 27 October 2026). The reader's own access decides.
+    const w = await designers();
+    const form = await applyForm(w);
+    const live = await publishForm(w.scope, { formId: form.formId, expectedRevision: form.revision });
+    await w.dropDefault(w.status.id);
+    const { scope, formId } = await enterPublicForm({ db }, live.publicKey);
+    await submitForm(scope, registry, {
+      formId,
+      body: { idempotencyKey: newId(), answers: { email: 'kit@example.com' }, hidden: {}, fillMs: 10_000 },
+      captcha: off,
+      answersKey: 'a-test-answers-key',
+    });
+    const [row] = await w.query<{ id: string }>(
+      sql`select id::text from form_submissions where form_id = ${formId}::uuid order by received_at desc limit 1`,
+    );
+    await runWrite(w.system, (context) => processSubmission(context, row?.id ?? ''));
+
+    // What the system wrote to the column names nothing.
+    const [stored] = await w.query<{ failure: string | null; outcome: { requiredMissing?: string[] } }>(
+      sql`select failure, outcome from form_submissions where id = ${row?.id ?? ''}::uuid`,
+    );
+    expect(stored?.failure).toContain('A required field isn’t asked');
+    expect(stored?.failure).not.toContain('Status');
+    expect(stored?.outcome.requiredMissing).toEqual([w.status.id]);
+
+    // A reader who may see the field reads its name.
+    const seen = await getSubmission(w.scope, { submissionId: row?.id ?? '' });
+    expect(seen.failure).toContain('Status is required');
+
+    // A reader the field is hidden from reads the sentence that names nothing.
+    const rules: AccessRules = {
+      levels: [
+        {
+          subject: { type: 'role', role: 'admin' },
+          target: { type: 'attribute', objectId: w.object.id, attributeId: w.status.id },
+          level: 'hidden',
+        },
+      ],
+      records: [],
+    };
+    const blind = await getSubmission(rescope(w.scope, { role: 'admin', rules }), { submissionId: row?.id ?? '' });
+    expect(blind.failure).not.toContain('Status');
+    expect(blind.failure).toContain('A required field isn’t asked');
   });
 });

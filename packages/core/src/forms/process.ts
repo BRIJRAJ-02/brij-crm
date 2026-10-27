@@ -30,7 +30,6 @@ import type { EngineScope } from '../engine/scope.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { enterAsForm } from '../access/door.ts';
 import { formAccess } from '../access/policy.ts';
-import { attributeVisible } from '../access/visibility.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition } from '../jobs/registry.ts';
 import { liveOptions, loadForm, loadVersions, type FormRow } from './shared.ts';
 import { parseAttributeInput } from '../engine/parse-value.ts';
@@ -347,15 +346,16 @@ export function mergedValue(planned: Planned, current: unknown): unknown {
 /** What one record write ended as: its result, the answers it skipped and why, or a refusal no answer explains. */
 type Written<T> =
   | { readonly ok: true; readonly value: T; readonly skipped: readonly EngineRefusal[] }
-  | { readonly ok: false; readonly failure: string };
+  | { readonly ok: false; readonly failure: string; readonly requiredMissing?: readonly string[] };
 
 /**
  * The sentence a write refused for a required field nobody filled ends as
  * (the owner, 27 October 2026: "A required field isn't asked by this form"
  * named nothing, so finding it took a support round trip). `fields` are the
- * fields that could be it, already filtered to the ones this message's reader
- * may see (`namableWalls`); with none of them it stays the old sentence,
- * which says what happened without naming a field it shouldn't.
+ * titles the reader of this message may see, filtered by their own access
+ * where the message is read (`submissions.ts`); with none of them it stays
+ * the old sentence, which says what happened without naming a field it
+ * shouldn't.
  */
 export function requiredFieldFailure(fields: readonly string[]): string {
   if (fields.length === 0) {
@@ -367,15 +367,15 @@ export function requiredFieldFailure(fields: readonly string[]): string {
 }
 
 /**
- * The fields a `VALUE_REQUIRED` refusal with no attribute could be about, by
- * title, for the sentence a submission's failure keeps. Only required fields
- * of the target object that nothing fills and that the write never sent, and
- * only those the triggering principal may see: the form narrows itself to its
- * own mapping (`formAccess` marks every other field hidden), so the writer's
- * own view would name nothing, while a member filing by hand sees exactly
- * what their access allows.
+ * The attributes a `VALUE_REQUIRED` refusal with no attribute could be about:
+ * required fields of the target object that nothing fills and the write never
+ * sent. Ids only, never titles. Which of them a reader may be told is decided
+ * where the message is read (`requiredFieldFailure` in `submissions.ts`), not
+ * here: the sentence is stored and read later by members with less access
+ * than whoever triggered the filing, and the background job runs as the
+ * system, which sees everything (security review, 27 October 2026).
  */
-export function namableWalls(
+export function unfilledRequired(
   scope: EngineScope,
   attributes: ReadonlyMap<string, AttributeDef>,
   sent: ReadonlySet<string>,
@@ -384,19 +384,17 @@ export function namableWalls(
   return [...attributes.values()]
     .filter(
       (attribute) =>
-        !isArchivedNow(attribute) &&
-        !sent.has(attribute.id) &&
-        isUnfillableRequired(attribute, { byMember }) &&
-        attributeVisible(scope.access, attribute),
+        !isArchivedNow(attribute) && !sent.has(attribute.id) && isUnfillableRequired(attribute, { byMember }),
     )
-    .map((attribute) => attribute.title);
+    .map((attribute) => attribute.id);
 }
 
 /**
  * Runs a record write under its own savepoint, dropping each value the
  * engine refuses (naming its attribute) and trying again with the rest
- * (AC-565). A refusal that names no attribute of the write ends it, with
- * `walls` naming the required fields it could have been about.
+ * (AC-565). A refusal that names no attribute of the write ends it, carrying
+ * out the ids of the required fields it could have been about (`walls`), for
+ * the reader's own view to name.
  */
 async function writeSkipping<T>(
   context: WriteContext,
@@ -417,7 +415,8 @@ async function writeSkipping<T>(
       const hidden = first?.code === 'VALUE_REQUIRED' && first.attributeId === undefined;
       return {
         ok: false,
-        failure: hidden ? requiredFieldFailure(walls) : (first?.message ?? 'The record couldn’t be written.'),
+        failure: hidden ? requiredFieldFailure([]) : (first?.message ?? 'The record couldn’t be written.'),
+        ...(hidden && walls.length > 0 ? { requiredMissing: walls } : {}),
       };
     }
     for (const refusal of named) {
@@ -519,6 +518,8 @@ export type Filed =
       readonly failure: string;
       readonly refused: readonly { questionId: string; message: string }[];
       readonly assignment: Assignment;
+      /** The required fields the write could have failed for, by id: the reader's view names the ones they may see. */
+      readonly requiredMissing?: readonly string[];
     };
 
 /** What filing one submission reads: its answers, the form, the mapping to apply and its object, and who writes. */
@@ -626,10 +627,16 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
       writer,
       values,
       (inner, given) => insertRecord(inner, { objectId, values: given }),
-      namableWalls(context.scope, attributes, new Set(values.keys())),
+      unfilledRequired(context.scope, attributes, new Set(values.keys())),
     );
     if (!written.ok) {
-      return { kind: 'failed', failure: written.failure, refused, assignment: notFiled(form, assignment) };
+      return {
+        kind: 'failed',
+        failure: written.failure,
+        refused,
+        assignment: notFiled(form, assignment),
+        ...(written.requiredMissing === undefined ? {} : { requiredMissing: written.requiredMissing }),
+      };
     }
     recordId = written.value.recordId;
     action = 'created';
@@ -940,7 +947,11 @@ export async function settle(
   if (filed.kind === 'failed') {
     await failSubmission(tx, submissionId, filed.failure, {
       assignment: filed.assignment,
-      outcome: { refused: filed.refused, ...extraOutcome },
+      outcome: {
+        refused: filed.refused,
+        ...(filed.requiredMissing === undefined ? {} : { requiredMissing: filed.requiredMissing }),
+        ...extraOutcome,
+      },
     });
     return;
   }

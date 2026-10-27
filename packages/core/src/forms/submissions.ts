@@ -24,17 +24,18 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import * as z from 'zod';
 import { checkId } from '../engine/ids.ts';
 import { readRecords } from '../engine/records.ts';
+import { loadAttributesById } from '../engine/values.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { can, fieldLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
-import { visibleRecords } from '../access/visibility.ts';
+import { attributeVisible, visibleRecords } from '../access/visibility.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { UNKNOWN_FORM } from './forms.ts';
-import { FORMS_PROCESS } from './process.ts';
+import { FORMS_PROCESS, requiredFieldFailure } from './process.ts';
 import { canSeeForm, loadForm, loadVersions, millis } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, records } = schema;
@@ -290,6 +291,29 @@ export async function listSubmissions(
   });
 }
 
+/**
+ * A failed submission's sentence as this reader may read it: the stored one,
+ * with the required fields it was about named when they may see them. The
+ * stored sentence names none of them, so a reader who may see nothing reads
+ * exactly what was stored (AC-144, the same rule the publish check follows).
+ */
+async function failureFor(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  stored: string | null,
+  missing: unknown,
+): Promise<string | undefined> {
+  if (stored === null) return undefined;
+  const ids = Array.isArray(missing) ? missing.filter((id): id is string => typeof id === 'string') : [];
+  if (ids.length === 0) return stored;
+  const attributes = await loadAttributesById(tx, ids);
+  const titles = ids.flatMap((id) => {
+    const attribute = attributes.get(id);
+    return attribute === undefined || !attributeVisible(scope.access, attribute) ? [] : [attribute.title];
+  });
+  return titles.length === 0 ? stored : requiredFieldFailure(titles);
+}
+
 /** One submission in full, as the reader may see it, read inside an open transaction. */
 async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string): Promise<SubmissionView> {
   const [row] = await tx
@@ -343,6 +367,9 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
       : [];
   });
   const assignment = record(row.assignment);
+  // A failure for a required field nothing filled is named here, not where it was stored: the job that wrote it
+  // runs as the system and sees every field, while this reader may not (security review, 27 October 2026).
+  const failure = await failureFor(tx, scope, row.failure, record(row.outcome).requiredMissing);
   return {
     id: row.id,
     formId: row.formId,
@@ -359,7 +386,7 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
     ...(context === undefined ? {} : { context }),
     signals: Array.isArray(signals) ? signals.filter((signal): signal is string => typeof signal === 'string') : [],
     records,
-    ...(row.failure === null ? {} : { failure: row.failure }),
+    ...(failure === undefined ? {} : { failure }),
     refused,
     ...(typeof assignment.reason === 'string'
       ? {
