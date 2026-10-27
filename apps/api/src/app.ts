@@ -40,7 +40,7 @@ import { hashAddress, mountPublicForms } from './forms/public.ts';
 import { mountFormFiles } from './forms/uploads.ts';
 import { createFileStore, type FileStore } from './storage/blob.ts';
 import { createDiskFileStore } from './storage/disk.ts';
-import { mountMyPicture } from './me-picture.ts';
+import { createForgetPicture, mountMyPicture } from './me-picture.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
 import { bookingLinkKey } from './booking-link.ts';
@@ -324,6 +324,7 @@ export function createApp({
         ? createDiskFileStore(join(tmpdir(), 'crm-local-files'))
         : undefined);
   const loadPicture = createPictureLoader(pictureFetch, pictureFiles);
+  const forgetPicture = createForgetPicture(identity, pictureFiles);
   // A link block's own site icon (26 Oct 2026), for the public link page.
   const faviconFetch = services.faviconFetch ?? createFaviconFetch();
   // The key every booking's guest page token derives from, shared with the worker's emails.
@@ -481,6 +482,7 @@ export function createApp({
           setWorkspaceDeleted: (workspaceId, deleted) => identity.setWorkspaceDeleted(workspaceId, deleted),
         },
         signedOut,
+        forgetPicture,
         requiredBy: (userId) => twoFactorRequiredBy({ db, identity }, userId),
         operators,
         noteActivity,

@@ -147,6 +147,11 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    */
   signedOut: SignedOutNotice;
   /**
+   * Takes a person's uploaded picture off their account and out of the private store (27 Oct 2026), for their
+   * account's deletion. Absent in tests that never upload.
+   */
+  forgetPicture?: (userId: string) => Promise<boolean>;
+  /**
    * Second factors and session proofs, by user and session id only (spec 0033,
    * milestone 4): a workspace's security settings count members without a
    * second factor, the Members page shows who has one to owners and admins,

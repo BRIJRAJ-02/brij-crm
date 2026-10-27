@@ -122,11 +122,19 @@ describe('deleting your account while in a deleted workspace (spec 0033, AC-903)
   it('leaves it and forgets them there, so another owner restores it without them', async () => {
     const w = await workspace({ secondOwner: true });
     const revoked: CalendarGrant[] = [];
-    const deps = deletionDeps(revoked);
+    // Their uploaded picture is let go while their account still reads it (it names the file), never after.
+    const forgotten: { userId: string; stillThere: boolean }[] = [];
+    const deps = {
+      ...deletionDeps(revoked),
+      forgetPicture: async (userId: string) => {
+        forgotten.push({ userId, stillThere: (await identity.getUser(userId)) !== undefined });
+      },
+    };
     expect(await accountDeletionCheck(deps, { userId: w.aUser, sessionId: randomUUID() })).toEqual({ blockers: [] });
     await expect(
       deleteMyAccount(deps, { userId: w.aUser, sessionId: randomUUID(), email: w.aEmail }, { email: w.aEmail }),
     ).resolves.toEqual({ deleted: true });
+    expect(forgotten).toEqual([{ userId: w.aUser, stillThere: true }]);
 
     // B restores it: A is not brought back.
     const entry = await enterDeletedWorkspace(w.doorDeps, { userId: w.bUser ?? '', slug: w.slug });

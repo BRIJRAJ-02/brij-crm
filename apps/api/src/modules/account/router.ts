@@ -95,6 +95,7 @@ function deletionDeps(context: RequestContext): AccountDeletionDeps {
     closeJoinRequests: async (userId) => {
       await closeJoinRequestsOf(memberDoor(context), userId);
     },
+    ...(context.forgetPicture === undefined ? {} : { forgetPicture: context.forgetPicture }),
     sendFarewell: async (email) => {
       try {
         const message = await renderAccountDeleted(new Date(), { appOrigin: new URL(context.appUrl).origin });

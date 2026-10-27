@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 import type { ErrorCode } from '@crm/contracts';
 import { errorStatus } from '@crm/contracts';
+import { jpegWith, pngWith } from '../test/pictures.ts';
 import type { Auth } from './auth/auth.ts';
 import { createMemoryLimiter } from './limits.ts';
 import { mountMyPicture } from './me-picture.ts';
@@ -13,8 +14,8 @@ import { createPictureLoader, type PictureFetch } from './public/picture.ts';
 import type { FileStore } from './storage/blob.ts';
 
 const USER = '01a17d71-1ebc-7ae4-986b-7879179e331a';
-const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
-const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+const JPEG = jpegWith({});
+const PNG = pngWith({});
 
 /** A store in memory. */
 function memoryStore(): FileStore & { readonly kept: Map<string, { bytes: Uint8Array; type: string }> } {
@@ -69,6 +70,11 @@ function setUp({ signedIn = true, withStore = true } = {}) {
         account.image = image;
         return Promise.resolve({ saved: true as const, previous });
       },
+      clearUploadedImage: () => {
+        const previous = account.image?.startsWith('stored:') === true ? account.image : undefined;
+        if (previous !== undefined) account.image = undefined;
+        return Promise.resolve(previous);
+      },
     },
     files,
     load: createPictureLoader(noGoogle, files),
@@ -78,7 +84,8 @@ function setUp({ signedIn = true, withStore = true } = {}) {
   });
   const upload = (type: string, body: Uint8Array) =>
     app.request('/me/picture', { method: 'POST', headers: { 'content-type': type }, body });
-  return { app, account, files, upload };
+  const remove = () => app.request('/me/picture', { method: 'DELETE' });
+  return { app, account, files, upload, remove };
 }
 
 describe('uploading your own picture', () => {
@@ -99,6 +106,19 @@ describe('uploading your own picture', () => {
     const kept = [...(files?.kept.keys() ?? [])];
     expect(kept).toHaveLength(1);
     expect(kept[0]).toMatch(/\.png$/);
+  });
+
+  it('keeps it without the EXIF it came with, whatever the browser did or didn’t do', async () => {
+    const { files, upload } = setUp();
+    expect((await upload('image/jpeg', jpegWith({ exif: true, comment: true }))).status).toBe(200);
+    const [kept] = [...(files?.kept.values() ?? [])];
+    expect(new TextDecoder('latin1').decode(kept?.bytes)).not.toContain('GPS');
+  });
+
+  it('refuses a file that starts like a picture and isn’t one', async () => {
+    const { files, upload } = setUp();
+    expect((await upload('image/jpeg', new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]))).status).toBe(400);
+    expect(files?.kept.size).toBe(0);
   });
 
   it('refuses without a session', async () => {
@@ -125,6 +145,29 @@ describe('uploading your own picture', () => {
   it('says so where there is no store to keep it in', async () => {
     const { upload } = setUp({ withStore: false });
     expect((await upload('image/jpeg', JPEG)).status).toBe(503);
+  });
+});
+
+describe('removing your own picture', () => {
+  it('takes your upload off your account and out of the store', async () => {
+    const { account, files, upload, remove } = setUp();
+    await upload('image/jpeg', JPEG);
+    const answer = await remove();
+    expect(answer.status).toBe(200);
+    expect(await answer.json()).toEqual({ removed: true });
+    expect(account.image).toBeUndefined();
+    expect(files?.kept.size).toBe(0);
+  });
+
+  it('leaves Google’s picture alone, and says nothing was removed', async () => {
+    const { account, remove } = setUp();
+    account.image = 'https://lh3.googleusercontent.com/a/x=s96-c';
+    expect(await (await remove()).json()).toEqual({ removed: false });
+    expect(account.image).toBe('https://lh3.googleusercontent.com/a/x=s96-c');
+  });
+
+  it('refuses without a session', async () => {
+    expect((await setUp({ signedIn: false }).remove()).status).toBe(401);
   });
 });
 

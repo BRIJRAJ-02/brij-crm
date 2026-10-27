@@ -331,6 +331,12 @@ export interface IdentityStore extends OperatorIdentity {
     id: string,
     image: string,
   ): Promise<{ readonly saved: true; readonly previous: string | undefined } | undefined>;
+  /**
+   * Takes away a picture the person uploaded (27 Oct 2026): Settings' Remove photo, and their account's deletion. Only
+   * an upload of their own goes (`stored:pictures/<their id>/…`); Google's, or none, is left as it is. Answers the
+   * upload that went, so the api can drop it from the store; undefined when there was none.
+   */
+  clearUploadedImage(id: string): Promise<string | undefined>;
   /** Whether the user has a Google account linked (it signs in with Google). Reads no token. */
   hasGoogleAccount(id: string): Promise<boolean>;
   /**
@@ -839,6 +845,25 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
           .set({ image, updatedAt: sql`now()` })
           .where(eq(user.id, id));
         return { saved: true as const, previous: before.image ?? undefined };
+      });
+    },
+
+    async clearUploadedImage(id) {
+      if (!UUID.test(id)) return undefined;
+      const upload = `^stored:pictures/${id.toLowerCase()}/[0-9a-f-]{36}\\.(jpg|png|webp)$`;
+      return db.transaction(async (tx) => {
+        const [before] = await tx
+          .select({ image: user.image })
+          .from(user)
+          .where(and(eq(user.id, id), sql`${user.image} ~ ${upload}`))
+          .for('update')
+          .limit(1);
+        if (before?.image === undefined || before.image === null) return undefined;
+        await tx
+          .update(user)
+          .set({ image: null, updatedAt: sql`now()` })
+          .where(eq(user.id, id));
+        return before.image;
       });
     },
 

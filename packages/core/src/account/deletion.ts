@@ -79,6 +79,11 @@ export interface AccountDeletionDeps {
    * workspace, before their `auth` rows go (`closeJoinRequestsOf`).
    */
   readonly closeJoinRequests: (userId: string) => Promise<void>;
+  /**
+   * Takes the picture they uploaded out of the private store (27 Oct 2026), before their `auth` row goes: nothing
+   * else would ever point at it again. Best effort; absent where there is no store.
+   */
+  readonly forgetPicture?: (userId: string) => Promise<unknown>;
   /** The last email, to the old address. Never throws. */
   readonly sendFarewell: (email: string) => Promise<void>;
   readonly now?: () => number;
@@ -264,6 +269,7 @@ export async function deleteMyAccount(
     await Promise.all(grants.map(capped));
   }
   await deps.closeJoinRequests(caller.userId);
+  await deps.forgetPicture?.(caller.userId).catch(() => undefined);
   await deps.identity.deleteUser(caller.userId);
   await deps.signedOut(caller.userId);
   await deps.sendFarewell(caller.email);

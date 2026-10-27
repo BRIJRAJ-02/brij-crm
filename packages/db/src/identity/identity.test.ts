@@ -170,6 +170,46 @@ describe('users', () => {
     expect(await identity.setUserNameIfEmpty(id, 'Someone Else')).toBe(false);
     expect((await identity.getUser(id))?.name).toBe('Ada Lovelace');
   });
+
+  it('lets an upload replace Google’s picture, and never lets Google’s replace an upload', async () => {
+    const id = await createTestUser(identityUrl, { email: `${unique()}@example.com` });
+    const google = 'https://lh3.googleusercontent.com/a/ACg8ocK=s96-c';
+    const upload = `stored:pictures/${id}/${randomUUID()}.jpg`;
+    expect(await identity.setUserImageFromGoogle(id, google)).toBe(true);
+    expect(await identity.setUserImageFromUpload(id, upload)).toEqual({ saved: true, previous: google });
+    expect(await identity.setUserImageFromGoogle(id, 'https://lh4.googleusercontent.com/a/other=s96-c')).toBe(false);
+    expect(await identity.userImage(id)).toBe(upload);
+  });
+
+  it('takes only an upload in this person’s own shape', async () => {
+    const id = await createTestUser(identityUrl, { email: `${unique()}@example.com` });
+    const other = await createTestUser(identityUrl, { email: `${unique()}@example.com` });
+    const file = randomUUID();
+    const refused = [
+      `stored:pictures/${other}/${file}.jpg`,
+      `stored:forms/${id}/${file}.jpg`,
+      `stored:pictures/${id}/${file}.svg`,
+      `stored:pictures/${id}/../${other}/${file}.jpg`,
+      `pictures/${id}/${file}.jpg`,
+    ];
+    for (const image of refused) expect(await identity.setUserImageFromUpload(id, image)).toBeUndefined();
+    expect(await identity.userImage(id)).toBeUndefined();
+  });
+
+  it('removes only an upload of the person’s own, and answers it', async () => {
+    const id = await createTestUser(identityUrl, { email: `${unique()}@example.com` });
+    const google = 'https://lh3.googleusercontent.com/a/ACg8ocK=s96-c';
+    expect(await identity.clearUploadedImage(id)).toBeUndefined();
+    await identity.setUserImageFromGoogle(id, google);
+    expect(await identity.clearUploadedImage(id)).toBeUndefined();
+    expect(await identity.userImage(id)).toBe(google);
+    const upload = `stored:pictures/${id}/${randomUUID()}.png`;
+    await identity.setUserImageFromUpload(id, upload);
+    expect(await identity.clearUploadedImage(id)).toBe(upload);
+    expect(await identity.userImage(id)).toBeUndefined();
+    // Once gone, Google's can come back.
+    expect(await identity.setUserImageFromGoogle(id, google)).toBe(true);
+  });
 });
 
 describe('Better Auth on the identity store', () => {
