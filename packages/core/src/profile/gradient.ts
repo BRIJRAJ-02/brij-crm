@@ -20,16 +20,17 @@ interface Pool {
 }
 
 /**
- * The three pools for one hue: the colour itself in the middle, a warmer and lighter one up the wheel towards
- * the top, and a deeper one down the wheel in the corner. Turning the hue rather than only lightening it is
- * what keeps a gradient from reading as a grey wash of one colour: a poured orange runs through yellow and red,
- * never through brown.
+ * The three pools for one hue: the light, warm one up in the top right, the colour itself down the left edge,
+ * and the deepest along the bottom, so the card reads as lit from one corner the way a physical card under a
+ * light does, with the orange kept on the side the name and the logo sit against. Turning the hue rather than
+ * only lightening it is what keeps a gradient from reading as a grey wash of one colour: a poured orange runs
+ * through yellow and red, never through brown.
  */
 function poolsOf(colour: Channels): readonly Pool[] {
   return [
-    { x: 0.34, y: 0.58, reach: 0.78, colour: turn(colour, 14, 1.12, 0.1) },
-    { x: 0.9, y: 0.06, reach: 0.95, colour: turn(colour, -16, 1.06, -0.12) },
-    { x: 0.04, y: 1.0, reach: 0.92, colour: turn(colour, -8, 1.02, -0.04) },
+    { x: 0.74, y: 0.0, reach: 0.78, colour: turn(colour, 14, 1.12, 0.12) },
+    { x: 0.0, y: 0.44, reach: 0.86, colour: turn(colour, -4, 1.04, -0.02) },
+    { x: 0.6, y: 1.0, reach: 0.92, colour: turn(colour, -16, 1.06, -0.12) },
   ];
 }
 
