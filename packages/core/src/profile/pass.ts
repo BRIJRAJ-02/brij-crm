@@ -10,6 +10,7 @@
 import { createHash } from 'node:crypto';
 import { contactValuesOf, type ProfileContactCard } from '@crm/contracts';
 import type { PageTheme } from '@crm/contracts';
+import { channelsOf, type Channels } from './colour.ts';
 import { gradientPng } from './gradient.ts';
 import { passImage, PASS_IMAGE_NAMES } from './pass-images.ts';
 import { signDetached, type PassSigningKeys } from './pkcs7.ts';
@@ -66,7 +67,7 @@ export function passImages(hue: string): PassImages {
 }
 
 /** Whether a pass's text colour is the white one, which decides which wordmark it carries. */
-function isWhite(text: readonly [number, number, number]): boolean {
+function isWhite(text: Channels): boolean {
   return text[0] === 255;
 }
 
@@ -104,71 +105,32 @@ export const PASS_HUES: Readonly<Record<string, string>> = {
 /** The hue a pass falls back to: the page theme's own default. */
 const DEFAULT_HUE = 'blue';
 
-/** The contrast the text needs against the pass's background (WCAG AA for the body text a field label is). */
-const AA_CONTRAST = 4.5;
-
-/** The ink a pass uses when its colour is too light for white text: near black, not black, as the tokens are. */
-const DARK_TEXT: readonly [number, number, number] = [21, 21, 21];
-
-/** A `#rrggbb` as its three channels, 0 to 255. */
-function channelsOf(colour: string): readonly [number, number, number] {
-  const hex = colour.replace('#', '');
-  return [0, 2, 4].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)) as unknown as [number, number, number];
-}
-
-/** A channel's share of relative luminance (WCAG 2). */
-function channelLuminance(value: number): number {
-  const part = value / 255;
-  return part <= 0.04045 ? part / 12.92 : ((part + 0.055) / 1.055) ** 2.4;
-}
-
-/** A colour's relative luminance (WCAG 2). */
-function luminanceOf(channels: readonly [number, number, number]): number {
-  const [red, green, blue] = channels;
-  return 0.2126 * channelLuminance(red) + 0.7152 * channelLuminance(green) + 0.0722 * channelLuminance(blue);
-}
-
-/** The contrast between two colours (WCAG 2). */
-export function contrastOf(one: readonly [number, number, number], other: readonly [number, number, number]): number {
-  const [lighter, darker] = [luminanceOf(one), luminanceOf(other)].sort((a, b) => b - a);
-  return ((lighter ?? 0) + 0.05) / ((darker ?? 0) + 0.05);
+/**
+ * The three colours of a pass, from one hue: the hue exactly as the tokens hold it, with white text and a
+ * white label drawn a little way back towards the card.
+ *
+ * The hue is never deepened to carry the text. Taking a warm hue down far enough for white to clear even 3:1
+ * turns it brown (tried both 4.5 and 3, 27 October 2026), and the card is a thing people hold up to each
+ * other, so the owner's call is that the colour wins: white on the vivid orange is about 2:1, below AA, which
+ * is a deliberate exception for this one surface and not a pattern for any screen in the app. The text is
+ * large and heavy, which is what makes it readable at this contrast, and nothing on the card is only
+ * available here: the same details are on the back in Wallet's own black on white, and on the link page.
+ */
+export function coloursOf(hue: string): {
+  readonly background: Channels;
+  readonly text: Channels;
+  readonly label: Channels;
+} {
+  const white: Channels = [255, 255, 255];
+  const background = channelsOf(PASS_HUES[hue] ?? PASS_HUES[DEFAULT_HUE] ?? '#266df0');
+  // The label, a sixth of the way back towards the card: quieter than the value under it, still clearly white.
+  const label = white.map((value, at) => value + ((background[at] ?? 0) - value) * 0.16) as unknown as Channels;
+  return { background, text: white, label };
 }
 
 /** A colour as Wallet writes one. */
-function rgb(channels: readonly [number, number, number]): string {
+function rgb(channels: Channels): string {
   return `rgb(${channels.map((value) => String(Math.round(value))).join(', ')})`;
-}
-
-/**
- * The three colours of a pass, from one hue. The hue itself is the background, at full strength: a pass is held
- * up to other people, and a hue toned down until it suits one text colour is a worse card than one that picks
- * the text colour to suit the hue. So the text is white or near black, whichever reads on it, and the label is
- * that colour drawn back towards the background until it is quieter but still clears AA.
- *
- * A dot that clears AA against neither (nothing in the token set does) keeps the darker of the two, which is
- * the token's own text colour on a pale tag.
- */
-export function coloursOf(hue: string): {
-  readonly background: readonly [number, number, number];
-  readonly text: readonly [number, number, number];
-  readonly label: readonly [number, number, number];
-} {
-  const background = channelsOf(PASS_HUES[hue] ?? PASS_HUES[DEFAULT_HUE] ?? '#266df0');
-  const white: readonly [number, number, number] = [255, 255, 255];
-  const text = contrastOf(background, white) >= contrastOf(background, DARK_TEXT) ? white : DARK_TEXT;
-  // The label, pulled towards the background a step at a time while it still clears AA: quieter than the value
-  // above it, never so quiet it stops being readable.
-  let label = text;
-  for (let step = 1; step <= 5; step += 1) {
-    const tried = text.map((value, at) => value + ((background[at] ?? 0) - value) * (step * 0.06)) as unknown as [
-      number,
-      number,
-      number,
-    ];
-    if (contrastOf(background, tried) < AA_CONTRAST) break;
-    label = tried;
-  }
-  return { background, text, label };
 }
 
 /** One field of a pass, as `pass.json` holds it. */
@@ -232,14 +194,17 @@ export function passJson(input: PassInput): string {
       headerFields: [],
       // Their name, large, with what they do as its label: the one line someone reads across a table.
       primaryFields: [{ key: 'name', label: card.jobTitle ?? '', value: card.fullName }],
-      secondaryFields: [...fieldOf('company', 'Company', card.company), ...fieldOf('phone', 'Phone', phones[0])],
+      // Only what a card always has. A name, an email and the page are the three a person fills in without
+      // being asked; a phone is often blank, and a row that is blank on most cards makes every card look
+      // unfinished, so the phone goes on the back with everything else (27 October 2026).
+      secondaryFields: fieldOf('email', 'Email', emails[0]),
       auxiliaryFields: [
-        ...fieldOf('email', 'Email', emails[0]),
         ...fieldOf('page', 'Page', shownAddress(input.pageUrl)),
+        ...fieldOf('company', 'Company', card.company),
       ],
       backFields: [
+        ...phones.map((phone, at) => ({ key: `phone${String(at + 1)}`, label: 'Phone', value: phone })),
         ...emails.slice(1).map((email, at) => ({ key: `email${String(at + 2)}`, label: 'Email', value: email })),
-        ...phones.slice(1).map((phone, at) => ({ key: `phone${String(at + 2)}`, label: 'Phone', value: phone })),
         ...websites.map((website, at) => ({ key: `website${String(at + 1)}`, label: 'Website', value: website })),
         ...fieldOf('note', 'Note', card.note),
         { key: 'link', label: 'Link page', value: input.pageUrl },
