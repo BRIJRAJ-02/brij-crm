@@ -100,6 +100,9 @@ export const strings = {
   // Questions: the shared editor's words (`features/questions/strings.ts`), and the form's own
   ...questionStrings,
   emailStays: 'The email question stays while the form files onto People: it is how a submission becomes a person.',
+  /** Publish couldn't make the email the match: two records on the object already share one (27 October 2026). */
+  matchHasDuplicates: (objectName: string) =>
+    `Some ${objectName} share an email already, so email can’t tell them apart yet. Give each its own, then publish.`,
 
   // First publish
   setUpTitle: 'Set up your form',

@@ -16,6 +16,7 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { changeQuestion, fileByLabel, fittingAttributes, publishAttributesOf, publishStart } from './draft.ts';
 import { createPlannedAttributes } from '../questions/attributes.ts';
+import { readyMatch, type ReadyMatch } from './match.ts';
 import { planNewAttributes } from '../questions/questions.ts';
 import { firstRefusal } from './refusals.ts';
 import { embedSnippet } from './snippets.ts';
@@ -208,31 +209,47 @@ export function PublishDialog(props: PublishDialogProps) {
    * sent to an object with no email attribute could not be published at all, and said only "Keep an email question"
    * about a question that was already there (the owner, 27 October 2026).
    */
-  const fileTheRest = async (): Promise<{ readonly document: FormDocument; readonly choices: FormTargetChoices }> => {
+  const fileTheRest = async (): Promise<ReadyMatch> => {
     const objectId = draft.targets.main?.objectId;
     const plans = planNewAttributes(draft.questions, target.items, canBuild && objectId !== undefined);
-    if (objectId === undefined || plans.length === 0) return { document: draft, choices: target };
-    const made = await createPlannedAttributes(data, slug, objectId, plans);
-    if (made.length === 0) return { document: draft, choices: target };
-    onDraftChange(
-      made.reduce((document, each) => changeQuestion(document, each.questionId, { filedOn: each.attributeId }), draft),
+    let document = draft;
+    let choices = target;
+    if (objectId !== undefined && plans.length > 0) {
+      const made = await createPlannedAttributes(data, slug, objectId, plans);
+      if (made.length > 0) {
+        document = made.reduce(
+          (next, each) => changeQuestion(next, each.questionId, { filedOn: each.attributeId }),
+          draft,
+        );
+        onDraftChange(document);
+        choices = await data.forms.attributes(slug, form.id);
+      }
+    }
+    // The email it matches on, made unique where the object has none, and the match worked out again over the
+    // attributes as they now are (`readyMatch`): an email attribute made by hand often isn't unique.
+    const ready = await readyMatch(
+      { data, slug, formId: form.id, canChangeAttributes: canBuild, flush },
+      document,
+      choices,
     );
-    const revision = await flush();
-    const view = await data.forms.setTarget(slug, form.id, objectId, revision);
-    const choices = await data.forms.attributes(slug, form.id);
-    onTargetChange(view, choices);
-    return { document: view.draft, choices };
+    if (!('refused' in ready) && ready.view !== undefined) onTargetChange(ready.view, ready.choices);
+    return ready;
   };
 
   const goLive = async () => {
     setBusy('publish');
     setError(undefined);
-    let ready: { readonly document: FormDocument; readonly choices: FormTargetChoices };
+    let ready: ReadyMatch;
     try {
       ready = await fileTheRest();
     } catch (failure) {
       setBusy(undefined);
       setError(firstRefusal(failure).message);
+      return;
+    }
+    if ('refused' in ready) {
+      setBusy(undefined);
+      setError(ready.refused);
       return;
     }
     const { document, choices } = ready;

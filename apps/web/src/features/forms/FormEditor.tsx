@@ -51,6 +51,7 @@ import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from '.
 import { PublishDialog } from './PublishDialog.tsx';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
 import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
+import { readyMatch } from './match.ts';
 import { firstRefusal, saveFailureMessage } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
 import { useJobFollower } from './followJobs.ts';
@@ -273,16 +274,31 @@ export function FormEditor(props: FormEditorProps) {
       if (tab !== 'settings') void navigate({ href: formHref(slug, form.id, 'settings') });
       return;
     }
-    // Questions with no attribute to file onto get one first, with no prompt; the check and publish then read it.
-    if (planNewAttributes(draft, target.items, canBuild && canManage && target.objectId !== undefined).length === 0) {
-      publishChecked(draft, target);
-      return;
-    }
+    // Questions with no attribute to file onto get one first, with no prompt; then the email the form matches on is
+    // made ready (`readyMatch`); the check and publish then read both.
     setPublishing(true);
-    createMissingAttributes().then(({ document, choices }) => {
-      setPublishing(false);
-      publishChecked(document, choices);
-    }, failed);
+    createMissingAttributes()
+      .then(({ document, choices }) =>
+        readyMatch(
+          { data, slug, formId: form.id, canChangeAttributes: canBuild && canManage, flush },
+          document,
+          choices,
+        ),
+      )
+      .then((ready) => {
+        setPublishing(false);
+        if ('refused' in ready) {
+          toasts.toast({ tone: 'danger', message: ready.refused });
+          return;
+        }
+        if (ready.view !== undefined) {
+          apply(ready.view);
+          setDraft(ready.document);
+          latest.current = ready.document;
+          setTarget(ready.choices);
+        }
+        publishChecked(ready.document, ready.choices);
+      }, failed);
   };
 
   const publishChecked = (draft: FormDocument, target: FormTargetChoices) => {
@@ -293,6 +309,7 @@ export function FormEditor(props: FormEditorProps) {
       slug: form.publicKey,
       document: draft,
       attributes,
+      ...(target.objectName === undefined ? {} : { objectName: target.objectName }),
     });
     if (found !== undefined && (isPublished || (found.code !== 'NAME_MISSING' && found.code !== 'ADDRESS_INVALID'))) {
       setProblem(found);
