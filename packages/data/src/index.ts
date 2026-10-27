@@ -5313,6 +5313,18 @@ export function createDataLayer({
       /** Marks a submission as spam (AC-574). */
       markSpam: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.markSpam({ workspace, submissionId, mutationId: mintId() }, options)),
+      /**
+       * Settles a submission the content checks held in Needs review: Not
+       * spam sends it to processing, Spam moves it to spam. Only a held one
+       * qualifies, so the panel routes a spam row to `release` instead.
+       */
+      resolve: (workspace: string, submissionId: string, resolution: 'not_spam' | 'spam') =>
+        call((options) =>
+          api.submissions.resolve(
+            { workspace, submissionId, resolution: { kind: resolution }, mutationId: mintId() },
+            options,
+          ),
+        ),
       /** Processes a failed submission again (AC-566). */
       retry: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.retry({ workspace, submissionId, mutationId: mintId() }, options)),

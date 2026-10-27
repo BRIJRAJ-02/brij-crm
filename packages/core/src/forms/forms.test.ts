@@ -565,6 +565,21 @@ describe('the content checks and Needs review (AC-563, AC-584, the spam follow-u
       ).toEqual([{ code: 'FORM_STATE', message: NOT_IN_REVIEW }]);
     }
   });
+
+  it('refuses to release a submission held for review, so Needs review is emptied by resolve alone', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    await submit(live.publicKey, body({ name: 'Xkcdqwrt', email: 'one@mailinator.com' }));
+    const [held] = await submissionIds(w, live.id);
+    if (held === undefined) throw new Error('A submission was expected.');
+    expect(held.state).toBe('needs_review');
+    // Release is for spam only. The panel's Not spam must route a held row to `resolve`; if this
+    // ever stops refusing, that routing (and this pin) should be revisited together.
+    expect(await refusalOf(releaseSubmission(w.scope, registry, { submissionId: held.id }))).toMatchObject([
+      { code: 'FORM_STATE' },
+    ]);
+    expect((await getSubmission(w.scope, { submissionId: held.id })).state).toBe('needs_review');
+  });
 });
 
 describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-565, AC-567)', () => {

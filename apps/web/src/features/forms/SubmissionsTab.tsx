@@ -187,18 +187,30 @@ export function SubmissionsTab({
     );
   };
 
+  /**
+   * Not spam and Mark as spam by the row's own state: a submission the bot
+   * checks held in Needs review is settled with `resolve` (the server refuses
+   * `release` for it, and `markSpam` would lose who settled it), a spam one
+   * with `release`.
+   */
+  const settleOne = (submissionId: string, kind: 'release' | 'spam') => {
+    const held = rows.find((submission) => submission.id === submissionId)?.state === 'needs_review';
+    if (held) return data.submissions.resolve(slug, submissionId, kind === 'release' ? 'not_spam' : 'spam');
+    return kind === 'release'
+      ? data.submissions.release(slug, submissionId)
+      : data.submissions.markSpam(slug, submissionId);
+  };
+
   const act = (kind: 'release' | 'spam' | 'retry' | 'delete', submissionId: string) => {
     if (busy !== undefined) return;
     setBusy(kind);
     if (kind === 'delete') setDeleteFailure(undefined);
     const done =
-      kind === 'release'
-        ? data.submissions.release(slug, submissionId)
-        : kind === 'spam'
-          ? data.submissions.markSpam(slug, submissionId)
-          : kind === 'retry'
-            ? data.submissions.retry(slug, submissionId)
-            : data.submissions.delete(slug, submissionId);
+      kind === 'release' || kind === 'spam'
+        ? settleOne(submissionId, kind)
+        : kind === 'retry'
+          ? data.submissions.retry(slug, submissionId)
+          : data.submissions.delete(slug, submissionId);
     const said = {
       release: strings.released,
       spam: strings.markedSpam,
@@ -281,7 +293,7 @@ export function SubmissionsTab({
     const step = (index: number): Promise<void> => {
       const id = ids[index];
       if (id === undefined) return Promise.resolve();
-      const call = kind === 'spam' ? data.submissions.markSpam(slug, id) : data.submissions.release(slug, id);
+      const call = settleOne(id, kind);
       return call.then(() => {
         done += 1;
         setBulk({ label, value: Math.round((done / ids.length) * 100) });
@@ -596,7 +608,7 @@ export function SubmissionsTab({
                 ),
                 footer: (
                   <>
-                    {open.state === 'spam' && (
+                    {(open.state === 'spam' || open.state === 'needs_review') && (
                       <Button variant="primary" isPending={busy === 'release'} onPress={() => act('release', open.id)}>
                         {strings.release}
                       </Button>
