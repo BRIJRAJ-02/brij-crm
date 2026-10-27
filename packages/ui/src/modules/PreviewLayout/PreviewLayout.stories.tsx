@@ -11,7 +11,7 @@ import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkPage } from '../LinkPage/LinkPage.tsx';
 import { HostedFormPreview } from '../HostedFormPreview/HostedFormPreview.tsx';
-import { EditorStatus, PreviewFrame, PreviewLayout } from './PreviewLayout.tsx';
+import { EditorStatus, PhonePreview, PreviewFrame, PreviewLayout } from './PreviewLayout.tsx';
 
 const FORM: PublicForm = {
   key: 'contact-us',
@@ -431,6 +431,30 @@ export const WideShare: Story = {
           <Field label="Title" value="timefix.com" />
         </Card>
       </PreviewLayout>
+    </Stage>
+  ),
+};
+
+/**
+ * The phone on its own (`PhonePreview`): no "Preview" heading and no
+ * controls, for a place whose own title already says what the page is (first
+ * run, spec 0036). A page that fits, and one that runs past the phone's foot,
+ * where the screen scrolls and takes a stop of its own.
+ */
+export const PhoneOnItsOwn: Story = {
+  render: () => (
+    <Stage height="page" width="fill">
+      <PhonePreview>
+        <LinkPage
+          isPreview
+          person={{ name: 'Ada Lovelace', id: 'ada' }}
+          address={{ label: 'timefix.com/ada', value: 'https://timefix.com/ada' }}
+          blocks={[
+            { kind: 'page', id: 'intro', title: 'Intro call', href: '/ada/intro', facts: '30 min' },
+            { kind: 'link', id: 'site', title: 'timefix.com', href: 'https://www.timefix.com', hue: 'sky' },
+          ]}
+        />
+      </PhonePreview>
     </Stage>
   ),
 };

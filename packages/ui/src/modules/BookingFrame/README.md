@@ -35,6 +35,8 @@ A team page (spec 0037, AC-1339) passes `host.team`: up to 4 faces stack in plac
 
 A personal page's `host.socials` (booking socials, 25 October 2026) draws the host's social links as SocialLinks, the last line of their block, under the facts: it arrives in the same paint as the rest of the host, and on a wide page nothing under it moves, since the foot is pinned to the rail's end. The loading rail reserves nothing for it, since most hosts have none. A team page never draws it.
 
+`isCompact` (27 October 2026) keeps the stacked layout however wide the window is. The page breakpoint is a media query, so it reads the window rather than the room the page is drawn in: inside a 375px phone on a 1440px screen the rail and the card still sat side by side and the weekday headers ran together. The editors don't need it, because `PreviewFrame` is a real frame with a viewport of its own; first run does, since it previews a page that doesn't exist yet and so can't be framed. It only holds the narrow layout, which the page already has below the breakpoint, so nothing is styled twice and the public page is untouched.
+
 ### BookingProfile (22 October 2026)
 
 A person's public profile, `/<handle>`, the Cal.com profile the owner pointed at: one card with their picture, their name as the page's `h1` and a one line bio (and their social links under it, `person.socials`), then their booking links, then the foot. `BookingProfileSection` groups links under the small heading their owner gave them. The links themselves are LinkList's comfortable rows (the whole row opens the page), with LinkListToolbar above them once there are many.

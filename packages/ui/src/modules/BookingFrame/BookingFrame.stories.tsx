@@ -511,3 +511,26 @@ export const HandleFreeLongest: Story = {
     </Stage>
   ),
 };
+
+/**
+ * `isCompact`: the stacked layout kept however wide the window is, for a page
+ * drawn in something narrow that is not a frame of its own (first run's
+ * preview of a page that doesn't exist yet). The same layout the page already
+ * has below its breakpoint, so no screenshot of its own.
+ */
+export const Compact: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingFrame
+        isCompact
+        host={{ name: 'Ada Lovelace' }}
+        title="Intro call"
+        facts={[{ id: 'length', icon: 'clock', children: '30 min' }]}
+        heading="Choose a time"
+      >
+        <p>The month goes here.</p>
+      </BookingFrame>
+    </Stage>
+  ),
+};
