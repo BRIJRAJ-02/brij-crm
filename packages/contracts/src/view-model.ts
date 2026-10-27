@@ -384,6 +384,85 @@ export function viewRule(action: ViewAction, caller: ViewRuleCaller, view: ViewR
   }
 }
 
+/** Whether two conditions say the same thing, whatever order their keys were written in. */
+function sameCondition(left: FilterCondition, right: FilterCondition): boolean {
+  const keys = [...new Set([...Object.keys(left), ...Object.keys(right)])].sort();
+  const read = (condition: FilterCondition, key: string): unknown => (condition as Record<string, unknown>)[key];
+  return keys.every((key) => JSON.stringify(read(left, key)) === JSON.stringify(read(right, key)));
+}
+
+/**
+ * Whether two stored filters are the same tree. Structural rather than
+ * `JSON.stringify`, which would answer no for the same filter with its keys
+ * in another order.
+ */
+function sameFilter(left: FilterGroup | undefined, right: FilterGroup | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  if (left.conjunction !== right.conjunction || left.conditions.length !== right.conditions.length) return false;
+  return left.conditions.every((item, at) => {
+    const other = right.conditions[at];
+    if (other === undefined) return false;
+    if (isGroupItem(item) || isGroupItem(other)) {
+      return isGroupItem(item) && isGroupItem(other) && sameFilter(item, other);
+    }
+    return sameCondition(item, other);
+  });
+}
+
+/** The stored filter with every condition the saver can't see taken out: what their screen showed them. */
+function asSeen(group: FilterGroup, visibleIds: ReadonlySet<string>): FilterGroup | undefined {
+  const conditions = group.conditions.flatMap((item): (FilterCondition | FilterGroup)[] => {
+    if (isGroupItem(item)) {
+      const kept = asSeen(item, visibleIds);
+      return kept === undefined ? [] : [kept];
+    }
+    // A through condition is seen when its relations are: the far side's visibility is the server's to judge.
+    const ids = item.operator === 'through' ? item.path : [item.attributeId];
+    return ids.every((id) => visibleIds.has(id)) ? [item] : [];
+  });
+  return conditions.length === 0 ? undefined : { conjunction: group.conjunction, conditions };
+}
+
+/** Whether a stored filter holds a condition on an attribute the saver can't see (hidden from them, or archived). */
+export function hasUnseenConditions(stored: FilterGroup | undefined, visibleIds: ReadonlySet<string>): boolean {
+  if (stored === undefined) return false;
+  return !sameFilter(stored, asSeen(stored, visibleIds));
+}
+
+/** What a save may do with a filter whose stored form holds conditions the saver never saw. */
+export type FilterMerge =
+  { readonly kind: 'keep'; readonly filter: FilterGroup | undefined } | { readonly kind: 'blocked' };
+
+/**
+ * The filter a save should store, for a view whose stored filter holds
+ * conditions the saver can't see (27 October 2026). Their screen is built
+ * from `effectiveQuery`, which leaves those conditions out, so what they send
+ * back is the filter without them — and writing that deletes, for everyone
+ * and for good, a condition they never knew was there. One flipped sort used
+ * to be enough to widen a shared view permanently.
+ *
+ * `mergeLayout` solves the same problem for columns by putting the unseen
+ * ones back. A filter can't be merged that way: the stored tree may be an
+ * `or`, and grafting the saver's branch onto it would change what the view
+ * asks rather than restore it. So the rule is narrower and always honest:
+ *
+ * - the saver left the filter alone (what they sent is exactly what they were
+ *   shown) → store the filter as it was, unseen conditions and all;
+ * - they changed it → `blocked`, and the caller refuses saying why.
+ *
+ * `visibleIds` are the attributes the saver sees, live, as `mergeLayout`
+ * takes them.
+ */
+export function mergeFilter(
+  stored: FilterGroup | undefined,
+  incoming: FilterGroup | undefined,
+  visibleIds: ReadonlySet<string>,
+): FilterMerge {
+  if (!hasUnseenConditions(stored, visibleIds)) return { kind: 'keep', filter: incoming };
+  const seen = stored === undefined ? undefined : asSeen(stored, visibleIds);
+  return sameFilter(seen, incoming) ? { kind: 'keep', filter: stored } : { kind: 'blocked' };
+}
+
 /**
  * A layout saved by someone who can't see every column (spec 0020,
  * `mergeLayout`): their columns in their order, with each stored column they

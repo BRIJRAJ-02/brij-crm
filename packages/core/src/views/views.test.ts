@@ -236,6 +236,69 @@ describe('saveViewQuery (AC-468, AC-469, AC-476, AC-482)', () => {
     expect(cleared.config.sorts).toEqual([]);
   });
 
+  it('keeps a condition on a field the saver can’t see, and refuses rather than lose it (27 October 2026)', async () => {
+    // The bug: Bea's screen is built from `effectiveQuery`, which leaves out a condition on a field hidden from
+    // her, so saving a sort change wrote the filter without it and deleted it for everyone, for good.
+    const w = await workspace();
+    const title = w.attribute('job_title');
+    const salary = w.attribute('description');
+    const both = {
+      conjunction: 'and' as const,
+      conditions: [
+        { attributeId: title, operator: 'contains' as const, value: 'pilot' },
+        { attributeId: salary, operator: 'contains' as const, value: 'senior' },
+      ],
+    };
+    await saveViewQuery(w.owner, { viewId: w.peopleView, filter: both, sorts: [], baseQueryVersion: 1 });
+    const rules: AccessRules = {
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'attribute', objectId: w.people, attributeId: salary },
+          level: 'hidden',
+        },
+      ],
+      records: [],
+    };
+    const blind = rescope(w.bea, { rules });
+    const shown = {
+      conjunction: 'and' as const,
+      conditions: [{ attributeId: title, operator: 'contains' as const, value: 'pilot' }],
+    };
+
+    // Bea changes only the sorting and sends back the filter she was shown: the hidden condition survives.
+    const sorted = await saveViewQuery(blind, {
+      viewId: w.peopleView,
+      filter: shown,
+      sorts: [{ attributeId: w.attribute('name'), direction: 'ascending' as const }],
+      baseQueryVersion: 2,
+    });
+    expect(sorted.config.filter).toEqual(both);
+    expect((await getView(w.owner, w.peopleView)).config.filter).toEqual(both);
+
+    // Changing the filter itself is refused, rather than quietly dropping what she can't see.
+    const refusal = await refusalOf(
+      saveViewQuery(blind, {
+        viewId: w.peopleView,
+        filter: { conjunction: 'and', conditions: [{ attributeId: title, operator: 'contains', value: 'captain' }] },
+        sorts: [],
+        baseQueryVersion: 3,
+      }),
+    );
+    expect(refusal.code).toBe('FORBIDDEN');
+    expect(refusal.message).toContain('a field you can’t see');
+    expect((await getView(w.owner, w.peopleView)).config.filter).toEqual(both);
+
+    // The owner, who sees both, still edits the filter freely.
+    const owned = await saveViewQuery(w.owner, {
+      viewId: w.peopleView,
+      filter: shown,
+      sorts: [],
+      baseQueryVersion: 3,
+    });
+    expect(owned.config.filter).toEqual(shown);
+  });
+
   it('refuses a save over someone else’s since the draft began, naming them, unless forced (Replace)', async () => {
     const w = await workspace();
     const sorts = [{ attributeId: w.attribute('name'), direction: 'ascending' as const }];

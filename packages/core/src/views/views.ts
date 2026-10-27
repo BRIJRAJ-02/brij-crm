@@ -17,13 +17,14 @@ import {
 import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
 import { checkViewQuery } from '../engine/query/page.ts';
+import { isArchivedNow, loadAttributes } from '../engine/values.ts';
 import { postgresError, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { can, fieldLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject } from '../access/visibility.ts';
-import { viewRule, type ViewRuleCaller } from '@crm/contracts/views';
+import { mergeFilter, viewRule, type ViewRuleCaller } from '@crm/contracts/views';
 import { defaultViewConfig } from './seed.ts';
 
 const { memberViewState, members, objects, views } = schema;
@@ -273,6 +274,18 @@ async function saverName(tx: WorkspaceTx, memberId: string | null): Promise<stri
  * run (an attribute not on it, archived, hidden, or not sortable), and
  * `CONFIG_INVALID` past 64 kB. A refused save writes nothing.
  */
+/** The object's live attributes the caller may see: what `mergeFilter` and `mergeLayout` mean by visible. */
+async function visibleLiveIds(tx: WorkspaceTx, scope: EngineScope, objectId: string): Promise<ReadonlySet<string>> {
+  const attributes = await loadAttributes(tx, objectId);
+  return new Set(
+    [...attributes.values()].flatMap((attribute) =>
+      isArchivedNow(attribute) || fieldLevel(scope.access, { id: attribute.id, objectId }) === 'hidden'
+        ? []
+        : [attribute.id],
+    ),
+  );
+}
+
 export async function saveViewQuery(
   scope: EngineScope,
   input: SaveViewQueryInput,
@@ -289,12 +302,24 @@ export async function saveViewQuery(
         const name = await saverName(tx, row.querySavedByMemberId);
         throw refuse('VIEW_CHANGED', `${name} changed this view’s filters since you started.`);
       }
-      const filter = input.filter === undefined || input.filter.conditions.length === 0 ? undefined : input.filter;
+      const sent = input.filter === undefined || input.filter.conditions.length === 0 ? undefined : input.filter;
+      // A condition on a field the saver can't see never reached their screen, so what they send back leaves it
+      // out. Writing that would delete it for everyone, for good (27 October 2026): one flipped sort was enough.
+      const merged = mergeFilter(configOf(row.config).filter, sent, await visibleLiveIds(tx, scope, row.objectId));
+      if (merged.kind === 'blocked') {
+        throw refuse(
+          'FORBIDDEN',
+          'This view also filters on a field you can’t see, so its filter can’t be changed here. Ask an admin who can see it, or change the sorting instead.',
+        );
+      }
+      // Only what they sent is checked: a condition put back was checked when it was stored, and compiling it
+      // under this saver's access would refuse the very field they can't see.
       await checkViewQuery(tx, scope, {
         objectId: row.objectId,
-        ...(filter === undefined ? {} : { filter }),
+        ...(sent === undefined ? {} : { filter: sent }),
         sorts: input.sorts,
       });
+      const filter = merged.filter;
       const { filter: _previous, ...rest } = configOf(row.config);
       const config = ViewConfig.safeParse({ ...rest, ...(filter === undefined ? {} : { filter }), sorts: input.sorts });
       if (!config.success) throw refuse('CONFIG_INVALID', 'This view’s settings are not valid.');
