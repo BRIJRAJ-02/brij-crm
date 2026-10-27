@@ -31,9 +31,9 @@ export const Route = createFileRoute('/welcome')({
     // as a member and the step has no role column.
     const made = landing.workspace;
     // Read together, so the invite step's roles add no wait after Create workspace.
-    const calendarRead = context.data.system.status().then(
-      (status) => status.calendarSync,
-      () => false,
+    const statusRead = context.data.system.status().then(
+      (status) => ({ calendarSync: status.calendarSync, google: status.providers.google }),
+      () => ({ calendarSync: false, google: false }),
     );
     // The loader only reads; the component picks the roles, so that code stays out of the first load.
     const rolesRead =
@@ -49,7 +49,12 @@ export const Route = createFileRoute('/welcome')({
       made === undefined
         ? Promise.resolve(undefined)
         : context.data.profile.get(made.slug).then(
-            (profile) => ({ handle: profile.handle, suggested: profile.suggestedHandle }),
+            (profile) => ({
+              handle: profile.handle,
+              suggested: profile.suggestedHandle,
+              // Their account photo, as our own origin serves it, for the pages the steps preview.
+              image: profile.pictureHidden === true ? undefined : profile.image,
+            }),
             () => undefined,
           );
     // Someone who already has a booking page (another workspace, spec 0031) is never asked to make a second one,
@@ -65,20 +70,22 @@ export const Route = createFileRoute('/welcome')({
                 .map((page) => ({ id: page.id, title: page.title, minutes: page.durations[0] ?? 30 })),
             () => [],
           );
-    const [calendarSync, roleRead, profile, bookingPages] = await Promise.all([
-      calendarRead,
+    const [status, roleRead, profile, bookingPages] = await Promise.all([
+      statusRead,
       rolesRead,
       profileRead,
       pagesRead,
     ]);
     return {
       user: me.user,
-      calendarSync,
+      calendarSync: status.calendarSync,
+      hasGoogle: status.google,
       workspace: landing.workspace,
       leaveTo: deps.another ? home : undefined,
       roleRead,
       linkPageHandle: profile?.handle,
       suggestedHandle: profile?.suggested,
+      image: profile?.image,
       bookingPages,
     };
   },
@@ -92,8 +99,18 @@ export const Route = createFileRoute('/welcome')({
 });
 
 function WelcomeRoute() {
-  const { user, calendarSync, workspace, leaveTo, roleRead, linkPageHandle, suggestedHandle, bookingPages } =
-    Route.useLoaderData();
+  const {
+    user,
+    calendarSync,
+    hasGoogle,
+    workspace,
+    leaveTo,
+    roleRead,
+    linkPageHandle,
+    suggestedHandle,
+    image,
+    bookingPages,
+  } = Route.useLoaderData();
   const allowed = roleRead === undefined ? [] : invitableRoles(roleRead.actor);
   const options = roleRead?.roles.roles.filter((each) => each.builtIn !== undefined && allowed.includes(each.builtIn));
   const inviteRoles =
@@ -124,6 +141,8 @@ function WelcomeRoute() {
       linkPageHandle={linkPageHandle}
       suggestedHandle={suggestedHandle}
       bookingPages={bookingPages}
+      hasGoogle={hasGoogle}
+      {...(image === undefined ? {} : { image })}
     />
   );
 }

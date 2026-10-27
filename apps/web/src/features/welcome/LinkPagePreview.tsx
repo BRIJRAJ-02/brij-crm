@@ -23,6 +23,8 @@ export interface LinkPagePreviewProps {
   readonly links?: readonly { readonly title: string; readonly url: string }[];
   /** Places for blocks that aren't there yet, so a page with one row on it doesn't read as the finished thing. */
   readonly ghosts?: number;
+  /** Their account photo, when they have one: the page shows it in place of the initials. */
+  readonly image?: string;
 }
 
 /**
@@ -30,7 +32,7 @@ export interface LinkPagePreviewProps {
  * booking page's row once it has a name. Inert and never on the public
  * origin, like the editor's own phone.
  */
-export function LinkPagePreview({ name, id, handle, pages = [], links = [], ghosts = 0 }: LinkPagePreviewProps) {
+export function LinkPagePreview({ name, id, handle, pages = [], links = [], ghosts = 0, image }: LinkPagePreviewProps) {
   const host = publicBookingHost();
   const label = `${host}/${handle}`;
   // A page with no name yet is left off: an empty row would read as a page that exists and has none.
@@ -69,7 +71,7 @@ export function LinkPagePreview({ name, id, handle, pages = [], links = [], ghos
     <PhonePreview>
       <LinkPage
         isPreview
-        person={{ name, id }}
+        person={{ name, id, ...(image === undefined ? {} : { image }) }}
         blocks={blocks}
         address={{ label, value: `https://${label}` }}
         ghosts={Math.max(0, ghosts - linkBlocks.length)}

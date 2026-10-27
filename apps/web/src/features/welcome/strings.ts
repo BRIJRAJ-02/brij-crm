@@ -23,6 +23,9 @@ export const strings = {
   aboutDescription: 'How your team sees you in Timefix.',
   yourName: 'Your name',
   nameMissing: 'Enter your name.',
+  /** The photo on Your name (27 October 2026): a Google account's is the only one until file storage (#32). */
+  usePhoto: 'Use your Google photo',
+  changePhoto: 'Change photo',
 
   handleTitle: 'Your link page',
   handleDescription: 'One address for everything you share. Your booking page is already on it.',

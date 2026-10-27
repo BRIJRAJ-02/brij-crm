@@ -27,6 +27,8 @@ export interface BookingPagePreviewProps {
   readonly title: string;
   /** How long it is, in minutes. */
   readonly minutes: number;
+  /** The host's account photo, when they have one: the page shows it in place of the initials. */
+  readonly image?: string;
 }
 
 /**
@@ -34,7 +36,7 @@ export interface BookingPagePreviewProps {
  * month of weekdays with a morning's times. Inert: a sketch of the page, not
  * the page, since its hours and its address don't exist yet.
  */
-export function BookingPagePreview({ name, title, minutes }: BookingPagePreviewProps) {
+export function BookingPagePreview({ name, title, minutes, image }: BookingPagePreviewProps) {
   // The weekdays of the month showing, so the tiles read as a working week rather than an empty grid.
   const { month, today, openDays } = useMemo(() => {
     const now = new Date();
@@ -70,7 +72,7 @@ export function BookingPagePreview({ name, title, minutes }: BookingPagePreviewP
       <div inert aria-hidden="true">
         <BookingFrame
           isCompact
-          host={{ name }}
+          host={{ name, ...(image === undefined ? {} : { image }) }}
           title={shown}
           facts={[{ id: 'length', icon: 'clock', children: strings.bookingLengthLabel(minutes) }]}
           heading={strings.previewChooseTime}

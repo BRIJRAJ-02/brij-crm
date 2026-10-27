@@ -111,6 +111,10 @@ export interface WelcomeScreenProps {
    * and having any means Your booking page isn't asked for.
    */
   readonly bookingPages?: readonly { readonly id: string; readonly title: string; readonly minutes: number }[];
+  /** Google sign in is set up here: without it, there is no way to take a photo from an account. */
+  readonly hasGoogle?: boolean;
+  /** Their account photo, as our own origin serves it: it draws on the pages the steps preview. */
+  readonly image?: string;
 }
 
 /**
@@ -131,6 +135,8 @@ export function WelcomeScreen({
   linkPageHandle,
   suggestedHandle,
   bookingPages = [],
+  hasGoogle = false,
+  image,
 }: WelcomeScreenProps) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -152,6 +158,7 @@ export function WelcomeScreen({
   const [isCreating, setCreating] = useState(false);
   const [refusals, setRefusals] = useState<readonly WelcomeRefusal[]>([]);
   const [isConnecting, setConnecting] = useState(false);
+  const [isOpeningGoogle, setOpeningGoogle] = useState(false);
   // Your link: the suggested handle until it is typed, then whatever was claimed.
   const [claimedHandle, setClaimedHandle] = useState<string | undefined>(linkPageHandle);
   const [typedHandle, setTypedHandle] = useState<string | undefined>(undefined);
@@ -209,8 +216,8 @@ export function WelcomeScreen({
   useEffect(() => {
     if (focusedStep.current === step) return;
     focusedStep.current = step;
-    // The calendar and Invite your team's sent state put focus on their own first button.
-    if (step !== 'calendar') focusPage(document, '/welcome');
+    // The calendar step, Invite your team's sent state and the end put focus on their own first button.
+    if (step !== 'calendar' && step !== DONE) focusPage(document, '/welcome');
   }, [step]);
 
   // Another workspace skips what is known about the person, so its count is its own ("Step 1 of 2").
@@ -354,6 +361,18 @@ export function WelcomeScreen({
       );
   };
 
+  /**
+   * Your name's photo (27 October 2026): there is no upload yet (file storage, #32), so the one photo a person
+   * can have is their Google account's. It leaves for Google, links the account if it isn't, and comes back here.
+   */
+  const useGooglePhoto = () => {
+    if (isOpeningGoogle) return;
+    setOpeningGoogle(true);
+    data.auth.syncGooglePhoto('/welcome').catch(() => {
+      setOpeningGoogle(false);
+    });
+  };
+
   const connect = () => {
     if (workspace === undefined) return;
     setConnecting(true);
@@ -405,12 +424,18 @@ export function WelcomeScreen({
           // The two steps that make the link page, and the one that hands its address over, show the page itself;
           // the rest show the workspace taking shape.
           step === 'booking' ? (
-            <BookingPagePreview name={shownName} title={pageTitle} minutes={pageMinutes} />
+            <BookingPagePreview
+              name={shownName}
+              title={pageTitle}
+              minutes={pageMinutes}
+              {...(image === undefined ? {} : { image })}
+            />
           ) : PAGE_PREVIEW.includes(step) ? (
             <LinkPagePreview
               name={shownName}
               id={claimedHandle ?? user.id}
               handle={handle}
+              {...(image === undefined ? {} : { image })}
               pages={previewPages}
               links={step === 'handle' ? links : savedLinks}
               ghosts={PREVIEW_GHOSTS}
@@ -452,6 +477,10 @@ export function WelcomeScreen({
             onMemberName={setMemberName}
             shownName={shownName}
             userId={user.id}
+            canUseGooglePhoto={hasGoogle}
+            isOpeningGoogle={isOpeningGoogle}
+            onUseGooglePhoto={useGooglePhoto}
+            {...(image === undefined ? {} : { image })}
             onContinue={() => {
               after('about');
             }}
