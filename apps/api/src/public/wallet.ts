@@ -16,8 +16,8 @@
 // in it a visitor could not have read off the page. What the public route does need is a tighter limit, since
 // every pass is signed and nobody is signed in to key on: the client address, and the handle.
 import { createHash } from 'node:crypto';
-import { errorStatus, HANDLE_PATTERN } from '@crm/contracts';
-import { findHandleOwner } from '@crm/core/public';
+import { errorStatus, HANDLE_PATTERN, type ProfileContactCard } from '@crm/contracts';
+import { enterContactCard, findHandleOwner, readContactCard } from '@crm/core/public';
 import type { Database } from '@crm/db';
 import type { Geo } from '../edge.ts';
 import type { Hono } from 'hono';
@@ -49,6 +49,20 @@ const PUBLIC_PASS_LIMITS = {
 } as const satisfies Record<string, LimitRule>;
 
 /** Where a visitor's browser asks for somebody's pass. The web app builds the same address (`publicPassPath`). */
+
+/**
+ * The person's contact card, or undefined: the pass draws its name and role from it (27 October 2026). A page with
+ * no card, or a read that fails, is no reason to refuse a pass, so this never throws.
+ */
+async function cardOf(db: Database, handle: string, viewer?: string): Promise<ProfileContactCard | undefined> {
+  try {
+    const found = await enterContactCard({ db }, handle, viewer === undefined ? {} : { viewer });
+    return readContactCard(found).card;
+  } catch {
+    return undefined;
+  }
+}
+
 export const PUBLIC_PASS_PATH = '/api/public/handles/:handle/pass.pkpass';
 
 /** What this route reads off the request, which is what the app already sets on every one. */
@@ -110,10 +124,13 @@ export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps:
       return nothing();
     }
     if (owner.userId !== session.user.id) return nothing();
+    const card = await cardOf(deps.db, owner.handle, owner.userId);
     const bytes = make({
       handle: owner.handle,
       name: owner.name.trim() === '' ? owner.handle : owner.name,
       ...(owner.bio === '' ? {} : { bio: owner.bio }),
+      ...(card === undefined ? {} : { card }),
+      hue: owner.theme.hue,
     });
     // Signed for this person and remade on every ask: never kept anywhere but their own device.
     const answered = passResponse(bytes, owner.handle, 'private, no-store');
@@ -139,10 +156,13 @@ export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps:
     }
     // The page's own budget, on the handle the door answered: an old address of theirs shares this one.
     if (!limiter(`wallet-pass-handle:${owner.handle}`, PUBLIC_PASS_LIMITS.perHandle).allowed) return tooMany();
+    const card = await cardOf(deps.db, owner.handle);
     const bytes = make({
       handle: owner.handle,
       name: owner.name.trim() === '' ? owner.handle : owner.name,
       ...(owner.bio === '' ? {} : { bio: owner.bio }),
+      ...(card === undefined ? {} : { card }),
+      hue: owner.theme.hue,
       shared: true,
     });
     // Nobody's but the browser that asked: the same page's pass is signed again each time, and an edge that kept

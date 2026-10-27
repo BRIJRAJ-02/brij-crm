@@ -1,3 +1,5 @@
+export { brandImages, passImages, writePass, type PassInput, type PassImages } from './profile/pass.ts';
+export { type PassSigningKeys } from './profile/pkcs7.ts';
 // `@crm/core/public`: what the api's public, unauthenticated routes may call
 // (spec 0025). The door that turns a booking page's public key into the
 // `booking` actor's narrow scope (and the guest page's, by its manage token), and the services that take them. Lint
