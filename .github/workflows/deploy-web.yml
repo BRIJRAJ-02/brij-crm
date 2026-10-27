@@ -136,12 +136,18 @@ jobs:
             echo "go=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          sha="$RUN_SHA"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
           if [ "$RUN_EVENT" != push ]; then
             echo "go=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # main's newest commit, not the one whose CI just finished (27 October 2026). This group keeps one run
+          # waiting, and a newer one replaces it, so when two pushes land close together the push run for the newer
+          # commit can be the one dropped, and the run that survives is CI finishing for the older. Deploying that
+          # one's own commit shipped nothing new, or, with its CI cancelled by the newer push, nothing at all. The
+          # newest commit is what main is, and it is held to exactly the same jobs below.
+          sha=$(gh api "repos/$REPO/commits/main" -q .sha)
+          [ "$sha" = "$RUN_SHA" ] || echo "CI finished for $RUN_SHA; main is at $sha, so that is the one asked about."
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
           # Not the run's own conclusion. That is red when a single flow shard is, and the flows stopped holding
           # the deploy above; reading the whole run put them back in its way through this door, so a browser that
           # failed to install still stood between a fix and production (27 October 2026). The same jobs decide
