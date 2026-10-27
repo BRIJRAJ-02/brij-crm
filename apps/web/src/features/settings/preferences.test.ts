@@ -77,29 +77,10 @@ describe('a choice’s change and its Undo', () => {
   });
 });
 
-describe('the Setup checklist switch', () => {
-  it('puts the checklist away, and Undo shows it again', () => {
-    expect(editOf(DEFAULTS, 'homeSetup', 'off')).toEqual({
-      change: { homeHidden: ['setup'] },
-      undo: { homeHidden: [] },
-    });
-  });
-
-  it('shows it again, keeping other sections put away', () => {
-    expect(editOf({ ...DEFAULTS, homeHidden: ['tasks', 'setup'] }, 'homeSetup', 'on')).toEqual({
-      change: { homeHidden: ['tasks'] },
-      undo: { homeHidden: ['tasks', 'setup'] },
-    });
-  });
-
-  it('changes nothing when the switch already says so', () => {
-    expect(editOf(DEFAULTS, 'homeSetup', 'on')).toBeUndefined();
-    expect(editOf({ ...DEFAULTS, homeHidden: ['setup'] }, 'homeSetup', 'off')).toBeUndefined();
-  });
-
-  it('lets an Undo through only while the checklist still shows as it set', () => {
-    const edit = editOf(DEFAULTS, 'homeSetup', 'off');
-    expect(edit && stillShows({ ...DEFAULTS, homeHidden: ['setup'] }, edit.change)).toBe(true);
+describe('an Undo that comes late', () => {
+  it('goes through only while the choice still shows as it set', () => {
+    const edit = editOf(DEFAULTS, 'weekStart', 'monday');
+    expect(edit && stillShows({ ...DEFAULTS, weekStart: 'monday' }, edit.change)).toBe(true);
     expect(edit && stillShows(DEFAULTS, edit.change)).toBe(false);
   });
 });

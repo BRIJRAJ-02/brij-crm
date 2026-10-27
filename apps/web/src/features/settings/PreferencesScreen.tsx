@@ -13,7 +13,6 @@ import {
   SettingsRow,
   SettingsSection,
   Skeleton,
-  Switch,
   useFormatSettings,
   type Toasts,
 } from '@crm/ui';
@@ -155,7 +154,7 @@ function MemberSections({
 
   // The last "Preferences saved": a newer one replaces it, so several changes leave one toast, not a stack.
   const lastSaved = useRef<string | undefined>(undefined);
-  const pick = (field: 'timeZone' | 'dateFormat' | 'weekStart' | 'landing' | 'homeSetup', id: string | null) => {
+  const pick = (field: 'timeZone' | 'dateFormat' | 'weekStart' | 'landing', id: string | null) => {
     if (id === null) return;
     const edit = editOf(preferences, field, id);
     if (edit === undefined) return;
@@ -227,14 +226,6 @@ function MemberSections({
               items={landings}
               value={landingId(preferences.landing, objects)}
               onChange={(id) => pick('landing', id)}
-            />
-          </SettingsRow>
-          <SettingsRow title={strings.homeSetup} description={strings.homeSetupDescription}>
-            <Switch
-              label={strings.homeSetup}
-              isLabelHidden
-              isSelected={!(preferences.homeHidden ?? []).includes('setup')}
-              onChange={(isOn) => pick('homeSetup', isOn ? 'on' : 'off')}
             />
           </SettingsRow>
         </Card>

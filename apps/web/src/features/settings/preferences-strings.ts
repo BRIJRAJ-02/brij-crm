@@ -26,8 +26,6 @@ export const strings = {
   startPage: 'Start page',
   landing: 'Open on',
   landingDescription: 'Where this workspace opens.',
-  homeSetup: 'Setup checklist on Home',
-  homeSetupDescription: 'The steps left to set up this workspace, at the top of Home.',
   home: 'Home',
   tasks: 'Tasks',
   /** The save toast and its Undo. */

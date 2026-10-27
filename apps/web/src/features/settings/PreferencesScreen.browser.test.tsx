@@ -1,12 +1,11 @@
 // Preferences in Chromium (spec 0026; SA12 to SA16): the plain labels (Automatic, Only on this browser, Home, the
-// Time zone InfoTip, no line under Sidebar), and the Setup checklist switch saving like every select, with the
-// "Preferences saved" toast whose Undo puts it back.
+// Time zone InfoTip, no line under Sidebar).
 import type { MemberPreferences, PreferencesChange, PreferencesState } from '@crm/data';
 import { createToasts } from '@crm/ui';
 import type { ThemeController } from '@crm/ui/theme';
 import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { page, userEvent } from 'vitest/browser';
+import { page } from 'vitest/browser';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { PreferencesScreen } from './PreferencesScreen.tsx';
 
@@ -63,25 +62,10 @@ describe('Preferences', () => {
     await expect.element(page.getByText('Only on this browser.')).toBeVisible();
     await expect.element(page.getByRole('button', { name: 'About Time zone' })).toBeVisible();
     await expect.element(page.getByText('Where this workspace opens.')).toBeVisible();
-    await expect.element(page.getByText('The steps left to set up this workspace, at the top of Home.')).toBeVisible();
     await expect.element(page.getByText('Show, hide or reorder what’s in your sidebar.')).toBeVisible();
     await expect.element(page.getByText('Kept for you on every device.')).not.toBeInTheDocument();
     // The theme's default and the start page's first choice, as their selects show them.
     await expect.element(page.getByText('Automatic', { exact: true }).first()).toBeVisible();
     await expect.element(page.getByText('Home', { exact: true }).first()).toBeVisible();
-  });
-
-  it('saves the Setup checklist switch with a toast whose Undo puts it back', async () => {
-    const changes = await render();
-    const checklist = page.getByRole('switch', { name: 'Setup checklist on Home' });
-    await expect.element(checklist).toBeChecked();
-    (checklist.element() as HTMLElement).focus();
-    await userEvent.keyboard('[Space]');
-    await expect.element(checklist).not.toBeChecked();
-    await expect.element(page.getByText('Preferences saved')).toBeVisible();
-    await page.getByRole('button', { name: 'Undo' }).click();
-    await expect.element(checklist).toBeChecked();
-    await expect.element(page.getByText('Change undone')).toBeVisible();
-    expect(changes).toEqual([{ homeHidden: ['setup'] }, { homeHidden: [] }]);
   });
 });
