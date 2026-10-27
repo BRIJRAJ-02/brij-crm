@@ -150,24 +150,39 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           # Not the run's own conclusion. That is red when a single flow shard is, and the flows stopped holding
           # the deploy above; reading the whole run put them back in its way through this door, so a browser that
-          # failed to install still stood between a fix and production (27 October 2026). The same jobs decide
-          # here as on the push path, read once, since CI has finished by the time this runs.
-          runs=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
-            -q '.check_runs[] | "\(.conclusion)\t\(.name)"' || true)
-          passed=$(grep -E '^success\s' <<< "$runs" | cut -f2- | sort -u || true)
-          settled=$(grep -E '^(success|skipped)\s' <<< "$runs" | cut -f2- | sort -u || true)
-          for name in "${REQUIRED[@]}"; do
-            if ! grep -Fxq "$name" <<< "$passed"; then
-              echo "$sha hasn't passed \"$name\", so it doesn't deploy."
+          # failed to install still stood between a fix and production (27 October 2026).
+          #
+          # And it waits here too, rather than reading once (27 October 2026). CI has finished for the run that
+          # woke this, but `sha` is main's newest commit, whose own CI may still be running: two pushes a few
+          # minutes apart left the newer one's push run cancelled by this group, this path declining because
+          # `check` hadn't passed yet, and nothing else to come but that commit's own CI finishing in full, flows
+          # and all. That is the twenty minutes the fast path exists to remove, arriving by the back door.
+          deadline=$((SECONDS + 900))
+          while true; do
+            runs=$(gh api --paginate "repos/$REPO/commits/$sha/check-runs?per_page=100" \
+              -q '.check_runs[] | "\(.conclusion)\t\(.name)"' || true)
+            passed=$(grep -E '^success\s' <<< "$runs" | cut -f2- | sort -u || true)
+            settled=$(grep -E '^(success|skipped)\s' <<< "$runs" | cut -f2- | sort -u || true)
+            failed=$(grep -E '^(failure|cancelled|timed_out|action_required)\s' <<< "$runs" | cut -f2- | sort -u || true)
+            waiting=''
+            for name in "${REQUIRED[@]}"; do
+              if grep -Fxq "$name" <<< "$failed"; then
+                echo "$sha failed \"$name\", so it doesn't deploy."
+                echo "go=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              grep -Fxq "$name" <<< "$passed" || waiting="$waiting $name"
+            done
+            settled_ui "$settled" || waiting="$waiting the library's jobs"
+            [ -z "$waiting" ] && break
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "$sha is still waiting on$waiting, so it doesn't deploy from here."
               echo "go=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
+            echo "Waiting on$waiting"
+            sleep 20
           done
-          if ! settled_ui "$settled"; then
-            echo "$sha hasn't settled the library's jobs, so it doesn't deploy."
-            echo "go=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           # "Already deployed" means a push run whose deploy job really ran, not one whose gate declined and
           # left the run green with the matrix skipped. Reading the run's own conclusion counted the declines
           # too, so after a push the commit could never deploy by either route (25 October 2026).
