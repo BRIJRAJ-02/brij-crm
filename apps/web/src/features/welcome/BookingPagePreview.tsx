@@ -5,7 +5,7 @@
 // on screen while it is made.
 // Leaves out: real times (the hours aren't set yet), the location, the questions and the Book bar: it is a sketch
 // of the page, inert, and nothing here books anything.
-import { BookingFrame, MonthTiles, SlotList } from '@crm/ui';
+import { BookingFrame, MonthTiles, PhonePreview, SlotList } from '@crm/ui';
 import { useMemo } from 'react';
 import { strings } from './strings.ts';
 
@@ -62,34 +62,39 @@ export function BookingPagePreview({ name, title, minutes }: BookingPagePreviewP
         });
   const shown = title.trim() === '' ? strings.bookingNamePlaceholder : title.trim();
   return (
-    // Decoration, like the workspace sketch beside the other steps: nothing in it is pressable or focusable, and
-    // it is out of the accessibility tree, since the frame draws a `main` of its own and the page already has one.
-    <div inert aria-hidden="true">
-      <BookingFrame
-        host={{ name }}
-        title={shown}
-        facts={[{ id: 'length', icon: 'clock', children: strings.bookingLengthLabel(minutes) }]}
-        heading={strings.previewChooseTime}
-        aside={
-          <SlotList
-            heading={chosenLabel}
-            slots={SAMPLE_TIMES.map((time) => ({ id: time, label: time, name: time }))}
-            value={undefined}
+    // The editors' own phone, so the page lays itself out as it does on a phone (the rail over the card) instead
+    // of being squeezed into half a panel. Decoration, like the workspace sketch beside the other steps: nothing
+    // in it is pressable or focusable, and it is out of the accessibility tree, since the frame draws a `main` of
+    // its own and the page already has one.
+    <PhonePreview>
+      <div inert aria-hidden="true">
+        <BookingFrame
+          isCompact
+          host={{ name }}
+          title={shown}
+          facts={[{ id: 'length', icon: 'clock', children: strings.bookingLengthLabel(minutes) }]}
+          heading={strings.previewChooseTime}
+          aside={
+            <SlotList
+              heading={chosenLabel}
+              slots={SAMPLE_TIMES.map((time) => ({ id: time, label: time, name: time }))}
+              value={undefined}
+              onChange={() => undefined}
+            />
+          }
+        >
+          <MonthTiles
+            month={month}
+            today={today}
+            openDays={openDays}
+            value={chosen}
             onChange={() => undefined}
+            onMonthChange={() => undefined}
+            canPrevious={false}
+            canNext={false}
           />
-        }
-      >
-        <MonthTiles
-          month={month}
-          today={today}
-          openDays={openDays}
-          value={chosen}
-          onChange={() => undefined}
-          onMonthChange={() => undefined}
-          canPrevious={false}
-          canNext={false}
-        />
-      </BookingFrame>
-    </div>
+        </BookingFrame>
+      </div>
+    </PhonePreview>
   );
 }

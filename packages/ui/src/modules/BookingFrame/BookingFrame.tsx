@@ -83,6 +83,12 @@ export interface BookingFrameProps {
    */
   readonly enter?: 'forward' | 'back';
   /**
+   * Keeps the stacked layout however wide the window is (27 October 2026): the page drawn in something narrow
+   * that is not a frame of its own, where a media query would read the window and lay out two columns inside a
+   * phone. First run's preview of a page that doesn't exist yet, and so cannot be shown in a `PreviewFrame`.
+   */
+  readonly isCompact?: boolean;
+  /**
    * Where "Claim your free page" goes: `claimPageHref('booking_page')`, tagged as the wordmark beside it is. Leave
    * it off to show the wordmark alone (a recognised visitor).
    */
@@ -120,6 +126,7 @@ export function BookingFrame({
   coverPlace = 'body',
   view,
   enter,
+  isCompact = false,
   claimHref,
   logo = TIMEFIX_LOGO,
 }: BookingFrameProps) {
@@ -133,7 +140,7 @@ export function BookingFrame({
   const isCardCovered = isCovered && coverPlace === 'card';
   const claim = claimHref === undefined ? {} : { claimHref };
   return (
-    <main className={styles.root}>
+    <main className={styles.root} {...(isCompact ? { 'data-compact': true } : {})}>
       <div className={styles.layout}>
         <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
           {isLoading ? (

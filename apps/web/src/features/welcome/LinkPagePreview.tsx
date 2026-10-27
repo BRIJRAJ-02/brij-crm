@@ -5,7 +5,7 @@
 // screen while it is made.
 // Leaves out: every other block, the look, the socials and the contact card (the link page editor), and anything
 // that presses: it is inert (`isPreview`).
-import { LinkPage, type LinkPageBlock } from '@crm/ui';
+import { LinkPage, PhonePreview, type LinkPageBlock } from '@crm/ui';
 import { publicBookingHost } from '../booking/links.ts';
 import { strings } from './strings.ts';
 
@@ -43,5 +43,10 @@ export function LinkPagePreview({ name, id, handle, page }: LinkPagePreviewProps
             facts: strings.bookingLengthLabel(page.minutes),
           },
         ];
-  return <LinkPage isPreview person={{ name, id }} blocks={blocks} address={{ label, value: `https://${label}` }} />;
+  return (
+    // The same phone the booking page's preview and the editors use, so first run's two pages read alike.
+    <PhonePreview>
+      <LinkPage isPreview person={{ name, id }} blocks={blocks} address={{ label, value: `https://${label}` }} />
+    </PhonePreview>
+  );
 }

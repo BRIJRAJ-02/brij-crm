@@ -358,9 +358,11 @@ export {
 } from './modules/RecordChipList/RecordChipList.tsx';
 export {
   EditorStatus,
+  PhonePreview,
   PreviewFrame,
   PreviewLayout,
   type EditorStatusTone,
+  type PhonePreviewProps,
   type PreviewFrameProps,
   type PreviewLayoutProps,
 } from './modules/PreviewLayout/PreviewLayout.tsx';

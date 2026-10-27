@@ -405,8 +405,12 @@ function useOverflow() {
 
 /** Props for PhoneColumn. */
 interface PhoneColumnProps {
-  /** Where it is drawn: the column beside the body, or the narrow layout's sheet. */
-  readonly place: 'side' | 'sheet';
+  /**
+   * Where it is drawn: the column beside the body, the narrow layout's sheet,
+   * or `bare`, the phone on its own with no heading row (first run's split
+   * card, where the step's own title already says what the page is).
+   */
+  readonly place: 'side' | 'sheet' | 'bare';
   /** The heading's id, which names the column beside the body. */
   readonly headingId?: string;
   readonly controls?: ReactNode;
@@ -434,12 +438,14 @@ function PhoneColumn({ place, headingId, controls, note, children }: PhoneColumn
         '--phone-scale': String(scale),
       }}
     >
-      <div className={styles.head}>
-        <h2 className={styles.heading} {...(headingId === undefined ? {} : { id: headingId })}>
-          {strings.preview}
-        </h2>
-        {controls !== undefined && <div className={styles.controls}>{controls}</div>}
-      </div>
+      {place !== 'bare' && (
+        <div className={styles.head}>
+          <h2 className={styles.heading} {...(headingId === undefined ? {} : { id: headingId })}>
+            {strings.preview}
+          </h2>
+          {controls !== undefined && <div className={styles.controls}>{controls}</div>}
+        </div>
+      )}
       {note}
       <div ref={ref} className={styles.stage}>
         <div className={styles.phone}>
@@ -454,6 +460,27 @@ function PhoneColumn({ place, headingId, controls, note, children }: PhoneColumn
       </div>
     </div>
   );
+}
+
+/** Props for PhonePreview. */
+export interface PhonePreviewProps {
+  /** What the phone shows: a page drawn at a phone's width, which is then scaled to the room there is. */
+  readonly children: ReactNode;
+}
+
+/**
+ * The editors' phone on its own (27 October 2026): the same stage, outline
+ * and screen `PreviewLayout` draws beside a Captures editor, with no
+ * "Preview" heading and no controls, for a place whose own title already says
+ * what the page is. First run shows the booking page and the link page it is
+ * making in it, so a page laid out for a window stacks the way it does on a
+ * phone instead of being squeezed into half a panel.
+ *
+ * It fills the room its container gives it, and the page inside it scrolls
+ * when it runs past the phone's foot.
+ */
+export function PhonePreview({ children }: PhonePreviewProps) {
+  return <PhoneColumn place="bare">{children}</PhoneColumn>;
 }
 
 /**

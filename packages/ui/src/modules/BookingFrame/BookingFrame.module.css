@@ -474,24 +474,32 @@
     outline-offset: var(--border-width-thick);
   }
 
+  /* `compact` keeps the stacked layout however wide the window is (27 October 2026): a page drawn in something
+     narrow that is not a frame of its own, so a media query would read the window and lay out two columns in a
+     phone. First run's preview of a page that doesn't exist yet, and so can't be shown in a PreviewFrame. */
   @media (width >= 1024px) {
     .root {
       align-items: center;
       padding-block: var(--space-32);
     }
 
-    .layout {
+    .root[data-compact] {
+      align-items: stretch;
+      padding-block: var(--space-24) var(--space-32);
+    }
+
+    .root:not([data-compact]) .layout {
       display: grid;
       grid-template-columns: var(--size-measure) minmax(0, 1fr);
       gap: var(--space-32);
     }
 
-    .rail {
+    .root:not([data-compact]) .rail {
       justify-content: space-between;
       padding-block-start: var(--space-8);
     }
 
-    .foot[data-placement='rail'] {
+    .root:not([data-compact]) .foot[data-placement='rail'] {
       display: flex;
       align-items: stretch;
       padding: var(--space-12) var(--space-16);
@@ -510,30 +518,30 @@
       border-block-start: var(--border-width-hairline) solid var(--border-subtle);
     }
 
-    .foot[data-placement='page'] {
+    .root:not([data-compact]) .foot[data-placement='page'] {
       display: none;
     }
 
-    .panes[data-panes='two'] {
+    .root:not([data-compact]) .panes[data-panes='two'] {
       grid-template-columns: minmax(0, 1fr) var(--size-column-wide);
     }
 
     .pane,
     .aside,
-    .coverBody {
+    .root:not([data-compact]) .coverBody {
       padding: var(--space-24);
     }
 
-    .head {
+    .root:not([data-compact]) .head {
       padding: var(--space-24) var(--space-24) 0;
     }
 
-    .footer {
+    .root:not([data-compact]) .footer {
       padding: var(--space-16) var(--space-24) var(--space-24);
     }
 
     /* The times take the month's height and scroll inside it, behind a hairline. */
-    .aside {
+    .root:not([data-compact]) .aside {
       block-size: auto;
       margin-block: var(--space-24);
       padding-block: 0;

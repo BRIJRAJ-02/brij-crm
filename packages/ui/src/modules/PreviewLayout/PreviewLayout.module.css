@@ -136,6 +136,12 @@
     block-size: max(var(--size-panel), calc(100dvh - 2 * var(--size-bar) - 3 * var(--space-16)));
   }
 
+  /* On its own, with no heading row: the phone takes whatever room its container gives it (first run's split
+     card), rather than measuring itself against the window's bars, which aren't there. */
+  .preview[data-place='bare'] {
+    block-size: 100%;
+  }
+
   /* In the sheet, the window less its bar and the sheet's own. */
   .preview[data-place='sheet'] {
     block-size: max(var(--size-panel), calc(100dvh - 3 * var(--size-bar) - 4 * var(--space-24)));
