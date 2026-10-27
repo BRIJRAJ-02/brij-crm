@@ -144,7 +144,12 @@ test.describe('availability schedules', () => {
     // The page's Hours tab edits the schedule's week in place, saved by the page's own Save (the owner, 22 October
     // 2026), and says which other pages the change reaches; View page opens the live page in a new tab.
     await page.goto(`${pageUrl}?tab=hours`);
-    await expect(page.getByRole('link', { name: 'View page' })).toHaveAttribute('href', new RegExp(`/b/${key ?? ''}$`));
+    // Its live address: `/b/<key>` until its host holds a handle, and `/<handle>/<slug>` once they do, which every
+    // membership now does (26 October 2026, a link page made with the membership).
+    await expect(page.getByRole('link', { name: 'View page' })).toHaveAttribute(
+      'href',
+      new RegExp(`(/b/${key ?? ''}|/[a-z0-9-]+/[a-z0-9-]+)$`),
+    );
     await setAllDays(page, '6:00 PM', '9:00 PM');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('Saved', { exact: true })).toBeVisible();
