@@ -14,7 +14,7 @@ import { publicProfileUrl } from '../booking/links.ts';
 import { profileHref } from '../settings/nav.ts';
 import { homeStrings as strings } from './home-strings.ts';
 import { linkPageHref } from './nav-strings.ts';
-import { showLinkPage } from './show.ts';
+import { PrivatePage, useWalletLink } from './private-page.tsx';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 
 /** Props for the card. */
@@ -58,41 +58,12 @@ function useProfile(data: DataLayer, slug: string) {
   };
 }
 
-/**
- * A link that saves the page to the person's wallet, or undefined (26 October 2026): this deployment has no
- * credentials for a wallet, the read failed, or they have no handle yet. Asked for once a visit, because a save
- * link is signed for a short while; a button nobody can use is never drawn, which is why this is read up front
- * rather than when it is pressed.
- */
-function useWalletLink(data: DataLayer, slug: string): string | undefined {
-  const [link, setLink] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    let isCurrent = true;
-    void data.linkPage.load().then(
-      (store) =>
-        store.walletLink(slug, 'apple_wallet').then(
-          (answer) => {
-            if (isCurrent && 'url' in answer) setLink(answer.url);
-          },
-          // No wallet is no error: the card simply doesn't offer it.
-          () => undefined,
-        ),
-      () => undefined,
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [data, slug]);
-  return link;
-}
-
 /** Your link page: its QR code, its address, Copy link, Open, and the code large in a Modal to save. */
 export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
-  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const { data } = useRouteContext({ from: '__root__' });
   const { read, retry, isPublic, madePublic } = useProfile(data, slug);
   const [isShowing, setShowing] = useState(false);
-  const [isPublishing, setPublishing] = useState(false);
-  const wallet = useWalletLink(data, slug);
+  const wallet = useWalletLink(data, slug, isPublic);
   if (read.status === 'loading') {
     return (
       <Card title={strings.title} isBusy>
@@ -127,17 +98,6 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
   const workspace =
     read.profile.workspaceName === undefined ? {} : { description: strings.inWorkspace(read.profile.workspaceName) };
   if (!isPublic) {
-    const publish = () => {
-      setPublishing(true);
-      showLinkPage(data, slug)
-        .then((isNow) => {
-          if (!isNow) throw new Error('No page to show.');
-          madePublic();
-          toasts.toast({ tone: 'success', message: strings.madePublic });
-        })
-        .catch(() => toasts.toast({ tone: 'danger', message: strings.makePublicFailed }))
-        .finally(() => setPublishing(false));
-    };
     return (
       <Card
         title={strings.title}
@@ -151,24 +111,7 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
           </>
         }
       >
-        <EmptyState
-          layout="row"
-          icon="lock"
-          title={strings.privateTitle}
-          actions={
-            <>
-              <Button variant="primary" isPending={isPublishing} onPress={publish}>
-                {strings.makePublic}
-              </Button>
-              {/* Their own page as only they can see it: signed in, the public page answers its owner. */}
-              <ButtonLink href={address} isExternal icon="arrow-up-right">
-                {strings.preview}
-              </ButtonLink>
-            </>
-          }
-        >
-          {strings.privateText(shown)}
-        </EmptyState>
+        <PrivatePage data={data} slug={slug} address={address} onPublic={madePublic} />
       </Card>
     );
   }

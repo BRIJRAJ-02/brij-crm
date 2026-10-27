@@ -115,8 +115,8 @@ export const strings = {
   /** The three views, each named as the page's own switch names it. */
   opensInViews: { month: 'Month', list: 'List', chat: 'Book by chat' },
   meeting: 'Meeting',
-  /** The Questions tab's switch (spec 0057, AC-5708), in a form's words: it applies to every booking. */
-  crmTitle: 'CRM',
+  /** The Meeting tab's switch (spec 0057, AC-5708; moved there 27 Oct 2026), in a form's words. */
+  afterBooking: 'After someone books',
   addToCrm: 'Add each booking to the CRM',
   addToCrmLine:
     'Every booking finds or adds the person who booked, and their company, and files their answers on them. Off, the answers stay with the booking.',

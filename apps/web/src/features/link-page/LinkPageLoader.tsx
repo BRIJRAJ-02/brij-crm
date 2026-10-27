@@ -10,10 +10,13 @@ export interface LinkPageLoaderProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly profile: MyProfile;
+  /** The builder is open (`?edit`); without it the page opens on the overview. */
+  readonly isEditing: boolean;
+  readonly onEditing: (isEditing: boolean) => void;
 }
 
 /** The link page editor once its store has loaded; its loading shape until then. */
-export function LinkPageLoader({ data, slug, profile }: LinkPageLoaderProps) {
+export function LinkPageLoader({ data, slug, profile, isEditing, onEditing }: LinkPageLoaderProps) {
   const [store, setStore] = useState<LinkPageStore | undefined>(undefined);
   useEffect(() => {
     let isCurrent = true;
@@ -27,5 +30,15 @@ export function LinkPageLoader({ data, slug, profile }: LinkPageLoaderProps) {
     };
   }, [data, slug]);
   if (store === undefined) return <LinkPagePending />;
-  return <LinkPageScreen key={profile.memberId} data={data} linkPage={store} slug={slug} profile={profile} />;
+  return (
+    <LinkPageScreen
+      key={profile.memberId}
+      data={data}
+      linkPage={store}
+      slug={slug}
+      profile={profile}
+      isEditing={isEditing}
+      onEditing={onEditing}
+    />
+  );
 }

@@ -66,6 +66,7 @@ import {
   type ChosenFacts,
 } from './registry.tsx';
 import { ImportLinksModal } from './ImportLinksModal.tsx';
+import { LinkPageOverview } from './LinkPageOverview.tsx';
 import { homeStrings } from './home-strings.ts';
 import { showLinkPage } from './show.ts';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
@@ -79,6 +80,10 @@ export interface LinkPageScreenProps {
   readonly linkPage: LinkPageStore;
   readonly slug: string;
   readonly profile: MyProfile;
+  /** The editor is open; without it the page opens on the overview, which shares it (27 Oct 2026). */
+  readonly isEditing: boolean;
+  /** Opens or closes the editor, as a change of the page's own address, so Back leaves the editor. */
+  readonly onEditing: (isEditing: boolean) => void;
 }
 
 /** Which editor is open: a kind's add, or a block's edit. */
@@ -147,7 +152,7 @@ function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined
 }
 
 /** The link page editor: the blocks beside the phone. */
-export function LinkPageScreen({ data, linkPage, slug, profile }: LinkPageScreenProps) {
+export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEditing }: LinkPageScreenProps) {
   const handle = profile.handle;
   return (
     // A page of the workspace since 25 October 2026, not a view inside Settings › Account › Profile: its own row
@@ -158,7 +163,14 @@ export function LinkPageScreen({ data, linkPage, slug, profile }: LinkPageScreen
         topBar: (
           <TopBar title={strings.title} icon="id-card">
             {handle === undefined ? undefined : (
-              <HeaderActions data={data} slug={slug} handle={handle} workspaceName={profile.workspaceName} />
+              <HeaderActions
+                data={data}
+                slug={slug}
+                handle={handle}
+                workspaceName={profile.workspaceName}
+                isEditing={isEditing}
+                onEditing={onEditing}
+              />
             )}
           </TopBar>
         ),
@@ -177,7 +189,14 @@ export function LinkPageScreen({ data, linkPage, slug, profile }: LinkPageScreen
               </Card>
             </PreviewLayout>
           ) : (
-            <Blocks data={data} linkPage={linkPage} slug={slug} profile={profile} handle={handle} />
+            <Blocks
+              data={data}
+              linkPage={linkPage}
+              slug={slug}
+              profile={profile}
+              handle={handle}
+              isEditing={isEditing}
+            />
           ),
       }}
     />
@@ -195,11 +214,15 @@ function HeaderActions({
   slug,
   handle,
   workspaceName,
+  isEditing,
+  onEditing,
 }: {
   readonly data: DataLayer;
   readonly slug: string;
   readonly handle: string;
   readonly workspaceName?: string | undefined;
+  readonly isEditing: boolean;
+  readonly onEditing: (isEditing: boolean) => void;
 }) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const address = publicProfileUrl(handle);
@@ -229,6 +252,16 @@ function HeaderActions({
       <Button icon="upload" onPress={share}>
         {strings.share}
       </Button>
+      {/* The one way in and out of the builder: the page itself opens on what it is for, sharing it. */}
+      {isEditing ? (
+        <Button variant="primary" icon="check" onPress={() => onEditing(false)}>
+          {strings.doneEditing}
+        </Button>
+      ) : (
+        <Button variant="primary" icon="pencil" onPress={() => onEditing(true)}>
+          {strings.editPageAction}
+        </Button>
+      )}
       <ShareLinkPageModal
         address={address}
         handle={handle}
@@ -247,12 +280,14 @@ function Blocks({
   slug,
   profile,
   handle,
+  isEditing,
 }: {
   readonly data: DataLayer;
   readonly linkPage: LinkPageStore;
   readonly slug: string;
   readonly profile: MyProfile;
   readonly handle: string;
+  readonly isEditing: boolean;
 }) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -274,6 +309,9 @@ function Blocks({
   );
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
+  // The page went public from the overview: the profile read this screen holds still says private, and reading it
+  // again would only tell it what it already knows.
+  const [madePublic, setMadePublic] = useState(false);
   // The look, shown the moment it is picked and saved behind it (AC-5421). A refusal puts back what was there and
   // says why on the card, where the control that changed is.
   const [picked, setPicked] = useState<PageTheme | undefined>(undefined);
@@ -716,6 +754,22 @@ function Blocks({
   }
 
   const Editor = editing === undefined ? undefined : BLOCK_KINDS[editing.kind].Editor;
+  // What the page opens on: the page as something to hand out, the phone beside it showing exactly what a visitor
+  // gets. Everything that changes the page is one press away, under Edit page (the owner, 27 October 2026).
+  if (!isEditing) {
+    return (
+      <PreviewLayout preview={preview} previewShare="wide">
+        <LinkPageOverview
+          data={data}
+          slug={slug}
+          handle={handle}
+          address={publicProfileUrl(handle)}
+          isPublic={madePublic || profile.isPublic !== false}
+          onPublic={() => setMadePublic(true)}
+        />
+      </PreviewLayout>
+    );
+  }
   return (
     <PreviewLayout preview={preview} previewShare="wide">
       {/* Only where there is a page to dress: the screen already sends a person with no handle to Profile. */}

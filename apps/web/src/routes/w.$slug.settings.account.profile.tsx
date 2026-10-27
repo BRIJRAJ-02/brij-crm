@@ -61,7 +61,18 @@ function ProfileRoute() {
   const router = useRouter();
   const navigate = useNavigate();
   if (profile === undefined) return <SettingsMissing backTo="home" />;
-  if (view) return <LinkPageLoader data={data} slug={slug} profile={profile} />;
+  // The old address still answers (spec 0051): it opens the page's overview, and Edit page moves to the page's
+  // own address, which owns the builder.
+  if (view)
+    return (
+      <LinkPageLoader
+        data={data}
+        slug={slug}
+        profile={profile}
+        isEditing={false}
+        onEditing={() => void navigate({ to: '/w/$slug/link-page', params: { slug }, search: { edit: true } })}
+      />
+    );
   return (
     <ProfileScreen
       key={profile.memberId}

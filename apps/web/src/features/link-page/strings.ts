@@ -181,6 +181,19 @@ export const strings = {
   openAddress: (address: string) => `${address}, open your page`,
   /** The header's Share: it opens the QR and the address to hand on. */
   share: 'Share',
+  // What the page opens on (27 Oct 2026): the page as something to hand out, with Edit page the way into the
+  // builder. The promise line says what a link page is for, since Home no longer explains it.
+  promise: 'Everything people need from you, behind one short link.',
+  shareOnline: 'Share online',
+  yourPage: 'Your page',
+  yourAddress: 'Your address',
+  pasteItAnywhere: 'Paste it in your bio, an email signature or a message.',
+  shareInPerson: 'Share in person',
+  scanIt: 'Anyone can scan this with their phone camera to open your page.',
+  downloadCode: 'Download',
+  editPageAction: 'Edit page',
+  doneEditing: 'Done',
+  whatVisitorsSee: 'What visitors see',
   // The rows.
   heading: 'Section',
   bookingPage: 'Booking page',

@@ -1060,12 +1060,10 @@ export function PageEditor({
                         onChange={(calendarId) => void data.calendar.setPageDestination(slug, page.id, calendarId)}
                         settingsHref={calendarsHref(slug)}
                       />
-                    </>
-                  )}
-                  {shown === 'questions' && (
-                    <>
-                      {/* The same switch a form's Settings has, in its words: it applies to every booking. */}
-                      <Card title={strings.crmTitle}>
+                      {/* What happens once a booking is made, on the tab about the meeting itself (the owner, 27
+                          October 2026): under a question's settings nobody found it. The same switch a form's
+                          Settings has, in its words: it applies to every booking. */}
+                      <Card title={strings.afterBooking}>
                         <Switch
                           label={strings.addToCrm}
                           description={strings.addToCrmLine}
@@ -1074,6 +1072,10 @@ export function PageEditor({
                           onChange={(fileToCrm) => change({ fileToCrm })}
                         />
                       </Card>
+                    </>
+                  )}
+                  {shown === 'questions' && (
+                    <>
                       {targets === undefined && !isLocked && (
                         <Callout
                           tone="danger"
@@ -1321,8 +1323,8 @@ export interface PageEditorPendingProps {
  */
 const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
   page: [strings.details, strings.sharing, socialsStrings.title],
-  meeting: [strings.meeting, strings.location, strings.calendarSection],
-  questions: [strings.crmTitle, questionStrings.questions],
+  meeting: [strings.meeting, strings.location, strings.calendarSection, strings.afterBooking],
+  questions: [questionStrings.questions],
   hosts: [rotationStrings.hosts, routingStrings.routing],
   hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff],
   limits: [strings.limitGroups.buffers, strings.limitGroups.window, strings.limitGroups.pace],

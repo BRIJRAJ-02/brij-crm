@@ -11,6 +11,10 @@ import { strings } from '../features/settings/workspace-strings.ts';
 // `/w/$slug/settings/account/profile?view=link-page` until then: three levels inside configuration, behind a query
 // parameter, for the surface a member opens most (the owner). That address still works and comes here.
 export const Route = createFileRoute('/w/$slug/link-page')({
+  // The page opens on what it is for, sharing itself; `?edit` is the builder (27 October 2026). It is in the
+  // address so Back leaves the editor, and a link can open it straight into one.
+  validateSearch: (search: Record<string, unknown>): { readonly edit?: true } =>
+    search['edit'] === undefined || search['edit'] === false || search['edit'] === 'false' ? {} : { edit: true },
   loader: async ({ context, params }) => {
     try {
       return { profile: await context.data.profile.get(params.slug) };
@@ -32,8 +36,18 @@ function LinkPageRoute() {
   const { profile } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
+  const { edit } = Route.useSearch();
+  const navigate = Route.useNavigate();
   if (profile === undefined) return <SettingsMissing backTo="home" />;
-  return <LinkPageLoader data={data} slug={slug} profile={profile} />;
+  return (
+    <LinkPageLoader
+      data={data}
+      slug={slug}
+      profile={profile}
+      isEditing={edit === true}
+      onEditing={(isEditing) => void navigate({ search: isEditing ? { edit: true } : {} })}
+    />
+  );
 }
 
 function LinkPageError({ error }: ErrorComponentProps) {
