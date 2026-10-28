@@ -354,9 +354,21 @@ async function importRow(
       { objectId: plan.objectId, values: Object.fromEntries(values) },
       { attributes: plan.attributes, countsSlots: true },
     );
+    // The versions the create wrote, kept as an update's are: the undo reads them to tell a record nobody has
+    // touched since from one that has been worked on, and never trashes the second.
+    const wrote = Object.fromEntries(
+      Object.entries(created.versions).flatMap(([id, result]) =>
+        result.versionId === undefined ? [] : [[id, result.versionId]],
+      ),
+    );
     return {
       result: { outcome: 'created', ...(note === undefined ? {} : { note }) },
-      stored: { ...base, outcome: 'created', record_id: created.recordId },
+      stored: {
+        ...base,
+        outcome: 'created',
+        record_id: created.recordId,
+        ...(Object.keys(wrote).length === 0 ? {} : { written: wrote }),
+      },
       made,
     };
   }

@@ -444,6 +444,34 @@ describe('undo (AC-1128, AC-1129)', () => {
     expect((await undoImport(w.owner, registry, id)).undoJobId).toBe(undoing.undoJobId);
   });
 
+  it('keeps a record the import created that someone has worked on since', async () => {
+    const w = await world();
+    const { id } = await runImport(w, w.owner, w.settings({ onMatch: 'overwrite' }), [
+      w.row(2, 'Cy', 'cy@example.com', 'Intern'),
+      w.row(3, 'Dot', 'dot@example.com', 'Intern'),
+    ]);
+    const [cy] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select r.id::text as id from records r
+       join "values" e on e.record_id = r.id and e.attribute_id = $2 and e.active_until is null and not e.is_cleared
+       where r.workspace_id = $1 and e.text_value = 'cy@example.com'`,
+      [w.workspaceId, w.attribute('email_addresses')],
+    );
+    // Cy was promoted after the import. Undo used to trash the record however much had been written on it since.
+    await setRecordValues(w.owner, {
+      recordId: cy?.id ?? '',
+      values: { [w.attribute('job_title')]: { value: 'Chief' } },
+    });
+    const undoing = await undoImport(w.owner, registry, id, [outboxHook()]);
+    expect((await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).at(-1)).toBe('succeeded');
+    // Dot, untouched, goes to the trash; Cy stays, with their edit, and the summary says why.
+    expect(await trash(w)).toEqual([{ email: 'dot@example.com', batch: id }]);
+    expect(await byEmail(w)).toEqual({ 'cy@example.com': { title: 'Chief', n: 1 } });
+    expect((await listImportRefusals(w.owner, { importId: id })).rows).toEqual([
+      { rowNumber: 2, code: 'RECORD_CHANGED', message: 'This record was edited since the import, so it was kept.' },
+    ]);
+  });
+
   it('refuses while the import is unstarted or running, after its window, and for someone else', async () => {
     const w = await world();
     const id = newId();

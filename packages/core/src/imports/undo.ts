@@ -4,14 +4,17 @@
 // the import created go to the trash with the import's id as their batch
 // (restorable as any delete is), and every value it changed goes back to what
 // it held, unless it has changed since (its version is no longer the one the
-// import wrote), in which case it is kept and counted. A row taken back is
+// import wrote), in which case it is kept and counted. A created record
+// somebody has worked on since is kept the same way, by the same test over
+// the versions the create wrote: an import undone a week later never trashes
+// the work done on its records meanwhile. A row taken back is
 // marked `undone`, so a batch tried again never puts anything back twice; a
 // row whose every value was edited since stays `updated`, its note saying so.
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { schema } from '@crm/db';
 import { isRefusal } from '../engine/refusals.ts';
-import { updateRecord } from '../engine/records.ts';
+import { readRecords, updateRecord } from '../engine/records.ts';
 import { deleteIn } from '../engine/trash.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
@@ -50,6 +53,50 @@ const Made = z.array(z.object({ objectId: z.uuid(), recordId: z.uuid() }));
 /** The words for values kept because they changed since the import. */
 export const keptMessage = (count: number): string =>
   count === 1 ? '1 value changed since, kept.' : `${String(count)} values changed since, kept.`;
+
+/** The code an item carries when a record the import created was worked on since, so it stays. */
+export const WORKED_ON_CODE = 'RECORD_CHANGED';
+
+/** What the summary says about a created record that was worked on since the import made it. */
+export const WORKED_ON_MESSAGE = 'This record was edited since the import, so it was kept.';
+
+/**
+ * Which of `recordIds` nobody has touched since the import created them, so
+ * the undo may trash them. A record is untouched when every value the import
+ * wrote still carries the version it wrote, and no other attribute has been
+ * given one since. A row stored before this was kept (no `written`) is
+ * untouched as far as we can tell, which is the behaviour the undo had.
+ */
+async function untouchedSince(
+  context: WriteContext,
+  rows: readonly { readonly recordId: string; readonly written: z.infer<typeof Written> | undefined }[],
+): Promise<ReadonlySet<string>> {
+  const checkable = rows.flatMap((row) => (row.written === undefined ? [] : [row]));
+  const untouched = new Set(rows.flatMap((row) => (row.written === undefined ? [row.recordId] : [])));
+  if (checkable.length === 0) return untouched;
+  const now = new Map(
+    (
+      await readRecords(
+        context.tx,
+        context.scope.access,
+        checkable.map((row) => row.recordId),
+      )
+    ).map((view) => [view.id, view]),
+  );
+  for (const row of checkable) {
+    const view = now.get(row.recordId);
+    // Gone already, or out of sight: left to the delete below, which answers for it.
+    if (view === undefined) {
+      untouched.add(row.recordId);
+      continue;
+    }
+    const wrote = row.written ?? {};
+    const changed = Object.entries(wrote).some(([attributeId, versionId]) => view.versions[attributeId] !== versionId);
+    const added = Object.keys(view.versions).some((attributeId) => !Object.hasOwn(wrote, attributeId));
+    if (!changed && !added) untouched.add(row.recordId);
+  }
+  return untouched;
+}
 
 /**
  * Puts one updated record's values back, one attribute at a time, each in its
@@ -112,12 +159,47 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
       const undone: string[] = [];
 
       // Created records: to the trash in one call, the import's id their batch.
-      const created = items.flatMap((item) => {
+      const madeRecords = items.flatMap((item) => {
         const staged = byId.get(item.itemId);
-        return staged?.outcome === 'created' && staged.record_id !== null
-          ? [{ item, rowId: staged.id, recordId: staged.record_id }]
-          : [];
+        if (staged?.outcome !== 'created' || staged.record_id === null) return [];
+        const written = Written.safeParse(staged.written);
+        return [
+          {
+            item,
+            rowId: staged.id,
+            recordId: staged.record_id,
+            written: written.success ? written.data : undefined,
+          },
+        ];
       });
+      // A record somebody has worked on since the import made it is not the import's to take back: it stays,
+      // counted on the summary. Undoing used to trash it however much had been written on it since.
+      const untouched = await untouchedSince(context, madeRecords);
+      const created = madeRecords.filter((each) => untouched.has(each.recordId));
+      const workedOn = madeRecords.filter((each) => !untouched.has(each.recordId));
+      for (const each of workedOn) {
+        outcomes.set(each.item.itemId, {
+          position: each.item.position,
+          state: 'skipped',
+          code: WORKED_ON_CODE,
+          message: WORKED_ON_MESSAGE,
+        });
+      }
+      // The row stays `created`, saying why on the summary, as a row whose every value changed stays `updated`.
+      if (workedOn.length > 0) {
+        await tx
+          .update(importRows)
+          .set({ errorCode: WORKED_ON_CODE, errorMessage: WORKED_ON_MESSAGE })
+          .where(
+            and(
+              eq(importRows.workspaceId, scope.workspaceId),
+              inArray(
+                importRows.id,
+                workedOn.map((each) => each.rowId),
+              ),
+            ),
+          );
+      }
       if (created.length > 0) {
         try {
           const deleted = await deleteIn(context, {
