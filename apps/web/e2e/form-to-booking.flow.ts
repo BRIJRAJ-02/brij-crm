@@ -88,6 +88,11 @@ test.describe('a form that sends its visitor on to book', () => {
 
     // The visitor: a browser of their own, signed in to nothing.
     const visitor = await (await browser.newContext()).newPage();
+    // Every address the tab lands on: the page keeps a hand off in the tab and takes it out of the address at once.
+    const landed: string[] = [];
+    visitor.on('framenavigated', (frame) => {
+      if (frame === visitor.mainFrame()) landed.push(frame.url());
+    });
     await visitor.goto(`${new URL(page.url()).origin}/f/${live.publicKey}`);
     await visitor.getByLabel('Your name').fill('Ada Lovelace');
     await visitor.getByLabel('Work email').fill(`ada-${tag}@example.com`);
@@ -97,10 +102,15 @@ test.describe('a form that sends its visitor on to book', () => {
     await expect(visitor.getByRole('heading', { name: 'Thank you. That is with us.' })).toBeVisible();
     await expect(visitor.getByRole('button', { name: 'Book now' })).toBeVisible();
 
-    // On to the booking page with the signed hand off, and nothing else in the address.
-    await visitor.waitForURL(new RegExp(`/b/${booking.publicKey}\\?p=fb1\\.`));
-    expect(new URL(visitor.url()).searchParams.get('name')).toBeNull();
-    const handoff = new URL(visitor.url()).searchParams.get('p') ?? '';
+    // On to the booking page (by its key, or by its owner's handle) with the signed hand off and nothing else in the
+    // address; then the page takes the hand off out of the address.
+    const handedOff = () => landed.find((url) => new URL(url).searchParams.get('p')?.startsWith('fb1.') === true);
+    await expect.poll(handedOff, { timeout: 30_000 }).toBeDefined();
+    const arrived = new URL(handedOff() ?? '');
+    expect(arrived.pathname).toMatch(new RegExp(`^/(b/${booking.publicKey}|[a-z0-9-]+/[a-z0-9-]+)$`));
+    expect([...arrived.searchParams.keys()]).toEqual(['p']);
+    const handoff = arrived.searchParams.get('p') ?? '';
+    await expect.poll(() => new URL(visitor.url()).searchParams.has('p')).toBe(false);
 
     // Pick the first open time, then the details start filled in.
     await visitor

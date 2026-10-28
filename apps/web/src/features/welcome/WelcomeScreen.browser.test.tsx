@@ -304,8 +304,10 @@ describe('first run’s steps', () => {
     expect(fake.created[0]).not.toHaveProperty('onboarding');
     expect(router.state.location.search).toEqual({ step: 'booking', workspace: 'ada' });
     expect(page.getByRole('button', { name: 'Back' }).query()).toBeNull();
-    // It starts named, so Continue alone would make it; this one is named and made 45 minutes long.
+    // It starts named, so Continue alone would make it; this one is named and made 45 minutes long. Its name takes
+    // focus, as each step's first field does.
     await expect.element(page.getByRole('textbox', { name: 'Meeting name' })).toHaveValue('Intro call');
+    await expect.element(page.getByRole('textbox', { name: 'Meeting name' })).toHaveFocus();
     // The segment's own label takes the press, as it does everywhere the control is used.
     await page.getByText('45 min', { exact: true }).click();
     await page.getByRole('button', { name: 'Continue' }).click();
@@ -314,6 +316,7 @@ describe('first run’s steps', () => {
     // Your link page: the handle, and the optional links that go on with it.
     await expect.element(page.getByRole('heading', { level: 1, name: 'Your link page' })).toBeVisible();
     await expect.element(page.getByText('Step 4 of 6')).toBeVisible();
+    await expect.element(page.getByRole('textbox', { name: 'Your link' })).toHaveFocus();
     // One address per link; its title comes from the address until it is renamed in the editor.
     await page.getByRole('textbox', { name: 'Link 1' }).fill('https://www.ada.example/');
     await page.getByRole('button', { name: 'Continue' }).click();

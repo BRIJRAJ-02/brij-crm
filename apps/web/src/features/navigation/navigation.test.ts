@@ -41,7 +41,8 @@ describe('focusPage', () => {
     'main input[name="email"]': {},
     'main input[autocomplete="one-time-code"]': {},
     // First run's first control on each step: Your name, Your workspace's name, or Invite your team's first email (spec 0036).
-    'main input[name="memberName"], main input[name="name"], main input[name^="invite-"]': {},
+    'main input[name="memberName"], main input[name="name"], main input[name="title"], main input[name="handle"], main input[name^="invite-"]':
+      {},
   };
 
   it('puts focus in the email field on /sign-in, the code on /verify and your name on /welcome', () => {
@@ -54,7 +55,7 @@ describe('focusPage', () => {
     const welcome = fakeDocument(page);
     focusPage(welcome.asDocument, '/welcome');
     expect(welcome.focused).toEqual([
-      'main input[name="memberName"], main input[name="name"], main input[name^="invite-"]',
+      'main input[name="memberName"], main input[name="name"], main input[name="title"], main input[name="handle"], main input[name^="invite-"]',
     ]);
   });
 
@@ -114,7 +115,8 @@ describe('focusFirstLoad', () => {
     'main input[name="email"]': {},
     'main input[autocomplete="one-time-code"]': {},
     // First run's first control on each step: Your name, Your workspace's name, or Invite your team's first email (spec 0036).
-    'main input[name="memberName"], main input[name="name"], main input[name^="invite-"]': {},
+    'main input[name="memberName"], main input[name="name"], main input[name="title"], main input[name="handle"], main input[name^="invite-"]':
+      {},
   };
 
   it('puts focus in the first field on /sign-in, /verify and /welcome, as after a route change', () => {
@@ -127,7 +129,7 @@ describe('focusFirstLoad', () => {
     const welcome = fakeDocument(page);
     focusFirstLoad(welcome.asDocument, '/welcome');
     expect(welcome.focused).toEqual([
-      'main input[name="memberName"], main input[name="name"], main input[name^="invite-"]',
+      'main input[name="memberName"], main input[name="name"], main input[name="title"], main input[name="handle"], main input[name^="invite-"]',
     ]);
   });
 
