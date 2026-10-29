@@ -52,10 +52,11 @@ describe('readBoot', () => {
 });
 
 describe('freshProfile', () => {
-  const boot = { kind: 'profile', profile, readAt: 1_000_000 } as const;
+  // Through bootOf, as the page reads it, so the fixture's loose theme names need no casting.
+  const boot = bootOf(JSON.stringify({ kind: 'profile', profile, readAt: 1_000_000 }));
 
   it('draws a copy read in the last few minutes', () => {
-    expect(freshProfile(boot, 1_000_000 + 60_000)).toBe(profile);
+    expect(freshProfile(boot, 1_000_000 + 60_000)).toEqual(profile);
   });
 
   it('never draws an old shell’s copy, which the page’s own read would repaint', () => {
