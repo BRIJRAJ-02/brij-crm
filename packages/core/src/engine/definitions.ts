@@ -308,8 +308,16 @@ async function checkDefaultMembers(tx: WorkspaceTx, type: AttributeType, fallbac
   const named: readonly unknown[] = Array.isArray(fallback.value)
     ? (fallback.value as readonly unknown[])
     : [fallback.value];
+  // A member and nothing else: a write refuses any other actor it adds (`checkActors`), so a default naming one
+  // would block every create that leaves the field out.
   const ids = named.flatMap((each) =>
-    typeof each === 'object' && each !== null && 'id' in each && typeof each.id === 'string' && isUuid(each.id)
+    typeof each === 'object' &&
+    each !== null &&
+    'type' in each &&
+    each.type === 'member' &&
+    'id' in each &&
+    typeof each.id === 'string' &&
+    isUuid(each.id)
       ? [each.id.toLowerCase()]
       : [],
   );

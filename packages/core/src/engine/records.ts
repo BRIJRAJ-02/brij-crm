@@ -46,7 +46,7 @@ import {
   visibleRecords,
 } from '../access/visibility.ts';
 
-const { attributeOptions, objects, records, values: valueRows } = schema;
+const { attributeOptions, members, objects, records, values: valueRows } = schema;
 
 /** What a new record needs: its object, its values by attribute id, and optionally a client minted UUID v7. */
 export interface RecordInput {
@@ -81,6 +81,46 @@ async function liveOptionDefault(tx: WorkspaceTx, attribute: AttributeDef, value
   return attribute.isRequired ? [...live][0] : undefined;
 }
 
+/** The member a static Member default names, when the item is one: `{ type: 'member', id }`. */
+function defaultMemberId(item: unknown): string | undefined {
+  if (typeof item !== 'object' || item === null || !('id' in item) || typeof item.id !== 'string') return undefined;
+  // Only a member: `checkActors` refuses any other actor a write adds, so another type would block every create.
+  if (!('type' in item) || item.type !== 'member') return undefined;
+  return isUuid(item.id) ? item.id.toLowerCase() : undefined;
+}
+
+/**
+ * A static Member default with the members no longer active left out (late trap #9): settings checks the
+ * default names an active member when it is set, but a member removed since stays named in it, and every create
+ * that left the field out was then refused, a form's or a booking's included, long after the removal. A multi
+ * default keeps the members still here; one naming nobody still here gives no value. The stored default is left
+ * alone, as an archived option's is.
+ */
+async function liveMemberDefault(tx: WorkspaceTx, value: unknown): Promise<unknown> {
+  const items: readonly unknown[] = Array.isArray(value) ? (value as readonly unknown[]) : [value];
+  const ids = [...new Set(items.flatMap((item) => defaultMemberId(item) ?? []))];
+  const active =
+    ids.length === 0
+      ? new Set<string>()
+      : new Set(
+          (
+            await tx
+              .select({ id: members.id })
+              .from(members)
+              .where(and(inArray(members.id, ids), eq(members.status, 'active')))
+          ).map((row) => row.id.toLowerCase()),
+        );
+  const isHere = (item: unknown) => {
+    const id = defaultMemberId(item);
+    return id !== undefined && active.has(id);
+  };
+  if (Array.isArray(value)) {
+    const kept = value.filter(isHere);
+    return value.length > 0 && kept.length === 0 ? undefined : kept;
+  }
+  return isHere(value) ? value : undefined;
+}
+
 /** The value a default gives a new record, or undefined when it gives none (a current user default for a non member). */
 async function defaultFor(
   tx: WorkspaceTx,
@@ -94,9 +134,8 @@ async function defaultFor(
   // A kind the type no longer allows (a static default stored on a timestamp before it was refused) gives nothing.
   if (!defaultKindsFor(attribute.type).includes(rule.kind)) return undefined;
   if (rule.kind === 'static') {
-    return attribute.type === 'select' || attribute.type === 'status'
-      ? liveOptionDefault(tx, attribute, rule.value)
-      : rule.value;
+    if (attribute.type === 'select' || attribute.type === 'status') return liveOptionDefault(tx, attribute, rule.value);
+    return attribute.type === 'actor_reference' ? liveMemberDefault(tx, rule.value) : rule.value;
   }
   if (rule.kind === 'current_user')
     return scope.actor.type === 'member' ? { type: 'member', id: scope.actor.id } : undefined;
