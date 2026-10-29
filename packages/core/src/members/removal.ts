@@ -9,6 +9,7 @@ import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
 import { bookingPagesRemoval } from '../booking/pages.ts';
 import { calendarsRemoval } from '../calendar/connections.ts';
+import { defaultsRemoval } from '../engine/default-removal.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { navRemoval } from '../navigation/navigation.ts';
 import { notificationsRemoval } from '../notifications/inbox.ts';
@@ -69,6 +70,7 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   rotationsRemoval,
   tasksRemoval,
   recordsRemoval,
+  defaultsRemoval,
   recentsRemoval,
   navRemoval,
   notificationsRemoval,
@@ -130,7 +132,14 @@ export async function runRemovalEffects(context: WriteContext, memberId: string)
 
 /** What removing `memberId` will do, every feature counted, read with no lock (AC-816). */
 export async function countRemoval(tx: WorkspaceTx, workspaceId: string, memberId: string): Promise<RemovalCounts> {
-  const counted: RemovalCounts = { pausedPages: 0, calendars: 0, openTasks: 0, records: 0 };
+  const counted: RemovalCounts = {
+    pausedPages: 0,
+    calendars: 0,
+    openTasks: 0,
+    records: 0,
+    defaults: 0,
+    requiredDefaults: 0,
+  };
   let total = counted;
   for (const effect of REMOVAL_EFFECTS) {
     if (effect.count === undefined) continue;

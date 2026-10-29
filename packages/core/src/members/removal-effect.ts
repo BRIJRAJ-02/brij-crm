@@ -16,6 +16,10 @@ export interface RemovalCounts {
   readonly openTasks: number;
   /** Live records whose member typed values name them (an Owner, an Account manager). */
   readonly records: number;
+  /** Fields whose default names them, which stop naming them (late trap #70). */
+  readonly defaults: number;
+  /** Of those, required ones left with no default: every new record then needs a value for them. */
+  readonly requiredDefaults: number;
 }
 
 /** One feature's part of a removal. */

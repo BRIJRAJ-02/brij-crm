@@ -157,7 +157,8 @@ function layerWith(answer: () => Promise<void>, startLink: InviteLinkView = LINK
     members: {
       watch: () => () => undefined,
       // The remove dialog reads what the removal does and who could take over (spec 0031, slice 5).
-      removalPreview: () => Promise.resolve({ pausedPages: 0, calendars: 0, openTasks: 1, records: 2 }),
+      removalPreview: () =>
+        Promise.resolve({ pausedPages: 0, calendars: 0, openTasks: 1, records: 2, defaults: 0, requiredDefaults: 0 }),
       list: () => Promise.resolve([ADA, LINUS]),
       remove: async () => {
         calls.remove += 1;

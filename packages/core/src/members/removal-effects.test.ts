@@ -6,6 +6,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase } from '@crm/db';
 import { createBookingPage } from '../booking/pages.ts';
+import { defineAttribute } from '../engine/definitions.ts';
 import { newId } from '../engine/ids.ts';
 import { createRecord } from '../engine/records.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
@@ -63,6 +64,7 @@ async function world() {
     )[0]?.member;
   return {
     ...t,
+    people,
     gus,
     hal,
     ann,
@@ -94,6 +96,8 @@ describe('the remove dialog’s counts (AC-816)', () => {
       calendars: 0,
       openTasks: 1,
       records: 2,
+      defaults: 0,
+      requiredDefaults: 0,
     });
     // About themself before leaving, yes; about anyone else, only with members.manage.
     expect(await previewRemoval(w.gusScope, { memberId: w.gus })).toMatchObject({ records: 2 });
@@ -101,6 +105,44 @@ describe('the remove dialog’s counts (AC-816)', () => {
     // Someone no longer here is not found.
     await removeMember(w.owner, { memberId: w.gus });
     expect(await refusalOf(previewRemoval(w.owner, { memberId: w.gus }))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('a field default naming them (late trap #70)', () => {
+  it('counts the fields beforehand, the required ones left empty apart, then takes them out of every default', async () => {
+    const w = await world();
+    const single = await defineAttribute(w.owner, {
+      objectId: w.people.object_id,
+      apiSlug: 'account_manager',
+      title: 'Account manager',
+      type: 'actor_reference',
+      isRequired: true,
+      defaultValue: { kind: 'static', value: { type: 'member', id: w.gus } },
+    });
+    const several = await defineAttribute(w.owner, {
+      objectId: w.people.object_id,
+      apiSlug: 'watchers',
+      title: 'Watchers',
+      type: 'actor_reference',
+      isMulti: true,
+      isRequired: true,
+      defaultValue: {
+        kind: 'static',
+        value: [
+          { type: 'member', id: w.gus },
+          { type: 'member', id: w.hal },
+        ],
+      },
+    });
+    expect(await previewRemoval(w.owner, { memberId: w.gus })).toMatchObject({ defaults: 2, requiredDefaults: 1 });
+    await removeMember(w.owner, { memberId: w.gus });
+    const stored = await w.read<{ id: string; value: unknown }>(sql`
+      select id::text, default_value as value from attributes
+      where id in (${single.attributeId}::uuid, ${several.attributeId}::uuid)
+    `);
+    const byId = new Map(stored.map((row) => [row.id, row.value]));
+    expect(byId.get(single.attributeId)).toBeNull();
+    expect(byId.get(several.attributeId)).toEqual({ kind: 'static', value: [{ type: 'member', id: w.hal }] });
   });
 });
 

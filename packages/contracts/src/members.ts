@@ -91,6 +91,10 @@ export const RemovalPreview = z.object({
   openTasks: z.number().int().min(0),
   /** Live records whose member values (an Owner) name them. */
   records: z.number().int().min(0),
+  /** Fields whose default names them: the removal takes them out of it. */
+  defaults: z.number().int().min(0),
+  /** Of those, required ones left with no default, so every new record needs a value for them. */
+  requiredDefaults: z.number().int().min(0),
 });
 /** What removing a member will do. */
 export type RemovalPreview = z.infer<typeof RemovalPreview>;

@@ -78,9 +78,17 @@ export const strings = {
       counts.calendars > 0
         ? `${String(counts.calendars)} calendar ${counts.calendars === 1 ? 'connection is' : 'connections are'} disconnected.`
         : '',
+      counts.defaults > 0
+        ? `${String(counts.defaults)} ${counts.defaults === 1 ? 'field uses them as its default, and loses it' : 'fields use them as their default, and lose it'}.`
+        : '',
     ]
       .filter((sentence) => sentence !== '')
       .join(' '),
+  /** The removal's one effect that stops other people's work, apart in a warning (late trap #70). */
+  requiredDefaultsLost: (count: number) =>
+    count === 1
+      ? 'A required field will have no default. Give it one in its object’s settings, or forms and booking pages can’t add records there.'
+      : `${String(count)} required fields will have no default. Give them one in their objects’ settings, or forms and booking pages can’t add records there.`,
   previewFailed: 'We couldn’t check what else this changes. You can still remove them.',
   handTo: 'Hand their open tasks and records to',
   handToHint: 'They move in the background. Leave it empty to keep them as they are.',

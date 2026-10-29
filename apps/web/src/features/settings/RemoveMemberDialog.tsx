@@ -128,6 +128,9 @@ function Asked({
       <p>{strings.removeText}</p>
       {read.status === 'loading' && <div aria-busy="true">{showSkeleton && <Skeleton lines={2} />}</div>}
       {read.status === 'failed' && <Callout tone="warning">{strings.previewFailed}</Callout>}
+      {read.status === 'ready' && read.preview.requiredDefaults > 0 && (
+        <Callout tone="warning">{strings.requiredDefaultsLost(read.preview.requiredDefaults)}</Callout>
+      )}
       {effects !== undefined && effects !== '' && <p>{effects}</p>}
       {read.status === 'ready' && read.preview.openTasks + read.preview.records > 0 && (
         <Select
