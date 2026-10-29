@@ -15,6 +15,17 @@ export const READ_TIMEOUT_MS = 800;
 /** What the shell answers with, so a crawler caches it and a person never waits on it (AC-5504). */
 export const SHELL_CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate=86400';
 
+/**
+ * A shell whose read missed (it timed out on a cold api, or failed) is kept by the edge for seconds, not minutes
+ * (29 Oct 2026): kept for five, every visitor in that time got the plain shell and waited on the page's own lookup.
+ */
+export const MISSED_CACHE_CONTROL = 'public, s-maxage=10';
+
+/** What the shell's answer is cached for: a miss briefly, anything the read decided (a page, a 404) as usual. */
+export function cacheControlFor(outcome: ShellOutcome): string {
+  return outcome === 'missed' ? MISSED_CACHE_CONTROL : SHELL_CACHE_CONTROL;
+}
+
 /** The share card's address for one handle, versioned so a new name or picture is a new address (AC-5513). */
 export function cardUrl(origin: string, handle: string, version: string | undefined): string {
   const card = `${origin}/api/public/handles/${encodeURIComponent(handle)}/card.png`;

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   BOOT_ID,
+  cacheControlFor,
   cardUrl,
   lookOf,
   partsOf,
@@ -286,5 +287,14 @@ describe('the boot block (29 Oct 2026)', () => {
     });
     expect(outside).not.toContain('rel="preload" as="image"');
     expect(quoted).not.toContain('rel="preload" as="image"');
+  });
+});
+
+describe('cacheControlFor', () => {
+  it('keeps a missed read for seconds, so a cold api never leaves the plain shell cached for minutes', () => {
+    expect(cacheControlFor('missed')).toBe('public, s-maxage=10');
+    expect(cacheControlFor('page')).toContain('s-maxage=300');
+    expect(cacheControlFor('profile')).toContain('s-maxage=300');
+    expect(cacheControlFor('unknown')).toContain('s-maxage=300');
   });
 });

@@ -24,7 +24,7 @@ registerHooks({
 });
 
 // @boundaries-ignore the Vercel Function entry runs on the server, not in the client bundle
-const { SHELL_CACHE_CONTROL, shellFor } = await import('../handle-shell.ts');
+const { cacheControlFor, shellFor } = await import('../handle-shell.ts');
 // The built shell, written beside this file by the build (`crm:booking-shell` in vite.config.ts), so the function
 // reads no file and makes no request for its own bytes.
 const { BOOKING_SHELL } = await import('./shell.generated.mjs');
@@ -73,7 +73,7 @@ export async function GET(request) {
     status,
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      'cache-control': SHELL_CACHE_CONTROL,
+      'cache-control': cacheControlFor(outcome),
       'x-crm-shell': outcome,
     },
   });
