@@ -4,6 +4,10 @@
 # its screenshots. Make `check`, `flows (1/4)` to `flows (4/4)`, `stories (chromium)`,
 # `stories (firefox)`, `stories (webkit)` and `visual` required status checks
 # on `main` (branch protection), so a red build blocks the merge.
+#
+# Every job runs on ubuntu-24.04, not ubuntu-latest: on 29 Oct 2026 ubuntu-latest moved to 26.04, where the
+# pinned Playwright's WebKit cannot start (libicudata.so.74 is missing), which failed stories (webkit) and the
+# flows that open a WebKit reader. Move with a Playwright release that supports the newer image.
 name: CI
 
 on:
@@ -19,7 +23,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
   # the tokens it draws with, the lockfile or this workflow skips them. A new branch, a force push and anything
   # that cannot be compared runs everything, so the safe answer is the default rather than the exception.
   changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -56,7 +60,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
   # too, one after another, which made it the run's long pole at about 20 minutes; they are their own jobs below
   # (25 October 2026). Chromium is still installed here because the artifact build render checks its previews.
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # A hung browser once held a job for over 40 minutes; a normal run takes under 10 (every step runs since round 9).
     timeout-minutes: 35
     permissions:
@@ -128,7 +132,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
   # Every package's tests but the library's and the engine's, which have jobs of their own below. The web app's
   # browser tests run here, so Chromium is installed.
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
@@ -219,7 +223,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
   # cancel test locks the records table, so query.test.ts has a database of its own (test/global-setup.ts).
   # It needs Postgres and nothing else: no HTTP, no mail, no realtime.
   core:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
@@ -251,7 +255,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
   # side, and the browser suites beside it made long tasks of their own on the 2 core runner (8 October 2026).
   # The stories themselves run per engine in `stories` below.
   ui:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
@@ -307,7 +311,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
   # touches a deployed environment.
   flows:
     name: flows (${{ matrix.shard }}/4)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Four shards, each with its own stack: one job ran past 40 minutes once round 9 had every flow (run 39706435009).
     timeout-minutes: 30
     strategy:
@@ -499,7 +503,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
     name: stories (${{ matrix.browser }})
     needs: changes
     if: ${{ needs.changes.outputs.ui == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # A hung browser once held a job for over 40 minutes; a normal run takes under 10 (every step runs since round 9).
     timeout-minutes: 35
     permissions:
@@ -548,7 +552,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
   visual:
     needs: changes
     if: ${{ needs.changes.outputs.ui == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # A hung browser once held a job for over 40 minutes; a normal run takes under 10 (every step runs since round 9).
     timeout-minutes: 35
     permissions:
