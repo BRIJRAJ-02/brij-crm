@@ -48,7 +48,9 @@ export function startTags(ids: TagIds, host: TagHost): readonly string[] {
     const call: (...args: unknown[]) => void = gtag;
     call('js', new Date());
     // One page view per page, sent by hand with the whole address, so `utm_*` and click ids reach the report.
-    call('config', ga, { send_page_view: false });
+    // Google signals off: no advertising audiences, so no calls to doubleclick or a country's google domain, which
+    // the CSP couldn't name ahead of time anyway. Measurement is unchanged.
+    call('config', ga, { send_page_view: false, allow_google_signals: false, allow_ad_personalization_signals: false });
     call('event', 'page_view', { page_location: host.href, page_title: host.title });
     host.addScript(`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(ga)}`);
     started.push('ga');

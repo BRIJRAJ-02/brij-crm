@@ -31,7 +31,11 @@ describe('startTags', () => {
     const queued = (global.dataLayer as IArguments[]).map((entry): unknown[] =>
       Array.from(entry as ArrayLike<unknown>),
     );
-    expect(queued[1]).toEqual(['config', 'G-ABC123XYZ', { send_page_view: false }]);
+    expect(queued[1]).toEqual([
+      'config',
+      'G-ABC123XYZ',
+      { send_page_view: false, allow_google_signals: false, allow_ad_personalization_signals: false },
+    ]);
     expect(queued[2]).toEqual([
       'event',
       'page_view',
@@ -91,6 +95,8 @@ describe('the CSP (vercel.json)', () => {
       expect.arrayContaining([
         "'self'",
         'https://*.google-analytics.com',
+        'https://analytics.google.com',
+        'https://www.google.com',
         'https://*.clarity.ms',
         'https://app.timefix.com',
       ]),
