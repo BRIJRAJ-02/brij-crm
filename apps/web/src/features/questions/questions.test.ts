@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FormAttributeChoice, FormQuestion } from '@crm/data';
-import { addQuestion, changeQuestion, fileByLabel, planNewAttributes, renamedKeys } from './questions.ts';
+import { addQuestion, changeQuestion, fileByLabel, planNewAttributes, renamedKeys, typeChange } from './questions.ts';
 
 const JOB = '0199f0a0-0000-7000-8000-0000000000aa';
 
@@ -93,5 +93,19 @@ describe('Not filed, chosen (crm-f7, 28 Oct 2026)', () => {
     expect(fileByLabel([job], attributes)).toEqual([job]);
     const { kept: _kept, ...open } = job;
     expect(fileByLabel([open], attributes)[0]?.filedOn).toEqual({ objectRole: 'main', attributeId: JOB });
+  });
+});
+
+describe('changing a filed question’s answer type (late trap #46)', () => {
+  const filed = { filedOn: { objectRole: 'main' as const, attributeId: JOB } };
+
+  it('lets go of a field the new type can’t fill, so Publish can give it one that fits', () => {
+    expect(typeChange(filed, attributes, 'number')).toEqual({ answerType: 'number', filedOn: null });
+  });
+
+  it('keeps a field the new type still fills, and one the editor can’t see', () => {
+    expect(typeChange(filed, attributes, 'long_text')).toEqual({ answerType: 'long_text' });
+    expect(typeChange(filed, [], 'number')).toEqual({ answerType: 'number' });
+    expect(typeChange({}, attributes, 'number')).toEqual({ answerType: 'number' });
   });
 });

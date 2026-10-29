@@ -36,6 +36,7 @@ import {
   duplicateQuestion,
   filedLine,
   fittingAttributes,
+  typeChange,
   planNewAttributes,
   moveQuestion,
   removeQuestion,
@@ -498,7 +499,8 @@ function QuestionEditor({
         value={question.answerType}
         isReadOnly={isReadOnly || isLocked}
         onChange={(type) => {
-          if (type !== null) onChange({ answerType: type as AnswerType });
+          if (type === null) return;
+          onChange(typeChange(question, attributes, type as AnswerType));
         }}
       />
       {isChoice && (

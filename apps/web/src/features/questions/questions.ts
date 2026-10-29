@@ -209,6 +209,20 @@ export function fittingAttributes(
   return attributes.filter((attribute) => fitsAttribute(answerType, attribute.type));
 }
 
+/**
+ * A question's answer type changed: a field the new type can't fill is let go, rather than kept filed out of sight
+ * until Publish refuses FILING_MISFIT (late trap #46), so Publish can give the question a field that fits. A filing
+ * on a field the editor doesn't list (hidden from them) is left as it is.
+ */
+export function typeChange(
+  question: Pick<FormQuestion, 'filedOn'>,
+  attributes: readonly FormAttributeChoice[],
+  answerType: AnswerType,
+): QuestionChange {
+  const filed = attributes.find((attribute) => attribute.attributeId === question.filedOn?.attributeId);
+  return filed !== undefined && !fitsAttribute(answerType, filed.type) ? { answerType, filedOn: null } : { answerType };
+}
+
 /** Where a question's answers go, as its closed card says it: "Person › Budget band", or Not filed. */
 export function filedLine(
   question: FormQuestion,
