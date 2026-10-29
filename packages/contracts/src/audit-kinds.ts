@@ -48,6 +48,9 @@ export const AUDIT_KINDS = {
     'form.owner_changed',
     'booking.record_linked',
     'booking.record_unlinked',
+    'delegation.granted',
+    'delegation.changed',
+    'delegation.revoked',
   ],
 } as const satisfies Record<AuditKindName, readonly AuditAction[]>;
 

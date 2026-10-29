@@ -76,6 +76,11 @@ export const AUDIT_ACTIONS = [
   'workspace_security.signed_out_everyone',
   // Owner ask A102 (22 Oct 2026): a person put their Public booking pages in a new order on their profile.
   'booking_page.profile_reordered',
+  // Scheduling access (spec 0037, AC-1257): See or Manage over someone's scheduling given, changed or taken back.
+  // The row's target is the delegate; `before` and `after` hold the level and whom it is over.
+  'delegation.granted',
+  'delegation.changed',
+  'delegation.revoked',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

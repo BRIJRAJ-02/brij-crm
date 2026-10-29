@@ -14,6 +14,7 @@ import type { WriteContext } from '../engine/write.ts';
 import { navRemoval } from '../navigation/navigation.ts';
 import { notificationsRemoval } from '../notifications/inbox.ts';
 import { rotationsRemoval } from '../rotation/removal.ts';
+import { delegationsRemoval } from '../scheduling/delegations.ts';
 import { recentsRemoval } from '../search/recents.ts';
 import { viewsRemoval } from '../views/manage.ts';
 import type { AuditSource } from './audit.ts';
@@ -111,6 +112,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   notificationsRemoval,
   invitationsRemoval,
   formsOwnerRemoval,
+  // Spec 0037, AC-1269: their delegations both ways, with an `access` row for each delegate who lost reach.
+  delegationsRemoval,
 ];
 
 /**

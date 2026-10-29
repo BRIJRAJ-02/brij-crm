@@ -54,10 +54,10 @@ function mayEditOwnHours(scope: EngineScope): boolean {
 
 /**
  * Whether the reader may change `memberId`'s schedules: their own (`mayEditOwnHours`), or a colleague's they
- * manage (`canActFor`, spec 0037; today everyone's with `booking.admin`, AC-971).
+ * manage (`canActFor` over their hours, spec 0037: owners and admins everyone's, delegates whom they name).
  */
 function mayChange(scope: EngineScope, reach: SchedulingReach, memberId: string): boolean {
-  return memberId === memberOf(scope) ? mayEditOwnHours(scope) : canActFor(reach, memberId, 'manage');
+  return memberId === memberOf(scope) ? mayEditOwnHours(scope) : canActFor(reach, memberId, 'manage', 'hours');
 }
 
 /** Whether `memberId` is an active member of the workspace. */
@@ -99,7 +99,8 @@ async function targetMember(
     .from(members)
     .where(and(eq(members.id, memberId), eq(members.status, 'active')));
   if (row === undefined) throw refuse('NOT_FOUND', NO_MEMBER_MESSAGE);
-  if (use === 'write' && !canActFor(reach, memberId, 'manage')) throw seeOnly();
+  // Hours (spec 0037, AC-1255): Manage from a member's own grant doesn't change hours set by others.
+  if (use === 'write' && !canActFor(reach, memberId, 'manage', 'hours')) throw seeOnly();
   return row.id;
 }
 

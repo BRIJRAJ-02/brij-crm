@@ -84,8 +84,7 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'can',
   // History's row mapping (spec 0046): a stored audit row and its names to an entry view, after the read's door.
   'toEntryView',
-  // Calendar health's reach (spec 0037, AC-1307), read off a scope readCalendarHealth checks, and a colour mapping.
-  'healthReach',
+  // A colour mapping.
   'nearestHue',
   'objectLevel',
   'fieldLevel',
@@ -605,6 +604,44 @@ describe('the walk: a principal without the access is refused', () => {
       await expect(Promise.resolve(service(name)(scope, ANY_MEMBER_INPUT[name]))).resolves.toBeDefined();
     },
   );
+
+  // Spec 0037, AC-1422: a filtered service answers a principal with no reach with nothing about anyone else.
+  it.each(entries.filter(([, entry]) => 'filtered' in entry).map(([name]) => name))(
+    '%s answers a member with no reach nothing about anyone else',
+    async (name) => {
+      const { scope, ownerId, memberId } = await memberOf('member');
+      const answer = (await service(name)(scope, { memberIds: [ownerId] })) as
+        readonly { readonly memberId: string }[] | { readonly members: readonly { readonly id: string }[] };
+      const ids = Array.isArray(answer)
+        ? answer.map((each: { readonly memberId: string }) => each.memberId)
+        : (answer as { readonly members: readonly { readonly id: string }[] }).members.map((each) => each.id);
+      expect(ids.filter((id) => id !== memberId)).toEqual([]);
+    },
+  );
+
+  // Spec 0037, AC-1255: a member grants over nobody but themself, lists and removes nobody else's.
+  it.each(entries.filter(([, entry]) => 'delegation' in entry).map(([name]) => name))(
+    '%s refuses a member acting on someone else’s scheduling access',
+    async (name) => {
+      const { scope, ownerId } = await memberOf('member');
+      const input = {
+        memberId: ownerId,
+        delegateMemberId: ownerId,
+        target: { type: 'everyone' },
+        level: 'manage',
+        id: core.newId(),
+      };
+      const refused = await refusalOf(service(name)(scope, input));
+      expect(refused.code).toBe(name === 'grantDelegation' ? 'FORBIDDEN' : 'NOT_FOUND');
+    },
+  );
+
+  // Spec 0037, AC-1422: each scheduling service, by a member with no reach, answers the member it names as absent.
+  // None yet: job J4 moves the schedules, blocks, time off and booking actions onto this kind.
+  const schedulingEntries = entries.filter(([, entry]) => 'scheduling' in entry).map(([name]) => name);
+  it('has no scheduling entry without a case (J4 adds them with theirs)', () => {
+    expect(schedulingEntries).toEqual([]);
+  });
 
   // Data levels (spec 0009, milestone 2): each data service, called by a principal at less than the level it
   // needs on People (and its list), answers as absent (a read) or refuses the change (a write).

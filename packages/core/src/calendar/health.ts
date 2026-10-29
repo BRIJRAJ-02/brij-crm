@@ -14,29 +14,21 @@
 //      stopped: `skipped`, since the earliest;
 //   4. otherwise `connected`.
 //
-// Whose health a reader may ask after is their reach. Until spec 0037's
-// `canActFor` (job J1) lands, the reach is the reader themself, and everyone
-// for owners and admins (`members.manage` or `booking.admin`, as decision 7
-// recommends); `healthReach` is the one place J1 swaps. A member outside the
-// reach, or not an active member, is left out of the answer, never refused,
-// so the answer never says who exists.
+// Whose health a reader may ask after is their See reach (spec 0037, job J1):
+// `canActFor` over `schedulingReach`, the one scheduling check, so the reader
+// themself, owners and admins over everyone (`schedule.view`), and delegates
+// over whom their delegations name. A member outside the reach, or not an
+// active member, is left out of the answer, never refused, so the answer never
+// says who exists.
 import { sql } from 'drizzle-orm';
 import type { CalendarHealthStatus, MemberCalendarHealth } from '@crm/contracts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
-import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
+import { canActFor, schedulingReach } from '../access/scheduling.ts';
 import { isUuid, uuidList } from '../engine/ids.ts';
 
 /** The statuses that stop an account until its member acts. */
 const STOPPED: ReadonlySet<string> = new Set(['expired', 'revoked', 'failed']);
-
-/** Whose calendar health the reader may see: themself, or everyone (owners and admins) until spec 0037's J1. */
-export function healthReach(scope: EngineScope): { readonly everyone: boolean; readonly memberId?: string } {
-  const { access } = scope;
-  const memberId = access.principal.kind === 'member' ? access.principal.memberId : undefined;
-  const everyone = can(access, 'members.manage') || can(access, 'booking.admin');
-  return { everyone, ...(memberId === undefined ? {} : { memberId }) };
-}
 
 /** One account or calendar as the health fold reads it. */
 interface HealthRow extends Record<string, unknown> {
@@ -102,13 +94,13 @@ export async function readCalendarHealth(
   input: { readonly memberIds: readonly string[] } = { memberIds: [] },
 ): Promise<readonly MemberCalendarHealth[]> {
   checkScope(scope);
-  const reach = healthReach(scope);
-  const asked = [...new Set(input.memberIds.filter(isUuid).map((id) => id.toLowerCase()))].filter(
-    (id) => reach.everyone || id === reach.memberId,
-  );
-  if (asked.length === 0) return [];
-  const rows = await inWorkspace(scope, (tx) =>
-    tx.execute<HealthRow>(sql`
+  const named = [...new Set(input.memberIds.filter(isUuid).map((id) => id.toLowerCase()))];
+  if (named.length === 0) return [];
+  const { asked, rows } = await inWorkspace(scope, async (tx) => {
+    const reach = await schedulingReach(tx, scope);
+    const inReach = named.filter((id) => canActFor(reach, id, 'view'));
+    if (inReach.length === 0) return { asked: inReach, rows: { rows: [] as HealthRow[] } };
+    const read = await tx.execute<HealthRow>(sql`
       select m.id::text as member_id, c.status::text as connection_status,
         to_char(c.failing_since at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as connection_failing_since,
         to_char(c.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as connection_changed_at,
@@ -119,9 +111,10 @@ export async function readCalendarHealth(
       left join calendar_connections c on c.workspace_id = m.workspace_id and c.member_id = m.id
       left join calendar_calendars k on k.workspace_id = c.workspace_id and k.connection_id = c.id
         and (k.check_conflicts or k.is_destination)
-      where m.id = any(${uuidList(asked)}) and m.status = 'active'
-    `),
-  );
+      where m.id = any(${uuidList(inReach)}) and m.status = 'active'
+    `);
+    return { asked: inReach, rows: read };
+  });
   const found = new Set(rows.rows.map((row) => row.member_id));
   return asked
     .filter((id) => found.has(id))

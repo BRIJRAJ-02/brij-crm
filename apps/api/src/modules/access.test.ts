@@ -53,7 +53,9 @@ describe('access.mine', () => {
       memberId: expect.any(String) as string,
       role: 'member',
       roleLabel: 'Member',
-      permissions: ['records.export', 'booking.manage'],
+      permissions: ['records.export', 'booking.manage', 'availability.own'],
+      // Spec 0037, AC-1261: a member reaches nobody's scheduling but their own.
+      scheduling: { seesOthers: false, managesOthers: false, seesEveryone: false, managesEveryone: false },
     });
     const stranger = await memberWithWorkspace(app);
     expect(await refusal(() => stranger.client.access.mine({ workspace: slug }))).toMatchObject({

@@ -78,6 +78,9 @@ const READS: ReadonlySet<string> = new Set([
   'operator.site',
   // The roles every role picker offers (spec 0037, AC-1439).
   'roles.list',
+  // Scheduling access (spec 0037): a member's delegations both ways, and the members in their See reach.
+  'scheduling.delegations.list',
+  'members.visible',
   'records.query',
   'records.count',
   'records.groups',
@@ -509,7 +512,12 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'members.setRole': async (m, mutationId) => {
     const mate = await teammate(m);
     await m.client.members.setRole({ workspace: m.slug, memberId: mate.memberId, role: 'admin', mutationId });
-    return [{ kind: 'members' }, { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId }];
+    // Their scheduling reach changed with the role (spec 0037, AC-1274).
+    return [
+      { kind: 'members' },
+      { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
+      { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
+    ];
   },
   'members.remove': async (m, mutationId) => {
     const mate = await teammate(m);
@@ -518,6 +526,35 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     return [
       { kind: 'members' },
       { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
+      { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
+    ];
+  },
+  // Scheduling access (spec 0037, AC-1257): the delegate's reach changed, so their own tabs read it again.
+  'scheduling.delegations.grant': async (m, mutationId) => {
+    const mate = await teammate(m);
+    await m.client.scheduling.delegations.grant({
+      workspace: m.slug,
+      delegateMemberId: mate.memberId,
+      target: { type: 'everyone' },
+      level: 'manage',
+      mutationId,
+    });
+    // The teammate's join first (a members row), then the grant's.
+    return [{ kind: 'members' }, { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId }];
+  },
+  'scheduling.delegations.revoke': async (m, mutationId) => {
+    const mate = await teammate(m);
+    const made = await m.client.scheduling.delegations.grant({
+      workspace: m.slug,
+      delegateMemberId: mate.memberId,
+      target: { type: 'everyone' },
+      level: 'view',
+      mutationId: newId(),
+    });
+    await m.client.scheduling.delegations.revoke({ workspace: m.slug, id: made.id, mutationId });
+    return [
+      { kind: 'members' },
+      { kind: 'access', item_ids: [mate.memberId] },
       { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
     ];
   },
@@ -2101,6 +2138,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'members.remove': 3,
   'members.leave': 3,
   'members.transferOwnership': 3,
+  'scheduling.delegations.grant': 3,
+  'scheduling.delegations.revoke': 4,
   'invitations.resend': 2,
   'invitations.revoke': 2,
   'invitations.accept': 2,

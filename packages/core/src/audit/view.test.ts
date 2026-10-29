@@ -231,6 +231,22 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'booking.record_unlinked': [
     row('booking.record_unlinked', 'booking', booking, { before: { recordId: record }, after: { recordId: null } }),
   ],
+  // Scheduling access (spec 0037, AC-1257): the delegate is the target; over a member, or everyone.
+  'delegation.granted': [
+    row('delegation.granted', 'member', ada, {
+      after: { level: 'manage', targetType: 'member', targetMemberId: bea },
+    }),
+    row('delegation.granted', 'member', ada, { after: { level: 'view', targetType: 'everyone' } }),
+  ],
+  'delegation.changed': [
+    row('delegation.changed', 'member', ada, {
+      before: { level: 'view', targetType: 'member', targetMemberId: bea },
+      after: { level: 'manage', targetType: 'member', targetMemberId: bea },
+    }),
+  ],
+  'delegation.revoked': [
+    row('delegation.revoked', 'member', ada, { before: { level: 'view', targetType: 'everyone' } }),
+  ],
 };
 
 const view = (each: AuditRow): AuditEntryView => {
@@ -366,6 +382,18 @@ describe('toEntryView, per action', () => {
       expect(entry.params).toEqual({});
       expect(JSON.stringify(entry)).not.toContain(record);
     }
+  });
+
+  it('names a delegation’s delegate, level and whom it is over, and drops a level it doesn’t know', () => {
+    expect(only('delegation.granted', 0).params).toEqual({
+      level: 'manage',
+      over: { kind: 'member', memberId: bea, name: 'Bea Rao', state: 'former' },
+    });
+    expect(only('delegation.granted', 1).params).toEqual({ level: 'view' });
+    expect(only('delegation.changed').params).toMatchObject({ level: 'manage', from: 'view' });
+    expect(only('delegation.revoked').params).toEqual({ level: 'view' });
+    const unknown = row('delegation.granted', 'member', ada, { after: { level: 'admin', targetType: 'everyone' } });
+    expect(toEntryView(unknown, names)).toBeUndefined();
   });
 
   it('types the changes, before and after', () => {

@@ -159,13 +159,19 @@ describe('a member', () => {
 
   it('sees their own role and permissions (access.mine)', async () => {
     const t = await team(['member']);
-    expect(getMyAccess(t.as(t.ids[0] ?? '', 'member'))).toEqual({
+    expect(await getMyAccess(t.as(t.ids[0] ?? '', 'member'))).toEqual({
       memberId: t.ids[0],
       role: 'member',
       roleLabel: 'Member',
-      permissions: ['records.export', 'booking.manage'],
+      permissions: ['records.export', 'booking.manage', 'availability.own'],
+      // Spec 0037, AC-1261: a member reaches nobody's scheduling but their own; an owner everyone's.
+      scheduling: { seesOthers: false, managesOthers: false, seesEveryone: false, managesEveryone: false },
     });
-    expect(getMyAccess(t.as(t.owner, 'owner'))).toMatchObject({ role: 'owner', roleLabel: 'Owner' });
+    expect(await getMyAccess(t.as(t.owner, 'owner'))).toMatchObject({
+      role: 'owner',
+      roleLabel: 'Owner',
+      scheduling: { seesOthers: true, managesOthers: true, seesEveryone: true, managesEveryone: true },
+    });
   });
 });
 

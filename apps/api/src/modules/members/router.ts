@@ -1,6 +1,7 @@
 import {
   leaveWorkspace,
   listMembers,
+  listVisibleMembers,
   previewRemoval,
   removeMember,
   setMemberRole,
@@ -76,6 +77,8 @@ export const membersRouter = member.members.router({
     );
     await forget(context, context.scope.workspaceId, removed);
   }),
+  // The members in the caller's See reach (spec 0037, AC-1261): a filtered read, never a refusal.
+  visible: member.members.visible.handler(({ context }) => listVisibleMembers(context.scope)),
   transferOwnership: member.members.transferOwnership.handler(async ({ context, input }) => {
     await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       transferOwnership(context.scope, { memberId: input.memberId }, hooks, { source: sourceOf(context) }),
