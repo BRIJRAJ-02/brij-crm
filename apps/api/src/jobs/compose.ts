@@ -76,18 +76,14 @@ export interface JobTasks {
 /** Builds the runners' work once, logging which parts are off and why. */
 export function composeJobTasks(options: JobTasksOptions): JobTasks {
   const { env, db, onStored } = options;
+  // The daily cleanup removes form uploads nobody submitted (#32) and record files no cell names any more
+  // (27 Oct 2026), filing copies a file answer's bytes into the record's own home, and a purged workspace's files go
+  // with it (late trap #84), all with the same store; without the store token those wait and a file isn't filed.
+  const store = env.BLOB_READ_WRITE_TOKEN === undefined ? undefined : createFileStore(env.BLOB_READ_WRITE_TOKEN);
   const registry = jobKinds({
     environment: env.APP_ENV,
     ...(options.queue === undefined ? {} : { queue: options.queue }),
-    // The daily cleanup removes form uploads nobody submitted (#32) and record files no cell names any more
-    // (27 Oct 2026), and filing copies a file answer's bytes into the record's own home with the same store;
-    // without the store token those phases wait and a file answer isn't filed.
-    ...(env.BLOB_READ_WRITE_TOKEN === undefined
-      ? {}
-      : (() => {
-          const store = createFileStore(env.BLOB_READ_WRITE_TOKEN);
-          return { uploads: store, files: store };
-        })()),
+    ...(store === undefined ? {} : { uploads: store, files: store }),
   });
   const runner = createJobRunner({
     db,
@@ -229,7 +225,8 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
           hooks: backgroundHooks,
           sweep,
           // Deleted workspaces past their window go for good (spec 0031, AC-823).
-          purge: (workspaceId, deadline) => purgeWorkspace({ db, log }, workspaceId, deadline),
+          purge: (workspaceId, deadline) =>
+            purgeWorkspace({ db, log, ...(store === undefined ? {} : { files: store }) }, workspaceId, deadline),
           log,
           onStored,
         },

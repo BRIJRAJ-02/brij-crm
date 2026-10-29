@@ -11,6 +11,7 @@ import { enterAsActor, enterDeletedWorkspace, NO_RULE_SOURCE } from '../access/d
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
+import { createForm } from '../forms/forms.ts';
 import { purgeWorkspace } from './purge.ts';
 import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
@@ -438,6 +439,35 @@ describe('the purge (AC-823)', () => {
       directory: 0,
       memberships: 0,
     });
+  });
+
+  it('removes the files its uploads hold from the store, not only their rows', async () => {
+    const t = await team();
+    const owner = t.as(t.owner, 'owner');
+    const form = await createForm(owner, { id: newId(), name: 'Apply' });
+    const fileId = newId();
+    const pathname = `forms/${t.workspaceId}/${form.id}/${fileId}.pdf`;
+    await testQuery(
+      ownerUrl,
+      `insert into form_uploads (workspace_id, id, form_id, pathname, name, size, content_type)
+       values ($1, $2, $3, $4, 'cv.pdf', 1024, 'application/pdf')`,
+      [t.workspaceId, fileId, form.id, pathname],
+    );
+    await deleteWorkspace(owner, { confirmName: 'Acme' });
+    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '2 hours' where id = $1`, [
+      t.workspaceId,
+    ]);
+    // A purge used to delete the rows only, after which nothing could ever find those bytes (late trap #84).
+    const removed: string[] = [];
+    const files = {
+      remove: (pathnames: readonly string[]) => {
+        removed.push(...pathnames);
+        return Promise.resolve();
+      },
+    };
+    expect(await purgeWorkspace({ db: worker, log, files }, t.workspaceId, Date.now() + 60_000)).toBe('done');
+    expect(removed).toEqual([pathname]);
+    expect((await left(t.workspaceId))?.workspaces).toBe(0);
   });
 
   it('stops where its time ran out and finishes on the next call', async () => {
