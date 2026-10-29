@@ -1,6 +1,9 @@
-// Home's Team today (spec 0041): every member, where they stand now and what
-// is next; a teammate's meeting by title only where the reader may see it.
-// For a workspace of more than one, and a member with Bookings.
+// Home's Team today (spec 0041): every member the reader may view (the
+// scheduling reach: an owner or admin everyone, anyone else only themself, the
+// owner's ask of 29 October 2026), where they stand now and what is next; a
+// teammate's meeting by title only where the reader may see it. For a
+// workspace of more than one, and a member with Bookings; a reader who sees
+// only their own day gets no card (Today has it).
 import { useTeamToday } from '@crm/data/react';
 import { Card, TeamList, useFormatSettings, type TeamRow } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
@@ -12,6 +15,7 @@ import type { HomeSectionProps } from '../registry.ts';
 import { strings } from '../strings.ts';
 import { standingOf, teamDaysOf, type TeamMemberDay } from '../team.ts';
 import { Failed, locale } from './shared.tsx';
+import { useCan } from '../../workspace/WorkspacePage.tsx';
 
 /** How many members Team today draws: the rest are counted. */
 export const TEAM_SHOWN = 8;
@@ -49,6 +53,9 @@ function teamRowOf(day: TeamMemberDay, meId: string | undefined, now: Date, time
 export function TeamSection({ context }: HomeSectionProps) {
   const { slug, members, meId } = context;
   const { data } = useRouteContext({ from: '__root__' });
+  // Only `booking.admin` reaches colleagues today (spec 0037 widens the reach): anyone else gets their own day alone,
+  // so no card, and none is drawn while it loads either, so nothing comes and goes.
+  const reachesTeam = useCan('booking.admin');
   const { timeZone } = useFormatSettings();
   const today = useToday(timeZone);
   const range = useMemo(() => dayRange(today), [today]);
@@ -67,6 +74,8 @@ export function TeamSection({ context }: HomeSectionProps) {
     () => days.slice(0, TEAM_SHOWN).map((day) => teamRowOf(day, meId, now, time)),
     [days, meId, now, time],
   );
+  // Someone who would see only their own day has no card to fail either.
+  if (state.status === 'error' && !reachesTeam) return null;
   if (state.status === 'error') {
     return (
       <Card title={strings.teamToday}>
@@ -81,6 +90,7 @@ export function TeamSection({ context }: HomeSectionProps) {
     );
   }
   if (state.status === 'ready' && days.length <= 1) return null;
+  if (state.status === 'loading' && !reachesTeam) return null;
   const hidden = days.length - TEAM_SHOWN;
   return (
     <Card
