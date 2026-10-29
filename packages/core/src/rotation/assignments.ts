@@ -1,12 +1,14 @@
-// Why a booking went to its host (spec 0029, AC-742, AC-753): the booking's
-// ledger rows, for its host (who sees why it came to them) and `booking.admin`.
-// Anyone else finds no such booking (hidden means absent).
-import { and, desc, eq } from 'drizzle-orm';
+// Why a booking went to its host (spec 0029, AC-742, AC-753; spec 0037,
+// AC-1262): the booking's ledger rows, for anyone whose scheduling reach sees
+// its host (the host themself, a delegate, owners and admins), each row only
+// about a member the reader may see. Anyone else finds no such booking
+// (hidden means absent).
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { AssignmentReason, type BookingAssignment } from '@crm/contracts';
 import { schema } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
-import { can } from '../access/policy.ts';
+import { canActFor, schedulingReach } from '../access/scheduling.ts';
 import { inWorkspace } from '../access/run.ts';
 import { refuse } from '../engine/refusals.ts';
 
@@ -33,22 +35,31 @@ function chosenOf(detail: unknown, memberId: string): { count?: number; weight?:
   };
 }
 
-/** A booking's ledger rows, newest first (AC-742): its host and `booking.admin` only, else NOT_FOUND. */
+/**
+ * A booking's ledger rows, newest first (AC-742): for a reader whose See reach covers its host (themself, a
+ * delegate, owners and admins), else NOT_FOUND; rows about members outside that reach are left out (AC-752).
+ */
 export async function bookingAssignments(
   scope: EngineScope,
   input: { readonly bookingId: string },
 ): Promise<readonly BookingAssignment[]> {
   requirePermission(scope, 'booking.manage');
-  const { principal } = scope.access;
-  const me = principal.kind === 'member' ? principal.memberId : undefined;
   return inWorkspace(scope, async (tx) => {
     const [booking] = await tx
       .select({ hostMemberId: bookings.hostMemberId })
       .from(bookings)
       .where(eq(bookings.id, input.bookingId));
-    if (booking === undefined || (!can(scope.access, 'booking.admin') && booking.hostMemberId !== me)) {
+    const reach = await schedulingReach(tx, scope);
+    if (booking === undefined || !canActFor(reach, booking.hostMemberId, 'view')) {
       throw refuse('NOT_FOUND', 'That booking doesn’t exist, or isn’t yours.');
     }
+    // Over everyone, every row; otherwise the reader and the members they reach one by one.
+    const seen =
+      reach.all === undefined
+        ? [...(reach.self === undefined ? [] : [reach.self]), ...reach.members.keys()].filter((id) =>
+            canActFor(reach, id, 'view'),
+          )
+        : undefined;
     const rows = await tx
       .select({
         id: rotationAssignments.id,
@@ -76,8 +87,8 @@ export async function bookingAssignments(
       .where(
         and(
           eq(rotationAssignments.bookingId, input.bookingId),
-          // Only `booking.admin` sees other members' counts and reasons (AC-752): a host reads their own rows.
-          can(scope.access, 'booking.admin') || me === undefined ? undefined : eq(rotationAssignments.memberId, me),
+          // Only members the reader may see (AC-752): a host reads their own rows, a delegate those of whom they reach.
+          seen === undefined ? undefined : inArray(rotationAssignments.memberId, seen),
         ),
       )
       .orderBy(desc(rotationAssignments.assignedAt), desc(rotationAssignments.id))

@@ -145,6 +145,7 @@ export const bookingsRouter = member.bookings.router({
           guests: input.guests,
           message: input.message,
           calendarId: input.calendarId,
+          forMemberId: input.forMemberId,
         },
         hooks,
       );
@@ -229,6 +230,7 @@ export const bookingsRouter = member.bookings.router({
           timeZone: input.timeZone,
           label: input.label,
           pageId: input.pageId,
+          forMemberId: input.forMemberId,
         }),
       ),
     ),

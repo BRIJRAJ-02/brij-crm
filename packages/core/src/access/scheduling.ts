@@ -15,8 +15,10 @@
 // The door never reads any of this (AC-1259): CRM requests pay nothing. One query reads it, inside the service's own
 // transaction, and only when the role doesn't already manage everyone.
 import { sql } from 'drizzle-orm';
-import { ROLE_PERMISSIONS } from '@crm/contracts';
+import { ROLE_PERMISSIONS, ROLES, type Role } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
+import { isUuid } from '../engine/ids.ts';
+import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from './mint.ts';
 import { can, isRole, type Access, type Principal } from './policy.ts';
 
@@ -238,4 +240,47 @@ export function managesPageOf(booking: { readonly ownerMemberId: string }, acces
   const { principal } = access;
   if (principal.kind === 'system') return true;
   return can(access, 'booking.admin') || (principal.kind === 'member' && booking.ownerMemberId === principal.memberId);
+}
+
+/**
+ * The built in roles whose holders manage everyone's scheduling (`schedule.manage`): who is told when a booking
+ * needs a host (spec 0029, AC-749), since reassigning it needs Manage over every host it could go to.
+ */
+export function rolesManagingEveryone(): readonly Role[] {
+  return ROLES.filter((role) => (ROLE_PERMISSIONS[role] as readonly string[]).includes('schedule.manage'));
+}
+
+/** What a member outside the caller's See reach reads as: the same sentence as one who doesn't exist (AC-1258). */
+export const NO_PERSON = 'That person isn’t in this workspace.';
+
+/** The refusal for a member the caller may See but not Manage (AC-1258), with their first name when known. */
+export function seeOnlyMessage(name: string | undefined): string {
+  const first = name?.trim().split(/\s+/)[0];
+  return first === undefined || first === ''
+    ? 'You can see this person’s scheduling but not change it.'
+    : `You can see ${first}’s scheduling but not change it.`;
+}
+
+/**
+ * The check every "for someone else" service makes before acting on `memberId` (AC-1258): the reach read once, the
+ * member active, not a guest, and in See reach (else NOT_FOUND, as an unknown member), and reached at `need` (else
+ * 403 FORBIDDEN naming them). Answers the reach for any further check. The caller checks their own permission first
+ * (AC-1275).
+ */
+export async function actingFor(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  memberId: string,
+  need: SchedulingLevel,
+  what: SchedulingWhat = 'any',
+): Promise<SchedulingReach> {
+  const reach = await schedulingReach(tx, scope);
+  if (!isUuid(memberId) || !canActFor(reach, memberId, 'view')) throw refuse('NOT_FOUND', NO_PERSON);
+  const found = await tx.execute<{ name: string }>(sql`
+    select name from members where id = ${memberId}::uuid and status = 'active' and role::text <> 'guest'
+  `);
+  const [row] = found.rows;
+  if (row === undefined) throw refuse('NOT_FOUND', NO_PERSON);
+  if (!canActFor(reach, memberId, need, what)) throw refuse('FORBIDDEN', seeOnlyMessage(row.name));
+  return reach;
 }

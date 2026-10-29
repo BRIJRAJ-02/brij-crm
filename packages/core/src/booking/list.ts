@@ -21,17 +21,17 @@ import {
   type MeetingListPage,
   type MeetingSource,
 } from '@crm/contracts';
-import { schema } from '@crm/db';
+import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { checkId, isUuid } from '../engine/ids.ts';
+import { checkId, isUuid, uuidList } from '../engine/ids.ts';
 import { inputInvalid } from '../engine/refusals.ts';
 import { blockOccurrences } from './blocks.ts';
 import { handLinkOf, linkedRecords, linksOf, seenLinks } from './links.ts';
 import { shownAsEvent } from './owned.ts';
 import { shownAnswers } from './questions.ts';
-import { bookingReaderOf, seesBookingSql, type BookingReader } from './seen.ts';
+import { bookingAccess, bookingReaderIn, bookingReaderOf, seesBookingSql, type BookingReader } from './seen.ts';
 
 const { bookingPages, bookings, members } = schema;
 
@@ -68,7 +68,7 @@ function guestsAndNote(answers: unknown): {
 /** Whose bookings a read asks for: the reader's own (their pages', hosted and co-hosted), or everyone's they may see. */
 export type BookingHosts = 'mine' | 'all';
 
-/** Who the reader is and whose bookings they see; undefined when they see none. */
+/** Who the reader is, before their reach is read; undefined when they see no bookings at all. */
 function readerOf(scope: EngineScope): BookingReader | undefined {
   requirePermission(scope, 'booking.manage');
   const reader = bookingReaderOf(scope.access);
@@ -77,9 +77,23 @@ function readerOf(scope: EngineScope): BookingReader | undefined {
 }
 
 /**
+ * The reader for one read: with `hosts: 'all'` their scheduling reach too (spec 0037, AC-1262: Everyone is everyone
+ * in their See reach), read once in the read's transaction; Mine needs none.
+ */
+async function readerIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  reader: BookingReader,
+  hosts: BookingHosts,
+): Promise<BookingReader> {
+  return hosts === 'all' && !reader.admin ? bookingReaderIn(tx, scope) : reader;
+}
+
+/**
  * The bookings the reader may see (`seen.ts`): with `hosts: 'mine'` (the default) only their own pages', the ones
- * they host and the ones they co-host, even for an admin; `'all'` is everyone's only with `booking.admin`, and the
- * same as Mine without it. A reader who is no member (a key) has no "mine", so an admin key reads everyone's.
+ * they host and the ones they co-host, even for an admin; `'all'` is everyone's with `booking.admin`, and otherwise
+ * theirs plus the hosts in their See reach. A reader who is no member (a key) has no "mine", so an admin key reads
+ * everyone's.
  */
 function visibleTo(reader: BookingReader, hosts: BookingHosts = 'mine') {
   return seesBookingSql(
@@ -93,6 +107,41 @@ function visibleTo(reader: BookingReader, hosts: BookingHosts = 'mine') {
       pageOwnerMemberId: bookingPages.ownerMemberId,
     },
     { everyone: hosts === 'all' || reader.member === undefined },
+  );
+}
+
+/**
+ * The listed bookings the reader may only See (spec 0037's Booking actions table): neither theirs, their page's,
+ * a co-host's nor a host's they Manage. One read of the co-hosts of the rows in question, none when the reader
+ * reaches nobody.
+ */
+async function seeOnlyOf(
+  tx: WorkspaceTx,
+  reader: BookingReader,
+  rows: readonly { readonly booking: typeof bookings.$inferSelect; readonly pageOwner: string }[],
+): Promise<ReadonlySet<string>> {
+  const me = reader.member;
+  if (reader.admin || me === undefined || reader.everyone === 'manage') return new Set();
+  if ((reader.sees ?? []).length === 0 && reader.everyone === undefined) return new Set();
+  const asked = rows.filter(({ booking, pageOwner }) => booking.hostMemberId !== me && pageOwner !== me);
+  if (asked.length === 0) return new Set();
+  const found = await tx.execute<{ booking_id: string; member_id: string }>(sql`
+    select h.booking_id::text as booking_id, h.member_id::text as member_id from booking_hosts h
+    where h.booking_id = any(${uuidList(asked.map(({ booking }) => booking.id))})
+  `);
+  const coHosts = new Map<string, string[]>();
+  for (const row of found.rows) coHosts.set(row.booking_id, [...(coHosts.get(row.booking_id) ?? []), row.member_id]);
+  return new Set(
+    asked
+      .filter(
+        ({ booking, pageOwner }) =>
+          bookingAccess(reader, {
+            hostMemberId: booking.hostMemberId,
+            ownerMemberId: pageOwner,
+            coHostIds: coHosts.get(booking.id) ?? [],
+          }) === 'see',
+      )
+      .map(({ booking }) => booking.id),
   );
 }
 
@@ -114,8 +163,33 @@ function itemOf(
   seen: ReadonlySet<string>,
   linked: ReadonlyMap<string, RecordRefDisplay>,
   answersOf: (stored: unknown) => BookingListItem['answers'],
+  seeOnly: ReadonlySet<string> = new Set(),
 ): BookingListItem {
   const place = BookingLocation.safeParse(location);
+  // See over the host (spec 0037, AC-1262): the guest's name, the page's title, the time and status only.
+  if (seeOnly.has(row.id)) {
+    return {
+      id: row.id,
+      pageId: row.pageId,
+      pageTitle,
+      location: place.success ? place.data : { type: 'video' },
+      hostMemberId: row.hostMemberId,
+      hostName: hostName ?? '',
+      needsHost: row.needsHostAt !== null,
+      startsAt: row.startsAt.toISOString(),
+      endsAt: row.endsAt.toISOString(),
+      visitorName: row.visitorName,
+      visitorEmail: '',
+      visitorTimeZone: row.visitorTimeZone,
+      status: row.status === 'cancelled' ? 'cancelled' : 'confirmed',
+      reschedules: row.reschedules,
+      guests: [],
+      eventFailed: row.eventFailedAt !== null,
+      createdAt: row.createdAt.toISOString(),
+      seeOnly: true,
+      ...(hostStatus === undefined || hostStatus === null || hostStatus === 'active' ? {} : { hostRemoved: true }),
+    };
+  }
   // The answers to the page's own questions (spec 0057, AC-5714), those the reader may see.
   const answers = answersOf(row.answers) ?? [];
   return {
@@ -155,18 +229,21 @@ export async function listWorkspaceBookings(
   input: Pick<ListWorkspaceBookingsInput, 'when'> & { readonly hosts?: BookingHosts },
   now: Date = new Date(),
 ): Promise<readonly BookingListItem[]> {
-  const reader = readerOf(scope);
-  if (reader === undefined) return [];
+  const base = readerOf(scope);
+  if (base === undefined) return [];
   const upcoming = input.when === 'upcoming';
   const shown =
     input.when === 'cancelled'
       ? eq(bookings.status, 'cancelled')
       : and(eq(bookings.status, 'confirmed'), upcoming ? gte(bookings.endsAt, now) : lt(bookings.endsAt, now));
   return inWorkspace(scope, async (tx) => {
+    const hosts = input.hosts ?? 'all';
+    const reader = await readerIn(tx, scope, base, hosts);
     const rows = await tx
       .select({
         booking: bookings,
         pageTitle: bookingPages.title,
+        pageOwner: bookingPages.ownerMemberId,
         location: bookingPages.location,
         // Whether the host is still here (spec 0031, AC-815): a removed host's bookings say so.
         hostStatus: members.status,
@@ -175,7 +252,7 @@ export async function listWorkspaceBookings(
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
       .leftJoin(members, and(eq(members.workspaceId, bookings.workspaceId), eq(members.id, bookings.hostMemberId)))
-      .where(and(shown, visibleTo(reader, input.hosts ?? 'all')))
+      .where(and(shown, visibleTo(reader, hosts)))
       .orderBy(upcoming ? asc(bookings.startsAt) : desc(bookings.startsAt), asc(bookings.id))
       .limit(BOOKINGS_LIST_MAX);
     const seen = await seenLinks(
@@ -193,7 +270,8 @@ export async function listWorkspaceBookings(
       scope.access,
       rows.map(({ booking }) => booking.answers),
     );
-    return rows.map((row) => itemOf(row, seen, linked, answers));
+    const seeOnly = await seeOnlyOf(tx, reader, rows);
+    return rows.map((row) => itemOf(row, seen, linked, answers, seeOnly));
   });
 }
 
@@ -230,15 +308,17 @@ export async function readBookingsCalendar(
   scope: EngineScope,
   input: { readonly from: string; readonly to: string; readonly hosts?: BookingHosts },
 ): Promise<BookingsCalendarView> {
-  const reader = readerOf(scope);
-  if (reader === undefined) return { bookings: [], events: [], busy: [], blocks: [] };
+  const base = readerOf(scope);
+  if (base === undefined) return { bookings: [], events: [], busy: [], blocks: [] };
   const from = new Date(input.from);
   const to = new Date(input.to);
   return inWorkspace(scope, async (tx) => {
+    const reader = await readerIn(tx, scope, base, input.hosts ?? 'mine');
     const rows = await tx
       .select({
         booking: bookings,
         pageTitle: bookingPages.title,
+        pageOwner: bookingPages.ownerMemberId,
         location: bookingPages.location,
         hostName: members.name,
       })
@@ -336,7 +416,13 @@ export async function readBookingsCalendar(
       scope.access,
       rows.map(({ booking }) => booking.answers),
     );
-    return { bookings: rows.map((row) => itemOf(row, seen, linked, answers)), events, busy, blocks: [...blocks] };
+    const seeOnly = await seeOnlyOf(tx, reader, rows);
+    return {
+      bookings: rows.map((row) => itemOf(row, seen, linked, answers, seeOnly)),
+      events,
+      busy,
+      blocks: [...blocks],
+    };
   });
 }
 
@@ -387,14 +473,15 @@ export async function listMeetings(
   },
   now: Date = new Date(),
 ): Promise<MeetingListPage> {
-  const reader = readerOf(scope);
-  if (reader === undefined) return { items: [] };
+  const base = readerOf(scope);
+  if (base === undefined) return { items: [] };
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
   const source = input.source ?? 'all';
   const ascending = input.when === 'upcoming';
   const after = input.cursor === undefined ? undefined : readCursor(input.cursor);
   const calendarIds = input.calendarIds?.map((id) => checkId(id, 'Pick one of your calendars.'));
   return inWorkspace(scope, async (tx) => {
+    const reader = await readerIn(tx, scope, base, input.hosts ?? 'mine');
     // Bookings: the tab's, those the reader may see, from the cursor on.
     const shown =
       input.when === 'cancelled'
@@ -413,6 +500,7 @@ export async function listMeetings(
             .select({
               booking: bookings,
               pageTitle: bookingPages.title,
+              pageOwner: bookingPages.ownerMemberId,
               location: bookingPages.location,
               // The host, for a colleague's booking and a removed host's (spec 0031, AC-815; spec 0037).
               hostStatus: members.status,
@@ -445,10 +533,11 @@ export async function listMeetings(
       scope.access,
       rows.map(({ booking }) => booking.answers),
     );
+    const seeOnly = await seeOnlyOf(tx, reader, rows);
     const bookingItems: Listed[] = rows.map((row) => ({
       at: row.booking.startsAt.toISOString(),
       id: row.booking.id,
-      item: { kind: 'booking', booking: itemOf(row, seen, linked, answers) },
+      item: { kind: 'booking', booking: itemOf(row, seen, linked, answers, seeOnly) },
     }));
 
     // The reader's own calendar events, from the calendars on their week (and the panel's pick).

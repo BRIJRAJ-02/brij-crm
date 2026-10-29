@@ -26,6 +26,7 @@ import { checkId, newId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import { actorRow, type EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { recordJoinReach } from '../scheduling/delegations.ts';
 import { ensureLinkPage } from '../booking/handles.ts';
 import { writeAudit } from './audit.ts';
 import {
@@ -479,6 +480,8 @@ export async function decideJoinRequest(
           'member',
         );
         context.record({ members: [memberId] });
+        // An everyone delegation reaches them now (spec 0037, AC-1274).
+        await recordJoinReach(context, scope.workspaceId, memberId);
       }
       // Their link page (26 Oct 2026): the one they hold here, or one made now. The approval email says where it is.
       const handle = await ensureLinkPage(tx, {

@@ -103,6 +103,11 @@ export const ScheduleView = z.object({
   pages: z.array(ScheduleUser),
   /** The stale check the editor sends back (`STALE`); null for the virtual default. */
   updatedAt: Timestamp.nullable(),
+  /**
+   * Who last changed it and when, when that wasn't its member (spec 0037, AC-1265: "Changed by Priya, 2 hours
+   * ago"); the screen names them from the members it already holds.
+   */
+  changedBy: z.object({ memberId: Uuid, at: Timestamp }).optional(),
 });
 /** One schedule. */
 export type ScheduleView = z.infer<typeof ScheduleView>;

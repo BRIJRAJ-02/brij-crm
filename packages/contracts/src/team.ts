@@ -81,6 +81,13 @@ export const AUDIT_ACTIONS = [
   'delegation.granted',
   'delegation.changed',
   'delegation.revoked',
+  // Someone's scheduling changed (spec 0037, AC-1263): the row's target is the member whose scheduling it is
+  // (`memberId` in `before` and `after` too), its actor whoever changed it, the member themself included.
+  'schedule.changed',
+  'block.created',
+  'block.removed',
+  // A booking made, moved or cancelled by someone other than its host: the target is the booking, `memberId` the host.
+  'booking.changed_for',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

@@ -8,7 +8,7 @@ import type { Template } from './template.ts';
 import { bookingCalendarRemoved, calendarDisconnected, signInAlert } from './templates/account.ts';
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
-import { importFinished, jobFailed } from './templates/team.ts';
+import { importFinished, jobFailed, schedulingChanged } from './templates/team.ts';
 import { workspaceWelcome } from './templates/welcome.ts';
 
 /** One queued kind of email. */
@@ -129,6 +129,19 @@ export const CATALOG: Catalog = {
       jobLabel: 'Bulk edit',
       reason: 'This job stopped after repeated errors. What it finished is kept.',
       jobsPath: '/w/acme/settings/jobs',
+    },
+  },
+  scheduling_changed: {
+    template: schedulingChanged,
+    medium: 'email_calendar_alert',
+    sample: {
+      actorName: 'Priya Shah',
+      lines: [
+        'Working hours, Monday: 9:00 AM to 5:00 PM became 10:00 AM to 6:00 PM',
+        'Working hours, date override added, Tue 3 Nov: Closed',
+      ],
+      more: 0,
+      availabilityPath: '/w/acme/bookings/availability',
     },
   },
   workspace_welcome: {

@@ -532,9 +532,6 @@ describe('the walk: a principal without the access is refused', () => {
           'readBookingsCalendar',
           'readTeamToday',
           'createBookingPage',
-          'createTimeBlock',
-          'removeTimeBlock',
-          'bookAsHost',
           // A member's change target and the guest link name a booking, not a page; the row decides (change.test.ts).
           'hostTarget',
           'bookingGuestPath',
@@ -636,12 +633,74 @@ describe('the walk: a principal without the access is refused', () => {
     },
   );
 
-  // Spec 0037, AC-1422: each scheduling service, by a member with no reach, answers the member it names as absent.
-  // None yet: job J4 moves the schedules, blocks, time off and booking actions onto this kind.
+  // Spec 0037, AC-1422: each scheduling service, by a member with no reach, answers the member it names as absent,
+  // and refuses a principal without its own permission first (AC-1275).
   const schedulingEntries = entries.filter(([, entry]) => 'scheduling' in entry).map(([name]) => name);
-  it('has no scheduling entry without a case (J4 adds them with theirs)', () => {
-    expect(schedulingEntries).toEqual([]);
+  /** Each scheduling service called about `ownerId`, the workspace's owner, whom a plain member doesn't reach. */
+  const SCHEDULING_CALLS: Readonly<
+    Record<string, (scope: EngineScope, ownerId: string, owner: EngineScope) => Promise<unknown>>
+  > = {
+    createTimeBlock: (scope, ownerId) =>
+      core.createTimeBlock(scope, {
+        id: core.newId(),
+        kind: 'block',
+        repeat: 'once',
+        date: '2030-01-07',
+        startMinute: 540,
+        endMinute: 600,
+        timeZone: 'UTC',
+        forMemberId: ownerId,
+      }),
+    removeTimeBlock: async (scope, _ownerId, owner) => {
+      const block = await core.createTimeBlock(owner, {
+        id: core.newId(),
+        kind: 'block',
+        repeat: 'once',
+        date: '2030-01-07',
+        startMinute: 540,
+        endMinute: 600,
+        timeZone: 'UTC',
+      });
+      return core.removeTimeBlock(scope, { id: block.id });
+    },
+    bookAsHost: (scope, ownerId) =>
+      core.bookAsHost(
+        scope,
+        { calendar: core.NO_CALENDAR, linkKey: Buffer.alloc(32, 1) },
+        {
+          idempotencyKey: core.newId(),
+          pageId: core.newId(),
+          start: new Date('2030-01-07T09:00:00.000Z'),
+          minutes: 30,
+          name: 'Vera',
+          email: 'vera@example.org',
+          timeZone: 'UTC',
+          guests: [],
+          forMemberId: ownerId,
+        },
+      ),
+    reassignUpcoming: (scope, ownerId) => core.reassignUpcoming(scope, { rotationId: core.newId(), memberId: ownerId }),
+  };
+  it('has a case for every scheduling entry', () => {
+    expect([...schedulingEntries].sort()).toEqual(Object.keys(SCHEDULING_CALLS).sort());
   });
+  it.each(schedulingEntries)(
+    '%s refuses a principal without booking.manage, and answers a member out of reach as absent',
+    async (name) => {
+      const { scope, workspaceId, ownerId } = await memberOf('member');
+      const call = SCHEDULING_CALLS[name];
+      if (call === undefined) throw new Error(`${name} has no case.`);
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
+      expect(await refusalOf(Promise.resolve().then(() => call(key, ownerId, owner)))).toEqual({
+        code: 'FORBIDDEN',
+        message: PERMISSIONS['booking.manage'].message,
+      });
+      expect(await refusalOf(Promise.resolve().then(() => call(scope, ownerId, owner)))).toMatchObject({
+        code: 'NOT_FOUND',
+      });
+    },
+  );
 
   // Data levels (spec 0009, milestone 2): each data service, called by a principal at less than the level it
   // needs on People (and its list), answers as absent (a read) or refuses the change (a write).

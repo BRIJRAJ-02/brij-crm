@@ -286,6 +286,12 @@ export const BookingListItem = BookingView.extend({
    * shows it. Absent when there is none, or the reader may not see it (hidden means absent).
    */
   linkedRecord: RecordRefDisplay.optional(),
+  /**
+   * The reader may only See its host's scheduling (spec 0037, AC-1262): the guest's name, the page's title, the time
+   * and status are all it holds (`visitorEmail` is empty, no answers, guests, note or links), and every change to it
+   * is refused.
+   */
+  seeOnly: z.boolean().optional(),
 });
 /** A booking in Bookings. */
 export type BookingListItem = z.infer<typeof BookingListItem>;
@@ -313,8 +319,8 @@ export const BOOKING_CALENDAR_MAX_DAYS = 42;
 
 /**
  * Whose bookings a Bookings read asks for (the owner's ask of 29 October 2026): the reader's own (their pages', the
- * ones they host or co-host), or everyone's, which only `booking.admin` gets (for anyone else it is the same as
- * Mine). Mine by default, for admins too.
+ * ones they host or co-host), or everyone's they may see: every booking with `booking.admin`, else theirs and those
+ * of the people in their scheduling See reach (spec 0037, AC-1262). Mine by default, for admins too.
  */
 export const BookingHosts = z.enum(['mine', 'all']);
 /** Whose bookings a read asks for. */

@@ -2,8 +2,10 @@
 // AC-712): drawn on Bookings › Calendar as a date and local minutes in the
 // member's zone, stored once as an absolute span or every week as local
 // minutes, read back as occurrences for the calendar and as busy time (and, for
-// a private page, open holds) for the slot engine. Only the member's own: a
-// block is never anyone else's to see, make or remove.
+// a private page, open holds) for the slot engine. A member's own, or (spec
+// 0037, AC-1272) made or removed for a colleague they Manage, with their own
+// `booking.manage` (AC-1275); never shown to anyone but the member. Every block
+// made or removed writes one audit row naming whose time it is (AC-1263).
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { PERMISSIONS, type TimeBlockOccurrence, type TimeBlockView } from '@crm/contracts';
@@ -11,8 +13,10 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { refuse, refuseOn } from '../engine/refusals.ts';
+import { actingFor } from '../access/scheduling.ts';
+import { isRefusal, refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
+import { writeAudit } from '../members/audit.ts';
 import { toInstant, type Span } from './engine.ts';
 import { hostLockKey, lockKey } from './locks.ts';
 
@@ -32,9 +36,11 @@ export interface TimeBlockDraft {
   readonly timeZone: string;
   readonly label?: string | undefined;
   readonly pageId?: string | undefined;
+  /** Whose time it closes, when not the caller's own: a colleague they Manage (spec 0037, AC-1272). */
+  readonly forMemberId?: string | undefined;
 }
 
-/** The member the scope acts for, who owns the time; a key or the system has no calendar. */
+/** The member the scope acts as; a key or the system has no calendar. */
 function blockOwner(scope: EngineScope): string {
   requirePermission(scope, 'booking.manage');
   const { principal } = scope.access;
@@ -78,7 +84,6 @@ function viewOf(row: BlockRow): TimeBlockView {
  * the drawn date's weekday, in the drawn zone, from that date on.
  */
 export async function createTimeBlock(scope: EngineScope, draft: TimeBlockDraft): Promise<TimeBlockView> {
-  const member = blockOwner(scope);
   const day = dayIn(draft.date, draft.timeZone);
   if (day === undefined) throw refuseOn('CONFIG_INVALID', 'Pick a date.', 'date');
   const start = at(day, draft.startMinute);
@@ -92,7 +97,10 @@ export async function createTimeBlock(scope: EngineScope, draft: TimeBlockDraft)
   }
   const label = draft.label?.trim() === '' ? undefined : draft.label?.trim();
   const by = actorRow(scope.actor);
+  const actor = blockOwner(scope);
+  const member = draft.forMemberId ?? actor;
   return inWorkspace(scope, async (tx) => {
+    if (member !== actor) await actingFor(tx, scope, member, 'manage');
     // A visitor's booking rechecks under this lock: the block lands wholly before or after it, never between.
     await lockKey(tx, hostLockKey(scope.workspaceId, member));
     const again = await existing(tx, member, draft.id);
@@ -130,6 +138,12 @@ export async function createTimeBlock(scope: EngineScope, draft: TimeBlockDraft)
       })
       .returning(blockColumns());
     if (row === undefined) throw new Error('booking_time_blocks insert returned no row');
+    await writeAudit(tx, scope.workspaceId, scope.actor, {
+      action: 'block.created',
+      targetType: 'member',
+      targetId: member,
+      after: auditFieldsOf(row),
+    });
     return viewOf(row);
   });
 }
@@ -172,20 +186,62 @@ async function requireOwnPage(tx: WorkspaceTx, member: string, pageId: string): 
   }
 }
 
-/** Reopens the time one of the caller's blocks closed (AC-705); a weekly block stops every week. */
+/**
+ * Reopens the time a block closed (AC-705); a weekly block stops every week. The caller's own, or one of a colleague
+ * they Manage (spec 0037): a colleague's block outside their See reach answers as one that doesn't exist.
+ */
 export async function removeTimeBlock(
   scope: EngineScope,
   input: { readonly id: string },
 ): Promise<{ readonly id: string }> {
-  const member = blockOwner(scope);
+  const actor = blockOwner(scope);
   return inWorkspace(scope, async (tx) => {
+    const [found] = await tx
+      .select({ memberId: bookingTimeBlocks.memberId })
+      .from(bookingTimeBlocks)
+      .where(eq(bookingTimeBlocks.id, input.id));
+    if (found === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+    if (found.memberId !== actor) {
+      try {
+        await actingFor(tx, scope, found.memberId, 'manage');
+      } catch (error) {
+        // A block of someone the caller can't see is no block at all to them.
+        if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+        throw error;
+      }
+    }
+    // The member's lock, as a new block takes, so a booking rechecking under it sees the block or its absence.
+    await lockKey(tx, hostLockKey(scope.workspaceId, found.memberId));
     const removed = await tx
       .delete(bookingTimeBlocks)
-      .where(and(eq(bookingTimeBlocks.id, input.id), eq(bookingTimeBlocks.memberId, member)))
-      .returning({ id: bookingTimeBlocks.id });
-    if (removed.length === 0) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+      .where(and(eq(bookingTimeBlocks.id, input.id), eq(bookingTimeBlocks.memberId, found.memberId)))
+      .returning(blockColumns());
+    const [row] = removed;
+    if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+    await writeAudit(tx, scope.workspaceId, scope.actor, {
+      action: 'block.removed',
+      targetType: 'member',
+      targetId: found.memberId,
+      before: auditFieldsOf(row),
+    });
     return { id: input.id };
   });
+}
+
+/** What an audit row keeps of a block (AC-1263): whose time and when, never its label. */
+function auditFieldsOf(row: BlockRow): Readonly<Record<string, unknown>> {
+  return {
+    memberId: row.memberId,
+    blockId: row.id,
+    kind: row.kind,
+    repeat: row.repeat,
+    ...(row.startsAt === null ? {} : { startsAt: iso(row.startsAt) }),
+    ...(row.endsAt === null ? {} : { endsAt: iso(row.endsAt) }),
+    ...(row.weekday === null ? {} : { weekday: row.weekday }),
+    ...(row.startMinute === null ? {} : { startMinute: row.startMinute }),
+    ...(row.endMinute === null ? {} : { endMinute: row.endMinute }),
+    ...(row.timeZone === null ? {} : { timeZone: row.timeZone }),
+  };
 }
 
 /** A member's blocks that can touch `[from, to)`: once ones overlapping it, and every weekly one begun by its end. */

@@ -64,6 +64,12 @@ export const AUDIT_KINDS = {
 export const AUDIT_NOT_LISTED = [
   'member.preferences_changed',
   'booking_page.profile_reordered',
+  // Spec 0037's scheduling rows (AC-1263) are stored from job J4 and listed with their sentences by the screens job
+  // (J5); until then they stay out of Workspace changes rather than show as rows with no words.
+  'schedule.changed',
+  'block.created',
+  'block.removed',
+  'booking.changed_for',
 ] as const satisfies readonly AuditAction[];
 
 /** An action Workspace changes lists: every catalog action outside `AUDIT_NOT_LISTED`. */

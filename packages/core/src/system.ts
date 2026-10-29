@@ -52,3 +52,6 @@ export { finishEmail, loadEmail, type EmailOutcome, type EmailToSend, type Loade
 export { emailLinkToken } from './emails/preferences.ts';
 export { prepareNotificationEmail, type PreparedNotificationEmail } from './notifications/email.ts';
 export { markEmailed, NOTIFICATION_EMAIL_MAX, queueNextEmail, releaseEmailed } from './notifications/inbox.ts';
+// The member told of someone else's change to their scheduling (spec 0037, AC-1264): the worker's
+// `crm_scheduling_notice` task.
+export { runSchedulingNotice, type SchedulingNoticeOutcome } from './scheduling/notice.ts';

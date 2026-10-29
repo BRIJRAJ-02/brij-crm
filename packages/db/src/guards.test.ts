@@ -173,6 +173,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_email', owner: 'crm_queue' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_enqueue_notification_email', owner: 'crm_queue' },
+      // The member told of someone else's change to their scheduling (spec 0037, migration 0122).
+      { name: 'crm_enqueue_scheduling_notice', owner: 'crm_queue' },
       { name: 'crm_ensure_public_profile', owner: 'crm_handle' },
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
       // The forms a person may place on their link page (spec 0052, migration 0104).
@@ -259,6 +261,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_notification_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_enqueue_scheduling_notice', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it tries a handle, then the next, and raises PROFILE_HANDLE_BASE.
       { name: 'crm_ensure_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -371,6 +374,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_booking_mail',
         'crm_enqueue_email',
         'crm_enqueue_notification_email',
+        'crm_enqueue_scheduling_notice',
       ],
       [
         'crm_enqueue_job(uuid, timestamp with time zone)',
@@ -378,8 +382,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_booking_mail(uuid, text)',
         'crm_enqueue_email(uuid)',
         'crm_enqueue_notification_email(uuid)',
+        'crm_enqueue_scheduling_notice(uuid, uuid)',
       ],
-      ['app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_sweep',

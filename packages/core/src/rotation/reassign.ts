@@ -2,8 +2,8 @@
 // AC-1337): one seat picked again at the booking's own time, through its
 // rotation ("Next in rotation") or to a named member who is free then, the
 // other seats kept. Needs Manage over the seat's current host and the new one
-// (`canActFor`, today `booking.admin` over everyone and each member over
-// themself). The same core reseats a booking whose host left or was handed on (`reseatGone`).
+// (`canActFor`: owners and admins over everyone, delegates over whom they
+// manage, each member over themself). The same core reseats a booking whose host left or was handed on (`reseatGone`).
 import { and, eq, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
@@ -221,7 +221,7 @@ export async function reassignBooking(
   const { reach, rotationId, rotationName } = await inWorkspace(scope, async (tx) => {
     const found = await readSeated(tx, input.bookingId, now);
     const reach = await schedulingReach(tx, scope);
-    // Seen only by someone who may see one of its hosts' scheduling (their own, a delegation, or booking.admin).
+    // Seen only by someone who may see one of its hosts' scheduling (their own, a delegation, owners and admins).
     const hosts = [found.row.hostMemberId, ...[...found.seats.values()].map((seat) => seat.memberId)];
     if (!hosts.some((memberId) => canActFor(reach, memberId, 'view'))) throw refuse('NOT_FOUND', MISSING);
     const seat = input.rotationId ?? found.team.rotations[0]?.rules.id;
@@ -304,7 +304,8 @@ export async function reseatGone(
 
 /**
  * Hands every upcoming booking a rotation seats `memberId` on to the next free member in it (spec 0029, AC-750:
- * "Reassign their N upcoming bookings", offered once they were removed from it or switched off). `booking.admin`.
+ * "Reassign their N upcoming bookings", offered once they were removed from it or switched off). Reassigning needs
+ * Manage over both hosts (spec 0037, AC-1337): over the member, and over every member the rotation could hand to.
  * Each booking is flagged "Needs a host" and queued (`needs_host`) for the worker, which reseats it through the
  * rotation (`reseatGone`) or tells the admins nobody was free; a slow calendar never holds the request. Answers how
  * many it queued. The member must be out of the rotation or switched off, or the worker would seat them again.
@@ -314,8 +315,17 @@ export async function reassignUpcoming(
   input: { readonly rotationId: string; readonly memberId: string },
   now: Date = new Date(),
 ): Promise<{ readonly queued: number }> {
-  requirePermission(scope, 'booking.admin');
+  requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
+    const reach = await schedulingReach(tx, scope);
+    if (!canActFor(reach, input.memberId, 'view')) throw refuse('NOT_FOUND', 'That person isn’t in this workspace.');
+    const candidates = await tx
+      .select({ memberId: schema.rotationMembers.memberId })
+      .from(schema.rotationMembers)
+      .where(and(eq(schema.rotationMembers.rotationId, input.rotationId), eq(schema.rotationMembers.isOn, true)));
+    if (![input.memberId, ...candidates.map((each) => each.memberId)].every((id) => canActFor(reach, id, 'manage'))) {
+      throw refuse('FORBIDDEN', FORBIDDEN_MESSAGE);
+    }
     const [still] = await tx
       .select({ isOn: schema.rotationMembers.isOn })
       .from(schema.rotationMembers)

@@ -7,7 +7,10 @@
 // minutes or past 8 hours. The guest is filed as a person like a visitor is;
 // the calendar event, with every guest invited, is written after the commit,
 // on the calendar the member picked (one of their own they can write), else
-// the page's own "Add events to", else their default.
+// the page's own "Add events to", else their default. A member may book in a
+// colleague whose scheduling they Manage (spec 0037, AC-1272), on that
+// colleague's page and calendars, never one the actor picks (decision 14);
+// it is audited as `booking.changed_for` (AC-1263).
 import { randomUUID } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { HOST_BOOKING_LIMITS, PERMISSIONS } from '@crm/contracts';
@@ -16,9 +19,11 @@ import { requirePermission } from '../access/check.ts';
 import { objectLevel } from '../access/policy.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
+import { actingFor } from '../access/scheduling.ts';
 import { isUuid } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { writeAudit } from '../members/audit.ts';
 import type { BookingCalendar } from './calendar.ts';
 import { hostLockKey, lockKey } from './locks.ts';
 import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
@@ -48,6 +53,8 @@ export interface HostBookingInput {
    * is theirs to write on an account that works. Absent, the page's own "Add events to", else their default.
    */
   readonly calendarId?: string | undefined;
+  /** Who hosts it, when not the caller: a colleague they Manage (spec 0037, AC-1272). */
+  readonly forMemberId?: string | undefined;
 }
 
 /** What the member's booking needs from outside: the calendar to write its event to, and the clock. */
@@ -70,6 +77,7 @@ function bookingHost(scope: EngineScope): string {
 const TAKEN = 'Something else is already in that time.';
 const REUSED = 'That request was already used. Open New meeting again to book.';
 const NO_SUCH_CALENDAR = 'That calendar isn’t one of yours, or can’t take events now. Pick another.';
+const NOT_YOUR_CALENDAR = 'Only they choose which of their calendars a meeting goes on.';
 
 /**
  * Refuses a picked calendar the host can't put the event on (NOT_FOUND on `calendarId`): it must be one of their
@@ -124,7 +132,8 @@ export async function bookAsHost(
   input: HostBookingInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ readonly bookingId: string; readonly replayed: boolean; readonly notInCrm?: string }> {
-  const host = bookingHost(scope);
+  const actor = bookingHost(scope);
+  const host = input.forMemberId ?? actor;
   const now = deps.now?.() ?? new Date();
   if (
     !Number.isInteger(input.minutes) ||
@@ -148,6 +157,11 @@ export async function bookAsHost(
     scope,
     async (context) => {
       const { tx } = context;
+      if (host !== actor) {
+        // Someone else's time (spec 0037): Manage over them, and nobody picks another person's calendar (decision 14).
+        await actingFor(tx, scope, host, 'manage');
+        if (input.calendarId !== undefined) throw refuseOn('FORBIDDEN', NOT_YOUR_CALENDAR, 'calendarId');
+      }
       const page = await loadPage(tx, input.pageId);
       const [onPage] =
         page === undefined || page.isDeleted
@@ -173,7 +187,7 @@ export async function bookAsHost(
       if (again !== undefined) return { bookingId: again.id, replayed: true, title: page.title, place: undefined };
       // After the retry check: a retry answers the booking it made, even once that calendar is disconnected.
       if (input.calendarId !== undefined) await checkCalendar(tx, host, input.calendarId);
-      const by = { type: 'member' as const, id: host, memberId: host };
+      const by = { type: 'member' as const, id: actor, memberId: actor };
       let bookingId: string;
       try {
         const [row] = await tx
@@ -207,6 +221,14 @@ export async function bookAsHost(
           .returning({ id: bookings.id });
         if (row === undefined) throw new Error('The booking was not stored.');
         bookingId = row.id;
+        if (host !== actor) {
+          await writeAudit(tx, scope.workspaceId, scope.actor, {
+            action: 'booking.changed_for',
+            targetType: 'booking',
+            targetId: bookingId,
+            after: { memberId: host, change: 'made' },
+          });
+        }
         // The reminders with the booking; the confirmation after its event, so it knows whether the calendar invited them.
         await enqueueBookingMail(tx, bookingId, ['reminder_24h', 'reminder_1h']);
       } catch (error) {
@@ -269,7 +291,9 @@ export async function bookAsHost(
         ...(input.calendarId === undefined ? {} : { calendarId: input.calendarId }),
         title: `${result.title} with ${input.name}`,
         description: [
-          `Booked in by you through “${result.title}”.`,
+          host === actor
+            ? `Booked in by you through “${result.title}”.`
+            : `Booked in for you through “${result.title}”.`,
           ...(input.message === undefined || input.message.trim() === '' ? [] : ['', input.message.trim()]),
         ].join('\n'),
         start: input.start.toISOString(),

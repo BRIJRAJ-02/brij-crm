@@ -447,3 +447,12 @@ export async function delegatesReachedBy(
   `);
   return found.rows.map((row) => row.id);
 }
+
+/**
+ * A member joined (spec 0037, AC-1274): every holder of an everyone delegation reaches them now, so the join's
+ * transaction stores one `access` row naming those delegates, and their open screens read their reach again.
+ */
+export async function recordJoinReach(context: WriteContext, workspaceId: string, memberId: string): Promise<void> {
+  const reached = await delegatesReachedBy(context.tx, workspaceId, [memberId]);
+  if (reached.length > 0) context.record({ access: reached });
+}

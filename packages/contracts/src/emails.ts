@@ -306,6 +306,23 @@ export const WorkspaceWelcomeEmail = z.strictObject({
 /** Welcome to a workspace. */
 export type WorkspaceWelcomeEmail = z.infer<typeof WorkspaceWelcomeEmail>;
 
+/**
+ * Scheduling changed (spec 0037, AC-1264): to a member, when someone else changed their scheduling, ten minutes of
+ * that person's changes in one email, a line each ("Working hours, Monday: 9:00 AM to 5:00 PM became 10:00 AM to
+ * 6:00 PM"), never a note or anything the member didn't already own.
+ */
+export const SchedulingChangedEmail = z.strictObject({
+  /** Who changed it, by name. */
+  actorName: Name,
+  lines: z.array(Line).min(1).max(30),
+  /** Lines past the ones listed. */
+  more: z.number().int().min(0),
+  /** Scheduling › Availability, where the member sees their hours now. */
+  availabilityPath: AppPath,
+});
+/** The scheduling changed email's params. */
+export type SchedulingChangedEmail = z.infer<typeof SchedulingChangedEmail>;
+
 /** Every email with a template, and its params' schema. The sign in code is drawn on its own (`renderSignInCode`). */
 export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
@@ -317,6 +334,7 @@ export const EMAIL_PARAMS = {
   import_finished: ImportFinishedEmail,
   job_failed: JobFailedEmail,
   workspace_welcome: WorkspaceWelcomeEmail,
+  scheduling_changed: SchedulingChangedEmail,
 } as const;
 
 /** A kind of email with a template. */
@@ -342,6 +360,7 @@ export const QUEUED_EMAIL_KINDS = [
   'import_finished',
   'job_failed',
   'workspace_welcome',
+  'scheduling_changed',
 ] as const satisfies readonly EmailKind[];
 /** A kind that goes through the workspace email queue. */
 export const QueuedEmailKind = z.enum(QUEUED_EMAIL_KINDS);

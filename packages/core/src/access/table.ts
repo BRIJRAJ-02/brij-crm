@@ -318,6 +318,8 @@ export const ACCESS_TABLE = {
   // A meeting a booking made shows its details only to who may see that booking (`booking/seen.ts`), else Busy.
   listMeetingsForRecord: { data: 'read' },
   meetingFacts: { system: true },
+  // The member told of someone else's change to their scheduling (spec 0037, AC-1264): the worker's task.
+  runSchedulingNotice: { system: true },
   // Spec 0031, AC-817: the relay's read of whom a removal cuts off.
   removedUserIds: { system: true },
   // Milestone 2: Add as person creates a person through the door (write on People, the record's own read first);
@@ -415,9 +417,9 @@ export const ACCESS_TABLE = {
   setDefaultSchedule: { schedules: true },
   duplicateSchedule: { schedules: true },
   deleteSchedule: { schedules: true },
-  createTimeBlock: { bookingPages: true },
-  removeTimeBlock: { bookingPages: true },
-  bookAsHost: { bookingPages: true },
+  createTimeBlock: { scheduling: 'manage' },
+  removeTimeBlock: { scheduling: 'manage' },
+  bookAsHost: { scheduling: 'manage' },
   // Changing a booking from Bookings (spec 0025, milestone 2): booking.manage first, then the booking's row.
   hostTarget: { bookingPages: true },
   bookingGuestPath: { bookingPages: true },
@@ -435,8 +437,8 @@ export const ACCESS_TABLE = {
   reassignBooking: { bookingPages: true },
   // The Distribution tab (spec 0037, AC-1330): a member of the rotation sees their own row, an admin every row.
   rotationDistribution: { bookingPages: true },
-  // A member's upcoming bookings in a rotation handed on (AC-750): booking.admin's.
-  reassignUpcoming: { permission: 'booking.admin' },
+  // A member's upcoming bookings in a rotation handed on (AC-750): Manage over them and every member it could hand to.
+  reassignUpcoming: { scheduling: 'manage' },
   // Count adjustments (AC-1329): booking.admin's until rotation editors arrive (J14).
   adjustCount: { permission: 'booking.admin' },
   undoAdjustment: { permission: 'booking.admin' },

@@ -32,6 +32,7 @@ import { limitsOf } from '../engine/limits.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
+import { recordJoinReach } from '../scheduling/delegations.ts';
 import { enterInvitation, inviteInvalid, inviteTokenHash, type EnteredInvitation } from '../access/door.ts';
 import { checkScope } from '../access/mint.ts';
 import { can, isRole } from '../access/policy.ts';
@@ -888,8 +889,9 @@ export async function acceptInvite(
         name,
         email,
       });
-      // Everyone's member list reads them in (spec 0007, AC-82).
+      // Everyone's member list reads them in (spec 0007, AC-82), and an everyone delegation reaches them (AC-1274).
       context.record({ members: [memberId] });
+      await recordJoinReach(context, scope.workspaceId, memberId);
       return { ...opened, memberId };
     },
     hooks,
@@ -973,6 +975,7 @@ async function joinByLink(
     options.source,
   );
   context.record({ members: [memberId] });
+  await recordJoinReach(context, scope.workspaceId, memberId);
   return { ...opened, memberId };
 }
 

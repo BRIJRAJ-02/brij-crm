@@ -1,7 +1,7 @@
 // Emails about a member's own background work: an import's result (#30), and
 // any other job of theirs that failed (late trap #20). A mention has no email of its own: it goes in the
 // notifications email (spec 0038), the one email a mention sends.
-import type { ImportFinishedEmail, JobFailedEmail } from '@crm/contracts/emails';
+import type { ImportFinishedEmail, JobFailedEmail, SchedulingChangedEmail } from '@crm/contracts/emails';
 import { plural } from '../format.ts';
 
 /** A count as the app writes it (1,204). */
@@ -66,3 +66,30 @@ export const jobFailed: Template<JobFailedEmail> = (params, context) => ({
   ],
   why: `You got this email because you started this job in ${workspaceOf(context)}.`,
 });
+
+/**
+ * Someone else changed the reader's scheduling (spec 0037, AC-1264): ten minutes of one person's changes, a line
+ * each, and the way to their hours.
+ */
+export const schedulingChanged: Template<SchedulingChangedEmail> = (params, context) => {
+  const subject = `${params.actorName} changed your scheduling`;
+  const count = params.lines.length + params.more;
+  return {
+    subject,
+    preheader: `${plural(count, 'change', 'changes')} to your scheduling in ${workspaceOf(context)}.`,
+    eyebrow: workspaceOf(context),
+    heading: subject,
+    blocks: [
+      {
+        type: 'paragraph',
+        text: `${params.actorName} changed your scheduling in ${workspaceOf(context)}. Here is what is different now.`,
+      },
+      ...params.lines.map((line) => ({ type: 'paragraph' as const, text: line })),
+      ...(params.more === 0
+        ? []
+        : [{ type: 'paragraph' as const, text: `And ${plural(params.more, 'more change', 'more changes')}.` }]),
+      { type: 'button', label: 'See your hours', url: context.link(params.availabilityPath) },
+    ],
+    why: `You got this email because ${params.actorName} can manage your scheduling in ${workspaceOf(context)}.`,
+  };
+};
