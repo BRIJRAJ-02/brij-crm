@@ -2052,14 +2052,18 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'profile_item_presses SELECT',
       'profile_item_presses UPDATE',
       'profile_items DELETE',
+      // And the purge's, removing a purged workspace's link pages (late trap #86, migration 0127).
+      'profile_items DELETE',
       'profile_items INSERT',
       'profile_items SELECT',
       'profile_items UPDATE',
       // Its views and presses (migration 0100), likewise.
       'profile_view_days DELETE',
+      'profile_view_days DELETE',
       'profile_view_days INSERT',
       'profile_view_days SELECT',
       'profile_view_days UPDATE',
+      'profile_views DELETE',
       'profile_views DELETE',
       'profile_views INSERT',
       'profile_views SELECT',
@@ -2067,6 +2071,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'public_handles DELETE',
       'public_handles INSERT',
       'public_handles SELECT',
+      'public_profiles DELETE',
       'public_profiles INSERT',
       'public_profiles SELECT',
       'social_links DELETE',
@@ -2085,6 +2090,14 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     expect(columns.rows.map((row) => row.grant)).toEqual([
+      // A purged workspace's link pages and handles (migration 0127): which are its, and its handles let go.
+      'auth.profile_items.workspace_id SELECT',
+      'auth.profile_view_days.workspace_id SELECT',
+      'auth.profile_views.workspace_id SELECT',
+      'auth.public_handles.user_id SELECT',
+      'auth.public_handles.user_id UPDATE',
+      'auth.public_handles.workspace_id SELECT',
+      'auth.public_profiles.workspace_id SELECT',
       'auth.user_prefs.last_workspace_id SELECT',
       'auth.user_prefs.last_workspace_id UPDATE',
       'auth.workspace_directory.workspace_id SELECT',

@@ -470,6 +470,43 @@ describe('the purge (AC-823)', () => {
     expect((await left(t.workspaceId))?.workspaces).toBe(0);
   });
 
+  it('takes its members’ link pages with it, and holds their handles rather than keeping them bound to it', async () => {
+    const t = await team();
+    const other = await team();
+    const pagesOf = (workspaceId: string) =>
+      testQuery<{ pages: number; held: number; bound: number }>(
+        ownerUrl,
+        `select (select count(*)::int from auth.public_profiles where workspace_id = $1) as pages,
+          (select count(*)::int from auth.public_handles where workspace_id = $1 and user_id is null
+            and released_at is not null) as held,
+          (select count(*)::int from auth.public_handles where workspace_id = $1 and user_id is not null) as bound`,
+        [workspaceId],
+      ).then((rows) => rows[0]);
+    const pages = () =>
+      testQuery<{ pages: number; held: number; bound: number }>(
+        ownerUrl,
+        `select (select count(*)::int from auth.public_profiles where workspace_id = $1) as pages,
+          (select count(*)::int from auth.public_handles where workspace_id = $1 and user_id is null
+            and released_at is not null) as held,
+          (select count(*)::int from auth.public_handles where workspace_id = $1 and user_id is not null) as bound`,
+        [t.workspaceId],
+      ).then((rows) => rows[0]);
+    // The owner's page, made with the membership.
+    expect(await pages()).toEqual({ pages: 1, held: 0, bound: 1 });
+    await deleteWorkspace(t.as(t.owner, 'owner'), { confirmName: 'Acme' });
+    // Deleted but inside its window: nothing of its pages goes yet.
+    expect(await purgeWorkspace({ db: worker, log }, t.workspaceId, Date.now() + 60_000)).toBe('skipped');
+    expect(await pages()).toEqual({ pages: 1, held: 0, bound: 1 });
+    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '2 hours' where id = $1`, [
+      t.workspaceId,
+    ]);
+    expect(await purgeWorkspace({ db: worker, log }, t.workspaceId, Date.now() + 60_000)).toBe('done');
+    // Late trap #86: the page stayed stored and its handle bound to a workspace that no longer exists, for good.
+    expect(await pages()).toEqual({ pages: 0, held: 1, bound: 0 });
+    // Another workspace's page and handle stand.
+    expect(await pagesOf(other.workspaceId)).toEqual({ pages: 1, held: 0, bound: 1 });
+  });
+
   it('stops where its time ran out and finishes on the next call', async () => {
     const t = await team();
     await deleteWorkspace(t.as(t.owner, 'owner'), { confirmName: 'Acme' });
