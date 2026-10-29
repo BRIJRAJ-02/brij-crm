@@ -16,13 +16,15 @@ import {
   type FormRefusal,
 } from '@crm/ui';
 import { useEffect, useId, useRef, useState } from 'react';
-import { hueFor, iconFor, INLINE_TYPES, pluralOf, startersFor, typeFor, type InlineType } from './new-object-guess.ts';
+import { hueFor, iconFor, INLINE_TYPES, namesFrom, startersFor, typeFor, type InlineType } from './new-object-guess.ts';
 import { ObjectHueField, ObjectIconButton } from './ObjectLookFields.tsx';
 import { formRefusals, objectWords } from './refusals.ts';
 import { strings } from './strings.ts';
 
 /** The form's field names, as the server names them on its refusals. */
-const FIELDS = ['singularName', 'pluralName', 'apiSlug', 'icon', 'hue'] as const;
+// `singularName` is the Name field, which may hold the plural ("Projects"); `singularGuess` is the Singular name
+// field, where a refusal lands once the person has typed their own singular.
+const FIELDS = ['singularName', 'singularGuess', 'pluralName', 'apiSlug', 'icon', 'hue'] as const;
 
 /** Props for the new object dialog. */
 export interface NewObjectDialogProps {
@@ -83,6 +85,9 @@ interface NewObjectFormProps extends Pick<NewObjectDialogProps, 'objects' | 'new
   readonly onBusyChange: (isBusy: boolean) => void;
 }
 
+/** The fields inside the names disclosure, which a refusal on any of them opens. */
+const IN_NAMES: ReadonlySet<string> = new Set(['singularGuess', 'pluralName', 'apiSlug']);
+
 /** One attribute row: its text, a type the person chose (else the name's guess) and a key that survives reordering. */
 interface Row {
   readonly key: number;
@@ -104,7 +109,10 @@ const isInlineType = (id: string | null): id is InlineType => INLINE_TYPES.some(
 function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate, onCreated }: NewObjectFormProps) {
   // One id per opening, sent again on every press.
   const [id] = useState(newId);
+  // What the Name field holds: either form, "Project" or "Projects" (the singular and plural follow from it).
   const [singular, setSingular] = useState('');
+  // The singular, once the person corrects the guess a plural Name gives.
+  const [singularEdit, setSingularEdit] = useState<string | undefined>(undefined);
   const [plural, setPlural] = useState<string | undefined>(undefined);
   const [apiSlug, setApiSlug] = useState<string | undefined>(undefined);
   const [pickedIcon, setIcon] = useState<ObjectIcon | undefined>(undefined);
@@ -127,7 +135,14 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
   const live = objects.filter((object) => !object.isArchived);
 
   const trimmed = singular.trim();
-  const pluralShown = plural ?? pluralOf(trimmed);
+  // A singular put back to the Name says the word is the same in both forms ("Kudos"): the plural is the Name too.
+  const guessed =
+    singularEdit?.trim() === trimmed && trimmed !== '' ? { singular: trimmed, plural: trimmed } : namesFrom(trimmed);
+  // As typed in the field (spaces kept while typing "Graphic Designer"); trimmed when compared and sent.
+  const singularTyped = singularEdit ?? guessed.singular;
+  const singularShown = singularTyped.trim();
+  const ownSingular = singularEdit !== undefined;
+  const pluralShown = plural ?? guessed.plural;
   const slugShown = apiSlug ?? (pluralShown.trim() === '' ? '' : toApiSlug(pluralShown, 'object'));
   const icon = pickedIcon ?? iconFor(trimmed);
   const hue =
@@ -186,20 +201,20 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
       seen.add(slug);
     }
     const missing = [
-      ...(trimmed === '' ? ['singularName'] : []),
+      ...(trimmed === '' ? ['singularName'] : singularShown === '' ? ['singularGuess'] : []),
       ...(pluralShown.trim() === '' ? ['pluralName'] : []),
     ].map((field) => ({ code: 'INPUT_INVALID', message: strings.nameMissing, attributeId: field }));
     if (missing.length > 0 || Object.keys(errors).length > 0) {
       setRowErrors(errors);
       setRefusals(missing);
-      if (missing.some((refusal) => refusal.attributeId === 'pluralName')) setNamesOpen(true);
+      if (missing.some((refusal) => IN_NAMES.has(refusal.attributeId))) setNamesOpen(true);
       return;
     }
     onBusyChange(true);
     setRefusals([]);
     onCreate({
       id,
-      singularName: trimmed,
+      singularName: singularShown,
       pluralName: pluralShown.trim(),
       // Sent only when the person typed one; the server derives the same otherwise.
       ...(apiSlug === undefined || apiSlug.trim() === '' ? {} : { apiSlug: apiSlug.trim() }),
@@ -215,11 +230,14 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
       },
       (error: unknown) => {
         onBusyChange(false);
-        const next = formRefusals(error, FIELDS, objectWords);
-        // The API name sits in a closed disclosure: a refusal on it opens it.
-        if (next.some((refusal) => refusal.attributeId === 'apiSlug' || refusal.attributeId === 'pluralName')) {
-          setNamesOpen(true);
-        }
+        // A refusal of the singular lands where it was typed: the Name, or the Singular name field once edited.
+        const next = formRefusals(error, FIELDS, objectWords).map((refusal) =>
+          ownSingular && refusal.attributeId === 'singularName'
+            ? { ...refusal, attributeId: 'singularGuess' }
+            : refusal,
+        );
+        // Those fields sit in a closed disclosure: a refusal on one opens it.
+        if (next.some((refusal) => IN_NAMES.has(refusal.attributeId ?? ''))) setNamesOpen(true);
         setRefusals(next);
       },
     );
@@ -245,15 +263,36 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
         maxLength={100}
         value={singular}
         onChange={setSingular}
+        // Named singularName for the server's refusals, though it may hold the plural: the singular and plural follow.
         // Enter moves on to the first attribute rather than creating.
         onSubmit={() => {
           markEnter();
           const first = rows[0];
           if (first !== undefined) inputs.current.get(first.key)?.focus();
         }}
-        hint={trimmed === '' ? undefined : strings.followsName(pluralShown, slugShown)}
+        // Both forms are said whenever the singular isn't what was typed, or the two are one word, so a plural Name
+        // never surprises anyone.
+        hint={
+          trimmed === ''
+            ? undefined
+            : singularShown === trimmed && pluralShown.trim() !== trimmed
+              ? strings.followsName(pluralShown, slugShown)
+              : strings.followsNames(singularShown, pluralShown.trim(), slugShown)
+        }
       />
       <Disclosure title={strings.namesAndApi} isExpanded={isNamesOpen} onExpandedChange={setNamesOpen} variant="quiet">
+        <Field
+          label={strings.singularName}
+          name="singularGuess"
+          autoComplete="off"
+          isRequired
+          maxLength={100}
+          value={singularTyped}
+          // Emptied, it follows the name again.
+          onChange={(next) => {
+            setSingularEdit(next === '' ? undefined : next);
+          }}
+        />
         <Field
           label={strings.pluralName}
           name="pluralName"

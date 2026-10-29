@@ -55,9 +55,11 @@ export const strings = {
   singularName: 'Singular name',
   /** The New object dialog's single flow: the name, the guesses that follow it and the inline attributes. */
   objectName: 'Name',
-  objectNamePlaceholder: 'Projects, Partners, Invoices…',
+  objectNamePlaceholder: 'Project, Partner, Invoice…',
   followsName: (plural: string, slug: string) => `${plural}, API name ${slug}`,
-  namesAndApi: 'Plural, API name and colour',
+  /** A plural Name: the singular guessed from it, said beside the plural so nothing changes unseen. */
+  followsNames: (singular: string, plural: string, slug: string) => `One ${singular}, many ${plural}, API name ${slug}`,
+  namesAndApi: 'Names, API name and colour',
   firstAttributes: 'Attributes',
   nameIsAlways: 'Name is added for you',
   attributePlaceholder: 'Add an attribute, then press Enter',
