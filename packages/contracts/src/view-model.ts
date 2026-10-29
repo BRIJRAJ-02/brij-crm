@@ -428,6 +428,15 @@ export function filterAttributeIds(group: FilterGroup | undefined): readonly str
   ];
 }
 
+/**
+ * A filter with every condition naming an attribute outside `visibleIds` taken out, along `through` paths too: what
+ * a reader's screen shows of it, and what a view sends them (hidden means absent, values and all). Undefined when
+ * nothing is left.
+ */
+export function seenFilter(group: FilterGroup | undefined, visibleIds: ReadonlySet<string>): FilterGroup | undefined {
+  return group === undefined ? undefined : asSeen(group, visibleIds);
+}
+
 /** The stored filter with every condition the saver can't see taken out: what their screen showed them. */
 function asSeen(group: FilterGroup, visibleIds: ReadonlySet<string>): FilterGroup | undefined {
   const conditions = group.conditions.flatMap((item): (FilterCondition | FilterGroup)[] => {

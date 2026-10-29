@@ -327,7 +327,7 @@ async function pluralOf(tx: WorkspaceTx, scope: EngineScope, objectId: string): 
 
 /** One view as it reads now, inside the write. */
 const reread = async (tx: WorkspaceTx, scope: EngineScope, viewId: string): Promise<View> =>
-  viewOf(scope.access, await readView(tx, scope, viewId, false));
+  viewOf(tx, scope.access, await readView(tx, scope, viewId, false));
 
 /** A new view (AC-472). */
 export interface CreateViewInput {
@@ -471,7 +471,7 @@ export async function updateView(
         changes.visibility = input.visibility;
         changes.position = await nextPosition(tx, scope, object, input.visibility, row.creatorMemberId);
       }
-      if (Object.keys(changes).length === 0) return viewOf(scope.access, row);
+      if (Object.keys(changes).length === 0) return viewOf(tx, scope.access, row);
       await nameGuard(object.pluralName, () =>
         tx
           .update(views)
@@ -651,7 +651,7 @@ export async function setViewLocked(
       const { tx } = context;
       const row = await readView(tx, scope, viewId, true);
       check(scope, 'lock', row);
-      if (row.isLocked === input.locked) return viewOf(scope.access, row);
+      if (row.isLocked === input.locked) return viewOf(tx, scope.access, row);
       await tx
         .update(views)
         .set({

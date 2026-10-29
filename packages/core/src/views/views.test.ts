@@ -273,7 +273,9 @@ describe('saveViewQuery (AC-468, AC-469, AC-476, AC-482)', () => {
       sorts: [{ attributeId: w.attribute('name'), direction: 'ascending' as const }],
       baseQueryVersion: 2,
     });
-    expect(sorted.config.filter).toEqual(both);
+    // She is sent what she sees, never the hidden condition or its value; the stored view keeps it whole.
+    expect(sorted.config.filter).toEqual(shown);
+    expect(JSON.stringify(await getView(blind, w.peopleView))).not.toContain('senior');
     expect((await getView(w.owner, w.peopleView)).config.filter).toEqual(both);
 
     // Changing the filter itself is refused, rather than quietly dropping what she can't see.
@@ -297,6 +299,34 @@ describe('saveViewQuery (AC-468, AC-469, AC-476, AC-482)', () => {
       baseQueryVersion: 3,
     });
     expect(owned.config.filter).toEqual(shown);
+  });
+
+  it('never sends a viewer a sort on a field hidden from them, and keeps it through their save', async () => {
+    const w = await workspace();
+    const salary = w.attribute('job_title');
+    const name = w.attribute('name');
+    const sorts = [
+      { attributeId: salary, direction: 'descending' as const },
+      { attributeId: name, direction: 'ascending' as const },
+    ];
+    await saveViewQuery(w.owner, { viewId: w.peopleView, sorts, baseQueryVersion: 1 });
+    const blind = rescope(w.bea, {
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: w.people, attributeId: salary },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    const seen = await getView(blind, w.peopleView);
+    expect(seen.config.sorts).toEqual([{ attributeId: name, direction: 'ascending' }]);
+    // She saves the sorts she was shown, unchanged: the one on the hidden field stays, in its place.
+    await saveViewQuery(blind, { viewId: w.peopleView, sorts: seen.config.sorts, baseQueryVersion: 2 });
+    expect((await getView(w.owner, w.peopleView)).config.sorts).toEqual(sorts);
   });
 
   it('keeps a condition reaching a field hidden from the saver on a linked object (security review, 28 Oct)', async () => {
@@ -339,7 +369,9 @@ describe('saveViewQuery (AC-468, AC-469, AC-476, AC-482)', () => {
       sorts: [{ attributeId: w.attribute('name'), direction: 'ascending' as const }],
       baseQueryVersion: 2,
     });
-    expect(sorted.config.filter).toEqual(both);
+    expect(sorted.config.filter).toEqual(shown);
+    expect(JSON.stringify(await getView(blind, w.peopleView))).not.toContain('saas');
+    expect((await getView(w.owner, w.peopleView)).config.filter).toEqual(both);
     const refusal = await refusalOf(
       saveViewQuery(blind, {
         viewId: w.peopleView,
