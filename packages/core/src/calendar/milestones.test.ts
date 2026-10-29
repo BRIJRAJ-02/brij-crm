@@ -25,7 +25,13 @@ import { removeMember } from '../members/members.ts';
 import { CALENDAR_SPREAD_SECONDS, deleteWorkspace, restoreWorkspace } from '../workspace/settings.ts';
 import { dropSources } from './apply.ts';
 import { refreshCalendarConnection, setCalendarDestination, updateMemberCalendar } from './calendars.ts';
-import { connectCalendar, listCalendarConnections, syncCalendarNow, updateCalendarConnection } from './connections.ts';
+import {
+  connectCalendar,
+  listCalendarConnections,
+  removeCalendarConnection,
+  syncCalendarNow,
+  updateCalendarConnection,
+} from './connections.ts';
 import { createCalendarEvents } from './events.ts';
 import { createFakeCalendarProvider } from './fake.ts';
 import { listMeetingsForRecord } from './meetings.ts';
@@ -1470,6 +1476,19 @@ describe('a cancelled booking whose event still lives in the calendar (owner rep
     w.fake.cancel('ada@acme.dev', 'team-copy', 'team@group.calendar');
     await w.sync(conn.id);
     expect(await status()).toBe('cancelled');
+  });
+
+  it('lets a booking go of its meeting when the host disconnects the account that held it', async () => {
+    const w = await world();
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    const { bookingId } = await booked(w, 3);
+    await w.sync(conn.id);
+    // The meeting goes with the connection; the booking pointed at it still (late trap #85), so a guest's later move
+    // or cancel threw at the provider rather than changing nothing.
+    await removeCalendarConnection(w.owner, { connectionId: conn.id });
+    expect(await w.query(sql`select status, meeting_id from bookings where id = ${bookingId}::uuid`)).toEqual([
+      { status: 'confirmed', meeting_id: null },
+    ]);
   });
 
   it('keeps a booking when the calendar holding it leaves the account’s list, rather than cancelling it', async () => {

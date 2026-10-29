@@ -304,10 +304,18 @@ async function deleteConnections(context: WriteContext, connectionIds: readonly 
   await tx.execute(sql`delete from calendar_connections where id = any(${uuidList(connectionIds)})`);
   const meetingIds = [...new Set(held.map((each) => each.meetingId))];
   if (meetingIds.length === 0) return 0;
-  const removed = await tx.execute(sql`
+  const removed = await tx.execute<{ id: string }>(sql`
     delete from meetings m where m.id = any(${uuidList(meetingIds)})
       and not exists (select 1 from meeting_sources s where s.workspace_id = m.workspace_id and s.meeting_id = m.id)
+    returning m.id::text as id
   `);
+  // A booking never points at a meeting that is gone, as `dropSources` keeps it (late trap #85): a guest's later
+  // move or cancel then finds no event to change, rather than one that throws NOT_FOUND at the provider.
+  if (removed.rows.length > 0) {
+    await tx.execute(sql`
+      update bookings set meeting_id = null where meeting_id = any(${uuidList(removed.rows.map((row) => row.id))})
+    `);
+  }
   // Those another connection still holds may stop being private.
   await recomputePrivacy(tx, meetingIds);
   context.record({ meetings: held });
