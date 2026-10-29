@@ -524,10 +524,15 @@ export function ViewScreen(props: ViewScreenProps) {
     () => (kind === 'board' ? planBoard(attributes, storedBoard) : undefined),
     [kind, attributes, storedBoard],
   );
-  // A board view showing defaults it never stored (saved with nothing to group by, or its grouping field gone):
-  // the first time it can group, the defaults are saved like any layout change, once per visit (AC-492).
+  // A board view showing defaults it never stored (saved with nothing to group by): the first time it can group,
+  // the defaults are saved like any layout change, once per visit (AC-492). Never over a grouping the view does
+  // store but this reader can't use (`isStandIn`, late trap #29): opening it would have replaced everyone's grouping
+  // with the reader's stand in.
   const filledFor = useRef<string | undefined>(undefined);
-  const toFill = boardOutcome?.kind === 'board' && !boardOutcome.isStored ? boardOutcome.settings : undefined;
+  const toFill =
+    boardOutcome?.kind === 'board' && !boardOutcome.isStored && !boardOutcome.isStandIn
+      ? boardOutcome.settings
+      : undefined;
   useEffect(() => {
     if (toFill === undefined || view === undefined || filledFor.current === view.id) return;
     filledFor.current = view.id;
