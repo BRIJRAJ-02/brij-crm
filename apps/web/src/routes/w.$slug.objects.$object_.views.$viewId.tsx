@@ -1,7 +1,13 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { runningQuery, savedQuery, toViewQuery } from '../features/views/query.ts';
+import {
+  farAttributesUnchecked,
+  runningQuery,
+  savedQuery,
+  throughTargets,
+  toViewQuery,
+} from '../features/views/query.ts';
 import { ViewScreen } from '../features/views/ViewScreen.tsx';
 import { ArchivedObjectScreen } from '../features/workspace/ArchivedObjectScreen.tsx';
 import { viewColumns, viewReadIds } from '../features/views/layout.ts';
@@ -78,8 +84,23 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
     const search = location.search as ViewSearch;
     const linked = search.draft === undefined ? undefined : await context.data.views.readDraft(search.draft);
     const query = linked ?? savedQuery(body.view);
-    const effective = runningQuery(query, attributes);
-    const running = effective.status === 'ready' ? effective : runningQuery(savedQuery(body.view), attributes);
+    // A through condition's far attributes are read first, so one the reader can't use drops out before it runs;
+    // past the first hop, or when that read fails, it is kept unchecked for the server (late trap #45): the first
+    // rows are the view's, never every record.
+    const targets = [
+      ...new Set([...throughTargets(query, attributes), ...throughTargets(savedQuery(body.view), attributes)]),
+    ];
+    const farLists = new Map(
+      await Promise.all(
+        targets.map(async (target) => {
+          const list = await context.data.attributes.list(params.slug, target).catch(() => undefined);
+          return [target, list] as const;
+        }),
+      ),
+    );
+    const far = farAttributesUnchecked(attributes, (id) => farLists.get(id) ?? undefined);
+    const effective = runningQuery(query, attributes, far);
+    const running = effective.status === 'ready' ? effective : runningQuery(savedQuery(body.view), attributes, far);
     const recordsQuery = running.status === 'ready' ? toViewQuery(running) : {};
     const [members, records] = await Promise.all([
       membersLoading,

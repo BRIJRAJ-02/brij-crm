@@ -263,7 +263,12 @@ export function ViewScreen(props: ViewScreenProps) {
   const [lastReady, setLastReady] = useState(effective.status === 'ready' ? effective : undefined);
   if (effective.status === 'ready' && effective !== lastReady) setLastReady(effective);
   const running = effective.status === 'ready' ? effective : lastReady;
-  const query = useMemo(() => (running === undefined ? { sorts: [] } : toViewQuery(running)), [running]);
+  // Nothing ran yet (the far attributes still loading as the page opens): the loader's question, which kept the
+  // through conditions unchecked, never an unfiltered table (late trap #45).
+  const query = useMemo(
+    () => (running === undefined ? props.recordsQuery : toViewQuery(running)),
+    [running, props.recordsQuery],
+  );
   // The archived fields this person can see that the view's filter or sorts use, by title (AC-480). A draft is
   // built from the query that runs, so its first filter edit already leaves them out; the saved view's are named
   // too while a draft is open, so the warning stays up until the save it warns about. A through filter's archived
