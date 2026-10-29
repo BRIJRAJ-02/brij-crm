@@ -245,6 +245,24 @@ describe('a required field nothing can fill (27 October 2026)', () => {
     expect(refusal).toMatchObject({ code: 'CONFIG_INVALID', field: 'isRequired' });
     expect(refusal?.message).toContain('Intro call');
     expect(refusal?.message).toContain('Desk phone');
+    expect(refusal?.message).toContain('Ask for it with a required question on that page');
+    // An optional question for it is still a wall: a guest may skip it.
+    const ask = (required: boolean) => ({
+      id: 'desk',
+      key: 'desk_phone',
+      label: 'Desk phone',
+      answerType: 'short_text' as const,
+      required,
+      update: 'fill' as const,
+      filedOn: { objectRole: 'main' as const, attributeId: phone.id },
+    });
+    await updateBookingPage(w.scope, { pageId: page.id, settings: { questions: [ask(false)] } });
+    expect(await refusalOf(editAttribute(w.scope, { attributeId: phone.id, isRequired: true }))).toHaveLength(1);
+    // A required question for it fills it at every booking, so the page is no wall (spec 0057).
+    await updateBookingPage(w.scope, { pageId: page.id, settings: { questions: [ask(true)] } });
+    expect((await editAttribute(w.scope, { attributeId: phone.id, isRequired: true })).isRequired).toBe(true);
+    await editAttribute(w.scope, { attributeId: phone.id, isRequired: false });
+    await updateBookingPage(w.scope, { pageId: page.id, settings: { questions: [] } });
     // What a booking writes itself is no wall, and a paused page makes nothing.
     const [name] = await w.query<{ id: string }>(
       sql`select id::text from attributes where object_id = ${people.id}::uuid and api_slug = 'name'`,

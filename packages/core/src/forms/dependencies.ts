@@ -136,6 +136,26 @@ async function bookingWrites(tx: WorkspaceTx, field: PageField, standardKey: str
 }
 
 /**
+ * Whether a page's own questions fill `attributeId` at every booking (spec 0057): one filed onto it that the visitor
+ * must answer and that always shows. A page asking for it like that is no wall: the booking can't go through without
+ * it. Read by shape, as the page stores spec 0023's `FormQuestion`.
+ */
+function asksFor(questions: unknown, attributeId: string): boolean {
+  if (!Array.isArray(questions)) return false;
+  return questions.some((question: unknown) => {
+    if (typeof question !== 'object' || question === null) return false;
+    const { filedOn, required, showWhen } = question as { filedOn?: unknown; required?: unknown; showWhen?: unknown };
+    return (
+      required === true &&
+      showWhen === undefined &&
+      typeof filedOn === 'object' &&
+      filedOn !== null &&
+      (filedOn as { attributeId?: unknown }).attributeId === attributeId
+    );
+  });
+}
+
+/**
  * The live booking pages that make a record on `field`'s object at each booking and would leave `field` empty
  * (late trap #11): every page that files to the CRM makes or finds the guest's Person and, by their email's
  * domain, a Company (in the same savepoint, so a refused Company loses the Person too); a page filing its answers
@@ -162,6 +182,7 @@ export async function livePagesWalledBy(tx: WorkspaceTx, field: PageField): Prom
   const asksAnything = (questions: unknown) => Array.isArray(questions) && questions.length > 0;
   return rows
     .filter((row) => isStandard || asksAnything(row.questions))
+    .filter((row) => !asksFor(row.questions, field.id))
     .map((row) => ({ id: row.id, title: row.title }));
 }
 

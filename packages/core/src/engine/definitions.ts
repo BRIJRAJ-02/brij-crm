@@ -1181,7 +1181,7 @@ async function checkLivePagesFill(
   const subject = breakageNames(named, pages.length - named.length, A_PAGE, PAGES);
   throw refuseOn(
     'CONFIG_INVALID',
-    `${subject} ${one ? 'is live and makes' : 'are live and make'} records here at bookings, with nothing for ${attribute.title}, so each guest would be left out of the CRM. Give it a default, or pause ${one ? 'that page' : 'those pages'} first.`,
+    `${subject} ${one ? 'is live and makes' : 'are live and make'} records here at bookings, with nothing for ${attribute.title}, so each guest would be left out of the CRM. Ask for it with a required question on ${one ? 'that page' : 'those pages'}, give it a default, or pause ${one ? 'that page' : 'those pages'} first.`,
     'isRequired',
   );
 }
