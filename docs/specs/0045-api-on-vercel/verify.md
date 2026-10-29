@@ -12,3 +12,4 @@ Run after the steps in [docs/runbooks/api-on-vercel.md](../../runbooks/api-on-ve
 | AC-1106 | A booking on a public booking page sends its email within a minute | |
 | AC-1107 | `curl -s -X POST https://brij-crm-phi.vercel.app/api/internal/jobs/run` answers 401 `UNAUTHENTICATED` | |
 | AC-1108 | The function's logs (Vercel, the deployment, Logs) show `API on Vercel` with `jobs: drain` and no value of any secret | |
+| AC-1109 | After the function has been idle for 15 minutes or more, `curl -s -o /dev/null -w '%{time_total}' https://brij-crm-phi.vercel.app/api/health` takes under 3 seconds (Timefix: under 1.5). `pnpm --filter @crm/web test build` passes the api bundle checks | 29 Oct 2026: 2.3 to 2.6 s (brij-crm), 0.6 to 0.8 s (Timefix); checks green in CI on `339ea0a9` |

@@ -17,13 +17,24 @@ Reasoning and options: [rationale.md](rationale.md). The owner's steps: [docs/ru
 | Piece | Behind a proxy (Railway or Render) | On Vercel (this spec) |
 |---|---|---|
 | Routing | `middleware.ts` rewrites `/api/*` to `API_ORIGIN_INTERNAL` | `middleware.ts` sends `/api/*` on (`next()`); `vercel.json` routes it to `apps/web/api/index.mjs` |
-| api | `server.ts` on its host | `apps/api/src/vercel/entry.ts` (re-exported by `apps/web/api/index.mjs`), the same `createApp`, built by `createFunctionApi` from the validated env (`ApiEnv` plus `FunctionEnv`) |
+| api | `server.ts` on its host | `apps/api/src/vercel/entry.ts`, the same `createApp`, built by `createFunctionApi` from the validated env (`ApiEnv` plus `FunctionEnv`). The web build bundles it into one file, `apps/web/api/api.generated.mjs`, which `apps/web/api/index.mjs` re-exports (see *How the function is built*) |
 | Function settings | | Node 24, region `sin1`, fluid compute, `maxDuration` 60 seconds (`vercel.json`) |
 | Database pools | api: 10 tenant, 5 identity | per instance: 3 tenant, 2 identity, 1 cancel, all on Neon's pooler, idle clients closed after 5 seconds and handed to Vercel's `attachDatabasePool` |
 | Jobs | the worker's Graphile runners, awake while there is work | the job drain (`jobs/drain.ts`): the same runners (`jobs/compose.ts`, shared with `worker.ts`), one slice per lane, in bounded turns |
 | Outbox relay, live updates | the worker publishes to Centrifugo | off: no relay runs, `VITE_REALTIME_URL` is unset, the `realtime.*` procedures answer 503 |
 | Migrations | the api's pre deploy step | a step in `deploy-web.yml` before the deploy, with the `DATABASE_URL_OWNER` repository secret |
 | Release in `/api/health` | `RENDER_GIT_COMMIT` or `RAILWAY_GIT_COMMIT_SHA` | `VERCEL_GIT_COMMIT_SHA` (`releaseOf` reads all three) |
+
+## How the function is built
+
+Amended 29 October 2026: the function is now one bundled file. This reverses the first build (a resolve hook over Vercel's compiled files), which [rationale.md](rationale.md) keeps as history along with the evidence.
+
+- `apps/web/api-bundle.ts` runs Rolldown from `apps/api/src/vercel/entry.ts` with `platform: 'node'` and writes `apps/web/api/api.generated.mjs`: ESM, one file (`codeSplitting: false`), minified.
+- Every dependency goes into the bundle. Only Node's built ins (`node:*`) and `pg-native` (pg's optional native driver, never installed) stay outside it.
+- `typescript` resolves to a stub that throws if anything ever loads it. Only Graphile's config loader reaches it, for a `.ts` config file the api never has, and it would add 7.7 MB.
+- The bundle runs as a Vite plugin (`crm:api-bundle`, in `vite.config.ts`) once the web build is done, so `vercel build` finds it beside `api/index.mjs`. `apps/web/api/index.mjs` only re-exports its handlers.
+- The bundle is written by the build and never committed (`.gitignore`). `apps/web/turbo.json` lists it as a build output, and its build inputs include the api's and the packages' sources plus `pnpm-lock.yaml`, so a change to any of them rebuilds it.
+- `apps/web/build.test.ts` guards it: the bundle imports only Node built ins, the TypeScript stub is in it, it stays under 12 MB, and `index.mjs` re-exports it.
 
 ## The edge guard in function mode
 
@@ -42,7 +53,7 @@ The guard stays on. The middleware runs for every `/api` request before the func
 - **No live updates.** Other people's changes show on reload or the next fetch, not at once.
 - **Job delay.** A job queued by a request usually runs within seconds of that request. A job due later (the 15 minute calendar poll, a retry after backoff, a booking reminder) waits for the next request that wakes the drain or the next scheduled run: up to about an hour when nobody uses the app, longer if GitHub starts its scheduled run late or skips one.
 - **The outbox grows.** With no relay, no row is ever published, and the prune deletes only published rows. Rows stay until a relay runs again, which then publishes the backlog (to nobody listening) and prunes it.
-- **Cold starts.** A new instance loads the api (about 41 MB of code) and opens its pools; the first request after idle takes longer.
+- **Cold starts.** A new instance loads the bundle and opens its pools, so the first request after idle takes longer. Measured 29 October 2026, after the bundle landed: about 2.3 to 2.6 seconds on brij-crm (Hobby, `sin1`, Neon free plan, whose compute wakes too), and about 0.6 to 0.8 seconds on Timefix (`iad1`). It was 5 to 7 seconds before.
 - **Neon compute.** Every scheduled run opens a connection and wakes the database, which then stays up about 5 minutes. Hourly, that is about 2 hours a day with no users, well inside the free plan's allowance; every 10 minutes would have been about half of every month, so the schedule is hourly (decided 22 Oct) and jobs queued by requests still run within seconds. Timefix's database is on Neon's Launch plan (paid by use, $0.106 a CU-hour, scale to zero after 5 minutes): its 15 minute cron keeps the compute up at most 5 minutes in every 15, about 8 hours a day at 0.25 CU with no users, so at most about 60 CU-hours, roughly $6.50, a month, and less while the app is in use anyway.
 - **Hobby limits.** 60 seconds per invocation as set (fluid compute allows up to 300 on Hobby), 4 hours of active CPU a month, 1 million invocations, 1 region, cron jobs only daily (hence GitHub's schedule), and the Hobby plan is for non commercial use.
 
