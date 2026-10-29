@@ -30,7 +30,14 @@ import { ARCHIVED_BY, loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { writeRules } from '../validation/rules.ts';
 import { seedDefaultView } from '../views/seed.ts';
-import { breakageNames, filedBy, isPeopleObject, liveFormsOn, livePagesOn } from '../forms/dependencies.ts';
+import {
+  breakageNames,
+  filedBy,
+  isPeopleObject,
+  liveFormsOn,
+  livePagesOn,
+  livePagesWalledBy,
+} from '../forms/dependencies.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
@@ -633,7 +640,13 @@ export async function insertAttribute(
         ANONYMOUS,
       )
     ) {
-      await checkLiveFormsFill(tx, scope.access, { id: row.id, objectId: parent.objectId, title: input.title.trim() });
+      await checkLiveFormsFill(tx, scope.access, {
+        id: row.id,
+        objectId: parent.objectId,
+        title: input.title.trim(),
+        apiSlug: input.apiSlug,
+        type: input.type,
+      });
     }
     // Its first rules (spec 0013): the row is new to this write, so nobody else holds it yet.
     const ruled =
@@ -916,10 +929,13 @@ export async function updateAttribute(
       // refuses, and no write silently changes anyone's data.
       const required = input.isRequired ?? attribute.isRequired;
       const stored = defaultValue === undefined ? attribute.defaultValue : defaultValue;
+      // A wall for a visitor now and not before: Required turned on, or the default cleared or made Current user,
+      // which fills nothing for a visitor (late trap #10: a Current user default used to pass as a fill).
+      // Clearing a default that gave nothing a visitor could use (a kind the type no longer allows) still counts, so
+      // a select or status is still given its first option.
       const becomingATrap =
-        required &&
-        (stored === null || stored === undefined) &&
-        ((input.isRequired === true && !attribute.isRequired) ||
+        isUnfillableRequired({ ...attribute, isRequired: required, defaultValue: stored ?? null }, ANONYMOUS) &&
+        (!isUnfillableRequired(attribute, ANONYMOUS) ||
           (defaultValue === null && attribute.defaultValue !== null && attribute.defaultValue !== undefined));
       const firstOption = becomingATrap ? await firstLiveOption(tx, attribute) : undefined;
       if (becomingATrap) checkRequiredHasAFallback(attribute.type, true, false, firstOption === undefined ? 0 : 1);
@@ -1102,9 +1118,16 @@ async function isFirstUniqueEmail(tx: WorkspaceTx, attribute: AttributeDef): Pro
 async function checkLiveFormsFill(
   tx: WorkspaceTx,
   access: Access,
-  attribute: { readonly id: string; readonly objectId: string | null; readonly title: string },
+  attribute: {
+    readonly id: string;
+    readonly objectId: string | null;
+    readonly title: string;
+    readonly apiSlug: string;
+    readonly type: string;
+  },
 ): Promise<void> {
   if (attribute.objectId === null) return;
+  await checkLivePagesFill(tx, attribute);
   const live = await liveFormsOn(tx, access, attribute.objectId);
   const broken = live.filter((form) => !filedBy(form.document).has(attribute.id));
   if (broken.length === 0) return;
@@ -1113,6 +1136,37 @@ async function checkLiveFormsFill(
   throw refuseOn(
     'CONFIG_INVALID',
     `${subject} ${broken.length === 1 ? 'is live and has no question for' : 'are live and have no question for'} ${attribute.title}, so every submission would fail. Add ${broken.length === 1 ? 'a question' : 'questions'} for it, give it a default, or pause ${broken.length === 1 ? 'that form' : 'those forms'} first.`,
+    'isRequired',
+  );
+}
+
+const PAGES = (count: number) => `${String(count)} live booking pages`;
+const A_PAGE = 'A live booking page';
+
+/**
+ * Refuses making an attribute a wall for the live booking pages that make records on its object (late trap #11):
+ * each booking would still go through, and quietly leave the guest out of the CRM. The forms check's twin, run
+ * from it, so every road to a wall checks both. Pages are named: a live page's title is on its public address for
+ * anyone, and the caller holds `schema.manage` (as `checkNotAMatch` names them).
+ */
+async function checkLivePagesFill(
+  tx: WorkspaceTx,
+  attribute: {
+    readonly id: string;
+    readonly objectId: string | null;
+    readonly title: string;
+    readonly apiSlug: string;
+    readonly type: string;
+  },
+): Promise<void> {
+  const pages = await livePagesWalledBy(tx, attribute);
+  if (pages.length === 0) return;
+  const one = pages.length === 1;
+  const named = pages.flatMap((page) => (page.title === undefined ? [] : [page.title]));
+  const subject = breakageNames(named, pages.length - named.length, A_PAGE, PAGES);
+  throw refuseOn(
+    'CONFIG_INVALID',
+    `${subject} ${one ? 'is live and makes' : 'are live and make'} records here at bookings, with nothing for ${attribute.title}, so each guest would be left out of the CRM. Give it a default, or pause ${one ? 'that page' : 'those pages'} first.`,
     'isRequired',
   );
 }

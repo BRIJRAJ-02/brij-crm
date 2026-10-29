@@ -25,6 +25,7 @@ import { runWrite } from '../engine/write.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { rescope, testScope } from '../testing.ts';
 import { updateOption } from '../engine/options.ts';
+import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { createForm, publishForm, saveFormDraft, setFormTarget } from './forms.ts';
 import { getSubmission } from './submissions.ts';
 import { processSubmission } from './process.ts';
@@ -226,6 +227,84 @@ describe('a required field nothing can fill (27 October 2026)', () => {
     expect(refusal).toMatchObject({ code: 'CONFIG_INVALID', field: 'isRequired' });
     expect(refusal?.message).toContain('Apply');
     expect(refusal?.message).toContain('Studio');
+  });
+
+  it('refuses turning Required on while a live booking page makes People records without it (late trap #11)', async () => {
+    // A booking stands when the guest's record can't be made, so the break would show as guests missing from the CRM.
+    const w = await designers();
+    const [people] = await w.query<{ id: string }>(sql`select id::text from objects where standard_key = 'people'`);
+    if (people === undefined) throw new Error('No People.');
+    const phone = await createAttribute(w.scope, {
+      objectId: people.id,
+      id: newId(),
+      title: 'Desk phone',
+      type: 'text',
+    });
+    const page = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const [refusal] = await refusalOf(editAttribute(w.scope, { attributeId: phone.id, isRequired: true }));
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID', field: 'isRequired' });
+    expect(refusal?.message).toContain('Intro call');
+    expect(refusal?.message).toContain('Desk phone');
+    // What a booking writes itself is no wall, and a paused page makes nothing.
+    const [name] = await w.query<{ id: string }>(
+      sql`select id::text from attributes where object_id = ${people.id}::uuid and api_slug = 'name'`,
+    );
+    if (name === undefined) throw new Error('No Name.');
+    expect((await editAttribute(w.scope, { attributeId: name.id, isRequired: true })).isRequired).toBe(true);
+    await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
+    expect((await editAttribute(w.scope, { attributeId: phone.id, isRequired: true })).isRequired).toBe(true);
+  });
+
+  it('refuses it too for a page onto another object that asks only an unfiled question, and for Companies', async () => {
+    const w = await designers();
+    const page = await createBookingPage(w.scope, { id: newId(), title: 'Portfolio review', timeZone: 'UTC' });
+    const question = {
+      id: newId(),
+      key: 'notes',
+      label: 'Anything to share?',
+      answerType: 'short_text' as const,
+      required: false,
+      update: 'fill' as const,
+    };
+    await updateBookingPage(w.scope, {
+      pageId: page.id,
+      settings: { answersObjectId: w.object.id, questions: [question] },
+    });
+    const portfolio = await createAttribute(w.scope, {
+      objectId: w.object.id,
+      id: newId(),
+      title: 'Portfolio',
+      type: 'text',
+    });
+    const [refusal] = await refusalOf(editAttribute(w.scope, { attributeId: portfolio.id, isRequired: true }));
+    expect(refusal?.message).toContain('Portfolio review');
+    // A guest's Company is made in the Person's savepoint, so a wall there loses the Person too.
+    const [companies] = await w.query<{ id: string }>(
+      sql`select id::text from objects where standard_key = 'companies'`,
+    );
+    if (companies === undefined) throw new Error('No Companies.');
+    const tier = await createAttribute(w.scope, { objectId: companies.id, id: newId(), title: 'Tier', type: 'text' });
+    const [walled] = await refusalOf(editAttribute(w.scope, { attributeId: tier.id, isRequired: true }));
+    expect(walled?.message).toContain('Portfolio review');
+  });
+
+  it('counts a Current user default as nothing for a visitor when it replaces one that filled (late trap #10)', async () => {
+    const w = await designers();
+    const form = await applyForm(w);
+    const lead = await createAttribute(w.scope, {
+      objectId: w.object.id,
+      id: newId(),
+      title: 'Lead owner',
+      type: 'actor_reference',
+      isRequired: true,
+      defaultValue: { kind: 'static', value: { type: 'member', id: w.scope.actor.id } },
+    });
+    await publishForm(w.scope, { formId: form.formId, expectedRevision: form.revision });
+    const [refusal] = await refusalOf(
+      editAttribute(w.scope, { attributeId: lead.id, defaultValue: { kind: 'current_user' } }),
+    );
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID', field: 'isRequired' });
+    expect(refusal?.message).toContain('Lead owner');
   });
 
   it('refuses archiving the field a live form matches its submissions on', async () => {

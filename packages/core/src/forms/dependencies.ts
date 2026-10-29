@@ -9,13 +9,13 @@
 // making it may see the form: a break is a break. But a form they may not see
 // is counted, never named (`canSeeForm`, spec 0009's hidden-means-absent),
 // so the refusal degrades to "a live form" rather than leaking its name.
-import { eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { FormDocument } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { Access } from '../access/policy.ts';
 import { canSeeForm, liveObjectOf } from './shared.ts';
 
-const { bookingPages, formVersions, forms } = schema;
+const { attributes, bookingPages, formVersions, forms, objects } = schema;
 
 /** One live form, as a schema change needs to see it: the document visitors post to now, and whether to name it. */
 export interface LiveForm {
@@ -86,6 +86,83 @@ export async function livePagesOn(tx: WorkspaceTx, objectId: string, isPeople: b
     );
   // A page's title is its host's, shown wherever its object is; whoever may change the object's schema may read it.
   return rows.map((row) => ({ id: row.id, title: row.title }));
+}
+
+/** A field a schema change is about: enough to place it and to know what a booking writes on it. */
+interface PageField {
+  readonly id: string;
+  readonly objectId: string | null;
+  readonly apiSlug: string;
+  readonly type: string;
+}
+
+/**
+ * Whether a booking writes this field itself on a record it makes, whatever its page asks (`matchVisitor`,
+ * `answersRecord`): People's email and name, Companies' domains and name, and on another answers object the first
+ * unique email and a text or personal name primary. Required on one of those is no wall for a booking.
+ */
+async function bookingWrites(tx: WorkspaceTx, field: PageField, standardKey: string | null): Promise<boolean> {
+  // By type too: `matchVisitor` writes a person's Name as a personal name or text, a company's as text, else nothing.
+  if (standardKey === 'people') {
+    return (
+      field.apiSlug === 'email_addresses' ||
+      (field.apiSlug === 'name' && (field.type === 'personal_name' || field.type === 'text'))
+    );
+  }
+  if (standardKey === 'companies')
+    return field.apiSlug === 'domains' || (field.apiSlug === 'name' && field.type === 'text');
+  if (field.objectId === null) return false;
+  const [match] = await tx
+    .select({ id: attributes.id })
+    .from(attributes)
+    .where(
+      and(
+        eq(attributes.objectId, field.objectId),
+        eq(attributes.isUnique, true),
+        eq(attributes.type, 'email'),
+        eq(attributes.isSystem, false),
+        isNull(attributes.archivedAt),
+      ),
+    )
+    .orderBy(asc(attributes.position), asc(attributes.createdAt), asc(attributes.id))
+    .limit(1);
+  if (match?.id === field.id) return true;
+  const [primary] = await tx
+    .select({ type: attributes.type })
+    .from(objects)
+    .innerJoin(attributes, eq(attributes.id, objects.primaryAttributeId))
+    .where(and(eq(objects.id, field.objectId), eq(objects.primaryAttributeId, field.id)));
+  return primary?.type === 'text' || primary?.type === 'personal_name';
+}
+
+/**
+ * The live booking pages that make a record on `field`'s object at each booking and would leave `field` empty
+ * (late trap #11): every page that files to the CRM makes or finds the guest's Person and, by their email's
+ * domain, a Company (in the same savepoint, so a refused Company loses the Person too); a page filing its answers
+ * onto another object makes the guest's record there too, when it asks a question. A required field nothing fills makes that record impossible, and the booking still stands, so
+ * the guest silently never reaches the CRM. Empty when the booking writes the field itself.
+ */
+export async function livePagesWalledBy(tx: WorkspaceTx, field: PageField): Promise<readonly LivePage[]> {
+  if (field.objectId === null) return [];
+  const [object] = await tx
+    .select({ standardKey: objects.standardKey })
+    .from(objects)
+    .where(and(eq(objects.id, field.objectId), isNull(objects.archivedAt)));
+  if (object === undefined) return [];
+  if (await bookingWrites(tx, field, object.standardKey)) return [];
+  const isStandard = object.standardKey === 'people' || object.standardKey === 'companies';
+  const rows = await tx
+    .select({ id: bookingPages.id, title: bookingPages.title, questions: bookingPages.questions })
+    .from(bookingPages)
+    .where(
+      sql`${bookingPages.status} = 'live' and ${bookingPages.deletedAt} is null and ${bookingPages.fileToCrm}${isStandard ? sql`` : sql` and ${bookingPages.answersObjectId} = ${field.objectId}::uuid`}`,
+    );
+  // A page onto another object makes the guest's record there whenever they answer any of its questions, filed or
+  // not (`answersRecord` runs on every answer kept), so a page with questions at all counts.
+  const asksAnything = (questions: unknown) => Array.isArray(questions) && questions.length > 0;
+  return rows
+    .filter((row) => isStandard || asksAnything(row.questions))
+    .map((row) => ({ id: row.id, title: row.title }));
 }
 
 /** Whether `objectId` is the workspace's live People, the object a page means by a null answers object. */
