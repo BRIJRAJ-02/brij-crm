@@ -65,6 +65,7 @@ export const bookingPagesRouter = member.bookingPages.router({
           timeZone: input.timeZone,
           ...(input.settings === undefined ? {} : { settings: input.settings }),
           ...(input.kind === undefined ? {} : { kind: input.kind }),
+          ...(input.scope === undefined ? {} : { scope: input.scope }),
           ...(input.hosts === undefined ? {} : { hosts: input.hosts }),
         }),
       );

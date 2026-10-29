@@ -34,8 +34,9 @@ import {
 import { intersectSlots, unionSlots } from './combine.ts';
 import { capStarts, windowCounts, windowStart, type WindowCount } from './ledger.ts';
 import { evenWaiting, hallHolds, type Candidate, type PickRules } from './pick.ts';
+import { rosterCalibration } from './roster.ts';
 
-const { bookingPageRotations, members, rotationMembers, rotations } = schema;
+const { bookingPageRotations, members, rotationRoster, rotations } = schema;
 
 /** The roles that may take bookings from a rotation: guests never (spec 0037, AC-729 narrowed); unknown roles fail closed. */
 export const ROTATION_ROLES: readonly string[] = ['owner', 'admin', 'member'];
@@ -59,6 +60,13 @@ export interface RotationMember {
   readonly dailyCap: number | null;
   readonly weeklyCap: number | null;
   readonly calibration: number;
+  /**
+   * Their settings are stored. Always so in a rotation of chosen people; in "Everyone on the roster" someone with no
+   * row yet takes the pool's average on read (`rosterCalibration`) until their first assignment stores it.
+   */
+  readonly stored?: boolean;
+  /** No row yet, and joined the workspace after "Everyone on the roster" was made (`rosterCalibration`). */
+  readonly joinsLate?: boolean;
 }
 
 /** A rotation a round robin page books from, and its members who may take work now. */
@@ -121,7 +129,9 @@ export async function pageRotations(tx: WorkspaceTx, pageId: string): Promise<re
 
 /**
  * Each rotation's members who may take work now (AC-729, AC-731): switched
- * on, active in the workspace, and not a guest, in the rotation's order.
+ * on, active in the workspace, and not a guest, in the rotation's order. Read
+ * through `rotation_roster`, so "Everyone on the roster" (the workspace link)
+ * holds every such member, whether or not they have settings of their own.
  */
 export async function eligibleMembers(
   tx: WorkspaceTx,
@@ -131,23 +141,25 @@ export async function eligibleMembers(
   if (rotationIds.length === 0) return found;
   const rows = await tx
     .select({
-      rotationId: rotationMembers.rotationId,
-      memberId: rotationMembers.memberId,
-      weight: rotationMembers.weight,
-      priority: rotationMembers.priority,
-      dailyCap: rotationMembers.dailyCap,
-      weeklyCap: rotationMembers.weeklyCap,
-      calibration: rotationMembers.calibration,
+      rotationId: rotationRoster.rotationId,
+      memberId: rotationRoster.memberId,
+      weight: rotationRoster.weight,
+      priority: rotationRoster.priority,
+      dailyCap: rotationRoster.dailyCap,
+      weeklyCap: rotationRoster.weeklyCap,
+      calibration: rotationRoster.calibration,
+      stored: rotationRoster.stored,
+      joinsLate: rotationRoster.joinsLate,
     })
-    .from(rotationMembers)
+    .from(rotationRoster)
     .innerJoin(
       members,
-      and(eq(members.workspaceId, rotationMembers.workspaceId), eq(members.id, rotationMembers.memberId)),
+      and(eq(members.workspaceId, rotationRoster.workspaceId), eq(members.id, rotationRoster.memberId)),
     )
     .where(
       and(
-        inArray(rotationMembers.rotationId, [...rotationIds]),
-        eq(rotationMembers.isOn, true),
+        inArray(rotationRoster.rotationId, [...rotationIds]),
+        eq(rotationRoster.isOn, true),
         eq(members.status, 'active'),
         sql`${members.role}::text in (${sql.join(
           ROTATION_ROLES.map((role) => sql`${role}`),
@@ -155,7 +167,7 @@ export async function eligibleMembers(
         )})`,
       ),
     )
-    .orderBy(asc(rotationMembers.position), asc(rotationMembers.memberId));
+    .orderBy(asc(rotationRoster.position), asc(members.name), asc(rotationRoster.memberId));
   for (const { rotationId, ...member } of rows) found.get(rotationId)?.push(member);
   return found;
 }
@@ -306,12 +318,15 @@ export function memberSlots(
 
 /** A rotation's members as the pick reads them: their counts in the window and calibration. */
 export function candidatesOf(rotation: PageRotation, standing: RotationStanding | undefined): readonly Candidate[] {
-  return rotation.members.map((member) => {
+  const calibrated = rosterCalibration(
+    rotation.members.map((member) => ({ ...member, count: standing?.counts.get(member.memberId)?.count ?? 0 })),
+  );
+  return rotation.members.map((member, index) => {
     const counted = standing?.counts.get(member.memberId);
     return {
       memberId: member.memberId,
       count: counted?.count ?? 0,
-      calibration: member.calibration,
+      calibration: calibrated[index] ?? member.calibration,
       weight: member.weight,
       priority: member.priority,
       ...(counted === undefined ? {} : { lastAssignedAt: counted.lastAssignedAt }),

@@ -10,7 +10,7 @@
 // booking's change target, a record's meetings and timeline, Home's Team today
 // and the realtime audience's meeting facts all take it from here.
 import { sql, type AnyColumn, type SQL } from 'drizzle-orm';
-import type { WorkspaceTx } from '@crm/db';
+import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import type { Access } from '../access/policy.ts';
 import { can } from '../access/policy.ts';
@@ -64,13 +64,30 @@ export async function bookingReaderIn(tx: WorkspaceTx, scope: EngineScope): Prom
   return bookingReaderWith(scope.access, await schedulingReach(tx, scope));
 }
 
+/**
+ * The page's owner as access reads it, for a query that joins `booking_pages`: its owner on a person's page, and
+ * nobody (null) on a workspace link, whose `owner_member_id` only made it and manages nothing (workspace link,
+ * 30 Oct 2026). Every Bookings read takes its page owner through this.
+ */
+export const pageManagerColumn = sql<
+  string | null
+>`case when ${schema.bookingPages.scope} = 'member' then ${schema.bookingPages.ownerMemberId} end`;
+
+/** A page's owner as access reads it: undefined on a workspace link (`pageManagerColumn`, in TypeScript). */
+export function pageManagerOf(page: { readonly scope: string; readonly ownerMemberId: string }): string | undefined {
+  return page.scope === 'member' ? page.ownerMemberId : undefined;
+}
+
 /** The columns of the booking a condition is about, as SQL (a Drizzle column, or an alias's column). */
 export interface BookingColumns {
   readonly workspaceId: AnyColumn | SQL;
   readonly id: AnyColumn | SQL;
   readonly pageId: AnyColumn | SQL;
   readonly hostMemberId: AnyColumn | SQL;
-  /** The page's owner, when the query already joins the page: then no lookup of the page is needed. */
+  /**
+   * The page's owner, when the query already joins the page (`pageManagerColumn`, null on a workspace link): then no
+   * lookup of the page is needed.
+   */
   readonly pageOwnerMemberId?: AnyColumn | SQL;
 }
 
@@ -108,6 +125,7 @@ export function seesBookingSql(
       ? sql`exists (
       select 1 from booking_pages sp
       where sp.workspace_id = ${booking.workspaceId} and sp.id = ${booking.pageId} and sp.owner_member_id = ${me}::uuid
+        and sp.scope = 'member'
     )`
       : sql`${booking.pageOwnerMemberId} = ${me}::uuid`;
   const reached = all ? ((act ? reader.manages : reader.sees) ?? []) : [];
@@ -143,7 +161,8 @@ export function hiddenBookingSql(reader: BookingReader): SQL {
 /** A booking already read, as the row checks take it: its host, its page's owner and its co-hosts. */
 export interface BookingHeld {
   readonly hostMemberId: string;
-  readonly ownerMemberId: string;
+  /** Its page's owner; null or undefined on a workspace link, which nobody owns (`pageManagerOf`). */
+  readonly ownerMemberId: string | null | undefined;
   readonly coHostIds: readonly string[];
 }
 

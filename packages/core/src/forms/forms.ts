@@ -56,7 +56,7 @@ import {
   type FormRow,
 } from './shared.ts';
 
-const { forms, formSubmissions, formVersions, members, objects, rotationMembers, rotations } = schema;
+const { forms, formSubmissions, formVersions, members, objects, rotationRoster, rotations } = schema;
 
 /** What a form the reader can't see, or one that doesn't exist, answers. */
 export const UNKNOWN_FORM = 'That form does not exist.';
@@ -404,7 +404,7 @@ async function checkOwnerRotation(tx: WorkspaceTx, scope: EngineScope, rotationI
         isNull(rotations.deletedAt),
         everyone
           ? undefined
-          : sql`exists (select 1 from ${rotationMembers} m where m.workspace_id = "rotations"."workspace_id"
+          : sql`exists (select 1 from ${rotationRoster} m where m.workspace_id = "rotations"."workspace_id"
               and m.rotation_id = "rotations"."id" and m.member_id = ${me ?? null}::uuid)`,
       ),
     )

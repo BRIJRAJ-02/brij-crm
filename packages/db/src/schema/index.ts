@@ -52,7 +52,7 @@ export {
 export { exportChunks, exports } from './exports.ts';
 export { auditEvents, invitations, joinRequests, workspaceDomains, workspaceSecurity } from './team.ts';
 export { emailPreferences, emails, emailStatus } from './emails.ts';
-export { bookingPageRotations, rotationAssignments, rotationMembers, rotations } from './rotation.ts';
+export { bookingPageRotations, rotationAssignments, rotationMembers, rotationRoster, rotations } from './rotation.ts';
 export { scheduleDelegations } from './scheduling.ts';
 export { routingDecisions } from './routing.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';
