@@ -11,6 +11,7 @@ import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
+import { strings as schedulingAccess } from './scheduling-access-strings.ts';
 import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
@@ -46,6 +47,9 @@ export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/member
 /** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
 export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
 
+/** Settings › Account › Scheduling access (spec 0037, AC-1266): who can see or manage the member's scheduling. */
+export const schedulingAccessHref = (slug: string) => `/w/${slug}/settings/account/scheduling`;
+
 /** Settings › Account › Sign in and devices (spec 0033): two factor, the devices signed in and recent activity. */
 export const securitySettingsHref = (slug: string) => `/w/${slug}/settings/account/sign-in`;
 
@@ -55,6 +59,7 @@ export type SettingsPageId =
   | 'preferences'
   | 'security'
   | 'notifications'
+  | 'scheduling-access'
   | 'general'
   | 'members'
   | 'workspace-security'
@@ -98,6 +103,7 @@ export interface SettingsNavEntry {
     | 'trash'
     | 'chart-line'
     | 'calendar-days'
+    | 'calendar-clock'
     | 'globe';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
@@ -138,6 +144,13 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
         { id: 'security', label: security.title, href: securitySettingsHref(slug), icon: 'shield-check' },
         { id: 'notifications', label: notifications.title, href: notificationSettingsHref(slug), icon: 'bell' },
+        // Who can see or manage the member's scheduling, and whose they reach (spec 0037, AC-1266): every member.
+        {
+          id: 'scheduling-access',
+          label: schedulingAccess.title,
+          href: schedulingAccessHref(slug),
+          icon: 'calendar-clock',
+        },
       ],
     },
     {
@@ -226,6 +239,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/preferences') return 'preferences';
   if (rest === 'general') return 'general';
   if (rest === 'account/notifications') return 'notifications';
+  if (rest === 'account/scheduling') return 'scheduling-access';
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';

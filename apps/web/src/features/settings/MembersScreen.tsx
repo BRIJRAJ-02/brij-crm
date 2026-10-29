@@ -57,6 +57,7 @@ import { InviteLinkRows } from './InviteLinkRows.tsx';
 import { MemberConfirm, type MemberQuestion } from './MemberConfirm.tsx';
 import { RemoveMemberDialog } from './RemoveMemberDialog.tsx';
 import { hasGuide, RoleGuide } from './RoleGuide.tsx';
+import { SCHEDULING_ACCESS_COLUMN, SchedulingAccessCell } from './SchedulingAccessCell.tsx';
 import { canRemove, grantableRoles, invitableRoles } from './members.ts';
 import { strings } from './members-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -107,6 +108,7 @@ const MEMBER_COLUMNS: readonly TableColumn[] = [
 const MEMBER_COLUMNS_WITH_FACTOR: readonly TableColumn[] = [
   ...MEMBER_COLUMNS.slice(0, 3),
   { id: 'twoFactor', label: strings.columns.twoFactor },
+  SCHEDULING_ACCESS_COLUMN,
   ...MEMBER_COLUMNS.slice(3),
 ];
 
@@ -371,6 +373,8 @@ export function MembersScreen({
       }
       case 'twoFactor':
         return member.twoFactor === true ? strings.twoFactorOn : strings.twoFactorOff;
+      case 'scheduling':
+        return <SchedulingAccessCell data={data} toasts={toasts} slug={slug} me={access.memberId} member={member} />;
       case 'joined':
         return <RelativeTime value={member.joinedAt} />;
       default: {

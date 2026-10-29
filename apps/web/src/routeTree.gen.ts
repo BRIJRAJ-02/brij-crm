@@ -57,6 +57,7 @@ import { Route as WSlugSettingsAccountCalendarsRouteImport } from './routes/w.$s
 import { Route as WSlugSettingsAccountNotificationsRouteImport } from './routes/w.$slug.settings.account.notifications.tsx'
 import { Route as WSlugSettingsAccountPreferencesRouteImport } from './routes/w.$slug.settings.account.preferences.tsx'
 import { Route as WSlugSettingsAccountProfileRouteImport } from './routes/w.$slug.settings.account.profile.tsx'
+import { Route as WSlugSettingsAccountSchedulingRouteImport } from './routes/w.$slug.settings.account.scheduling.tsx'
 import { Route as WSlugSettingsAccountSecurityRouteImport } from './routes/w.$slug.settings.account.security.tsx'
 import { Route as WSlugSettingsAccountSignInRouteImport } from './routes/w.$slug.settings.account.sign-in.tsx'
 import { Route as WSlugSettingsAdminIndexRouteImport } from './routes/w.$slug.settings.admin.index.tsx'
@@ -334,6 +335,12 @@ const WSlugSettingsAccountProfileRoute =
     path: '/account/profile',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsAccountSchedulingRoute =
+  WSlugSettingsAccountSchedulingRouteImport.update({
+    id: '/account/scheduling',
+    path: '/account/scheduling',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsAccountSecurityRoute =
   WSlugSettingsAccountSecurityRouteImport.update({
     id: '/account/security',
@@ -535,6 +542,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
+  '/w/$slug/settings/account/scheduling': typeof WSlugSettingsAccountSchedulingRoute
   '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
   '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
   '/w/$slug/settings/admin/website': typeof WSlugSettingsAdminWebsiteRoute
@@ -607,6 +615,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
+  '/w/$slug/settings/account/scheduling': typeof WSlugSettingsAccountSchedulingRoute
   '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
   '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
   '/w/$slug/settings/admin/website': typeof WSlugSettingsAdminWebsiteRoute
@@ -684,6 +693,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
+  '/w/$slug/settings/account/scheduling': typeof WSlugSettingsAccountSchedulingRoute
   '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
   '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
   '/w/$slug/settings/admin/website': typeof WSlugSettingsAdminWebsiteRoute
@@ -762,6 +772,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
+    | '/w/$slug/settings/account/scheduling'
     | '/w/$slug/settings/account/security'
     | '/w/$slug/settings/account/sign-in'
     | '/w/$slug/settings/admin/website'
@@ -834,6 +845,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
+    | '/w/$slug/settings/account/scheduling'
     | '/w/$slug/settings/account/security'
     | '/w/$slug/settings/account/sign-in'
     | '/w/$slug/settings/admin/website'
@@ -910,6 +922,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
+    | '/w/$slug/settings/account/scheduling'
     | '/w/$slug/settings/account/security'
     | '/w/$slug/settings/account/sign-in'
     | '/w/$slug/settings/admin/website'
@@ -1292,6 +1305,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsAccountProfileRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/account/scheduling': {
+      id: '/w/$slug/settings/account/scheduling'
+      path: '/account/scheduling'
+      fullPath: '/w/$slug/settings/account/scheduling'
+      preLoaderRoute: typeof WSlugSettingsAccountSchedulingRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/account/security': {
       id: '/w/$slug/settings/account/security'
       path: '/account/security'
@@ -1527,6 +1547,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsAccountNotificationsRoute: typeof WSlugSettingsAccountNotificationsRoute
   WSlugSettingsAccountPreferencesRoute: typeof WSlugSettingsAccountPreferencesRoute
   WSlugSettingsAccountProfileRoute: typeof WSlugSettingsAccountProfileRoute
+  WSlugSettingsAccountSchedulingRoute: typeof WSlugSettingsAccountSchedulingRoute
   WSlugSettingsAccountSecurityRoute: typeof WSlugSettingsAccountSecurityRoute
   WSlugSettingsAccountSignInRoute: typeof WSlugSettingsAccountSignInRoute
   WSlugSettingsAdminWebsiteRoute: typeof WSlugSettingsAdminWebsiteRoute
@@ -1564,6 +1585,7 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
     WSlugSettingsAccountNotificationsRoute,
   WSlugSettingsAccountPreferencesRoute: WSlugSettingsAccountPreferencesRoute,
   WSlugSettingsAccountProfileRoute: WSlugSettingsAccountProfileRoute,
+  WSlugSettingsAccountSchedulingRoute: WSlugSettingsAccountSchedulingRoute,
   WSlugSettingsAccountSecurityRoute: WSlugSettingsAccountSecurityRoute,
   WSlugSettingsAccountSignInRoute: WSlugSettingsAccountSignInRoute,
   WSlugSettingsAdminWebsiteRoute: WSlugSettingsAdminWebsiteRoute,

@@ -19,7 +19,7 @@ describe('settingsNav', () => {
     // Scheduling is gone: Calendars and Round robin are tabs of Bookings (25 October 2026).
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace', 'Super admin']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
-      ['Profile', 'Preferences', 'Sign in and devices', 'Notifications'],
+      ['Profile', 'Preferences', 'Sign in and devices', 'Notifications', 'Scheduling access'],
       ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'History', 'Trash'],
       ['Overview', 'Users', 'Booking pages', 'Website'],
     ]);
@@ -31,6 +31,7 @@ describe('settingsNav', () => {
       profile: '/w/acme/settings/account/profile',
       preferences: '/w/acme/settings/account/preferences',
       notifications: '/w/acme/settings/account/notifications',
+      'scheduling-access': '/w/acme/settings/account/scheduling',
       general: '/w/acme/settings/general',
       security: '/w/acme/settings/account/sign-in',
       members: '/w/acme/settings/members',
@@ -81,7 +82,7 @@ describe('visibleSettingsNav', () => {
     expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'])).toEqual(workspaceGroups);
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
-      ['profile', 'preferences', 'security', 'notifications'],
+      ['profile', 'preferences', 'security', 'notifications', 'scheduling-access'],
       ['general', 'members', 'objects', 'jobs', 'history', 'trash'],
     ]);
   });
