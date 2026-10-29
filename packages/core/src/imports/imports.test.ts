@@ -16,9 +16,11 @@ import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { createRecord, getRecords, setRecordValues } from '../engine/records.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
+import { createTask } from '../tasks/tasks.ts';
 import { rescope } from '../testing.ts';
 import { jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
 import { mergeValue } from './kind.ts';
+import { MADE_KEPT_MESSAGE } from './undo.ts';
 import {
   checkImportLinks,
   createImport,
@@ -472,6 +474,33 @@ describe('undo (AC-1128, AC-1129)', () => {
     ]);
   });
 
+  it('keeps a record the import created that someone has put a task on since, though no value changed', async () => {
+    const w = await world();
+    const { id } = await runImport(w, w.owner, w.settings({ onMatch: 'overwrite' }), [
+      w.row(2, 'Cy', 'cy@example.com', 'Intern'),
+      w.row(3, 'Dot', 'dot@example.com', 'Intern'),
+    ]);
+    const [cy] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select r.id::text as id from records r
+       join "values" e on e.record_id = r.id and e.attribute_id = $2 and e.active_until is null and not e.is_cleared
+       where r.workspace_id = $1 and e.text_value = 'cy@example.com'`,
+      [w.workspaceId, w.attribute('email_addresses')],
+    );
+    // A task on Cy, no field touched (late trap #81): trashing Cy took the task's record out from under it.
+    await createTask(w.owner, {
+      id: newId(),
+      title: 'Call Cy back',
+      recordIds: [cy?.id ?? ''],
+    });
+    const undoing = await undoImport(w.owner, registry, id, [outboxHook()]);
+    expect((await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).at(-1)).toBe('succeeded');
+    expect(await trash(w)).toEqual([{ email: 'dot@example.com', batch: id }]);
+    expect((await listImportRefusals(w.owner, { importId: id })).rows.map((row) => row.code)).toEqual([
+      'RECORD_CHANGED',
+    ]);
+  });
+
   it('refuses while the import is unstarted or running, after its window, and for someone else', async () => {
     const w = await world();
     const id = newId();
@@ -643,6 +672,45 @@ describe('relation columns (decision 7, milestone 5)', () => {
     expect(await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).toContain('succeeded');
     expect(await c.live()).toEqual(['Acme']);
     expect((await getImport(w.owner, id)).counts.made).toBe(0);
+  });
+
+  it('keeps a company it made once someone else has linked to it or edited it, and trashes the rest', async () => {
+    const w = await world();
+    const c = await companies(w);
+    const { id } = await runImport(w, w.owner, linkSettings(w, true), [
+      linkRow(w, 2, 'ada@example.com', ['Initech']),
+      linkRow(w, 3, 'bob@example.com', ['Hooli']),
+      linkRow(w, 4, 'cy@example.com', ['Umbrella']),
+      linkRow(w, 5, 'dee@example.com', ['Umbrella']),
+    ]);
+    const linked = await links(w);
+    // After the import: someone links a person of their own to Initech, and renames Hooli (late trap #80).
+    await createRecord(w.owner, {
+      objectId: w.people,
+      values: {
+        [w.attribute('name')]: { firstName: 'Eve' },
+        [w.attribute('email_addresses')]: ['eve@example.com'],
+        [w.attribute('company')]: { objectId: c.objectId, recordId: linked['ada@example.com'] ?? '' },
+      },
+    });
+    const names = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(
+        sql`select a.id::text from attributes a where a.object_id = ${c.objectId} and a.api_slug = 'name'`,
+      ),
+    );
+    await setRecordValues(w.owner, {
+      recordId: linked['bob@example.com'] ?? '',
+      values: { [names.rows[0]?.id ?? '']: { value: 'Hooli Inc' } },
+    });
+    const undoing = await undoImport(w.owner, registry, id);
+    expect(await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).toContain('succeeded');
+    // Umbrella, only ever the import's (its two links are the import's own rows), goes; the other two stay.
+    expect((await c.live()).sort()).toEqual(['Hooli Inc', 'Initech']);
+    // The rows that made them say so on the summary.
+    expect((await listImportRefusals(w.owner, { importId: id })).rows).toEqual([
+      { rowNumber: 2, code: 'RECORD_CHANGED', message: MADE_KEPT_MESSAGE },
+      { rowNumber: 3, code: 'RECORD_CHANGED', message: MADE_KEPT_MESSAGE },
+    ]);
   });
 
   it('refuses Create missing to a member who can only read the far object', async () => {

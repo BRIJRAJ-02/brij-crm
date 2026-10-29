@@ -7,7 +7,9 @@
 // import wrote), in which case it is kept and counted. A created record
 // somebody has worked on since is kept the same way, by the same test over
 // the versions the create wrote: an import undone a week later never trashes
-// the work done on its records meanwhile. A row taken back is
+// the work done on its records meanwhile, and nor does a note, comment or
+// task on one. A far record it made for a relation name stays too once
+// somebody else has edited it, linked to it or written on it. A row taken back is
 // marked `undone`, so a batch tried again never puts anything back twice; a
 // row whose every value was edited since stays `updated`, its note saying so.
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -60,6 +62,9 @@ export const WORKED_ON_CODE = 'RECORD_CHANGED';
 /** What the summary says about a created record that was worked on since the import made it. */
 export const WORKED_ON_MESSAGE = 'This record was edited since the import, so it was kept.';
 
+/** What the summary says about a record a row made for a relation name that was worked on since. */
+export const MADE_KEPT_MESSAGE = 'The record this row made for a linked name was worked on since, so it was kept.';
+
 /**
  * Which of `recordIds` nobody has touched since the import created them, so
  * the undo may trash them. A record is untouched when every value the import
@@ -96,6 +101,65 @@ async function untouchedSince(
     if (!changed && !added) untouched.add(row.recordId);
   }
   return untouched;
+}
+
+/**
+ * Of `recordIds`, those somebody has attached work to: a live note, comment or task. None of them is a value, so the
+ * version test above can't see them, and trashing the record took them out of sight with it (late trap #81).
+ */
+async function withAttachedWork(context: WriteContext, recordIds: readonly string[]): Promise<ReadonlySet<string>> {
+  if (recordIds.length === 0) return new Set();
+  const ids = sql`array(select jsonb_array_elements_text(${JSON.stringify(recordIds)}::jsonb))::uuid[]`;
+  const found = await context.tx.execute<{ id: string }>(sql`
+    select n.record_id::text as id from notes n
+    where n.workspace_id = ${context.scope.workspaceId} and n.record_id = any(${ids}) and n.deleted_at is null
+    union
+    select c.record_id::text from comments c
+    where c.workspace_id = ${context.scope.workspaceId} and c.record_id = any(${ids}) and c.deleted_at is null
+    union
+    select l.record_id::text from task_records l
+    join tasks t on t.workspace_id = l.workspace_id and t.id = l.task_id and t.deleted_at is null
+    where l.workspace_id = ${context.scope.workspaceId} and l.record_id = any(${ids})
+  `);
+  return new Set(found.rows.map((row) => row.id));
+}
+
+/**
+ * Of the far records an import made for its relation names (`createMissing`), those that are no longer only the
+ * import's (late trap #80): edited since (a record's revision moves on every write to it, and a record is made at
+ * 0), linked to a record the import neither made nor wrote, or holding a note, comment or task. Undoing used to
+ * trash them all, so a company other people had since linked deals to, or written on, went with the import.
+ */
+async function madeWorkedOn(
+  context: WriteContext,
+  importId: string,
+  recordIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (recordIds.length === 0) return new Set();
+  const ids = sql`array(select jsonb_array_elements_text(${JSON.stringify(recordIds)}::jsonb))::uuid[]`;
+  const workspaceId = context.scope.workspaceId;
+  const found = await context.tx.execute<{ id: string }>(sql`
+    select r.id::text from records r
+    where r.workspace_id = ${workspaceId} and r.id = any(${ids}) and r.revision > 0
+    union
+    -- A link to a record none of this import's rows wrote. One arm per end, each on its own history index, and NOT
+    -- EXISTS, so the planner probes or anti-joins the import's rows rather than holding all of them per link.
+    select k.from_record_id::text from record_links k
+    where k.workspace_id = ${workspaceId} and k.from_record_id = any(${ids}) and k.active_until is null
+      and not exists (
+        select 1 from import_rows ir
+        where ir.workspace_id = ${workspaceId} and ir.import_id = ${importId} and ir.record_id = k.to_record_id
+      )
+    union
+    select k.to_record_id::text from record_links k
+    where k.workspace_id = ${workspaceId} and k.to_record_id = any(${ids}) and k.active_until is null
+      and not exists (
+        select 1 from import_rows ir
+        where ir.workspace_id = ${workspaceId} and ir.import_id = ${importId} and ir.record_id = k.from_record_id
+      )
+  `);
+  const attached = await withAttachedWork(context, recordIds);
+  return new Set([...found.rows.map((row) => row.id), ...attached]);
 }
 
 /**
@@ -174,7 +238,12 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
       });
       // A record somebody has worked on since the import made it is not the import's to take back: it stays,
       // counted on the summary. Undoing used to trash it however much had been written on it since.
-      const untouched = await untouchedSince(context, madeRecords);
+      const unedited = await untouchedSince(context, madeRecords);
+      const attached = await withAttachedWork(
+        context,
+        madeRecords.map((each) => each.recordId),
+      );
+      const untouched = new Set([...unedited].filter((id) => !attached.has(id)));
       const created = madeRecords.filter((each) => untouched.has(each.recordId));
       const workedOn = madeRecords.filter((each) => !untouched.has(each.recordId));
       for (const each of workedOn) {
@@ -251,8 +320,13 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
             byObject.set(link.objectId, [...(byObject.get(link.objectId) ?? []), link.recordId]);
         }
         const gone = new Set<string>();
+        // A made record others have worked on since stays, as the row's own record does; its row still goes back.
+        const workedOn = await madeWorkedOn(context, row.id, [...byObject.values()].flat());
+        for (const id of workedOn) gone.add(id);
         try {
-          for (const [objectId, recordIds] of byObject) {
+          for (const [objectId, all] of byObject) {
+            const recordIds = all.filter((id) => !workedOn.has(id));
+            if (recordIds.length === 0) continue;
             const deleted = await deleteIn(context, { objectId, recordIds, batchId: row.id });
             for (const outcome of deleted) {
               if (outcome.state === 'deleted' || outcome.state === 'already-deleted') gone.add(outcome.recordId);
@@ -262,6 +336,22 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
         } catch (error) {
           if (!isRefusal(error) || error.refusal.code === 'QUERY_CANCELLED') throw error;
           return { finished: false, failed: { code: error.refusal.code, message: error.refusal.message } };
+        }
+        // A row whose made record stays says so on the summary, as a created record kept does.
+        const keptRows = madeRows.filter((each) => each.made.some((link) => workedOn.has(link.recordId)));
+        if (keptRows.length > 0) {
+          await tx
+            .update(importRows)
+            .set({ errorCode: WORKED_ON_CODE, errorMessage: MADE_KEPT_MESSAGE })
+            .where(
+              and(
+                eq(importRows.workspaceId, scope.workspaceId),
+                inArray(
+                  importRows.id,
+                  keptRows.map((each) => each.staged.id),
+                ),
+              ),
+            );
         }
         // A row that only made far records (its own record skipped) is taken back by this alone.
         // A made record the member can no longer delete (a record rule changed) keeps its row, said as refused.
