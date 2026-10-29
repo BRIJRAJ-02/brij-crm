@@ -187,6 +187,26 @@ describe('form uploads', () => {
     expect(m.slug).toBeTruthy();
   });
 
+  it('keeps a spam-judged submission’s file with it, so a release can still file it (late trap #52)', async () => {
+    const { live } = await formWithFile();
+    const file = (await (await upload(live.publicKey, PDF)).json()) as { fileId: string };
+    // The honeypot filled, as Chrome's autofill once did for real people (25 Oct 2026): a bot verdict.
+    const caught = await submit(live.publicKey, { ...answers(file.fileId), company_url: 'https://acme.example' });
+    expect(caught.status).toBe(200);
+    const [row] = await testQuery<{ submission_id: string | null }>(
+      ownerUrl,
+      `select submission_id from form_uploads where id = $1`,
+      [file.fileId],
+    );
+    expect(row?.submission_id).not.toBeNull();
+    const [stored] = await testQuery<{ state: string; answers: { cv?: { fileId: string } } }>(
+      ownerUrl,
+      `select state, answers from form_submissions where id = $1`,
+      [row?.submission_id],
+    );
+    expect(stored).toMatchObject({ state: 'spam', answers: { cv: { fileId: file.fileId } } });
+  });
+
   it('lets a member download it as an attachment, and no one else, nor from another workspace', async () => {
     const { m, live } = await formWithFile();
     const file = (await (await upload(live.publicKey, PDF)).json()) as { fileId: string };

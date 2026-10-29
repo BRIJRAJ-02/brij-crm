@@ -427,11 +427,25 @@ export async function submitForm(
       let hash: string | undefined;
       let claimedIds: readonly string[] = [];
       if (bot.verdict === 'spam') {
-        // A spam submission keeps no file answers: no upload is attached to it, so the cleanup removes the file.
+        // A spam submission keeps its files with it, quarantined (late trap #52): a real visitor a bot signal caught
+        // (autofill in the honeypot, 25 Oct 2026) is released later, and their file has to be there to file. They
+        // go when the submission does, as any attached upload does. An upload that can't be claimed (not this form's,
+        // taken, or past its day) is dropped, never a refusal: a bot is told nothing.
+        const kept = Object.fromEntries(Object.entries(body.answers).filter(([key]) => known.has(key)));
         const fileKeys = new Set(rendered.questions.filter((q) => q.answerType === 'file').map((q) => q.key));
-        answers = Object.fromEntries(
-          Object.entries(body.answers).filter(([key]) => known.has(key) && !fileKeys.has(key)),
-        );
+        answers = Object.fromEntries(Object.entries(kept).filter(([key]) => !fileKeys.has(key)));
+        try {
+          const claimed = await claimUploads(tx, {
+            formId: form.id,
+            questions: rendered.questions,
+            answers: kept,
+            invalid: formStrings(rendered.language).fileInvalid,
+          });
+          answers = claimed.answers;
+          claimedIds = claimed.ids;
+        } catch (error) {
+          if (!isRefusal(error)) throw error;
+        }
         judged = bot;
       } else {
         const checked = checkAnswers(rendered, body.answers);
