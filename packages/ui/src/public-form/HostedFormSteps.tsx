@@ -89,6 +89,7 @@ export function HostedFormSteps({
   onRedirect,
   onUpload,
   onRemoveUpload,
+  onStale,
   now = Date.now,
   logo = TIMEFIX_LOGO,
 }: HostedFormStepsProps) {
@@ -106,6 +107,7 @@ export function HostedFormSteps({
     onRedirect,
     onUpload,
     onRemoveUpload,
+    onStale,
     now,
     // A refusal for an earlier step goes back to it, where its errors show.
     onRefused: (keys) => {
