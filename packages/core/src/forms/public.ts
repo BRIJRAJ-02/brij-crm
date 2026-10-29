@@ -320,6 +320,11 @@ export interface SubmitInput {
   readonly ipHash?: string;
   /** True when a site's server signed the post with the form's secret. */
   readonly signed?: boolean;
+  /**
+   * True when the post came from a site's own form (its own page or its server), not ours: a question that form's
+   * HTML doesn't have is skipped, not refused (late trap #55, `checkAnswers`' `absentNotAsked`).
+   */
+  readonly fromSite?: boolean;
   /** True when the per form and email limit was spent: a content sign, not a refusal. */
   readonly emailOverLimit?: boolean;
   /** The server key answers are hashed with for repeats; without it repeats aren't looked for. */
@@ -373,7 +378,8 @@ async function repeatsOf(tx: WorkspaceTx, workspaceId: string, formId: string, h
  * Stores one submission (AC-553 to AC-556). The form must be live (a paused
  * one is 410 `FORM_CLOSED`, AC-662), and its answers are checked against the
  * live version whatever version the page loaded (unknown keys dropped; a
- * question added since and left empty fails only if it is required). A
+ * question added since and left empty fails only if it is required, and one a
+ * site's own form never sent is skipped, `fromSite`, late trap #55). A
  * submission a bot signal flags (`judgeSubmission`) is stored as `spam` with
  * its answers to known questions and gets the same answer as success
  * (AC-586); any other is checked (`checkAnswers`, field errors as refusals on
@@ -439,7 +445,7 @@ export async function submitForm(
         claimedIds = claimed.ids;
         judged = bot;
       } else {
-        const checked = checkAnswers(rendered, body.answers);
+        const checked = checkAnswers(rendered, body.answers, { absentNotAsked: input.fromSite === true });
         if (!checked.ok) {
           const [first, ...rest] = Object.entries(checked.fields).map(([field, message]) => ({
             code: 'ATTRIBUTE_VALUE_INVALID' as const,

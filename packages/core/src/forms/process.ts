@@ -381,6 +381,15 @@ export function requiredFieldFailure(fields: readonly string[]): string {
 }
 
 /**
+ * The sentence for a required field that a required question fills, and that question wasn't answered: only a site's
+ * own form can send that, its HTML copied before the question was added (late trap #55, `checkAnswers`'
+ * `absentNotAsked`), so the fix is on the site, not in the form.
+ */
+export function siteFieldFailure(field: string, question: string): string {
+  return `${field} is filled by “${question}”, which your site’s own form doesn’t ask, so the record couldn’t be created. Add that field to the form on your site; the Install tab has the code.`;
+}
+
+/**
  * The attributes a `VALUE_REQUIRED` refusal with no attribute could be about:
  * required fields of the target object that nothing fills and the write never
  * sent. Ids only, never titles. Which of them a reader may be told is decided

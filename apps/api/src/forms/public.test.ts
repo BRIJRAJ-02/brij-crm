@@ -243,6 +243,47 @@ describe('POST /api/public/forms/:publicKey/submissions', () => {
     });
     expect(server.status).toBe(200);
   });
+
+  it('takes a site’s own form whose HTML lacks a question added since, and refuses it on our page (late trap #55)', async () => {
+    const { m, live } = await liveForm();
+    const path = `/forms/${live.publicKey}/submissions`;
+    const site = 'https://acme.example';
+    await m.client.forms.updateSettings({
+      workspace: m.slug,
+      formId: live.id,
+      allowedOrigins: ['acme.example'],
+      mutationId: newId(),
+    });
+    // The starting form asks Name; the site's copied HTML only ever had Email.
+    const onlyEmail = submission({ answers: { email: 'site@example.com' } });
+    expect((await call(path, { method: 'POST', body: onlyEmail, origin: site, ip: '192.0.2.21' })).status).toBe(200);
+    // Our hosted page sends every question it shows, so there an absent required answer is still refused.
+    const ours = await call(path, {
+      method: 'POST',
+      body: submission({ answers: { email: 'ours@example.com' } }),
+      ip: '192.0.2.22',
+    });
+    expect(ours.status).toBe(422);
+    // A site field sent empty was asked, and is held to the question.
+    const empty = submission({ answers: { name: '', email: 'site2@example.com' } });
+    expect((await call(path, { method: 'POST', body: empty, origin: site, ip: '192.0.2.23' })).status).toBe(422);
+    // A site's server, signing its post with no Origin, is a site's own form too.
+    const signed = await m.client.forms.updateSettings({
+      workspace: m.slug,
+      formId: live.id,
+      requireSignature: true,
+      mutationId: newId(),
+    });
+    const text = JSON.stringify(submission({ answers: { email: 'server@example.com' } }));
+    const server = await call(path, {
+      method: 'POST',
+      body: text,
+      origin: null,
+      ip: '192.0.2.24',
+      headers: { [SIGNATURE_HEADER]: signatureOf(signed.signingSecret ?? '', text) },
+    });
+    expect(server.status).toBe(200);
+  });
 });
 
 describe('the spam checks over HTTP (AC-584, AC-585)', () => {

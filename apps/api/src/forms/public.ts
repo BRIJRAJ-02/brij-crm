@@ -285,6 +285,8 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
               captcha,
               ticket,
               signed: from.signed,
+              // Not our hosted page or embed: a site's own form, whose HTML may be older than the form.
+              fromSite: c.get('origin') !== deps.publicOrigin,
               emailOverLimit,
               answersKey: deps.answersKey,
               publicOrigins: deps.publicOrigins,

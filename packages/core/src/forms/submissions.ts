@@ -36,7 +36,7 @@ import { attributeVisible, visibleRecords } from '../access/visibility.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { UNKNOWN_FORM } from './forms.ts';
-import { FORMS_PROCESS, requiredFieldFailure } from './process.ts';
+import { FORMS_PROCESS, requiredFieldFailure, siteFieldFailure } from './process.ts';
 import { canSeeForm, loadForm, loadVersions, millis } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, records } = schema;
@@ -314,15 +314,22 @@ async function failureFor(
   scope: EngineScope,
   stored: string | null,
   missing: unknown,
+  questions: FormDocument['questions'] = [],
 ): Promise<string | undefined> {
   if (stored === null) return undefined;
   const ids = Array.isArray(missing) ? missing.filter((id): id is string => typeof id === 'string') : [];
   if (ids.length === 0) return stored;
   const attributes = await loadAttributesById(tx, ids);
-  const titles = ids.flatMap((id) => {
+  const seen = ids.flatMap((id) => {
     const attribute = attributes.get(id);
-    return attribute === undefined || !attributeVisible(scope.access, attribute) ? [] : [attribute.title];
+    return attribute === undefined || !attributeVisible(scope.access, attribute) ? [] : [attribute];
   });
+  // A required question fills it, yet it came unanswered: a site's own form without that field (late trap #55).
+  for (const attribute of seen) {
+    const asks = questions.find((question) => question.required && question.filedOn?.attributeId === attribute.id);
+    if (asks !== undefined) return siteFieldFailure(attribute.title, asks.label);
+  }
+  const titles = seen.map((attribute) => attribute.title);
   return titles.length === 0 ? stored : requiredFieldFailure(titles);
 }
 
@@ -381,7 +388,13 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
   const assignment = record(row.assignment);
   // A failure for a required field nothing filled is named here, not where it was stored: the job that wrote it
   // runs as the system and sees every field, while this reader may not (security review, 27 October 2026).
-  const failure = await failureFor(tx, scope, row.failure, record(row.outcome).requiredMissing);
+  const failure = await failureFor(
+    tx,
+    scope,
+    row.failure,
+    record(row.outcome).requiredMissing,
+    version?.document.questions,
+  );
   const removedOn = filesRemovedOn(row.state, row.spam, row.receivedAt);
   return {
     id: row.id,

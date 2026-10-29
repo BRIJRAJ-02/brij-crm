@@ -26,7 +26,7 @@ import { jobKinds } from '../jobs/kinds/index.ts';
 import { rescope, testScope } from '../testing.ts';
 import { updateOption } from '../engine/options.ts';
 import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
-import { createForm, publishForm, saveFormDraft, setFormTarget } from './forms.ts';
+import { createForm, getForm, publishForm, saveFormDraft, setFormTarget } from './forms.ts';
 import { getSubmission } from './submissions.ts';
 import { processSubmission } from './process.ts';
 import { submitForm } from './public.ts';
@@ -464,6 +464,52 @@ describe('a required field nothing can fill (27 October 2026)', () => {
     const seen = await getSubmission(w.scope, { submissionId: row?.id ?? '' });
     expect(seen.failure).toContain('Status is required');
     expect(seen.failure).not.toContain('A required field isn’t asked');
+  });
+
+  it('takes a site’s own form missing a question added since, and says the fix is on the site (late trap #55)', async () => {
+    const w = await designers();
+    const form = await applyForm(w);
+    const [first] = (await getForm(w.scope, { formId: form.formId })).draft.questions;
+    if (first === undefined) throw new Error('The form asks the email.');
+    // A required Stage question added after the site copied its HTML, filed on the required Status.
+    const withStage = await saveFormDraft(w.scope, {
+      formId: form.formId,
+      document: {
+        ...(await getForm(w.scope, { formId: form.formId })).draft,
+        questions: [
+          first,
+          {
+            id: 'stage',
+            key: 'stage',
+            label: 'Stage',
+            answerType: 'dropdown',
+            choices: ['New', 'Hired'],
+            required: true,
+            update: 'fill',
+            filedOn: { objectRole: 'main', attributeId: w.status.id },
+          },
+        ],
+      },
+      expectedRevision: form.revision,
+    });
+    const live = await publishForm(w.scope, { formId: form.formId, expectedRevision: withStage.revision });
+    await w.dropDefault(w.status.id);
+    const { scope, formId } = await enterPublicForm({ db }, live.publicKey);
+    const body = { idempotencyKey: newId(), answers: { email: 'kit@example.com' }, hidden: {}, fillMs: 10_000 };
+    // From our own page the absent Stage is refused; from the site's form, the submission is kept.
+    expect(await refusalOf(submitForm(scope, registry, { formId, body, captcha: off }))).toMatchObject([
+      { field: 'stage' },
+    ]);
+    await submitForm(scope, registry, { formId, body, captcha: off, fromSite: true });
+    const [row] = await w.query<{ id: string }>(
+      sql`select id::text from form_submissions where form_id = ${formId}::uuid order by received_at desc limit 1`,
+    );
+    await runWrite(w.system, (context) => processSubmission(context, row?.id ?? ''));
+    const seen = await getSubmission(w.scope, { submissionId: row?.id ?? '' });
+    expect(seen.state).toBe('failed');
+    expect(seen.failure).toBe(
+      'Status is filled by “Stage”, which your site’s own form doesn’t ask, so the record couldn’t be created. Add that field to the form on your site; the Install tab has the code.',
+    );
   });
 
   it('stores the failure unnamed, and names the field only for a reader who may see it', async () => {

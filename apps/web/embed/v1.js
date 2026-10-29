@@ -480,7 +480,9 @@
         field.removeAttribute('aria-invalid');
         if (field.type === 'checkbox') answers[name] = field.checked;
         else if (field.type === 'radio') {
+          // A group with nothing picked still says it was asked, so a required choice left empty is refused.
           if (field.checked) answers[name] = field.value;
+          else if (!Object.prototype.hasOwnProperty.call(answers, name)) answers[name] = '';
         } else answers[name] = field.value;
       }
       var mode = 'own';

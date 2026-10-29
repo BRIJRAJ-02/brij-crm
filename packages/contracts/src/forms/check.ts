@@ -166,14 +166,25 @@ function checkOne(
  * a yes or no is always an answer), choices among the question's own. Answers
  * to anything but a question of the form are dropped, and so are answers to a
  * question its Show when hides (spec 0043, AC-1614).
+ *
+ * `absentNotAsked` is for a site's own form (late trap #55): its HTML was
+ * copied once, so a question added since has no field there and its key never
+ * comes. That question wasn't asked, so it is skipped as a hidden one is,
+ * rather than refusing every visitor for a field they were never shown. A key
+ * that comes empty was asked, and is held to the question as ever.
  */
-export function checkAnswers(form: CheckedForm, answers: Readonly<Record<string, unknown>>): AnswerCheck {
+export function checkAnswers(
+  form: CheckedForm,
+  answers: Readonly<Record<string, unknown>>,
+  options: { readonly absentNotAsked?: boolean } = {},
+): AnswerCheck {
   const words = formStrings(form.language);
   const values: Record<string, string | boolean | PhoneAnswer | FileAnswer> = {};
   const fields: Record<string, string> = {};
   for (const question of form.questions) {
     // A question whose Show when doesn't hold over the answers kept so far is skipped: never required, never kept.
     if (!matchesShowWhen(question.showWhen, values)) continue;
+    if (options.absentNotAsked === true && !Object.hasOwn(answers, question.key)) continue;
     const raw = Object.hasOwn(answers, question.key) ? answers[question.key] : undefined;
     if (question.answerType === 'checkbox' || question.answerType === 'yes_no') {
       const ticked = raw === true || raw === 'yes' || raw === 'true';

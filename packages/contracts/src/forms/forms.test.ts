@@ -96,6 +96,18 @@ describe('checkAnswers (spec 0023, AC-553, AC-556, AC-660)', () => {
     if (!required.ok) expect(required.fields.phone).not.toBe('Answer this question.');
   });
 
+  it('skips a question a site’s own form never sent, and still holds one it sent empty (late trap #55)', () => {
+    // The site's HTML was copied before Name and the terms box were added: their keys never come.
+    const own = checkAnswers(form, { email: 'ada@example.com', budget: '' }, { absentNotAsked: true });
+    expect(own).toEqual({ ok: true, answers: { email: 'ada@example.com' } });
+    // Sent empty, a question was asked, and a required one refuses as ever.
+    const empty = checkAnswers(form, { name: '', email: 'ada@example.com', terms: false }, { absentNotAsked: true });
+    expect(empty.ok).toBe(false);
+    if (!empty.ok) expect(Object.keys(empty.fields).sort()).toEqual(['name', 'terms']);
+    // Our own page sends every key, so without the option an absent one is refused.
+    expect(checkAnswers(form, { email: 'ada@example.com' }).ok).toBe(false);
+  });
+
   it('reads web addresses as a visitor types them', () => {
     expect(websiteOf('https://acme.com/about')).toBe('https://acme.com/about');
     expect(websiteOf('acme')).toBeUndefined();
