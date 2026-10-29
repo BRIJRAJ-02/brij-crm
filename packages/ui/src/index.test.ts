@@ -151,6 +151,7 @@ describe('@crm/ui', () => {
       'RelationshipSettings',
       'RelativeTime',
       'RemoteCursor',
+      'RolePowers',
       'RulesEditor',
       'SaveBar',
       'SectionBar',

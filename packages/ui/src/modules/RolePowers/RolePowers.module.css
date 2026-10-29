@@ -1,0 +1,56 @@
+/* RolePowers: one quiet line of what everyone can do, then an area per row
+   (its standing's mark, title and word), each opening to its powers, the
+   ones held at full contrast and the ones not held quieter. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .summary {
+    margin: 0;
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    color: var(--text-secondary);
+  }
+
+  .mark {
+    display: inline-flex;
+    color: var(--text-tertiary);
+
+    &[data-standing='all'] {
+      color: var(--success);
+    }
+
+    &[data-standing='some'] {
+      color: var(--text-secondary);
+    }
+  }
+
+  /* Under the area's own mark: past the Disclosure's chevron (an sm icon) and its gap, which Disclosure owns;
+     change this with them. */
+  .powers {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    padding-inline-start: calc(var(--size-icon-sm) + var(--space-6));
+    list-style: none;
+  }
+
+  .power {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text);
+
+    &[data-withheld] {
+      color: var(--text-tertiary);
+    }
+  }
+}

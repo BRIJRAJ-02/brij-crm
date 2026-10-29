@@ -509,6 +509,15 @@ export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
+/** What each role lets someone do, area by area, derived from the permissions the server enforces (Members, Invite). */
+export {
+  EVERYONE_CAN,
+  PERMISSION_AREAS,
+  rolePowers,
+  type AreaPowers,
+  type AreaStanding,
+  type PermissionArea,
+} from '@crm/contracts/role-powers';
 /** History's kinds of change (spec 0046), with no Zod: which kind each listed action is, for Workspace changes. */
 export {
   AUDIT_KIND_NAMES,

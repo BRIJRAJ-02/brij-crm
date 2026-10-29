@@ -11,6 +11,12 @@ export const strings = {
   pendingSection: 'Pending invitations',
   otherWaysSection: 'Other ways to join',
   invite: 'Invite people',
+  /** The page's second action and the Invite dialog's fold: what each role lets someone do (owner, 27 October 2026). */
+  roleGuide: 'What each role can do',
+  /** The guide's role switch. */
+  roleGuideRoles: 'Role',
+  /** The guide's list, named by the role it explains: "What the Admin role can do". */
+  rolePowers: (role: string) => `What the ${role} role can do`,
   columns: {
     name: 'Name',
     email: 'Email',

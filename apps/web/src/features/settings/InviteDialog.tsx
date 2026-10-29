@@ -4,8 +4,9 @@
 // each row's role where it differs, then Invite; the dialog then says who was invited.
 // Leaves out: the invite link (the Joining tab's Other ways to join), email domains, and a seat line (until #38 sets limits).
 import type { DataLayer, RoleOption } from '@crm/data';
-import { Button, Callout, InviteRows, Modal, Skeleton, useDelayedLoading } from '@crm/ui';
+import { Button, Callout, Disclosure, InviteRows, Modal, Skeleton, useDelayedLoading } from '@crm/ui';
 import { strings } from './members-strings.ts';
+import { hasGuide, RoleGuide } from './RoleGuide.tsx';
 import { useInvite } from './useInvite.tsx';
 
 /** Props for the Invite dialog. */
@@ -42,7 +43,7 @@ export interface InviteDialogProps {
 /**
  * The Invite dialog: the one invite form (`useInvite` with the library's
  * InviteRows), a row per person with that row's role, what each role can do
- * in the tip by the Role column, "+ Add another" under the rows. An address
+ * in the tip by the Role column and in full under the rows (What each role can do), "+ Add another" under them. An address
  * that already belongs or is already invited is refused in its row before
  * anything is sent. Invite sends every valid row, one call per role; the
  * dialog then says who was invited, who already belongs, and whose email
@@ -169,6 +170,12 @@ export function InviteDialog({
         // eslint-disable-next-line jsx-a11y-x/no-autofocus
         autoFocus
       />
+      {/* What each role can do, one press away: closed, so the dialog stays the invite it was opened for. */}
+      {roles !== undefined && hasGuide(roles) && (
+        <Disclosure title={strings.roleGuide} variant="quiet">
+          <RoleGuide roles={roles} initialRole={defaultRole} />
+        </Disclosure>
+      )}
     </Modal>
   );
 }
