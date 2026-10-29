@@ -4,13 +4,41 @@
 // Main task: read each person's reach in a few words; open it to give them See or Manage over a person or everyone,
 // change a level, or take one back (asked first, AC-1445).
 // Leaves out: teams (not built), reach from custom roles (not built), "What can Priya do" (the role guide's).
-import type { DataLayer, DelegationTarget, DelegationView, MemberView, SchedulingLevel } from '@crm/data';
+import type { DataLayer, DelegationTarget, DelegationView, MemberView, Role, SchedulingLevel } from '@crm/data';
 import { ROLE_LABELS } from '@crm/data';
 import { useDelegations } from '@crm/data/react';
-import { Button, EmptyState, Icon, Popover, Select, SettingsRow, type TableColumn, type Toasts } from '@crm/ui';
-import { useEffect, useRef, useState } from 'react';
-import { LevelControl, personItem, RemoveAccessDialog, type RemoveAccessQuestion } from './SchedulingAccessDialogs.tsx';
-import { heldBy, reachWords, roleManagesEveryone, targetName, whoseOf } from './scheduling-access.ts';
+import {
+  Avatar,
+  Button,
+  focusLater,
+  Form,
+  Icon,
+  Popover,
+  Select,
+  Separator,
+  SettingsRow,
+  Skeleton,
+  type TableColumn,
+  type Toasts,
+} from '@crm/ui';
+import { memo, useEffect, useId, useRef, useState } from 'react';
+import { useMyAccess } from '../workspace/WorkspacePage.tsx';
+import {
+  LevelControl,
+  LevelSelect,
+  personItem,
+  RemoveAccessDialog,
+  type RemoveAccessQuestion,
+} from './SchedulingAccessDialogs.tsx';
+import {
+  heldBy,
+  reachWords,
+  roleManagesEveryone,
+  sourceOf,
+  targetName,
+  whoseOf,
+  type NameOf,
+} from './scheduling-access.ts';
 import { strings } from './scheduling-access-strings.ts';
 
 /** The column, for holders of `members.manage` (AC-1267): its header names its subject (timefix's lesson). */
@@ -31,7 +59,7 @@ const EVERYONE = '@everyone';
 
 /**
  * The workspace's members, for names and the person picker: the data layer's one cached list (the route loaded it),
- * read once per cell.
+ * so this resolves at once and asks the network nothing.
  */
 function useMemberList(data: DataLayer, slug: string): readonly MemberView[] {
   const [list, setList] = useState<readonly MemberView[]>([]);
@@ -55,50 +83,39 @@ function useMemberList(data: DataLayer, slug: string): readonly MemberView[] {
  * reach from their role, their delegations (each level changes in place, Remove asks first) and Give access. An owner
  * or admin reads "Everyone" as plain text: a control that couldn't change their reach would lie (timefix's rule).
  */
-export function SchedulingAccessCell({ data, toasts, slug, me, member }: SchedulingAccessCellProps) {
+export const SchedulingAccessCell = memo(function SchedulingAccessCell(props: SchedulingAccessCellProps) {
+  if (roleManagesEveryone(props.member.role)) return strings.everyoneByRole;
+  return <Reach {...props} />;
+});
+
+/** A member whose reach comes from their delegations: the words, the popover and the confirm. */
+function Reach({ data, toasts, slug, me, member }: SchedulingAccessCellProps) {
   const held = data.scheduling.delegations(slug, 'everyone');
   const state = useDelegations(held);
   const members = useMemberList(data, slug);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [isOpen, setOpen] = useState(false);
   const [question, setQuestion] = useState<RemoveAccessQuestion | undefined>(undefined);
-  const [target, setTarget] = useState<string | null>(null);
-  const [level, setLevel] = useState<SchedulingLevel>('view');
-  const nameOf = (id: string) => (id === member.id ? member.name : members.find((each) => each.id === id)?.name);
+  const nameOf: NameOf = (id) => (id === member.id ? member.name : members.find((each) => each.id === id)?.name);
 
-  if (roleManagesEveryone(member.role)) return strings.everyoneByRole;
-  if (state.status === 'loading') return null;
-  if (state.status === 'error') return strings.theirs;
+  // Its place while the workspace's delegations load, so the column doesn't fill in late with nothing.
+  if (state.status === 'loading') return <Skeleton width="short" />;
+  // Never a reach the reader might act on when it wasn't read: say so, and try again from here.
+  if (state.status === 'error') {
+    return (
+      <Button
+        variant="ghost"
+        icon="refresh-cw"
+        label={strings.cellFailedFor(member.name)}
+        onPress={() => held.reload()}
+      >
+        {strings.cellFailed}
+      </Button>
+    );
+  }
 
   const theirs = heldBy(state.delegations, member.id);
   const words = reachWords(member.role, theirs, nameOf);
-  // Whom they may be given: everyone, or a member who isn't them, isn't an owner or admin unless the reader is an
-  // owner (the server says so either way), and isn't already in their list.
-  const people = members.filter(
-    (each) =>
-      each.id !== member.id && !theirs.some((one) => one.target.type === 'member' && one.target.memberId === each.id),
-  );
-  const hasEveryone = theirs.some((one) => one.target.type === 'everyone');
-  const targets = [
-    ...(hasEveryone
-      ? []
-      : [
-          {
-            id: EVERYONE,
-            label: strings.everyoneOption,
-            description: strings.everyoneOptionText,
-            leading: <Icon name="users-round" tone="muted" />,
-          },
-        ]),
-    ...people.map(personItem),
-  ];
-
-  const grant = (to: DelegationTarget, chosen: SchedulingLevel) => {
-    const whose = whoseOf(to, nameOf);
-    void data.scheduling.grant(slug, me, { delegateMemberId: member.id, target: to, level: chosen }).then((landed) => {
-      if (landed) toasts.toast({ tone: 'success', message: strings.given(member.name, chosen, whose) });
-    });
-  };
   const ask = (delegation: DelegationView) => {
     // The popover closes first, so focus moves into the dialog and nothing is left open behind it.
     setOpen(false);
@@ -129,81 +146,161 @@ export function SchedulingAccessCell({ data, toasts, slug, me, member }: Schedul
         triggerRef={triggerRef}
         isOpen={isOpen}
         onOpenChange={setOpen}
-        width="builder"
+        width="list"
       >
-        <SettingsRow
-          leading={<Icon name="shield-check" tone="muted" />}
-          leadingAlign="center"
-          title={ROLE_LABELS[member.role]}
-          description={strings.roleOwnOnly}
-        />
-        {theirs.map((delegation) => {
-          const name = targetName(delegation.target, nameOf);
-          return (
-            <SettingsRow key={delegation.id} title={name} leadingAlign="center">
-              <Select
-                label={strings.levelFor(name)}
-                isLabelHidden
-                variant="inline"
-                items={[
-                  { id: 'view', label: strings.see },
-                  { id: 'manage', label: strings.manage },
-                ]}
-                value={delegation.level}
-                onChange={(next) => {
-                  if ((next === 'view' || next === 'manage') && next !== delegation.level)
-                    grant(delegation.target, next);
-                }}
-              />
-              <Button
-                variant="ghost"
-                icon="x"
-                label={strings.removeFor(`${member.name}: ${name}`)}
-                onPress={() => ask(delegation)}
-              />
-            </SettingsRow>
-          );
-        })}
-        {theirs.length === 0 && <EmptyState layout="row" icon="calendar-clock" title={strings.theirs} />}
-        {targets.length > 0 && (
-          <SettingsRow title={strings.addFor} control="field">
-            <Select
-              label={strings.target}
-              isLabelHidden
-              placeholder={strings.targetPlaceholder}
-              items={targets}
-              value={target}
-              onChange={setTarget}
-              isSearchable
-            />
-            <LevelControl
-              value={level}
-              onChange={setLevel}
-              label={strings.levelFor(member.name)}
-              isLabelVisible={false}
-            />
-            <Button
-              variant="primary"
-              isDisabled={target === null}
-              onPress={() => {
-                if (target === null) return;
-                grant(target === EVERYONE ? { type: 'everyone' } : { type: 'member', memberId: target }, level);
-                setTarget(null);
-                setLevel('view');
-              }}
-            >
-              {strings.give}
-            </Button>
-          </SettingsRow>
+        {/* Mounted only while open: the pickers over every member are built for the one person being edited. */}
+        {isOpen && (
+          <Editor
+            data={data}
+            toasts={toasts}
+            slug={slug}
+            me={me}
+            member={member}
+            members={members}
+            theirs={theirs}
+            nameOf={nameOf}
+            onRemove={ask}
+          />
         )}
       </Popover>
       <RemoveAccessDialog
         question={question}
         onClose={() => {
           setQuestion(undefined);
-          triggerRef.current?.focus();
+          focusLater(() => triggerRef.current);
         }}
       />
+    </>
+  );
+}
+
+/** The popover's body: the role's reach, each delegation, and Give access. */
+function Editor({
+  data,
+  toasts,
+  slug,
+  me,
+  member,
+  members,
+  theirs,
+  nameOf,
+  onRemove,
+}: SchedulingAccessCellProps & {
+  readonly members: readonly MemberView[];
+  readonly theirs: readonly DelegationView[];
+  readonly nameOf: NameOf;
+  readonly onRemove: (delegation: DelegationView) => void;
+}) {
+  const reader = useMyAccess()?.role;
+  const [target, setTarget] = useState<string | null>(null);
+  const [level, setLevel] = useState<SchedulingLevel>('view');
+  const targetRef = useRef<HTMLButtonElement>(null);
+  const formId = useId();
+  // Whom they may be given (AC-1255): never an owner, an admin only when the reader is an owner, never themself or
+  // someone they already have. The server holds the same rules, so nothing offered here is refused.
+  const offerable = (role: Role) => role !== 'owner' && (role !== 'admin' || reader === 'owner');
+  const people = members.filter(
+    (each) =>
+      each.id !== member.id &&
+      offerable(each.role) &&
+      !theirs.some((one) => one.target.type === 'member' && one.target.memberId === each.id),
+  );
+  const hasEveryone = theirs.some((one) => one.target.type === 'everyone');
+  const targets = [
+    ...(hasEveryone
+      ? []
+      : [
+          {
+            id: EVERYONE,
+            label: strings.everyoneOption,
+            description: strings.everyoneOptionText,
+            leading: <Icon name="users-round" tone="muted" />,
+          },
+        ]),
+    ...people.map(personItem),
+  ];
+  const grant = (to: DelegationTarget, chosen: SchedulingLevel) => {
+    const whose = whoseOf(to, nameOf);
+    void data.scheduling.grant(slug, me, { delegateMemberId: member.id, target: to, level: chosen }).then((landed) => {
+      if (landed) toasts.toast({ tone: 'success', message: strings.given(member.name, chosen, whose) });
+    });
+  };
+  const byId = new Map(members.map((each) => [each.id, each]));
+  const give = () => {
+    if (target === null) return;
+    grant(target === EVERYONE ? { type: 'everyone' } : { type: 'member', memberId: target }, level);
+    setTarget(null);
+    setLevel('view');
+    // The button that had focus is disabled now: back to the picker, for the next one.
+    focusLater(() => targetRef.current);
+  };
+  return (
+    <>
+      <SettingsRow
+        leading={<Icon name="shield-check" tone="muted" />}
+        leadingAlign="center"
+        title={ROLE_LABELS[member.role]}
+        description={theirs.length === 0 ? strings.roleOwnOnly : strings.roleOwn}
+      />
+      {theirs.map((delegation) => {
+        const name = targetName(delegation.target, nameOf);
+        const found = delegation.target.type === 'member' ? byId.get(delegation.target.memberId) : undefined;
+        return (
+          <SettingsRow
+            key={delegation.id}
+            leading={
+              delegation.target.type === 'member' ? (
+                <Avatar
+                  name={name}
+                  id={delegation.target.memberId}
+                  size="sm"
+                  {...(found?.avatarUrl === undefined ? {} : { src: found.avatarUrl })}
+                  isDecorative
+                />
+              ) : (
+                <Icon name="users-round" tone="muted" />
+              )
+            }
+            leadingAlign="center"
+            title={name}
+            description={sourceOf(delegation, me, nameOf)}
+          >
+            <LevelSelect
+              name={`${member.name}: ${name}`}
+              value={delegation.level}
+              onChange={(next) => grant(delegation.target, next)}
+            />
+            <Button
+              variant="ghost"
+              icon="x"
+              label={strings.removeFor(`${member.name}: ${name}`)}
+              onPress={() => onRemove(delegation)}
+            />
+          </SettingsRow>
+        );
+      })}
+      {targets.length > 0 && (
+        // Give access as one short form under the rows: the picker, See or Manage, then the button, each whole at
+        // the popover's width.
+        <>
+          {theirs.length > 0 && <Separator />}
+          <Form id={formId} label={strings.addFor} onSubmit={give}>
+            <Select
+              label={strings.addFor}
+              placeholder={strings.targetPlaceholder}
+              items={targets}
+              value={target}
+              onChange={setTarget}
+              isSearchable
+              triggerRef={targetRef}
+            />
+            <LevelControl value={level} onChange={setLevel} />
+            <Button variant="primary" type="submit" form={formId} isDisabled={target === null}>
+              {strings.give}
+            </Button>
+          </Form>
+        </>
+      )}
     </>
   );
 }

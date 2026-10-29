@@ -32,7 +32,8 @@ describe('which rows belong where', () => {
 describe('a row’s source', () => {
   it('says who added it', () => {
     expect(sourceOf(grant('priya', ME, 'view', { grantedBySelf: true, grantedBy: ME }), ME, nameOf)).toBe('You added');
-    expect(sourceOf(grant(ME, 'bea', 'view', { grantedBySelf: true }), ME, nameOf)).toBe('Bea added');
+    expect(sourceOf(grant(ME, 'bea', 'view', { grantedBySelf: true }), ME, nameOf)).toBe('They added you');
+    expect(sourceOf(grant('sam', 'bea', 'view', { grantedBySelf: true }), ME, nameOf)).toBe('Bea added');
     expect(sourceOf(grant(ME, 'everyone', 'view', { grantedBy: 'kim' }), ME, nameOf)).toBe('Kim added');
     expect(sourceOf(grant(ME, 'everyone', 'view', { grantedBy: 'gone' }), ME, nameOf)).toBe('Added by an admin');
   });

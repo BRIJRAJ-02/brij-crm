@@ -929,6 +929,7 @@ type CardAsk = CardQuestion & { readonly opening: number };
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
   const forPeople = props.forPeople ?? NO_PEOPLE;
+  const canBookForOthers = useCan('booking.admin');
   const { workingStart, toasts, onBookAsHost, newBookingKey } = props;
   // The reader: a colleague's booking (an admin's Everyone) names its host on its block.
   const me = useMyAccess()?.memberId;
@@ -1570,7 +1571,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
           locale={locale}
           hasCalendar={connections.length > 0}
           pages={bookable}
-          forPeople={forPeople}
+          // Only `booking.admin` reads a colleague's pages today, so only they get For here (AC-1273 widens it).
+          forPeople={canBookForOthers ? forPeople : NO_PEOPLE}
           newKey={newBookingKey}
           people={props.peopleSearch}
           calendars={calendarList}

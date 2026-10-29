@@ -53,6 +53,35 @@ export function LevelControl({
   );
 }
 
+/** See or Manage as one quiet inline Select in a row, each with what it allows (the page's rows, the popover's). */
+export function LevelSelect({
+  name,
+  value,
+  onChange,
+}: {
+  readonly name: string;
+  readonly value: SchedulingLevel;
+  readonly onChange: (level: SchedulingLevel) => void;
+}) {
+  return (
+    <Select
+      label={strings.levelFor(name)}
+      isLabelHidden
+      variant="inline"
+      items={[
+        { id: 'view', label: strings.see, description: strings.seeDescription },
+        { id: 'manage', label: strings.manage, description: strings.manageDescription },
+      ]}
+      value={value}
+      onChange={(next) => {
+        if (next === 'view' || next === 'manage') {
+          if (next !== value) onChange(next);
+        }
+      }}
+    />
+  );
+}
+
 /** Props for the Add someone dialog. */
 export interface AddDelegateDialogProps {
   readonly isOpen: boolean;

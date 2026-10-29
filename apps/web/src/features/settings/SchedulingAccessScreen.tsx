@@ -13,14 +13,19 @@ import {
   Card,
   EmptyState,
   Icon,
-  Select,
+  focusLater,
   SettingsRow,
   SettingsSection,
   Skeleton,
   type Toasts,
 } from '@crm/ui';
-import { useMemo, useState } from 'react';
-import { AddDelegateDialog, RemoveAccessDialog, type RemoveAccessQuestion } from './SchedulingAccessDialogs.tsx';
+import { useMemo, useRef, useState } from 'react';
+import {
+  AddDelegateDialog,
+  LevelSelect,
+  RemoveAccessDialog,
+  type RemoveAccessQuestion,
+} from './SchedulingAccessDialogs.tsx';
 import { heldBy, overMe, roleManagesEveryone, sourceOf, targetName, whoseOf } from './scheduling-access.ts';
 import { strings } from './scheduling-access-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -35,35 +40,6 @@ export interface SchedulingAccessScreenProps {
   readonly members: readonly MemberView[];
 }
 
-/** See or Manage as one quiet inline Select in a row. */
-function LevelSelect({
-  name,
-  value,
-  onChange,
-}: {
-  readonly name: string;
-  readonly value: SchedulingLevel;
-  readonly onChange: (level: SchedulingLevel) => void;
-}) {
-  return (
-    <Select
-      label={strings.levelFor(name)}
-      isLabelHidden
-      variant="inline"
-      items={[
-        { id: 'view', label: strings.see, description: strings.seeDescription },
-        { id: 'manage', label: strings.manage, description: strings.manageDescription },
-      ]}
-      value={value}
-      onChange={(next) => {
-        if (next === 'view' || next === 'manage') {
-          if (next !== value) onChange(next);
-        }
-      }}
-    />
-  );
-}
-
 /** A level as a quiet word, for a row that can't change it here. */
 const levelBadge = (level: SchedulingLevel) => (
   <Badge text={level === 'manage' ? strings.manage : strings.see} isWhole />
@@ -75,6 +51,9 @@ export function SchedulingAccessScreen({ data, toasts, slug, access, members }: 
   const state = useDelegations(data.scheduling.delegations(slug, 'mine'));
   const [isAdding, setAdding] = useState(false);
   const [question, setQuestion] = useState<RemoveAccessQuestion | undefined>(undefined);
+  // Where focus goes once a confirm or the Add dialog closes: the row it came from may be gone.
+  const addRef = useRef<HTMLButtonElement>(null);
+  const refocus = () => focusLater(() => addRef.current);
   const byId = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
   const nameOf = (id: string) => byId.get(id)?.name;
   const delegations = state.status === 'ready' ? state.delegations : [];
@@ -129,8 +108,8 @@ export function SchedulingAccessScreen({ data, toasts, slug, access, members }: 
         {state.error.message}
       </EmptyState>
     );
-    overBody = failed;
-    heldBody = null;
+    overBody = <Card>{failed}</Card>;
+    heldBody = <Card>{failed}</Card>;
   } else if (state.status === 'loading') {
     overBody = <SchedulingAccessLoadingCard />;
     heldBody = <SchedulingAccessLoadingCard />;
@@ -236,35 +215,45 @@ export function SchedulingAccessScreen({ data, toasts, slug, access, members }: 
   }
 
   return (
-    <SettingsPage
-      title={strings.title}
-      actions={
-        <Button
-          variant="primary"
-          icon="user-plus"
-          isDisabled={state.status !== 'ready'}
-          onPress={() => setAdding(true)}
-        >
-          {strings.addSomeone}
-        </Button>
-      }
-    >
-      <SettingsSection title={strings.overMe} description={strings.overMeDescription}>
+    <SettingsPage title={strings.title}>
+      <SettingsSection
+        title={strings.overMe}
+        description={strings.overMeDescription}
+        // The page's one primary, on the section it adds to, so it is there on every width.
+        actions={
+          <Button
+            ref={addRef}
+            variant="primary"
+            icon="user-plus"
+            isDisabled={state.status !== 'ready'}
+            onPress={() => setAdding(true)}
+          >
+            {strings.addSomeone}
+          </Button>
+        }
+      >
         {overBody}
       </SettingsSection>
-      {heldBody !== null && (
-        <SettingsSection title={strings.mine} description={strings.mineDescription}>
-          {heldBody}
-        </SettingsSection>
-      )}
+      <SettingsSection title={strings.mine} description={strings.mineDescription}>
+        {heldBody}
+      </SettingsSection>
       <AddDelegateDialog
         isOpen={isAdding}
         people={addable}
         hoursSetByOthers={hoursSetByOthers}
-        onClose={() => setAdding(false)}
+        onClose={() => {
+          setAdding(false);
+          refocus();
+        }}
         onAdd={(memberId, level) => grant(memberId, level, false)}
       />
-      <RemoveAccessDialog question={question} onClose={() => setQuestion(undefined)} />
+      <RemoveAccessDialog
+        question={question}
+        onClose={() => {
+          setQuestion(undefined);
+          refocus();
+        }}
+      />
     </SettingsPage>
   );
 }
@@ -273,12 +262,11 @@ export function SchedulingAccessScreen({ data, toasts, slug, access, members }: 
 function SchedulingAccessLoadingCard() {
   return (
     <Card isBusy>
-      <SettingsRow title="" leading={<Skeleton shape="circle" />}>
-        <Skeleton width="short" />
-      </SettingsRow>
-      <SettingsRow title="" leading={<Skeleton shape="circle" />}>
-        <Skeleton width="short" />
-      </SettingsRow>
+      {[0, 1].map((row) => (
+        <SettingsRow key={row} title="" leading={<Skeleton shape="circle" />} description={<Skeleton width="medium" />}>
+          <Skeleton width="short" />
+        </SettingsRow>
+      ))}
     </Card>
   );
 }

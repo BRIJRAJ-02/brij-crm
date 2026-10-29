@@ -16,9 +16,8 @@ export const strings = {
   addSomeone: 'Add someone',
   ownersAndAdmins: 'Workspace owners and admins',
   ownersAndAdminsSource: 'Through their role',
-  admins: 'Workspace admins',
-  ownersOnly: 'Workspace owners',
   youAdded: 'You added',
+  theyAdded: 'They added you',
   addedBy: (name: string) => `${name} added`,
   addedByAdmin: 'Added by an admin',
   nobodyOverMe: 'Nobody else yet. Add an assistant or a colleague who covers for you.',
@@ -52,7 +51,7 @@ export const strings = {
   hoursStaySet:
     'They can book and block time for you, but can’t change your hours: those are set by the people who manage your scheduling.',
   added: (name: string, level: 'view' | 'manage') => `${name} can now ${levelWord(level)} your scheduling.`,
-  changed: (name: string, level: 'view' | 'manage') => `${name} can ${levelWord(level)} your scheduling now.`,
+  changed: (name: string, level: 'view' | 'manage') => `${name} can now ${levelWord(level)} your scheduling.`,
 
   // Take access back (AC-1445): the consequence in plain words.
   removeTitle: (name: string) => `Remove ${name}’s access?`,
@@ -71,12 +70,8 @@ export const strings = {
 
   // The Members page's column (AC-1267).
   column: 'Scheduling access',
-  columnInfo:
-    'Whose hours, time off and bookings each person can manage (or only see) beyond their own. Owners and admins manage everyone through their role.',
   cellFor: (name: string) => `Scheduling access for ${name}`,
   everyoneByRole: 'Everyone',
-  byRole: 'Through their role',
-  roleReach: (role: string) => `As ${role}, they manage everyone’s scheduling.`,
   theirs: 'Only their own',
   andOthers: (count: number) => `and ${String(count)} more`,
   and: ' and ',
@@ -84,9 +79,10 @@ export const strings = {
   seesOnly: (words: string) => `Sees ${words}`,
   everyoneLower: 'everyone',
   formerMember: 'Former member',
-  sees: 'See',
-  manages: 'Manage',
   roleOwnOnly: 'Their role reaches only their own scheduling. Give them more below.',
+  roleOwn: 'Their role reaches only their own scheduling. These reach further.',
+  cellFailed: 'Couldn’t load',
+  cellFailedFor: (name: string) => `Scheduling access for ${name} didn’t load. Try again`,
   addFor: 'Give access to',
   target: 'Whose scheduling',
   targetPlaceholder: 'Choose',

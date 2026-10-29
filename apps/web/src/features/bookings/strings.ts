@@ -184,20 +184,19 @@ export const strings = {
   howOften: 'How often',
   justThis: (weekday: string) => `Just this ${weekday}`,
   onlyYou: 'Only you see this.',
+  onlyYouAnd: (name: string) => `Only you, ${name} and whoever manages ${name}’s scheduling see this.`,
   blockIt: 'Block it',
   blocking: 'Blocking',
   blockFailed: 'That time couldn’t be blocked. Try again.',
   timeBlocked: 'Time blocked.',
   // Acting for a colleague whose scheduling the member Manages (spec 0037, AC-1272).
   seeOnly: (host: string) =>
-    host === ''
-      ? 'You can see this booking but not change it.'
-      : `You can see ${host}’s bookings but not change them, or read the guest’s email and answers.`,
+    host === '' ? 'You can see this booking but not change it.' : `You can see ${host}’s bookings but not change them.`,
   forWhom: 'For',
   forMe: 'Me',
   timeBlockedFor: (name: string) => `Time blocked on ${name}’s calendar.`,
   noPagesFor: (name: string) => `${name} has no live booking pages you can book on.`,
-  forHint: (name: string) => `Booked as ${name}, on ${name}’s calendar. ${name} is told.`,
+  forHint: (name: string) => `On ${name}’s calendar. ${name} is told.`,
   bookSomeoneIn: 'Book someone in',
   newMeeting: 'New meeting',
   /** The TopBar's New: it reads New, as Captures' does, and is named New meeting. */

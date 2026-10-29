@@ -114,6 +114,16 @@ const stillLoading = {
   retain: () => () => undefined,
 };
 
+/** The workspace's delegations, read and empty (the Scheduling access column). */
+const NO_DELEGATIONS = { status: 'ready', delegations: [] } as const;
+const noDelegations = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => NO_DELEGATIONS,
+  retain: () => () => undefined,
+  ready: () => Promise.resolve(),
+  reload: () => undefined,
+};
+
 /** A link change as the data layer takes it. */
 type LinkChange = Parameters<DataLayer['invitations']['setLink']>[1];
 
@@ -154,6 +164,8 @@ function layerWith(answer: () => Promise<void>, startLink: InviteLinkView = LINK
     // The frame's sidebar and Tasks badge (spec 0034), still loading.
     nav: { source: () => stillLoading, change: () => undefined },
     tasks: { due: () => stillLoading },
+    // The Scheduling access column (spec 0037, AC-1267): nobody holds a delegation.
+    scheduling: { delegations: () => noDelegations },
     members: {
       watch: () => () => undefined,
       // The remove dialog reads what the removal does and who could take over (spec 0031, slice 5).

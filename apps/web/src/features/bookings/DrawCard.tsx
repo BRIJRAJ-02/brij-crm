@@ -4,6 +4,7 @@
 // Leaves out: drawing (WeekCalendar), what a block does to slots (the server), and the New meeting dialog's form.
 import { isDataError, type TimeBlockKind, type TimeBlockRepeat } from '@crm/data';
 import {
+  Avatar,
   Button,
   ButtonLink,
   Callout,
@@ -184,7 +185,11 @@ function CloseForm({
           label={strings.forWhom}
           items={[
             { id: ME, label: strings.forMe },
-            ...forPeople.map((person) => ({ id: person.id, label: person.name })),
+            ...forPeople.map((person) => ({
+              id: person.id,
+              label: person.name,
+              leading: <Avatar name={person.name} id={person.id} size="xs" isDecorative />,
+            })),
           ]}
           value={forId}
           isDisabled={pending}
@@ -216,7 +221,9 @@ function CloseForm({
       )}
       <Field
         label={strings.why}
-        hint={strings.onlyYou}
+        hint={
+          forId === ME ? strings.onlyYou : strings.onlyYouAnd(forPeople.find((one) => one.id === forId)?.name ?? '')
+        }
         value={label}
         isDisabled={pending}
         onChange={setLabel}

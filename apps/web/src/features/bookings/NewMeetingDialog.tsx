@@ -354,23 +354,6 @@ export function NewMeetingDialog({
       >
         {/* First, so it is read before the form is filled in, and never below the dialog's fold. */}
         {!hasCalendar && forId === ME && <Callout tone="info">{strings.noCalendar}</Callout>}
-        {forPeople.length > 0 && (
-          <Select
-            label={strings.forWhom}
-            {...(forName === undefined ? {} : { hint: strings.forHint(forName) })}
-            items={[
-              { id: ME, label: strings.forMe },
-              ...forPeople.map((person) => ({ id: person.id, label: person.name })),
-            ]}
-            value={forId}
-            isDisabled={busy}
-            isSearchable={forPeople.length > 8}
-            onChange={(id) => setForId(id ?? ME)}
-          />
-        )}
-        {forName !== undefined && choices.length === 0 && (
-          <Callout tone="warning">{strings.noPagesFor(forName)}</Callout>
-        )}
         <Field
           ref={withRef}
           label={strings.with}
@@ -475,6 +458,28 @@ export function NewMeetingDialog({
           hint={strings.timesIn(zoneDisplay(memberTimeZone, start.getTime()))}
           isDisabled={busy}
         />
+        {/* Whose meeting: after the guest and the time, since most are the member's own (AC-1272). */}
+        {forPeople.length > 0 && (
+          <Select
+            label={strings.forWhom}
+            {...(forName === undefined ? {} : { hint: strings.forHint(forName) })}
+            items={[
+              { id: ME, label: strings.forMe },
+              ...forPeople.map((person) => ({
+                id: person.id,
+                label: person.name,
+                leading: <Avatar name={person.name} id={person.id} size="xs" isDecorative />,
+              })),
+            ]}
+            value={forId}
+            isDisabled={busy}
+            isSearchable={forPeople.length > 8}
+            onChange={(id) => setForId(id ?? ME)}
+          />
+        )}
+        {forName !== undefined && choices.length === 0 && (
+          <Callout tone="warning">{strings.noPagesFor(forName)}</Callout>
+        )}
         {choices.length > 1 && (
           <Select
             label={strings.about}

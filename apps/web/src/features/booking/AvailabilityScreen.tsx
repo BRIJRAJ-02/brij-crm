@@ -164,9 +164,14 @@ export function AvailabilityScreen({
   // New schedule is the screen's one primary, at the TopBar's end in place of New meeting (the owner, 22 October
   // 2026); with no TopBar slot it stays at the strip's end.
   const newButton = (
-    <NewScheduleButton isDisabled={memberId === undefined || isFull || !canChange} onPress={() => setCreating(true)} />
+    <NewScheduleButton isDisabled={memberId === undefined || isFull} onPress={() => setCreating(true)} />
   );
-  const newAction = isFull ? <Tooltip content={scheduleStrings.limitReached}>{newButton}</Tooltip> : newButton;
+  // Read only, there is nothing to make: the Callout above the week says why, so no dead button stands here.
+  const newAction = !canChange ? null : isFull ? (
+    <Tooltip content={scheduleStrings.limitReached}>{newButton}</Tooltip>
+  ) : (
+    newButton
+  );
   // The strip's end, as the Calendar tab's tools are (the owner, 22 October 2026: no row of its own over the card):
   // the schedule switcher, and an admin's compact member filter (AC-971).
   const tools = (

@@ -29,6 +29,8 @@ export function sourceOf(delegation: DelegationView, me: string, nameOf: NameOf)
     delegation.grantedBy ??
     (delegation.grantedBySelf && delegation.target.type === 'member' ? delegation.target.memberId : undefined);
   if (by === me) return strings.youAdded;
+  // A grant someone made over themself, read by its delegate: they chose you.
+  if (delegation.grantedBySelf && delegation.delegateMemberId === me) return strings.theyAdded;
   const name = by === undefined ? undefined : nameOf(by);
   return name === undefined ? strings.addedByAdmin : strings.addedBy(name);
 }
