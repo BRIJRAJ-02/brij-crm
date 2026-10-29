@@ -70,7 +70,12 @@ describe('profile.importLinks', () => {
     // Hidden, every one: nothing a visitor sees has changed.
     expect(answer.items).toEqual([]);
     expect(answer.archived).toHaveLength(2);
-    expect(answer.archived.map((item) => (item.kind === 'link' ? item.title : item.kind))).toEqual(['Shop', 'My blog']);
+    // One import archives its rows in one statement, at one moment: newest first can't order them, and the read's
+    // tie-break (the id) is random between them, so the test compares them as a set.
+    expect(answer.archived.map((item) => (item.kind === 'link' ? item.title : item.kind)).toSorted()).toEqual([
+      'My blog',
+      'Shop',
+    ]);
   }, 60_000);
 
   it('refuses a redirect out of the services, through the fetch’s own rule', async () => {
