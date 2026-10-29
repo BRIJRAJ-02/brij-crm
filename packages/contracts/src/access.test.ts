@@ -2,7 +2,9 @@
 // a reviewed change to this file, never a side effect.
 import { describe, expect, it } from 'vitest';
 import {
+  GRANT_LEVELS,
   KEY_DATA_SCOPES,
+  PERMISSION_GROUPS,
   KEY_SCOPES,
   MyAccess,
   Permission,
@@ -14,7 +16,7 @@ import {
 } from './access.ts';
 
 describe('the permission catalog', () => {
-  it('lists the eighteen permissions of spec 0009, jobs.manage among them, forms.manage of spec 0023, the booking two of spec 0025, comments.manage of spec 0038 and security.manage of spec 0033', () => {
+  it('lists the eighteen permissions of spec 0009, jobs.manage among them, forms.manage of spec 0023, the booking two of spec 0025, comments.manage of spec 0038, security.manage of spec 0033 and the six of spec 0037', () => {
     expect([...PERMISSION_NAMES]).toEqual([
       'workspace.manage',
       'workspace.delete',
@@ -39,6 +41,61 @@ describe('the permission catalog', () => {
       'booking.admin',
       'comments.manage',
       'security.manage',
+      'availability.own',
+      'schedule.view',
+      'schedule.view.team',
+      'schedule.manage',
+      'schedule.manage.team',
+      'routing.manage',
+    ]);
+  });
+
+  // Spec 0037, AC-1226: every permission carries a label, a one line description, a group and a grant level.
+  it('gives every permission a label, a description, a group and a grant level', () => {
+    for (const name of PERMISSION_NAMES) {
+      const entry = PERMISSIONS[name];
+      expect([name, entry.label.length > 0, /\.$/.test(entry.description)]).toEqual([name, true, true]);
+      expect(PERMISSION_GROUPS).toContain(entry.group);
+      expect(GRANT_LEVELS).toContain(entry.grant);
+    }
+  });
+
+  it('pins each grant level (AC-1226, AC-1227): owner only five, admin only ten, the rest any', () => {
+    const of = (grant: string) => PERMISSION_NAMES.filter((name) => PERMISSIONS[name].grant === grant);
+    expect(of('owner')).toEqual([
+      'workspace.delete',
+      'workspace.export',
+      'billing.manage',
+      'support.grant',
+      'security.manage',
+    ]);
+    expect(of('admin')).toEqual([
+      'workspace.manage',
+      'members.invite',
+      'members.manage',
+      'jobs.manage',
+      'teams.manage',
+      'access.manage',
+      'api_keys.manage',
+      'webhooks.manage',
+      'audit.read',
+      'routing.manage',
+    ]);
+    expect(of('any')).toEqual([
+      'schema.manage',
+      'views.manage',
+      'records.purge',
+      'forms.manage',
+      'records.export',
+      'automations.manage',
+      'booking.manage',
+      'booking.admin',
+      'comments.manage',
+      'availability.own',
+      'schedule.view',
+      'schedule.view.team',
+      'schedule.manage',
+      'schedule.manage.team',
     ]);
   });
 
@@ -82,6 +139,13 @@ describe('the role table', () => {
     'booking.admin': ['owner', 'admin'],
     'comments.manage': ['owner', 'admin'],
     'security.manage': ['owner'],
+    // Spec 0037 (AC-1227): everyone changes their own hours; owners and admins see and manage everyone's scheduling.
+    'availability.own': ['owner', 'admin', 'member'],
+    'schedule.view': ['owner', 'admin'],
+    'schedule.view.team': ['owner', 'admin'],
+    'schedule.manage': ['owner', 'admin'],
+    'schedule.manage.team': ['owner', 'admin'],
+    'routing.manage': ['owner', 'admin'],
   };
 
   it('holds exactly the table, row by row', () => {
