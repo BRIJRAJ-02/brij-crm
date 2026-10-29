@@ -44,6 +44,12 @@ export const PERMISSION_POWERS: Record<Permission, string> = {
   'booking.admin': 'Change other people’s booking pages',
   'comments.manage': 'Delete other people’s comments',
   'security.manage': 'Change how people sign in',
+  'availability.own': 'Change their own hours',
+  'schedule.view': 'See everyone’s scheduling',
+  'schedule.view.team': 'See their teams’ scheduling',
+  'schedule.manage': 'Manage everyone’s scheduling',
+  'schedule.manage.team': 'Manage their teams’ scheduling',
+  'routing.manage': 'Set up routing',
 };
 
 /** One group of powers, as a person thinks about them rather than as the code names them. */
@@ -63,6 +69,18 @@ export const PERMISSION_AREAS: readonly PermissionArea[] = [
   { id: 'records', title: 'Records', permissions: ['records.export', 'records.purge'] },
   { id: 'schema', title: 'Objects and fields', permissions: ['schema.manage', 'views.manage'] },
   { id: 'capture', title: 'Forms and booking', permissions: ['forms.manage', 'booking.manage', 'booking.admin'] },
+  {
+    id: 'scheduling',
+    title: 'Scheduling',
+    permissions: [
+      'availability.own',
+      'schedule.view.team',
+      'schedule.view',
+      'schedule.manage.team',
+      'schedule.manage',
+      'routing.manage',
+    ],
+  },
   {
     id: 'people',
     title: 'People and access',

@@ -33,11 +33,15 @@ describe('what a role can do', () => {
     }
   });
 
-  it('gives an owner everything, and a member the two powers they really hold', () => {
+  it('gives an owner everything, and a member the three powers they really hold', () => {
     expect(rolePowers('owner').every((area) => area.standing === 'all')).toBe(true);
     expect(roleReach('owner')).toEqual({ held: PERMISSION_NAMES.length, total: PERMISSION_NAMES.length });
     const member = rolePowers('member');
-    expect(member.flatMap((area) => area.held)).toEqual(['Export records', 'Make booking pages']);
+    expect(member.flatMap((area) => area.held)).toEqual([
+      'Export records',
+      'Make booking pages',
+      'Change their own hours',
+    ]);
     // An admin stops short of the owner-only powers, so the two roles never read the same.
     expect(rolePowers('admin').flatMap((area) => area.withheld).length).toBeGreaterThan(0);
   });
