@@ -9,6 +9,7 @@ import { createRoot, hydrateRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { sendVisit } from './beacon.ts';
 import { routeFor } from './routes.ts';
+import { startTags } from './tags.ts';
 import { APP_ORIGIN } from './site.ts';
 
 const root = document.getElementById('root');
@@ -27,3 +28,26 @@ sendVisit(hits, {
   isAutomated: navigator.webdriver,
   send: (url, body) => navigator.sendBeacon(url, body),
 });
+
+// The outside measurement the old site ran (tags.ts): the built site only, each tag only with its id set.
+if (import.meta.env.PROD) {
+  startTags(
+    {
+      ga: import.meta.env.VITE_GA_MEASUREMENT_ID,
+      clarity: import.meta.env.VITE_CLARITY_PROJECT_ID,
+      vercel: import.meta.env.VITE_VERCEL_ANALYTICS === '1',
+    },
+    {
+      href: window.location.href,
+      title: document.title,
+      isAutomated: navigator.webdriver,
+      global: window as unknown as Record<string, unknown>,
+      addScript: (src) => {
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = src;
+        document.head.append(script);
+      },
+    },
+  );
+}
