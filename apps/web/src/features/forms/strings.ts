@@ -171,6 +171,15 @@ export const strings = {
   mappingQuestion: 'Question',
   mappingSavedAs: 'Saved as',
   retargetFailed: 'That didn’t change where submissions go.',
+  retargetTitle: 'Change which object submissions are saved to?',
+  retargetOffTitle: 'Stop saving submissions to the CRM?',
+  retargetText: (filed: number, from: string, to: string) =>
+    `${count(filed, 'question is', 'questions are')} saved to ${from} fields. On ${to}, only questions whose label matches a field stay saved; the rest are kept with the submission only.`,
+  retargetOffText: (filed: number, from: string) =>
+    `${count(filed, 'question is', 'questions are')} saved to ${from} fields. Submissions will make no record, and every answer is kept with the submission only.`,
+  thisObject: 'this object',
+  retargetAction: 'Change object',
+  retargetOffAction: 'Stop saving',
   filedOn: (object: string, attribute: string) => `${object} › ${attribute}`,
   keptOnly: 'Kept with the submission only',
   owner: 'Owner',

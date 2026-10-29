@@ -31,7 +31,8 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { DeleteFormDialog } from './FormConfirms.tsx';
+import { DeleteFormDialog, RetargetFormDialog, type RetargetAsk } from './FormConfirms.tsx';
+import { retargetStep } from './retarget.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
 import {
@@ -358,9 +359,22 @@ export function FormEditor(props: FormEditorProps) {
 
   // Settings' Add each submission to the CRM: the draft points at an object (its starting questions filed by the
   // server, the rest by label) or at none. Saved first, so the change names the revision it starts from.
+  // Asked first when questions are saved onto the object now: the change clears where every one of them is saved,
+  // and nothing takes it back. With nothing saved anywhere it stays one click.
+  const [retargetAsk, setRetargetAsk] = useState<RetargetAsk | undefined>(undefined);
+  const askRetarget = (objectId: string | null) => {
+    if (isRetargeting) return;
+    const step = retargetStep(draft, objects, objectId, strings.thisObject);
+    if (step.kind === 'go') retarget(objectId);
+    else if (step.kind === 'ask') setRetargetAsk(step.ask);
+  };
+
   const retarget = (objectId: string | null) => {
     if (isRetargeting) return;
     setRetargeting(true);
+    const settled = () => {
+      setRetargeting(false);
+    };
     flush()
       .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision))
       .then(async (view) => {
@@ -370,10 +384,10 @@ export function FormEditor(props: FormEditorProps) {
         setDraft(next);
         latest.current = next;
         setTarget(choices);
-        setRetargeting(false);
+        settled();
       })
       .catch((error: unknown) => {
-        setRetargeting(false);
+        settled();
         if (isDataError(error) && error.code === 'FORM_CHANGED') {
           setConflict(true);
           return;
@@ -491,6 +505,18 @@ export function FormEditor(props: FormEditorProps) {
           {strings.readOnlyText}
         </Callout>
       )}
+      <RetargetFormDialog
+        ask={retargetAsk}
+        onClose={() => {
+          setRetargetAsk(undefined);
+        }}
+        onConfirm={(objectId) => {
+          retarget(objectId);
+          // The Switch or Select that opened it is disabled while the change runs, so the dialog's own return of
+          // focus would land on the page: it goes to the page's More as it closes, as the other ends here do.
+          focusLater(() => moreRef.current);
+        }}
+      />
       {conflict && (
         <Callout tone="warning" isAnnounced actions={<Button onPress={loadTheirs}>{strings.loadTheirs}</Button>}>
           {changedBy === undefined ? strings.someoneChanged : strings.changedBy(changedBy)}
@@ -519,7 +545,7 @@ export function FormEditor(props: FormEditorProps) {
             isReadOnly={!canManage}
             settings={settings}
             onDraftChange={setDraft}
-            onRetarget={retarget}
+            onRetarget={askRetarget}
             isRetargeting={isRetargeting}
             showGaps={showGaps}
           />
