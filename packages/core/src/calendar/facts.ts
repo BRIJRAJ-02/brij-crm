@@ -1,6 +1,7 @@
 // The facts spec 0009's `filterEvent` needs for a `meetings` row (spec 0024,
 // AC-610, AC-611): each meeting's privacy, the members whose connections hold
-// it, and the records it shows on, read once per relay batch (`meetingFacts`,
+// it, who may see the booking that made it (when one did), and the records it
+// shows on, read once per relay batch (`meetingFacts`,
 // the system's read) or per catch up page (`readMeetingFacts`, inside the
 // caller's own transaction). A removed meeting has no fact.
 import { sql } from 'drizzle-orm';
@@ -17,6 +18,8 @@ interface FactRow extends Record<string, unknown> {
   readonly id: string;
   readonly is_private: boolean;
   readonly holders: string[] | null;
+  readonly booked: boolean;
+  readonly seers: string[] | null;
   readonly records: { readonly objectId: string; readonly recordId: string; readonly trashed: boolean }[] | null;
 }
 
@@ -33,16 +36,35 @@ export async function readMeetingFacts(
       (select array_agg(distinct c.member_id::text)
         from meeting_sources s join calendar_connections c on c.workspace_id = s.workspace_id and c.id = s.connection_id
         where s.workspace_id = m.workspace_id and s.meeting_id = m.id) as holders,
+      -- A meeting a booking made, and who may see that booking besides booking.admin (seen.ts): the host, co-hosts
+      -- and page owner of every booking pointing either way (each way its own index lookup).
+      bk.ids is not null as booked,
+      -- Only for a meeting a booking made. The host's own row is in booking_hosts too (crm_booking_hosts_mirror).
+      case when bk.ids is not null then (select array_agg(distinct w.member_id::text) from (
+        select h.member_id from booking_hosts h where h.workspace_id = m.workspace_id and h.booking_id = any(bk.ids)
+        union all
+        select p.owner_member_id from bookings b
+        join booking_pages p on p.workspace_id = b.workspace_id and p.id = b.page_id
+        where b.workspace_id = m.workspace_id and b.id = any(bk.ids)
+      ) w) end as seers,
       (select json_agg(json_build_object('objectId', r.object_id, 'recordId', r.id, 'trashed', r.deleted_at is not null))
         from meeting_records l join records r on r.workspace_id = l.workspace_id and r.id = l.record_id
         where l.workspace_id = m.workspace_id and l.meeting_id = m.id) as records
     from meetings m
+    cross join lateral (
+      select array_agg(x.id) as ids from (
+        select b.id from bookings b where b.workspace_id = m.workspace_id and b.id = m.booking_id
+        union
+        select b.id from bookings b where b.workspace_id = m.workspace_id and b.meeting_id = m.id
+      ) x
+    ) bk
     where m.id = any(${uuidList(ids)})
   `);
   for (const row of rows.rows) {
     facts[row.id] = {
       isPrivate: row.is_private,
       holderMemberIds: row.holders ?? [],
+      ...(row.booked ? { bookingSeerMemberIds: row.seers ?? [] } : {}),
       records: (row.records ?? []).map((record) => ({
         objectId: record.objectId,
         recordId: record.recordId,

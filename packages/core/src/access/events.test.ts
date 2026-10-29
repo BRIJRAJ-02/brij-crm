@@ -371,6 +371,33 @@ describe('meetings (spec 0024)', () => {
       coarse: true,
     });
   });
+
+  it('keeps a booking’s meeting id only for an audience who may see the booking: its seers or booking.admin', () => {
+    // The owner's ask of 29 October 2026: m3 a booking made, which Bea hosts; Ada is a colleague.
+    const booked = {
+      meetings: {
+        m3: {
+          isPrivate: false,
+          holderMemberIds: [BEA],
+          bookingSeerMemberIds: [BEA],
+          records: [{ objectId: OBJECT, recordId: 'r1' }],
+        },
+      },
+    };
+    const row: EventRow = { ...meetings, meetingIds: ['m3'], recordIds: ['r1'] };
+    // Ada, a plain member: the record hears of it (it reads "Private meeting" there), the id never.
+    expect(filterEvent(open, row, booked)).toMatchObject({ recordIds: ['r1'], meetingIds: [] });
+    // Bea, the host: in full.
+    expect(filterEvent(audience([{ id: BEA, role: 'member' }]), row, booked)).toMatchObject({ meetingIds: ['m3'] });
+    // An admin (booking.admin) who isn't on it: in full too.
+    expect(filterEvent(audience([{ id: ADA, role: 'admin' }]), row, booked)).toMatchObject({ meetingIds: ['m3'] });
+    // An audience of the host and a colleague together: not every one may see it, so the id goes.
+    const mixed = audience([
+      { id: BEA, role: 'member' },
+      { id: ADA, role: 'member' },
+    ]);
+    expect(filterEvent(mixed, row, booked)).toMatchObject({ meetingIds: [] });
+  });
 });
 
 describe('tasks', () => {

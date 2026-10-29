@@ -22,6 +22,7 @@ import { loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { runWrite, type AfterWrite, type MeetingChange, type WriteContext } from '../engine/write.ts';
 import { checkMeetingRecord } from './meetings.ts';
 import { domainOf, holders, matchEvent, recordsOf, shouldSync, type Lookups } from './match.ts';
+import { bookingReaderOf, hiddenBookingSql } from '../booking/seen.ts';
 import { isGoogleCalendarId, normaliseEmail, type ProviderEvent } from './provider.ts';
 
 /** What an attendee that can't be added answers: the same whether they are a member, matched, or hidden. */
@@ -228,7 +229,8 @@ export interface AddMeetingAttendeeInput {
 /**
  * Adds an attendee the CRM doesn't know as a person (AC-609), as the reader,
  * through the access door: the record must be visible to them, the meeting on
- * it and not private to someone else, and the attendee unknown. The person
+ * it and not private to someone else (nor a colleague's booking, `seen.ts`),
+ * and the attendee unknown. The person
  * gets their email, the calendar's name and the company holding their
  * domain (when exactly one does and the reader can see it), and every
  * meeting listing the address links them. Anything else that isn't
@@ -255,7 +257,7 @@ export async function addMeetingAttendee(
           select 1 from meeting_sources s
           join calendar_connections c on c.workspace_id = s.workspace_id and c.id = s.connection_id
           where s.workspace_id = m.workspace_id and s.meeting_id = m.id and c.member_id = ${me}::uuid
-        )) as hidden
+        )) or ${hiddenBookingSql(bookingReaderOf(scope.access))} as hidden
         from meeting_records l
         join meetings m on m.workspace_id = l.workspace_id and m.id = l.meeting_id
         join meeting_attendees a on a.workspace_id = m.workspace_id and a.meeting_id = m.id

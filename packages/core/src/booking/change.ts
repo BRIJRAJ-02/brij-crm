@@ -25,7 +25,7 @@ import type { BookingEntry } from '../access/door.ts';
 import { requirePermission } from '../access/check.ts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
 import { writeAudit } from '../members/audit.ts';
-import { can, isOpen, objectLevel } from '../access/policy.ts';
+import { isOpen, objectLevel } from '../access/policy.ts';
 import { visibleRecords } from '../access/visibility.ts';
 import { checkId } from '../engine/ids.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -49,8 +49,9 @@ import {
   type PageRecord,
 } from './slots.ts';
 import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
+import { bookingReaderOf, seesBooking } from './seen.ts';
 
-const { bookings } = schema;
+const { bookings, bookingHosts } = schema;
 
 /** The most times a booking may be moved (AC-639). */
 export const MAX_RESCHEDULES = 5;
@@ -98,8 +99,8 @@ const MISSING = 'That booking doesn’t exist, or isn’t yours.';
 
 /**
  * The booking and its page as the target may see them: the guest's own
- * booking; for a member, one on a page they own or that they host, or any
- * with `booking.admin` (hidden means absent: NOT_FOUND).
+ * booking; for a member, one on a page they own, that they host or co-host,
+ * or any with `booking.admin` (hidden means absent: NOT_FOUND).
  */
 async function readTarget(
   tx: WorkspaceTx,
@@ -114,12 +115,21 @@ async function readTarget(
     if (row.pageId !== target.pageId) throw refuse('NOT_FOUND', MISSING);
     return { row, page };
   }
-  const { principal } = target.scope.access;
-  const me = principal.kind === 'member' ? principal.memberId : undefined;
-  const allowed =
-    can(target.scope.access, 'booking.admin') ||
-    (me !== undefined && (row.hostMemberId === me || page.ownerMemberId === me));
-  if (!allowed) throw refuse('NOT_FOUND', MISSING);
+  // The one booking rule (`seen.ts`): its host, a co-host, its page's owner, or `booking.admin`.
+  const reader = bookingReaderOf(target.scope.access);
+  const me = reader.member;
+  const coHostIds =
+    reader.admin || me === undefined || row.hostMemberId === me || page.ownerMemberId === me
+      ? []
+      : (
+          await tx
+            .select({ memberId: bookingHosts.memberId })
+            .from(bookingHosts)
+            .where(and(eq(bookingHosts.bookingId, row.id), eq(bookingHosts.memberId, me)))
+        ).map((host) => host.memberId);
+  if (!seesBooking(reader, { hostMemberId: row.hostMemberId, ownerMemberId: page.ownerMemberId, coHostIds })) {
+    throw refuse('NOT_FOUND', MISSING);
+  }
   return { row, page };
 }
 
@@ -721,7 +731,7 @@ export async function bookingGuestPath(
 
 /**
  * Marks a past booking as a no show, or takes the mark back (spec 0043,
- * AC-1613): its host, the page's owner or `booking.admin`, as any change; a
+ * AC-1613): its host, a co-host, the page's owner or `booking.admin`, as any change; a
  * cancelled booking or one not yet started is BOOKING_CLOSED. Audited; the
  * same mark again changes nothing. It feeds each routing rule's report.
  */

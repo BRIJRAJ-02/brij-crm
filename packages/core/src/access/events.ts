@@ -87,11 +87,17 @@ export interface TaskFact {
  * A meeting's privacy and the records it shows on (spec 0024, AC-611): a
  * private one shows in full only to the members whose connections hold it;
  * to everyone else it is "Private meeting", still on its records. A record in
- * the trash is marked `trashed`, and shows its meetings to nobody.
+ * the trash is marked `trashed`, and shows its meetings to nobody. A meeting a
+ * booking made shows in full only to those who may see the booking.
  */
 export interface MeetingFact {
   readonly isPrivate: boolean;
   readonly holderMemberIds: readonly string[];
+  /**
+   * Present when a booking made the meeting: the members who may see that booking besides `booking.admin` (its
+   * host, co-hosts and page owner, `booking/seen.ts`). To anyone else it reads as a private meeting does.
+   */
+  readonly bookingSeerMemberIds?: readonly string[];
   readonly records: readonly {
     readonly objectId: string;
     readonly recordId: string;
@@ -321,11 +327,22 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
         record.trashed !== true &&
         level(record.objectId) !== 'none' &&
         recordRule({ data: policy }, record.objectId) === undefined;
-      // A private meeting's id only to an audience of its holders; everyone else rereads its records' timelines,
+      // A private meeting's id only to an audience of its holders, a booking's only to an audience who may see it;
+      // everyone else rereads its records' timelines,
       // where it shows as "Private meeting" (AC-611). A meeting with no fact (removed) names nothing.
       const meetingIds = row.meetingIds.filter((id) => {
         const meeting = factOf(facts.meetings, id);
         if (meeting === undefined) return false;
+        const seers = meeting.bookingSeerMemberIds;
+        // A colleague's booking (the owner's ask of 29 October 2026): only its host, co-hosts, page owner and
+        // `booking.admin` hear its id; everyone else rereads the timeline, where it reads "Private meeting".
+        const seesBooking =
+          seers === undefined ||
+          (audience.members.length > 0 &&
+            audience.members.every(
+              (member) => member.permissions.includes('booking.admin') || seers.includes(member.memberId),
+            ));
+        if (!seesBooking) return false;
         if (!meeting.isPrivate) return true;
         return (
           audience.members.length > 0 &&

@@ -71,5 +71,5 @@ export const strings = {
   /** Several people hold the attendee's address, so none is linked. */
   ambiguous: 'several people match',
   /** A private meeting the reader doesn't hold: its time only. */
-  privateMeeting: 'Only the people whose calendar holds it see its details.',
+  privateMeeting: 'Only the people it belongs to see its details.',
 } as const;
