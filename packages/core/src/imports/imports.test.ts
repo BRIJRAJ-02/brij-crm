@@ -713,6 +713,45 @@ describe('relation columns (decision 7, milestone 5)', () => {
     ]);
   });
 
+  it('refuses Create missing when the far object has a required field a made record can’t fill', async () => {
+    const w = await world();
+    const c = await companies(w);
+    const tier = await createAttribute(w.owner, {
+      objectId: c.objectId,
+      id: newId(),
+      title: 'Tier',
+      type: 'status',
+      isRequired: true,
+      options: [{ id: newId(), label: 'Gold', hue: 'yellow' }],
+    });
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update attributes set default_value = null where id = ${tier.id}::uuid`),
+    );
+    // Every unknown company would have been refused row by row, after the run (late trap #75).
+    const refusal = await refusalOf(
+      createImport(w.owner, {
+        id: newId(),
+        objectId: w.people,
+        fileName: 'a.csv',
+        rowCount: 1,
+        errorRows: 0,
+        settings: linkSettings(w, true),
+      }),
+    );
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID' });
+    expect(refusal.message).toContain('“Company” can’t make missing records: Tier is required there');
+    // Linking to companies that exist, making none, is still fine.
+    const linking = await createImport(w.owner, {
+      id: newId(),
+      objectId: w.people,
+      fileName: 'a.csv',
+      rowCount: 1,
+      errorRows: 0,
+      settings: linkSettings(w),
+    });
+    expect(linking.id).toBeDefined();
+  });
+
   it('refuses Create missing to a member who can only read the far object', async () => {
     const w = await world();
     const c = await companies(w);

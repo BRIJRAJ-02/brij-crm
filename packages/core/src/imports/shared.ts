@@ -218,22 +218,19 @@ export function checkSettings(
 }
 
 /**
- * Refuses an import that would create records onto an object with a required
- * field nothing fills and no column matched to it (27 October 2026): every
- * new row would fail the same way, so it is said once, before the run, rather
- * than row by row afterwards. A member runs an import, so a Current user
- * default does fill itself here (`BY_MEMBER`). A field hidden from them is
- * counted but never named (spec 0009, AC-144).
+ * The required fields of `attributes` that nothing in `filled` fills and that can't fill themselves (no default, or
+ * a Current user default for a member, `BY_MEMBER`), worded for a refusal: the ones the member may see by title,
+ * the rest counted but never named (spec 0009, AC-144). Undefined when there are none.
  */
-function checkRequiredColumns(
+export function requiredWall(
   scope: EngineScope,
   attributes: ReadonlyMap<string, AttributeDef>,
-  mapped: ReadonlySet<string>,
-): void {
+  filled: ReadonlySet<string>,
+): { readonly subject: string; readonly one: boolean; readonly anyNamed: boolean } | undefined {
   const walls = [...attributes.values()].filter(
-    (attribute) => !isArchivedNow(attribute) && !mapped.has(attribute.id) && isUnfillableRequired(attribute, BY_MEMBER),
+    (attribute) => !isArchivedNow(attribute) && !filled.has(attribute.id) && isUnfillableRequired(attribute, BY_MEMBER),
   );
-  if (walls.length === 0) return;
+  if (walls.length === 0) return undefined;
   const named = walls
     .filter((attribute) => attributeVisible(scope.access, attribute))
     .map((attribute) => attribute.title);
@@ -246,10 +243,26 @@ function checkRequiredColumns(
   const subject = one
     ? (subjects[0] ?? '')
     : `${subjects.slice(0, -1).join(', ')} and ${subjects[subjects.length - 1] ?? ''}`;
-  const fix =
-    named.length === 0
-      ? `Ask a workspace admin to give ${one ? 'it a default' : 'them defaults'} or make ${one ? 'it' : 'them'} optional.`
-      : `Match a column to ${one ? 'it' : 'them'}, or give ${one ? 'it a default' : 'them defaults'}.`;
+  return { subject, one, anyNamed: named.length > 0 };
+}
+
+/**
+ * Refuses an import that would create records onto an object with a required
+ * field nothing fills and no column matched to it (27 October 2026): every
+ * new row would fail the same way, so it is said once, before the run, rather
+ * than row by row afterwards.
+ */
+function checkRequiredColumns(
+  scope: EngineScope,
+  attributes: ReadonlyMap<string, AttributeDef>,
+  mapped: ReadonlySet<string>,
+): void {
+  const wall = requiredWall(scope, attributes, mapped);
+  if (wall === undefined) return;
+  const { subject, one } = wall;
+  const fix = !wall.anyNamed
+    ? `Ask a workspace admin to give ${one ? 'it a default' : 'them defaults'} or make ${one ? 'it' : 'them'} optional.`
+    : `Match a column to ${one ? 'it' : 'them'}, or give ${one ? 'it a default' : 'them defaults'}.`;
   throw refuse(
     'CONFIG_INVALID',
     `${subject} ${one ? 'is' : 'are'} required, and no column fills ${one ? 'it' : 'them'}, so no new record could be made. ${fix}`,

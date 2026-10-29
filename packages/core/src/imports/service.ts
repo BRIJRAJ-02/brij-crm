@@ -39,6 +39,7 @@ import {
   undoFailed,
   undoRefusal,
   importable,
+  requiredWall,
 } from './shared.ts';
 import { parseAttributeInput } from '../engine/parse-value.ts';
 
@@ -86,6 +87,26 @@ async function checkMakes(
     } catch (error) {
       if (isRefusal(error)) throw refuse('CONFIG_INVALID', why);
       throw error;
+    }
+    // A record made for a name starts with that name, and its unique email or domain when the name is one
+    // (`madeValues`): a required field past those refused every made record, row by row (late trap #75).
+    const far = await loadAttributes(tx, only.objectId);
+    const filled = new Set([
+      ...(only.nameAttributeId === undefined ? [] : [only.nameAttributeId]),
+      ...[...far.values()]
+        .filter((each) => each.isUnique && (each.type === 'email' || each.type === 'domain'))
+        .map((each) => each.id),
+    ]);
+    const wall = requiredWall(scope, far, filled);
+    if (wall !== undefined) {
+      const { subject, one } = wall;
+      throw refuse(
+        'CONFIG_INVALID',
+        `The column “${column.header}” can’t make missing records: ${subject} ${one ? 'is' : 'are'} required there, ` +
+          `and a record made for a name starts with only its name. Turn Create missing off, or ${
+            wall.anyNamed ? `give ${one ? 'it a default' : 'them defaults'}` : 'ask a workspace admin for defaults'
+          }.`,
+      );
     }
   }
 }
