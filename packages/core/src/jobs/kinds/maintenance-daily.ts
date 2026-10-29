@@ -20,6 +20,8 @@
 //    a year, the person's rather than the workspace's, through a definer.
 // 1h. `link_pages` (26 Oct 2026): every active member with a sign in and no link page here gets one, as the
 //    membership's own transaction would have made it (`ensureLinkPage`): the retry for one that failed there.
+// 1i. `released_handles` (migration 0126): handles held 90 days after their person's account was deleted are freed,
+//    the person's rather than the workspace's, through a definer.
 // 2. `expired`: jobs left `ready` past their hour end `cancelled` with
 //    `JOB_EXPIRED` (the queue row at the expiry normally does it first).
 // 3. `items`: the items of jobs that finished since the last cleanup, all
@@ -76,6 +78,7 @@ const PHASES = [
   'views',
   'profile_counts',
   'link_pages',
+  'released_handles',
   'expired',
   'items',
   'jobs',
@@ -127,6 +130,8 @@ const Totals = z.object({
   linkPages: Count.default(0),
   /** Members it tried and still couldn't make a page for (20 handles held, a failure): tried again tomorrow. */
   linkPagesMissed: Count.default(0),
+  /** Handles freed 90 days after their person's account was deleted (migration 0126); 0 in an older checkpoint. */
+  handles: Count.default(0),
   expired: Count,
   items: Count,
   jobs: Count,
@@ -156,6 +161,7 @@ const NO_TOTALS: Totals = {
   profileCounts: 0,
   linkPages: 0,
   linkPagesMissed: 0,
+  handles: 0,
   expired: 0,
   items: 0,
   jobs: 0,
@@ -219,6 +225,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   profileCounts: totals.profileCounts + (more.profileCounts ?? 0),
   linkPages: totals.linkPages + (more.linkPages ?? 0),
   linkPagesMissed: totals.linkPagesMissed + (more.linkPagesMissed ?? 0),
+  handles: totals.handles + (more.handles ?? 0),
   expired: totals.expired + (more.expired ?? 0),
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
@@ -351,6 +358,19 @@ async function oldProfileCounts(context: WriteContext, at: Checkpoint, limit: nu
   );
   const count = swept.rows[0]?.gone ?? 0;
   const totals = plus(at.totals, { profileCounts: count });
+  return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1i (migration 0126): handles held more than 90 days after their person's account was deleted, `limit` a batch,
+ * through `crm_sweep_released_handles`. They are nobody's workspace's, so whichever cleanup runs first frees them.
+ */
+async function releasedHandles(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const swept = await context.tx.execute<{ readonly gone: number } & Record<string, unknown>>(
+    sql`select crm_sweep_released_handles(${limit}::integer) as gone`,
+  );
+  const count = swept.rows[0]?.gone ?? 0;
+  const totals = plus(at.totals, { handles: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
 
@@ -755,6 +775,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return oldProfileCounts(context, at, limit);
         case 'link_pages':
           return missingLinkPages(context, at);
+        case 'released_handles':
+          return releasedHandles(context, at, limit);
         case 'expired':
           return expired(context, at, limit);
         case 'items':
