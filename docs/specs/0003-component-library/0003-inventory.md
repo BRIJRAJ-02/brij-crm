@@ -37,7 +37,7 @@ This is the full list of what the library holds when #4 is done, worked out from
 | Spinner | New | all | `ProgressBar` (indeterminate) | used by Button loading; one turn per `duration-spin` |
 | ProgressBar | New | 14, 22, 30, 55 | `ProgressBar` | determinate and indeterminate |
 | Meter | New | 38 | `Meter` | usage against a limit; warning and over states |
-| Link | New | all | `Link` | inline text link; protocol allowlist |
+| Link | New | all | `Link` | inline text link; protocol allowlist; `opensInNewTab` (29 Oct 2026) opens an app path in a new tab and tells screen readers "(opens in a new tab)", for a step taken elsewhere while a dialog waits |
 | Separator | New | all | `Separator` | |
 | Tooltip | New | all | `Tooltip`, `TooltipTrigger` | opens after 500 ms, at once on keyboard focus, never the only label |
 | TruncatedText | New | 17, 20 | | ellipsis, full text in a tooltip only when cut |
@@ -151,6 +151,7 @@ One display and one editor per attribute type: text, long text, number, currency
 | RulesEditor | New (spec 0013) | 14 | Field, Select, DatePicker, Disclosure, FilterBuilder, `GridList` | an attribute's validation rules: each read as its message, opened in place, reordered, deleted |
 | AccessRuleEditor | New | 24 | Table, Select | object, field and record rules per role |
 | InviteRows (was MemberInvite, RolePicker) | Built 22 Oct 2026 | 23 | Field, Select, Button, FieldLabel | a row per person with its role, + Add another, paste into rows; the Members dialog and first run share it |
+| RolePowers | Built 29 Oct 2026 | 23 | Disclosure, Badge, Icon | what a role can do: six permission areas, each All, Some or None in words, opening to what the role can and can't do; reads `rolePowers()` from `@crm/contracts/role-powers`, so it can't drift from what the server enforces (spec 0031 AC-834) |
 | TwoFactorSetup | New | 25 | Steps, CodeInput | QR image comes from #25 |
 | SecretReveal | New | 34 | Callout, Code, CopyButton | shown once |
 | UsagePanel | New | 38 | Meter, Card | |
