@@ -57,14 +57,25 @@ export interface PurgeDeps {
   readonly files?: UploadStore;
 }
 
-/** How many stored files one step removes. */
-const FILES_BATCH = 100;
+/** How many stored files one step removes from each table: few, since the store call runs inside the transaction. */
+const FILES_BATCH = 50;
+
+/** Whether a stored path is this workspace's own: the purge never asks the store to remove another workspace's bytes. */
+function ownPath(kind: string, pathname: string, workspaceId: string): boolean {
+  return pathname.startsWith(`${kind === 'upload' ? 'forms' : 'records'}/${workspaceId}/`);
+}
 
 /**
  * One batch of the workspace's stored files: from the store first, then their rows, in one transaction, so a store
- * that fails rolls the rows back and the next call tries again (a file already gone is no error). Answers how many.
+ * that fails rolls the rows back and the next call tries again (a file already gone is no error). A path outside the
+ * workspace's own folder is never removed: its row goes and its id is logged. Answers how many rows.
  */
-async function removeStoredFiles(db: Database, store: UploadStore, workspaceId: string): Promise<number> {
+async function removeStoredFiles(
+  db: Database,
+  store: UploadStore,
+  log: PurgeLog,
+  workspaceId: string,
+): Promise<number> {
   return db.withWorkspace(workspaceId, async (tx) => {
     const found = await tx.execute<{ kind: string; id: string; pathname: string }>(sql`
       (select 'upload' as kind, id::text, pathname from form_uploads
@@ -74,7 +85,12 @@ async function removeStoredFiles(db: Database, store: UploadStore, workspaceId: 
         where workspace_id = ${workspaceId}::uuid and ${stillDeleted(workspaceId)} limit ${FILES_BATCH})
     `);
     if (found.rows.length === 0) return 0;
-    await store.remove(found.rows.map((row) => row.pathname));
+    const own = found.rows.filter((row) => ownPath(row.kind, row.pathname, workspaceId));
+    const foreign = found.rows.filter((row) => !ownPath(row.kind, row.pathname, workspaceId));
+    if (foreign.length > 0) {
+      log.info('workspace.purge.foreign_paths', { workspaceId, ids: foreign.map((row) => row.id) });
+    }
+    if (own.length > 0) await store.remove(own.map((row) => row.pathname));
     const ids = (kind: string) => JSON.stringify(found.rows.filter((row) => row.kind === kind).map((row) => row.id));
     await tx.execute(sql`
       delete from form_uploads where workspace_id = ${workspaceId}::uuid
@@ -290,7 +306,7 @@ export async function purgeWorkspace(deps: PurgeDeps, workspaceId: string, deadl
         deps.log.info('workspace.purge', { workspaceId, counts: {}, done: false });
         return 'more';
       }
-      const gone = await removeStoredFiles(db, deps.files, workspaceId);
+      const gone = await removeStoredFiles(db, deps.files, deps.log, workspaceId);
       if (gone === 0) break;
     }
   }

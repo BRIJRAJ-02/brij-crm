@@ -456,6 +456,14 @@ describe('the purge (AC-823)', () => {
        values ($1, $2, $3, $4, 'cv.pdf', 1024, 'application/pdf')`,
       [t.workspaceId, fileId, form.id, pathname],
     );
+    // A row naming another workspace's path loses its row, never that workspace's bytes.
+    const strayId = newId();
+    await testQuery(
+      ownerUrl,
+      `insert into form_uploads (workspace_id, id, form_id, pathname, name, size, content_type)
+       values ($1, $2, $3, $4, 'other.pdf', 1024, 'application/pdf')`,
+      [t.workspaceId, strayId, form.id, `forms/${newId()}/${form.id}/${strayId}.pdf`],
+    );
     await deleteWorkspace(owner, { confirmName: 'Acme' });
     await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '2 hours' where id = $1`, [
       t.workspaceId,
