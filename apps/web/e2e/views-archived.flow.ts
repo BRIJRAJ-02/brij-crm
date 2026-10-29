@@ -20,8 +20,6 @@ test.describe('a view filtered on an archived field', () => {
   test('says so, widens, keeps the condition through a sort save, and filters again once restored', async ({
     page,
   }) => {
-    // Fails at the banner until crm-65's AC-480 fix lands on wip/required-unfillable; then drop test.fail.
-    test.fail();
     test.setTimeout(180_000);
     const tag = randomUUID().slice(0, 8);
     const slug = `viewarch-${tag}`;
