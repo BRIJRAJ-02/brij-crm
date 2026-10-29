@@ -191,6 +191,16 @@ describe('the Table and Board switch (spec 0021, AC-492, AC-497)', () => {
     expect(switchPatch(view({}), 'table', WITH_STAGE)).toBeUndefined();
   });
 
+  it('fills the defaults when the stored grouping field was archived since, so the server never refuses the switch', () => {
+    const status = attribute('status', 3, { type: 'status' });
+    expect(
+      switchPatch(view({ board: BOARD }), 'board', [...ATTRIBUTES, { ...stage, isArchived: true }, status]),
+    ).toEqual({
+      kind: 'board',
+      board: expect.objectContaining({ groupByAttributeId: 'id-status' }) as unknown,
+    });
+  });
+
   it('saves the columns as they are with the patch, and a tab only layout carries the kind and board shown', () => {
     const shown: View = {
       ...view({ columns: [{ attributeId: 'id-name' }], pinnedCount: 1, board: BOARD }),

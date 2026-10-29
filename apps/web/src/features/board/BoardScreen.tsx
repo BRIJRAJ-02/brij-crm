@@ -3,6 +3,7 @@
 // Main task: see where every record stands and drag a card to its next column, live for everyone.
 // Leaves out: the stuck badge (milestone 3), and creating records from the board.
 import {
+  isDataError,
   toActorDisplays,
   toFieldAttribute,
   type AttributeDefinition,
@@ -33,7 +34,7 @@ import {
   type ViewLayoutSwitch,
   type ViewSettingsTrigger,
 } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMemberPicker } from '../records/members.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
@@ -124,6 +125,31 @@ export function BoardScreen(props: BoardScreenProps) {
     setAdding(false);
     onAddAttributeClosed?.();
   };
+  // The archived grouping field, restored from the board itself (late trap #14).
+  const router = useRouter();
+  const [restoringId, setRestoringId] = useState<string | undefined>(undefined);
+  const restoreGroup = (id: string, title: string) => {
+    if (restoringId !== undefined) return;
+    setRestoringId(id);
+    data.attributes
+      .restore(slug, id)
+      // Pending until the board is back, so the button never shows enabled beside "restored".
+      .then(() => router.invalidate())
+      .then(
+        () => {
+          setRestoringId(undefined);
+          toasts.toast({ tone: 'success', message: strings.restoredGroup(title) });
+        },
+        (error: unknown) => {
+          setRestoringId(undefined);
+          // As settings says it (a live form or rule can refuse it): never swallowed.
+          toasts.toast({
+            tone: 'danger',
+            message: strings.restoreGroupFailed(title, isDataError(error) ? error.message : strings.tryAgain),
+          });
+        },
+      );
+  };
   // What a move says to screen readers ("Moved Acme renewal to Won."), through the Toolbar's status.
   const [announced, setAnnounced] = useState<string | undefined>(undefined);
   // New <record> in the top bar, as on the table: the same dialog, so switching to the board never hides the
@@ -213,8 +239,39 @@ export function BoardScreen(props: BoardScreenProps) {
                 {strings.nothingToGroupText}
               </EmptyState>
             ) : outcome.kind === 'group-archived' ? (
-              <EmptyState icon="archive" title={strings.groupArchivedTitle(outcome.title)}>
-                {strings.groupArchivedText}
+              <EmptyState
+                icon="archive"
+                title={strings.groupArchivedTitle(outcome.title)}
+                actions={
+                  <>
+                    {/* Restored in place, as settings' Archived list does: the board groups by it again. */}
+                    {canChangeSchema && (
+                      <Button
+                        variant="primary"
+                        icon="archive-restore"
+                        isPending={restoringId === outcome.id}
+                        onPress={() => {
+                          restoreGroup(outcome.id, outcome.title);
+                        }}
+                      >
+                        {restoringId === outcome.id ? strings.restoringGroup : strings.restoreGroup(outcome.title)}
+                      </Button>
+                    )}
+                    <Button
+                      // Readers' one way out, so it leads for them.
+                      {...(canChangeSchema ? {} : { variant: 'primary' as const })}
+                      icon="table"
+                      isDisabled={layoutSwitch.isDisabled === true || restoringId !== undefined}
+                      onPress={() => layoutSwitch.onChange('table')}
+                    >
+                      {strings.showAsTable}
+                    </Button>
+                  </>
+                }
+              >
+                {canChangeSchema
+                  ? strings.groupArchivedText(outcome.title)
+                  : strings.groupArchivedTextReader(outcome.title)}
               </EmptyState>
             ) : (
               <EmptyState icon="kanban" title={strings.tooManyTitle}>

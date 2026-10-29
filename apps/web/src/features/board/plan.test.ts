@@ -84,7 +84,7 @@ describe('the board a view shows', () => {
         cardFields: [],
         showEmptyColumns: true,
       }),
-    ).toEqual({ kind: 'group-archived', title: 'stage' });
+    ).toEqual({ kind: 'group-archived', id: 'stage', title: 'stage' });
     const crowded = attribute('crowd', {
       type: 'status',
       position: 0,
