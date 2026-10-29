@@ -24,7 +24,7 @@ import { rescope, testScope } from '../testing.ts';
 import { removeMember } from '../members/members.ts';
 import { CALENDAR_SPREAD_SECONDS, deleteWorkspace, restoreWorkspace } from '../workspace/settings.ts';
 import { dropSources } from './apply.ts';
-import { updateMemberCalendar } from './calendars.ts';
+import { refreshCalendarConnection, setCalendarDestination, updateMemberCalendar } from './calendars.ts';
 import { connectCalendar, listCalendarConnections, syncCalendarNow, updateCalendarConnection } from './connections.ts';
 import { createCalendarEvents } from './events.ts';
 import { createFakeCalendarProvider } from './fake.ts';
@@ -1470,6 +1470,29 @@ describe('a cancelled booking whose event still lives in the calendar (owner rep
     w.fake.cancel('ada@acme.dev', 'team-copy', 'team@group.calendar');
     await w.sync(conn.id);
     expect(await status()).toBe('cancelled');
+  });
+
+  it('keeps a booking when the calendar holding it leaves the account’s list, rather than cancelling it', async () => {
+    const w = await world();
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    w.fake.addCalendar('ada@acme.dev', { id: 'team@group.calendar', name: 'Team', accessRole: 'writer' });
+    await w.sync(conn.id);
+    const [team] = await w.query<{ id: string }>(
+      sql`select id::text from calendar_calendars where provider_calendar_id = 'team@group.calendar'`,
+    );
+    await setCalendarDestination(w.owner, { calendarId: team?.id ?? '' });
+    const { bookingId } = await booked(w, 3);
+    await w.sync(conn.id);
+    // Unsubscribed, unshared, or past the 50 a listing keeps (late trap #82): not the host deleting the event, so
+    // the guest's booking stands and its time stays taken.
+    w.fake.removeCalendar('ada@acme.dev', 'team@group.calendar');
+    await refreshCalendarConnection(w.owner, { connectionId: conn.id });
+    await w.sync(conn.id);
+    expect(await w.query(sql`select 1 from calendar_calendars where id = ${team?.id ?? ''}::uuid`)).toEqual([]);
+    expect(await w.query(sql`select status from bookings where id = ${bookingId}::uuid`)).toEqual([
+      { status: 'confirmed' },
+    ]);
+    expect(await w.query(sql`select id from emails where kind = 'booking_calendar_removed'`)).toEqual([]);
   });
 
   it('lets go of a meeting another calendar still holds when the sync cancels its booking', async () => {
