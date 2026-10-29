@@ -519,9 +519,11 @@ export async function setViewLayout(
           ? stored.board
           : {
               ...layout.board,
-              // Card fields the caller can't see stay, after theirs; theirs give way to keep them (at most 6).
+              // Card fields the caller can't see stay, after theirs; theirs give way to keep them (at most 6). An
+              // archived one they can see is dropped, never kept to eat the budget (late trap #31: the fields just
+              // chosen were cut to make room for fields no card shows).
               cardFields: (() => {
-                const kept = (stored.board?.cardFields ?? []).filter((id) => !visible.live.has(id));
+                const kept = (stored.board?.cardFields ?? []).filter((id) => !visible.any.has(id));
                 return [...layout.board.cardFields.slice(0, Math.max(0, 6 - kept.length)), ...kept];
               })(),
             };

@@ -8,7 +8,7 @@ import { sql } from 'drizzle-orm';
 import type { ViewConfig } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
-import { defineAttribute } from '../engine/definitions.ts';
+import { archiveAttribute, defineAttribute } from '../engine/definitions.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -383,6 +383,35 @@ describe('board settings on a layout or a new view (spec 0021, boardConfigProble
         }),
       ),
     ).toMatchObject({ code: 'CONFIG_INVALID' });
+  });
+});
+
+describe('card fields and an archived one (late trap #31)', () => {
+  it('never keeps an archived card field to eat the budget of six', async () => {
+    const w = await workspace();
+    const stage = (
+      await defineAttribute(w.owner, { objectId: w.people, apiSlug: 'stage', title: 'Stage', type: 'status' })
+    ).attributeId;
+    const fields: string[] = [];
+    for (const letter of ['a', 'b', 'c', 'd', 'e', 'f', 'g']) {
+      fields.push(
+        (await defineAttribute(w.owner, { objectId: w.people, apiSlug: `f_${letter}`, title: letter, type: 'text' }))
+          .attributeId,
+      );
+    }
+    const board = (cardFields: string[]) => ({
+      viewId: w.peopleView,
+      layout: {
+        kind: 'board' as const,
+        columns: [],
+        pinnedCount: 1,
+        board: { groupByAttributeId: stage, cardFields, showEmptyColumns: true },
+      },
+    });
+    await setViewLayout(w.owner, board(fields.slice(0, 6)), hook());
+    await archiveAttribute(w.owner, fields[0] ?? '');
+    const saved = await setViewLayout(w.owner, board(fields.slice(1, 7)), hook());
+    expect(saved.config.board?.cardFields).toEqual(fields.slice(1, 7));
   });
 });
 
