@@ -1,7 +1,8 @@
 // The form journey's edges (flow walks, phase 2, 29 October 2026): a required question holds a visitor in place
 // until answered; changing which object a filed form saves to asks first and, confirmed, moves it; a send that
 // trips the bot trap is kept as spam, never lost, and Not spam files it; a paused form tells its visitor it is
-// closed and takes sends again once resumed.
+// closed and takes sends again once resumed; a changed address keeps old links working; a form published again
+// mid fill redraws in place with the visitor's answers kept.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { newWorkspace } from './people.ts';
@@ -148,6 +149,57 @@ test.describe('the form journey’s edges', () => {
     // The hosted form's read is never cached, so the visitor who saw it closed gets it back on one reload (F1).
     await visitor.reload();
     await expect(visitor.getByRole('button', { name: 'Send' })).toBeVisible();
+    await visitor.context().close();
+  });
+
+  test('an address changed in settings keeps the old link working, and moves the visitor to the new one', async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(180_000);
+    const { slug, form } = await withForm(page, 'moved');
+    const moved = `talk-${form.id.slice(-8)}`;
+    await page.goto(`/w/${slug}/captures/forms/${form.id}?tab=settings`);
+    await page.getByLabel('Link', { exact: true }).fill(moved);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeHidden({ timeout: 15_000 });
+
+    // A link pasted before the change still opens the form, and the page moves to the new address.
+    const visitor = await visitorOn(browser, page, form);
+    await expect(visitor).toHaveURL(new RegExp(`/f/${moved}$`));
+    await expect(visitor.getByRole('button', { name: 'Send' })).toBeVisible();
+    await visitor.context().close();
+  });
+
+  test('a form published again while a visitor fills it in redraws in place, their answers kept', async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(180_000);
+    const { slug, form } = await withForm(page, 'midfill');
+    const visitor = await visitorOn(browser, page, form);
+    await visitor.getByLabel(/Your name/).fill('Ada Lovelace');
+    await visitor.getByLabel(/Work email/).fill(`ada-${form.id.slice(-6)}@example.com`);
+
+    // Meanwhile the owner adds a required question and publishes, so the visitor's page lacks something it needs.
+    await page.goto(`/w/${slug}/captures/forms/${form.id}`);
+    await page.getByRole('button', { name: 'Add a question' }).click();
+    await page.getByLabel('Question', { exact: true }).last().fill('What is your budget?');
+    await page.getByText('Visitors must answer').last().click();
+    await page
+      .getByRole('button', { name: /^Publish/ })
+      .first()
+      .click();
+    await expect(page.getByText(/Live · v2/).first()).toBeVisible({ timeout: 30_000 });
+
+    await visitor.waitForTimeout(HUMAN_PACE_MS);
+    await visitor.getByRole('button', { name: 'Send' }).click();
+    // Not lost and not a dead end: the new version, the answers still in it, and why.
+    await expect(visitor.getByText(/This form was updated while you filled it in\./)).toBeVisible({ timeout: 15_000 });
+    await expect(visitor.getByLabel(/Your name/)).toHaveValue('Ada Lovelace');
+    await visitor.getByLabel(/What is your budget\?/).fill('About ten thousand');
+    await visitor.getByRole('button', { name: 'Send' }).click();
+    await expect(visitor.getByText(/Thank you/).first()).toBeVisible({ timeout: 15_000 });
     await visitor.context().close();
   });
 });
