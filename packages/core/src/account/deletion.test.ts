@@ -123,7 +123,11 @@ describe('deleting your account while in a deleted workspace (spec 0033, AC-903)
     const w = await workspace({ secondOwner: true });
     const revoked: CalendarGrant[] = [];
     const deps = deletionDeps(revoked);
-    expect(await accountDeletionCheck(deps, { userId: w.aUser, sessionId: randomUUID() })).toEqual({ blockers: [] });
+    // Another owner can restore it: nothing to say.
+    expect(await accountDeletionCheck(deps, { userId: w.aUser, sessionId: randomUUID() })).toEqual({
+      blockers: [],
+      lost: [],
+    });
     await expect(
       deleteMyAccount(deps, { userId: w.aUser, sessionId: randomUUID(), email: w.aEmail }, { email: w.aEmail }),
     ).resolves.toEqual({ deleted: true });
@@ -169,7 +173,11 @@ describe('deleting your account while in a deleted workspace (spec 0033, AC-903)
   it('never blocks on a deleted workspace the person is the only owner of: it stays deleted, and they are forgotten', async () => {
     const w = await workspace({ secondOwner: false });
     const deps = deletionDeps([]);
-    expect(await accountDeletionCheck(deps, { userId: w.aUser, sessionId: randomUUID() })).toEqual({ blockers: [] });
+    // Not in the way, but said beforehand: nobody could restore it afterwards (late trap #23).
+    expect(await accountDeletionCheck(deps, { userId: w.aUser, sessionId: randomUUID() })).toEqual({
+      blockers: [],
+      lost: ['Acme'],
+    });
     await expect(
       deleteMyAccount(deps, { userId: w.aUser, sessionId: randomUUID(), email: w.aEmail }, { email: w.aEmail }),
     ).resolves.toEqual({ deleted: true });

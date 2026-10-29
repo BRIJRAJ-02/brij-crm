@@ -105,13 +105,16 @@ describe('deleting your own account (spec 0033)', () => {
 
   it('names the workspaces the person is the last owner of, and refuses until each has another owner', async () => {
     const owner = await memberWithWorkspace(app);
-    expect(await owner.client.account.deletion.check()).toEqual({ blockers: [{ slug: owner.slug, name: 'Acme' }] });
+    expect(await owner.client.account.deletion.check()).toEqual({
+      blockers: [{ slug: owner.slug, name: 'Acme' }],
+      lost: [],
+    });
     expect(await failure(() => owner.client.account.deletion.confirm({ email: owner.email }))).toMatchObject({
       code: 'LAST_OWNER',
       status: 409,
     });
     await teammate(owner, 'owner');
-    expect(await owner.client.account.deletion.check()).toEqual({ blockers: [] });
+    expect(await owner.client.account.deletion.check()).toEqual({ blockers: [], lost: [] });
   });
 
   it('deletes the account: nothing personal remains, records stay with Deleted user', async () => {
