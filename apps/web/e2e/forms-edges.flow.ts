@@ -202,4 +202,66 @@ test.describe('the form journey’s edges', () => {
     await expect(visitor.getByText(/Thank you/).first()).toBeVisible({ timeout: 15_000 });
     await visitor.context().close();
   });
+
+  test('a new form sends its visitors to a booking page, set up in Settings before the first publish', async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(240_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `formbook-${tag}`;
+    await newWorkspace(page, `formbook-${tag}@example.com`, slug);
+    await rpc(page, 'bookingPages/create', {
+      workspace: slug,
+      id: uuidv7(),
+      title: 'Intro call',
+      timeZone: 'UTC',
+      mutationId: randomUUID(),
+    });
+
+    await page.goto(`/w/${slug}/captures/forms`);
+    await page.getByRole('button', { name: 'New form' }).first().click();
+    await expect(page).toHaveURL(/\/captures\/forms\/[0-9a-f-]{36}/, { timeout: 30_000 });
+    // Settings is open before the first publish, so what comes after sending is chosen first.
+    await page.getByRole('tab', { name: 'Settings' }).click();
+    await page.getByRole('radio', { name: 'Booking' }).check({ force: true });
+    await page.getByRole('button', { name: /Booking page$/ }).click();
+    await page.getByRole('option', { name: /^Intro call/ }).click();
+    await expect(page.getByRole('button', { name: /Booking page$/ })).toContainText('Intro call');
+
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    const setUp = page.getByRole('dialog', { name: 'Set up your form' });
+    await setUp.getByLabel('Name').fill(`Talk to us ${tag}`);
+    await setUp.getByRole('button', { name: 'Next' }).click();
+    await page
+      .getByRole('dialog', { name: 'Where the answers go' })
+      .getByRole('button', { name: 'Publish', exact: true })
+      .click();
+    await expect(page.getByRole('dialog', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
+    await page.keyboard.press('Escape');
+    await page.getByRole('tab', { name: 'Settings' }).click();
+    const key = await page.getByRole('textbox', { name: /^Link/ }).inputValue();
+
+    const visitor = await (await browser.newContext()).newPage();
+    await visitor.goto(`${new URL(page.url()).origin}/f/${key}`);
+    await visitor.getByLabel(/Your name/).fill('Grace Hopper');
+    await visitor.getByLabel(/Work email/).fill(`grace-${tag}@example.com`);
+    await visitor.waitForTimeout(HUMAN_PACE_MS);
+    await visitor.getByRole('button', { name: 'Send' }).click();
+    // Run after the other sends here, one address can meet the five a minute limit: then, as the page says, again
+    // in a moment.
+    const tooSoon = visitor.getByText('That did not go through. Try again in a moment.');
+    if (
+      await tooSoon.waitFor({ timeout: 5_000 }).then(
+        () => true,
+        () => false,
+      )
+    ) {
+      await visitor.waitForTimeout(61_000);
+      await visitor.getByRole('button', { name: 'Send' }).click();
+    }
+    // Sent, and straight on to pick a time.
+    await expect(visitor.getByRole('list', { name: /^Times on / }).first()).toBeVisible({ timeout: 30_000 });
+    await visitor.context().close();
+  });
 });
