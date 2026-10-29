@@ -27,7 +27,7 @@ export type SchedulingLevel = 'view' | 'manage';
 export interface SchedulingReach {
   /** The caller, when a member: they always see and manage their own scheduling. */
   readonly self: string | undefined;
-  /** Over everyone in the workspace (the system, the built in Owner and Admin roles, a key's scopes), or undefined. */
+  /** Over everyone in the workspace (the system, the built in Owner and Admin roles), or undefined. */
   readonly all: SchedulingLevel | undefined;
   /** Over single members (delegations, and later team mates), by member id, the highest level each. */
   readonly members: ReadonlyMap<string, SchedulingLevel>;
@@ -72,12 +72,13 @@ const selfOf = (principal: Principal): string | undefined =>
 
 /**
  * The reach over everyone that the access itself gives (pure): the system manages everyone; a member through the
- * built in role's `schedule.manage` or `schedule.view`; a key through the same scopes. Nobody else.
+ * built in role's `schedule.manage` or `schedule.view`. Nobody else: a key never holds `schedule.*`
+ * (`KEY_FORBIDDEN_PERMISSIONS`, decision 7), and a form, a booking page or an email link has no member.
  */
 export function roleReach(access: Access): SchedulingLevel | undefined {
   const { principal } = access;
   if (principal.kind === 'system') return 'manage';
-  if (principal.kind !== 'member' && principal.kind !== 'api_key') return undefined;
+  if (principal.kind !== 'member') return undefined;
   if (can(access, 'schedule.manage')) return 'manage';
   if (can(access, 'schedule.view')) return 'view';
   return undefined;
@@ -156,8 +157,7 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
   const { principal } = access;
   const all = roleReach(access);
   const self = selfOf(principal);
-  if (principal.kind !== 'member')
-    return principal.kind === 'system' || principal.kind === 'api_key' ? { ...NOBODY, all } : NOBODY;
+  if (principal.kind !== 'member') return { ...NOBODY, all };
   if (all === 'manage') return { ...NOBODY, self, all };
   const me = principal.memberId;
   // Two arms, so each takes its index: a member delegation's target by the members key, an everyone delegation's

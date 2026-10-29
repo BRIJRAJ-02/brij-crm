@@ -304,6 +304,12 @@ export const KEY_FORBIDDEN_PERMISSIONS: readonly Permission[] = [
   'support.grant',
   'security.manage',
   'audit.read',
+  // Spec 0037, decision 7: reach over owners' and admins' scheduling comes only from the built in Owner and Admin
+  // roles, so a key never holds whose time it may see or change.
+  'schedule.view',
+  'schedule.view.team',
+  'schedule.manage',
+  'schedule.manage.team',
 ];
 
 /** The data level a key holds on every object, as a scope. A key with neither reads and writes no data. */

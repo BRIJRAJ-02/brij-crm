@@ -31,6 +31,7 @@ import { checkScope } from '../access/mint.ts';
 import { can, isRole } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { startJob } from '../jobs/service.ts';
+import { delegatesReachedBy } from '../scheduling/delegations.ts';
 import { mySchedulingReach } from '../scheduling/visible.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { REASSIGN_KIND } from './reassign.ts';
@@ -377,8 +378,10 @@ export async function setMemberRole(
         options.source,
       );
       // Everyone's member list reads them again, and the relay drops the workspace's audiences (spec 0007, AC-82).
-      // Their scheduling reach changed with their role, so their own tabs read it again (spec 0037, AC-1274).
-      context.record({ members: [target.id], access: [target.id] });
+      // Their scheduling reach changed with their role, and so may that of the delegates reaching them or holding
+      // grants they last set (spec 0037, decision 7): their own tabs read it again (AC-1274).
+      const reached = await delegatesReachedBy(tx, scope.workspaceId, [target.id]);
+      context.record({ members: [target.id], access: [...new Set([target.id, ...reached])] });
       return toView({ ...target, role });
     },
     hooks,
@@ -574,8 +577,13 @@ export async function transferOwnership(
         },
         options.source,
       );
-      // Both lists read them again, and the caller's own access changes (spec 0007, AC-82).
-      context.record({ members: [target.id, principal.memberId] });
+      // Both lists read them again, and the caller's own access changes (spec 0007, AC-82). The delegates reaching
+      // either, or holding grants either last set, may see more or less of their scheduling (spec 0037, AC-1274).
+      const reached = await delegatesReachedBy(tx, scope.workspaceId, [target.id, principal.memberId]);
+      context.record({
+        members: [target.id, principal.memberId],
+        ...(reached.length === 0 ? {} : { access: [...reached] }),
+      });
     },
     hooks,
   );

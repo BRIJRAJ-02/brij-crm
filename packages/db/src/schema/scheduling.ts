@@ -40,15 +40,14 @@ export const scheduleDelegations = pgTable(
       columns: [t.workspaceId, t.targetMemberId],
       foreignColumns: [members.workspaceId, members.id],
     }),
-    // One delegation per delegate and target: a grant again changes its level.
+    // One delegation per delegate and target: a grant again changes its level. Its prefix also serves the delegate's
+    // reach (the scheduling choke point's one query), the delegate cap and the removal.
     uniqueIndex('schedule_delegations_one').on(
       t.workspaceId,
       t.delegateMemberId,
       t.targetType,
       sql`coalesce(${t.targetMemberId}, ${t.targetTeamId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
     ),
-    // The delegate's reach (the scheduling choke point's one query) and the delegate cap.
-    index('schedule_delegations_by_delegate').on(t.workspaceId, t.delegateMemberId),
     // Who reaches a member (the removal, the target cap, "Who can see or manage your scheduling").
     index('schedule_delegations_by_target_member')
       .on(t.workspaceId, t.targetMemberId)
