@@ -130,6 +130,17 @@
     object-fit: cover;
   }
 
+  /* The big sizes' picture fades in over its initials once loaded (Avatar.tsx's FADES_IN). A fade, never a move,
+     so reduced motion keeps it as it is. */
+  .image[data-fade='waiting'] {
+    opacity: 0;
+  }
+
+  .image[data-fade='in'] {
+    opacity: 1;
+    transition: opacity var(--duration-popover) var(--ease-out);
+  }
+
   .stack {
     display: inline-flex;
     align-items: center;

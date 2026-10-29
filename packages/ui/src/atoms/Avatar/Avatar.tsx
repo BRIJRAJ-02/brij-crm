@@ -28,14 +28,26 @@ export interface AvatarProps {
   readonly isDecorative?: boolean;
 }
 
+/**
+ * The sizes whose picture fades in over the initials once it has loaded (29 Oct 2026): a page's one big picture (a
+ * link page's, a booking page's host, a record heading its page) otherwise sits as an empty tile and then pops. The
+ * small ones in rows and chips show the picture at once, as before: a fade repeated down a table is noise.
+ */
+const FADES_IN: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['title', 'xl', 'hero']);
+
 /** The two small sizes, 16px and 20px, show one initial: a pair doesn't fit at a readable size. */
 const ONE_INITIAL: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['xs', 'sm']);
 
 /** A person's or company's picture, or their initials on a hue tile: people are circles, companies squares. */
 export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDecorative = false }: AvatarProps) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
+  const [loaded, setLoaded] = useState<string | undefined>(undefined);
   const image = safeImageSrc(src);
   const showImage = image !== undefined && failed !== image;
+  const fades = showImage && FADES_IN.has(size);
+  // While a fading picture loads, its initials hold the tile; once it has, they go, so a picture with clear parts
+  // (a company's logo) never shows letters through it.
+  const isWaiting = fades && loaded !== image;
   // One initial is the first word's: initialsOf on that word alone, so a letter built of several code points stays whole.
   const initials = initialsOf(ONE_INITIAL.has(size) ? (name.trim().split(/\s+/u)[0] ?? '') : name);
   return (
@@ -47,14 +59,21 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
       {...(isDecorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': name })}
     >
       {showImage ? (
-        <img
-          className={styles.image}
-          src={image}
-          alt={strings.pictureAlt}
-          onError={() => {
-            setFailed(image);
-          }}
-        />
+        <>
+          {isWaiting ? initials : null}
+          <img
+            className={styles.image}
+            src={image}
+            alt={strings.pictureAlt}
+            {...(fades ? { 'data-fade': isWaiting ? 'waiting' : 'in' } : {})}
+            onLoad={() => {
+              setLoaded(image);
+            }}
+            onError={() => {
+              setFailed(image);
+            }}
+          />
+        </>
       ) : (
         initials
       )}
