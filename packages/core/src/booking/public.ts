@@ -1118,16 +1118,19 @@ export async function bookPublicSlot(
             },
           );
           // Onto the person, as every page did, when that is where this page files.
+          // No person found or made: the answers filed on People were not saved, and say so (late trap #32).
           const filed =
-            answersObject !== entry.people || visitor.personId === undefined || kept.length === 0
+            answersObject !== entry.people || kept.length === 0
               ? kept
-              : await fileBookingAnswers(step, {
-                  objectId: entry.people,
-                  recordId: visitor.personId,
-                  questions: page.questions,
-                  answers,
-                  kept,
-                });
+              : visitor.personId === undefined
+                ? notSaved(kept)
+                : await fileBookingAnswers(step, {
+                    objectId: entry.people,
+                    recordId: visitor.personId,
+                    questions: page.questions,
+                    answers,
+                    kept,
+                  });
           return { visitor, filed };
         });
         if (matched.ok) {
@@ -1144,8 +1147,10 @@ export async function bookPublicSlot(
                     name: input.name,
                     timeZone: input.timeZone,
                   });
+                  // No record to put them on (the object has no unique email to find the visitor by): not saved,
+                  // and the host's screen says so rather than showing them saved (late trap #32).
                   return recordId === undefined
-                    ? kept
+                    ? notSaved(kept)
                     : await fileBookingAnswers(step, {
                         objectId: answersObject,
                         recordId,

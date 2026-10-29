@@ -413,6 +413,26 @@ describe('a page that files onto another object (booking answers parity, 27 Oct 
     expect(made.rows).toHaveLength(1);
   });
 
+  it('marks the answers not saved when the object has lost its way to find the visitor (late trap #32)', async () => {
+    const w = await workspace();
+    const object = await designers(w);
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'Portfolio', timeZone: 'UTC' }, NOW);
+    await updateBookingPage(w.owner, {
+      pageId: page.id,
+      settings: { answersObjectId: object.id, questions: askStudio(object.studio.id) },
+    });
+    // The match the page was pointed at with is gone (the guards refuse it in the app; this is how an older
+    // workspace got here), so no record of the object can be found or made for the visitor.
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update attributes set is_unique = false where id = ${object.email?.id ?? ''}::uuid`),
+    );
+    const entry = await enterBookingPage({ db }, page.publicKey);
+    await bookPublicSlot(entry, deps, bookInput({ answers: { studio: 'Bauhaus' } }));
+    const [listed] = await listWorkspaceBookings(w.owner, { when: 'upcoming' }, NOW);
+    // The host's screen said saved; the answer is kept with the booking and marked not saved.
+    expect(listed?.answers?.[0]).toEqual(expect.objectContaining({ key: 'studio', saved: false }));
+  });
+
   it('refuses an object a visitor can’t be matched on, saying what is missing', async () => {
     const w = await workspace();
     const object = await designers(w, false);
