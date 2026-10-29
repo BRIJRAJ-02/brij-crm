@@ -312,12 +312,25 @@ export type ListWorkspaceBookingsInput = z.infer<typeof ListWorkspaceBookingsInp
 export const BOOKING_CALENDAR_MAX_DAYS = 42;
 
 /**
+ * Whose bookings a Bookings read asks for (the owner's ask of 29 October 2026): the reader's own (their pages', the
+ * ones they host or co-host), or everyone's, which only `booking.admin` gets (for anyone else it is the same as
+ * Mine). Mine by default, for admins too.
+ */
+export const BookingHosts = z.enum(['mine', 'all']);
+/** Whose bookings a read asks for. */
+export type BookingHosts = z.infer<typeof BookingHosts>;
+
+/**
  * Bookings' calendar for a range (the week view): every booking the reader
  * may see that overlaps it, cancelled ones too, and the reader's own calendar
  * events from their connected calendars (spec 0024), so the week shows what
  * else they have on.
  */
-export const BookingCalendarInput = WorkspaceScoped.extend({ from: Timestamp, to: Timestamp }).refine(
+export const BookingCalendarInput = WorkspaceScoped.extend({
+  from: Timestamp,
+  to: Timestamp,
+  hosts: BookingHosts.default('mine'),
+}).refine(
   ({ from, to }) => {
     const span = Date.parse(to) - Date.parse(from);
     return span > 0 && span <= BOOKING_CALENDAR_MAX_DAYS * 86_400_000;
@@ -325,7 +338,7 @@ export const BookingCalendarInput = WorkspaceScoped.extend({ from: Timestamp, to
   { error: `Ask for a range of at most ${String(BOOKING_CALENDAR_MAX_DAYS)} days.`, path: ['to'] },
 );
 /** A calendar read. */
-export type BookingCalendarInput = z.infer<typeof BookingCalendarInput>;
+export type BookingCalendarInput = z.input<typeof BookingCalendarInput>;
 
 /** One of the reader's own calendar events (not a booking): spec 0024's meeting, from one of their connections. */
 export const CalendarEventItem = z.object({
@@ -432,6 +445,8 @@ export type MeetingSource = z.infer<typeof MeetingSource>;
 export const ListMeetingsInput = WorkspaceScoped.extend({
   when: BookingsTab,
   source: MeetingSource.default('all'),
+  /** Whose bookings: the reader's own (the default), or everyone's for `booking.admin`. */
+  hosts: BookingHosts.default('mine'),
   /** Only these of the reader's calendars' events (the calendars panel's pick); absent is every one shown. */
   calendarIds: z.array(Uuid).max(50).optional(),
   cursor: z.string().max(200).optional(),

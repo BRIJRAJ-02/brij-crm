@@ -8,6 +8,8 @@ import { strings } from '../features/bookings/strings.ts';
 import { hostActions } from '../features/bookings/hostActions.ts';
 import { useFirstDay } from '../features/workspace/first-day.ts';
 import { memberZone } from '../features/booking/zone.ts';
+import { readHosts, useHostsChoice } from '../features/bookings/hosts.ts';
+import { useCan } from '../features/workspace/WorkspacePage.tsx';
 
 // Bookings › List (spec 0025, AC-646; every meeting, the owner's ask of 21 October 2026): Upcoming, Past (`tab=past`)
 // or Cancelled (`tab=cancelled`), All, Bookings or Calendar (`src`), one booking page (`link`) and the calendars the
@@ -22,10 +24,13 @@ export const Route = createFileRoute('/w/$slug/bookings/list')({
     const { data } = context;
     // The list reads by tab and link, never by week; the week start and zone only fill the defaults.
     const search = bookingsSearchOf(parseBookingsSearch(location.search), new Date(), 1, memberZone(data, params.slug));
+    // Whose bookings: an admin's kept Mine or Everyone, Mine for anyone else, as the screen asks (access is cached).
+    const access = await data.access.mine(params.slug).catch(() => undefined);
+    const hosts = readHosts(params.slug, access?.permissions.includes('booking.admin') === true);
     const [objects, pages] = await Promise.all([
       data.objects.list(params.slug),
       data.bookingPages.held(params.slug).catch(() => []),
-      data.bookings.meetings(params.slug, queryOf(search)).ready(),
+      data.bookings.meetings(params.slug, { ...queryOf(search), hosts }).ready(),
     ]);
     return { objects, pages };
   },
@@ -73,9 +78,13 @@ function List({ objects, pages }: ListLoaded) {
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
   const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
+  // Mine or Everyone: only an admin chooses (`booking.admin`); anyone else sees their own.
+  const isAdmin = useCan('booking.admin');
+  const { hosts, choose } = useHostsChoice(slug, isAdmin);
   return (
     <BookingsListScreen
       slug={slug}
+      hosts={isAdmin ? { value: hosts, onChange: choose } : undefined}
       search={search}
       meetings={(query) => data.bookings.meetings(slug, query)}
       calendars={data.calendar.calendars(slug)}

@@ -10,7 +10,14 @@
 // opened stay open, and none starts while another read of the list is out. A
 // failed first read shows the failure; a failed next page keeps what is shown
 // and says so in `moreFailed`; a failed read of what is shown keeps it.
-import type { BookingListItem, BookingsTab, MeetingListItem, MeetingListPage, MeetingSource } from '@crm/contracts';
+import type {
+  BookingHosts,
+  BookingListItem,
+  BookingsTab,
+  MeetingListItem,
+  MeetingListPage,
+  MeetingSource,
+} from '@crm/contracts';
 import { MEETINGS_PAGE_MAX } from '@crm/contracts/meeting-limits';
 import { toDataError } from '../errors.ts';
 import { keepFresh, type FreshDeps, type Freshness } from './fresh.ts';
@@ -19,6 +26,8 @@ import { keepFresh, type FreshDeps, type Freshness } from './fresh.ts';
 export interface MeetingsQuery {
   readonly when: BookingsTab;
   readonly source: MeetingSource;
+  /** Whose bookings: the reader's own (absent, the default), or everyone's for an admin (`booking.admin`). */
+  readonly hosts?: BookingHosts;
   /** The calendars panel's pick; absent is every calendar shown. */
   readonly calendarIds?: readonly string[];
 }
@@ -79,6 +88,7 @@ const keyOf = (workspace: string, query: MeetingsQuery) =>
     workspace,
     query.when,
     query.source,
+    query.hosts ?? 'mine',
     query.calendarIds === undefined ? '*' : [...query.calendarIds].sort().join(','),
   ].join(':');
 
@@ -117,6 +127,7 @@ export function createMeetingsStore(deps: MeetingsDeps) {
         workspace,
         when: query.when,
         source: query.source,
+        hosts: query.hosts ?? 'mine',
         ...(query.calendarIds === undefined ? {} : { calendarIds: [...query.calendarIds] }),
         ...(after === undefined ? {} : { cursor: after }),
         limit: size,

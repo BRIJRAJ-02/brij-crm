@@ -11,7 +11,7 @@
 // a first read shows the failure. A change the member makes reads every held
 // one again (`reloadAll`); Sync now reads the held ones once it has run
 // (`refreshHeld`).
-import type { BookingListItem, BookingsCalendarView, BookingsTab } from '@crm/contracts';
+import type { BookingHosts, BookingListItem, BookingsCalendarView, BookingsTab } from '@crm/contracts';
 import { toDataError } from '../errors.ts';
 import { keepFresh, type FreshDeps, type Freshness } from './fresh.ts';
 
@@ -25,6 +25,7 @@ export interface BookingsApi {
     readonly workspace: string;
     readonly from: string;
     readonly to: string;
+    readonly hosts: BookingHosts;
   }) => Promise<BookingsCalendarView>;
 }
 
@@ -175,12 +176,15 @@ export function createBookingsStore(deps: BookingsDeps) {
       lists.set(key, made);
       return made;
     },
-    /** One workspace's range: its bookings and the reader's calendar events (the week view). */
-    calendar(workspace: string, from: string, to: string): BookingsCalendarHeld {
-      const key = `${workspace}:${from}:${to}`;
+    /**
+     * One workspace's range: its bookings and the reader's calendar events (the week view). `hosts` is whose
+     * bookings: the reader's own (the default), or everyone's for an admin; each is its own held read.
+     */
+    calendar(workspace: string, from: string, to: string, hosts: BookingHosts = 'mine'): BookingsCalendarHeld {
+      const key = `${workspace}:${from}:${to}:${hosts}`;
       const found = ranges.get(key);
       if (found !== undefined) return found;
-      const made = makeView(() => deps.api.calendar({ workspace, from, to }));
+      const made = makeView(() => deps.api.calendar({ workspace, from, to, hosts }));
       ranges.set(key, made);
       const unheld = [...ranges.entries()].filter(([, view]) => !view.isHeld());
       for (const [old] of unheld.slice(0, Math.max(0, unheld.length - UNHELD_RANGES_MAX))) ranges.delete(old);

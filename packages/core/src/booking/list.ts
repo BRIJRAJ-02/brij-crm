@@ -1,7 +1,9 @@
 // Bookings, the workspace's list (spec 0025, AC-646): every booking the
 // reader may see, upcoming, past or cancelled, with its page's title and
 // location. A member with `booking.manage` sees the bookings of their own
-// pages and the ones they host; `booking.admin` sees everyone's. Deleted
+// pages, the ones they host and the ones they co-host (`seen.ts`, the one
+// rule); `booking.admin` may ask for everyone's (`hosts: 'all'`; the week and
+// the list read Mine unless asked). Deleted
 // pages' bookings stay listed (AC-648). Bookings are settings, not CRM data:
 // no outbox row, so the screen reads again when the person comes back to it.
 // The week view reads a range: its bookings, and the reader's own calendar
@@ -22,7 +24,6 @@ import {
 import { schema } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
-import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkId, isUuid } from '../engine/ids.ts';
 import { inputInvalid } from '../engine/refusals.ts';
@@ -30,6 +31,7 @@ import { blockOccurrences } from './blocks.ts';
 import { handLinkOf, linkedRecords, linksOf, seenLinks } from './links.ts';
 import { shownAsEvent } from './owned.ts';
 import { shownAnswers } from './questions.ts';
+import { bookingReaderOf, seesBookingSql, type BookingReader } from './seen.ts';
 
 const { bookingPages, bookings, members } = schema;
 
@@ -63,21 +65,35 @@ function guestsAndNote(answers: unknown): {
   };
 }
 
-/** Who the reader is and whether they see everyone's bookings; undefined when they see none. */
-function readerOf(scope: EngineScope): { readonly member?: string; readonly everyone: boolean } | undefined {
+/** Whose bookings a read asks for: the reader's own (their pages', hosted and co-hosted), or everyone's they may see. */
+export type BookingHosts = 'mine' | 'all';
+
+/** Who the reader is and whose bookings they see; undefined when they see none. */
+function readerOf(scope: EngineScope): BookingReader | undefined {
   requirePermission(scope, 'booking.manage');
-  const { principal } = scope.access;
-  const member = principal.kind === 'member' ? principal.memberId : undefined;
-  const everyone = can(scope.access, 'booking.admin');
-  if (!everyone && member === undefined) return undefined;
-  return { ...(member === undefined ? {} : { member }), everyone };
+  const reader = bookingReaderOf(scope.access);
+  if (!reader.admin && reader.member === undefined) return undefined;
+  return reader;
 }
 
-/** The bookings the reader may see: their own pages' and the ones they host, or everyone's. */
-function visibleTo(reader: { readonly member?: string; readonly everyone: boolean }) {
-  return reader.everyone || reader.member === undefined
-    ? undefined
-    : or(eq(bookingPages.ownerMemberId, reader.member), eq(bookings.hostMemberId, reader.member));
+/**
+ * The bookings the reader may see (`seen.ts`): with `hosts: 'mine'` (the default) only their own pages', the ones
+ * they host and the ones they co-host, even for an admin; `'all'` is everyone's only with `booking.admin`, and the
+ * same as Mine without it. A reader who is no member (a key) has no "mine", so an admin key reads everyone's.
+ */
+function visibleTo(reader: BookingReader, hosts: BookingHosts = 'mine') {
+  return seesBookingSql(
+    reader,
+    {
+      workspaceId: bookings.workspaceId,
+      id: bookings.id,
+      pageId: bookings.pageId,
+      hostMemberId: bookings.hostMemberId,
+      // Every Bookings read joins the page already.
+      pageOwnerMemberId: bookingPages.ownerMemberId,
+    },
+    { everyone: hosts === 'all' || reader.member === undefined },
+  );
 }
 
 /** A booking row and its page as Bookings shows it. */
@@ -133,10 +149,10 @@ function itemOf(
   };
 }
 
-/** The reader's bookings on one of Bookings' tabs (see the header), at most `BOOKINGS_LIST_MAX`. */
+/** The reader's bookings on one of Bookings' tabs (see the header), at most `BOOKINGS_LIST_MAX`; everyone's they may see unless `hosts: 'mine'`. */
 export async function listWorkspaceBookings(
   scope: EngineScope,
-  input: Pick<ListWorkspaceBookingsInput, 'when'>,
+  input: Pick<ListWorkspaceBookingsInput, 'when'> & { readonly hosts?: BookingHosts },
   now: Date = new Date(),
 ): Promise<readonly BookingListItem[]> {
   const reader = readerOf(scope);
@@ -159,7 +175,7 @@ export async function listWorkspaceBookings(
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
       .leftJoin(members, and(eq(members.workspaceId, bookings.workspaceId), eq(members.id, bookings.hostMemberId)))
-      .where(and(shown, visibleTo(reader)))
+      .where(and(shown, visibleTo(reader, input.hosts ?? 'all')))
       .orderBy(upcoming ? asc(bookings.startsAt) : desc(bookings.startsAt), asc(bookings.id))
       .limit(BOOKINGS_LIST_MAX);
     const seen = await seenLinks(
@@ -212,7 +228,7 @@ const iso = (value: Date | string) => new Date(value).toISOString();
  */
 export async function readBookingsCalendar(
   scope: EngineScope,
-  input: { readonly from: string; readonly to: string },
+  input: { readonly from: string; readonly to: string; readonly hosts?: BookingHosts },
 ): Promise<BookingsCalendarView> {
   const reader = readerOf(scope);
   if (reader === undefined) return { bookings: [], events: [], busy: [], blocks: [] };
@@ -229,7 +245,7 @@ export async function readBookingsCalendar(
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
       .leftJoin(members, and(eq(members.workspaceId, bookings.workspaceId), eq(members.id, bookings.hostMemberId)))
-      .where(and(lt(bookings.startsAt, to), gt(bookings.endsAt, from), visibleTo(reader)))
+      .where(and(lt(bookings.startsAt, to), gt(bookings.endsAt, from), visibleTo(reader, input.hosts)))
       .orderBy(asc(bookings.startsAt), asc(bookings.id))
       .limit(BOOKINGS_LIST_MAX);
     const member = reader.member;
@@ -364,6 +380,7 @@ export async function listMeetings(
   input: {
     readonly when: 'upcoming' | 'past' | 'cancelled';
     readonly source?: MeetingSource;
+    readonly hosts?: BookingHosts;
     readonly calendarIds?: readonly string[];
     readonly cursor?: string;
     readonly limit?: number;
@@ -407,7 +424,7 @@ export async function listMeetings(
               members,
               and(eq(members.workspaceId, bookings.workspaceId), eq(members.id, bookings.hostMemberId)),
             )
-            .where(and(shown, visibleTo(reader), past))
+            .where(and(shown, visibleTo(reader, input.hosts), past))
             .orderBy(
               ascending ? asc(bookings.startsAt) : desc(bookings.startsAt),
               ascending ? asc(bookings.id) : desc(bookings.id),

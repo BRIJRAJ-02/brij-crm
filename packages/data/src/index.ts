@@ -42,6 +42,7 @@ import type {
   TimeBlockOccurrence,
   TimeBlockView,
   BookingsTab,
+  BookingHosts,
   PublicSlots,
   BookingPageSettings,
   BookingPageView,
@@ -307,6 +308,7 @@ export type {
   BookingLocation,
   BookingsCalendarView,
   BookingsTab,
+  BookingHosts,
   HomeMetricsView,
   TeamTodayItem,
   TeamTodayMember,
@@ -3609,10 +3611,11 @@ export function createDataLayer({
        * Bookings' week: a range's bookings (cancelled too) and the reader's own
        * calendar events, held while a screen shows it (`useBookingsCalendar`)
        * and read again whenever the person comes back to the page, and every
-       * minute while the page shows and live updates are paused or off.
+       * minute while the page shows and live updates are paused or off. `hosts` is whose bookings: the reader's own
+       * (the default), or everyone's for an admin (`booking.admin`; the same as Mine for anyone else).
        */
-      calendar: (workspace: string, from: string, to: string): BookingsCalendarHeld =>
-        bookingsLists.calendar(workspace, from, to),
+      calendar: (workspace: string, from: string, to: string, hosts?: BookingHosts): BookingsCalendarHeld =>
+        bookingsLists.calendar(workspace, from, to, hosts),
       /**
        * Bookings' list: every meeting on a tab (bookings and the member's own calendar events), narrowed to a source
        * and the calendars panel's pick, a page at a time (`useMeetings`; More reads the next). While held, what it

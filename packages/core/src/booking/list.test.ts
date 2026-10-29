@@ -1,7 +1,8 @@
 // Bookings, the workspace's list (spec 0025, AC-646), against the real
 // Postgres: upcoming soonest first and past latest first, with the page's
 // title and location; a member sees their own pages' bookings and the ones
-// they host, an admin everyone's, a member without either nothing. The week
+// they host or co-host, an admin everyone's when they ask (Mine by default on
+// the week and the list), a member without either nothing. The week
 // read: a range's bookings, cancelled ones too, and the reader's own calendar
 // events synced from the fake provider (never another member's).
 import { sql } from 'drizzle-orm';
@@ -15,9 +16,10 @@ import { decodeTokenKey } from '../calendar/tokens.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { newId } from '../engine/ids.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
+import type { EngineScope } from '../engine/scope.ts';
 import { rescope, testScope } from '../testing.ts';
 import { NO_CALENDAR } from './calendar.ts';
-import { listWorkspaceBookings, readBookingsCalendar } from './list.ts';
+import { listMeetings, listWorkspaceBookings, readBookingsCalendar } from './list.ts';
 import { createBookingPage } from './pages.ts';
 import { bookPublicSlot } from './public.ts';
 
@@ -32,6 +34,9 @@ afterAll(async () => {
 });
 
 const NOW = new Date('2026-11-01T00:00:00.000Z');
+
+const memberOfScope = (scope: EngineScope) =>
+  scope.access.principal.kind === 'member' ? scope.access.principal.memberId : '';
 
 async function workspace() {
   const created = await createWorkspace(db, {
@@ -143,6 +148,48 @@ describe('the bookings list (AC-646)', () => {
       'Ada’s',
       'Bea’s',
     ]);
+  });
+
+  it('reads Mine by default, everyone’s only for an admin who asks, and a co-host’s booking as theirs', async () => {
+    const w = await workspace();
+    const bea = await w.addMember('Bea', 'member');
+    const cy = await w.addMember('Cy', 'admin');
+    const adas = await createBookingPage(w.owner, { id: newId(), title: 'Ada’s', timeZone: 'UTC' }, NOW);
+    const beas = await createBookingPage(bea, { id: newId(), title: 'Bea’s', timeZone: 'UTC' }, NOW);
+    const cys = await createBookingPage(cy, { id: newId(), title: 'Cy’s', timeZone: 'UTC' }, NOW);
+    const shared = await book(adas.publicKey, '2026-11-02T09:00:00.000Z', 'Visitor');
+    await book(beas.publicKey, '2026-11-02T11:00:00.000Z', 'Other');
+    await book(cys.publicKey, '2026-11-02T13:00:00.000Z', 'Third');
+    // Bea co-hosts Ada's booking (a collective page's other member).
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into booking_hosts (workspace_id, booking_id, member_id, during, status)
+        select workspace_id, id, ${memberOfScope(bea)}::uuid, during, status from bookings where id = ${shared.bookingId}::uuid
+      `),
+    );
+    const range = { from: '2026-11-02T00:00:00.000Z', to: '2026-11-03T00:00:00.000Z' };
+    const titles = (items: readonly { readonly pageTitle: string }[]) => items.map((each) => each.pageTitle);
+    const listed = async (scope: typeof bea, hosts?: 'mine' | 'all') =>
+      (await listMeetings(scope, { when: 'upcoming', ...(hosts === undefined ? {} : { hosts }) }, NOW)).items.flatMap(
+        (item) => (item.kind === 'booking' ? [item.booking] : []),
+      );
+
+    // An admin: their own by default (the week and the list), everyone's when asked.
+    expect(titles((await readBookingsCalendar(cy, range)).bookings)).toEqual(['Cy’s']);
+    expect(titles((await readBookingsCalendar(cy, { ...range, hosts: 'all' })).bookings)).toEqual([
+      'Ada’s',
+      'Bea’s',
+      'Cy’s',
+    ]);
+    expect(titles(await listed(cy))).toEqual(['Cy’s']);
+    expect(titles(await listed(cy, 'all'))).toEqual(['Ada’s', 'Bea’s', 'Cy’s']);
+
+    // A member: their own page's and the one they co-host; asking for everyone's is the same as Mine.
+    expect(titles((await readBookingsCalendar(bea, range)).bookings)).toEqual(['Ada’s', 'Bea’s']);
+    expect(titles((await readBookingsCalendar(bea, { ...range, hosts: 'all' })).bookings)).toEqual(['Ada’s', 'Bea’s']);
+    expect(titles(await listed(bea))).toEqual(['Ada’s', 'Bea’s']);
+    expect(titles(await listed(bea, 'all'))).toEqual(['Ada’s', 'Bea’s']);
+    expect(JSON.stringify(await listed(bea, 'all'))).not.toContain('Third');
   });
 
   it('reads a week: its bookings, cancelled too, and the reader’s own calendar events, never another member’s', async () => {

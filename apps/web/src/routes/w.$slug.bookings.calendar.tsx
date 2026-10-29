@@ -1,6 +1,7 @@
 import {
   isDataError,
   type BookingAvailability,
+  type BookingHosts,
   type BookingPageView,
   type BookingsCalendarHeld,
   type CalendarConnectionView,
@@ -19,6 +20,8 @@ import { addDays, weekRange } from '../features/bookings/week.ts';
 import { memberZone } from '../features/booking/zone.ts';
 import { firstDayFor, useFirstDay } from '../features/workspace/first-day.ts';
 import { peopleSearchOf } from '../features/bookings/people.ts';
+import { readHosts, useHostsChoice } from '../features/bookings/hosts.ts';
+import { useCan } from '../features/workspace/WorkspacePage.tsx';
 
 // Bookings › Calendar (spec 0025, AC-646): the week (`w`, its Monday; `d`, the day picked) with the reader's own
 // calendar events beside the bookings, filtered by `link` (one booking page) and `cal` (the calendars the panel shows). The
@@ -41,10 +44,14 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
       firstDayFor(preferences?.weekStart),
       zone,
     ).week;
-    const week = heldWeek(shown, data, params.slug, zone);
+    // Whose bookings: an admin's kept Mine or Everyone (this browser's convenience), Mine for anyone else, as the
+    // screen asks (the access is cached: the workspace frame read it).
+    const access = await data.access.mine(params.slug).catch(() => undefined);
+    const hosts = readHosts(params.slug, access?.permissions.includes('booking.admin') === true);
+    const week = heldWeek(shown, data, params.slug, zone, hosts);
     // The weeks either side, read behind, so Previous and Next show at once.
     for (const step of [-7, 7])
-      heldWeek(addDays(shown, step), data, params.slug, zone)
+      heldWeek(addDays(shown, step), data, params.slug, zone, hosts)
         .ready()
         .catch(() => undefined);
     const calendar = data.calendar.view(params.slug);
@@ -66,10 +73,19 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
   component: CalendarRoute,
 });
 
-/** The data layer's held read of the week starting on `monday` in `zone`: the same one for the same week, every time. */
-function heldWeek(monday: string, data: DataLayer, slug: string, zone: string): BookingsCalendarHeld {
+/**
+ * The data layer's held read of the week starting on `monday` in `zone`, of `hosts`' bookings: the same one for the
+ * same week, every time.
+ */
+function heldWeek(
+  monday: string,
+  data: DataLayer,
+  slug: string,
+  zone: string,
+  hosts: BookingHosts,
+): BookingsCalendarHeld {
   const range = weekRange(monday, zone);
-  return data.bookings.calendar(slug, range.from, range.to);
+  return data.bookings.calendar(slug, range.from, range.to, hosts);
 }
 
 /** What the loader read beside the week. */
@@ -105,21 +121,26 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
   const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
-  const week = heldWeek(search.week, data, slug, timeZone);
+  // Mine or Everyone: only an admin chooses (`booking.admin`); anyone else sees their own.
+  const isAdmin = useCan('booking.admin');
+  const { hosts, choose } = useHostsChoice(slug, isAdmin);
+  const week = heldWeek(search.week, data, slug, timeZone, hosts);
   // The member's zone changed in Preferences while the page is open: the loader primed the weeks either side in the
   // old one, so prime them again in the new one (each held read is the same one for the same range).
-  const primedZone = useRef(timeZone);
+  // Mine or Everyone changed too: the weeks either side of the new choice.
+  const primed = useRef({ timeZone, hosts });
   useEffect(() => {
-    if (primedZone.current === timeZone) return;
-    primedZone.current = timeZone;
+    if (primed.current.timeZone === timeZone && primed.current.hosts === hosts) return;
+    primed.current = { timeZone, hosts };
     for (const step of [-7, 7])
-      heldWeek(addDays(search.week, step), data, slug, timeZone)
+      heldWeek(addDays(search.week, step), data, slug, timeZone, hosts)
         .ready()
         .catch(() => undefined);
-  }, [data, slug, timeZone, search.week]);
+  }, [data, slug, timeZone, search.week, hosts]);
   return (
     <BookingsCalendarScreen
       slug={slug}
+      hosts={isAdmin ? { value: hosts, onChange: choose } : undefined}
       search={search}
       week={week}
       objects={objects}

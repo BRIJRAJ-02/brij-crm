@@ -1,10 +1,11 @@
 // Brief
 // Purpose: Bookings › Calendar and Bookings › List (spec 0025, AC-646), on the reference product's bookings page: a week calendar (bookings and the member's own calendar events) and a list (Upcoming, Past, Cancelled) with sort and pages.
 // Main task: see the week at a glance, open a booking or an event for its details, or page through the list.
-// Leaves out: changing a booking from here (the actions arrive next), the new meeting dialog, team views and filing, and live arrival (it reads again when the page is shown again).
+// Leaves out: changing a booking from here (the actions arrive next), the new meeting dialog, team views beyond an admin's Mine · Everyone (spec 0037), filing, and live arrival (it reads again when the page is shown again).
 import {
   isDataError,
   type BookingAssignment,
+  type BookingHosts,
   type BookingListItem,
   type BookingPageView,
   type BookingsCalendarHeld,
@@ -86,6 +87,7 @@ import { ReassignDialog } from './ReassignDialog.tsx';
 import { BookingDialog, useBookingActions, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
+import { HostsSwitch } from './HostsSwitch.tsx';
 import {
   addDays,
   bookingPieces,
@@ -317,6 +319,9 @@ function BookingCard({
   const seats = read === undefined || 'failed' in read ? [] : read.rows.filter((row) => row.voidedAt === undefined);
   // Admins reassign a round robin seat (AC-748; Manage over both hosts, today booking.admin's, AC-1337).
   const canReassign = useCan('booking.admin');
+  // A colleague's booking (an admin's Everyone, a co-hosted one) says whose it is.
+  const me = useMyAccess()?.memberId;
+  const isColleagues = me !== undefined && booking.hostMemberId !== me && booking.hostName !== '';
   const [reassigning, setReassigning] = useState(false);
   const [isChatOpen, setChatOpen] = useState(false);
   const chatId = useId();
@@ -410,6 +415,9 @@ function BookingCard({
           ...booking.guests.map((guest) => ({ id: `${booking.id}-${guest}`, name: guest })),
         ]}
         rows={[
+          ...(isColleagues
+            ? [{ id: 'host', icon: 'user' as const, label: strings.hostRow, value: booking.hostName }]
+            : []),
           { id: 'where', ...whereRowOf(booking, Date.parse(booking.endsAt) > now.getTime()) },
           ...(linked === undefined ? [] : [linked]),
           ...(booking.note === undefined
@@ -814,9 +822,17 @@ export type BlockDraft = Omit<CreateTimeBlockInput, 'workspace' | 'mutationId' |
 /** A block's turn to show at once, before the server answers (the data layer names it). */
 export type BlockPreview = Omit<TimeBlockOccurrence, 'key' | 'blockId'>;
 
+/** Whose bookings an admin sees, and how they change it (HostsSwitch); absent for anyone else. */
+export interface HostsChoice {
+  readonly value: BookingHosts;
+  readonly onChange: (next: BookingHosts) => void;
+}
+
 /** Props for the calendar: its held week, the address, and what Filter offers. */
 export interface BookingsCalendarScreenProps {
   readonly slug: string;
+  /** Mine or Everyone, for a holder of `booking.admin` only. */
+  readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
   readonly week: BookingsCalendarHeld;
   readonly objects: readonly ObjectSummary[];
@@ -905,6 +921,8 @@ type CardAsk = CardQuestion & { readonly opening: number };
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
   const { workingStart, toasts, onBookAsHost, newBookingKey } = props;
+  // The reader: a colleague's booking (an admin's Everyone) names its host on its block.
+  const me = useMyAccess()?.memberId;
   const calendarList = useCalendarList(props.calendars);
   const accounts = calendarList.status === 'ready' ? calendarList.accounts : [];
   // Book someone in: the span the New meeting dialog books.
@@ -1103,7 +1121,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
           <CalendarSwitch calendars={switchable} choice={choice} onChoose={choose} />
         )
       }
-      end={<FilterMenu search={search} pages={pages} onSearch={onSearch} />}
+      end={
+        <>
+          {props.hosts !== undefined && <HostsSwitch value={props.hosts.value} onChange={props.hosts.onChange} />}
+          <FilterMenu search={search} pages={pages} onSearch={onSearch} />
+        </>
+      }
     />
   );
   if (state.status === 'loading') {
@@ -1176,7 +1199,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
           endMinute: piece.endMinute,
           title: booking.pageTitle,
           time: timeRange(booking.startsAt, booking.endsAt, locale, timeZone),
-          detail: booking.visitorName,
+          // A colleague's booking (an admin's Everyone) names its host, so it is never taken for the reader's own.
+          detail:
+            me !== undefined && booking.hostMemberId !== me && booking.hostName !== ''
+              ? strings.withHost(booking.visitorName, booking.hostName)
+              : booking.visitorName,
           kind: 'booking',
           // Its booking link's colour, as on Links; no mark (every booking is one) and no status while confirmed, so
           // a block says only what is news: a no show, a booking with no host, or struck through when cancelled.
@@ -1675,12 +1702,14 @@ function ListBar({
   pages,
   panel,
   hasNoCalendar,
+  hosts,
   onSearch,
 }: {
   readonly slug: string;
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
   readonly panel: CalendarsPanel;
+  readonly hosts?: HostsChoice | undefined;
   /** The calendars read and none is connected: Connect calendar in the toggle's place. */
   readonly hasNoCalendar: boolean;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
@@ -1700,6 +1729,7 @@ function ListBar({
       }
       end={
         <>
+          {hosts !== undefined && <HostsSwitch value={hosts.value} onChange={hosts.onChange} />}
           {search.source !== 'bookings' && search.link === undefined && (
             <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={hasNoCalendar} />
           )}
@@ -1718,6 +1748,8 @@ const SOURCES: readonly MeetingSource[] = ['all', 'bookings', 'calendar'];
 /** Props for the list: its held pages, the address, the calendars and what Filter offers. */
 export interface BookingsListScreenProps {
   readonly slug: string;
+  /** Mine or Everyone, for a holder of `booking.admin` only. */
+  readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
   /** The data layer's held list for a question (tab, source, the calendars picked): the same one every time. */
   readonly meetings: (query: MeetingsQuery) => MeetingsHeld;
@@ -1777,6 +1809,7 @@ export function BookingsListScreen({
   locale,
   onSearch,
   actions,
+  hosts,
 }: BookingsListScreenProps) {
   const personHref = usePersonHref(slug, objects);
   // The member's zone (their Preferences, else the browser's): each row's day band and time.
@@ -1805,6 +1838,7 @@ export function BookingsListScreen({
   const list = meetings({
     when: tab,
     source,
+    ...(hosts === undefined ? {} : { hosts: hosts.value }),
     ...(search.cal === undefined ? {} : { calendarIds: search.cal }),
   });
   const state = useMeetings(list);
@@ -1841,6 +1875,7 @@ export function BookingsListScreen({
       pages={pages}
       panel={panel}
       hasNoCalendar={hasNoCalendar}
+      hosts={hosts}
       onSearch={onSearch}
     />
   );
@@ -1884,6 +1919,12 @@ export function BookingsListScreen({
                       <ButtonLink variant="primary" icon="link" href={linksHref(slug)}>
                         {strings.shareBookingPage}
                       </ButtonLink>
+                      {/* An admin on Mine: everyone else's bookings may be there. */}
+                      {hosts?.value === 'mine' && (
+                        <Button variant="secondary" onPress={() => hosts.onChange('all')}>
+                          {strings.showEveryone}
+                        </Button>
+                      )}
                       {calendarList.status === 'ready' && !hasCalendar && (
                         <Link href={calendarsHref(slug)}>{strings.connectCalendar}</Link>
                       )}

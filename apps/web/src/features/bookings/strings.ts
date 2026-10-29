@@ -63,6 +63,15 @@ export const strings = {
   allLinks: 'All links',
   calendars: 'Calendars',
   allCalendars: 'All calendars',
+  /** Whose bookings an admin sees (HostsSwitch). */
+  hostsLabel: 'Whose bookings',
+  hosts: { mine: 'Mine', all: 'Everyone' },
+  /** An admin's empty Mine: everyone's may not be empty. */
+  showEveryone: 'Show everyone’s',
+  /** A colleague's booking on the week (an admin's Everyone): the guest, then whose it is. */
+  withHost: (guest: string, host: string) => `${guest} · ${host}`,
+  /** A colleague's booking's card: whose it is. */
+  hostRow: 'Host',
   bookingsOnly: 'Bookings',
   moreCalendars: 'More calendars',
   moreCount: (count: number) => (count === 1 ? '1 more calendar' : `${String(count)} more calendars`),
