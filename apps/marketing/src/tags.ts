@@ -45,7 +45,7 @@ export function startTags(ids: TagIds, host: TagHost): readonly string[] {
       dataLayer.push(arguments);
     };
     host.global.gtag = gtag;
-    const call = gtag as (...args: unknown[]) => void;
+    const call: (...args: unknown[]) => void = gtag;
     call('js', new Date());
     // One page view per page, sent by hand with the whole address, so `utm_*` and click ids reach the report.
     call('config', ga, { send_page_view: false });

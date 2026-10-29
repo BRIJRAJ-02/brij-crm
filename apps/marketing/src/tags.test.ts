@@ -28,7 +28,9 @@ describe('startTags', () => {
     const { host, scripts, global } = hostWith();
     expect(startTags({ ga: 'G-ABC123XYZ' }, host)).toEqual(['ga']);
     expect(scripts).toEqual(['https://www.googletagmanager.com/gtag/js?id=G-ABC123XYZ']);
-    const queued = (global.dataLayer as IArguments[]).map((entry) => [...entry]);
+    const queued = (global.dataLayer as IArguments[]).map((entry): unknown[] =>
+      Array.from(entry as ArrayLike<unknown>),
+    );
     expect(queued[1]).toEqual(['config', 'G-ABC123XYZ', { send_page_view: false }]);
     expect(queued[2]).toEqual([
       'event',
