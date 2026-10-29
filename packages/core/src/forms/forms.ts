@@ -39,7 +39,7 @@ import { requirePermission } from '../access/check.ts';
 import { bookingTargetProblem } from '../booking/pages.ts';
 import { writeAudit } from '../members/audit.ts';
 import { changedRuleIds, checkFormAddresses, checkFormRoutes, rulesChanged } from '../routing/check.ts';
-import { can, fieldLevel, objectLevel } from '../access/policy.ts';
+import { can, fieldLevel, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
 import {
@@ -472,15 +472,15 @@ async function insertForm(
 }
 
 /** The workspace's People object, else its first live object: where a new form files. */
-async function defaultObject(tx: WorkspaceTx): Promise<string> {
-  const [row] = await tx
+async function defaultObject(tx: WorkspaceTx, access: Access): Promise<string | undefined> {
+  const rows = await tx
     .select({ id: objects.id })
     .from(objects)
     .where(sql`${objects.archivedAt} is null`)
-    .orderBy(sql`(${objects.standardKey} = 'people') desc nulls last`, objects.position)
-    .limit(1);
-  if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_OBJECT);
-  return row.id;
+    .orderBy(sql`(${objects.standardKey} = 'people') desc nulls last`, objects.position);
+  // The first one the creator may write (late trap #16): a member who reads People but can't write it was refused
+  // "New form" outright. Undefined when they write none, and the form keeps its submissions only.
+  return rows.find((row) => objectLevel(access, row.id) === 'write')?.id;
 }
 
 /** What creating a form takes: `mainObjectId` absent is People (or the first object), `null` keeps submissions only. */
@@ -512,7 +512,13 @@ export async function createForm(
         if (existing.createdById === scope.actor.id) return viewOf(tx, scope, existing);
         throw refuse('ID_TAKEN', 'A form with that id already exists.');
       }
-      if (input.mainObjectId === null) {
+      const objectId =
+        input.mainObjectId === undefined
+          ? await defaultObject(tx, scope.access)
+          : input.mainObjectId === null
+            ? undefined
+            : checkId(input.mainObjectId, UNKNOWN_OBJECT);
+      if (objectId === undefined) {
         const kept = await insertForm(tx, scope, {
           id: input.id,
           name: input.name?.trim() ?? UNTITLED_FORM,
@@ -521,8 +527,6 @@ export async function createForm(
         });
         return viewOf(tx, scope, kept);
       }
-      const objectId =
-        input.mainObjectId === undefined ? await defaultObject(tx) : checkId(input.mainObjectId, UNKNOWN_OBJECT);
       const object = await writableObject(tx, scope, objectId);
       const attributes = await loadAttributes(tx, objectId);
       const form = await insertForm(tx, scope, {

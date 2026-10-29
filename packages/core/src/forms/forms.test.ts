@@ -346,6 +346,20 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     expect(again.draft.questions.find((each) => each.id === referrer.id)?.filedOn).toBeUndefined();
   });
 
+  it('starts a new form on the first object its creator may write, not People they can only read (late trap #16)', async () => {
+    const w = await workspace();
+    const readsPeople: AccessRules = {
+      levels: [
+        { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: w.people }, level: 'read' },
+      ],
+      records: [],
+    };
+    const admin = rescope(w.scope, { role: 'admin', rules: readsPeople });
+    const created = await createForm(admin, { id: newId() });
+    expect(created.mainObjectId).toBeDefined();
+    expect(created.mainObjectId).not.toBe(w.people);
+  });
+
   it('refuses a publish filing onto a field the publisher can only read, naming it (AC-546)', async () => {
     const w = await workspace();
     const created = await createForm(w.scope, { id: newId(), name: 'Contact us' });
