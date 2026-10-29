@@ -167,6 +167,29 @@ describe('POST /api/public/forms/:publicKey/submissions', () => {
     expect(await (await call(`/forms/${live.publicKey}`)).json()).toMatchObject({ status: 'live' });
   });
 
+  it('answers 429, never cached, past 60 reads a minute from one address (late trap #69)', async () => {
+    const { live } = await liveForm();
+    const statuses: number[] = [];
+    for (let index = 0; index < 60; index += 1) {
+      statuses.push((await call(`/forms/${live.publicKey}`, { ip: '198.51.100.69' })).status);
+    }
+    expect(statuses.every((status) => status === 200)).toBe(true);
+    const over = await call(`/forms/${live.publicKey}`, { ip: '198.51.100.69' });
+    expect(over.status).toBe(429);
+    expect(Number(over.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(over.headers.get('cache-control')).toBe('no-store');
+    // A key that names nothing counts too: guessing addresses costs the same as reading one.
+    expect((await call('/forms/no-such-form', { ip: '198.51.100.69' })).status).toBe(429);
+    // Another address still reads it, and the reads spent none of the submissions' own limits.
+    expect((await call(`/forms/${live.publicKey}`, { ip: '198.51.100.70' })).status).toBe(200);
+    const sent = await call(`/forms/${live.publicKey}/submissions`, {
+      method: 'POST',
+      ip: '198.51.100.69',
+      body: submission(),
+    });
+    expect(sent.status).toBe(200);
+  });
+
   it('answers 429 with Retry-After past 5 a minute from one address', async () => {
     const { live } = await liveForm();
     const path = `/forms/${live.publicKey}/submissions`;

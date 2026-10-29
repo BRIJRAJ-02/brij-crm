@@ -46,6 +46,8 @@ export interface PublicFormsDeps {
   readonly captcha: CaptchaVerifier;
   /** The central limiter (`../limits.ts`). */
   readonly limiter: PublicLimiter;
+  /** The hosted form read's own limiter, so a flood of reads never evicts the submissions' windows. */
+  readonly readLimiter: PublicLimiter;
   /** Fill tickets: the server's clock for the minimum fill time. */
   readonly tickets: TicketBook;
   /** The origin hosted pages (and the embed's frame) are served from. */
@@ -166,6 +168,20 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
   const allowedHosts = new Set([new URL(deps.publicOrigin).hostname]);
 
   app.get('/public/forms/:publicKey', async (c) => {
+    // Every read is a database read now nothing caches it (late trap #69): limited before the form is looked up, by
+    // address and across the instance. Never by the form: a few addresses could then shut a form for everyone.
+    const address = hashAddress(deps.ipSalt, c.get('clientIp')) ?? 'unknown';
+    for (const [key, limit] of [
+      ['forms:read:instance', FORM_LIMITS.readsPerInstance],
+      [`forms:read:${address}`, FORM_LIMITS.readsPerAddress],
+    ] as const) {
+      const hit = deps.readLimiter(key, limit);
+      if (!hit.allowed) {
+        return answer('RATE_LIMITED', words.tooMany, {
+          headers: { 'retry-after': String(hit.retryAfterSeconds), 'cache-control': PUBLIC_FORM_CACHE_CONTROL },
+        });
+      }
+    }
     try {
       const { scope, formId } = await enterPublicForm({ db: deps.db }, c.req.param('publicKey'));
       const form = await getPublicForm(scope, {

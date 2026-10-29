@@ -549,6 +549,8 @@ export function createApp({
       services.captcha ??
       createCaptchaVerifier(env.RECAPTCHA_SECRET_KEY === undefined ? {} : { secret: env.RECAPTCHA_SECRET_KEY }),
     limiter: formLimiter,
+    // Reads count apart (late trap #69): a flood of reads never evicts a submission's hour long windows.
+    readLimiter: createMemoryLimiter(),
     tickets,
     publicOrigin: formsOrigin,
     publicOrigins,
