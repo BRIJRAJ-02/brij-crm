@@ -103,6 +103,7 @@ import { PRUNE_BATCH, type OutboxReader, type OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
 import type { PublishBatch } from './centrifugo.ts';
 import { createRelayStats, type RelayStats, type RelayStatsSnapshot } from './stats.ts';
+import { REALTIME_TOKEN_SECONDS } from './tokens.ts';
 
 type Fields = Record<string, unknown>;
 
@@ -134,8 +135,9 @@ export interface RelayDeps {
   /**
    * Cuts off the members an `access` row names who are no longer in the
    * workspace (spec 0031, AC-817), once that row went out, so their open tabs
-   * stop hearing it. Best effort: a failure is logged, and their subscription
-   * token runs out within the hour anyway.
+   * stop hearing it. Best effort: a failure is logged and tried again after
+   * later passes while this relay publishes (late trap #41), and their
+   * subscription token runs out within the hour anyway.
    */
   readonly cutOff?: (workspaceId: string, memberIds: readonly string[]) => Promise<void>;
   readonly log: RelayLog;
@@ -257,6 +259,12 @@ export const PRUNE_EVERY_MS = 600_000;
  * round of them. AC-78's relay lag target is 250 ms at p95.
  */
 const PRUNE_SLOW_MS = 250;
+
+/** The first wait before a failed cut off is tried again, and the longest (late trap #41). */
+const CUT_RETRY_FIRST_MS = 2_000;
+const CUT_RETRY_MAX_MS = 5 * 60_000;
+/** A subscription token's life: past it, a member not cut off has lost the channel anyway. */
+const CUT_RETRY_GIVE_UP_MS = REALTIME_TOKEN_SECONDS * 1_000;
 
 /**
  * The event for one outbox row on `workspace:<id>` (spec 0007's
@@ -389,6 +397,12 @@ export function createRelay(deps: RelayDeps): Relay {
   // Each workspace's audiences, for the awake period (AC-85): loaded at its first turn, dropped after a `members`
   // or `access` row and when the relay goes dormant. A load that fails is forgotten, so the next turn asks again.
   const audienceCache = new Map<string, Promise<readonly Audience[]>>();
+  // Removed members whose cut off failed, by workspace, tried again after each pass with a growing wait (late trap
+  // #41: they kept hearing the workspace's live events until their token ran out, up to an hour).
+  const pendingCuts = new Map<
+    string,
+    { readonly memberIds: Set<string>; firstAt: number; dueAt: number; waitMs: number }
+  >();
   // Workspaces already reported as needing a channel per audience in this awake period.
   const splitWarned = new Set<string>();
   // The prune's rounds in this awake period (AC-89): when the next may start (the awake period's start, then
@@ -536,10 +550,25 @@ export function createRelay(deps: RelayDeps): Relay {
       const row = rows[cut];
       if (row?.kind === 'access' && deps.cutOff !== undefined) {
         await deps.cutOff(workspaceId, row.itemIds).catch((error: unknown) => {
-          log.warn('Cutting removed members off the live channel failed; their token runs out within the hour', {
+          log.warn('Cutting removed members off the live channel failed; it is tried again', {
             workspaceId,
             ...errorFields(error),
           });
+          const pending = pendingCuts.get(workspaceId);
+          if (pending === undefined) {
+            pendingCuts.set(workspaceId, {
+              memberIds: new Set(row.itemIds),
+              firstAt: clock(),
+              dueAt: clock() + CUT_RETRY_FIRST_MS,
+              waitMs: CUT_RETRY_FIRST_MS,
+            });
+          } else {
+            // Someone newly cut off holds a newer token: the entry waits their hour, from the first try again.
+            for (const memberId of row.itemIds) pending.memberIds.add(memberId);
+            pending.firstAt = clock();
+            pending.waitMs = CUT_RETRY_FIRST_MS;
+            pending.dueAt = clock() + CUT_RETRY_FIRST_MS;
+          }
         });
       }
     }
@@ -608,6 +637,41 @@ export function createRelay(deps: RelayDeps): Relay {
     };
     await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, lane));
     return more;
+  }
+
+  /**
+   * Tries the failed cut offs that are due again, after a pass of a relay holding the lock: one that lands is
+   * forgotten, one that fails waits twice as long, up to `CUT_RETRY_MAX_MS`, until it lands or the members' tokens
+   * have run out. Best effort, in memory: a relay that goes dormant or loses the lock tries again only once it is
+   * publishing again (a durable cut off, as a job, is the stronger fix, noted for later).
+   */
+  async function retryCuts(): Promise<void> {
+    const cutOff = deps.cutOff;
+    if (cutOff === undefined || pendingCuts.size === 0) return;
+    const now = clock();
+    for (const [workspaceId, pending] of [...pendingCuts]) {
+      // Their subscription tokens have run out by now (an hour at most): nothing left to cut.
+      if (now - pending.firstAt >= CUT_RETRY_GIVE_UP_MS) {
+        pendingCuts.delete(workspaceId);
+        log.error('Removed members were never cut off the live channel; their tokens have run out', {
+          workspaceId,
+          members: pending.memberIds.size,
+        });
+        continue;
+      }
+      if (now < pending.dueAt) continue;
+      try {
+        await cutOff(workspaceId, [...pending.memberIds]);
+        pendingCuts.delete(workspaceId);
+      } catch (error) {
+        pending.waitMs = Math.min(pending.waitMs * 2, CUT_RETRY_MAX_MS);
+        pending.dueAt = clock() + pending.waitMs;
+        log.warn('Cutting removed members off the live channel failed again; it is tried again', {
+          workspaceId,
+          ...errorFields(error),
+        });
+      }
+    }
   }
 
   /**
@@ -716,6 +780,7 @@ export function createRelay(deps: RelayDeps): Relay {
             for (const workspaceId of waiting) add(workspaceId);
           }
           leftover = await round(reader, workspaces);
+          if (!halted()) await retryCuts();
           // After a pass only (a poll, or a round with a workspace in it), so pruning never wakes the database; a
           // pass with nothing to publish is quiet, where a new round prefers to start.
           if ((due || workspaces.size > 0) && !halted()) await pruneAfterPass(reader, workspaces.size === 0);

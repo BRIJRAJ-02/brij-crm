@@ -1339,10 +1339,17 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
     });
     await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2, 3]);
     // Once, after the access row itself went out; the members row cuts nobody off.
-    expect(cut).toEqual([{ workspaceId, memberIds: [ada], published: [1, 2] }]);
+    expect(cut[0]).toEqual({ workspaceId, memberIds: [ada], published: [1, 2] });
     expect(warnings.map((warning) => warning.message)).toContain(
-      'Cutting removed members off the live channel failed; their token runs out within the hour',
+      'Cutting removed members off the live channel failed; it is tried again',
     );
+    // Tried again after the next pass that is due, not left to the token's hour (late trap #41); then forgotten.
+    await expect.poll(() => cut.length, { timeout: 10_000, interval: 100 }).toBe(2);
+    expect(cut[1]).toMatchObject({ workspaceId, memberIds: [ada] });
+    await events(workspaceId, [4]);
+    await testQuery(ownerUrl, `select pg_notify('crm_outbox', $1)`, [workspaceId]);
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2, 3, 4]);
+    expect(cut).toHaveLength(2);
   });
 
   it('forgets the audiences when it goes dormant, and reads them again after the wake', async () => {
