@@ -327,6 +327,27 @@ describe('a form’s routing', () => {
     expect(refusal.message).toContain('isn’t in the page’s rotation');
   });
 
+  it('keeps saving a form whose rule names a host who has since left the rotation, and says so on publish', async () => {
+    const w = await world();
+    const form = await routedForm(w, [
+      rule('bea', {
+        when: { join: 'all', rules: [{ key: 'budget', op: 'is', value: 'Large' }] },
+        then: { kind: 'book', bookingPageId: w.page.id, hosts: [w.bea.id], message: '' },
+      }),
+    ]);
+    // Bea leaves the rotation after the rule was saved (late trap #83: every later autosave was then refused).
+    await w.query(sql`delete from rotation_members where member_id = ${w.bea.id}::uuid`);
+    const now = await getForm(w.owner, { formId: form.id });
+    const saved = await saveFormDraft(w.owner, {
+      formId: form.id,
+      document: { ...now.draft, headline: 'Talk to our team' },
+      expectedRevision: now.revision,
+    });
+    expect(saved.draft.headline).toBe('Talk to our team');
+    const refusal = await refusalOf(publishForm(w.owner, { formId: form.id, expectedRevision: saved.revision }));
+    expect(JSON.stringify(refusal)).toContain('isn’t in the page’s rotation');
+  });
+
   it('refuses a draft whose Show when or rule reads a person’s or a company’s field, in publish’s words, storing nothing', async () => {
     const w = await world();
     const jobTitle = w.attribute('people.job_title');
