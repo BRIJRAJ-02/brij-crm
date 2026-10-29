@@ -61,15 +61,8 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
     const view = context.data.views.get(params.slug, params.viewId);
     const views = context.data.views.list(params.slug, object.id);
     const membersLoading = context.data.members.list(params.slug);
-    const [attributes, archivedAttributes] = await Promise.all([
+    const [attributes] = await Promise.all([
       context.data.attributes.list(params.slug, object.id),
-      // The archived ones the reader may see, so the view can say which it runs without (spec 0020, AC-480): the
-      // live list leaves them out, so they read as unknown rather than archived. The same list settings reads, held
-      // apart; a failed read only leaves the view unexplained, never unopened.
-      context.data.attributes
-        .all(params.slug, object.id)
-        .then((all) => all.filter((attribute) => attribute.isArchived))
-        .catch(() => []),
       view.ready(),
       views.ready(),
     ]);
@@ -101,6 +94,17 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
     const far = farAttributesUnchecked(attributes, (id) => farLists.get(id) ?? undefined);
     const effective = runningQuery(query, attributes, far);
     const running = effective.status === 'ready' ? effective : runningQuery(savedQuery(body.view), attributes, far);
+    // The archived ones the reader may see, so the view can say which it runs without (spec 0020, AC-480): the live
+    // list leaves them out, so they read as unknown rather than archived. Read only when the view or its draft leaves
+    // something out, so a schema change reloads the table with one read, not two. The same list settings reads, held
+    // apart; a failed read only leaves the view unexplained, never unopened.
+    const savedRun = runningQuery(savedQuery(body.view), attributes, far);
+    const archivedAttributes = [effective, savedRun].some((run) => run.status === 'ready' && run.dropped)
+      ? await context.data.attributes
+          .all(params.slug, object.id)
+          .then((all) => all.filter((attribute) => attribute.isArchived))
+          .catch(() => [])
+      : [];
     const recordsQuery = running.status === 'ready' ? toViewQuery(running) : {};
     const [members, records] = await Promise.all([
       membersLoading,
