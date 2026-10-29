@@ -202,6 +202,32 @@ const SENTENCES: SentenceTemplates = {
     actor(
       `stopped ${w.person(entry.target.person)} being able to ${verbOf(entry.params.level)} ${whoseScheduling(entry.params.over, w)}`,
     ),
+  // Someone's scheduling changed (spec 0037, AC-1263): "Priya changed Bea’s “Working hours” schedule".
+  'schedule.changed': (entry, w) => {
+    const whose = w.persons(entry.target.person);
+    const named = entry.params.schedule === undefined ? undefined : `“${entry.params.schedule}”`;
+    switch (entry.params.kind) {
+      case 'create':
+        return actor(`made ${whose} ${named ?? 'new'} schedule`);
+      case 'duplicate':
+        return actor(`copied one of ${whose} schedules${named === undefined ? '' : ` as ${named}`}`);
+      case 'delete':
+        return actor(`deleted ${whose} ${named === undefined ? 'schedule' : `${named} schedule`}`);
+      case 'set_default':
+        return actor(
+          named === undefined ? `changed ${whose} default schedule` : `made ${named} ${whose} default schedule`,
+        );
+      case 'update':
+      case 'default_hours':
+        return actor(`changed ${whose} ${named === undefined ? 'hours' : `${named} schedule`}`);
+    }
+  },
+  'block.created': (entry, w) => actor(`blocked time on ${w.persons(entry.target.person)} calendar`),
+  'block.removed': (entry, w) => actor(`removed a block from ${w.persons(entry.target.person)} calendar`),
+  'booking.changed_for': (entry, w) => {
+    const verb = { made: 'booked', moved: 'moved', cancelled: 'cancelled' }[entry.params.change];
+    return actor(`${verb} ${w.booking(entry.target)} for ${w.person(entry.params.host)}`);
+  },
 };
 
 /** A delegation's level as its verb: See or Manage. */

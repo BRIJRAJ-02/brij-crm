@@ -247,6 +247,27 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'delegation.revoked': [
     row('delegation.revoked', 'member', ada, { before: { level: 'view', targetType: 'everyone' } }),
   ],
+  // Someone's scheduling (spec 0037, AC-1263): the member whose it is is the target.
+  'schedule.changed': [
+    row('schedule.changed', 'member', bea, {
+      before: { memberId: bea, kind: 'update', schedules: [{ id: newId(), name: 'Working hours', weekly: [] }] },
+      after: { memberId: bea, kind: 'update', schedules: [{ id: newId(), name: 'Working hours', weekly: [1] }] },
+    }),
+    row('schedule.changed', 'member', bea, {
+      before: { memberId: bea, kind: 'create', schedules: [] },
+      after: { memberId: bea, kind: 'create', schedules: [{ id: newId(), name: 'Summer' }] },
+    }),
+  ],
+  'block.created': [
+    row('block.created', 'member', bea, { after: { memberId: bea, blockId: newId(), kind: 'busy', repeat: 'once' } }),
+  ],
+  'block.removed': [
+    row('block.removed', 'member', bea, { before: { memberId: bea, blockId: newId(), kind: 'busy', repeat: 'once' } }),
+  ],
+  'booking.changed_for': [
+    row('booking.changed_for', 'booking', booking, { after: { memberId: bea, change: 'moved' } }),
+    row('booking.changed_for', 'booking', booking, { after: { memberId: bea, change: 'made' } }),
+  ],
 };
 
 const view = (each: AuditRow): AuditEntryView => {
@@ -393,6 +414,21 @@ describe('toEntryView, per action', () => {
     expect(only('delegation.changed').params).toMatchObject({ level: 'manage', from: 'view' });
     expect(only('delegation.revoked').params).toEqual({ level: 'view' });
     const unknown = row('delegation.granted', 'member', ada, { after: { level: 'admin', targetType: 'everyone' } });
+    expect(toEntryView(unknown, names)).toBeUndefined();
+  });
+
+  it('names whose scheduling changed, the write and the schedule, and drops a write it doesn’t know', () => {
+    expect(only('schedule.changed')).toMatchObject({
+      target: { type: 'member', person: { name: 'Bea Rao' } },
+      params: { kind: 'update', schedule: 'Working hours' },
+    });
+    expect(only('schedule.changed', 1).params).toEqual({ kind: 'create', schedule: 'Summer' });
+    expect(only('block.created').params).toEqual({});
+    expect(only('booking.changed_for').params).toEqual({
+      host: { kind: 'member', memberId: bea, name: 'Bea Rao', state: 'former' },
+      change: 'moved',
+    });
+    const unknown = row('schedule.changed', 'member', bea, { after: { memberId: bea, kind: 'rebuilt' } });
     expect(toEntryView(unknown, names)).toBeUndefined();
   });
 

@@ -20,14 +20,10 @@ describe('the kinds of change', () => {
   });
 
   it('leaves a member’s own preferences and profile order out, and names each listed action’s kind', () => {
-    expect(AUDIT_NOT_LISTED).toEqual([
-      'member.preferences_changed',
-      'booking_page.profile_reordered',
-      'schedule.changed',
-      'block.created',
-      'block.removed',
-      'booking.changed_for',
-    ]);
+    expect(AUDIT_NOT_LISTED).toEqual(['member.preferences_changed', 'booking_page.profile_reordered']);
+    // Spec 0037's scheduling rows (AC-1263) are listed with their sentences since J5.
+    expect(auditKindOf('schedule.changed')).toBe('scheduling');
+    expect(auditKindOf('booking.changed_for')).toBe('scheduling');
     expect(auditKindOf('member.preferences_changed')).toBeUndefined();
     expect(auditKindOf('form.owner_changed')).toBe('scheduling');
     expect(auditKindOf('booking.record_linked')).toBe('scheduling');

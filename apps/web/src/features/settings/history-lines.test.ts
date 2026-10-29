@@ -332,6 +332,52 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, action: 'delegation.revoked', target: member(bea), params: { level: 'view' } },
     'Ada Lovelace stopped Bea Rao being able to see everyone’s scheduling',
   ],
+  // Someone's scheduling changed (spec 0037, AC-1263).
+  [
+    {
+      ...base,
+      action: 'schedule.changed',
+      target: member(bea),
+      params: { kind: 'update', schedule: 'Working hours' },
+    },
+    'Ada Lovelace changed Bea Rao’s “Working hours” schedule',
+  ],
+  [
+    { ...base, action: 'schedule.changed', target: member(bea), params: { kind: 'create', schedule: 'Summer' } },
+    'Ada Lovelace made Bea Rao’s “Summer” schedule',
+  ],
+  [
+    { ...base, action: 'schedule.changed', target: member(bea), params: { kind: 'set_default', schedule: 'Summer' } },
+    'Ada Lovelace made “Summer” Bea Rao’s default schedule',
+  ],
+  [
+    { ...base, action: 'schedule.changed', target: member(bea), params: { kind: 'delete', schedule: 'Summer' } },
+    'Ada Lovelace deleted Bea Rao’s “Summer” schedule',
+  ],
+  [
+    { ...base, action: 'schedule.changed', target: member(bea), params: { kind: 'duplicate', schedule: 'Copy' } },
+    'Ada Lovelace copied one of Bea Rao’s schedules as “Copy”',
+  ],
+  [
+    { ...base, action: 'schedule.changed', target: member(bea), params: { kind: 'default_hours' } },
+    'Ada Lovelace changed Bea Rao’s hours',
+  ],
+  [
+    { ...base, action: 'block.created', target: member(bea), params: {} },
+    'Ada Lovelace blocked time on Bea Rao’s calendar',
+  ],
+  [
+    { ...base, action: 'block.removed', target: member(bea), params: {} },
+    'Ada Lovelace removed a block from Bea Rao’s calendar',
+  ],
+  [
+    { ...base, action: 'booking.changed_for', target: booking, params: { host: bea, change: 'moved' } },
+    'Ada Lovelace moved Intro call on dayTime(2026-10-24T09:30) for Bea Rao',
+  ],
+  [
+    { ...base, action: 'booking.changed_for', target: booking, params: { host: bea, change: 'made' } },
+    'Ada Lovelace booked Intro call on dayTime(2026-10-24T09:30) for Bea Rao',
+  ],
 ];
 
 describe('every listed action', () => {

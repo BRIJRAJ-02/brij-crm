@@ -140,6 +140,7 @@ export function auditNameIds(rows: readonly AuditRow[]): AuditNameIds {
     if (row.action.startsWith('delegation.')) {
       for (const side of [before, after]) add(sets.members, side.targetMemberId);
     }
+    if (row.action === 'booking.changed_for') add(sets.members, after.memberId);
     if (row.action === 'form.owner_changed') {
       for (const side of [before, after]) {
         add(sets.members, side.ownerMemberId);
@@ -563,6 +564,44 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         action,
         target: memberTarget(),
         params: { level, ...(from === undefined ? {} : { from }), ...(over === undefined ? {} : { over }) },
+        changes: [],
+      };
+    }
+    case 'schedule.changed': {
+      // A write the code doesn't know is no row (AC-1223); the schedule's name only when it touched one.
+      const kind = after.kind ?? before.kind;
+      if (
+        kind !== 'create' &&
+        kind !== 'update' &&
+        kind !== 'set_default' &&
+        kind !== 'duplicate' &&
+        kind !== 'delete' &&
+        kind !== 'default_hours'
+      ) {
+        return undefined;
+      }
+      const touched = [...seatsOf(after.schedules), ...seatsOf(before.schedules)];
+      const name = text(touched[0]?.name);
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: { kind, ...(name === undefined ? {} : { schedule: name }) },
+        changes: [],
+      };
+    }
+    case 'block.created':
+    case 'block.removed':
+      // Whose time and when stay in the row; the sentence names whose (a block's label is never stored).
+      return { ...base, action, target: memberTarget(), params: {}, changes: [] };
+    case 'booking.changed_for': {
+      const made = after.change;
+      if (made !== 'made' && made !== 'moved' && made !== 'cancelled') return undefined;
+      return {
+        ...base,
+        action,
+        target: bookingTarget(),
+        params: { host: person(after.memberId), change: made },
         changes: [],
       };
     }

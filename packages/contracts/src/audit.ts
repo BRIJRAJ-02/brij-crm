@@ -280,6 +280,26 @@ export const AuditEntryView = z.discriminatedUnion('action', [
       over: AuditPerson.optional(),
     }),
   ),
+  /**
+   * Someone's schedules changed (spec 0037, AC-1263): the target is the member whose they are; `kind` the write;
+   * `schedule` the schedule's name when the write touched one (never its hours: the details hold no times yet).
+   */
+  entry(
+    ['schedule.changed'],
+    member,
+    z.strictObject({
+      kind: z.enum(['create', 'update', 'set_default', 'duplicate', 'delete', 'default_hours']),
+      schedule: z.string().optional(),
+    }),
+  ),
+  /** Time blocked or a block removed (spec 0037, AC-1263): the target is the member whose time it is. */
+  entry(['block.created', 'block.removed'], member, NoParams),
+  /** A booking made, moved or cancelled by someone other than its host (spec 0037, AC-1263). */
+  entry(
+    ['booking.changed_for'],
+    booking,
+    z.strictObject({ host: AuditPerson, change: z.enum(['made', 'moved', 'cancelled']) }),
+  ),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;
