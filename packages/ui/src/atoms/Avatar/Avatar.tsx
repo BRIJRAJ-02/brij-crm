@@ -54,7 +54,7 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
   // straight away, with no initials and no fade.
   useLayoutEffect(() => {
     const element = picture.current;
-    if (fades && image !== undefined && element !== null && element.complete && element.naturalWidth > 0) {
+    if (fades && element !== null && element.complete && element.naturalWidth > 0) {
       setLoaded({ src: image, isCached: true });
     }
   }, [fades, image]);
