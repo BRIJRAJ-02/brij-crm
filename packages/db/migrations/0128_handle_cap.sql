@@ -98,6 +98,7 @@ declare
   candidate text;
   try integer;
   made integer;
+  roomy boolean := false;
 begin
   if base is null or base !~ '^[a-z0-9]+(-[a-z0-9]+)*$' or pg_catalog.char_length(base) not between 3 and 40 then
     raise exception using errcode = '22023', message = 'PROFILE_HANDLE_BASE';
@@ -113,9 +114,6 @@ begin
   if held is not null then
     return held;
   end if;
-  if not public.crm_make_handle_room(owner) then
-    return null;
-  end if;
   for try in 1..60 loop
     suffix := case
       when try = 1 then ''
@@ -123,6 +121,17 @@ begin
       else '-' || (1000 + pg_catalog.floor(pg_catalog.random() * 9000))::integer::text
     end;
     candidate := pg_catalog.rtrim(pg_catalog.left(base, 40 - pg_catalog.char_length(suffix)), '-') || suffix;
+    -- Room is made only once a free candidate is in hand, so a person whose every try is taken loses no old
+    -- handle for a page they don't get (security review). The insert still checks: the candidate isn't locked.
+    if exists (select 1 from auth.public_handles h where h.handle = candidate) then
+      continue;
+    end if;
+    if not roomy then
+      if not public.crm_make_handle_room(owner) then
+        return null;
+      end if;
+      roomy := true;
+    end if;
     insert into auth.public_handles (handle, user_id, workspace_id) values (candidate, owner, workspace)
     on conflict (handle) do nothing;
     get diagnostics made = row_count;

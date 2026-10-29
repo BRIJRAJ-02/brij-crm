@@ -2,6 +2,7 @@
 import type { UploadStore } from '../../forms/uploads.ts';
 import type { RecordFileStore } from '../../records/files.ts';
 import type { AppEnvironment } from '@crm/contracts';
+import type { RuleSource } from '../../access/door.ts';
 import { createRegistry, type AnyKind, type JobRegistry } from '../registry.ts';
 import { devSimulate, type Sleep } from './dev-simulate.ts';
 import { maintenanceDaily, type QueueRows } from './maintenance-daily.ts';
@@ -32,6 +33,12 @@ export interface JobKindsOptions {
    * owns them (27 Oct 2026); without it a file answer isn't filed and says so.
    */
   readonly files?: RecordFileStore;
+  /**
+   * The access rules a member is read with when a job cuts what it tells them (a form's submission notice, an
+   * import's result):
+   * the api's `APP_RULES`, the same its door and its job runner take. None until #24 stores rules.
+   */
+  readonly rules?: RuleSource;
   /** Extra kinds: a test setup registers its own. */
   readonly extra?: readonly AnyKind[];
 }
@@ -47,13 +54,13 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
   const tests = local ? [devSimulate(options.sleep) as AnyKind, devSimulate(options.sleep, 'light') as AnyKind] : [];
   return createRegistry([
     maintenanceDaily(options.queue, options.uploads),
-    formsProcess(options.files),
+    formsProcess(options.files, options.rules),
     formsFile(options.files),
     formsSync(options.files),
     formsExport(),
     ...(bulkKinds() as readonly AnyKind[]),
     reassignKind(),
-    recordsImport(),
+    recordsImport(options.rules),
     recordsImportUndo(),
     recordsExport(),
     ...tests,

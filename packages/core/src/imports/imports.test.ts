@@ -596,6 +596,39 @@ describe('who sees and undoes an import (security review)', () => {
   });
 });
 
+describe('the result email (late trap #74, security review)', () => {
+  it('tells nothing of an object its starter lost access to while it ran', async () => {
+    const w = await world();
+    const ruled = jobKinds({ environment: 'local', rules });
+    const id = newId();
+    await createImport(w.admin, {
+      id,
+      objectId: w.people,
+      fileName: 'people.csv',
+      rowCount: 1,
+      errorRows: 0,
+      settings: w.settings(),
+    });
+    await stageImportRows(w.admin, { importId: id, rows: [w.row(2, 'Ada', 'ada@example.com')] }, [outboxHook()]);
+    const started = await startImport(w.admin, ruled, id, [outboxHook()]);
+    // The object is hidden from the starter's role, as an admin renames it: the email must not name it.
+    rulesByWorkspace.set(w.workspaceId, {
+      levels: [
+        { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+      ],
+      records: [],
+    });
+    const outcomes = await drive(runnerFor(ruled), w.workspaceId, started.jobId ?? '');
+    expect(outcomes.at(-1)).toBe('failed');
+    const sent = await testQuery<{ kind: string }>(
+      ownerUrl,
+      `select kind from emails where workspace_id = $1 and kind in ('import_finished', 'job_failed')`,
+      [w.workspaceId],
+    );
+    expect(sent).toEqual([]);
+  });
+});
+
 describe('mergeValue (decision 2)', () => {
   const single = { isMulti: false };
   const multi = { isMulti: true };

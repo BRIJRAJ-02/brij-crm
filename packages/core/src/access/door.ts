@@ -363,6 +363,48 @@ export async function enterAsActor(
 }
 
 /**
+ * An active member's scope inside a transaction already open on their workspace, as they stand now: what a system
+ * job uses to cut what it tells one member to what that member may see (a form's submission notice, late trap #19).
+ * Reads their row and their rules through `tx`, on the database and in the workspace of `beside` (the job's own
+ * scope, checked). Undefined for a member who isn't active, in a deleted workspace, or whose role the code doesn't
+ * know (fail closed).
+ */
+export async function memberScopeIn(
+  tx: WorkspaceTx,
+  beside: EngineScope,
+  rules: RuleSource,
+  memberId: string,
+): Promise<EngineScope | undefined> {
+  const { workspaceId } = beside;
+  if (!isUuid(memberId)) return undefined;
+  const [row] = await tx
+    .select({ id: members.id, userId: members.userId, role: members.role })
+    .from(members)
+    .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
+    .where(
+      and(
+        eq(members.workspaceId, workspaceId),
+        eq(members.id, memberId),
+        eq(members.status, 'active'),
+        isNull(workspaces.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (row === undefined || !isRole(row.role)) return undefined;
+  const access = roleAccess(
+    {
+      kind: 'member',
+      memberId: row.id,
+      ...(row.userId === null ? {} : { userId: row.userId }),
+      role: row.role,
+      teamIds: [],
+    },
+    await rules(tx, { memberId: row.id, role: row.role }),
+  );
+  return rescope(beside, { type: 'member', id: row.id }, access);
+}
+
+/**
  * The scope for an API key (#34), which stores keys and builds their access
  * with `keyAccess`. No key exists yet, so every key is refused NOT_FOUND.
  */

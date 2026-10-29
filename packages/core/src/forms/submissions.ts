@@ -333,8 +333,8 @@ async function failureFor(
   return titles.length === 0 ? stored : requiredFieldFailure(titles);
 }
 
-/** One submission in full, as the reader may see it, read inside an open transaction. */
-async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string): Promise<SubmissionView> {
+/** One submission in full, as the reader may see it, read inside an open transaction (NOT_FOUND for one they can't). */
+export async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string): Promise<SubmissionView> {
   const [row] = await tx
     .select(COLUMNS)
     .from(formSubmissions)

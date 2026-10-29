@@ -15,6 +15,8 @@ import { ImportSettings, type EngineRefusal } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId } from '../engine/ids.ts';
 import { checkObject } from '../access/visibility.ts';
+import { memberScopeIn, NO_RULE_SOURCE, type RuleSource } from '../access/door.ts';
+import { objectLevel } from '../access/policy.ts';
 import { queueImportFinished } from '../emails/queue.ts';
 import { limitsOf, takeRecordSlots } from '../engine/limits.ts';
 import { insertRecord, readRecords, updateRecord } from '../engine/records.ts';
@@ -491,23 +493,29 @@ async function liveImportObject(tx: WorkspaceTx, objectId: string): Promise<void
 
 /**
  * Emails the member who started an import how it ended (#30, late trap #74), in the transaction that ends its job:
- * its counts and its summary page. Before, only a toast told them, and only while they had the app open.
+ * its counts and its summary page. Before, only a toast told them, and only while they had the app open. Nothing for
+ * a starter who can no longer read the object (an import ended by losing access says nothing of it: hidden means
+ * absent) or is no longer a member.
  */
 async function tellStarter(
-  tx: WorkspaceTx,
-  workspaceId: string,
+  context: WriteContext,
+  rules: RuleSource,
   importId: string,
   outcome: 'done' | 'failed',
 ): Promise<void> {
+  const { tx, scope } = context;
+  const { workspaceId } = scope;
   const found = await tx.execute<{
     file_name: string;
     error_rows: number;
     starter: string;
+    object_id: string;
     plural_name: string;
     api_slug: string;
     slug: string;
   }>(sql`
-    select i.file_name, i.error_rows, i.created_by_member_id::text as starter, o.plural_name, o.api_slug, w.slug
+    select i.file_name, i.error_rows, i.created_by_member_id::text as starter, i.object_id::text, o.plural_name,
+      o.api_slug, w.slug
     from imports i
     join objects o on o.workspace_id = i.workspace_id and o.id = i.object_id
     join workspaces w on w.id = i.workspace_id
@@ -515,6 +523,8 @@ async function tellStarter(
   `);
   const row = found.rows[0];
   if (row === undefined) return;
+  const starter = await memberScopeIn(tx, scope, rules, row.starter);
+  if (starter === undefined || objectLevel(starter.access, row.object_id) === 'none') return;
   const counts = await countRows(tx, workspaceId, importId);
   await queueImportFinished(tx, {
     importId,
@@ -533,8 +543,8 @@ async function tellStarter(
   });
 }
 
-/** The import kind. */
-export function recordsImport(): KindDefinition<ImportJobParams> {
+/** The import kind; `rules` are the ones its starter is read with when it tells them how it ended. */
+export function recordsImport(rules: RuleSource = NO_RULE_SOURCE): KindDefinition<ImportJobParams> {
   return defineKind<ImportJobParams>({
     kind: RECORDS_IMPORT,
     lane: 'heavy',
@@ -546,11 +556,13 @@ export function recordsImport(): KindDefinition<ImportJobParams> {
     batchSize: IMPORT_BATCH,
     sample: { importId: '0192f1a4-0000-7000-8000-000000000001' },
     tellsStarter: true,
-    async onSucceeded({ tx, scope }, job) {
-      await tellStarter(tx, scope.workspaceId, job.params.importId, 'done');
+    async onSucceeded(context, job) {
+      await tellStarter(context, rules, job.params.importId, 'done');
     },
-    async onFailed({ tx, scope }, job) {
-      if (job.params !== undefined) await tellStarter(tx, scope.workspaceId, job.params.importId, 'failed');
+    async onFailed(context, job) {
+      // A removed starter isn't told about the job their removal ended.
+      if (job.params === undefined || job.error.code === 'ACTOR_REMOVED') return;
+      await tellStarter(context, rules, job.params.importId, 'failed');
     },
     async step(context, { job, items = [] }) {
       const { tx, scope } = context;

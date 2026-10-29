@@ -82,6 +82,7 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
   const store = env.BLOB_READ_WRITE_TOKEN === undefined ? undefined : createFileStore(env.BLOB_READ_WRITE_TOKEN);
   const registry = jobKinds({
     environment: env.APP_ENV,
+    rules: APP_RULES,
     ...(options.queue === undefined ? {} : { queue: options.queue }),
     ...(store === undefined ? {} : { uploads: store, files: store }),
   });
