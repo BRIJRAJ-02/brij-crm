@@ -29,7 +29,7 @@ import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 import { canActFor, schedulingReach } from '../access/scheduling.ts';
 import { shownAsEvent } from '../booking/owned.ts';
-import { bookingAlias, bookingReaderOf, seesBookingSql } from '../booking/seen.ts';
+import { bookingAlias, bookingReaderWith, seesBookingSql } from '../booking/seen.ts';
 import { inputInvalid } from '../engine/refusals.ts';
 
 /** How far before the day a meeting may start and still reach into it (all day and multi day events). */
@@ -84,7 +84,6 @@ export async function readTeamToday(
   const { principal } = scope.access;
   if (principal.kind !== 'member') return { members: [] };
   const reader = principal.memberId;
-  const seer = bookingReaderOf(scope.access);
   const from = new Date(input.from);
   const to = new Date(input.to);
   const now = deps.now ?? new Date();
@@ -93,6 +92,8 @@ export async function readTeamToday(
   }
   return inWorkspace(scope, async (tx) => {
     const reach = await schedulingReach(tx, scope);
+    // A booking's title shows to whoever may see it (`seen.ts`): theirs, their page's, or a host in their See reach.
+    const seer = bookingReaderWith(scope.access, reach);
     // Only those the reach shows (spec 0037's one check): without a reach over everyone, the reader and the members
     // reached one by one, named in the read so the cut never fills with members left out.
     const named = reach.all === undefined ? [reader, ...reach.members.keys()] : undefined;

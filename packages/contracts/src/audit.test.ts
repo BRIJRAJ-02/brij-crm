@@ -20,7 +20,14 @@ describe('the kinds of change', () => {
   });
 
   it('leaves a member’s own preferences and profile order out, and names each listed action’s kind', () => {
-    expect(AUDIT_NOT_LISTED).toEqual(['member.preferences_changed', 'booking_page.profile_reordered']);
+    expect(AUDIT_NOT_LISTED).toEqual([
+      'member.preferences_changed',
+      'booking_page.profile_reordered',
+      'schedule.changed',
+      'block.created',
+      'block.removed',
+      'booking.changed_for',
+    ]);
     expect(auditKindOf('member.preferences_changed')).toBeUndefined();
     expect(auditKindOf('form.owner_changed')).toBe('scheduling');
     expect(auditKindOf('booking.record_linked')).toBe('scheduling');

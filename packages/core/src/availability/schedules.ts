@@ -1,7 +1,11 @@
 // Availability schedules (spec 0035): list, read, make, rename and change,
-// set as default, duplicate and delete a member's schedules. A member works
-// on their own with `booking.manage`; `booking.admin` works on anyone's
-// (AC-971). A schedule the reader may not see answers as absent (NOT_FOUND).
+// set as default, duplicate and delete a member's schedules. A member reads
+// their own with `booking.manage` and changes them with `availability.own`
+// too (spec 0037, AC-1260: without it their hours are set by others); a
+// colleague's are read with See reach and changed with Manage (`canActFor`,
+// AC-971 as spec 0037 replaces it). A schedule the reader may not see answers
+// as absent (NOT_FOUND). Every write is audited (`schedule.changed`) and, when
+// someone else made it, queues the member's notice (AC-1263, AC-1264, AC-1444).
 // Every write takes the member's schedules lock (the 20 limit, the one
 // default, the names) and records `Change.schedules`, so the outbox stores
 // one `schedules` row (ids only) and the member's other tabs read again
@@ -28,6 +32,13 @@ import { isUuidV7, newId } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
+import { writeAudit } from '../members/audit.ts';
+import {
+  queueSchedulingNotice,
+  SCHEDULE_AUDIT_FIELDS,
+  type ScheduleAudited,
+  type ScheduleAuditEntry,
+} from '../scheduling/notice.ts';
 import { lockKey } from '../booking/locks.ts';
 import { hoursOf, virtualDefault, withoutNotes } from './resolve.ts';
 import { fallbackZoneOf } from '../booking/slots.ts';
@@ -45,12 +56,22 @@ function memberOf(scope: EngineScope): string | undefined {
 }
 
 /**
- * Whether the reader may change their own schedules: `booking.manage` today. Spec 0037 adds `availability.own`
- * here (AC-1260), the one place a member's own edit is decided.
+ * Whether the reader may change their own schedules: `booking.manage` and `availability.own` (spec 0037, AC-1260),
+ * the one place a member's own edit is decided.
  */
 function mayEditOwnHours(scope: EngineScope): boolean {
-  return can(scope.access, 'booking.manage');
+  return can(scope.access, 'booking.manage') && can(scope.access, 'availability.own');
 }
+
+/** Why the reader can't change their own hours: no `booking.manage`, or hours set by others (AC-1260). */
+function ownHoursRefusal(scope: EngineScope) {
+  return can(scope.access, 'booking.manage')
+    ? refuse('FORBIDDEN', HOURS_SET_BY_OTHERS)
+    : refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
+}
+
+/** A member without `availability.own` reads this on their own hours and on every write to them (AC-1260). */
+export const HOURS_SET_BY_OTHERS = PERMISSIONS['availability.own'].message;
 
 /**
  * Whether the reader may change `memberId`'s schedules: their own (`mayEditOwnHours`), or a colleague's they
@@ -87,9 +108,8 @@ async function targetMember(
 ): Promise<string> {
   const caller = memberOf(scope);
   if (memberId === undefined || memberId === caller) {
-    if (caller === undefined || (use === 'write' && !mayEditOwnHours(scope))) {
-      throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
-    }
+    if (caller === undefined) throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
+    if (use === 'write' && !mayEditOwnHours(scope)) throw ownHoursRefusal(scope);
     return caller;
   }
   const reach = await schedulingReach(tx, scope);
@@ -115,12 +135,68 @@ interface ScheduleChange {
 }
 
 /**
- * After a schedule write, inside its transaction, with what it changed: nothing yet. Spec 0037 (AC-1444) writes the
- * `schedule.changed` audit row here, with before and after summaries, and queues the member's notice when the actor
- * isn't the schedule's member (AC-1263, AC-1264).
+ * After a schedule write, inside its transaction, with what it changed (spec 0037, AC-1444): one `schedule.changed`
+ * audit row (AC-1263) naming the member and, per schedule, the fields that changed before and after (a day off's
+ * note never: it is the member's alone); and, when the actor isn't the schedule's member, their notice queued
+ * (AC-1264), which gathers ten minutes of one actor's changes into one email.
  */
-function afterScheduleChange(_context: WriteContext, _scope: EngineScope, _change: ScheduleChange): void {
-  // The seam (spec 0037, AC-1444): the audit row and the member's notice attach here.
+async function afterScheduleChange(context: WriteContext, scope: EngineScope, change: ScheduleChange): Promise<void> {
+  const sides = scheduleAuditSides(change);
+  if (sides === undefined) return;
+  await writeAudit(context.tx, scope.workspaceId, scope.actor, {
+    action: 'schedule.changed',
+    targetType: 'member',
+    targetId: change.memberId,
+    before: sides.before,
+    after: sides.after,
+  });
+  const actor = memberOf(scope);
+  if (actor !== undefined && actor !== change.memberId) await queueSchedulingNotice(context.tx, actor, change.memberId);
+}
+
+/** A stored schedule as an audit row keeps it: its name, default mark, week and overrides, notes left out. */
+function auditedOf(row: ScheduleRow): ScheduleAudited {
+  const hours = withoutNotes(hoursOf(row.availability, 'UTC'));
+  return {
+    id: row.id,
+    name: row.name,
+    isDefault: row.isDefault,
+    timeZone: hours.timeZone,
+    weekly: hours.weekly,
+    overrides: hours.overrides,
+  };
+}
+
+/**
+ * The audit row's two sides for one write: each schedule it touched, before and after, with only the fields that
+ * changed (and its name, which a line needs), or undefined when nothing did.
+ */
+function scheduleAuditSides(
+  change: ScheduleChange,
+): { readonly before: Record<string, unknown>; readonly after: Record<string, unknown> } | undefined {
+  const before: ScheduleAuditEntry[] = [];
+  const after: ScheduleAuditEntry[] = [];
+  for (const each of change.schedules) {
+    const was = each.before === undefined ? undefined : auditedOf(each.before);
+    const now = each.after === undefined ? undefined : auditedOf(each.after);
+    if (was === undefined || now === undefined) {
+      if (was !== undefined) before.push(was);
+      if (now !== undefined) after.push(now);
+      continue;
+    }
+    const fields = SCHEDULE_AUDIT_FIELDS.filter((field) => JSON.stringify(was[field]) !== JSON.stringify(now[field]));
+    if (fields.length === 0) continue;
+    const pick = (side: ScheduleAudited): ScheduleAuditEntry => ({
+      id: side.id,
+      name: side.name,
+      ...Object.fromEntries(fields.map((field) => [field, side[field]])),
+    });
+    before.push(pick(was));
+    after.push(pick(now));
+  }
+  if (before.length === 0 && after.length === 0) return undefined;
+  const base = { memberId: change.memberId, kind: change.kind };
+  return { before: { ...base, schedules: before }, after: { ...base, schedules: after } };
 }
 
 /**
@@ -139,7 +215,7 @@ async function writeSchedules<T>(
       const { result: answer, change } = await body(context);
       if (change !== undefined) {
         context.record({ schedules: change.schedules.map((each) => each.id) });
-        afterScheduleChange(context, scope, change);
+        await afterScheduleChange(context, scope, change);
       }
       return answer;
     },
@@ -190,6 +266,10 @@ function viewOf(
     availability: reader === row.memberId ? hours : withoutNotes(hours),
     pages: usersOf(pages, row),
     updatedAt: row.updatedAt.toISOString(),
+    // "Changed by Priya, 2 hours ago" (spec 0037, AC-1265): last changed by someone other than its member.
+    ...(row.updatedByMemberId === null || row.updatedByMemberId === row.memberId
+      ? {}
+      : { changedBy: { memberId: row.updatedByMemberId, at: row.updatedAt.toISOString() } }),
   };
 }
 
@@ -356,7 +436,8 @@ async function scheduleToChange(tx: WorkspaceTx, scope: EngineScope, id: string)
   if (peek.memberId !== memberOf(scope) && !(await isActive(tx, peek.memberId))) {
     throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
   }
-  if (!mayChange(scope, reach, peek.memberId)) throw seeOnly();
+  if (!mayChange(scope, reach, peek.memberId))
+    throw peek.memberId === memberOf(scope) ? ownHoursRefusal(scope) : seeOnly();
   await schedulesLock(tx, scope.workspaceId, peek.memberId);
   const [row] = await tx
     .select()

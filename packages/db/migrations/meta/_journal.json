@@ -848,6 +848,13 @@
       "when": 1793800000000,
       "tag": "0121_schedule_delegations",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1793850000000,
+      "tag": "0122_scheduling_notice",
+      "breakpoints": true
     }
   ]
 }

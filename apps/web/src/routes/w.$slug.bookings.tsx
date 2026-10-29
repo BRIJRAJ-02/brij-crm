@@ -5,7 +5,7 @@ import { BookingsTopBar } from '../features/bookings/BookingsTopBar.tsx';
 import { bookingsTabOf } from '../features/bookings/tabs.ts';
 import { useHostsChoice } from '../features/bookings/HostsSwitch.tsx';
 import { BookingsActionSlot, BookingsHosts } from '../features/bookings/toolbarSlot.ts';
-import { useCan, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
+import { useCan, useMyAccess, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // Bookings, after Records in the sidebar, laid out as Captures is: the frame, the TopBar (the tile, the upcoming
 // count and New, as People's) and the tab strip (Calendar · List · Availability) in the row People's ViewBar
@@ -29,9 +29,11 @@ function BookingsRoute() {
   // screen): Availability's New schedule, Round robin's New group, Calendars' Connect.
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   const ownsAction = OWN_ACTION.has(tab);
-  // Mine or Everyone (the owner's ask of 29 October 2026): an admin's choice, kept here so Calendar and List share
-  // it and its switch stands still on the strip as they swap.
-  const isAdmin = useCan('booking.admin');
+  // Mine or Everyone (the owner's ask of 29 October 2026): an admin's choice, and anyone's whose scheduling reach
+  // sees a colleague (spec 0037, AC-1262), kept here so Calendar and List share it and its switch stands still on
+  // the strip as they swap.
+  const seesOthers = useMyAccess()?.scheduling?.seesOthers === true;
+  const isAdmin = useCan('booking.admin') || seesOthers;
   const { hosts: value, choose } = useHostsChoice(slug, isAdmin);
   const hosts = useMemo(() => (isAdmin ? { value, onChange: choose } : undefined), [isAdmin, value, choose]);
   return (

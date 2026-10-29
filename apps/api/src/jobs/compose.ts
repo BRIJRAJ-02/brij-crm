@@ -25,6 +25,7 @@ import { runBookingMail } from './booking-mail.ts';
 import { runEmail, type EmailRun, type EmailTry } from './email.ts';
 import { runnerTasks } from './graphile.ts';
 import { runNotificationEmail } from './notification-email.ts';
+import { runSchedulingNoticeTask } from './scheduling-notice.ts';
 import { createJobRunner } from './runner.ts';
 
 /** The gap between sends: under Resend's 2 requests a second, with room for the api's. */
@@ -67,6 +68,8 @@ export interface JobTasks {
   readonly email: ((payload: unknown, attempt: EmailTry) => Promise<EmailRun>) | undefined;
   /** One notification email a member, entered as that member; without a transport it is logged and dropped. */
   readonly notificationEmail: (payload: unknown) => Promise<void>;
+  /** One member's scheduling notice (spec 0037), as the system: it queues a `scheduling_changed` email. */
+  readonly schedulingNotice: (payload: unknown) => Promise<void>;
   /** The daily cleanup's fan out on an open queue connection (only crm_worker may sweep). */
   readonly daily: (sweep: QueueConnection) => (input: DailyCleanupInput) => Promise<DailyCleanupReport>;
   /** The task identifiers these runners take: only their rows count as due. */
@@ -213,6 +216,10 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
   const notificationEmail = (payload: unknown) =>
     runNotificationEmail({ door: { db, rules: APP_RULES }, mailer, appOrigin: emailDeps?.appOrigin, log }, payload);
 
+  // Scheduling notices (spec 0037, AC-1264): the system folds the changes and queues the email `crm_email` sends.
+  const schedulingNotice = (payload: unknown) =>
+    runSchedulingNoticeTask({ systemScope: (workspaceId) => systemScope(db, workspaceId), log }, payload);
+
   return {
     registry,
     runner,
@@ -220,6 +227,7 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
     bookingMail,
     email,
     notificationEmail,
+    schedulingNotice,
     // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
     daily: (sweep) => (input) =>
       runDailyCleanup(

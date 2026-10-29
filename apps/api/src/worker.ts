@@ -197,6 +197,7 @@ async function openWorker(hooks: {
       bookingMail: jobTasks.bookingMail,
       ...(jobTasks.email === undefined ? {} : { email: jobTasks.email }),
       notificationEmail: jobTasks.notificationEmail,
+      schedulingNotice: jobTasks.schedulingNotice,
       // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
       daily: jobTasks.daily(opened),
     });

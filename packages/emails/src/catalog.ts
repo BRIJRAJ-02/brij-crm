@@ -8,7 +8,7 @@ import type { Template } from './template.ts';
 import { bookingCalendarRemoved, calendarDisconnected, signInAlert } from './templates/account.ts';
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
-import { importFinished } from './templates/team.ts';
+import { importFinished, schedulingChanged } from './templates/team.ts';
 import { workspaceWelcome } from './templates/welcome.ts';
 
 /** One queued kind of email. */
@@ -119,6 +119,19 @@ export const CATALOG: Catalog = {
       skipped: 12,
       failed: 0,
       resultPath: '/w/acme/objects/people',
+    },
+  },
+  scheduling_changed: {
+    template: schedulingChanged,
+    medium: 'email_calendar_alert',
+    sample: {
+      actorName: 'Priya Shah',
+      lines: [
+        'Working hours, Monday: 9:00 AM to 5:00 PM became 10:00 AM to 6:00 PM',
+        'Working hours, date override added, Tue 3 Nov: Closed',
+      ],
+      more: 0,
+      availabilityPath: '/w/acme/bookings/availability',
     },
   },
   workspace_welcome: {

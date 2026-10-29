@@ -33,6 +33,7 @@ import { errorFields } from '../log.ts';
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
+import { SCHEDULING_NOTICE_TASK } from './scheduling-notice.ts';
 
 /** The two lanes: their task and how many slices each runs at once (AC-108). */
 export const LANES = {
@@ -70,6 +71,7 @@ export const RUNNER_TASKS: readonly string[] = [
   BOOKING_MAIL_TASK,
   NOTIFICATION_EMAIL_TASK,
   DIGEST_TASK,
+  SCHEDULING_NOTICE_TASK,
 ];
 
 /**
@@ -174,6 +176,12 @@ export interface JobRunnersOptions {
    * takes `crm_notification_email`; it throws plainly for a retry.
    */
   readonly notificationEmail?: (payload: unknown) => Promise<void>;
+  /**
+   * Scheduling notices (spec 0037, AC-1264): one member told of another's changes to their scheduling
+   * (`runSchedulingNoticeTask`). With it, the light runner takes `crm_scheduling_notice`; it throws plainly for a
+   * retry.
+   */
+  readonly schedulingNotice?: (payload: unknown) => Promise<void>;
   /**
    * Hears every task call start and end (the worker's idle clock starts
    * again, spec 0008's sleep): a slice, or the daily task.
@@ -477,6 +485,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const bookingMail = lane === LANES.light ? options.bookingMail : undefined;
       const email = lane === LANES.light ? options.email : undefined;
       const notificationEmail = lane === LANES.light ? options.notificationEmail : undefined;
+      const schedulingNotice = lane === LANES.light ? options.schedulingNotice : undefined;
       runners.push(
         watch(
           await run({
@@ -508,6 +517,15 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                       options.onActivity,
                     ),
                     [DIGEST_TASK]: counted(digestTask(options.queue, options.log), inFlight, options.onActivity),
+                  }),
+              ...(schedulingNotice === undefined
+                ? {}
+                : {
+                    [SCHEDULING_NOTICE_TASK]: counted(
+                      (payload) => schedulingNotice(payload),
+                      inFlight,
+                      options.onActivity,
+                    ),
                   }),
             },
             // The daily cleanup's line, and the digest's hourly one beside the email task that sends it.

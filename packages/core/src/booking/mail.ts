@@ -17,12 +17,13 @@
 // - reminders: the visitor, 24 hours and 1 hour before, only while the
 //   booking is confirmed and that close (a stale reminder sends nothing).
 // A guest never gets the visitor's link: it is the visitor's key.
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { zoneDisplay } from '@crm/contracts/zones';
 import { schema } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
+import { rolesManagingEveryone } from '../access/scheduling.ts';
 import { addedLaterOf, guestsOf } from './change.ts';
 import { buildBookingIcs } from './ics.ts';
 import { answerWords, storedBookingAnswers } from './questions.ts';
@@ -501,7 +502,7 @@ export async function prepareBookingMail(
         const admins = await tx
           .select({ email: members.email })
           .from(members)
-          .where(and(eq(members.status, 'active'), sql`${members.role} in ('owner', 'admin')`));
+          .where(and(eq(members.status, 'active'), inArray(members.role, [...rolesManagingEveryone()])));
         return {
           messages: admins.map((admin) => ({
             to: admin.email,

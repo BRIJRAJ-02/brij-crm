@@ -40,6 +40,11 @@ export const CreateTimeBlockInput = WorkspaceScoped.extend({
   label: TimeBlockLabel.optional(),
   /** A hold for one private page; absent holds for any private page. */
   pageId: Uuid.optional(),
+  /**
+   * Whose time it closes, when not the caller's: a colleague whose scheduling they Manage (spec 0037, AC-1272).
+   * Outside their See reach it answers NOT_FOUND; Seen but not Managed, FORBIDDEN.
+   */
+  forMemberId: Uuid.optional(),
   mutationId: Uuid,
 })
   .refine(({ startMinute, endMinute }) => endMinute - startMinute >= TIME_BLOCK_MINUTES.min, {
@@ -127,6 +132,11 @@ export const BookAsHostInput = WorkspaceScoped.extend({
    * one they can add events to, on an account that works. Absent, the page's own "Add events to", else their default.
    */
   calendarId: Uuid.optional(),
+  /**
+   * Who hosts it, when not the caller: a colleague whose scheduling they Manage (spec 0037, AC-1272), on one of that
+   * colleague's pages, on their calendars as that page or their default says (never a calendar the caller picks).
+   */
+  forMemberId: Uuid.optional(),
   mutationId: Uuid,
 });
 /** Book someone in. */

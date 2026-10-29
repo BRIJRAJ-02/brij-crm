@@ -1,8 +1,8 @@
 // The scheduling source scan (spec 0037, AC-1221): whose time someone may see or change is decided in one place,
 // `access/scheduling.ts`. The scan fails on any `schedule.*` permission named in server code anywhere else (a
 // `can(…)`, a `requirePermission(…)`, a permissions list), and on `booking.admin` in any file not listed below with
-// its reason. `booking.admin` stays for things (booking pages, team pages, rotations, decision 12); a use over
-// someone's time is listed as J4's, which swaps it for the reach and takes it off this list.
+// its reason. `booking.admin` stays for things (booking pages, team pages, rotations, decision 12); job J4 swapped
+// every use over someone's time for the reach and took it off this list, which only shrinks.
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,14 +18,12 @@ const BOOKING_ADMIN: Readonly<Record<string, string>> = {
   'packages/core/src/access/table.ts': 'the access table: rotations are things (AC-751)',
   'packages/core/src/access/events.ts': 'live events: a booking’s audience is its page’s managers (decision 12)',
   'packages/core/src/booking/pages.ts': 'booking pages and team pages are things',
-  'packages/core/src/booking/seen.ts': 'a page’s bookings are the page’s (decision 12); J4 adds See and Manage reach',
+  'packages/core/src/booking/seen.ts': 'a page’s bookings are the page’s (decision 12), beside See and Manage reach',
   'packages/core/src/calendar/page-destination.ts': 'a booking page’s own destination: a thing',
   'packages/core/src/forms/forms.ts': 'which pages a form may hand to: things',
   'packages/core/src/home/metrics.ts': 'Home’s figures over every page’s bookings: things',
   'packages/core/src/rotation/rotations.ts': 'rotations are things (AC-751)',
   'packages/core/src/rotation/distribution.ts': 'a rotation’s distribution: a thing',
-  'packages/core/src/rotation/assignments.ts': 'J4: a booking’s assignments, to the host or Manage over them',
-  'packages/core/src/rotation/reassign.ts': 'J4: handing on upcoming bookings needs Manage over both hosts',
   'packages/core/src/routing/report.ts': 'routing reports over pages and forms: things',
 };
 

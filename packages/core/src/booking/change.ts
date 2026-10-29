@@ -49,7 +49,7 @@ import {
   type PageRecord,
 } from './slots.ts';
 import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
-import { bookingReaderOf, seesBooking } from './seen.ts';
+import { bookingAccess, bookingReaderIn, bookingReaderOf } from './seen.ts';
 
 const { bookings, bookingHosts } = schema;
 
@@ -97,6 +97,9 @@ type BookingRow = typeof bookings.$inferSelect;
 
 const MISSING = 'That booking doesn’t exist, or isn’t yours.';
 
+/** A booking whose host the reader may See but not Manage (spec 0037, AC-1258). */
+const SEE_ONLY = 'You can see this person’s scheduling but not change it.';
+
 /**
  * The booking and its page as the target may see them: the guest's own
  * booking; for a member, one on a page they own, that they host or co-host,
@@ -115,22 +118,46 @@ async function readTarget(
     if (row.pageId !== target.pageId) throw refuse('NOT_FOUND', MISSING);
     return { row, page };
   }
-  // The one booking rule (`seen.ts`): its host, a co-host, its page's owner, or `booking.admin`.
+  // The one booking rule (`seen.ts`, spec 0037's Booking actions table): its host, a co-host, its page's owner,
+  // `booking.admin`, or Manage over its host or a co-host act on it; See over them shows it but changes nothing.
   const reader = bookingReaderOf(target.scope.access);
   const me = reader.member;
-  const coHostIds =
-    reader.admin || me === undefined || row.hostMemberId === me || page.ownerMemberId === me
-      ? []
-      : (
-          await tx
-            .select({ memberId: bookingHosts.memberId })
-            .from(bookingHosts)
-            .where(and(eq(bookingHosts.bookingId, row.id), eq(bookingHosts.memberId, me)))
-        ).map((host) => host.memberId);
-  if (!seesBooking(reader, { hostMemberId: row.hostMemberId, ownerMemberId: page.ownerMemberId, coHostIds })) {
-    throw refuse('NOT_FOUND', MISSING);
+  if (reader.admin || (me !== undefined && (row.hostMemberId === me || page.ownerMemberId === me))) {
+    return { row, page };
   }
+  const coHostIds = (
+    await tx
+      .select({ memberId: bookingHosts.memberId })
+      .from(bookingHosts)
+      .where(and(eq(bookingHosts.bookingId, row.id), sql`${bookingHosts.memberId} <> ${row.hostMemberId}`))
+  ).map((host) => host.memberId);
+  const reached = await bookingReaderIn(tx, target.scope);
+  const may = bookingAccess(reached, { hostMemberId: row.hostMemberId, ownerMemberId: page.ownerMemberId, coHostIds });
+  if (may === undefined) throw refuse('NOT_FOUND', MISSING);
+  if (may === 'see') throw refuse('FORBIDDEN', SEE_ONLY);
   return { row, page };
+}
+
+/**
+ * A booking moved or cancelled by a member other than its host (spec 0037, AC-1263): one `booking.changed_for` row
+ * naming the actor and the host, in the change's transaction. A guest's own change, and a host's, write none.
+ */
+async function auditChangedFor(
+  tx: WorkspaceTx,
+  target: ChangeTarget,
+  row: BookingRow,
+  change: 'moved' | 'cancelled',
+): Promise<void> {
+  if (target.by !== 'host') return;
+  const { scope } = target;
+  const { principal } = scope.access;
+  if (principal.kind !== 'member' || principal.memberId === row.hostMemberId) return;
+  await writeAudit(tx, scope.workspaceId, scope.actor, {
+    action: 'booking.changed_for',
+    targetType: 'booking',
+    targetId: row.id,
+    after: { memberId: row.hostMemberId, change },
+  });
 }
 
 /** Who a change is recorded as. */
@@ -423,6 +450,7 @@ export async function moveBooking(
       if (updated === undefined) throw new Error('The booking was not moved.');
       // The emails with the change; the reminders again for the new time, replacing the old ones.
       await enqueueBookingMail(tx, updated.id, ['moved', 'reminder_24h', 'reminder_1h']);
+      await auditChangedFor(tx, target, row, 'moved');
       return updated;
     } catch (error) {
       // The lock should make this unreachable: a write that skipped it, refused by the database.
@@ -533,6 +561,7 @@ async function moveTeamBooking(
         .where(and(eq(bookings.id, row.id), eq(bookings.status, 'confirmed')))
         .returning();
       if (updated === undefined) throw new Error('The booking was not moved.');
+      await auditChangedFor(tx, target, row, 'moved');
       await syncHosts(tx, updated.id, chosen.hosts);
       await recordSeats(tx, scope, updated.id, changes);
       const organiserChanged = chosen.organiser !== row.hostMemberId;
@@ -596,6 +625,7 @@ export async function cancelBooking(
       .returning();
     if (updated === undefined) throw new Error('The booking was not cancelled.');
     await enqueueBookingMail(tx, updated.id, ['cancelled']);
+    await auditChangedFor(tx, target, row, 'cancelled');
     return updated;
   });
   if (cancelled === undefined) return { cancelled: false };
