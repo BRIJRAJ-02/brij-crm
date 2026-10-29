@@ -633,6 +633,13 @@ describe('the walk: a principal without the access is refused', () => {
     },
   );
 
+  // The workspace's every delegation (the Members page's column, AC-1267): `members.manage` alone.
+  it('listDelegations refuses a member asking for every delegation in the workspace', async () => {
+    const { scope } = await memberOf('member');
+    const refused = await refusalOf(core.listDelegations(scope, { everyone: true }));
+    expect(refused.code).toBe('FORBIDDEN');
+  });
+
   // Spec 0037, AC-1422: each scheduling service, by a member with no reach, answers the member it names as absent,
   // and refuses a principal without its own permission first (AC-1275).
   const schedulingEntries = entries.filter(([, entry]) => 'scheduling' in entry).map(([name]) => name);

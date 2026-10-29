@@ -1692,6 +1692,8 @@ export function createDataLayer({
     }
   });
   router.on('members', (workspace, event) => {
+    // Whom the caller sees in the scheduling pickers changes with who is here (spec 0037).
+    schedulingAccess.forgetReach(workspace);
     // Every member's tab hears a role change at once: spread, and one read for a burst.
     spread(`members ${workspace}`, () => {
       reloadIfChanged([refreshHeld(members, workspace, () => readMembers(workspace))]);

@@ -184,6 +184,51 @@ describe('the held lists', () => {
     });
   });
 
+  it('keeps a saved grant when a read sent during it answers first without it', async () => {
+    const t = setup();
+    const mine = t.store.delegations(W, 'mine');
+    await mine.ready();
+    const answer = deferred<DelegationView>();
+    t.api.grant.mockReturnValueOnce(answer.promise);
+    const landing = t.store.grant(W, ME, {
+      delegateMemberId: PRIYA,
+      target: { type: 'member', memberId: ME },
+      level: 'view',
+    });
+    const read = deferred<{ delegations: DelegationView[] }>();
+    t.api.list.mockReturnValueOnce(read.promise);
+    t.tick(5_000);
+    mine.reload();
+    read.resolve({ delegations: [] });
+    await Promise.resolve();
+    expect(ready(mine.getSnapshot())?.map((each) => each.id)).toEqual(['temp-id']);
+    t.setStored([over(PRIYA, ME, 'view', 'real')]);
+    answer.resolve(over(PRIYA, ME, 'view', 'real'));
+    expect(await landing).toBe(true);
+    await vi.waitFor(() => {
+      expect(ready(mine.getSnapshot())?.map((each) => each.id)).toEqual(['real']);
+    });
+  });
+
+  it('keeps a removal gone when a read sent during it answers with the row', async () => {
+    const first = over(PRIYA, ME, 'view');
+    const t = setup([first]);
+    const mine = t.store.delegations(W, 'mine');
+    await mine.ready();
+    const answer = deferred<undefined>();
+    t.api.revoke.mockReturnValueOnce(answer.promise);
+    const removing = t.store.revoke(W, ME, first);
+    t.tick(5_000);
+    mine.reload();
+    await Promise.resolve();
+    t.setStored([]);
+    answer.resolve(undefined);
+    expect(await removing).toBe(true);
+    await vi.waitFor(() => {
+      expect(ready(mine.getSnapshot())).toEqual([]);
+    });
+  });
+
   it('reads every held list and the reach again on an access change', async () => {
     const t = setup();
     await t.store.delegations(W, 'mine').ready();

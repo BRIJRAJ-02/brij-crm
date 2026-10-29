@@ -128,8 +128,11 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     let reading: Promise<void> | undefined;
     let readAt: number | undefined;
     // A read sent before a write landed would put its older answer over the write: each write bumps this, and an
-    // answer from before it is read again instead of shown.
+    // answer from before it is read again instead of shown. While a write is out, an answer isn't shown at all (it
+    // may or may not hold the write): it is read again once the last write settles.
     let version = 0;
+    let writing = 0;
+    let owed = false;
     const listeners = new Set<() => void>();
     const set = (next: DelegationsState) => {
       state = next;
@@ -140,6 +143,10 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
       reading ??= deps.api.list({ workspace, ...(scope === 'everyone' ? { everyone: true as const } : {}) }).then(
         (answer) => {
           reading = undefined;
+          if (writing > 0 && state.status === 'ready') {
+            owed = true;
+            return undefined;
+          }
           if (sentAt !== version) return read();
           readAt = now();
           set({ status: 'ready', delegations: answer.delegations });
@@ -176,6 +183,20 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
       change(next: (delegations: readonly DelegationView[]) => readonly DelegationView[]) {
         version += 1;
         if (state.status === 'ready') set({ status: 'ready', delegations: next(state.delegations) });
+      },
+      /** A write goes out: reads answering meanwhile wait for it. */
+      begin() {
+        writing += 1;
+        version += 1;
+      },
+      /** A write settled: once none is out, a read held back meanwhile is asked again. */
+      end() {
+        writing = Math.max(0, writing - 1);
+        version += 1;
+        if (writing === 0 && owed) {
+          owed = false;
+          void read().catch(() => undefined);
+        }
       },
       reread() {
         readAt = undefined;
@@ -237,18 +258,27 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
             )
           : undefined;
       });
-      for (const list of touched) list.change((shown) => withGrant(shown, grant, stand, me, at));
+      for (const list of touched) {
+        list.begin();
+        list.change((shown) => withGrant(shown, grant, stand, me, at));
+      }
       try {
         const saved = await deps.api.grant({ workspace, ...grant });
+        // In place, or again when a read meanwhile replaced the list: the saved row is always there.
         for (const list of touched) {
-          list.change((shown) =>
-            shown.map((each) =>
-              each.id === stand ||
-              (each.delegateMemberId === saved.delegateMemberId && sameTarget(each.target, saved.target))
-                ? saved
-                : each,
-            ),
-          );
+          list.change((shown) => {
+            const kept = shown.filter(
+              (each) =>
+                each.id !== stand &&
+                !(each.delegateMemberId === saved.delegateMemberId && sameTarget(each.target, saved.target)),
+            );
+            const place = shown.findIndex(
+              (each) =>
+                each.id === stand ||
+                (each.delegateMemberId === saved.delegateMemberId && sameTarget(each.target, saved.target)),
+            );
+            return place < 0 ? [...kept, saved] : [...kept.slice(0, place), saved, ...kept.slice(place)];
+          });
         }
         visibles.delete(workspace);
         return true;
@@ -262,6 +292,8 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
           );
         });
         return refused(error);
+      } finally {
+        for (const list of touched) list.end();
       }
     },
     /** Takes a delegation back: gone at once, put back where it was with a toast if refused. */
@@ -271,19 +303,34 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
         const snapshot = list.held.getSnapshot();
         return snapshot.status === 'ready' ? snapshot.delegations.findIndex((each) => each.id === delegation.id) : -1;
       });
-      for (const list of touched) list.change((shown) => shown.filter((each) => each.id !== delegation.id));
+      for (const list of touched) {
+        list.begin();
+        list.change((shown) => shown.filter((each) => each.id !== delegation.id));
+      }
       try {
         await deps.api.revoke({ workspace, id: delegation.id });
+        // Gone, even when a read meanwhile brought it back.
+        for (const list of touched) list.change((shown) => shown.filter((each) => each.id !== delegation.id));
         visibles.delete(workspace);
         return true;
       } catch (error) {
         touched.forEach((list, index) => {
           const place = places[index] ?? -1;
           if (place < 0) return;
-          list.change((shown) => [...shown.slice(0, place), delegation, ...shown.slice(place)]);
+          list.change((shown) =>
+            shown.some((each) => each.id === delegation.id)
+              ? shown
+              : [...shown.slice(0, place), delegation, ...shown.slice(place)],
+          );
         });
         return refused(error);
+      } finally {
+        for (const list of touched) list.end();
       }
+    },
+    /** Someone joined, left or changed role: whom the caller reaches is read again when next asked. */
+    forgetReach(workspace: string): void {
+      visibles.delete(workspace);
     },
     /** The member's reach changed (an `access` row naming them): every held list reads again, `visible` too. */
     reload(workspace: string): void {

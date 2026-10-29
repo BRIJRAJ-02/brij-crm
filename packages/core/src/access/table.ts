@@ -66,6 +66,7 @@ export type AccessEntry =
   /**
    * Delegations (spec 0037, AC-1255): over yourself with `booking.manage`, otherwise `members.manage` (never over an
    * owner; over an admin only by an owner); the delegate may remove their own; someone else's answer as absent.
+   * `listDelegations` with `everyone: true` is `members.manage` alone (403 FORBIDDEN; the Members page's column).
    */
   | { readonly delegation: true };
 

@@ -128,6 +128,7 @@ export async function listDelegations(
   // Every delegation in the workspace (the Members page's Scheduling column, AC-1267): `members.manage` alone, who
   // may grant and remove any of them anyway. Anyone else meets it as a refusal, never a partial list.
   if (input.everyone === true) {
+    if (input.memberId !== undefined) throw inputInvalid('memberId', 'Ask for one person or everyone, not both.');
     if (!can(scope.access, 'members.manage')) throw refuse('FORBIDDEN', PERMISSIONS['members.manage'].message);
     return inWorkspace(scope, async (tx) => {
       const rows = await tx
