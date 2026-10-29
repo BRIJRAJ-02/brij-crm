@@ -246,6 +246,8 @@ describe('a private link page’s picture', () => {
     ]);
     if (user === undefined) throw new Error('The signed in person has no account.');
     await testQuery(ownerUrl, `update auth."user" set image = $1 where id = $2`, [GOOGLE, user.id]);
+    // A page is live from the moment it exists (0119); one left private (as 0116 made them) is what this checks.
+    await testQuery(ownerUrl, `update auth.public_profiles set shown_at = null where user_id = $1`, [user.id]);
     const profile = await m.client.profile.get({ workspace: m.slug });
     expect(profile.isPublic).toBe(false);
     const handle = profile.handle;
