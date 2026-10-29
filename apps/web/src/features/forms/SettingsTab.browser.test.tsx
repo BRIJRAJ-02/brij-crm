@@ -317,7 +317,7 @@ describe('a form that sends visitors on to a booking page (late trap #53)', () =
 });
 
 describe('where a live form saves its answers (late trap #39)', () => {
-  const WAITS = 'Changes here go live when you publish. Until then, submissions are still saved to People as before.';
+  const WAITS = 'Changes here go live when you publish. Until then, submissions are still saved to People.';
 
   it('says a change waits for Publish, naming where submissions still go', async () => {
     const keptOnly: FormDocument = {

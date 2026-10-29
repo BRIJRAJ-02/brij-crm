@@ -516,7 +516,11 @@ export function RecordsScreen({
                 {strings.livePaused}
               </Callout>
             )}
-            {ungrouped !== undefined && <Callout placement="bar">{ungrouped}</Callout>}
+            {ungrouped !== undefined && (
+              <Callout placement="bar" isAnnounced>
+                {ungrouped}
+              </Callout>
+            )}
             {viewActions}
           </ViewBar>
         ),

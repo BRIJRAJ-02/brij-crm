@@ -5,7 +5,9 @@
 // scrolls into it, and a folded group's rows are never asked for. The grid
 // reads the open groups' windows end to end as one source.
 import {
+  BOARD_MAX_COLUMNS,
   isGroupable,
+  liveOptionCount,
   type AttributeDefinition,
   type BoardStore,
   type RecordView,
@@ -53,8 +55,9 @@ export function groupingGap(
   const attribute = attributes.find((each) => each.id === groupBy);
   if (attribute === undefined) return strings.groupingGone;
   if (attribute.isArchived) return strings.groupingArchived(attribute.title);
-  const plan = planBoard(attributes, { groupByAttributeId: groupBy, cardFields: [], showEmptyColumns: false });
-  return plan.kind === 'too-many' ? strings.groupingTooMany(attribute.title, plan.count) : strings.groupingGone;
+  if (!isGroupable(attribute)) return strings.groupingCant(attribute.title);
+  const count = liveOptionCount(attribute.options ?? []);
+  return count > BOARD_MAX_COLUMNS ? strings.groupingTooMany(attribute.title, count, BOARD_MAX_COLUMNS) : undefined;
 }
 
 /** One group as the table runs it: its column's window (when in), and where its rows start. */

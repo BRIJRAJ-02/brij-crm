@@ -28,13 +28,14 @@ describe('groupingGap', () => {
   });
 
   it('names the field past 50 options, and an archived one', () => {
-    expect(groupingGap([stage(51)], 'stage')).toBe(
-      'Not grouped: Stage has 51 options, and tables group by at most 50.',
+    expect(groupingGap([stage(51)], 'stage')).toBe('Not grouped: Stage has 51 options (max 50)');
+    expect(groupingGap([stage(5, { isArchived: true })], 'stage')).toBe('Not grouped: Stage is archived');
+    expect(groupingGap([stage(5, { type: 'select', isMulti: true })], 'stage')).toBe(
+      'Not grouped: Stage can’t group a table',
     );
-    expect(groupingGap([stage(5, { isArchived: true })], 'stage')).toBe('Not grouped: Stage is archived.');
   });
 
   it('never names a field the reader can’t see', () => {
-    expect(groupingGap([], 'stage')).toBe('Not grouped: the field this view groups by isn’t available to you.');
+    expect(groupingGap([], 'stage')).toBe('Not grouped: field unavailable');
   });
 });

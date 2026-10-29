@@ -111,7 +111,7 @@ export const strings = {
   setDefault: 'Set as default',
   // Late trap #27: a member's last opened view still wins for them (AC-462), so the toast says who lands on it.
   isDefaultNow: (name: string, plural: string) =>
-    `${name} is the default view for ${plural}, where anyone opening ${plural} for the first time lands.`,
+    `${name} is the default view for ${plural}. Anyone opening ${plural} for the first time lands here.`,
   deleteView: 'Delete view',
   deleting: 'Deleting',
   deleteSharedTitle: (name: string) => `Delete ${name} for everyone?`,

@@ -126,10 +126,11 @@ export const strings = {
   somethingWrong: 'Something went wrong. Try again in a moment.',
   /** Above the table while the live connection is down (AC-38). */
   livePaused: 'Live updates paused, reconnecting',
-  groupingTooMany: (field: string, count: number) =>
-    `Not grouped: ${field} has ${String(count)} options, and tables group by at most 50.`,
-  groupingArchived: (field: string) => `Not grouped: ${field} is archived.`,
-  groupingGone: 'Not grouped: the field this view groups by isn’t available to you.',
+  groupingTooMany: (field: string, count: number, max: number) =>
+    `Not grouped: ${field} has ${String(count)} options (max ${String(max)})`,
+  groupingArchived: (field: string) => `Not grouped: ${field} is archived`,
+  groupingCant: (field: string) => `Not grouped: ${field} can’t group a table`,
+  groupingGone: 'Not grouped: field unavailable',
   /** A row with no name ("Unnamed person"), muted in its row header. */
   unnamed: (singularName: string) => `Unnamed ${singularName.toLowerCase()}`,
   /** A linked record this person can't see, or that was deleted. */
