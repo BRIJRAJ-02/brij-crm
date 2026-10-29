@@ -39,5 +39,7 @@ export async function runSchedulingNoticeTask(deps: SchedulingNoticeDeps, payloa
   }
   const { workspaceId, actorMemberId, memberId } = parsed.data;
   const outcome = await runSchedulingNotice(deps.systemScope(workspaceId), { actorMemberId, memberId });
-  deps.log.info('scheduling.notice', { workspaceId, actorMemberId, memberId, outcome });
+  // A refused email (params its template doesn't take) is a fault to see, never silence.
+  if (outcome === 'refused') deps.log.warn('scheduling.notice', { workspaceId, actorMemberId, memberId, outcome });
+  else deps.log.info('scheduling.notice', { workspaceId, actorMemberId, memberId, outcome });
 }

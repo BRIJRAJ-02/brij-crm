@@ -8,11 +8,11 @@ import { AssignmentReason, type BookingAssignment } from '@crm/contracts';
 import { schema } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
-import { canActFor, schedulingReach } from '../access/scheduling.ts';
+import { canActFor, managesPageOf, schedulingReach } from '../access/scheduling.ts';
 import { inWorkspace } from '../access/run.ts';
 import { refuse } from '../engine/refusals.ts';
 
-const { bookings, members, rotationAssignments, rotations } = schema;
+const { bookingPages, bookings, members, rotationAssignments, rotations } = schema;
 
 const REASONS: ReadonlySet<string> = new Set(AssignmentReason.options);
 
@@ -46,16 +46,22 @@ export async function bookingAssignments(
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
     const [booking] = await tx
-      .select({ hostMemberId: bookings.hostMemberId })
+      .select({ hostMemberId: bookings.hostMemberId, ownerMemberId: bookingPages.ownerMemberId })
       .from(bookings)
+      .innerJoin(
+        bookingPages,
+        and(eq(bookingPages.workspaceId, bookings.workspaceId), eq(bookingPages.id, bookings.pageId)),
+      )
       .where(eq(bookings.id, input.bookingId));
     const reach = await schedulingReach(tx, scope);
-    if (booking === undefined || !canActFor(reach, booking.hostMemberId, 'view')) {
+    // The page's managers act on its bookings (decision 12); anyone else needs See over its host.
+    const manages = booking !== undefined && managesPageOf(booking, scope.access);
+    if (booking === undefined || (!manages && !canActFor(reach, booking.hostMemberId, 'view'))) {
       throw refuse('NOT_FOUND', 'That booking doesn’t exist, or isn’t yours.');
     }
-    // Over everyone, every row; otherwise the reader and the members they reach one by one.
+    // A page's managers and a reach over everyone, every row; otherwise the reader and the members they reach.
     const seen =
-      reach.all === undefined
+      !manages && reach.all === undefined
         ? [...(reach.self === undefined ? [] : [reach.self]), ...reach.members.keys()].filter((id) =>
             canActFor(reach, id, 'view'),
           )

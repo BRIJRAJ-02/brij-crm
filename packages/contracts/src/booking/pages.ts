@@ -288,7 +288,8 @@ export const BookingListItem = BookingView.extend({
   linkedRecord: RecordRefDisplay.optional(),
   /**
    * The reader may only See its host's scheduling (spec 0037, AC-1262): the guest's name, the page's title, the time
-   * and status are all it holds (`visitorEmail` is empty, no answers, guests, note or links), and every change to it
+   * and status are all it holds (`visitorEmail` and `visitorTimeZone` are empty, no answers, guests, note or links),
+   * and every change to it
    * is refused.
    */
   seeOnly: z.boolean().optional(),

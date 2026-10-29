@@ -51,6 +51,24 @@ export const NOTICE_WINDOW_MINUTES = 10;
 /** The most lines one email lists; the rest are counted. */
 export const NOTICE_LINES_MAX = 30;
 
+/** The longest line an email takes (`SchedulingChangedEmail`'s lines); a longer one ends in an ellipsis. */
+const LINE_MAX = 200;
+
+/** The most rows one run folds; past it, the run queues the next one for the rest. */
+const ROWS_MAX = 500;
+
+/**
+ * A line cut to what the email takes (its length in UTF-16 units, as the schema counts), so one long day never
+ * refuses the whole email. A lone surrogate left at the cut is dropped.
+ */
+const fitted = (line: string): string =>
+  line.length <= LINE_MAX
+    ? line
+    : `${line
+        .slice(0, LINE_MAX - 1)
+        .replace(/[\uD800-\uDBFF]$/, '')
+        .trimEnd()}…`;
+
 /**
  * Queues the member's notice in the change's transaction (AC-1264): ten minutes on, one waiting row per actor and
  * member however many changes. `crm_enqueue_scheduling_notice` builds the row itself, ids only.
@@ -189,11 +207,11 @@ export function noticeLines(rows: readonly { readonly before: unknown; readonly 
       }
     }
   }
-  return lines;
+  return lines.map(fitted);
 }
 
 /** What one notice run did: queued the email, found it queued already, had nothing to tell, or the member left. */
-export type SchedulingNoticeOutcome = 'queued' | 'exists' | 'nothing' | 'gone';
+export type SchedulingNoticeOutcome = 'queued' | 'exists' | 'nothing' | 'gone' | 'refused';
 
 /**
  * The worker's `crm_scheduling_notice` (AC-1264), as the system in the workspace: the actor's rows about the
@@ -227,9 +245,13 @@ export async function runSchedulingNotice(
       limit 1
     `);
     const lastTold = previous.rows[0]?.key.slice(prefix.length);
+    // From the last row told on; when that row is gone, the day's bound alone.
     const after =
       lastTold !== undefined && isUuid(lastTold)
-        ? sql`and (a.at, a.id) > (select p.at, p.id from audit_events p where p.id = ${lastTold}::uuid)`
+        ? sql`and (
+            not exists (select 1 from audit_events p where p.id = ${lastTold}::uuid)
+            or (a.at, a.id) > (select p.at, p.id from audit_events p where p.id = ${lastTold}::uuid)
+          )`
         : sql``;
     const rows = await tx.execute<{ id: string; before: unknown; after: unknown }>(sql`
       select a.id::text as id, a.before, a.after
@@ -241,10 +263,12 @@ export async function runSchedulingNotice(
         )})
         and a.at > now() - interval '1 day' ${after}
       order by a.at, a.id
-      limit 500
+      limit ${ROWS_MAX}
     `);
     const last = rows.rows.at(-1);
     if (last === undefined) return 'nothing';
+    // More than one run holds: the next one, queued now, tells the rest.
+    if (rows.rows.length === ROWS_MAX) await queueSchedulingNotice(tx, actor, member);
     const lines = noticeLines(rows.rows);
     if (lines.length === 0) return 'nothing';
     const params: SchedulingChangedEmail = {
@@ -259,6 +283,6 @@ export async function runSchedulingNotice(
       to: { memberId: member },
       params,
     });
-    return queued.outcome === 'refused' ? 'nothing' : queued.outcome;
+    return queued.outcome;
   });
 }
