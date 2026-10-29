@@ -193,6 +193,11 @@ describe('a member and their own scheduling (AC-1255)', () => {
     expect(mine.delegations).toHaveLength(1);
     expect(theirs.delegations).toEqual(mine.delegations);
     expect(await listDelegations(t.as(t.owner, 'owner'), { memberId: bea })).toEqual(mine);
+    // The whole workspace's (the Members page's Scheduling column, AC-1267): `members.manage` alone.
+    expect(await listDelegations(t.as(t.owner, 'owner'), { everyone: true })).toEqual(mine);
+    expect(await refusalOf(listDelegations(t.as(bea, 'member'), { everyone: true }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
   });
 });
 

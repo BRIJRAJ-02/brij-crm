@@ -43,8 +43,18 @@ export const DELEGATIONS_PER_DELEGATE = 50;
 /** The most delegates naming one member as their target (AC-1256). */
 export const DELEGATES_PER_MEMBER = 20;
 
-/** `scheduling.delegations.list`: where `memberId` (the caller when absent) is the delegate or the target. */
-export const DelegationsListInput = WorkspaceScoped.extend({ memberId: Uuid.optional() });
+/** The most delegations one workspace wide read answers (Settings › Members' Scheduling column, AC-1267). */
+export const DELEGATIONS_WORKSPACE_MAX = 2000;
+
+/**
+ * `scheduling.delegations.list`: where `memberId` (the caller when absent) is the delegate or the target; or, with
+ * `everyone: true`, every delegation in the workspace (holders of `members.manage` only, for the Members page's
+ * Scheduling column, AC-1267), oldest first, up to `DELEGATIONS_WORKSPACE_MAX`.
+ */
+export const DelegationsListInput = WorkspaceScoped.extend({
+  memberId: Uuid.optional(),
+  everyone: z.literal(true).optional(),
+});
 /** `scheduling.delegations.list`'s input. */
 export type DelegationsListInput = z.infer<typeof DelegationsListInput>;
 

@@ -16,6 +16,7 @@ import { and, asc, count, eq, or, sql } from 'drizzle-orm';
 import {
   DELEGATES_PER_MEMBER,
   DELEGATIONS_PER_DELEGATE,
+  DELEGATIONS_WORKSPACE_MAX,
   PERMISSIONS,
   ROLE_PERMISSIONS,
   type DelegationsList,
@@ -120,10 +121,24 @@ function auditFields(row: {
  */
 export async function listDelegations(
   scope: EngineScope,
-  input: { readonly memberId?: string | undefined } = {},
+  input: { readonly memberId?: string | undefined; readonly everyone?: boolean | undefined } = {},
 ): Promise<DelegationsList> {
   checkScope(scope);
   const me = actingMember(scope);
+  // Every delegation in the workspace (the Members page's Scheduling column, AC-1267): `members.manage` alone, who
+  // may grant and remove any of them anyway. Anyone else meets it as a refusal, never a partial list.
+  if (input.everyone === true) {
+    if (!can(scope.access, 'members.manage')) throw refuse('FORBIDDEN', PERMISSIONS['members.manage'].message);
+    return inWorkspace(scope, async (tx) => {
+      const rows = await tx
+        .select()
+        .from(scheduleDelegations)
+        .where(eq(scheduleDelegations.workspaceId, scope.workspaceId))
+        .orderBy(asc(scheduleDelegations.createdAt), asc(scheduleDelegations.id))
+        .limit(DELEGATIONS_WORKSPACE_MAX);
+      return { delegations: rows.flatMap((row) => toView(row) ?? []) };
+    });
+  }
   const memberId = input.memberId === undefined ? me : checkId(input.memberId, NO_PERSON);
   if (memberId !== me && !can(scope.access, 'members.manage')) throw refuse('NOT_FOUND', NO_PERSON);
   return inWorkspace(scope, async (tx) => {

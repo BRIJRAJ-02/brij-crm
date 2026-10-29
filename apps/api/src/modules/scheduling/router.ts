@@ -9,7 +9,10 @@ import { sourceOf } from '../../source.ts';
 export const schedulingRouter = member.scheduling.router({
   delegations: {
     list: member.scheduling.delegations.list.handler(({ context, input }) =>
-      listDelegations(context.scope, input.memberId === undefined ? {} : { memberId: input.memberId }),
+      listDelegations(context.scope, {
+        ...(input.memberId === undefined ? {} : { memberId: input.memberId }),
+        ...(input.everyone === undefined ? {} : { everyone: input.everyone }),
+      }),
     ),
     grant: member.scheduling.delegations.grant.handler(({ context, input }) =>
       commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
