@@ -236,3 +236,10 @@ Rotations and team pages: `booking.admin`. Ledger: the host sees their own rows,
 ## Rationale
 
 See [rationale.md](rationale.md).
+
+## Calls made fixing late traps, 27 to 30 October 2026 (shipped, main 82fbc760f)
+
+A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
+
+- Saving a form or a team page checks the hosts only on routing rules that are new or changed; a rule naming a host who has since left no longer blocks every autosave. Publish still checks every rule (#83).
+- Removal pauses a round robin page whose rotation empties; losing the owner or a fixed host no longer pauses it; going live or making a rotation with no live member is refused `HOSTS_INVALID` (#22).

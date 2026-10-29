@@ -404,3 +404,12 @@ Technical calls the spec left open, each the recommended default. The milestone'
 - **`viewVisible` (milestone 3, task 14)**: a shared view filtering or sorting on an attribute hidden from a member is still served to them (columns are cut); no rule source hides attributes yet.
 - **AC-470's 1 second across tabs** for the last of a burst of column moves can exceed it under the spec's coalescing (1 s window plus up to 2 s jitter); measure with two browsers, and drop the jitter for named views events if it misses.
 - **The double schema reload** the owner saw was not reproduced on this stack; the flow tests hold scroll and focus across both reloads.
+
+## Calls made fixing late traps, 27 to 30 October 2026 (shipped, main 82fbc760f)
+
+A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
+
+- Saving a view never deletes the filter conditions the saver can't see: the saved filter keeps them (#1).
+- A viewer is never sent filter conditions or sorts on fields hidden from them (hidden means absent) (#66).
+- A view names the archived fields it runs without (#26). A board grouped by a field hidden from the reader says which field stands in, and opening it no longer overwrites the stored grouping (#29). Past 50 options the view bar says Not grouped and why (#30). Card fields drop archived fields and keep hidden ones in the six field budget (#31). A relation filtered view loads its far objects first, so it never opens unfiltered (#45).
+- Set as default view: last opened still wins (AC-462); the toast now says who lands on the default (#27).

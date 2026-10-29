@@ -331,3 +331,12 @@ Tracer Bullet, in the coordinator's slice order. Each slice ends with something 
 - [ ] Slug change with redirects, if asked.
 - [ ] Private views of a removed member (spec 0009's #20 follow up).
 - [ ] `/sync`: `packages/db/AGENTS.md` names `audit_events` as append only; `apps/api/AGENTS.md` names the new bootstrap handlers.
+
+## Calls made fixing late traps, 27 to 30 October 2026 (shipped, main 82fbc760f)
+
+A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
+
+- Invitations and the invite link a member sent are revoked when they are demoted below the role that vouched for them, transferred out of ownership, or removed (an audit row each); the role change toast says how many, and the remove dialog counts them (#72).
+- The purge of a deleted workspace removes its stored files (form uploads, record files) from the store first, only paths in its own folder (#84), and its members' link pages, holding their handles 90 days as an account deletion does (migration 0123) (#86).
+- Restoring a deleted workspace emails every member who was told it was deleted, except the one who restored it (#89). Queued emails stop once a workspace is deleted (#7). An account deletion that would leave a deleted workspace with no owner is warned in the dialog (#23). A reassignment ends failed with the reason when the remover loses the right mid run (#24).
+- Guests (slice 9), when they ship, get no link page made for them: guests in Slack or Calendly have no public profile (#77).

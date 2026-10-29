@@ -264,3 +264,9 @@ None new: the worker gains the mailer the api already has (`RESEND_API_KEY` or `
 - [ ] Comments in the record's Activity timeline.
 - [ ] Warn in the composer when a mentioned member can't read the record.
 - [ ] Snooze, as Linear has.
+
+## Calls made fixing late traps, 27 to 30 October 2026 (shipped, main 82fbc760f)
+
+A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
+
+- Settings shows Email mentions off while the email's one click unsubscribe has the topic off, and turning it on there subscribes again (`updated_via = app`) (#87). A notifications email that was claimed but not sent is given back for the retry (#4).

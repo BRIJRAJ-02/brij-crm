@@ -401,3 +401,11 @@ Technical calls the spec left open, each the recommended default, made while bui
 ## Open questions for the owner
 
 None. Every call in this spec follows the owner decisions of 3 October 2026 or a recommendation already taken in the cross check of 8 October 2026.
+
+## Calls made fixing late traps, 27 to 30 October 2026 (shipped, main 82fbc760f)
+
+A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
+
+- A member's job that ends `failed` emails the member who started it (`job_failed`): the job's label ("Didn't finish: Bulk edit"), the runner's plain sentence for why, and a button to Background jobs. Not for system jobs, not for a starter whose removal ended it (`ACTOR_REMOVED`), and not for a kind that tells its starter itself (`tellsStarter`, the import). Before, only a toast told them, and only while the app was open (#20).
+- A kind may declare `onSucceeded`, the twin of `onFailed`: it runs in the transaction that ends the job `succeeded`, under the system's scope, short and idempotent, and a throw rolls the ending back to try again.
+- A job that tells a member something reads that member through the door's `memberScopeIn` (system scope only), with the api's rules (`APP_RULES`, passed to `jobKinds`). A registry built without rules tells nobody, so it fails closed.

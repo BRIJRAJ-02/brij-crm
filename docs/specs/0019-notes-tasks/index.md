@@ -372,3 +372,9 @@ Technical calls the spec left open, each the recommended default. The milestone'
 - [ ] **#30**, **#36**: export and privacy erase include notes and tasks.
 - [ ] **#38**: limits on notes and tasks per workspace, if storage needs them (none in v1).
 - [ ] `/sync`: spec 0003's RichTextEditor interface gains `onChangeMaxWait`, its inventory gains `NoteList`; spec 0008's `maintenance.daily` gains the `notes_tasks` phase.
+
+## Calls made fixing late traps, 27 to 30 October 2026 (shipped, main 82fbc760f)
+
+A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
+
+- A task whose last linked record is purged keeps the visibility it had: `tasks.links_purged` (migration 0121) is set before the links go, and the task rule, its SQL and the relay's facts read it, so a private task never becomes everyone's (AC-447 read "no links" as everyone's) (#79).

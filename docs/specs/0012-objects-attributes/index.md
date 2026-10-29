@@ -446,3 +446,12 @@ The most conservative choice consistent with the settings screens of milestones 
 - **A status row in a slot narrower than the dialog wraps** its outcome and days under the label; in the 480px dialog it is one line.
 - **The compact swatch has a control's outline** (`control-border`), since a lone tag edge in gray, yellow or lime falls far under 3.5:1 on the surface (the guardian's finding). The tag border tokens themselves are left as they are: owner item.
 - **"Create" stays offered for a label only an archived option holds**, as the spec allows, and stays out of the record panel's editors (AC-238 names cells).
+
+## Calls made fixing late traps, 27 to 30 October 2026 (shipped, main 82fbc760f)
+
+A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
+
+- Turning Required on (by create, edit or restore) is refused while a live form has no question for the field, and while a live booking page that files to the CRM would make a record without it, naming the pages; each guest would otherwise be left out of the CRM while the booking still went through (#11). What a booking writes itself (a person's email and name, a company's domains and name) never counts. The refusal offers two ways through: a default, or pausing the page. Since the first run makes a live Intro call in every workspace, this applies from day one.
+- A page asking for the field with a required question of its own (spec 0057) still counts as a wall, on purpose: a booking files its answers only after it makes the person, and that insert carries only email, name, company and owner, so a new guest would still be refused; host made bookings ask no questions at all. Owed before the page can count as filling the field: the person insert carries the page's filed answers, and host bookings take them too.
+- A Current user default counts as nothing for a visitor, who has no user (#10). Un uniquing a live form's match email is guarded the same way archiving it is (#13). Archiving a field a live form files onto is refused, as the match field was (#50).
+- Removing a member drops them from every static Member default (an audit row each), and the removal dialog counts a Required one left empty, so creates don't start failing afterwards (#9, #70). Archiving the option a select defaults to says so in a toast with Undo (#34).

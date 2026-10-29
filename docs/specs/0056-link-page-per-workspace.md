@@ -128,3 +128,11 @@ Each task needs `security-access-reviewer`, and the UI tasks `design-system-guar
 **Why option 1**: it is the only one where each workspace can have its own page and the address alone says which. The cost is a handle that belongs to a membership, which touches the handle tables once, in one migration.
 
 **Calls taken on the owner's behalf**: the migration picks the workspace by most Public booking pages (their real public presence); bio is per workspace and name and picture stay on the account; our own addresses are checked by one shared function so link blocks and redirects cannot disagree.
+
+## Calls made fixing late traps, 27 to 30 October 2026 (shipped, main 82fbc760f)
+
+A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
+
+- A deleted account's handles are held 90 days, naming nobody, then freed by the daily cleanup (migration 0122), as GitHub and X hold a deleted account's name; the delete account copy says so. A published handle is not kept forever: a printed code can outlive the 90 days, and that stays the trade (#73).
+- The 20 handle cap counts what a person uses: at the cap, their oldest handle that no page uses goes into the same 90 day hold to make room, and only 20 live pages refuse a new one (migration 0124) (#76).
+- A purged workspace's link pages go with it and their handles are held (#86).

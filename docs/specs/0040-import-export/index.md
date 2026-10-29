@@ -261,3 +261,11 @@ Imports need write on the object and run as the member, so every rule of spec 00
 ## Rationale
 
 See [rationale.md](rationale.md).
+
+## Calls made fixing late traps, 27 to 30 October 2026 (shipped, main 82fbc760f)
+
+A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
+
+- The member who started an import is emailed how it ended (`import_finished`), on success and on failure: counts, what to do next on a failure, and the import's page. Nothing goes to a starter who can no longer read the object or was removed (#74).
+- Undo keeps a created record someone has worked on since (an edit, a note, a comment, a task, or a link from elsewhere), and a record made by Create missing likewise; each kept one gets a row note (#5, #80, #81). An import reads undone only once the undo finishes (#21).
+- An import is refused up front when a required field has no column (#25), and Create missing is refused when the far object has a required field a made record can't fill (#75). A sorted export that saw changes while it ran says so (#40).

@@ -179,3 +179,9 @@ Satisfies AC-627, AC-628, AC-642.
 ## Rationale
 
 See [rationale.md](rationale.md).
+
+## Calls made fixing late traps, 27 to 30 October 2026 (shipped, main 82fbc760f)
+
+A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
+
+- Booking emails are idempotent across retries (#2). Answers a booking couldn't save are marked not saved (#32). Book as host follows the same required field guard as live pages (#71). A page's required wall can't be reached by publishing first and adding the filed question after (#12).

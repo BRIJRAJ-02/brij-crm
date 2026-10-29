@@ -250,3 +250,7 @@ Named, not built here. Two of these have been built since, in spec 0055, and say
 - **Server rendered meta and an OG card** for `/<handle>`, so a shared link previews with the person's name and picture. Built since, in spec 0055, with a picture the owner may choose instead of the drawn one.
 - **A second contact card** or several, for a person who hands out a work card and a personal one.
 - **Collections**, the Linktree idea of a group of links that opens on its own page.
+
+## Calls made fixing late traps, 27 to 30 October 2026
+
+- Links imported together keep the source page's order in the archived list: one import archives its rows at one moment, and their ids are handed out in ascending order, so the list's tie break (the id) follows the page.
