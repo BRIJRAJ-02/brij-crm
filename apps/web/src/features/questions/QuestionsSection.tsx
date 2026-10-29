@@ -189,10 +189,18 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     }
   }
 
+  // A booking page's new question starts Not filed (flow walks B3): a guest's answer stays with the booking unless
+  // the host picks a field, rather than every question quietly becoming a column on everyone's People table. A form
+  // keeps filing onto a new field by default (spec 0023), since filing is what a form is for.
+  const keptAtFirst = (list: readonly FormQuestion[], id: string): readonly FormQuestion[] =>
+    props.keptWith === 'booking'
+      ? list.map((each) => (each.id === id && each.filedOn === undefined ? { ...each, kept: true as const } : each))
+      : list;
+
   const add = () => {
     if (isFull) return;
     const id = newId();
-    onChange((before) => addQuestion(before, id));
+    onChange((before) => keptAtFirst(addQuestion(before, id), id));
     opened(id);
   };
 
@@ -284,7 +292,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                         const preset = QUESTION_PRESETS.find((each) => each.key === key);
                         if (preset === undefined || isFull) return;
                         const id = newId();
-                        onChange((before) => addPreset(before, preset, id));
+                        onChange((before) => keptAtFirst(addPreset(before, preset, id), id));
                         opened(id);
                       }}
                     >
@@ -373,7 +381,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                 label={strings.duplicateQuestion}
                 onPress={() => {
                   const copy = newId();
-                  onChange((before) => duplicateQuestion(before, id, copy));
+                  onChange((before) => keptAtFirst(duplicateQuestion(before, id, copy), copy));
                   opened(copy);
                 }}
               />

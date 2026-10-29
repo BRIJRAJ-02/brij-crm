@@ -6,7 +6,7 @@
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList, useSchedules } from '@crm/data/react';
 import { Button, Callout, Field, InfoTip, Link, Modal, Radio, RadioGroup, SegmentedControl, Select } from '@crm/ui';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { lengthOf } from './durations.ts';
 import { memberZone } from './zone.ts';
@@ -64,6 +64,31 @@ export function NewPageDialog({
         }))
       : [];
   const isTeam = canBookTeams && who === 'rotation';
+  // No group yet: Manage round robin opens in a new tab, so what is typed here stays (flow walks B8), and the
+  // groups are read again when this tab is back in front.
+  const isWaitingForGroup = isOpen && isTeam && rotations.status === 'ready' && rotationItems.length === 0;
+  useEffect(() => {
+    if (!isWaitingForGroup) return;
+    const reread = () => {
+      if (document.visibilityState === 'visible') data.rotations.view(slug).reload();
+    };
+    window.addEventListener('focus', reread);
+    document.addEventListener('visibilitychange', reread);
+    return () => {
+      window.removeEventListener('focus', reread);
+      document.removeEventListener('visibilitychange', reread);
+    };
+  }, [isWaitingForGroup, data, slug]);
+  // The group made there arrives: the only one is picked, and focus goes to the picker that replaced the link.
+  const [wasWaiting, setWasWaiting] = useState(false);
+  const [focusGroups, setFocusGroups] = useState(false);
+  if (isWaitingForGroup !== wasWaiting) {
+    setWasWaiting(isWaitingForGroup);
+    if (!isWaitingForGroup && isTeam && rotationItems.length > 0) {
+      if (rotationItems.length === 1) setRotationId(rotationItems[0]?.id ?? null);
+      setFocusGroups(true);
+    }
+  }
   const [id, setId] = useState(() => data.bookingPages.newId());
   const [isBusy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{ readonly title?: string; readonly custom?: string }>({});
@@ -217,13 +242,23 @@ export function NewPageDialog({
       )}
       {isTeam &&
         (rotationItems.length === 0 && rotations.status === 'ready' ? (
-          <Callout tone="info" actions={<Link href={roundRobinHref(slug)}>{rotationStrings.manageRotations}</Link>}>
+          <Callout
+            tone="info"
+            actions={
+              <Link href={roundRobinHref(slug)} opensInNewTab>
+                {rotationStrings.manageRotations}
+              </Link>
+            }
+          >
             {rotationStrings.noRotations}
           </Callout>
         ) : (
           <Select
             label={rotationStrings.rotation}
             placeholder={rotationStrings.pickRotation}
+            // Only when the group made in the other tab replaced the focused link, so focus isn't dropped.
+            // eslint-disable-next-line jsx-a11y-x/no-autofocus
+            autoFocus={focusGroups}
             items={rotationItems}
             value={rotationId}
             onChange={setRotationId}

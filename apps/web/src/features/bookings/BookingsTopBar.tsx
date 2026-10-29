@@ -37,7 +37,7 @@ export interface BookingsTopBarProps {
  * on yet New opens New booking page instead of sitting turned off (the owner, 22 October 2026).
  */
 export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   // The week on screen: the Calendar's, else this week.
   const { timeZone } = useFormatSettings();
   const { week } = bookingsSearchOf(
@@ -158,6 +158,8 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
         onCreated={(page) => {
           setAddingPage(false);
           void navigate({ to: pageEditorHref(slug, page.id) });
+          // The page opens under Captures, where every booking page lives: said, so the jump isn't a mystery (B1).
+          toasts.toast({ tone: 'success', message: strings.pageMadeWhere(page.title) });
         }}
       />
       {meeting !== undefined && (

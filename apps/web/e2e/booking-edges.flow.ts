@@ -246,7 +246,9 @@ test.describe('the booking journey’s edges', () => {
     await visitor.context().close();
   });
 
-  test('a round robin page can’t be made before a group exists, and says where to make one', async ({ page }) => {
+  test('a round robin page can’t be made before a group exists, and says where to make one, keeping the title', async ({
+    page,
+  }) => {
     test.setTimeout(120_000);
     const tag = randomUUID().slice(0, 8);
     await newWorkspace(page, `bookrr-${tag}@example.com`, `bookrr-${tag}`);
@@ -258,8 +260,15 @@ test.describe('the booking journey’s edges', () => {
     const create = page.getByRole('dialog', { name: 'Add a booking page' });
     await create.getByLabel('Title').fill('Team call');
     await create.getByText('A round robin group').click();
-    await expect(create.getByText('Make a round robin group first, in Settings.')).toBeVisible();
-    await expect(create.getByRole('link', { name: 'Manage round robin' })).toBeVisible();
+    await expect(create.getByText(/^Make a round robin group first\./)).toBeVisible();
+    // Settings opens beside it, so the title typed here isn't lost on the way (B8).
+    const [settings] = await Promise.all([
+      page.context().waitForEvent('page'),
+      create.getByRole('link', { name: 'Manage round robin' }).click(),
+    ]);
+    await expect(settings).toHaveURL(/\/bookings\/round-robin/);
+    await settings.close();
+    await expect(create.getByLabel('Title')).toHaveValue('Team call');
   });
 
   test('an object a booking can’t file answers onto is shown off in the picker, with the reason', async ({ page }) => {

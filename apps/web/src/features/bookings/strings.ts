@@ -1,6 +1,8 @@
 /** The Bookings page's copy. */
 export const strings = {
   title: 'Bookings',
+  /** After New makes a page from here: where it, and every booking page, lives (flow walks B1). */
+  pageMadeWhere: (title: string) => `Made “${title}”, in Captures › Links.`,
   /** The page's tab strip, as Captures has: its name, read by screen readers, and each tab. */
   pageTabsLabel: 'Bookings',
   pageTabs: {
