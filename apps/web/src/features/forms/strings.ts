@@ -198,6 +198,10 @@ export const strings = {
   retargetOffText: (filed: number, from: string) =>
     `${count(filed, 'question is', 'questions are')} saved to ${from} fields. Submissions will make no record, and every answer is kept with the submission only.`,
   thisObject: 'this object',
+  savingWaits: (objectName: string) =>
+    `Changes here go live when you publish. Until then, submissions are still saved to ${objectName} as before.`,
+  savingWaitsKeptOnly:
+    'Changes here go live when you publish. Until then, submissions are still kept with the form only.',
   retargetAction: 'Change object',
   retargetOffAction: 'Stop saving',
   filedOn: (object: string, attribute: string) => `${object} › ${attribute}`,

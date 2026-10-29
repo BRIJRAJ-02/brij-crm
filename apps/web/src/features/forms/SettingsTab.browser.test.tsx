@@ -315,3 +315,23 @@ describe('a form that sends visitors on to a booking page (late trap #53)', () =
     expect(page.getByText('Demo call is paused').query()).toBeNull();
   });
 });
+
+describe('where a live form saves its answers (late trap #39)', () => {
+  const WAITS = 'Changes here go live when you publish. Until then, submissions are still saved to People as before.';
+
+  it('says a change waits for Publish, naming where submissions still go', async () => {
+    const keptOnly: FormDocument = {
+      ...DRAFT,
+      questions: DRAFT.questions.map(({ filedOn: _filed, ...question }) => question),
+      targets: {},
+    };
+    await show({ ...formView({}), draft: keptOnly }, []);
+    await expect.element(page.getByText(WAITS)).toBeVisible();
+  });
+
+  it('says nothing while the draft saves answers as the live form does', async () => {
+    await show(formView({}), []);
+    await expect.element(page.getByText('Talk to us').or(page.getByRole('switch').first())).toBeVisible();
+    expect(page.getByText(WAITS).query()).toBeNull();
+  });
+});

@@ -340,6 +340,21 @@ export function SettingsTab({
   // By value, not as text: rules the editor wrote spell their keys in another order than the published ones, so
   // text said "waits for publish" for rules that were already live.
   const routingChanged = live !== undefined && !sameValue(live.routing.rules, draft.routing.rules);
+  // Where answers are saved, as the live form does it: a change waits for Publish, and the card says so, naming where
+  // submissions still go meanwhile (late trap #39: the card showed the new object as if it were already in use).
+  const savingOf = (document: Pick<FormDocument, 'targets' | 'questions'>) => ({
+    targets: document.targets,
+    filed: document.questions.map((question) => [question.id, question.filedOn?.attributeId ?? null]),
+  });
+  const savingChanged = live !== undefined && !sameValue(savingOf(live), savingOf(draft));
+  const liveMain = live?.targets.main;
+  const liveObjectName =
+    liveMain === undefined ? undefined : objects.find((object) => object.id === liveMain.objectId)?.pluralName;
+  const savingWaits = !savingChanged
+    ? undefined
+    : liveMain === undefined
+      ? strings.savingWaitsKeptOnly
+      : strings.savingWaits(liveObjectName ?? strings.thisObject);
 
   const bookingPage = after.kind === 'booking' ? pageList.find((page) => page.id === after.bookingPageId) : undefined;
   const afterProblem = afterPageProblem(draft, pages.status === 'ready' ? pages.items : undefined, seesAllPages);
@@ -549,7 +564,11 @@ export function SettingsTab({
           return Promise.resolve();
         }}
       />
-      <Card title={strings.crmTitle} isBusy={isRetargeting}>
+      <Card
+        title={strings.crmTitle}
+        isBusy={isRetargeting}
+        {...(savingWaits === undefined ? {} : { description: savingWaits })}
+      >
         <Switch
           label={strings.addToCrmSwitch}
           // Whether a submission makes a record or updates one matters, so it stays in view while the form files.
