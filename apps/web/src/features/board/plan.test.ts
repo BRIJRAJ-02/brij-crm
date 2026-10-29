@@ -51,6 +51,18 @@ describe('the board a view shows', () => {
     expect(plan.settings.showEmptyColumns).toBe(true);
   });
 
+  it('says when another field stands in for a grouping field the reader can’t use (late trap #29)', () => {
+    // Hidden from this reader: absent from their attributes, so the first status stands in, and says so.
+    const hidden = planBoard(DEALS, { groupByAttributeId: 'secret', cardFields: [], showEmptyColumns: true });
+    if (hidden.kind !== 'board') throw new Error('A board.');
+    expect(hidden.groupBy.id).toBe('stage');
+    expect(hidden.isStandIn).toBe(true);
+    // A board with nothing stored uses the defaults without anything to say.
+    const fresh = planBoard(DEALS, undefined);
+    if (fresh.kind !== 'board') throw new Error('A board.');
+    expect(fresh.isStandIn).toBe(false);
+  });
+
   it('keeps the stored settings, leaving out archived card fields and the name', () => {
     const plan = planBoard([...DEALS, attribute('gone', { isArchived: true })], {
       groupByAttributeId: 'priority',
@@ -72,7 +84,7 @@ describe('the board a view shows', () => {
         cardFields: [],
         showEmptyColumns: true,
       }),
-    ).toEqual({ kind: 'group-archived', title: 'stage' });
+    ).toEqual({ kind: 'group-archived', id: 'stage', title: 'stage' });
     const crowded = attribute('crowd', {
       type: 'status',
       position: 0,

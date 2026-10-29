@@ -32,6 +32,7 @@ import {
   Field,
   InfoTip,
   Menu,
+  Modal,
   MenuItem,
   MenuSeparator,
   MenuTrigger,
@@ -55,6 +56,7 @@ import { EmailDomainRow } from './EmailDomainRow.tsx';
 import { InviteLinkRows } from './InviteLinkRows.tsx';
 import { MemberConfirm, type MemberQuestion } from './MemberConfirm.tsx';
 import { RemoveMemberDialog } from './RemoveMemberDialog.tsx';
+import { hasGuide, RoleGuide } from './RoleGuide.tsx';
 import { canRemove, grantableRoles, invitableRoles } from './members.ts';
 import { strings } from './members-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -149,6 +151,7 @@ export function MembersScreen({
   // Owners and admins see who has two factor sign in (spec 0033, AC-895): decided by access, so it never slides in.
   const canManage = access.permissions.includes('members.manage');
   const [isInviting, setInviting] = useState(false);
+  const [isGuideOpen, setGuideOpen] = useState(false);
   // The request being approved: its Approve spins and its Decline waits, so one press makes one decision.
   const [approving, setApproving] = useState<string | undefined>(undefined);
   // The tab shown: the search belongs to the Members tab alone. It opens on Joining while someone waits to join,
@@ -227,10 +230,21 @@ export function MembersScreen({
   const changeRole = (member: MemberView, role: Role) => {
     setPendingRoles((pending) => new Map(pending).set(member.id, role));
     data.members.setRole(slug, member.id, role).then(
-      async () => {
+      async (changed) => {
         await reload();
         settleRole(member.id);
-        toasts.toast({ tone: 'success', message: strings.roleChanged(member.name, labelOf(role)) });
+        const cancelled = changed.cancelledInvitations;
+        const message = strings.roleChanged(member.name, labelOf(role));
+        // Cancelled invitations are sent again from Invite people, which stays on the toast until dismissed.
+        toasts.toast(
+          cancelled === undefined
+            ? { tone: 'success', message }
+            : {
+                tone: 'success',
+                message: `${message} ${strings.roleInvitationsCancelled(cancelled)}`,
+                action: { label: strings.invite, onAction: () => setInviting(true) },
+              },
+        );
       },
       (error: unknown) => {
         settleRole(member.id);
@@ -556,15 +570,21 @@ export function MembersScreen({
       hasTabs={canInvite}
       // The page's one primary action, in the header's action place (the owner, 21 October 2026: no title block;
       // it moves to the settings header bar's action slot when that lands).
-      {...(canInvite && inviteRoles.length > 0
-        ? {
-            actions: (
-              <Button variant="primary" icon="user-plus" onPress={() => setInviting(true)}>
-                {strings.invite}
-              </Button>
-            ),
-          }
-        : {})}
+      // What each role can do sits before it, for everyone: choosing a role, or reading one's own, starts there.
+      actions={
+        <>
+          {hasGuide(roles.roles) && (
+            <Button icon="shield-check" onPress={() => setGuideOpen(true)}>
+              {strings.roleGuide}
+            </Button>
+          )}
+          {canInvite && inviteRoles.length > 0 && (
+            <Button variant="primary" icon="user-plus" onPress={() => setInviting(true)}>
+              {strings.invite}
+            </Button>
+          )}
+        </>
+      }
     >
       {canInvite ? (
         <Tabs
@@ -684,6 +704,18 @@ export function MembersScreen({
           toasts.toast({ tone: 'success', message });
         }}
       />
+      <Modal
+        title={strings.roleGuide}
+        isOpen={isGuideOpen}
+        onOpenChange={setGuideOpen}
+        actions={
+          <Button variant="primary" slot="close">
+            {strings.done}
+          </Button>
+        }
+      >
+        <RoleGuide roles={roles.roles} initialRole={roles.roles.find((option) => option.builtIn === access.role)?.id} />
+      </Modal>
       {canInvite && (
         <InviteDialog
           data={data}
@@ -735,16 +767,19 @@ export function MembersPending() {
     <SettingsPage
       title={strings.title}
       hasTabs={canInvite}
-      // The bar's one action holds its place while the page loads.
-      {...(canInvite
-        ? {
-            actions: (
-              <Button variant="primary" icon="user-plus" isDisabled>
-                {strings.invite}
-              </Button>
-            ),
-          }
-        : {})}
+      // The bar's actions hold their places while the page loads.
+      actions={
+        <>
+          <Button icon="shield-check" isDisabled>
+            {strings.roleGuide}
+          </Button>
+          {canInvite && (
+            <Button variant="primary" icon="user-plus" isDisabled>
+              {strings.invite}
+            </Button>
+          )}
+        </>
+      }
     >
       {canInvite ? (
         <Tabs

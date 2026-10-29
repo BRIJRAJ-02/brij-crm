@@ -4,11 +4,15 @@
 // open tasks to someone else.
 import { sql } from 'drizzle-orm';
 import { afterAll, describe, expect, inject, it } from 'vitest';
+import { defaultAvailability } from '@crm/contracts';
 import { createDatabase } from '@crm/db';
+import { saveDefaultHours } from '../availability/schedules.ts';
 import { createBookingPage } from '../booking/pages.ts';
+import { defineAttribute } from '../engine/definitions.ts';
 import { newId } from '../engine/ids.ts';
 import { createRecord } from '../engine/records.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
+import { createRotation } from '../rotation/rotations.ts';
 import { createTask } from '../tasks/tasks.ts';
 import { jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
 import { leaveWorkspace, previewRemoval, removeMember, setMemberRole } from './members.ts';
@@ -63,6 +67,7 @@ async function world() {
     )[0]?.member;
   return {
     ...t,
+    people,
     gus,
     hal,
     ann,
@@ -94,6 +99,9 @@ describe('the remove dialog’s counts (AC-816)', () => {
       calendars: 0,
       openTasks: 1,
       records: 2,
+      defaults: 0,
+      requiredDefaults: 0,
+      invitations: 0,
     });
     // About themself before leaving, yes; about anyone else, only with members.manage.
     expect(await previewRemoval(w.gusScope, { memberId: w.gus })).toMatchObject({ records: 2 });
@@ -101,6 +109,44 @@ describe('the remove dialog’s counts (AC-816)', () => {
     // Someone no longer here is not found.
     await removeMember(w.owner, { memberId: w.gus });
     expect(await refusalOf(previewRemoval(w.owner, { memberId: w.gus }))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('a field default naming them (late trap #70)', () => {
+  it('counts the fields beforehand, the required ones left empty apart, then takes them out of every default', async () => {
+    const w = await world();
+    const single = await defineAttribute(w.owner, {
+      objectId: w.people.object_id,
+      apiSlug: 'account_manager',
+      title: 'Account manager',
+      type: 'actor_reference',
+      isRequired: true,
+      defaultValue: { kind: 'static', value: { type: 'member', id: w.gus } },
+    });
+    const several = await defineAttribute(w.owner, {
+      objectId: w.people.object_id,
+      apiSlug: 'watchers',
+      title: 'Watchers',
+      type: 'actor_reference',
+      isMulti: true,
+      isRequired: true,
+      defaultValue: {
+        kind: 'static',
+        value: [
+          { type: 'member', id: w.gus },
+          { type: 'member', id: w.hal },
+        ],
+      },
+    });
+    expect(await previewRemoval(w.owner, { memberId: w.gus })).toMatchObject({ defaults: 2, requiredDefaults: 1 });
+    await removeMember(w.owner, { memberId: w.gus });
+    const stored = await w.read<{ id: string; value: unknown }>(sql`
+      select id::text, default_value as value from attributes
+      where id in (${single.attributeId}::uuid, ${several.attributeId}::uuid)
+    `);
+    const byId = new Map(stored.map((row) => [row.id, row.value]));
+    expect(byId.get(single.attributeId)).toBeNull();
+    expect(byId.get(several.attributeId)).toEqual({ kind: 'static', value: [{ type: 'member', id: w.hal }] });
   });
 });
 
@@ -124,6 +170,91 @@ describe('booking pages on removal (AC-814)', () => {
       await w.read(sql`select page_id::text as page from booking_page_members where member_id = ${w.gus}::uuid`),
     ).toEqual([]);
     expect(own.id).not.toBe(shared.id);
+  });
+});
+
+describe('round robin pages on removal (late trap #22)', () => {
+  it('pauses one whose rotation they were the last one on in, and keeps one another member still fills', async () => {
+    const w = await world();
+    // A rotation takes only members with hours of their own.
+    for (const scope of [w.gusScope, w.halScope]) {
+      await saveDefaultHours(scope, { availability: defaultAvailability('UTC') });
+    }
+    const pool = (name: string, memberIds: readonly string[]) =>
+      createRotation(w.owner, {
+        id: newId(),
+        settings: { name, strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' },
+        members: memberIds.map((memberId) => ({
+          memberId,
+          weight: 100,
+          priority: 2,
+          dailyCap: null,
+          weeklyCap: null,
+          isOn: true,
+        })),
+      });
+    const page = (title: string, rotationId: string) =>
+      createBookingPage(
+        w.owner,
+        { id: newId(), title, timeZone: 'UTC', kind: 'round_robin', hosts: { fixed: [], rotations: [rotationId] } },
+        NOW,
+      );
+    const alone = await pool('Gus only', [w.gus]);
+    const shared = await pool('Gus and Hal', [w.gus, w.hal]);
+    await page('Gus only demo', alone.id);
+    await page('Shared demo', shared.id);
+    // Gus has no page of his own, so the one that pauses is the round robin page with nobody else to seat.
+    expect(await previewRemoval(w.owner, { memberId: w.gus })).toMatchObject({ pausedPages: 1 });
+    await removeMember(w.owner, { memberId: w.gus });
+    expect(
+      await w.read(sql`select title, status::text as status, paused_reason from booking_pages order by title`),
+    ).toEqual([
+      { title: 'Gus only demo', status: 'paused', paused_reason: 'host_removed' },
+      { title: 'Shared demo', status: 'live', paused_reason: null },
+    ]);
+  });
+
+  it('keeps one live when its owner or a fixed host leaves while its rotations still seat someone', async () => {
+    const w = await world();
+    for (const scope of [w.gusScope, w.halScope]) {
+      await saveDefaultHours(scope, { availability: defaultAvailability('UTC') });
+    }
+    const rotation = await createRotation(w.owner, {
+      id: newId(),
+      settings: { name: 'Hal', strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' },
+      members: [{ memberId: w.hal, weight: 100, priority: 2, dailyCap: null, weeklyCap: null, isOn: true }],
+    });
+    // Ann's own page, and one with Gus as its fixed host: the old rule paused both.
+    await createBookingPage(
+      w.annScope,
+      {
+        id: newId(),
+        title: 'Ann’s',
+        timeZone: 'UTC',
+        kind: 'round_robin',
+        hosts: { fixed: [], rotations: [rotation.id] },
+      },
+      NOW,
+    );
+    await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'With Gus',
+        timeZone: 'UTC',
+        kind: 'round_robin',
+        hosts: { fixed: [w.gus], rotations: [rotation.id] },
+      },
+      NOW,
+    );
+    expect(await previewRemoval(w.owner, { memberId: w.gus })).toMatchObject({ pausedPages: 0 });
+    expect(await previewRemoval(w.owner, { memberId: w.ann })).toMatchObject({ pausedPages: 0 });
+    await removeMember(w.owner, { memberId: w.gus });
+    await removeMember(w.owner, { memberId: w.ann });
+    expect(await w.read(sql`select title, status::text as status from booking_pages order by title`)).toEqual([
+      { title: 'Ann’s', status: 'live' },
+      { title: 'With Gus', status: 'live' },
+    ]);
   });
 });
 
@@ -157,6 +288,8 @@ describe('handing their work on (AC-816)', () => {
     });
     await setMemberRole(w.owner, { memberId: w.ann, role: 'member' });
     await drive(runnerFor(registry), w.workspaceId, jobId);
+    // Said as stopped, never as done (late trap #24).
+    expect((await jobRow(jobId))?.status).toBe('failed');
     expect(await w.ownerOf(record)).toEqual([w.gus]);
     expect(await w.assigneeOf(open)).toBe(w.gus);
     // Leaving with someone named is refused: the job would run as someone no longer here.
@@ -177,7 +310,7 @@ describe('handing their work on (AC-816)', () => {
     const { jobId = '' } = await removeMember(w.owner, { memberId: w.gus, reassignTo: w.hal }, [], { jobs: registry });
     await leaveWorkspace(w.halScope);
     await drive(runnerFor(registry), w.workspaceId, jobId);
-    expect((await jobRow(jobId))?.status).toBe('succeeded');
+    expect((await jobRow(jobId))?.status).toBe('failed');
     expect(await w.ownerOf(record)).toEqual([w.gus]);
   });
 });

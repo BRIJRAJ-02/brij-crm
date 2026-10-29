@@ -46,6 +46,8 @@ export interface PublicFormsDeps {
   readonly captcha: CaptchaVerifier;
   /** The central limiter (`../limits.ts`). */
   readonly limiter: PublicLimiter;
+  /** The hosted form read's own limiter, so a flood of reads never evicts the submissions' windows. */
+  readonly readLimiter: PublicLimiter;
   /** Fill tickets: the server's clock for the minimum fill time. */
   readonly tickets: TicketBook;
   /** The origin hosted pages (and the embed's frame) are served from. */
@@ -157,22 +159,39 @@ function postFrom(
   return { allowed: origin === undefined && signed, signed };
 }
 
+/** How a hosted form's own read is cached: not at all, so a paused or resumed form shows so on the next load. */
+export const PUBLIC_FORM_CACHE_CONTROL = 'no-store';
+
 /** Mounts the public form endpoints on the app (`/api` is its base path). */
 export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: PublicFormsDeps): void {
   const { handoffKey } = deps;
   const allowedHosts = new Set([new URL(deps.publicOrigin).hostname]);
 
   app.get('/public/forms/:publicKey', async (c) => {
+    // Every read is a database read now nothing caches it (late trap #69): limited before the form is looked up, by
+    // address and across the instance. Never by the form: a few addresses could then shut a form for everyone.
+    const address = hashAddress(deps.ipSalt, c.get('clientIp')) ?? 'unknown';
+    for (const [key, limit] of [
+      ['forms:read:instance', FORM_LIMITS.readsPerInstance],
+      [`forms:read:${address}`, FORM_LIMITS.readsPerAddress],
+    ] as const) {
+      const hit = deps.readLimiter(key, limit);
+      if (!hit.allowed) {
+        return answer('RATE_LIMITED', words.tooMany, {
+          headers: { 'retry-after': String(hit.retryAfterSeconds), 'cache-control': PUBLIC_FORM_CACHE_CONTROL },
+        });
+      }
+    }
     try {
       const { scope, formId } = await enterPublicForm({ db: deps.db }, c.req.param('publicKey'));
       const form = await getPublicForm(scope, {
         formId,
         ...(deps.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: deps.recaptchaSiteKey }),
       });
-      // A minute at most: a pause or a new version shows within it.
-      return c.json(form, 200, { 'cache-control': 'public, max-age=60', 'x-robots-tag': 'noindex' });
+      // Never kept: a pause, a resume or a new version shows on the visitor's next load, not a minute later.
+      return c.json(form, 200, { 'cache-control': PUBLIC_FORM_CACHE_CONTROL, 'x-robots-tag': 'noindex' });
     } catch (error) {
-      return refusalAnswer(error);
+      return refusalAnswer(error, { 'cache-control': PUBLIC_FORM_CACHE_CONTROL });
     }
   });
 
@@ -266,6 +285,8 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
               captcha,
               ticket,
               signed: from.signed,
+              // Not our hosted page or embed: a site's own form, whose HTML may be older than the form.
+              fromSite: c.get('origin') !== deps.publicOrigin,
               emailOverLimit,
               answersKey: deps.answersKey,
               publicOrigins: deps.publicOrigins,

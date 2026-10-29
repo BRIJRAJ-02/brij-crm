@@ -168,6 +168,83 @@ function isVouchedFor(sent: {
   return (ROLE_PERMISSIONS[senderRole] as readonly string[]).includes('members.invite');
 }
 
+/**
+ * Where a member stands after a role change or removal, for the invitations they last sent: removed, or the role
+ * they now hold.
+ */
+export type SenderStanding = Role | 'removed';
+
+/**
+ * The open invitations (email ones and the link) `memberId` last sent that `standing` no longer vouches for
+ * (`isVouchedFor`): all of them once removed or without `members.invite`, an admin's owner invitations only.
+ * Undefined when they all still stand.
+ */
+function unvouchedBy(workspaceId: string, memberId: string, standing: SenderStanding) {
+  const invites =
+    standing !== 'removed' && (ROLE_PERMISSIONS[standing] as readonly string[]).includes('members.invite');
+  if (invites && standing === 'owner') return undefined;
+  return and(
+    eq(invitations.workspaceId, workspaceId),
+    eq(invitations.status, 'open'),
+    eq(invitations.updatedByType, 'member'),
+    eq(invitations.updatedByMemberId, memberId),
+    ...(invites ? [eq(invitations.role, 'owner')] : []),
+  );
+}
+
+/** How many open invitations `memberId` sent would stop opening anything at `standing`, for the remove dialog. */
+export async function countUnvouched(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  memberId: string,
+  standing: SenderStanding,
+): Promise<number> {
+  const where = unvouchedBy(workspaceId, memberId, standing);
+  if (where === undefined) return 0;
+  const [found] = await tx.select({ n: count() }).from(invitations).where(where);
+  return found?.n ?? 0;
+}
+
+/**
+ * Revokes the open invitations `memberId` sent that `standing` no longer vouches for, inside the role change or
+ * removal's own transaction, each with its audit row. They opened nothing from that moment anyway; revoked, the
+ * Invitations tab and the link's card stop showing them as open and they stop holding seats, and the caller says
+ * how many went so they can be sent again (late trap: they died with nobody told). Answers how many.
+ */
+export async function revokeUnvouched(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  memberId: string,
+  standing: SenderStanding,
+  source?: AuditSource,
+): Promise<number> {
+  const where = unvouchedBy(scope.workspaceId, memberId, standing);
+  if (where === undefined) return 0;
+  // No invitations lock: the caller holds the member's row, which revokeInvite takes after that lock, and revoking
+  // only frees seats, so a count read beside it errs high, never low. A row resent meanwhile is someone else's.
+  const revoked = await tx
+    .update(invitations)
+    .set({ status: 'revoked', ...touched(scope) })
+    .where(where)
+    .returning({ id: invitations.id, kind: invitations.kind });
+  for (const row of revoked) {
+    await writeAudit(
+      tx,
+      scope.workspaceId,
+      scope.actor,
+      {
+        action: row.kind === 'link' ? 'invitation.link_revoked' : 'invitation.revoked',
+        targetType: 'invitation',
+        targetId: row.id,
+        before: { status: 'open' },
+        after: { status: 'revoked' },
+      },
+      source,
+    );
+  }
+  return revoked.length;
+}
+
 /** Takes turns with every other invitation write in the workspace, so the counts below stay exact. */
 async function lockInvitations(tx: WorkspaceTx, workspaceId: string): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`invitations:${workspaceId}`}, 0))`);
@@ -484,8 +561,16 @@ export async function resendInvite(
           expiresAt: INVITE_WINDOW,
           ...touched(scope),
         })
-        .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)))
+        // Still open: a role change or removal revoking its sender's invitations takes no invitations lock.
+        .where(
+          and(
+            eq(invitations.workspaceId, scope.workspaceId),
+            eq(invitations.id, open.id),
+            eq(invitations.status, 'open'),
+          ),
+        )
         .returning({ sendCount: invitations.sendCount });
+      if (row === undefined) throw refuse('NOT_FOUND', INVITATION_NOT_FOUND);
       await writeAudit(
         tx,
         scope.workspaceId,
@@ -495,7 +580,7 @@ export async function resendInvite(
       );
       const [invitation] = await viewsOf(tx, scope.workspaceId, [open.id]);
       if (invitation === undefined) throw new Error('The invitation just resent was not read back.');
-      return { ...(await senderOf(tx, scope)), invitation, token, sendCount: row?.sendCount ?? 1 };
+      return { ...(await senderOf(tx, scope)), invitation, token, sendCount: row.sendCount };
     },
     hooks,
   );

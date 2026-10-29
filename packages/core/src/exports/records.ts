@@ -431,13 +431,31 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
     ...(page.nextCursor === undefined ? {} : { cursor: page.nextCursor }),
   };
   const finished = page.nextCursor === undefined;
+  // Pages follow the view's own order by keyset, so a record whose sorted value changed while the file was written
+  // can be skipped or written twice (late trap #40). Not silently: a sorted export that saw records change says so,
+  // and its end toast suggests exporting again. An export in creation order (no sorts) is stable and never warns.
+  let changed = false;
   if (finished) {
     await tx
       .update(exports)
       .set({ rowCount: next.rows, byteCount: next.bytes, updatedAt: sql`now()` })
       .where(eq(exports.id, exportId));
+    if ((selection.sorts?.length ?? 0) > 0) {
+      const moved = await tx.execute(sql`
+        select 1 from records
+        where workspace_id = ${scope.workspaceId}::uuid and object_id = ${held.objectId}::uuid
+          and updated_at > (select created_at from exports where id = ${exportId}::uuid)
+        limit 1
+      `);
+      changed = moved.rows.length > 0;
+    }
   }
-  return { finished, checkpoint: next, counts: { done: page.records.length }, result: { rows: next.rows, exportId } };
+  return {
+    finished,
+    checkpoint: next,
+    counts: { done: page.records.length },
+    result: { rows: next.rows, exportId, ...(changed ? { changedWhileWritten: true } : {}) },
+  };
 }
 
 /** `records.export`: the member's, heavy lane, cancellable, 200 records a batch, read as the member. */

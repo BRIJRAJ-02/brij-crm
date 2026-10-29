@@ -43,6 +43,11 @@ export const tasks = pgTable(
     dueOn: date('due_on'),
     /** At most one assignee; a removed member keeps their tasks (owner decision). */
     assigneeMemberId: uuid('assignee_member_id'),
+    /**
+     * A link of the task's went with its record, removed for good (migration 0125): with none left it stays its
+     * creator's and assignee's, never everyone's as a task made with no links is (late trap #79).
+     */
+    linksPurged: boolean('links_purged').notNull().default(false),
     ...auditColumns(),
     deletedAt: timestamptz('deleted_at'),
     deletedByType: deletedBy.type,

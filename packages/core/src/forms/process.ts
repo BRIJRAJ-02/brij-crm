@@ -20,6 +20,7 @@
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { fitsAttribute, type EngineRefusal, type FormDocument } from '@crm/contracts';
+import { isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue } from '../engine/columns.ts';
 import { insertRecord, updateRecord } from '../engine/records.ts';
@@ -179,6 +180,13 @@ export async function optionsFor(
   return liveOptions(tx, filedSelects);
 }
 
+/** Why an answer filed on a field archived or deleted since stays on the submission only, naming it while it exists. */
+export const fieldGone = (attribute: AttributeDef | undefined): string =>
+  attribute === undefined ? 'Its field was deleted.' : `${attribute.title} was archived.`;
+/** Why an answer filed on a field whose type changed since stays on the submission only. */
+export const fieldChanged = (attribute: AttributeDef): string =>
+  `${attribute.title} no longer takes this kind of answer.`;
+
 /**
  * The answers a version's questions file on live attributes, as each attribute takes them now (no I/O). A booking
  * page's questions (spec 0057) are planned here too.
@@ -194,9 +202,16 @@ export function plan(
   for (const question of document.questions) {
     if (question.filedOn === undefined || !Object.hasOwn(answers, question.key)) continue;
     const attribute = attributes.get(question.filedOn.attributeId);
-    // An answer filed on an attribute archived, deleted or changed since stays on the submission only (AC-551).
-    if (attribute === undefined || attribute.isSystem || isArchivedNow(attribute)) continue;
-    if (!fitsAttribute(question.answerType, attribute.type)) continue;
+    // An answer filed on an attribute archived, deleted or changed since stays on the submission only (AC-551), and
+    // says so (late trap #50): before, it was dropped with no word, and the panel counted it saved on the record.
+    if (attribute === undefined || attribute.isSystem || isArchivedNow(attribute)) {
+      refused.push({ questionId: question.id, message: fieldGone(attribute) });
+      continue;
+    }
+    if (!fitsAttribute(question.answerType, attribute.type)) {
+      refused.push({ questionId: question.id, message: fieldChanged(attribute) });
+      continue;
+    }
     const converted = valueFor(attribute, answers[question.key], options);
     if ('refused' in converted) {
       refused.push({ questionId: question.id, message: converted.refused });
@@ -345,17 +360,70 @@ export function mergedValue(planned: Planned, current: unknown): unknown {
 /** What one record write ended as: its result, the answers it skipped and why, or a refusal no answer explains. */
 type Written<T> =
   | { readonly ok: true; readonly value: T; readonly skipped: readonly EngineRefusal[] }
-  | { readonly ok: false; readonly failure: string };
+  | { readonly ok: false; readonly failure: string; readonly requiredMissing?: readonly string[] };
+
+/**
+ * The sentence a write refused for a required field nobody filled ends as
+ * (the owner, 27 October 2026: "A required field isn't asked by this form"
+ * named nothing, so finding it took a support round trip). `fields` are the
+ * titles the reader of this message may see, filtered by their own access
+ * where the message is read (`submissions.ts`); with none of them it stays
+ * the old sentence, which says what happened without naming a field it
+ * shouldn't.
+ */
+export function requiredFieldFailure(fields: readonly string[]): string {
+  if (fields.length === 0) {
+    return 'A required field isn’t asked by this form, so the record couldn’t be created. Add a question for it and publish.';
+  }
+  const one = fields.length === 1;
+  const list = one ? (fields[0] ?? '') : `${fields.slice(0, -1).join(', ')} and ${fields[fields.length - 1] ?? ''}`;
+  return `${list} ${one ? 'is' : 'are'} required, and no question fills ${one ? 'it' : 'them'}, so the record couldn’t be created. Add ${one ? 'a question' : 'questions'} for ${one ? 'it' : 'them'}, or give the ${one ? 'field a default' : 'fields defaults'}.`;
+}
+
+/**
+ * The sentence for a required field that a required question fills, and that question wasn't answered: only a site's
+ * own form can send that, its HTML copied before the question was added (late trap #55, `checkAnswers`'
+ * `absentNotAsked`), so the fix is on the site, not in the form.
+ */
+export function siteFieldFailure(field: string, question: string): string {
+  return `${field} is filled by “${question}”, which your site’s own form doesn’t ask, so the record couldn’t be created. Add that field to the form on your site; the Install tab has the code.`;
+}
+
+/**
+ * The attributes a `VALUE_REQUIRED` refusal with no attribute could be about:
+ * required fields of the target object that nothing fills and the write never
+ * sent. Ids only, never titles. Which of them a reader may be told is decided
+ * where the message is read (`requiredFieldFailure` in `submissions.ts`), not
+ * here: the sentence is stored and read later by members with less access
+ * than whoever triggered the filing, and the background job runs as the
+ * system, which sees everything (security review, 27 October 2026).
+ */
+export function unfilledRequired(
+  scope: EngineScope,
+  attributes: ReadonlyMap<string, AttributeDef>,
+  sent: ReadonlySet<string>,
+): readonly string[] {
+  const byMember = scope.actor.type === 'member';
+  return [...attributes.values()]
+    .filter(
+      (attribute) =>
+        !isArchivedNow(attribute) && !sent.has(attribute.id) && isUnfillableRequired(attribute, { byMember }),
+    )
+    .map((attribute) => attribute.id);
+}
 
 /**
  * Runs a record write under its own savepoint, dropping each value the
  * engine refuses (naming its attribute) and trying again with the rest
- * (AC-565). A refusal that names no attribute of the write ends it.
+ * (AC-565). A refusal that names no attribute of the write ends it, carrying
+ * out the ids of the required fields it could have been about (`walls`), for
+ * the reader's own view to name.
  */
 async function writeSkipping<T>(
   context: WriteContext,
   values: ReadonlyMap<string, unknown>,
   write: (inner: WriteContext, values: Readonly<Record<string, unknown>>) => Promise<T>,
+  walls: readonly string[] = [],
 ): Promise<Written<T>> {
   const remaining = new Map(values);
   const skipped: EngineRefusal[] = [];
@@ -370,9 +438,8 @@ async function writeSkipping<T>(
       const hidden = first?.code === 'VALUE_REQUIRED' && first.attributeId === undefined;
       return {
         ok: false,
-        failure: hidden
-          ? 'A required field isn’t asked by this form, so the record couldn’t be created. Add a question for it and publish.'
-          : (first?.message ?? 'The record couldn’t be written.'),
+        failure: hidden ? requiredFieldFailure([]) : (first?.message ?? 'The record couldn’t be written.'),
+        ...(hidden && walls.length > 0 ? { requiredMissing: walls } : {}),
       };
     }
     for (const refusal of named) {
@@ -474,6 +541,8 @@ export type Filed =
       readonly failure: string;
       readonly refused: readonly { questionId: string; message: string }[];
       readonly assignment: Assignment;
+      /** The required fields the write could have failed for, by id: the reader's view names the ones they may see. */
+      readonly requiredMissing?: readonly string[];
     };
 
 /** What filing one submission reads: its answers, the form, the mapping to apply and its object, and who writes. */
@@ -577,11 +646,20 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
     if (owner !== undefined && ownerValue !== undefined) {
       values.set(owner.id, owner.isMulti ? [ownerValue] : ownerValue);
     }
-    const written = await writeSkipping(writer, values, (inner, given) =>
-      insertRecord(inner, { objectId, values: given }),
+    const written = await writeSkipping(
+      writer,
+      values,
+      (inner, given) => insertRecord(inner, { objectId, values: given }),
+      unfilledRequired(context.scope, attributes, new Set(values.keys())),
     );
     if (!written.ok) {
-      return { kind: 'failed', failure: written.failure, refused, assignment: notFiled(form, assignment) };
+      return {
+        kind: 'failed',
+        failure: written.failure,
+        refused,
+        assignment: notFiled(form, assignment),
+        ...(written.requiredMissing === undefined ? {} : { requiredMissing: written.requiredMissing }),
+      };
     }
     recordId = written.value.recordId;
     action = 'created';
@@ -892,7 +970,11 @@ export async function settle(
   if (filed.kind === 'failed') {
     await failSubmission(tx, submissionId, filed.failure, {
       assignment: filed.assignment,
-      outcome: { refused: filed.refused, ...extraOutcome },
+      outcome: {
+        refused: filed.refused,
+        ...(filed.requiredMissing === undefined ? {} : { requiredMissing: filed.requiredMissing }),
+        ...extraOutcome,
+      },
     });
     return;
   }

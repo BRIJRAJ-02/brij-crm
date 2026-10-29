@@ -67,7 +67,7 @@ import { questionsProblem } from '@crm/data/forms';
 import { archiveMadeAttributes, createPlannedAttributes, type MadeAttribute } from '../questions/attributes.ts';
 import { strings as questionStrings } from '../questions/strings.ts';
 import { linkPageHref } from '../link-page/nav-strings.ts';
-import { profileHref } from '../settings/nav.ts';
+import { objectSettingsHref, profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { noVideoLinkReason } from './destination.ts';
@@ -104,6 +104,7 @@ import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
+import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
 import { strings as socialsStrings } from './socials-strings.ts';
 
@@ -405,6 +406,42 @@ export function PageEditor({
   const answersObjectName =
     liveObjects.find((object) => object.id === answersObject)?.pluralName ?? choices.objectName ?? '';
   const [isMovingAnswers, setMovingAnswers] = useState(false);
+  // The objects a booking can't file onto, said in the list rather than refused after the pick (crm-f7's booking
+  // walk, 28 Oct 2026): a booking knows the guest by email alone, so the object needs a unique email field to find or
+  // make their record. Read from each object's attributes, which the data layer holds once read; People always has
+  // one. Undefined while they load, when every object is offered and the server still refuses one that can't.
+  const [noEmailMatch, setNoEmailMatch] = useState<ReadonlySet<string> | undefined>(undefined);
+  useEffect(() => {
+    let isCurrent = true;
+    Promise.all(
+      liveObjects.map((object) =>
+        data.attributes
+          .list(slug, object.id)
+          .then((attributes) => ({
+            id: object.id,
+            matches: canMatchVisitor(attributes),
+          }))
+          // Couldn't read: offered, and the server's refusal says why if it can't take bookings.
+          .catch(() => ({ id: object.id, matches: true })),
+      ),
+    ).then(
+      (read) => {
+        if (isCurrent) setNoEmailMatch(new Set(read.flatMap((each) => (each.matches ? [] : [each.id]))));
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug, liveObjects]);
+  // The object chosen, when it can no longer take answers: said above the picker, since it is never disabled there.
+  const brokenAnswersObject =
+    answersObject !== null && noEmailMatch?.has(answersObject) === true
+      ? liveObjects.find((object) => object.id === answersObject)
+      : undefined;
+  const isAnyUnmatched = liveObjects.some(
+    (object) => object.id !== answersObject && noEmailMatch?.has(object.id) === true,
+  );
   // Changing it saves at once, as the forms editor's does: the server clears the filings the new object has no
   // field for, and the page comes back with the questions to file again. The attribute choices are read afresh.
   const moveAnswers = (objectId: string | null) => {
@@ -532,7 +569,8 @@ export function PageEditor({
   // saved at once, and the attributes are archived. A refused save puts the draft's filings back.
   const undoAttributes = (made: readonly MadeAttribute[]) => {
     const unfile = (list: Questions) => [
-      ...made.reduce((each, one) => changeQuestion(each, one.questionId, { filedOn: null }), list),
+      // Undo says the field wasn't wanted: kept off the CRM, so the next Save doesn't make it again.
+      ...made.reduce((each, one) => changeQuestion(each, one.questionId, { filedOn: null, kept: true }), list),
     ];
     const refile = (list: Questions) => [
       ...made.reduce((each, one) => changeQuestion(each, one.questionId, { filedOn: one.attributeId }), list),
@@ -932,7 +970,11 @@ export function PageEditor({
                         )}
                         <FieldGroup
                           label={strings.whoCanBook}
-                          {...(draft.isPrivate ? { hint: strings.linkOnlyHint } : {})}
+                          // Switching a public page to Link only retires the address people already have: said
+                          // before Save, not found out later by a visitor on Page not found (flow walks, B10).
+                          {...(draft.isPrivate
+                            ? { hint: page.isPrivate ? strings.linkOnlyHint : strings.linkOnlyChanging }
+                            : {})}
                         >
                           <SegmentedControl
                             label={strings.whoCanBook}
@@ -1136,6 +1178,23 @@ export function PageEditor({
                           {strings.targetsFailed}
                         </Callout>
                       )}
+                      {brokenAnswersObject !== undefined && (
+                        <Callout
+                          tone="warning"
+                          title={strings.answersObjectBrokenTitle(brokenAnswersObject.pluralName)}
+                          {...(canBuild
+                            ? {
+                                actions: (
+                                  <ButtonLink href={objectSettingsHref(slug, brokenAnswersObject)} icon="plus">
+                                    {strings.answersObjectAddField}
+                                  </ButtonLink>
+                                ),
+                              }
+                            : {})}
+                        >
+                          {canBuild ? strings.answersObjectBroken : strings.answersObjectBrokenAsk}
+                        </Callout>
+                      )}
                       {liveObjects.length > 0 && (
                         <Card
                           title={strings.answersObject}
@@ -1146,11 +1205,18 @@ export function PageEditor({
                         >
                           <Select
                             label={strings.answersObject}
+                            // The card's title already says it (flow walks B6): read, not drawn twice.
+                            isLabelHidden
                             items={liveObjects.map((object) => ({
                               id: object.id,
                               label: object.pluralName,
                               icon: object.icon,
+                              ...(noEmailMatch?.has(object.id) === true && object.id !== answersObject
+                                ? { isDisabled: true, description: strings.answersObjectNoEmail }
+                                : {}),
                             }))}
+                            optionDescription="below"
+                            {...(isAnyUnmatched ? { hint: strings.answersObjectRule } : {})}
                             value={answersObject}
                             isReadOnly={isLocked}
                             isDisabled={isMovingAnswers}

@@ -11,6 +11,12 @@ export const strings = {
   pendingSection: 'Pending invitations',
   otherWaysSection: 'Other ways to join',
   invite: 'Invite people',
+  /** The page's second action and the Invite dialog's fold: what each role lets someone do (owner, 27 October 2026). */
+  roleGuide: 'What each role can do',
+  /** The guide's role switch. */
+  roleGuideRoles: 'Role',
+  /** The guide's list, named by the role it explains: "What the Admin role can do". */
+  rolePowers: (role: string) => `What the ${role} role can do`,
   columns: {
     name: 'Name',
     email: 'Email',
@@ -53,6 +59,11 @@ export const strings = {
   resentUnsent: (email: string) =>
     `The invitation to ${email} is renewed, but its email didn’t go out. Try Resend again.`,
   revoked: (email: string) => `Invitation to ${email} cancelled.`,
+  /** A role change took away what their invitations needed (late trap): they were cancelled, said with the change. */
+  roleInvitationsCancelled: (count: number) =>
+    count === 1
+      ? 'An invitation they sent was cancelled, since their new role can’t send it.'
+      : `${String(count)} invitations they sent were cancelled, since their new role can’t send them.`,
   // The confirms (the owner, 21 October 2026: anything that ends something asks first).
   revokeTitle: (email: string) => `Cancel the invitation to ${email}?`,
   revokeText: 'The link in their email stops working at once.',
@@ -78,9 +89,22 @@ export const strings = {
       counts.calendars > 0
         ? `${String(counts.calendars)} calendar ${counts.calendars === 1 ? 'connection is' : 'connections are'} disconnected.`
         : '',
+      counts.defaults > 0
+        ? `${String(counts.defaults)} ${counts.defaults === 1 ? 'field uses them as its default, and loses it' : 'fields use them as their default, and lose it'}.`
+        : '',
+      counts.invitations > 0
+        ? counts.invitations === 1
+          ? 'An invitation they sent is cancelled. Invite them again from Invite people if you still want them.'
+          : `${String(counts.invitations)} invitations they sent are cancelled. Invite any you still want again from Invite people.`
+        : '',
     ]
       .filter((sentence) => sentence !== '')
       .join(' '),
+  /** The removal's one effect that stops other people's work, apart in a warning (late trap #70). */
+  requiredDefaultsLost: (count: number) =>
+    count === 1
+      ? 'A required field will have no default. Give it one in its object’s settings, or forms and booking pages can’t add records there.'
+      : `${String(count)} required fields will have no default. Give them one in their objects’ settings, or forms and booking pages can’t add records there.`,
   previewFailed: 'We couldn’t check what else this changes. You can still remove them.',
   handTo: 'Hand their open tasks and records to',
   handToHint: 'They move in the background. Leave it empty to keep them as they are.',

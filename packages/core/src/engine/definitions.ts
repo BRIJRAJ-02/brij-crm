@@ -11,7 +11,11 @@ import {
   HUES,
   isReservedSlug,
   OBJECT_ICONS,
+  ANONYMOUS,
+  isUnfillableRequired,
+  OPTION_DEFAULT_TYPES,
   parseAttributeValue,
+  REQUIRED_NEEDS_AN_OPTION,
   type ApiSlugKind,
   type AttributeType,
   type ValidationRuleInput,
@@ -26,6 +30,15 @@ import { ARCHIVED_BY, loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { writeRules } from '../validation/rules.ts';
 import { seedDefaultView } from '../views/seed.ts';
+import {
+  breakageNames,
+  filedBy,
+  isPeopleObject,
+  liveFormsOn,
+  livePagesOn,
+  livePagesFilingToCrm,
+  livePagesWalledBy,
+} from '../forms/dependencies.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
@@ -303,8 +316,16 @@ async function checkDefaultMembers(tx: WorkspaceTx, type: AttributeType, fallbac
   const named: readonly unknown[] = Array.isArray(fallback.value)
     ? (fallback.value as readonly unknown[])
     : [fallback.value];
+  // A member and nothing else: a write refuses any other actor it adds (`checkActors`), so a default naming one
+  // would block every create that leaves the field out.
   const ids = named.flatMap((each) =>
-    typeof each === 'object' && each !== null && 'id' in each && typeof each.id === 'string' && isUuid(each.id)
+    typeof each === 'object' &&
+    each !== null &&
+    'type' in each &&
+    each.type === 'member' &&
+    'id' in each &&
+    typeof each.id === 'string' &&
+    isUuid(each.id)
       ? [each.id.toLowerCase()]
       : [],
   );
@@ -319,6 +340,39 @@ async function checkDefaultMembers(tx: WorkspaceTx, type: AttributeType, fallbac
   if (found.length < unique.length || ids.length < named.length) {
     throw refuseOn('CONFIG_INVALID', 'Pick a member of this workspace as the default.', 'defaultValue');
   }
+}
+
+/**
+ * Refuses a select or status attribute that would be required with nothing to
+ * fill it (the owner, 27 October 2026). Such an attribute makes every create
+ * with nobody at the keyboard fail — a form submission, a booking page's
+ * answers, an import row — long after the field was made, and with the
+ * visitor's whole form already typed in. The caller has already tried to give
+ * it the first option as its default (`firstOptionDefault`); reaching here
+ * means there was no option to take, so there is nothing to fall back on.
+ * Refused on `isRequired`, the switch the writer just flicked.
+ */
+function checkRequiredHasAFallback(type: AttributeType, isRequired: boolean, hasDefault: boolean, options: number) {
+  if (!isRequired || hasDefault || !OPTION_DEFAULT_TYPES.includes(type) || options > 0) return;
+  throw refuseOn('CONFIG_INVALID', REQUIRED_NEEDS_AN_OPTION, 'isRequired');
+}
+
+/**
+ * The default a required select or status attribute is given when it has
+ * none: its first option, exactly as the standard template's Deal Stage
+ * carries one (`defaultFirstOption`, `standard-v1.ts`). Undefined when the
+ * attribute needs no help. Preferred over refusing the write: the owner meant
+ * "every record has a stage", and the first stage is the one they would pick.
+ */
+function firstOptionDefault(
+  type: AttributeType,
+  isRequired: boolean,
+  hasDefault: boolean,
+  firstOptionId: string | undefined,
+): { readonly kind: 'static'; readonly value: string } | undefined {
+  if (!isRequired || hasDefault || !OPTION_DEFAULT_TYPES.includes(type) || firstOptionId === undefined)
+    return undefined;
+  return { kind: 'static', value: firstOptionId };
 }
 
 /** Takes the workspace counters row's lock for the rest of the write: object creates and moves take turns on it. */
@@ -511,7 +565,7 @@ async function earlierAttribute(
 export async function insertAttribute(
   context: WriteContext,
   input: AttributeInput,
-  internal: { readonly reference?: boolean } = {},
+  internal: { readonly reference?: boolean; readonly optionsFollow?: boolean } = {},
 ): Promise<InsertedAttribute> {
   const { tx, scope } = context;
   const parent = parentOf(input);
@@ -527,6 +581,10 @@ export async function insertAttribute(
   const config = parseConfig(input.type, input.config);
   const defaultValue = parseDefault(input.type, input.isMulti ?? false, input.defaultValue);
   const options = checkInitialOptions(scope, input);
+  // Required with nothing to fall back on: refused here rather than at every submission (27 October 2026). The
+  // standard template writes its options in a second step and sets its own default, and says so (`optionsFollow`).
+  const optionCount = options.length + (internal.optionsFollow === true ? 1 : 0);
+  checkRequiredHasAFallback(input.type, input.isRequired ?? false, defaultValue !== null, optionCount);
   // The parent's row lock first: a replay is found under it, before the room check would count it twice.
   await lockAttributeParent(tx, parent);
   const id = input.id?.toLowerCase();
@@ -567,7 +625,30 @@ export async function insertAttribute(
       })
       .returning({ id: attributes.id });
     if (row === undefined) throw new Error('The attribute was not created.');
-    if (options.length > 0) await insertInitialOptions(tx, scope, row.id, input.type, options);
+    const optionIds = options.length === 0 ? [] : await insertInitialOptions(tx, scope, row.id, input.type, options);
+    // A required select or status starts on its first option, as the template's Deal Stage does.
+    const fallback = firstOptionDefault(input.type, input.isRequired ?? false, defaultValue !== null, optionIds[0]);
+    if (fallback !== undefined) {
+      await tx.update(attributes).set({ defaultValue: fallback }).where(eq(attributes.id, row.id));
+    }
+    // A field made required with nothing to fill it breaks a live form exactly as turning Required on does
+    // (security review, 27 October 2026): the same refusal, one code path earlier.
+    if (
+      fallback === undefined &&
+      'objectId' in parent &&
+      isUnfillableRequired(
+        { type: input.type, isRequired: input.isRequired ?? false, isSystem: false, defaultValue },
+        ANONYMOUS,
+      )
+    ) {
+      await checkLiveFormsFill(tx, scope.access, {
+        id: row.id,
+        objectId: parent.objectId,
+        title: input.title.trim(),
+        apiSlug: input.apiSlug,
+        type: input.type,
+      });
+    }
     // Its first rules (spec 0013): the row is new to this write, so nobody else holds it yet.
     const ruled =
       input.rules === undefined || input.rules.length === 0
@@ -625,21 +706,25 @@ async function insertInitialOptions(
   attributeId: string,
   type: AttributeType,
   options: readonly InitialOption[],
-): Promise<void> {
+): Promise<readonly string[]> {
   try {
-    await tx.insert(attributeOptions).values(
-      options.map((option, position) => ({
-        ...(option.id === undefined ? {} : { id: option.id.toLowerCase() }),
-        workspaceId: scope.workspaceId,
-        attributeId,
-        label: option.label.trim(),
-        hue: option.hue,
-        position,
-        outcome: type === 'status' ? (option.outcome ?? 'open') : null,
-        targetTimeInStage: option.targetTimeInStage ?? null,
-        ...audit(scope),
-      })),
-    );
+    const made = await tx
+      .insert(attributeOptions)
+      .values(
+        options.map((option, position) => ({
+          ...(option.id === undefined ? {} : { id: option.id.toLowerCase() }),
+          workspaceId: scope.workspaceId,
+          attributeId,
+          label: option.label.trim(),
+          hue: option.hue,
+          position,
+          outcome: type === 'status' ? (option.outcome ?? 'open') : null,
+          targetTimeInStage: option.targetTimeInStage ?? null,
+          ...audit(scope),
+        })),
+      )
+      .returning({ id: attributeOptions.id, position: attributeOptions.position });
+    return [...made].sort((a, b) => a.position - b.position).map((option) => option.id);
   } catch (error) {
     const pg = postgresError(error);
     if (pg?.code === '23505' && pg.constraint === 'attribute_options_pkey') {
@@ -791,6 +876,18 @@ async function lockWithPair(tx: WorkspaceTx, attributeId: string): Promise<void>
     .for('update');
 }
 
+/** The first live option of a select or status attribute, in its order, or undefined (none, or another type). */
+async function firstLiveOption(tx: WorkspaceTx, attribute: AttributeDef): Promise<string | undefined> {
+  if (!OPTION_DEFAULT_TYPES.includes(attribute.type)) return undefined;
+  const [option] = await tx
+    .select({ id: attributeOptions.id })
+    .from(attributeOptions)
+    .where(and(eq(attributeOptions.attributeId, attribute.id), isNull(attributeOptions.archivedAt)))
+    .orderBy(asc(attributeOptions.position), asc(attributeOptions.id))
+    .limit(1);
+  return option?.id;
+}
+
 /** Changes an attribute's title, description, required, unique, settings or default (AC-10, AC-11). */
 export async function updateAttribute(
   scope: EngineScope,
@@ -828,9 +925,30 @@ export async function updateAttribute(
           ? undefined
           : parseDefault(attribute.type, attribute.isMulti, input.defaultValue);
       if (defaultValue !== undefined) await checkDefaultMembers(tx, attribute.type, defaultValue);
+      // Turning Required on, or clearing the default of a required field, must leave something to fill it
+      // (27 October 2026). An attribute already in that state is left exactly as it is: no edit of its title
+      // refuses, and no write silently changes anyone's data.
+      const required = input.isRequired ?? attribute.isRequired;
+      const stored = defaultValue === undefined ? attribute.defaultValue : defaultValue;
+      // A wall for a visitor now and not before: Required turned on, or the default cleared or made Current user,
+      // which fills nothing for a visitor (late trap #10: a Current user default used to pass as a fill).
+      // Clearing a default that gave nothing a visitor could use (a kind the type no longer allows) still counts, so
+      // a select or status is still given its first option.
+      const becomingATrap =
+        isUnfillableRequired({ ...attribute, isRequired: required, defaultValue: stored ?? null }, ANONYMOUS) &&
+        (!isUnfillableRequired(attribute, ANONYMOUS) ||
+          (defaultValue === null && attribute.defaultValue !== null && attribute.defaultValue !== undefined));
+      const firstOption = becomingATrap ? await firstLiveOption(tx, attribute) : undefined;
+      if (becomingATrap) checkRequiredHasAFallback(attribute.type, true, false, firstOption === undefined ? 0 : 1);
+      const fallback = firstOptionDefault(attribute.type, becomingATrap, false, firstOption);
+      // Still a wall after the fallback (a text field, say): no live form could make a record any more.
+      if (becomingATrap && fallback === undefined) await checkLiveFormsFill(tx, context.scope.access, attribute);
       const turningOn = input.isUnique === true && !attribute.isUnique && attribute.archivedAt === null;
       const turningOff = input.isUnique === false && attribute.isUnique;
       if (turningOn) await fillUniqueKeys(tx, attribute, context.scope.access);
+      // Unique off is archiving by another name for a live form or page matching on it (late trap #13): the match
+      // finds nothing, and every submission adds a new record.
+      if (turningOff) await checkNotAMatch(tx, context.scope.access, [attribute], 'unique');
       if (turningOff) await clearUniqueKeys(tx, attribute.id);
       // Its rules (spec 0013), replaced as sent, under the row lock `editable` took.
       const ruled =
@@ -847,7 +965,7 @@ export async function updateAttribute(
           ...(input.isRequired === undefined ? {} : { isRequired: input.isRequired }),
           ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
           ...(input.config === undefined ? {} : { config: parseConfig(attribute.type, input.config) }),
-          ...(defaultValue === undefined ? {} : { defaultValue }),
+          ...(fallback !== undefined ? { defaultValue: fallback } : defaultValue === undefined ? {} : { defaultValue }),
           ...touched(scope),
         })
         .where(eq(attributes.id, attribute.id));
@@ -910,6 +1028,7 @@ export async function archiveAttribute(
         throw refuse('CONFIG_INVALID', "A record's name attribute can't be archived.", attribute.id);
       const far = await farEnd(tx, attribute);
       const ends = far === undefined ? [attribute] : [attribute, far];
+      await checkNotAMatch(tx, context.scope.access, ends);
       const live = ends.filter((end) => end.archivedAt === null);
       for (const end of live) if (end.isUnique) await clearUniqueKeys(tx, end.id);
       if (live.length > 0) {
@@ -929,6 +1048,142 @@ export async function archiveAttribute(
     hooks,
   );
   return result;
+}
+
+/**
+ * How a count of live forms reads when none of them may be named.
+ */
+const FORMS = (count: number) => `${String(count)} live forms`;
+const A_FORM = 'A live form';
+
+/**
+ * Refuses archiving the attribute a live form matches its submissions on, or
+ * the one a live booking page finds its visitor by (27 October 2026). Both
+ * keep working to look at: nothing in the form or the page changes, and every
+ * question still files. But the match answer is dropped with the archived
+ * attribute (`plan`), so `matchKey` finds nothing and every submission takes
+ * the create branch — a new record for the same person, every time, with
+ * nobody told; a booking page's `answersRecord` gives up and the answers go
+ * unsaved. Refused here, which is the moment someone can still choose
+ * otherwise. A form the caller may not see is counted, never named.
+ */
+async function checkNotAMatch(
+  tx: WorkspaceTx,
+  access: Access,
+  ends: readonly AttributeDef[],
+  change: 'archive' | 'unique' = 'archive',
+): Promise<void> {
+  for (const attribute of ends) {
+    if (attribute.objectId === null || attribute.archivedAt !== null) continue;
+    const live = await liveFormsOn(tx, access, attribute.objectId);
+    const matching = live.filter((form) => form.document.targets.main?.matchAttributeId === attribute.id);
+    // What a booking finds its guest by (security review, 29 Oct 2026): every page that files to the CRM finds the
+    // Person by People's Email addresses (`matchVisitor`); a page onto another object finds its record there by that
+    // object's first unique email (`visitorMatchOf`), worked out afresh at every booking.
+    const isPeople = await isPeopleObject(tx, attribute.objectId);
+    const pages = isPeople
+      ? attribute.apiSlug === 'email_addresses'
+        ? await livePagesFilingToCrm(tx)
+        : []
+      : attribute.isUnique && attribute.type === 'email' && (await isFirstUniqueEmail(tx, attribute))
+        ? await livePagesOn(tx, attribute.objectId, false)
+        : [];
+    const count = matching.length + pages.length;
+    if (count === 0) continue;
+    const named = [
+      ...matching.flatMap((form) => (form.name === undefined ? [] : [form.name])),
+      ...pages.flatMap((page) => (page.title === undefined ? [] : [page.title])),
+    ];
+    const subject = breakageNames(named, count - named.length, A_FORM, FORMS);
+    const message = `${attribute.title} is how ${subject} ${count === 1 ? 'finds' : 'find'} the record a submission belongs to. ${change === 'archive' ? 'Archiving it' : 'Turning Unique off'} would make every submission add a new record instead. Point ${count === 1 ? 'that one' : 'those'} at another field first, or pause ${count === 1 ? 'it' : 'them'}.`;
+    // Refused on the switch the writer flicked: the attribute row for an archive, Unique for the other.
+    throw change === 'archive'
+      ? refuse('CONFIG_INVALID', message, attribute.id)
+      : refuseOn('CONFIG_INVALID', message, 'isUnique');
+  }
+}
+
+/** Whether this is the object's first unique email, the one a booking page matches its visitor on. */
+async function isFirstUniqueEmail(tx: WorkspaceTx, attribute: AttributeDef): Promise<boolean> {
+  if (attribute.objectId === null) return false;
+  const [first] = await tx
+    .select({ id: attributes.id })
+    .from(attributes)
+    .where(
+      and(
+        eq(attributes.objectId, attribute.objectId),
+        eq(attributes.isUnique, true),
+        eq(attributes.type, 'email'),
+        isNull(attributes.archivedAt),
+      ),
+    )
+    .orderBy(asc(attributes.position), asc(attributes.createdAt), asc(attributes.id))
+    .limit(1);
+  return first?.id === attribute.id;
+}
+
+/**
+ * Refuses making an attribute required when a live form has no question for
+ * it (27 October 2026). The form's own publish check covers this before it
+ * goes live; this is the other direction, where the form was fine and the
+ * field changed under it. Run wherever a field can become a wall: made
+ * required, turned required, or restored into that state. A form the caller
+ * may not see is counted, never named.
+ */
+async function checkLiveFormsFill(
+  tx: WorkspaceTx,
+  access: Access,
+  attribute: {
+    readonly id: string;
+    readonly objectId: string | null;
+    readonly title: string;
+    readonly apiSlug: string;
+    readonly type: string;
+  },
+): Promise<void> {
+  if (attribute.objectId === null) return;
+  await checkLivePagesFill(tx, attribute);
+  const live = await liveFormsOn(tx, access, attribute.objectId);
+  const broken = live.filter((form) => !filedBy(form.document).has(attribute.id));
+  if (broken.length === 0) return;
+  const named = broken.flatMap((form) => (form.name === undefined ? [] : [form.name]));
+  const subject = breakageNames(named, broken.length - named.length, A_FORM, FORMS);
+  throw refuseOn(
+    'CONFIG_INVALID',
+    `${subject} ${broken.length === 1 ? 'is live and has no question for' : 'are live and have no question for'} ${attribute.title}, so every submission would fail. Add ${broken.length === 1 ? 'a question' : 'questions'} for it, give it a default, or pause ${broken.length === 1 ? 'that form' : 'those forms'} first.`,
+    'isRequired',
+  );
+}
+
+const PAGES = (count: number) => `${String(count)} live booking pages`;
+const A_PAGE = 'A live booking page';
+
+/**
+ * Refuses making an attribute a wall for the live booking pages that make records on its object (late trap #11):
+ * each booking would still go through, and quietly leave the guest out of the CRM. The forms check's twin, run
+ * from it, so every road to a wall checks both. Pages are named: a live page's title is on its public address for
+ * anyone, and the caller holds `schema.manage` (as `checkNotAMatch` names them).
+ */
+async function checkLivePagesFill(
+  tx: WorkspaceTx,
+  attribute: {
+    readonly id: string;
+    readonly objectId: string | null;
+    readonly title: string;
+    readonly apiSlug: string;
+    readonly type: string;
+  },
+): Promise<void> {
+  const pages = await livePagesWalledBy(tx, attribute);
+  if (pages.length === 0) return;
+  const one = pages.length === 1;
+  const named = pages.flatMap((page) => (page.title === undefined ? [] : [page.title]));
+  const subject = breakageNames(named, pages.length - named.length, A_PAGE, PAGES);
+  throw refuseOn(
+    'CONFIG_INVALID',
+    `${subject} ${one ? 'is live and makes' : 'are live and make'} records here at bookings, with nothing for ${attribute.title}, so each guest would be left out of the CRM. Give it a default, or pause ${one ? 'that page' : 'those pages'} first.`,
+    'isRequired',
+  );
 }
 
 /** The plural name of an object, for "Restore <Plural> first." */
@@ -974,6 +1229,13 @@ export async function restoreAttribute(
       const far = await farEnd(tx, attribute);
       const ends = far === undefined ? [attribute] : [attribute, far];
       const archived = ends.filter((end) => end.archivedAt !== null);
+      // Archive, submissions pass, restore, submissions fail: a required end with nothing to fill it is a wall
+      // again the moment it comes back (security review, 27 October 2026).
+      for (const end of archived) {
+        if (isUnfillableRequired({ ...end, defaultValue: end.defaultValue }, ANONYMOUS)) {
+          await checkLiveFormsFill(tx, context.scope.access, end);
+        }
+      }
       for (const end of archived) if (end.isUnique) await fillUniqueKeys(tx, end, context.scope.access);
       if (archived.length > 0) {
         await tx
@@ -1078,6 +1340,25 @@ export async function updateObject(scope: EngineScope, input: ObjectUpdate, hook
   );
 }
 
+/**
+ * Refuses archiving an object a form is taking submissions onto (27 October
+ * 2026). An archived object takes no new records (`liveObject`), so every
+ * submission would fail on a sentence written for a member looking at
+ * settings — "That object is archived. Restore it first." — shown to a
+ * visitor who had just filled the form in. Refused here, naming the forms,
+ * which is the moment someone can still pause them instead.
+ */
+async function checkNoLiveForms(tx: WorkspaceTx, access: Access, objectId: string): Promise<void> {
+  const live = await liveFormsOn(tx, access, objectId);
+  if (live.length === 0) return;
+  const named = live.flatMap((form) => (form.name === undefined ? [] : [form.name]));
+  const subject = breakageNames(named, live.length - named.length, A_FORM, FORMS);
+  throw refuse(
+    'CONFIG_INVALID',
+    `${subject} ${live.length === 1 ? 'is' : 'are'} live and files submissions here, and an archived object takes no new records. Pause ${live.length === 1 ? 'that form' : 'those forms'} first, or send ${live.length === 1 ? 'it' : 'them'} to another object.`,
+  );
+}
+
 /** Archives or restores an object. Its records stay; an archived object takes no new records. */
 export async function setObjectArchived(
   scope: EngineScope,
@@ -1092,6 +1373,7 @@ export async function setObjectArchived(
   await runWrite(
     scope,
     async ({ tx, ...context }) => {
+      if (input.archived) await checkNoLiveForms(tx, context.scope.access, input.objectId.toLowerCase());
       const updated = await tx
         .update(objects)
         .set({ archivedAt: input.archived ? sql`coalesce(${objects.archivedAt}, now())` : null, ...touched(scope) })

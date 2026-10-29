@@ -36,13 +36,13 @@ import {
   type TableColumn,
 } from '@crm/ui';
 // eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
-import { StatusDot } from '@crm/ui';
+import { formatDate, StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
-import { AnswerList, answerText } from '../questions/AnswerList.tsx';
-import { answerFiling } from './answer-filing.ts';
+import { AnswerList, answerText, holdsFile } from '../questions/AnswerList.tsx';
+import { answerFiling, notSavedReasons } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
@@ -187,18 +187,30 @@ export function SubmissionsTab({
     );
   };
 
+  /**
+   * Not spam and Mark as spam by the row's own state: a submission the bot
+   * checks held in Needs review is settled with `resolve` (the server refuses
+   * `release` for it, and `markSpam` would lose who settled it), a spam one
+   * with `release`.
+   */
+  const settleOne = (submissionId: string, kind: 'release' | 'spam') => {
+    const held = rows.find((submission) => submission.id === submissionId)?.state === 'needs_review';
+    if (held) return data.submissions.resolve(slug, submissionId, kind === 'release' ? 'not_spam' : 'spam');
+    return kind === 'release'
+      ? data.submissions.release(slug, submissionId)
+      : data.submissions.markSpam(slug, submissionId);
+  };
+
   const act = (kind: 'release' | 'spam' | 'retry' | 'delete', submissionId: string) => {
     if (busy !== undefined) return;
     setBusy(kind);
     if (kind === 'delete') setDeleteFailure(undefined);
     const done =
-      kind === 'release'
-        ? data.submissions.release(slug, submissionId)
-        : kind === 'spam'
-          ? data.submissions.markSpam(slug, submissionId)
-          : kind === 'retry'
-            ? data.submissions.retry(slug, submissionId)
-            : data.submissions.delete(slug, submissionId);
+      kind === 'release' || kind === 'spam'
+        ? settleOne(submissionId, kind)
+        : kind === 'retry'
+          ? data.submissions.retry(slug, submissionId)
+          : data.submissions.delete(slug, submissionId);
     const said = {
       release: strings.released,
       spam: strings.markedSpam,
@@ -281,7 +293,7 @@ export function SubmissionsTab({
     const step = (index: number): Promise<void> => {
       const id = ids[index];
       if (id === undefined) return Promise.resolve();
-      const call = kind === 'spam' ? data.submissions.markSpam(slug, id) : data.submissions.release(slug, id);
+      const call = settleOne(id, kind);
       return call.then(() => {
         done += 1;
         setBulk({ label, value: Math.round((done / ids.length) * 100) });
@@ -596,7 +608,7 @@ export function SubmissionsTab({
                 ),
                 footer: (
                   <>
-                    {open.state === 'spam' && (
+                    {(open.state === 'spam' || open.state === 'needs_review') && (
                       <Button variant="primary" isPending={busy === 'release'} onPress={() => act('release', open.id)}>
                         {strings.release}
                       </Button>
@@ -725,12 +737,33 @@ function SubmissionDetail({
   readonly isFiling: boolean;
 }) {
   const source = cameFromOf(submission);
-  const filing = answerFiling(submission.answers, submission.crm, isFiling);
+  const filing = answerFiling(submission.answers, submission.crm, isFiling, submission.refused);
+  const reasons = submission.crm.state === 'linked' ? notSavedReasons(submission.answers, submission.refused) : [];
   return (
     <>
       {submission.failure !== undefined && (
         <Callout tone="danger" title={strings.failure}>
           {submission.failure}
+        </Callout>
+      )}
+      {submission.filesRemovedOn !== undefined && submission.answers.some(holdsFile) && (
+        // Its files are kept so a real one can be released with them (late trap #52), but a bot may have sent them.
+        <Callout tone="warning" title={strings.spamFilesTitle}>
+          {strings.spamFiles(formatDate(submission.filesRemovedOn, navigator.languages[0] ?? 'en-GB'))}
+        </Callout>
+      )}
+      {reasons.length > 0 && (
+        // What filing left off the record, and why: the answers stay here, so nothing is lost, but the record lacks them.
+        <Callout tone="warning" title={strings.notSavedTitle(submission.refused.length)}>
+          <DescriptionList
+            layout="stacked"
+            items={reasons.map((reason) => ({
+              id: reason.message,
+              term: strings.questionList(reason.labels),
+              description: reason.message,
+            }))}
+          />
+          <p>{strings.notSavedNext}</p>
         </Callout>
       )}
       <FieldGroup

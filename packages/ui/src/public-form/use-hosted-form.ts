@@ -54,6 +54,11 @@ export interface HostedFormSettings {
   readonly onUpload?: HostedUpload | undefined;
   readonly onRemoveUpload?: HostedRemoveUpload | undefined;
   readonly now: () => number;
+  /**
+   * Reads the form again and draws its new version in place, keeping the answers given by question key; answers
+   * whether it could. Asked when a refusal names a question this page never drew (late trap #18).
+   */
+  readonly onStale?: (() => Promise<boolean>) | undefined;
   /** Told the keys a refusal named, before their errors show: a step layout goes to the first one's step. */
   readonly onRefused?: (keys: readonly string[]) => void;
 }
@@ -180,6 +185,7 @@ export function useHostedForm({
   onRedirect,
   onUpload,
   onRemoveUpload,
+  onStale,
   now,
   onRefused,
 }: HostedFormSettings): {
@@ -350,6 +356,26 @@ export function useHostedForm({
           } else thank(outcome.next.text);
           return;
         case 'invalid':
+          // A question this page never drew (late trap #18): the form was published again more than a day after it
+          // loaded. Nothing on the page could be marked, so it says so rather than re-enabling the button silently.
+          if (Object.keys(outcome.fields).some((key) => !form.questions.some((question) => question.key === key))) {
+            if (onStale === undefined) {
+              setAlert(words.changed);
+              return;
+            }
+            setSending(true);
+            void onStale().then(
+              (isNew) => {
+                setSending(false);
+                setAlert(isNew ? words.updated : words.changed);
+              },
+              () => {
+                setSending(false);
+                setAlert(words.changed);
+              },
+            );
+            return;
+          }
           setSubmitted(true);
           onRefused?.(Object.keys(outcome.fields));
           show(outcome.fields, form.questions);

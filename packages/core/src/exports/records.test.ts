@@ -8,7 +8,7 @@ import { afterAll, describe, expect, inject, it } from 'vitest';
 import type { RuleSource } from '../access/door.ts';
 import { NO_RULES, type AccessRules } from '../access/policy.ts';
 import { newId } from '../engine/ids.ts';
-import { createRecord } from '../engine/records.ts';
+import { createRecord, setRecordValues } from '../engine/records.ts';
 import { exportFile, exportPart } from '../forms/export.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { rescope } from '../testing.ts';
@@ -102,6 +102,40 @@ describe('records exports', () => {
     // Nobody else reads it.
     expect(await refusalOf(getRecordsExport(w.owner, { exportId: started.id }))).toMatchObject({ code: 'NOT_FOUND' });
     expect(await refusalOf(exportFile(w.owner, { exportId: started.id }))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('says a sorted export saw records change while it was written, and an unsorted one never (late trap #40)', async () => {
+    const w = await world();
+    const ada = await w.person('Ada', 'ada@example.com', 'Analyst');
+    await w.person('Bob', 'bob@example.com', 'Designer');
+    const resultOf = async (jobId: string) =>
+      (
+        await db.withWorkspace(w.workspaceId, (tx) =>
+          tx.execute<{ result: Record<string, unknown> | null }>(
+            sql`select result from jobs where id = ${jobId}::uuid`,
+          ),
+        )
+      ).rows[0]?.result;
+    const start = (sorted: boolean) =>
+      startRecordsExport(w.owner, registry, {
+        id: newId(),
+        objectId: w.people,
+        attributeIds: [w.attribute('job_title')],
+        ...(sorted ? { sorts: [{ attributeId: w.attribute('job_title'), direction: 'ascending' as const }] } : {}),
+        timeZone: 'UTC',
+      });
+    const sorted = await start(true);
+    const plain = await start(false);
+    // A record's sorted value changes after the exports started, before they are written.
+    await setRecordValues(w.owner, {
+      recordId: ada.recordId,
+      values: { [w.attribute('job_title')]: { value: 'Zoologist' } },
+    });
+    const run = runnerFor(registry);
+    expect((await drive(run, w.workspaceId, sorted.jobId)).at(-1)).toBe('succeeded');
+    expect((await drive(run, w.workspaceId, plain.jobId)).at(-1)).toBe('succeeded');
+    expect(await resultOf(sorted.jobId)).toMatchObject({ changedWhileWritten: true });
+    expect(await resultOf(plain.jobId)).not.toHaveProperty('changedWhileWritten');
   });
 
   it('refuses a view past the limit with its count, and an object the member can’t see', async () => {

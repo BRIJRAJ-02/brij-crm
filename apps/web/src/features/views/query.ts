@@ -75,6 +75,44 @@ export function farAttributesFrom(
   };
 }
 
+/**
+ * The far attributes as the server judges them, for a question asked before they load (late trap #45): a through
+ * condition whose far object is still loading is kept, unchecked, rather than dropped, so the first rows are the
+ * view's own, never every record. The server checks every condition through the access door anyway.
+ */
+export function farAttributesUnchecked(
+  attributes: readonly AttributeDefinition[],
+  loaded: (objectId: string) => readonly AttributeDefinition[] | undefined = () => undefined,
+): FarAttributes {
+  const loading = farAttributesFrom(attributes, loaded);
+  return (relation) => {
+    const far = loading(relation);
+    return far === 'pending' ? 'unchecked' : far;
+  };
+}
+
+/**
+ * The objects a query's through conditions lead to first, each once: what the page reads before its first rows, so
+ * a condition on a far field the reader can't use drops out before it runs rather than failing once (late trap #45).
+ */
+export function throughTargets(query: DraftQuery, attributes: readonly AttributeDefinition[]): readonly string[] {
+  const found = new Set<string>();
+  const walk = (group: NonNullable<DraftQuery['filter']>): void => {
+    for (const item of group.conditions) {
+      if ('conditions' in item) {
+        walk(item);
+        continue;
+      }
+      if (item.operator !== 'through') continue;
+      const first = attributes.find((attribute) => attribute.id === item.path[0]);
+      const target = first === undefined ? undefined : relationTarget(first);
+      if (target !== undefined) found.add(target);
+    }
+  };
+  if (query.filter !== undefined) walk(query.filter);
+  return [...found];
+}
+
 /** What runs for `query` on the object's attributes today (archived and unknown ones left out). */
 export function runningQuery(
   query: DraftQuery,

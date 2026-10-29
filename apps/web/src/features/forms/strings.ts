@@ -80,6 +80,10 @@ export const strings = {
   tabInstall: 'Install',
   tabSubmissions: 'Submissions',
   published: (version: number) => `Published version ${String(version)}.`,
+  madeUnique: (field: string, objectName: string) => `${field} is now unique on ${objectName}: one record per email.`,
+  viewField: 'View field',
+  willMakeUnique: (field: string, objectName: string) =>
+    `Publishing makes ${field} unique on ${objectName}: one record per email. Submissions, imports and other forms then update that record instead of adding another.`,
   changedBy: (name: string) => `${name} changed this form.`,
   someoneChanged: 'Someone else changed this form.',
   loadTheirs: 'Load their version',
@@ -132,12 +136,12 @@ export const strings = {
   // Settings tab
   nameHint: 'Only your team sees it.',
   nameRequired: 'Give the form a name.',
-  addressChanged: 'Address changed. The old link no longer works.',
+  addressChanged: 'Address changed. Old links still open the form.',
   draftNameText: 'Only your team sees it. The address comes with the first publish.',
   headline: 'Headline',
   headlineDefault: 'Fill this in and we will come back to you',
   subheadingOptional: 'Subheading',
-  addressChangeWarning: 'Once saved, the old link stops working.',
+  addressChangeWarning: 'Links with the old address keep working.',
   buttonText: 'Button text',
   wordsTitle: 'Text',
   afterTitle: 'After sending',
@@ -154,6 +158,22 @@ export const strings = {
   pickBookingPage: 'Pick a booking page',
   pageItem: (title: string, minutes: number) => `${title} · ${String(minutes)} min`,
   pageNotUsable: 'Paused, or not yours to use: pick another',
+  pagePausedTitle: (title: string) => `${title} is paused`,
+  pagePaused: (when: { readonly hostLeft: boolean; readonly canResume: boolean; readonly canPick: boolean }) =>
+    [
+      when.hostLeft
+        ? 'Its last host left the workspace, so visitors see your message instead of booking a meeting.'
+        : 'Visitors see your message instead of booking a meeting.',
+      when.canResume ? (when.hostLeft ? 'Give it a host, then resume it' : 'Resume it') : 'Ask its owner to resume it',
+    ].join(' ') + (when.canPick ? ', or pick another page.' : '.'),
+  pageGoneTitle: 'Its booking page was deleted',
+  pageGone: (canPick: boolean) =>
+    `Visitors see your message instead of booking a meeting.${canPick ? ' Pick another page.' : ''}`,
+  afterPagePausedTitle: (title: string) => `Visitors can’t book: ${title} is paused`,
+  afterPageGoneTitle: 'Visitors can’t book: the booking page was deleted',
+  afterPageText: 'They see the form’s message instead of booking a meeting.',
+  afterPageFix: 'Change where it sends',
+  openPage: 'Open page',
   noBookingPages: 'No live booking pages',
   keepsMessage: 'Visitors see your message until then.',
   keepsWebPage: 'Visitors go to your web page until then.',
@@ -171,6 +191,19 @@ export const strings = {
   mappingQuestion: 'Question',
   mappingSavedAs: 'Saved as',
   retargetFailed: 'That didn’t change where submissions go.',
+  retargetTitle: 'Change which object submissions are saved to?',
+  retargetOffTitle: 'Stop saving submissions to the CRM?',
+  retargetText: (filed: number, from: string, to: string) =>
+    `${count(filed, 'question is', 'questions are')} saved to ${from} fields. On ${to}, only questions whose label matches a field stay saved; the rest are kept with the submission only.`,
+  retargetOffText: (filed: number, from: string) =>
+    `${count(filed, 'question is', 'questions are')} saved to ${from} fields. Submissions will make no record, and every answer is kept with the submission only.`,
+  thisObject: 'this object',
+  savingWaits: (objectName: string) =>
+    `Changes here go live when you publish. Until then, submissions are still saved to ${objectName}.`,
+  savingWaitsKeptOnly:
+    'Changes here go live when you publish. Until then, submissions are still kept with the form only.',
+  retargetAction: 'Change object',
+  retargetOffAction: 'Stop saving',
   filedOn: (object: string, attribute: string) => `${object} › ${attribute}`,
   keptOnly: 'Kept with the submission only',
   owner: 'Owner',
@@ -413,6 +446,19 @@ export const strings = {
   deleteSubmissionAction: 'Delete submission',
   /** Marks the answers not saved on the record, when some were. */
   notSavedMark: 'Not saved',
+  /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
+  spamFilesTitle: 'Our spam check caught this',
+  spamFiles: (day: string) =>
+    `Open its files only if you trust the sender. They’re removed on ${day}. Choose Not spam to keep them.`,
+  /** Over the answers filing left off the record, each with why (late trap #50). */
+  notSavedTitle: (count: number) =>
+    count === 1 ? 'One answer wasn’t saved on the record' : `${String(count)} answers weren’t saved on the record`,
+  /** Several questions' labels as one line ("Job title and Budget"), in English as the rest of the copy is. */
+  questionList: (labels: readonly string[]) =>
+    new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(labels),
+  /** The way forward under them: put the field back or file the question elsewhere, then file again. */
+  notSavedNext:
+    'To save them, restore the field or save the question to another one, then sync earlier submissions. Or copy the answer onto the record.',
   /** After Answers, once for the section: what went to the CRM. */
   answersKeptOnly: 'Not added to the CRM',
   answersNotInCrm: 'Not in the CRM',

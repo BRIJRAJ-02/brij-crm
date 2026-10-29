@@ -4,6 +4,9 @@
 /** What the toast says when an export's file is ready, and its action. */
 export const exportToast = {
   ready: (fileName: string) => `${fileName} is ready`,
+  /** Records changed while a sorted export was written (late trap #40): a row may be missing or twice. */
+  readyChanged: (fileName: string) =>
+    `${fileName} is ready, but records changed as it was written; export again for an exact copy.`,
   download: 'Download',
 } as const;
 

@@ -26,6 +26,11 @@ export interface BoardPlan {
   readonly cardFields: readonly AttributeDefinition[];
   /** Whether settings came from the view (false: the defaults, this visit, AC-492). */
   readonly isStored: boolean;
+  /**
+   * The view names a grouping field this reader can't group by (hidden from them, gone, or no longer groupable), so
+   * the defaults stand in: said on the board, never quietly (late trap #29).
+   */
+  readonly isStandIn: boolean;
 }
 
 /** What a board view shows: its board, or why it can't. */
@@ -34,7 +39,7 @@ export type BoardOutcome =
   /** The object has no status or single select attribute (AC-493). */
   | { readonly kind: 'nothing-to-group' }
   /** The grouping attribute was archived (AC-506): pick another. */
-  | { readonly kind: 'group-archived'; readonly title: string }
+  | { readonly kind: 'group-archived'; readonly id: string; readonly title: string }
   /** More than 50 live options (AC-494). */
   | { readonly kind: 'too-many'; readonly title: string; readonly count: number };
 
@@ -47,7 +52,7 @@ export type BoardOutcome =
 export function planBoard(attributes: readonly AttributeDefinition[], stored: BoardSettings | undefined): BoardOutcome {
   const byId = new Map(attributes.map((attribute) => [attribute.id, attribute]));
   const storedGroup = stored === undefined ? undefined : byId.get(stored.groupByAttributeId);
-  if (storedGroup?.isArchived === true) return { kind: 'group-archived', title: storedGroup.title };
+  if (storedGroup?.isArchived === true) return { kind: 'group-archived', id: storedGroup.id, title: storedGroup.title };
   const isStored = storedGroup !== undefined && isGroupable(storedGroup);
   const settings = isStored ? stored : boardDefaults(attributes);
   if (settings === undefined) return { kind: 'nothing-to-group' };
@@ -68,5 +73,6 @@ export function planBoard(attributes: readonly AttributeDefinition[], stored: Bo
     archivedIds: options.filter((option) => option.isArchived).map((option) => option.id),
     cardFields,
     isStored,
+    isStandIn: stored !== undefined && !isStored,
   };
 }

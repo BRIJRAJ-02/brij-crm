@@ -29,12 +29,14 @@ export const strings = {
   notFiledShort: 'Not filed',
   willCreate: (title: string, objectName: string) => `Creates “${title}” on ${objectName}`,
   willCreateShort: (title: string) => `Creates “${title}”`,
+  /** The Create choice before the question has words to name its field by. */
+  willCreateUnnamed: (objectName: string) => `Creates a field on ${objectName} from this question`,
   cantCreate: 'You can’t add attributes, so this stays with the submission.',
   /** Save couldn't make some planned attributes: those questions stay unfiled. */
-  notCreated: (titles: readonly string[], objectName: string) =>
+  notCreated: (titles: readonly string[], objectName: string, keptWith: 'booking' | 'submission' = 'booking') =>
     titles.length === 1
-      ? `Couldn’t add “${titles[0] ?? ''}” to ${objectName}, so its answers stay with the booking.`
-      : `Couldn’t add ${String(titles.length)} attributes to ${objectName}, so their answers stay with the booking.`,
+      ? `Couldn’t add “${titles[0] ?? ''}” to ${objectName}, so its answers stay with the ${keptWith}.`
+      : `Couldn’t add ${String(titles.length)} attributes to ${objectName}, so their answers stay with the ${keptWith}.`,
   undoFailed: 'Couldn’t undo that. The questions are still filed.',
   createdAttributes: (count: number, objectName: string) =>
     count === 1 ? `Added 1 attribute to ${objectName}.` : `Added ${String(count)} attributes to ${objectName}.`,

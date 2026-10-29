@@ -91,6 +91,12 @@ export const RemovalPreview = z.object({
   openTasks: z.number().int().min(0),
   /** Live records whose member values (an Owner) name them. */
   records: z.number().int().min(0),
+  /** Fields whose default names them: the removal takes them out of it. */
+  defaults: z.number().int().min(0),
+  /** Of those, required ones left with no default, so every new record needs a value for them. */
+  requiredDefaults: z.number().int().min(0),
+  /** Open invitations they sent (the invite link among them), revoked with them: nobody vouches for them any more. */
+  invitations: z.number().int().min(0),
 });
 /** What removing a member will do. */
 export type RemovalPreview = z.infer<typeof RemovalPreview>;
@@ -111,6 +117,14 @@ export const SetRoleInput = MemberInput.extend({ role: Role });
 export type SetRoleInput = z.infer<typeof SetRoleInput>;
 
 /**
+ * A member with their new role, and how many open invitations they sent were cancelled with the change, when any:
+ * a role that can't send them any more leaves them opening nothing, so they are revoked and the change says so.
+ */
+export const SetRoleResult = MemberView.extend({ cancelledInvitations: z.number().int().min(1).optional() });
+/** A member with their new role, and the invitations the change cancelled. */
+export type SetRoleResult = z.infer<typeof SetRoleResult>;
+
+/**
  * A workspace's members. `list` answers the active ones a page at a time to
  * every member. `setRole` and `remove` follow spec 0009's owner rules (403
  * `FORBIDDEN`, 409 `LAST_OWNER`); `leave` removes the caller, refused 409
@@ -118,7 +132,7 @@ export type SetRoleInput = z.infer<typeof SetRoleInput>;
  */
 export const membersContract = {
   list: oc.input(MembersInput).output(MembersPage),
-  setRole: oc.input(SetRoleInput).output(MemberView),
+  setRole: oc.input(SetRoleInput).output(SetRoleResult),
   /** What removing a member will do (AC-816): `members.manage`, or about oneself. */
   removalPreview: oc.input(MemberRead).output(RemovalPreview),
   remove: oc.input(RemoveMemberInput).output(RemovedMemberResult),

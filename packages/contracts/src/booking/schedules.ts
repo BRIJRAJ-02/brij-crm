@@ -33,6 +33,28 @@ export function isQuarterHour(time: string): boolean {
 const QUARTER_HOUR_MESSAGE = 'Use times on the quarter hour, such as 09:15.';
 
 /**
+ * What a schedule with no hours at all is refused with (27 October 2026). A
+ * page booking by it offers a visitor an empty calendar for ever, with
+ * nothing on either side saying why, so the empty week is refused where it is
+ * saved rather than discovered by whoever was meant to book.
+ */
+export const NO_HOURS_AT_ALL =
+  'Open at least one time on one day. A page booking by this schedule would offer no times at all.';
+
+/**
+ * Whether a week has no bookable time at all: every day empty. A date
+ * override still counts as hours, so "closed all week except 24 December"
+ * saves. Known soft edge: an override whose date has passed counts too, so a
+ * schedule whose only open date was last year still saves and offers nothing.
+ * Checking that needs today's date in the schedule's zone, which this pure
+ * schema has no business knowing; the slot engine already shows the host an
+ * empty calendar, and the empty week was the case worth refusing.
+ */
+export function hasNoHours(hours: { readonly weekly: Record<string, readonly unknown[]> }): boolean {
+  return WEEKDAYS.every((day) => (hours.weekly[day] ?? []).length === 0);
+}
+
+/**
  * A schedule's hours as a write sends them (AC-961): the shape a page's hours
  * always had, read in the schedule's zone, every time on a 15 minute step.
  * Hours stored before spec 0035 are read as they are; only a write is held
@@ -53,6 +75,10 @@ export const ScheduleHours = BookingAvailability.superRefine((hours, context) =>
       }
     });
   });
+  // An override opens a named date, so a week that is empty every day still books if one of them does.
+  if (hasNoHours(hours) && !hours.overrides.some((override) => override.ranges.length > 0)) {
+    context.addIssue({ code: 'custom', message: NO_HOURS_AT_ALL, path: ['weekly'] });
+  }
 });
 /** A schedule's hours as a write sends them. */
 export type ScheduleHours = z.infer<typeof ScheduleHours>;

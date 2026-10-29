@@ -62,8 +62,13 @@ export function createMemoryLimiter(
  * within one workspace, 120 an hour per form, 50 a second across the
  * instance: beyond any, 429 with `Retry-After`. 5 an hour per form and
  * normalised email: beyond it, a spam sign (Needs review), never a 429.
+ * Reading a hosted form is cheaper but uncached, so it has its own limiter
+ * and pair: 60 a minute per address and 300 a second across the instance,
+ * never per form, which a few addresses could spend for everyone.
  */
 export const FORM_LIMITS = {
+  readsPerAddress: { max: 60, windowMs: 60_000 },
+  readsPerInstance: { max: 300, windowMs: 1_000 },
   perAddress: { max: 5, windowMs: 60_000 },
   perAddressInWorkspace: { max: 30, windowMs: 3_600_000 },
   perForm: { max: 120, windowMs: 3_600_000 },

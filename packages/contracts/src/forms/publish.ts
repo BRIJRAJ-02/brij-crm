@@ -17,11 +17,18 @@ export interface PublishAttribute {
   readonly objectName: string;
   readonly canWrite: boolean;
   /**
-   * The object refuses a record without it, and nothing else fills it (no default, and not a checkbox, which is
-   * false until ticked). A form that never asks for it can't make a record at all, so publishing says so instead
-   * of letting every submission fail (27 October 2026).
+   * The object refuses a record without it, and nothing else fills it (`isUnfillableRequired` in
+   * `@crm/contracts/values`: no default, not a checkbox, and not a Current user default, which fills nothing for a
+   * visitor). A form that never asks for it can't make a record at all, so publishing says so instead of letting
+   * every submission fail (27 October 2026).
    */
   readonly isRequired?: boolean;
+  /**
+   * Whether the publisher may see this attribute. False for one hidden from them, which the check still counts —
+   * a hidden required field stops every submission just the same — but never names (security review: the
+   * refusal would otherwise tell them a field's title they have no access to). Absent means they may see it.
+   */
+  readonly canSee?: boolean;
 }
 
 /** What publishing checks. */
@@ -33,6 +40,12 @@ export interface PublishInput {
   readonly attributes: ReadonlyMap<string, PublishAttribute>;
   /** The main object's name, for the sentences that name it; "People" when it isn't given. */
   readonly objectName?: string;
+  /**
+   * Whether the publisher may change the object's attributes (`schema.manage`). Without it, an email the object
+   * can't match on is something only a workspace admin can put right, so the sentence sends them to one instead of
+   * telling them to file a question that is already filed (late trap #17).
+   */
+  readonly canChangeAttributes?: boolean;
 }
 
 /** The first problem: a stable code, the sentence, and the question it is about. */
@@ -210,14 +223,6 @@ export function questionsProblem(
 }
 
 /**
- * The first problem that stops a draft going live, or undefined when it can.
- * In order: the name, the address, an email question filed on the match
- * attribute (how a submission becomes a person; not asked of a form that
- * keeps its submissions only), each question's label, choices
- * and filing (gone, a type that doesn't fit, or an attribute the publisher
- * can't write), and file questions, which wait for file attachments (#32).
- */
-/**
  * A field the object insists on that no question fills (27 October 2026, the owner: every submission failed with
  * "A required field isn't asked by this form"). Named here, before the form goes live, rather than once a visitor
  * has typed everything in.
@@ -232,19 +237,70 @@ function requiredNotAsked(input: PublishInput): PublishProblem | undefined {
   const missing = [...input.attributes.values()].filter(
     (attribute) => attribute.isRequired === true && !filled.has(attribute.id),
   );
-  const [first] = missing;
-  if (first === undefined) return undefined;
-  const names = missing.map((attribute) => attribute.title);
+  if (missing.length === 0) return undefined;
   const where = input.objectName ?? 'People';
+  // Hidden means unnamed (spec 0009, AC-144): the publisher is told a field stops them, never which one.
+  const named = missing.filter((attribute) => attribute.canSee !== false).map((attribute) => attribute.title);
+  const hidden = missing.length - named.length;
+  const subjects = [
+    ...named,
+    ...(hidden === 0 ? [] : [hidden === 1 ? 'one field you can’t see' : `${String(hidden)} fields you can’t see`]),
+  ];
+  const one = subjects.length === 1;
+  const subject = one
+    ? (subjects[0] ?? '')
+    : `${subjects.slice(0, -1).join(', ')} and ${subjects[subjects.length - 1] ?? ''}`;
+  // Only hidden fields: the publisher can do nothing about them themselves, so the sentence sends them to someone who can.
+  const fix =
+    named.length === 0
+      ? `Ask a workspace admin to give ${one ? 'it a default' : 'them defaults'} or make ${one ? 'it' : 'them'} optional.`
+      : one
+        ? 'Add a question for it, or make the field optional.'
+        : 'Add questions for them, or make the fields optional.';
   return {
     code: 'REQUIRED_MISSING',
-    message:
-      names.length === 1
-        ? `${first.title} is required on ${where}, and no question fills it, so no submission could become a record. Add a question for it, or make the field optional.`
-        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] ?? ''} are required on ${where}, and no question fills them, so no submission could become a record. Add questions for them, or make the fields optional.`,
+    message: `${subject} ${one ? 'is' : 'are'} required on ${where}, and no question fills ${one ? 'it' : 'them'}, so no submission could become a record. ${fix}`,
   };
 }
 
+/**
+ * Why an email question that is there doesn't match a submission to its record, said so it can be put right. Filed
+ * on an email the object holds that isn't its match: the object's own unique email is named, or, with none, the
+ * email has to become unique, which a publisher without `canChangeAttributes` asks a workspace admin for. Not
+ * filed, on an object with no email at all: the same, an email has to exist first. Otherwise, file it on the object.
+ */
+function noMatchMessage(input: PublishInput, email: FormDocument['questions'][number], where: string): string {
+  const why = 'It is how a submission finds the record it belongs to, instead of adding a new one each time.';
+  const match = input.document.targets.main?.matchAttributeId;
+  const matchAttribute = match === undefined ? undefined : input.attributes.get(match);
+  if (matchAttribute !== undefined && matchAttribute.type === 'email' && matchAttribute.canSee !== false) {
+    return `File the email question on ${where} · ${matchAttribute.title}. ${why}`;
+  }
+  const filed = email.filedOn === undefined ? undefined : input.attributes.get(email.filedOn.attributeId);
+  const needsAdmin = input.canChangeAttributes === false;
+  if (filed !== undefined && filed.type === 'email' && filed.canSee !== false) {
+    return needsAdmin
+      ? `${filed.title} on ${where} isn’t unique, so a submission can’t find the record it belongs to. Ask a workspace admin to make it unique.`
+      : `Make ${filed.title} on ${where} unique. ${why}`;
+  }
+  const hasEmail = [...input.attributes.values()].some(
+    // Hidden means absent: a hidden email is as good as none to this publisher.
+    (attribute) => attribute.type === 'email' && attribute.canSee !== false,
+  );
+  if (!hasEmail && needsAdmin) {
+    return `${where} has no email field to file the email question on. Ask a workspace admin to add one that is unique.`;
+  }
+  return `File the email question on ${where}. ${why}`;
+}
+
+/**
+ * The first problem that stops a draft going live, or undefined when it can.
+ * In order: the name, the address, an email question filed on the match
+ * attribute (how a submission becomes a person; not asked of a form that
+ * keeps its submissions only), each question's label, choices
+ * and filing (gone, a type that doesn't fit, or an attribute the publisher
+ * can't write), and file questions, which wait for file attachments (#32).
+ */
 export function publishProblem(input: PublishInput): PublishProblem | undefined {
   if (input.name.trim() === '') return { code: 'NAME_MISSING', message: 'Give the form a name.' };
   if (!FORM_SLUG.test(input.slug)) {
@@ -268,11 +324,7 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
           message: `Add an email question. It is how a submission finds the ${where} record it belongs to, instead of adding a new one each time.`,
         };
       }
-      return {
-        code: 'EMAIL_MISSING',
-        message: `File the email question on ${where}. It is how a submission finds the record it belongs to, instead of adding a new one each time.`,
-        questionId: anyEmail.id,
-      };
+      return { code: 'EMAIL_MISSING', message: noMatchMessage(input, anyEmail, where), questionId: anyEmail.id };
     }
     if (!emailQuestion.required) {
       return {

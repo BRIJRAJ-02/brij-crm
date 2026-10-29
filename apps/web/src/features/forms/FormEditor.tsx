@@ -1,5 +1,5 @@
 // Brief
-// Purpose: one form's editor (spec 0023, 0023-experience.md, Builder): its questions beside a live preview, then Settings, Install and Submissions once published.
+// Purpose: one form's editor (spec 0023, 0023-experience.md, Builder): its questions beside a live preview, and Settings (what happens after sending, routing, the owner) from the start; Install and Submissions once published.
 // Main task: shape the draft (saved quietly as you go), publish it, and share it.
 // Leaves out: steps and routing, round robin (#58), booking (#59), file questions (#32), analytics.
 import {
@@ -14,8 +14,10 @@ import {
   type SubmissionView,
 } from '@crm/data';
 import { FORM_QUESTIONS_MAX, previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
+import { useCaptureList } from '@crm/data/react';
 import {
   Button,
+  ButtonLink,
   Callout,
   Card,
   EditorStatus,
@@ -31,7 +33,8 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { DeleteFormDialog } from './FormConfirms.tsx';
+import { DeleteFormDialog, RetargetFormDialog, type RetargetAsk } from './FormConfirms.tsx';
+import { retargetStep } from './retarget.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
 import {
@@ -51,7 +54,9 @@ import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from '.
 import { PublishDialog } from './PublishDialog.tsx';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
 import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
-import { readyMatch } from './match.ts';
+import { afterPageProblem } from './after-page.ts';
+import { emailToMakeUnique, readyMatch } from './match.ts';
+import { objectSettingsHref } from '../settings/nav.ts';
 import { firstRefusal, saveFailureMessage } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
 import { useJobFollower } from './followJobs.ts';
@@ -230,6 +235,18 @@ export function FormEditor(props: FormEditorProps) {
     const plans = planNewAttributes(draft, target.items, canBuild && canManage && objectId !== undefined);
     if (objectId === undefined || plans.length === 0) return { document: draft, choices: target };
     const made = await createPlannedAttributes(data, slug, objectId, plans);
+    // A field that couldn't be made leaves its question unfiled: said, never published quietly (late trap #37).
+    const missed = plans.filter((plan) => !made.some((each) => each.questionId === plan.questionId));
+    if (missed.length > 0) {
+      toasts.toast({
+        tone: 'danger',
+        message: questionStrings.notCreated(
+          missed.map((plan) => plan.title),
+          target.objectName ?? '',
+          'submission',
+        ),
+      });
+    }
     if (made.length === 0) return { document: draft, choices: target };
     const next = made.reduce(
       (document, each) => changeQuestion(document, each.questionId, { filedOn: each.attributeId }),
@@ -246,7 +263,11 @@ export function FormEditor(props: FormEditorProps) {
         label: strings.undo,
         onAction: () => {
           setDraft((before) =>
-            made.reduce((document, each) => changeQuestion(document, each.questionId, { filedOn: null }), before),
+            // Undo says the field wasn't wanted: kept off the CRM, so the next Save doesn't make it again.
+            made.reduce(
+              (document, each) => changeQuestion(document, each.questionId, { filedOn: null, kept: true }),
+              before,
+            ),
           );
           archiveMadeAttributes(data, slug, made).then(
             () => data.forms.attributes(slug, form.id).then(setTarget, failed),
@@ -276,20 +297,34 @@ export function FormEditor(props: FormEditorProps) {
     }
     // Questions with no attribute to file onto get one first, with no prompt; then the email the form matches on is
     // made ready (`readyMatch`); the check and publish then read both.
+    // An email field the object already had becomes unique on the way (late trap #36): it changes how imports and
+    // every other form match there too, so it is never done unsaid. A first publish leaves it to its dialog, which
+    // says so before Publish; a later one says so as soon as it is done, whatever the publish then does. One made
+    // just now for this form needs no word.
+    const mayMakeUnique = canBuild && canManage && isPublished;
+    const making = mayMakeUnique ? emailToMakeUnique(draft, target) : undefined;
+    const uniqueTitle = target.items.find((item) => item.attributeId === making)?.title;
     setPublishing(true);
     createMissingAttributes()
       .then(({ document, choices }) =>
-        readyMatch(
-          { data, slug, formId: form.id, canChangeAttributes: canBuild && canManage, flush },
-          document,
-          choices,
-        ),
+        readyMatch({ data, slug, formId: form.id, canChangeAttributes: mayMakeUnique, flush }, document, choices),
       )
       .then((ready) => {
         setPublishing(false);
         if ('refused' in ready) {
           toasts.toast({ tone: 'danger', message: ready.refused });
           return;
+        }
+        const object = objects.find((each) => each.id === ready.choices.objectId);
+        if (uniqueTitle !== undefined && ready.choices.objectName !== undefined && object !== undefined) {
+          toasts.toast({
+            tone: 'info',
+            message: strings.madeUnique(uniqueTitle, ready.choices.objectName),
+            action: {
+              label: strings.viewField,
+              onAction: () => void navigate({ href: objectSettingsHref(slug, object) }),
+            },
+          });
         }
         if (ready.view !== undefined) {
           apply(ready.view);
@@ -310,8 +345,14 @@ export function FormEditor(props: FormEditorProps) {
       document: draft,
       attributes,
       ...(target.objectName === undefined ? {} : { objectName: target.objectName }),
+      canChangeAttributes: canBuild && canManage,
     });
-    if (found !== undefined && (isPublished || (found.code !== 'NAME_MISSING' && found.code !== 'ADDRESS_INVALID'))) {
+    // A first publish's dialog names the form and its address, and makes the email unique once it has said so.
+    const dialogFixes = (problem: PublishProblem) =>
+      problem.code === 'NAME_MISSING' ||
+      problem.code === 'ADDRESS_INVALID' ||
+      (problem.code === 'EMAIL_MISSING' && canBuild && emailToMakeUnique(draft, target) !== undefined);
+    if (found !== undefined && (isPublished || !dialogFixes(found))) {
       setProblem(found);
       if (tab !== 'form') void navigate({ href: formHref(slug, form.id) });
       return;
@@ -358,9 +399,22 @@ export function FormEditor(props: FormEditorProps) {
 
   // Settings' Add each submission to the CRM: the draft points at an object (its starting questions filed by the
   // server, the rest by label) or at none. Saved first, so the change names the revision it starts from.
+  // Asked first when questions are saved onto the object now: the change clears where every one of them is saved,
+  // and nothing takes it back. With nothing saved anywhere it stays one click.
+  const [retargetAsk, setRetargetAsk] = useState<RetargetAsk | undefined>(undefined);
+  const askRetarget = (objectId: string | null) => {
+    if (isRetargeting) return;
+    const step = retargetStep(draft, objects, objectId, strings.thisObject);
+    if (step.kind === 'go') retarget(objectId);
+    else if (step.kind === 'ask') setRetargetAsk(step.ask);
+  };
+
   const retarget = (objectId: string | null) => {
     if (isRetargeting) return;
     setRetargeting(true);
+    const settled = () => {
+      setRetargeting(false);
+    };
     flush()
       .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision))
       .then(async (view) => {
@@ -370,10 +424,10 @@ export function FormEditor(props: FormEditorProps) {
         setDraft(next);
         latest.current = next;
         setTarget(choices);
-        setRetargeting(false);
+        settled();
       })
       .catch((error: unknown) => {
-        setRetargeting(false);
+        settled();
         if (isDataError(error) && error.code === 'FORM_CHANGED') {
           setConflict(true);
           return;
@@ -475,6 +529,9 @@ export function FormEditor(props: FormEditorProps) {
     </TopBar>
   );
 
+  // Before the first publish, Form and Settings: what happens after sending, routing and the owner are set before
+  // anyone fills it in (late trap #47); Install and Submissions wait for a live form.
+  const current: FormTab = isPublished || tab === 'settings' ? tab : 'form';
   const notices = (
     <>
       {form.status === 'paused' && (
@@ -486,11 +543,27 @@ export function FormEditor(props: FormEditorProps) {
           {strings.pausedText}
         </Callout>
       )}
+      {/* On every tab but Settings, which says it beside the choice: visitors quietly get the message (late trap #53). */}
+      {current !== 'settings' && form.live?.after.kind === 'booking' && (
+        <AfterPageNotice slug={slug} formId={form.id} live={form.live} />
+      )}
       {!canManage && (
         <Callout tone="info" title={strings.readOnlyTitle}>
           {strings.readOnlyText}
         </Callout>
       )}
+      <RetargetFormDialog
+        ask={retargetAsk}
+        onClose={() => {
+          setRetargetAsk(undefined);
+        }}
+        onConfirm={(objectId) => {
+          retarget(objectId);
+          // The Switch or Select that opened it is disabled while the change runs, so the dialog's own return of
+          // focus would land on the page: it goes to the page's More as it closes, as the other ends here do.
+          focusLater(() => moreRef.current);
+        }}
+      />
       {conflict && (
         <Callout tone="warning" isAnnounced actions={<Button onPress={loadTheirs}>{strings.loadTheirs}</Button>}>
           {changedBy === undefined ? strings.someoneChanged : strings.changedBy(changedBy)}
@@ -504,7 +577,6 @@ export function FormEditor(props: FormEditorProps) {
     </>
   );
 
-  const current: FormTab = isPublished ? tab : 'form';
   const body = (() => {
     switch (current) {
       case 'settings':
@@ -519,7 +591,7 @@ export function FormEditor(props: FormEditorProps) {
             isReadOnly={!canManage}
             settings={settings}
             onDraftChange={setDraft}
-            onRetarget={retarget}
+            onRetarget={askRetarget}
             isRetargeting={isRetargeting}
             showGaps={showGaps}
           />
@@ -547,7 +619,7 @@ export function FormEditor(props: FormEditorProps) {
       default:
         return (
           <>
-            {/* Before the first publish there is no Settings tab: the name is changed here, as a field. */}
+            {/* Before the first publish the name is changed here too, as a field, beside the questions. */}
             {!isPublished && canManage && (
               <DraftName
                 name={form.name}
@@ -719,7 +791,7 @@ export function FormEditor(props: FormEditorProps) {
         topBar,
         body: (
           <FormToolbarSlot.Provider value={toolbarSlot}>
-            {isPublished ? (
+            {
               // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
               <Tabs
                 variant="bar"
@@ -732,24 +804,62 @@ export function FormEditor(props: FormEditorProps) {
                 tabs={[
                   { id: 'form', label: strings.tabForm, href: formHref(slug, form.id) },
                   { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
-                  { id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') },
-                  { id: 'submissions', label: strings.tabSubmissions, href: formHref(slug, form.id, 'submissions') },
+                  ...(isPublished
+                    ? [
+                        { id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') },
+                        {
+                          id: 'submissions',
+                          label: strings.tabSubmissions,
+                          href: formHref(slug, form.id, 'submissions'),
+                        },
+                      ]
+                    : []),
                 ]}
               >
-                {FORM_TABS.map((id) => (
+                {(isPublished ? FORM_TABS : (['form', 'settings'] as const)).map((id) => (
                   <TabPanel key={id} id={id} variant="fill">
                     {id === current && layout}
                   </TabPanel>
                 ))}
               </Tabs>
-            ) : (
-              layout
-            )}
+            }
             {dialogs}
           </FormToolbarSlot.Provider>
         ),
       }}
     />
+  );
+}
+
+/**
+ * The live form's After page can't take visitors (late trap #53): paused, or deleted. Its own component, so the
+ * booking pages are read only for a form that sends visitors to one.
+ */
+function AfterPageNotice({
+  slug,
+  formId,
+  live,
+}: {
+  readonly slug: string;
+  readonly formId: string;
+  readonly live: FormDocument;
+}) {
+  const { data } = useRouteContext({ from: '__root__' });
+  const pages = useCaptureList(data.bookingPages.view(slug));
+  const problem = afterPageProblem(live, pages.status === 'ready' ? pages.items : undefined, useCan('booking.admin'));
+  if (problem === undefined) return null;
+  return (
+    <Callout
+      tone="warning"
+      title={problem.kind === 'paused' ? strings.afterPagePausedTitle(problem.page.title) : strings.afterPageGoneTitle}
+      actions={
+        <ButtonLink href={formHref(slug, formId, 'settings')} variant="secondary">
+          {strings.afterPageFix}
+        </ButtonLink>
+      }
+    >
+      {strings.afterPageText}
+    </Callout>
   );
 }
 

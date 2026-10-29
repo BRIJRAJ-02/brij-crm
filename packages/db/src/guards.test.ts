@@ -89,6 +89,9 @@ describe('every tenant table', () => {
             row.index === 'workspaces_slug' ||
             // A form's public key finds it before the workspace is known (spec 0023), so it is unique everywhere.
             row.index === 'forms_public_key' ||
+            // An old form address (0120) likewise, read only through crm_form_by_key; unique everywhere, so no other
+            // form takes an address one held while it still finds that one.
+            row.index === 'form_public_keys_key' ||
             row.index === 'booking_pages_public_key' ||
             // `/<handle>/<slug>` and a profile's pages are found before the workspace is known (22 Oct 2026), read
             // only through crm_booking_lookup's crm_booking_page_by_address and crm_booking_profile_pages.
@@ -218,6 +221,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_show_public_profile', owner: 'crm_handle' },
       { name: 'crm_social_links_of', owner: 'crm_handle' },
       { name: 'crm_sweep_profile_counts', owner: 'crm_handle' },
+      // A deleted account's handles freed after their 90 days (late trap #73, migration 0126).
+      { name: 'crm_sweep_released_handles', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
       // Whether a person is an active member of a workspace: crm_handle's definers ask it (spec 0056, migration 0113).
@@ -309,6 +314,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_social_links_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it answers how many rows past the year it removed.
       { name: 'crm_sweep_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      // A plpgsql body: it answers how many held handles it freed.
+      { name: 'crm_sweep_released_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_member', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -490,6 +497,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // A link page made for every membership (26 Oct 2026, migration 0116).
         'crm_ensure_public_profile',
         'crm_show_public_profile',
+        // A deleted account's handles freed after their 90 days (migration 0126).
+        'crm_sweep_released_handles',
       ],
       [
         'crm_save_public_profile(uuid, uuid, text, text)',
@@ -520,10 +529,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_profile_handles_of(uuid)',
         'crm_ensure_public_profile(uuid, uuid, text)',
         'crm_show_public_profile(uuid, uuid)',
+        'crm_sweep_released_handles(integer)',
       ],
       // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
       // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 28 }, () => 'app'),
+      Array.from({ length: 29 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -2054,6 +2064,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'profile_views INSERT',
       'profile_views SELECT',
       'profile_views UPDATE',
+      'public_handles DELETE',
       'public_handles INSERT',
       'public_handles SELECT',
       'public_profiles INSERT',

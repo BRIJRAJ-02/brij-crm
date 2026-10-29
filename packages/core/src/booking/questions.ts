@@ -18,8 +18,10 @@ import {
   type PublishAttribute,
   type PublicQuestion,
 } from '@crm/contracts';
+import { ANONYMOUS, isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { fieldLevel, objectLevel, type Access } from '../access/policy.ts';
+import { attributeVisible } from '../access/visibility.ts';
 import { encodeValue } from '../engine/columns.ts';
 import { parseAttributeInput } from '../engine/parse-value.ts';
 import { insertRecord } from '../engine/records.ts';
@@ -73,6 +75,59 @@ export const NO_VISITOR_EMAIL =
   'This object has no unique email field, so a booking can’t find or make the visitor’s record in it. Add one first.';
 
 /**
+ * The attributes a booking writes on the record it makes, whatever the page asks: the unique email it matches the
+ * visitor on, and the object's name attribute where `nameValueFor` fills one (a text or a personal name).
+ */
+async function bookingFills(
+  tx: WorkspaceTx,
+  objectId: string,
+  attributes: ReadonlyMap<string, AttributeDef>,
+): Promise<ReadonlySet<string>> {
+  const match = visitorMatchOf(attributes);
+  const [row] = await tx
+    .select({ primary: objects.primaryAttributeId })
+    .from(objects)
+    .where(sql`${objects.id} = ${objectId}::uuid`);
+  const primary = row?.primary === null || row?.primary === undefined ? undefined : attributes.get(row.primary);
+  // `nameValueFor` fills a text or a personal name and nothing else, so only those count as written.
+  const named =
+    primary === undefined || (primary.type !== 'text' && primary.type !== 'personal_name') ? undefined : primary.id;
+  return new Set([match?.id, named].filter((id): id is string => id !== undefined));
+}
+
+/**
+ * Why a booking page can't file answers onto this object: one of its fields is required and nothing fills it, so
+ * the guest's record could never be made (27 October 2026, the same wall a form's publish refuses). Named when
+ * the saver may see the field, counted generically when not (spec 0009, AC-144). Undefined when the object is fine.
+ */
+export async function requiredWall(tx: WorkspaceTx, access: Access, objectId: string): Promise<string | undefined> {
+  const attributes = await loadAttributes(tx, objectId);
+  // The booking fills these two itself, whatever the questions are: the email it matches on, and the object's
+  // name, where it takes one (`answersRecord`). Required on them is no wall.
+  const written = await bookingFills(tx, objectId, attributes);
+  // A guest is nobody: a Current user default fills nothing for them, as `ANONYMOUS` says.
+  const walls = fileable(attributes).filter(
+    (attribute) => !written.has(attribute.id) && isUnfillableRequired(attribute, ANONYMOUS),
+  );
+  if (walls.length === 0) return undefined;
+  const named = walls.filter((attribute) => attributeVisible(access, attribute)).map((attribute) => attribute.title);
+  const hidden = walls.length - named.length;
+  const subjects = [
+    ...named,
+    ...(hidden === 0 ? [] : [hidden === 1 ? 'one field you can’t see' : `${String(hidden)} fields you can’t see`]),
+  ];
+  const one = subjects.length === 1;
+  const subject = one
+    ? (subjects[0] ?? '')
+    : `${subjects.slice(0, -1).join(', ')} and ${subjects[subjects.length - 1] ?? ''}`;
+  const fix =
+    named.length === 0
+      ? `Ask a workspace admin to give ${one ? 'it a default' : 'them defaults'} or make ${one ? 'it' : 'them'} optional.`
+      : `Give ${one ? 'it a default' : 'them defaults'}, or make ${one ? 'it' : 'them'} optional.`;
+  return `${subject} ${one ? 'is' : 'are'} required there, and nothing fills ${one ? 'it' : 'them'}, so a booking could never make the record. ${fix}`;
+}
+
+/**
  * Checks the object a page files its answers onto, as a form's publish checks its target: it has to be live here
  * (row level security keeps another workspace's away), and it has to carry a unique email attribute, since the
  * visitor's email is all a booking knows them by. Refused `CONFIG_INVALID` on `answersObjectId`, so the choice is
@@ -89,6 +144,26 @@ export async function checkAnswersObject(tx: WorkspaceTx, scope: EngineScope, ob
   if (visitorMatchOf(await loadAttributes(tx, objectId)) === undefined) {
     throw refuseOn('CONFIG_INVALID', NO_VISITOR_EMAIL, 'answersObjectId');
   }
+  const wall = await requiredWall(tx, scope.access, objectId);
+  if (wall !== undefined) throw refuseOn('CONFIG_INVALID', wall, 'answersObjectId');
+}
+
+/**
+ * Refuses a page going live onto an object whose record a booking could never make (27 October 2026). Only a page
+ * that files answers somewhere is checked: one with no filed question writes nothing there, so nothing can fail.
+ * Refused on `status`, the switch the writer just flicked.
+ */
+export async function checkPageCanGoLive(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  questions: BookingQuestions,
+  named: string | null,
+): Promise<void> {
+  if (named === null && !questions.some((question) => question.filedOn !== undefined)) return;
+  const target = await answersObjectOf(tx, named);
+  if (target === undefined) return;
+  const wall = await requiredWall(tx, scope.access, target);
+  if (wall !== undefined) throw refuseOn('CONFIG_INVALID', wall, 'status');
 }
 
 /** The attributes a question may never be filed onto: the one the visitor is matched on, and People's own email. */

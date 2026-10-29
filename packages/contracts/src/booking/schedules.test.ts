@@ -2,7 +2,15 @@
 // characters, and for one release the old hours keys a stale tab may still send refused, never dropped (AC-975).
 import { describe, expect, it } from 'vitest';
 import { UpdateBookingPageInput, UpdateMemberHoursInput } from './pages.ts';
-import { CreateScheduleInput, isQuarterHour, ScheduleHours, ScheduleName, UpdateScheduleInput } from './schedules.ts';
+import {
+  CreateScheduleInput,
+  hasNoHours,
+  isQuarterHour,
+  NO_HOURS_AT_ALL,
+  ScheduleHours,
+  ScheduleName,
+  UpdateScheduleInput,
+} from './schedules.ts';
 import { defaultAvailability } from './settings.ts';
 
 const WORKSPACE = 'acme';
@@ -13,6 +21,24 @@ describe('schedule hours', () => {
   it('takes times on the quarter hour, the day’s end included', () => {
     expect(['00:00', '09:15', '12:30', '17:45', '24:00'].every(isQuarterHour)).toBe(true);
     expect(['09:10', '17:59', '00:01'].some(isQuarterHour)).toBe(false);
+  });
+
+  it('refuses a week with no hours at all, unless a date override opens one', () => {
+    // The owner, 27 October 2026: a page on such a schedule offers an empty calendar for ever and says nothing.
+    const hours = defaultAvailability('Asia/Kolkata');
+    const empty = { ...hours, weekly: Object.fromEntries(Object.keys(hours.weekly).map((day) => [day, []])) };
+    expect(hasNoHours(empty)).toBe(true);
+    const refused = ScheduleHours.safeParse(empty);
+    expect(refused.success).toBe(false);
+    expect(refused.error?.issues[0]).toMatchObject({ path: ['weekly'], message: NO_HOURS_AT_ALL });
+
+    // One open date is enough: the page books on it and nothing else.
+    const onlyADate = { ...empty, overrides: [{ date: '2026-12-24', ranges: [['09:00', '12:00']] }] };
+    expect(ScheduleHours.safeParse(onlyADate).success).toBe(true);
+
+    // A date override that closes a day is not hours, so an otherwise empty week is still refused.
+    const closedOnly = { ...empty, overrides: [{ date: '2026-12-24', ranges: [] }] };
+    expect(ScheduleHours.safeParse(closedOnly).success).toBe(false);
   });
 
   it('refuses a write whose week or date override is off the quarter hour, naming the range', () => {

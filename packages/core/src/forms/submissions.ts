@@ -6,6 +6,7 @@
 // see are left out, the same rule as everywhere else (hidden means absent).
 import { and, desc, eq, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import {
+  SPAM_FILES_KEPT_DAYS,
   SubmissionContext,
   SUBMISSION_SUMMARY_QUESTIONS,
   SUBMISSIONS_PAGE,
@@ -24,17 +25,18 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import * as z from 'zod';
 import { checkId } from '../engine/ids.ts';
 import { readRecords } from '../engine/records.ts';
+import { loadAttributesById } from '../engine/values.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { can, fieldLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
-import { visibleRecords } from '../access/visibility.ts';
+import { attributeVisible, visibleRecords } from '../access/visibility.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { UNKNOWN_FORM } from './forms.ts';
-import { FORMS_PROCESS } from './process.ts';
+import { FORMS_PROCESS, requiredFieldFailure, siteFieldFailure } from './process.ts';
 import { canSeeForm, loadForm, loadVersions, millis } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, records } = schema;
@@ -104,6 +106,17 @@ function contextOf(stored: unknown): SubmissionContext | undefined {
   const parsed = SubmissionContext.safeParse(stored);
   return parsed.success && Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
 }
+
+/**
+ * The day a submission our spam check caught loses its files (`SPAM_FILES_KEPT_DAYS` after it arrived), as the
+ * daily cleanup judges it; undefined for any other, a member's own Mark as spam included.
+ */
+const filesRemovedOn = (state: string, spam: unknown, receivedAt: string): string | undefined => {
+  if (state !== 'spam' || record(spam).verdict !== 'spam' || record(spam).marked === true) return undefined;
+  const at = new Date(receivedAt);
+  if (Number.isNaN(at.getTime())) return undefined;
+  return new Date(at.getTime() + (SPAM_FILES_KEPT_DAYS + 1) * 86_400_000).toISOString().slice(0, 10);
+};
 
 const verdictOf = (spam: unknown): SubmissionSummary['verdict'] => {
   const verdict = record(spam).verdict;
@@ -290,6 +303,36 @@ export async function listSubmissions(
   });
 }
 
+/**
+ * A failed submission's sentence as this reader may read it: the stored one,
+ * with the required fields it was about named when they may see them. The
+ * stored sentence names none of them, so a reader who may see nothing reads
+ * exactly what was stored (AC-144, the same rule the publish check follows).
+ */
+async function failureFor(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  stored: string | null,
+  missing: unknown,
+  questions: FormDocument['questions'] = [],
+): Promise<string | undefined> {
+  if (stored === null) return undefined;
+  const ids = Array.isArray(missing) ? missing.filter((id): id is string => typeof id === 'string') : [];
+  if (ids.length === 0) return stored;
+  const attributes = await loadAttributesById(tx, ids);
+  const seen = ids.flatMap((id) => {
+    const attribute = attributes.get(id);
+    return attribute === undefined || !attributeVisible(scope.access, attribute) ? [] : [attribute];
+  });
+  // A required question fills it, yet it came unanswered: a site's own form without that field (late trap #55).
+  for (const attribute of seen) {
+    const asks = questions.find((question) => question.required && question.filedOn?.attributeId === attribute.id);
+    if (asks !== undefined) return siteFieldFailure(attribute.title, asks.label);
+  }
+  const titles = seen.map((attribute) => attribute.title);
+  return titles.length === 0 ? stored : requiredFieldFailure(titles);
+}
+
 /** One submission in full, as the reader may see it, read inside an open transaction. */
 async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string): Promise<SubmissionView> {
   const [row] = await tx
@@ -343,6 +386,16 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
       : [];
   });
   const assignment = record(row.assignment);
+  // A failure for a required field nothing filled is named here, not where it was stored: the job that wrote it
+  // runs as the system and sees every field, while this reader may not (security review, 27 October 2026).
+  const failure = await failureFor(
+    tx,
+    scope,
+    row.failure,
+    record(row.outcome).requiredMissing,
+    version?.document.questions,
+  );
+  const removedOn = filesRemovedOn(row.state, row.spam, row.receivedAt);
   return {
     id: row.id,
     formId: row.formId,
@@ -359,8 +412,9 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
     ...(context === undefined ? {} : { context }),
     signals: Array.isArray(signals) ? signals.filter((signal): signal is string => typeof signal === 'string') : [],
     records,
-    ...(row.failure === null ? {} : { failure: row.failure }),
+    ...(failure === undefined ? {} : { failure }),
     refused,
+    ...(removedOn === undefined ? {} : { filesRemovedOn: removedOn }),
     ...(typeof assignment.reason === 'string'
       ? {
           assignment: {

@@ -84,7 +84,13 @@ export function Disclosure({
   const level = useContext(CardTitleLevel);
   const heading = (
     <Heading className={styles.heading} level={headingLevel ?? (atPageEdge ? level : 3)}>
-      <AriaButton slot="trigger" className={styles.trigger}>
+      <AriaButton
+        slot="trigger"
+        className={styles.trigger}
+        data-variant={variant}
+        data-edge={atPageEdge ? 'page' : undefined}
+        data-inset={atRowInset ? 'row' : undefined}
+      >
         <span className={styles.chevron}>
           <Icon name="chevron-right" size={variant === 'label' ? 'xs' : 'sm'} />
         </span>
@@ -122,17 +128,27 @@ export function Disclosure({
         </div>
       )}
       <DisclosurePanel className={styles.panel}>
-        <PanelContent>{children}</PanelContent>
+        <PanelContent variant={variant} edge={atPageEdge ? 'page' : undefined}>
+          {children}
+        </PanelContent>
       </DisclosurePanel>
     </AriaDisclosure>
   );
 }
 
 /** The panel's content, inert while folded, so links and fields inside it take no focus. */
-function PanelContent({ children }: { readonly children: ReactNode }) {
+function PanelContent({
+  variant,
+  edge,
+  children,
+}: {
+  readonly variant: string;
+  readonly edge: 'page' | undefined;
+  readonly children: ReactNode;
+}) {
   const state = useContext(DisclosureStateContext);
   return (
-    <div className={styles.content} inert={state?.isExpanded === false}>
+    <div className={styles.content} data-variant={variant} data-edge={edge} inert={state?.isExpanded === false}>
       {children}
     </div>
   );

@@ -16,6 +16,7 @@ New. Text in notes, descriptions, settings and empty states links somewhere; one
 - App paths (`/people/1`) go through the router (React Aria's `RouterProvider`, from UiProvider).
 - `http` and `https` links out open in a new tab with `noopener noreferrer`; `mailto:` and `tel:` open as usual.
 - Any other href (`javascript:`, `data:`, `//host`) renders the text with no link.
+- `opensInNewTab` opens an app path in a new tab too, with "(opens in a new tab)" read after its words. Why a variant: a dialog half filled in that needs something set up elsewhere first (a new booking page's round robin group) lost what was typed when the link moved the page; in a new tab the dialog waits. Links out already open in a new tab without it.
 - `onPress` does something in the page instead of navigating (a form's error summary focuses a question): the same look, focus ring and Enter key, and `href` is not rendered.
 
 ## States

@@ -17,6 +17,7 @@ import type {
 import { useCaptureList } from '@crm/data/react';
 import {
   ButtonLink,
+  Callout,
   Card,
   EmptyState,
   Field,
@@ -30,15 +31,17 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
-import { linksHref } from '../booking/links.ts';
+import { linksHref, pageEditorHref } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
-import { isRedirectAddress } from './draft.ts';
+import { afterPageProblem } from './after-page.ts';
+import { isRedirectAddress, sameValue } from './draft.ts';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
 import { questionFacts } from '../routing/facts.ts';
 import { RulesCard } from '../routing/RulesCard.tsx';
 import { strings as routingStrings } from '../routing/strings.ts';
+import { useCan } from '../workspace/WorkspacePage.tsx';
 
 const NOBODY = 'nobody';
 
@@ -216,6 +219,7 @@ export function SettingsTab({
   });
   // The booking pages a visitor can be sent on to: the reader's own, or everyone's with booking.admin, live ones.
   const pages = useCaptureList(data.bookingPages.view(slug));
+  const seesAllPages = useCan('booking.admin');
   const pageList: readonly BookingPageView[] = pages.status === 'ready' ? pages.items : [];
   const usable = pageList.filter((page) => page.canChange && page.status === 'live');
 
@@ -333,10 +337,28 @@ export function SettingsTab({
     return pool.filter((member, at) => pool.findIndex((each) => each.id === member.id) === at);
   };
   const live = form.live;
-  const routingChanged =
-    live !== undefined && JSON.stringify(live.routing.rules) !== JSON.stringify(draft.routing.rules);
+  // By value, not as text: rules the editor wrote spell their keys in another order than the published ones, so
+  // text said "waits for publish" for rules that were already live.
+  const routingChanged = live !== undefined && !sameValue(live.routing.rules, draft.routing.rules);
+  // Where answers are saved, as the live form does it: a change waits for Publish, and the card says so, naming where
+  // submissions still go meanwhile (late trap #39: the card showed the new object as if it were already in use).
+  const savingOf = (document: Pick<FormDocument, 'targets' | 'questions'>) => ({
+    targets: document.targets,
+    filed: document.questions.map((question) => [question.id, question.filedOn?.attributeId ?? null]),
+  });
+  const isPublished = form.liveVersionNumber !== undefined;
+  const savingChanged = live !== undefined && !sameValue(savingOf(live), savingOf(draft));
+  const liveMain = live?.targets.main;
+  const liveObjectName =
+    liveMain === undefined ? undefined : objects.find((object) => object.id === liveMain.objectId)?.pluralName;
+  const savingWaits = !savingChanged
+    ? undefined
+    : liveMain === undefined
+      ? strings.savingWaitsKeptOnly
+      : strings.savingWaits(liveObjectName ?? strings.thisObject);
 
   const bookingPage = after.kind === 'booking' ? pageList.find((page) => page.id === after.bookingPageId) : undefined;
+  const afterProblem = afterPageProblem(draft, pages.status === 'ready' ? pages.items : undefined, seesAllPages);
   // Where each question's answer goes: the target's attribute, or kept with the submission only.
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
   const objectName = target.objectName ?? '';
@@ -413,6 +435,34 @@ export function SettingsTab({
         )}
         {after.kind === 'booking' && (
           <>
+            {/* Late trap #53: the page paused (by hand, or its last host left) or went, and every visitor quietly got
+                the message instead of a meeting. Said here, beside the choice that fixes it. */}
+            {afterProblem?.kind === 'paused' && (
+              <Callout
+                tone="warning"
+                title={strings.pagePausedTitle(afterProblem.page.title)}
+                {...(afterProblem.page.canChange
+                  ? {
+                      actions: (
+                        <ButtonLink href={pageEditorHref(slug, afterProblem.page.id)} variant="secondary">
+                          {strings.openPage}
+                        </ButtonLink>
+                      ),
+                    }
+                  : {})}
+              >
+                {strings.pagePaused({
+                  hostLeft: afterProblem.page.pausedReason === 'host_removed',
+                  canResume: afterProblem.page.canChange,
+                  canPick: !isReadOnly,
+                })}
+              </Callout>
+            )}
+            {afterProblem?.kind === 'gone' && (
+              <Callout tone="warning" title={strings.pageGoneTitle}>
+                {strings.pageGone(!isReadOnly)}
+              </Callout>
+            )}
             <Select
               label={strings.bookingPage}
               items={[
@@ -515,7 +565,11 @@ export function SettingsTab({
           return Promise.resolve();
         }}
       />
-      <Card title={strings.crmTitle} isBusy={isRetargeting}>
+      <Card
+        title={strings.crmTitle}
+        isBusy={isRetargeting}
+        {...(savingWaits === undefined ? {} : { description: savingWaits })}
+      >
         <Switch
           label={strings.addToCrmSwitch}
           // Whether a submission makes a record or updates one matters, so it stays in view while the form files.
@@ -594,58 +648,70 @@ export function SettingsTab({
           }}
         />
       </Card>
-      <Card title={strings.detailsTitle}>
-        <Field
-          label={strings.name}
-          hint={strings.nameHint}
-          value={settings.values.name}
-          maxLength={80}
-          isRequired
-          isReadOnly={isReadOnly}
-          onChange={(name) => {
-            settings.set({ name });
-          }}
-          {...(settings.values.name.trim() === ''
-            ? { error: strings.nameRequired }
-            : settings.fieldError('name') === undefined
-              ? {}
-              : { error: settings.fieldError('name') ?? '' })}
-        />
-        <Field
-          label={strings.address}
-          prefix={data.forms.hostedUrl('').replace(/^https?:\/\//, '')}
-          hint={strings.addressChangeWarning}
-          value={settings.values.address}
-          maxLength={40}
-          isRequired
-          isReadOnly={isReadOnly}
-          onChange={(text) => {
-            settings.set({ address: text.toLowerCase() });
-          }}
-          {...(settings.fieldError('slug') === undefined ? {} : { error: settings.fieldError('slug') ?? '' })}
-        />
-        {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
-        {isFiling && (
-          <Select
-            label={strings.owner}
-            hint={ownerHint}
-            items={ownerItems}
-            value={settings.values.owner}
-            isReadOnly={isReadOnly}
-            {...(settings.fieldError('owner') === undefined ? {} : { error: settings.fieldError('owner') ?? '' })}
-            onChange={(id) => {
-              settings.set({ owner: id ?? NOBODY });
-            }}
-          />
-        )}
-      </Card>
+      {/* Before the first publish, the name and address belong to the Form tab and the publish dialog (late trap #47):
+          one place each, and no talk of old links for a form that has none. */}
+      {(isPublished || isFiling) && (
+        <Card title={strings.detailsTitle}>
+          {isPublished && (
+            <>
+              <Field
+                label={strings.name}
+                hint={strings.nameHint}
+                value={settings.values.name}
+                maxLength={80}
+                isRequired
+                isReadOnly={isReadOnly}
+                onChange={(name) => {
+                  settings.set({ name });
+                }}
+                {...(settings.values.name.trim() === ''
+                  ? { error: strings.nameRequired }
+                  : settings.fieldError('name') === undefined
+                    ? {}
+                    : { error: settings.fieldError('name') ?? '' })}
+              />
+              <Field
+                label={strings.address}
+                prefix={data.forms.hostedUrl('').replace(/^https?:\/\//, '')}
+                hint={strings.addressChangeWarning}
+                value={settings.values.address}
+                maxLength={40}
+                isRequired
+                isReadOnly={isReadOnly}
+                onChange={(text) => {
+                  settings.set({ address: text.toLowerCase() });
+                }}
+                {...(settings.fieldError('slug') === undefined ? {} : { error: settings.fieldError('slug') ?? '' })}
+              />
+            </>
+          )}
+          {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
+          {isFiling && (
+            <Select
+              label={strings.owner}
+              hint={ownerHint}
+              items={ownerItems}
+              value={settings.values.owner}
+              isReadOnly={isReadOnly}
+              {...(settings.fieldError('owner') === undefined ? {} : { error: settings.fieldError('owner') ?? '' })}
+              onChange={(id) => {
+                settings.set({ owner: id ?? NOBODY });
+              }}
+            />
+          )}
+        </Card>
+      )}
       <Card
         title={strings.spamTitle}
-        actions={
-          <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">
-            {strings.spamReview}
-          </ButtonLink>
-        }
+        {...(isPublished
+          ? {
+              actions: (
+                <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">
+                  {strings.spamReview}
+                </ButtonLink>
+              ),
+            }
+          : {})}
       >
         {strings.spamSummary}
       </Card>

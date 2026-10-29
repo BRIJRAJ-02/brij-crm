@@ -1,7 +1,7 @@
 // Brief
 // Purpose: a form's first publish (spec 0023, 0023-experience.md, Publishing): its name and address, then where the answers go, then the link.
 // Main task: name the form, take an address, file the questions on an object (or build one), and go live.
-// Leaves out: later publishes (straight from the header), and the settings a form keeps after (Settings tab).
+// Leaves out: later publishes (straight from the header), and the rest of the form's settings (the Settings tab, open before the first publish too).
 import {
   isDataError,
   type AnswerType,
@@ -16,11 +16,12 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { changeQuestion, fileByLabel, fittingAttributes, publishAttributesOf, publishStart } from './draft.ts';
 import { createPlannedAttributes } from '../questions/attributes.ts';
-import { readyMatch, type ReadyMatch } from './match.ts';
+import { emailToMakeUnique, readyMatch, type ReadyMatch } from './match.ts';
 import { planNewAttributes } from '../questions/questions.ts';
 import { firstRefusal } from './refusals.ts';
 import { embedSnippet } from './snippets.ts';
 import { strings } from './strings.ts';
+import { strings as questionStrings } from '../questions/strings.ts';
 
 /** Props for the first publish. */
 export interface PublishDialogProps {
@@ -67,7 +68,7 @@ const NO_CRM = 'none';
 export function PublishDialog(props: PublishDialogProps) {
   const { slug, form, draft, target, objects, canBuild, flush, onDraftChange, onTargetChange, onPublished, onClose } =
     props;
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const [step, setStep] = useState<1 | 2 | 'live'>(1);
   // Until one is typed here, the name and address follow the form's own name, so a name given in the editor just
   // before Publish (saved as the field is left) lands in the dialog too.
@@ -154,6 +155,9 @@ export function PublishDialog(props: PublishDialogProps) {
     ]),
   );
 
+  const makesUnique = canBuild ? emailToMakeUnique(draft, target) : undefined;
+  const uniqueTitle = target.items.find((item) => item.attributeId === makesUnique)?.title;
+
   // Build one out of this form: an object named after it, one attribute per unfiled question (the email unique).
   const build = async () => {
     setBusy(BUILD);
@@ -216,6 +220,18 @@ export function PublishDialog(props: PublishDialogProps) {
     let choices = target;
     if (objectId !== undefined && plans.length > 0) {
       const made = await createPlannedAttributes(data, slug, objectId, plans);
+      // A field that couldn't be made leaves its question unfiled: said, never published quietly (late trap #37).
+      const missed = plans.filter((plan) => !made.some((each) => each.questionId === plan.questionId));
+      if (missed.length > 0) {
+        toasts.toast({
+          tone: 'danger',
+          message: questionStrings.notCreated(
+            missed.map((plan) => plan.title),
+            target.objectName ?? '',
+            'submission',
+          ),
+        });
+      }
       if (made.length > 0) {
         document = made.reduce(
           (next, each) => changeQuestion(next, each.questionId, { filedOn: each.attributeId }),
@@ -259,6 +275,7 @@ export function PublishDialog(props: PublishDialogProps) {
       document,
       attributes: publishAttributesOf(choices),
       ...(choices.objectName === undefined ? {} : { objectName: choices.objectName }),
+      canChangeAttributes: canBuild,
     });
     if (problem !== undefined) {
       setBusy(undefined);
@@ -438,6 +455,11 @@ export function PublishDialog(props: PublishDialogProps) {
                     draft.questions.filter((question) => question.answerType !== 'file').length,
                   )}
             </Button>
+          )}
+          {/* An email field the object already has becomes unique on Publish (late trap #36): said before it happens,
+              last before the Publish it is about. */}
+          {uniqueTitle !== undefined && target.objectName !== undefined && (
+            <Callout tone="info">{strings.willMakeUnique(uniqueTitle, target.objectName)}</Callout>
           )}
         </>
       )}

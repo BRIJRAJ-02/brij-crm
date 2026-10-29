@@ -170,7 +170,9 @@ describe('Add to CRM and the CRM link state', () => {
     await submit(live.publicKey, body({ name: 'Ada Lovelace', email: 'needs@example.com', title: 'Engineer' }));
     await submit(live.publicKey, body({ name: 'Bot', email: 'bot@example.com' }, { company_url: 'x' }));
     const timezone = w.attribute('people.timezone');
-    await editAttribute(w.scope, { attributeId: timezone, isRequired: true });
+    // Required with nothing to fill it, written straight to the row: settings refuses that edit while a form
+    // is live (27 October 2026), and this test is about what the filing does when it meets one already there.
+    await w.query(sql`update attributes set is_required = true where id = ${timezone}::uuid`);
     const [failed, spam] = await submissionIds(w, live.id);
     if (failed === undefined || spam === undefined) throw new Error('Two submissions expected.');
     await processNow(w, failed.id);

@@ -319,7 +319,9 @@ describe('never assigned twice', () => {
 
     // Processing fails (a required field the form doesn't ask): nothing is counted.
     const timezone = w.attribute('people.timezone');
-    await editAttribute(w.scope, { attributeId: timezone, isRequired: true });
+    // Required with nothing to fill it, written straight to the row: settings refuses that edit while a form
+    // is live (27 October 2026), and this test is about what the filing does when it meets one already there.
+    await w.query(sql`update attributes set is_required = true where id = ${timezone}::uuid`);
     const submissionId = await submit(form.publicKey, 'Lea Lead', 'twice@example.com');
     await processNow(w, submissionId);
     expect(await getSubmission(w.scope, { submissionId })).toMatchObject({

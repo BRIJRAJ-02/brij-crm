@@ -22,7 +22,12 @@ export interface DeleteAccountSectionProps {
 }
 
 /** What the confirm learned when it opened: who is signed in, and the workspaces in the way. */
-type Ready = { readonly email: string; readonly blockers: readonly DeletionBlocker[] };
+type Ready = {
+  readonly email: string;
+  readonly blockers: readonly DeletionBlocker[];
+  /** Deleted workspaces only they own, by name: nobody could restore them afterwards. */
+  readonly lost: readonly string[];
+};
 
 /** The delete account confirm: `open` it, and render its `dialog`. */
 export interface DeleteAccount {
@@ -98,7 +103,7 @@ function useDeleteAccount(data: DataLayer, security: AccountSecurityState, lostW
     setReady(undefined);
     void Promise.all([data.me.get(), data.account.deletion.check()]).then(
       ([me, found]) => {
-        setReady({ email: me?.user.email ?? '', blockers: found.blockers });
+        setReady({ email: me?.user.email ?? '', blockers: found.blockers, lost: found.lost });
       },
       () => {
         setCheckFailed(true);
@@ -179,7 +184,12 @@ function useDeleteAccount(data: DataLayer, security: AccountSecurityState, lostW
     body = (
       <>
         {error !== undefined && <Callout tone="danger">{error}</Callout>}
-        {lostWorkspace !== undefined && <Callout tone="warning">{copy.lostWorkspace(lostWorkspace)}</Callout>}
+        {/* Deleted workspaces only they own (late trap #23): nobody could restore them after this, so it says so. */}
+        {[...new Set([...(lostWorkspace === undefined ? [] : [lostWorkspace]), ...ready.lost])].map((name) => (
+          <Callout key={name} tone="warning">
+            {copy.lostWorkspace(name)}
+          </Callout>
+        ))}
         {copy.text}
         <Field
           label={copy.emailLabel(ready.email)}

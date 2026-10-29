@@ -12,6 +12,13 @@ import type {
 } from '@crm/contracts';
 import type { CaptureListStore } from '../captures/list.ts';
 
+/**
+ * What a signup says once someone has signed up. Without its own, a form with an email question thanks them as an
+ * enquiry, "We will come back to you at the address you gave", which a newsletter never does (crm-f7's link page
+ * walk, 28 Oct 2026). The heading above it ("Thank you. That is with us.") is every form's.
+ */
+export const SIGNUP_THANKS = 'You’re on the list.';
+
 /** What the form is called, and the two words its page shows: the heading above it and its button. */
 export interface SignupFacts {
   readonly name: string;
@@ -76,6 +83,7 @@ export async function makeSignupForm(
           targets: {},
           headline: input.headline,
           buttonText: input.buttonText,
+          after: { kind: 'message', message: SIGNUP_THANKS },
         },
         expectedRevision: made.revision,
         mutationId: mintId(),

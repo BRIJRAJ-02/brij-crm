@@ -15,6 +15,7 @@ import {
   removeQuestion,
   restoreQuestion,
   sameDocument,
+  sameValue,
   savableDraft,
   statusOf,
 } from './draft.ts';
@@ -149,6 +150,14 @@ describe('the builder’s draft changes', () => {
     const reordered = { ...base, look: { corners: 'rounded' as const, colour: 'light' as const } };
     expect(sameDocument(base, reordered)).toBe(true);
     expect(sameDocument(base, { ...base, headline: 'Hello' })).toBe(false);
+  });
+
+  it('compares routing rules by value, so rules already live never read as waiting for publish', () => {
+    const live = [{ id: 'r1', when: { key: 'size', is: 'big' }, then: { kind: 'page', pageId: 'p1' } }];
+    const written = [{ then: { pageId: 'p1', kind: 'page' }, id: 'r1', when: { is: 'big', key: 'size' } }];
+    expect(sameValue(live, written)).toBe(true);
+    // A list's order is still a change: the first rule that matches wins.
+    expect(sameValue([...live, { ...live[0], id: 'r2' }], [{ ...live[0], id: 'r2' }, ...live])).toBe(false);
   });
 });
 

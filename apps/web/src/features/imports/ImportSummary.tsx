@@ -63,8 +63,13 @@ function JobProgress({ job, label }: { readonly job: JobView | undefined; readon
 }
 
 /** How the import ended, as the summary's title says it. */
-function outcomeTitle(view: ImportView, job: JobView | undefined): string {
+function outcomeTitle(view: ImportView, job: JobView | undefined, undoJob: JobView | undefined): string {
   if (view.status === 'staging') return strings.notStarted;
+  // The import reads `undone` from the moment its undo starts (late trap #21): an undo that failed or was
+  // cancelled part way says so, and Undo stays open to finish it.
+  if (view.status === 'undone' && (undoJob?.status === 'failed' || undoJob?.status === 'cancelled')) {
+    return strings.undoStopped;
+  }
   if (view.status === 'undone') return strings.undone;
   if (job?.status === 'failed') return strings.failed;
   if (job?.status === 'cancelled') return strings.cancelled;
@@ -248,7 +253,7 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
         </Card>
       ) : (
         <Card
-          title={isUndoRunning ? strings.undoing : outcomeTitle(view, job)}
+          title={isUndoRunning ? strings.undoing : outcomeTitle(view, job, undoJob)}
           actions={
             <InfoTip label={strings.counts.refused} {...(view.canUndo ? { example: strings.undoInfo } : {})}>
               {strings.countsInfo}

@@ -2,6 +2,8 @@ import type { AttributeDefinition, View } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import {
   createView,
+  farAttributesUnchecked,
+  throughTargets,
   isDefaultSort,
   withDefaultOrderAsNone,
   landingView,
@@ -70,6 +72,18 @@ describe('what a view runs', () => {
     const linked = { ...COMPANY, relationship: { targetObjectIds: ['companies'] } } as AttributeDefinition;
     expect(relationTarget(linked)).toBe('companies');
     expect(runningQuery({ filter, sorts: [] }, [CREATED, NAME, linked])).toEqual({ status: 'pending' });
+    // Asked before the far attributes load (the page's first rows, late trap #45): kept for the server to check,
+    // never dropped to an unfiltered table.
+    const withLinked = [CREATED, NAME, linked];
+    expect(runningQuery({ filter, sorts: [] }, withLinked, farAttributesUnchecked(withLinked))).toMatchObject({
+      status: 'ready',
+      filter,
+    });
+    // The page reads the far object first; a far field the reader can't use then drops out before anything runs.
+    expect(throughTargets({ filter, sorts: [] }, withLinked)).toEqual(['companies']);
+    const read = farAttributesUnchecked(withLinked, (id) => (id === 'companies' ? [] : undefined));
+    expect(runningQuery({ filter, sorts: [] }, withLinked, read)).toMatchObject({ status: 'ready' });
+    expect(runningQuery({ filter, sorts: [] }, withLinked, read)).not.toHaveProperty('filter');
   });
 
   it('reads a view’s saved query', () => {

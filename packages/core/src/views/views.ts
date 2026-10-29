@@ -17,13 +17,21 @@ import {
 import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
 import { checkViewQuery } from '../engine/query/page.ts';
+import { isArchivedNow, loadAttributes, loadAttributesById, type AttributeDef } from '../engine/values.ts';
 import { postgresError, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
-import { can, fieldLevel, type Access } from '../access/policy.ts';
+import { can, fieldLevel, isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject } from '../access/visibility.ts';
-import { viewRule, type ViewRuleCaller } from '@crm/contracts/views';
+import {
+  filterAttributeIds,
+  mergeFilter,
+  mergeSorts,
+  seenFilter,
+  viewRule,
+  type ViewRuleCaller,
+} from '@crm/contracts/views';
 import { defaultViewConfig } from './seed.ts';
 
 const { memberViewState, members, objects, views } = schema;
@@ -113,18 +121,57 @@ export function configOf(stored: unknown): ViewConfig {
 }
 
 /**
- * The config as this caller may see it: columns, card fields and the table's
- * grouping naming an attribute hidden from them left out (AC-479). The stored
- * config keeps them.
+ * The config as this caller may see it: columns, card fields, the table's
+ * grouping, and filter conditions and sorts naming an attribute hidden from
+ * them left out (AC-479). Filter conditions and sorts used to go to them whole,
+ * values included: a viewer with Salary hidden was sent "Salary contains
+ * senior" (security review, 28 October 2026). Every field the filter names is
+ * judged on its own object (`filterShown`). The stored config
+ * keeps everything, and a save puts back what the viewer wasn't sent
+ * (`mergeFilter`, `mergeSorts`).
  */
-function visibleConfig(access: Access, objectId: string, config: ViewConfig): ViewConfig {
+function visibleConfig(
+  access: Access,
+  objectId: string,
+  config: ViewConfig,
+  filterShown: ReadonlySet<string>,
+): ViewConfig {
+  if (isOpen(access)) return config;
   const shown = (id: string) => fieldLevel(access, { id, objectId }) !== 'hidden';
   const columns = config.columns.filter((column) => shown(column.attributeId));
+  const filter = seenFilter(config.filter, filterShown);
+  const sorts = config.sorts.filter((sort) => shown(sort.attributeId));
   // A grouping attribute hidden from them groups nothing for them: their table is one list.
-  const { groupBy, ...rest } = config;
-  const grouped = groupBy !== undefined && shown(groupBy) ? { ...rest, groupBy } : rest;
+  const { groupBy, filter: _filter, ...rest } = config;
+  const kept = { ...rest, sorts, ...(filter === undefined ? {} : { filter }) };
+  const grouped = groupBy !== undefined && shown(groupBy) ? { ...kept, groupBy } : kept;
   if (config.board === undefined) return { ...grouped, columns };
   return { ...grouped, columns, board: { ...config.board, cardFields: config.board.cardFields.filter(shown) } };
+}
+
+/**
+ * The attributes a view's filter names that the caller may see, each judged on its own object: this one's, or the
+ * far object a `through` condition reaches. Judging a far field on the view's object instead let one on an object
+ * hidden from the caller read as visible. A field gone for good is in neither set: it shows no one anything.
+ */
+async function filterFieldsShown(
+  tx: WorkspaceTx,
+  access: Access,
+  objectId: string,
+  config: ViewConfig,
+): Promise<ReadonlySet<string>> {
+  const named = filterAttributeIds(config.filter);
+  if (named.length === 0 || isOpen(access)) return new Set(named);
+  const found = await loadAttributesById(tx, named);
+  return new Set(
+    [...found.values()].flatMap((attribute) =>
+      attribute.objectId !== null &&
+      objectLevel(access, attribute.objectId) !== 'none' &&
+      fieldLevel(access, { id: attribute.id, objectId: attribute.objectId }) !== 'hidden'
+        ? [attribute.id]
+        : [],
+    ),
+  );
 }
 
 export function summaryOf(row: ViewRow & { readonly objectId: string }): ViewSummary {
@@ -143,10 +190,15 @@ export function summaryOf(row: ViewRow & { readonly objectId: string }): ViewSum
   };
 }
 
-export function viewOf(access: Access, row: ViewRow & { readonly objectId: string }): View {
+export async function viewOf(
+  tx: WorkspaceTx,
+  access: Access,
+  row: ViewRow & { readonly objectId: string },
+): Promise<View> {
+  const config = configOf(row.config);
   return {
     ...summaryOf(row),
-    config: visibleConfig(access, row.objectId, configOf(row.config)),
+    config: visibleConfig(access, row.objectId, config, await filterFieldsShown(tx, access, row.objectId, config)),
     queryVersion: row.queryVersion,
     ...(row.querySavedByMemberId === null ? {} : { querySavedBy: row.querySavedByMemberId }),
     ...(row.querySavedAt === null ? {} : { querySavedAt: row.querySavedAt.toISOString() }),
@@ -242,7 +294,7 @@ export async function listViews(scope: EngineScope, objectId: string): Promise<V
 
 /** One view whole, as the caller may see it, or `NOT_FOUND` (AC-463). */
 export async function getView(scope: EngineScope, viewId: string): Promise<View> {
-  return inWorkspace(scope, async (tx) => viewOf(scope.access, await readView(tx, scope, viewId, false)));
+  return inWorkspace(scope, async (tx) => viewOf(tx, scope.access, await readView(tx, scope, viewId, false)));
 }
 
 /** A draft saved as a view's query (AC-468). */
@@ -273,6 +325,37 @@ async function saverName(tx: WorkspaceTx, memberId: string | null): Promise<stri
  * run (an attribute not on it, archived, hidden, or not sortable), and
  * `CONFIG_INVALID` past 64 kB. A refused save writes nothing.
  */
+/**
+ * The object's attributes the caller may see, archived or not (`seeable`), and those of them not archived (`live`):
+ * what `mergeFilter` tells apart, since an archived condition the saver can see may go with a new filter (AC-480)
+ * while a hidden one may not.
+ */
+async function filterIds(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  objectId: string,
+  stored: ViewConfig['filter'],
+): Promise<{ readonly seeable: ReadonlySet<string>; readonly live: ReadonlySet<string> }> {
+  const own = await loadAttributes(tx, objectId);
+  // The far fields a `through` condition reaches live on other objects: each is judged on its own object, so one
+  // hidden from the saver, or on an object they can't read, is unseen however visible the relation leading to it.
+  const farIds = filterAttributeIds(stored).filter((id) => !own.has(id));
+  const far = farIds.length === 0 ? new Map<string, AttributeDef>() : await loadAttributesById(tx, farIds);
+  const attributes = [...own.values(), ...far.values()].filter(
+    (attribute) =>
+      attribute.objectId !== null &&
+      objectLevel(scope.access, attribute.objectId) !== 'none' &&
+      fieldLevel(scope.access, { id: attribute.id, objectId: attribute.objectId }) !== 'hidden',
+  );
+  // A field gone for good (its object's deleted, the attribute purged) is no one's to protect: it may go like an
+  // archived one, rather than refuse every later edit of the filter.
+  const gone = farIds.filter((id) => !far.has(id));
+  return {
+    seeable: new Set([...attributes.map((attribute) => attribute.id), ...gone]),
+    live: new Set(attributes.flatMap((attribute) => (isArchivedNow(attribute) ? [] : [attribute.id]))),
+  };
+}
+
 export async function saveViewQuery(
   scope: EngineScope,
   input: SaveViewQueryInput,
@@ -289,14 +372,29 @@ export async function saveViewQuery(
         const name = await saverName(tx, row.querySavedByMemberId);
         throw refuse('VIEW_CHANGED', `${name} changed this view’s filters since you started.`);
       }
-      const filter = input.filter === undefined || input.filter.conditions.length === 0 ? undefined : input.filter;
+      const sent = input.filter === undefined || input.filter.conditions.length === 0 ? undefined : input.filter;
+      // A condition on a field the saver can't see never reached their screen, so what they send back leaves it
+      // out. Writing that would delete it for everyone, for good (27 October 2026): one flipped sort was enough.
+      const ids = await filterIds(tx, scope, row.objectId, configOf(row.config).filter);
+      const merged = mergeFilter(configOf(row.config).filter, sent, ids);
+      if (merged.kind === 'blocked') {
+        throw refuse(
+          'FORBIDDEN',
+          'This view also filters on a field you can’t see, so its filter can’t be changed here. Ask an admin who can see it, or change the sorting instead.',
+        );
+      }
+      // Only what they sent is checked: a condition put back was checked when it was stored, and compiling it
+      // under this saver's access would refuse the very field they can't see.
       await checkViewQuery(tx, scope, {
         objectId: row.objectId,
-        ...(filter === undefined ? {} : { filter }),
+        ...(sent === undefined ? {} : { filter: sent }),
         sorts: input.sorts,
       });
+      const filter = merged.filter;
       const { filter: _previous, ...rest } = configOf(row.config);
-      const config = ViewConfig.safeParse({ ...rest, ...(filter === undefined ? {} : { filter }), sorts: input.sorts });
+      // A sort on an archived or hidden field is kept through a save that left the sorts alone (AC-480).
+      const sorts = mergeSorts(rest.sorts, input.sorts, ids.live);
+      const config = ViewConfig.safeParse({ ...rest, ...(filter === undefined ? {} : { filter }), sorts });
       if (!config.success) throw refuse('CONFIG_INVALID', 'This view’s settings are not valid.');
       if (new TextEncoder().encode(JSON.stringify(config.data)).length > MAX_VIEW_CONFIG_BYTES) {
         throw refuse('CONFIG_INVALID', 'This view has too many settings to save.');
@@ -323,7 +421,7 @@ export async function saveViewQuery(
         throw error;
       }
       context.record({ views: [{ viewId: row.id, objectId: row.objectId }] });
-      return viewOf(scope.access, await readView(tx, scope, row.id, false));
+      return viewOf(tx, scope.access, await readView(tx, scope, row.id, false));
     },
     hooks,
   );

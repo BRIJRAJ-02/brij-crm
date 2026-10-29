@@ -48,6 +48,8 @@ export interface HostedFormProps {
   readonly onRemoveUpload?: HostedRemoveUpload;
   /** Goes to the form's web address after a submission, when it sends visitors on. */
   readonly onRedirect?: (url: string) => void;
+  /** Reads the form again and draws its new version in place, the answers kept; answers whether it could. */
+  readonly onStale?: () => Promise<boolean>;
   /** The clock, for the fill time (tests pass their own). */
   readonly now?: () => number;
   /** The Timefix wordmark under the form; the web app serves these two by default. */
@@ -71,6 +73,7 @@ export function HostedForm({
   onRedirect,
   onUpload,
   onRemoveUpload,
+  onStale,
   now = Date.now,
   logo = TIMEFIX_LOGO,
 }: HostedFormProps) {
@@ -83,6 +86,7 @@ export function HostedForm({
     onRedirect,
     onUpload,
     onRemoveUpload,
+    onStale,
     now,
   });
   const { words, preview } = state;

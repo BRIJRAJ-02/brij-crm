@@ -7,13 +7,79 @@ import type { Hue, ObjectIcon, PickerAttributeType } from '@crm/data';
 export function pluralOf(singular: string): string {
   const name = singular.trim();
   if (name === '') return '';
+  if (SAME_BOTH.test(lastWord(name).toLowerCase())) return name;
   const lower = name.toLowerCase();
   const end = lower.slice(-1);
+  // An acronym takes a small s, "APIs" as "KPIs" is read back as a plural; a capitals word takes capitals.
+  if (/^[A-Z]{2,}$/.test(lastWord(name)) && !/\s/.test(name)) return `${name}s`;
   const keepsCase = name === name.toUpperCase() && name.length > 1;
   const add = (suffix: string) => (keepsCase ? suffix.toUpperCase() : suffix);
   if (/(s|x|z|ch|sh)$/.test(lower)) return `${name}${add('es')}`;
   if (end === 'y' && !/[aeiou]y$/.test(lower)) return `${name.slice(0, -1)}${add('ies')}`;
   return `${name}${add('s')}`;
+}
+
+/**
+ * Whether a name reads as a plural already ("Projects", "Graphic Designers"): its last word ends in an s that isn't
+ * a singular's own (Address, Status, Analysis). The New object dialog's Name was always taken as the singular, so
+ * "Projects" became the object "Projectses", whose API name can't change afterwards (crm-f7, 28 Oct 2026).
+ */
+export function looksPlural(name: string): boolean {
+  const word = lastWord(name);
+  // Capitals and a small s are an acronym's plural ("KPIs", "APIs"), whatever letter comes before the s.
+  if (/^[A-Z]{2,}s$/.test(word)) return true;
+  const last = word.toLowerCase();
+  if (SAME_BOTH.test(last)) return false;
+  // Plurals in -us and -is a CRM may be named ("Menus", "Emojis"): missed, "Menus" became "Menuses", an API name
+  // fixed for good; a singular wrongly taken for a plural only guesses a singular that can be renamed later.
+  if (US_IS_PLURALS.test(last)) return true;
+  return last.length > 2 && last.endsWith('s') && !/(ss|us|is)$/.test(last);
+}
+
+/** A name's last word, as typed. */
+function lastWord(name: string): string {
+  return name.trim().split(/\s+/).at(-1) ?? '';
+}
+
+/** Words the same in the singular and the plural ("Series", "News", "Analytics", "Lens"): neither guess changes them. */
+const SAME_BOTH =
+  /^(series|species|news|analytics|logistics|economics|ethics|physics|mathematics|politics|lens|canvas|atlas|gas|alias|bias|saas|ios)$/;
+
+/** Plurals ending -us or -is, where most words so ending are singulars (Status, Analysis). */
+const US_IS_PLURALS = /^(menus|gurus|emus|haikus|emojis|wikis|taxis|skis|kiwis)$/;
+
+/** Singulars that end in -ie, whose plural ends -ies like Company's: "Movies" is "Movie", not "Movy". */
+const IE_SINGULARS = /\b(movie|cookie|calorie|rookie|selfie|zombie|freebie|pie|tie)s$/;
+
+/** Singulars in -us, whose plural adds -es ("Statuses"): every other -uses is a word in -use plus s ("Houses"). */
+const US_SINGULARS = /\b(status|campus|bonus|virus|census|focus|syllabus|corpus|bus)es$/;
+
+/**
+ * The singular of a plural name, a guess the person can correct: "Companies" is "Company", "Boxes" "Box",
+ * "Addresses" "Address", "Statuses" "Status", "Cases" "Case", "Houses" "House", "Graphic Designers" "Graphic Designer". Only the last
+ * word changes. A name that doesn't look plural comes back as it is.
+ */
+export function singularOf(name: string): string {
+  const trimmed = name.trim();
+  if (!looksPlural(trimmed)) return trimmed;
+  if (US_IS_PLURALS.test(lastWord(trimmed).toLowerCase())) return trimmed.slice(0, -1);
+  // Anchored to the last word: "Opportunities" must not read as "-ties" from "tie".
+  const lower = lastWord(trimmed).toLowerCase();
+  if (IE_SINGULARS.test(lower)) return trimmed.slice(0, -1);
+  if (lower.endsWith('ies')) return `${trimmed.slice(0, -3)}${trimmed.slice(-3) === 'IES' ? 'Y' : 'y'}`;
+  // -es after ss, x, z, ch or sh is the plural's own ("Addresses", "Boxes", "Matches"), and after a known -us singular
+  // ("Statuses"); after anything else the e is the word's ("Cases", "Houses", "Licenses"), so only the s goes.
+  if (/(ss|x|z|ch|sh)es$/.test(lower) || US_SINGULARS.test(lower)) return trimmed.slice(0, -2);
+  return trimmed.slice(0, -1);
+}
+
+/**
+ * The singular and plural a typed name gives: a plural ("Projects") is taken as the plural, its singular guessed;
+ * anything else is the singular, its plural guessed.
+ */
+export function namesFrom(typed: string): { readonly singular: string; readonly plural: string } {
+  const name = typed.trim();
+  return looksPlural(name) ? { singular: singularOf(name), plural: name } : { singular: name, plural: pluralOf(name) };
 }
 
 /** Words in an object's name, and the icon each suggests (curated `ObjectIcon`s only). */

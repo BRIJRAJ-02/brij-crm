@@ -5,7 +5,9 @@
 // scrolls into it, and a folded group's rows are never asked for. The grid
 // reads the open groups' windows end to end as one source.
 import {
+  BOARD_MAX_COLUMNS,
   isGroupable,
+  liveOptionCount,
   type AttributeDefinition,
   type BoardStore,
   type RecordView,
@@ -19,6 +21,7 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { planBoard, type BoardPlan } from '../board/plan.ts';
 import { strings as boardStrings } from '../board/strings.ts';
+import { strings } from './strings.ts';
 
 /** A grouped table's rows and their groups, or why it has none yet. */
 export interface GroupedRows {
@@ -38,6 +41,23 @@ export function groupPlan(
   if (attribute === undefined || !isGroupable(attribute)) return undefined;
   const plan = planBoard(attributes, { groupByAttributeId: groupBy, cardFields: [], showEmptyColumns: false });
   return plan.kind === 'board' && plan.groupBy.id === groupBy ? plan : undefined;
+}
+
+/**
+ * Why a table the view groups shows its rows ungrouped, or undefined when it groups (or isn't asked to): late trap
+ * #30, a 51st option quietly ungrouped every grouped table. A field the reader can't see is never named.
+ */
+export function groupingGap(
+  attributes: readonly AttributeDefinition[],
+  groupBy: string | undefined,
+): string | undefined {
+  if (groupBy === undefined || groupPlan(attributes, groupBy) !== undefined) return undefined;
+  const attribute = attributes.find((each) => each.id === groupBy);
+  if (attribute === undefined) return strings.groupingGone;
+  if (attribute.isArchived) return strings.groupingArchived(attribute.title);
+  if (!isGroupable(attribute)) return strings.groupingCant(attribute.title);
+  const count = liveOptionCount(attribute.options ?? []);
+  return count > BOARD_MAX_COLUMNS ? strings.groupingTooMany(attribute.title, count, BOARD_MAX_COLUMNS) : undefined;
 }
 
 /** One group as the table runs it: its column's window (when in), and where its rows start. */

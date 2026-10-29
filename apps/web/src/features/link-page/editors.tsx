@@ -157,6 +157,22 @@ function iconItems(icons: readonly ProfileLinkIcon[]): readonly SelectItem[] {
   ];
 }
 
+/** The site an address names, for a link's title left empty: "example.com" from "https://www.example.com/a". */
+function siteOf(url: string): string | undefined {
+  const typed = url.trim();
+  // An email address or a phone number names no site: those still ask for a title.
+  if (typed === '' || typed.includes('@') || /^[+\d\s()-]+$/.test(typed)) return undefined;
+  try {
+    const host = new URL(/^[a-z][a-z0-9+.-]*:/i.test(typed) ? typed : `https://${typed}`).hostname.replace(
+      /^www\./,
+      '',
+    );
+    return host.includes('.') ? host.slice(0, 60) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Add or edit a link: its title, address, note and icon, with the block drawn as typed under them. */
 export function LinkEditor({
   item,
@@ -170,15 +186,21 @@ export function LinkEditor({
 }: BlockEditorProps) {
   const formId = useId();
   const editing = item?.kind === 'link' ? item : undefined;
-  const [title, setTitle] = useState(editing?.title ?? '');
+  // A title that was only the address's site starts empty, so it keeps following the address when that changes.
+  const [title, setTitle] = useState(
+    editing === undefined || editing.title === siteOf(editing.url) ? '' : editing.title,
+  );
   const [url, setUrl] = useState(editing?.url ?? '');
   const [note, setNote] = useState(editing?.note ?? '');
   const [icon, setIcon] = useState<string>(editing?.icon ?? 'auto');
   const [problems, setProblems] = useState<BlockProblems>({});
   const icons = useMemo(() => iconItems(linkPage.icons), [linkPage]);
+  // Left empty, the title is the address's site ("example.com"), shown as the placeholder and in the preview, so
+  // a link added with its address alone is never refused (flow walks, 29 October 2026: L3).
+  const guessed = siteOf(url);
   const draft: BlockDraft = {
     kind: 'link',
-    title,
+    title: title.trim() === '' ? (guessed ?? title) : title,
     url,
     note,
     ...(icon === 'auto' ? {} : { icon }),
@@ -212,7 +234,7 @@ export function LinkEditor({
             {
               kind: 'link',
               id: editing?.id ?? 'draft',
-              title: title.trim() === '' ? strings.linkTitlePlaceholder : title.trim(),
+              title: title.trim() === '' ? (guessed ?? strings.linkTitlePlaceholder) : title.trim(),
               // Only a checked address: one the rule refuses draws as words, never as a link.
               href: checked.ok ? shownUrl : '',
               hue: editing?.hue ?? newHue,
@@ -257,9 +279,9 @@ export function LinkEditor({
           label={strings.linkTitle}
           name="title"
           autoComplete="off"
-          isRequired
+          isRequired={guessed === undefined}
           maxLength={60}
-          placeholder={strings.linkTitlePlaceholder}
+          placeholder={guessed ?? strings.linkTitlePlaceholder}
           value={title}
           onChange={(next) => {
             setTitle(next);

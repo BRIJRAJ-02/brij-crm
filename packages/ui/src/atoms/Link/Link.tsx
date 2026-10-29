@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { Link as AriaLink } from 'react-aria-components';
 import { isAppPath, safeHref } from '../../lib/safe-href.ts';
+import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Link.module.css';
+import { strings } from './strings.ts';
 
 /** Props for Link. */
 export interface LinkProps {
@@ -14,6 +16,11 @@ export interface LinkProps {
    * keys; `href` is not rendered then.
    */
   readonly onPress?: () => void;
+  /**
+   * Opens an app path in a new tab, said to screen readers. For a step the person must take elsewhere while a
+   * half filled dialog waits here (a round robin group a new booking page needs), so what they typed stays.
+   */
+  readonly opensInNewTab?: boolean;
 }
 
 /** Where a checked href goes: inside the app, or out to another site in a new tab. */
@@ -26,7 +33,7 @@ export function linkTarget(href: string) {
  * in a new tab. A link that fails `safeHref` (a `javascript:` URL) renders as
  * plain text (AC-14).
  */
-export function Link({ href, children, onPress }: LinkProps) {
+export function Link({ href, children, onPress, opensInNewTab = false }: LinkProps) {
   if (onPress !== undefined) {
     return (
       <AriaLink className={styles.root} onPress={onPress}>
@@ -36,6 +43,14 @@ export function Link({ href, children, onPress }: LinkProps) {
   }
   const safe = safeHref(href);
   if (safe === undefined) return <span className={styles.text}>{children}</span>;
+  if (opensInNewTab) {
+    return (
+      <AriaLink className={styles.root} href={safe} target="_blank" rel="noopener noreferrer">
+        {children}
+        <VisuallyHidden> {strings.newTab}</VisuallyHidden>
+      </AriaLink>
+    );
+  }
   return (
     <AriaLink className={styles.root} href={safe} {...linkTarget(safe)}>
       {children}

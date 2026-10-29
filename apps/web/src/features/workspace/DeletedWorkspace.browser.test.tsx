@@ -34,7 +34,7 @@ function fakeData(): DataLayer {
         getSnapshot: () => security,
       }),
       isFresh: () => false,
-      deletion: { check: () => Promise.resolve({ blockers: [] }) },
+      deletion: { check: () => Promise.resolve({ blockers: [], lost: [] }) },
     },
   } as unknown as DataLayer;
 }

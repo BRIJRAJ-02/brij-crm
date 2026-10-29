@@ -222,6 +222,9 @@ describe('the remove dialog (AC-816)', () => {
       calendars: 0,
       openTasks: 0,
       records: 0,
+      defaults: 0,
+      requiredDefaults: 0,
+      invitations: 0,
     });
     // A member asks about nobody but themself.
     expect(

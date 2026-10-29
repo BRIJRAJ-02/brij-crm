@@ -33,6 +33,17 @@ export const External: Story = {
   },
 };
 
+/** An app path that opens beside the page, so a half filled dialog waits; screen readers hear it opens a new tab. */
+export const InNewTab: Story = {
+  args: { href: '/w/acme/bookings/round-robin', children: 'Manage round robin', opensInNewTab: true },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    const link = canvas.getByRole('link', { name: 'Manage round robin (opens in a new tab)' });
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  },
+};
+
 /** A `javascript:` URL is refused and renders as text (AC-14). */
 export const Refused: Story = {
   args: { href: 'javascript:alert(1)', children: 'Click me' },

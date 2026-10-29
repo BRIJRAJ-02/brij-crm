@@ -86,7 +86,16 @@ async function start(): Promise<void> {
     loading.destroy();
     document.title = message.title;
   } else {
-    const { form } = loaded;
+    let form = loaded.form;
+    // An old address still finds the form (late trap #54): the page moves to its current one in place, keeping the
+    // query (prefill, UTM tags). Never inside a site's frame, whose address is the site's embed's own.
+    if (!embedded && form.key !== address) {
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `/f/${form.key}${window.location.search}${window.location.hash}`,
+      );
+    }
     document.title = form.headline;
     document.documentElement.lang = form.language;
     document.documentElement.dataset.theme = form.look.colour;
@@ -97,7 +106,7 @@ async function start(): Promise<void> {
     // A fill ticket per round (the spam checks): asked for as the page loads, and for the next round as one is
     // sent, so the server's clock times the filling. Without one the submit still goes.
     const tickets = new Map<number, Promise<string | undefined>>([[0, client.ticket(address)]]);
-    mountHostedForm(root, form, {
+    const drawn = mountHostedForm(root, form, {
       mode,
       countryGuess: guessCountry(),
       prefill,
@@ -110,6 +119,15 @@ async function start(): Promise<void> {
       },
       onUpload: (file, onProgress) => client.upload(address, file, onProgress),
       onRemoveUpload: (fileId) => client.removeUpload(address, fileId),
+      // Published again while this page was open (late trap #18): the new version is drawn in place, the same form
+      // keyed the same, so every answer given stays by its question's key.
+      onStale: async () => {
+        const fresh = await client.load(address);
+        if (fresh.kind !== 'form' || fresh.form.versionNumber === form.versionNumber) return false;
+        form = fresh.form;
+        drawn.update(form);
+        return true;
+      },
       onSubmit: async (submission): Promise<HostedSubmitOutcome> => {
         const idempotencyKey = keys.get(submission.round) ?? crypto.randomUUID();
         keys.set(submission.round, idempotencyKey);

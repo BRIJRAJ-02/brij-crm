@@ -313,6 +313,61 @@ describe('rotations (AC-728, AC-729, AC-751, AC-752, AC-758)', () => {
     expect((await listRotations(w.owner)).map((each) => each.id)).toEqual([rotation.id]);
   });
 
+  it('never leaves a live page’s rotation with nobody switched on (late trap #22)', async () => {
+    // The page stayed Live, offering an empty calendar for ever, and nobody was told.
+    const w = await workspace();
+    const sam = await w.addMember('Sam Lee');
+    const kim = await w.addMember('Kim Park');
+    const { rotation, page } = await roundRobin(w, [sam.id, kim.id]);
+    const allOff = [pooled(sam.id, { isOn: false }), pooled(kim.id, { isOn: false })];
+    expect(
+      await refusalOf(updateRotation(w.owner, { rotationId: rotation.id, settings: {}, members: allOff }, NOW)),
+    ).toMatchObject({
+      code: 'IN_USE',
+      message:
+        '“Demo” books through this group, so it needs someone switched on. Keep someone on, or pause that page first.',
+    });
+    expect(
+      (await refusalOf(updateRotation(w.owner, { rotationId: rotation.id, settings: {}, members: [] }, NOW))).code,
+    ).toBe('IN_USE');
+    // Nothing changed: both are still on.
+    expect((await listRotations(w.owner, NOW))[0]?.members.map((member) => member.isOn)).toEqual([true, true]);
+    // One left on is enough; with the page paused, all may go.
+    await updateRotation(
+      w.owner,
+      { rotationId: rotation.id, settings: {}, members: [pooled(sam.id), pooled(kim.id, { isOn: false })] },
+      NOW,
+    );
+    await updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'paused' } });
+    const off = await updateRotation(w.owner, { rotationId: rotation.id, settings: {}, members: allOff }, NOW);
+    expect(off.members.every((member) => !member.isOn)).toBe(true);
+    // Nor may the page go live again on it, or a live page be pointed at it.
+    expect(
+      await refusalOf(updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'live' } })),
+    ).toMatchObject({
+      code: 'HOSTS_INVALID',
+      message:
+        'Nobody is switched on in Sales, so this page would offer no times. Switch someone on there, or pick another rotation.',
+    });
+    expect(
+      (
+        await refusalOf(
+          createBookingPage(
+            w.owner,
+            {
+              id: newId(),
+              title: 'Second',
+              timeZone: 'UTC',
+              kind: 'round_robin',
+              hosts: { fixed: [], rotations: [rotation.id] },
+            },
+            NOW,
+          ),
+        )
+      ).code,
+    ).toBe('HOSTS_INVALID');
+  });
+
   it('starts a member who joins at the pool’s average count, so they aren’t flooded (AC-730)', async () => {
     const w = await workspace();
     const sam = await w.addMember('Sam Lee');

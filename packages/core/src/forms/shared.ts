@@ -12,10 +12,11 @@ import {
   type PublicQuestion,
   type PublishAttribute,
 } from '@crm/contracts';
-import { Hue } from '@crm/contracts/values';
+import { ANONYMOUS, Hue, isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { can, fieldLevel, objectLevel, type Access } from '../access/policy.ts';
+import { attributeVisible } from '../access/visibility.ts';
 
 const { attributeOptions, forms, formVersions, objects } = schema;
 
@@ -181,7 +182,11 @@ export async function objectName(tx: WorkspaceTx, objectId: string): Promise<str
 
 /**
  * The target's attributes as the publish check sees them: live ones, the reader's write access on each
- * (AC-546). None for a form that keeps its submissions only.
+ * (AC-546), and whether they may see it at all. None for a form that keeps its submissions only.
+ *
+ * Every live attribute is listed, hidden ones included: a required field nothing fills stops every submission
+ * whether or not the publisher may see it, and leaving it out let the form go live and fail at submission time
+ * (27 October 2026). The check never names one the publisher can't see (`canSee`).
  */
 export async function publishAttributes(
   tx: WorkspaceTx,
@@ -201,13 +206,9 @@ export async function publishAttributes(
         type: attribute.type,
         objectName: name,
         canWrite: writesObject && fieldLevel(access, { id: attribute.id, objectId }) === 'write',
-        // Required with nothing else to fill it: a checkbox is false until ticked, and a default fills itself.
-        ...(attribute.isRequired &&
-        !attribute.isSystem &&
-        attribute.type !== 'checkbox' &&
-        (attribute.defaultValue === null || attribute.defaultValue === undefined)
-          ? { isRequired: true }
-          : {}),
+        ...(attributeVisible(access, attribute) ? {} : { canSee: false }),
+        // A visitor is nobody, so a Current user default fills nothing for them either (`ANONYMOUS`).
+        ...(isUnfillableRequired(attribute, ANONYMOUS) ? { isRequired: true } : {}),
       },
     ]),
   );

@@ -87,6 +87,11 @@ export interface ViewScreenProps {
   readonly slug: string;
   readonly object: ObjectSummary;
   readonly attributes: readonly AttributeDefinition[];
+  /**
+   * The object's archived attributes the reader may see. Only the query is run over them, so a condition or sort on
+   * one reads as archived, which the view then names (AC-480), rather than as unknown.
+   */
+  readonly archivedAttributes?: readonly AttributeDefinition[];
   readonly members: readonly MemberSummary[];
   readonly view: SavedViewSource;
   readonly views: ViewsListSource;
@@ -138,6 +143,12 @@ const FOLLOW_SPREAD_MS = 600;
 /** One view of an object: the bars, the Toolbar with its draft, and the table running the view. */
 export function ViewScreen(props: ViewScreenProps) {
   const { slug, object, attributes, members, records, opened, param, writeParam } = props;
+  // What the query runs over: the live attributes and the archived ones the reader may see (AC-480).
+  const archived = props.archivedAttributes;
+  const queried = useMemo(
+    () => (archived === undefined ? attributes : [...attributes, ...archived]),
+    [attributes, archived],
+  );
   // The object's key, so a url field (here and in the filter's value editor) checks a company's handle as its page.
   const objectKey = object.standardKey ?? object.apiSlug;
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -243,16 +254,40 @@ export function ViewScreen(props: ViewScreenProps) {
     () =>
       runningQuery(
         draft.query,
-        attributes,
+        queried,
         farAttributesFrom(attributes, (id) => far.get(id)),
       ),
-    [draft.query, attributes, far],
+    [draft.query, queried, attributes, far],
   );
   // While a through filter's far attributes load, the table keeps what it ran last (the bar says it is working).
   const [lastReady, setLastReady] = useState(effective.status === 'ready' ? effective : undefined);
   if (effective.status === 'ready' && effective !== lastReady) setLastReady(effective);
   const running = effective.status === 'ready' ? effective : lastReady;
-  const query = useMemo(() => (running === undefined ? { sorts: [] } : toViewQuery(running)), [running]);
+  // Nothing ran yet (the far attributes still loading as the page opens): the loader's question, which kept the
+  // through conditions unchecked, never an unfiltered table (late trap #45).
+  const query = useMemo(
+    () => (running === undefined ? props.recordsQuery : toViewQuery(running)),
+    [running, props.recordsQuery],
+  );
+  // The archived fields this person can see that the view's filter or sorts use, by title (AC-480). A draft is
+  // built from the query that runs, so its first filter edit already leaves them out; the saved view's are named
+  // too while a draft is open, so the warning stays up until the save it warns about. A through filter's archived
+  // attribute is on the far object, so its title is looked up there as well.
+  const archivedTitles = useMemo(() => {
+    const savedRun = draft.isDraft
+      ? runningQuery(
+          saved,
+          queried,
+          farAttributesFrom(attributes, (id) => far.get(id)),
+        )
+      : undefined;
+    const ids = new Set([...(running?.skipped ?? []), ...(savedRun?.status === 'ready' ? savedRun.skipped : [])]);
+    const known = [...queried, ...[...far.values()].flat()];
+    return [...ids].flatMap((id) => {
+      const title = known.find((attribute) => attribute.id === id)?.title;
+      return title === undefined ? [] : [title];
+    });
+  }, [running, saved, draft.isDraft, queried, attributes, far]);
 
   // Whether the table holds ticked rows: a new query clears them, and the toast below says so (spec 0022, AC-522).
   const isTicked = useRef(false);
@@ -490,14 +525,21 @@ export function ViewScreen(props: ViewScreenProps) {
     },
   };
   const storedBoard = view?.config.board;
+  // Planned over the archived attributes too, so a grouping field archived since says so rather than the board
+  // quietly grouping by the next field and saving that over it (late trap #14).
   const boardOutcome = useMemo(
-    () => (kind === 'board' ? planBoard(attributes, storedBoard) : undefined),
-    [kind, attributes, storedBoard],
+    () => (kind === 'board' ? planBoard(queried, storedBoard) : undefined),
+    [kind, queried, storedBoard],
   );
-  // A board view showing defaults it never stored (saved with nothing to group by, or its grouping field gone):
-  // the first time it can group, the defaults are saved like any layout change, once per visit (AC-492).
+  // A board view showing defaults it never stored (saved with nothing to group by): the first time it can group,
+  // the defaults are saved like any layout change, once per visit (AC-492). Never over a grouping the view does
+  // store but this reader can't use (`isStandIn`, late trap #29): opening it would have replaced everyone's grouping
+  // with the reader's stand in.
   const filledFor = useRef<string | undefined>(undefined);
-  const toFill = boardOutcome?.kind === 'board' && !boardOutcome.isStored ? boardOutcome.settings : undefined;
+  const toFill =
+    boardOutcome?.kind === 'board' && !boardOutcome.isStored && !boardOutcome.isStandIn
+      ? boardOutcome.settings
+      : undefined;
   useEffect(() => {
     if (toFill === undefined || view === undefined || filledFor.current === view.id) return;
     filledFor.current = view.id;
@@ -659,6 +701,13 @@ export function ViewScreen(props: ViewScreenProps) {
         {...(focusRequest === undefined ? {} : { focusRequest })}
         {...(announced === undefined ? {} : { status: announced })}
       />
+      {archivedTitles.length > 0 && (
+        // Spec 0020, AC-480: archived fields the view filters or sorts on are left out when it runs, so it shows
+        // more than it was saved to. Nothing said so, and the view simply looked wrong.
+        <Callout tone="info" placement="banner">
+          {strings.archivedInView(archivedTitles)}
+        </Callout>
+      )}
       {showDropped && draft.isDraft && (
         <Callout
           tone="warning"

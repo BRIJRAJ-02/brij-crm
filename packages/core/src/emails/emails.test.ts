@@ -275,6 +275,26 @@ describe('sending a queued email (the worker’s half)', () => {
     );
     expect(await loadEmail(w.system, old)).toEqual({ kind: 'skip', reason: 'stale' });
   });
+
+  it('sends nothing for a deleted workspace, and sends again once it is restored', async () => {
+    const w = await workspace();
+    const queued = idOf(
+      await inWorkspace(w.system, (tx) =>
+        queueFormSubmissionNotice(tx, { submissionId: newId(), memberId: w.memberId, params: NOTICE }),
+      ),
+    );
+    expect(await loadEmail(w.system, queued)).toMatchObject({ kind: 'send' });
+    // Deleted: the email carries the workspace's own words, and every link in it leads nowhere.
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update workspaces set deleted_at = now(), purge_after = now() + interval '30 days'`),
+    );
+    expect(await loadEmail(w.system, queued)).toEqual({ kind: 'skip', reason: 'workspace_deleted' });
+    // Restored inside the day: the ones still queued go.
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update workspaces set deleted_at = null, purge_after = null`),
+    );
+    expect(await loadEmail(w.system, queued)).toMatchObject({ kind: 'send' });
+  });
 });
 
 describe('the preferences link', () => {

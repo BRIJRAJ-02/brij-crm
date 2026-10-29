@@ -304,27 +304,36 @@ export const workspaceAddresses = auth.table(
  * Every public handle a person has held, their current one included (booking addresses, 22 Oct 2026): the
  * address `/<handle>` of their profile and `/<handle>/<slug>` of each booking page. Keyed by the handle alone, so
  * it is unique across every workspace, and an old handle keeps finding its person (the public page then moves to
- * the current one); none is freed while its person exists. Written only through `crm_save_public_profile`
- * (migration 0086) and `crm_ensure_public_profile`, which makes a new membership's first one (migration 0115).
+ * the current one); none is freed while its person exists, nor for 90 days after their account is deleted
+ * (migration 0126: the person cleared, `releasedAt` stamped, then `crm_sweep_released_handles` frees it). Written
+ * only through `crm_save_public_profile` (migration 0086) and `crm_ensure_public_profile`, which makes a new
+ * membership's first one (migration 0115).
  */
 export const publicHandles = auth.table(
   'public_handles',
   {
     handle: text('handle').notNull(),
-    userId: uuid('user_id').notNull(),
+    /** Null once its person's account is deleted: the handle is then held, naming nobody, until it is swept. */
+    userId: uuid('user_id'),
     /** The one workspace this handle, and the link page behind it, belong to (spec 0056, AC-5601). */
     workspaceId: uuid('workspace_id').notNull(),
     createdAt: createdAt(),
+    /** When its person's account was deleted: set with a null `userId`, never otherwise. */
+    releasedAt: timestamptz('released_at'),
   },
   (t) => [
     primaryKey({ name: 'public_handles_pkey', columns: [t.handle] }),
+    check('public_handles_released', sql`(${t.userId} is null) = (${t.releasedAt} is not null)`),
+    index('public_handles_released')
+      .on(t.releasedAt)
+      .where(sql`${t.releasedAt} is not null`),
     index('public_handles_user_workspace').on(t.userId, t.workspaceId),
     uniqueIndex('public_handles_membership').on(t.handle, t.userId, t.workspaceId),
     check(
       'public_handles_shape',
       sql`${t.handle} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.handle}) between 3 and 40`,
     ),
-    foreignKey({ name: 'public_handles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    foreignKey({ name: 'public_handles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('set null'),
   ],
 );
 

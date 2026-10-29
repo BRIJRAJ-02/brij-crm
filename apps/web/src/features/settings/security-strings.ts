@@ -149,7 +149,7 @@ export const strings = {
     /** Deleting the account from a deleted workspace's page: nobody it leaves behind can bring the person back. */
     lostWorkspace: (name: string) =>
       `You won’t be able to restore ${name} after this. To keep anything in it, restore it first.`,
-    text: 'You’ll leave every workspace, and your sign in, devices and details are deleted. This can’t be undone. Export anything you need from each workspace first.',
+    text: 'You’ll leave every workspace, and your sign in, devices and details are deleted. Your link page addresses stay reserved for 90 days, tied to nobody, so no one else is given them. This can’t be undone. Export anything you need from each workspace first.',
     emailLabel: (email: string) => `Type ${email} to confirm`,
     deleting: 'Deleting',
     close: 'Close',

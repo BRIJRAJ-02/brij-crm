@@ -345,6 +345,12 @@ export { SectionBar, type SectionBarProps, type SectionBarVariant } from './mole
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export { TileGrid, type TileGridProps } from './molecules/TileGrid/TileGrid.tsx';
 export { Stats, type StatItem, type StatsProps } from './molecules/Stats/Stats.tsx';
+export {
+  RolePowers,
+  type RolePowerArea,
+  type RolePowerStanding,
+  type RolePowersProps,
+} from './modules/RolePowers/RolePowers.tsx';
 export { TeamList, type TeamListProps, type TeamPresence, type TeamRow } from './modules/TeamList/TeamList.tsx';
 export {
   SetupChecklist,

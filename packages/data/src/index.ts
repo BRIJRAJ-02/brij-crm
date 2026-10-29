@@ -69,6 +69,7 @@ import type {
   MemberView,
   MyAccess,
   ObjectSummary,
+  SetRoleResult,
   RecordView,
   SessionLengthDays,
   WorkspaceSecurity,
@@ -508,6 +509,15 @@ export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
+/** What each role lets someone do, area by area, derived from the permissions the server enforces (Members, Invite). */
+export {
+  EVERYONE_CAN,
+  PERMISSION_AREAS,
+  rolePowers,
+  type AreaPowers,
+  type AreaStanding,
+  type PermissionArea,
+} from '@crm/contracts/role-powers';
 /** History's kinds of change (spec 0046), with no Zod: which kind each listed action is, for Workspace changes. */
 export {
   AUDIT_KIND_NAMES,
@@ -3633,7 +3643,7 @@ export function createDataLayer({
       bookAsHost: async (
         workspace: string,
         input: Omit<BookAsHostInput, 'workspace' | 'mutationId'>,
-      ): Promise<{ bookingId: string }> => {
+      ): Promise<{ bookingId: string; notInCrm?: string }> => {
         const booked = await call((options) =>
           api.bookings.bookAsHost({ ...input, workspace, mutationId: mintId() }, options),
         );
@@ -3862,9 +3872,10 @@ export function createDataLayer({
       /**
        * Changes a member's role (spec 0031, AC-811), waiting for the server:
        * the owner rules live there. Refusals: `FORBIDDEN`, `LAST_OWNER`,
-       * `NOT_FOUND`. The list, and the person's own access, are read again after.
+       * `NOT_FOUND`. The list, and the person's own access, are read again after. Answers how many open invitations
+       * they sent the change cancelled, when any (their new role can't send them).
        */
-      async setRole(workspace: string, memberId: string, role: Role): Promise<MemberView> {
+      async setRole(workspace: string, memberId: string, role: Role): Promise<SetRoleResult> {
         const changed = await call((options) =>
           api.members.setRole({ workspace, memberId, role, mutationId: mintId() }, options),
         );
@@ -5336,6 +5347,18 @@ export function createDataLayer({
       /** Marks a submission as spam (AC-574). */
       markSpam: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.markSpam({ workspace, submissionId, mutationId: mintId() }, options)),
+      /**
+       * Settles a submission the content checks held in Needs review: Not
+       * spam sends it to processing, Spam moves it to spam. Only a held one
+       * qualifies, so the panel routes a spam row to `release` instead.
+       */
+      resolve: (workspace: string, submissionId: string, resolution: 'not_spam' | 'spam') =>
+        call((options) =>
+          api.submissions.resolve(
+            { workspace, submissionId, resolution: { kind: resolution }, mutationId: mintId() },
+            options,
+          ),
+        ),
       /** Processes a failed submission again (AC-566). */
       retry: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.retry({ workspace, submissionId, mutationId: mintId() }, options)),

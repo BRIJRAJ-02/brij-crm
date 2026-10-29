@@ -284,6 +284,55 @@ describe('defaults and required', () => {
     expect((await listOptions(scope, tier)).find((option) => option.id === gold)?.archived).toBe(true);
   });
 
+  it('gives nothing from a Member default once that member is removed, rather than refusing every create (late trap #9)', async () => {
+    const { scope, objects } = await workspace();
+    const objectId = id(objects.companies);
+    const bea = newId();
+    await db.withWorkspace(scope.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${scope.workspaceId}, ${bea}, 'Bea', 'bea@example.com', 'member', 'system', 'system')`,
+      ),
+    );
+    const { attributeId: single } = await defineAttribute(scope, {
+      objectId,
+      apiSlug: 'account_manager',
+      title: 'Account manager',
+      type: 'actor_reference',
+      defaultValue: { kind: 'static', value: { type: 'member', id: bea } },
+    });
+    const { attributeId: several } = await defineAttribute(scope, {
+      objectId,
+      apiSlug: 'watchers',
+      title: 'Watchers',
+      type: 'actor_reference',
+      isMulti: true,
+      defaultValue: {
+        kind: 'static',
+        value: [
+          { type: 'member', id: bea },
+          { type: 'member', id: scope.actor.id },
+        ],
+      },
+    });
+    const { recordId: before } = await createRecord(scope, { objectId });
+    expect((await getRecords(scope, { ids: [before] }))[0]?.values[single]).toEqual({ type: 'member', id: bea });
+    await db.withWorkspace(scope.workspaceId, (tx) =>
+      tx.execute(sql`update members set status = 'removed' where id = ${bea}`),
+    );
+    // Before, this create was refused: "Pick a member of this workspace for Account manager."
+    const { recordId: after } = await createRecord(scope, { objectId });
+    const [record] = await getRecords(scope, { ids: [after] });
+    expect(record?.values[single]).toBeNull();
+    expect(record?.values[several]).toEqual([{ type: 'member', id: scope.actor.id }]);
+    // A Member default naming another kind of actor is refused when set, since a write refuses it on every create.
+    await expect(
+      updateAttribute(scope, {
+        attributeId: single,
+        defaultValue: { kind: 'static', value: { type: 'form', id: scope.actor.id } },
+      }),
+    ).rejects.toMatchObject({ refusals: [{ code: 'CONFIG_INVALID', field: 'defaultValue' }] });
+  });
+
   it("applies a date offset in the creator's time zone, and leaves old empty records alone when made required", async () => {
     const { scope, objects } = await workspace();
     const objectId = id(objects.companies);

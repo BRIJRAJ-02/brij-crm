@@ -13,7 +13,17 @@ import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
 import { testScope } from '../testing.ts';
-import { acceptInvite, inviteMembers, listInvitations, peekInvite, resendInvite, revokeInvite } from './invitations.ts';
+import {
+  acceptInvite,
+  getInviteLink,
+  inviteMembers,
+  listInvitations,
+  peekInvite,
+  resendInvite,
+  revokeInvite,
+  setInviteLink,
+} from './invitations.ts';
+import { previewRemoval, removeMember, setMemberRole, transferOwnership } from './members.ts';
 
 const { appUrl, identityUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -356,6 +366,59 @@ describe('the owner rules and who vouches for an invitation (key invariants)', (
     expect((await acceptInvite({ db }, member, renewed.token)).slug).toBe(w.workspace.slug);
     const again = await resendInvite(asEve, { invitationId: ownerInvite.sent[0]?.invitation.id ?? '' });
     expect(await peekInvite({ db }, again.token)).toMatchObject({ role: 'owner', inviterName: 'Eve' });
+  });
+
+  it('revokes what a sender can no longer vouch for when their role changes or they go, and says how many', async () => {
+    const w = await workspace('admin');
+    const sent = await inviteMembers(w.other, {
+      emails: ['dee@example.com', 'eli@example.com', 'fay@example.com'],
+      role: 'member',
+    });
+    await setInviteLink(w.other, { enabled: true });
+    await inviteMembers(w.owner, { emails: ['flo@example.com'], role: 'member' });
+    // One of theirs an owner resent since: the owner vouches for it now, so it stays.
+    const fay = sent.sent.find((each) => each.invitation.email === 'fay@example.com');
+    await resendInvite(w.owner, { invitationId: fay?.invitation.id ?? '' });
+    // An admin made a member: their other two invitations and the link open nothing now, so they go, counted.
+    const changed = await setMemberRole(w.owner, { memberId: w.otherId, role: 'member' });
+    expect(changed).toMatchObject({ role: 'member', cancelledInvitations: 3 });
+    expect((await listInvitations(w.owner)).map((each) => each.email).sort()).toEqual([
+      'fay@example.com',
+      'flo@example.com',
+    ]);
+    expect(await getInviteLink(w.owner)).toMatchObject({ enabled: false });
+    // A revoked one can't be resent: it is gone, as any other cancelled invitation.
+    const dee = sent.sent.find((each) => each.invitation.email === 'dee@example.com');
+    expect(await refusalOf(resendInvite(w.owner, { invitationId: dee?.invitation.id ?? '' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    const actions = (await audit(w.workspaceId)).map((row) => row.action);
+    expect(actions.filter((action) => action === 'invitation.revoked')).toHaveLength(2);
+    expect(actions).toContain('invitation.link_revoked');
+    // Made an admin again, nothing is left of theirs to revoke, and the answer says nothing.
+    expect(await setMemberRole(w.owner, { memberId: w.otherId, role: 'admin' })).not.toHaveProperty(
+      'cancelledInvitations',
+    );
+
+    // Removed: the remove dialog counts what they sent, and the removal revokes it.
+    const admin = w.as(w.otherId, 'admin');
+    await inviteMembers(admin, { emails: ['gus@example.com'], role: 'member' });
+    expect(await previewRemoval(w.owner, { memberId: w.otherId })).toMatchObject({ invitations: 1 });
+    await removeMember(w.owner, { memberId: w.otherId });
+    expect((await listInvitations(w.owner)).map((each) => each.email).sort()).toEqual([
+      'fay@example.com',
+      'flo@example.com',
+    ]);
+  });
+
+  it('keeps an owner’s member invitations when they hand the workspace on, and revokes their owner ones', async () => {
+    const w = await workspace('admin');
+    await inviteMembers(w.owner, { emails: ['hal@example.com'], role: 'member' });
+    await inviteMembers(w.owner, { emails: ['ivy@example.com'], role: 'owner' });
+    await transferOwnership(w.owner, { memberId: w.otherId });
+    expect((await listInvitations(w.other)).map((each) => [each.email, each.role])).toEqual([
+      ['hal@example.com', 'member'],
+    ]);
   });
 
   it('answers another workspace’s invitation as not found, to resend and to revoke', async () => {

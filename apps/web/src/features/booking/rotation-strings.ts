@@ -174,7 +174,7 @@ export const strings = {
   whoBooks: 'Who it books',
   bookMe: 'Me',
   bookRotation: 'A round robin group',
-  noRotations: 'Make a round robin group first, in Settings.',
+  noRotations: 'Make a round robin group first. Round robin opens in a new tab, and what you typed here stays.',
   rotationRequired: 'Pick a group.',
   /** The rotation card's two views (spec 0037, AC-1330). */
   views: (rotation: string) => `${rotation} views`,

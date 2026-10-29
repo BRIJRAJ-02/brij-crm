@@ -127,12 +127,14 @@ interface TaskRow extends Record<string, unknown> {
   readonly updated_at: string;
   /** Every linked record, in link order, whatever its state or visibility. */
   readonly record_ids: string[];
+  /** A link went with its record, removed for good: with none left, the task isn't everyone's. */
+  readonly links_purged: boolean;
 }
 
 const TASK_COLUMNS = sql`t.id::text as id, t.title, t.is_done, ${millis('t.done_at')} as done_at, t.done_by_type,
   t.done_by_id::text as done_by_id, t.due_on::text as due_on, t.assignee_member_id::text as assignee_member_id,
   ${millis('t.created_at')} as created_at, t.created_by_type, t.created_by_id::text as created_by_id,
-  ${millis('t.updated_at')} as updated_at,
+  ${millis('t.updated_at')} as updated_at, t.links_purged,
   coalesce((select array_agg(l.record_id::text order by l.position, l.record_id) from task_records l
     where l.workspace_id = t.workspace_id and l.task_id = t.id), '{}') as record_ids`;
 
@@ -173,16 +175,17 @@ const isCreator = (row: Pick<TaskRow, 'created_by_type' | 'created_by_id'>, acto
 
 /**
  * The task rule (spec 0009's Decision, AC-447): visible when it links no
- * records at all, the reader is its assignee or creator, or one of its links
- * is to a live record the reader may see.
+ * records at all (and never did one removed for good since: late trap #79),
+ * the reader is its assignee or creator, or one of its links is to a live
+ * record the reader may see.
  */
 export function taskVisible(
-  row: Pick<TaskRow, 'assignee_member_id' | 'created_by_type' | 'created_by_id' | 'record_ids'>,
+  row: Pick<TaskRow, 'assignee_member_id' | 'created_by_type' | 'created_by_id' | 'record_ids' | 'links_purged'>,
   scope: Pick<EngineScope, 'access' | 'actor'>,
   seen: ReadonlyMap<string, RecordRefDisplay>,
 ): boolean {
   const me = memberOf(scope.access);
-  if (row.record_ids.length === 0) return true;
+  if (row.record_ids.length === 0 && !row.links_purged) return true;
   if (me !== undefined && row.assignee_member_id === me) return true;
   if (isCreator(row, scope.actor)) return true;
   return row.record_ids.some((id) => seen.has(id));
@@ -190,16 +193,16 @@ export function taskVisible(
 
 /**
  * The change rule (AC-447): its assignee, its creator, anyone when it links
- * no records at all, and anyone with `write` on the object of a live linked
+ * no records at all (and lost none to a purge), and anyone with `write` on the object of a live linked
  * record they may see.
  */
 export function taskChangeable(
-  row: Pick<TaskRow, 'assignee_member_id' | 'created_by_type' | 'created_by_id' | 'record_ids'>,
+  row: Pick<TaskRow, 'assignee_member_id' | 'created_by_type' | 'created_by_id' | 'record_ids' | 'links_purged'>,
   scope: Pick<EngineScope, 'access' | 'actor'>,
   seen: ReadonlyMap<string, RecordRefDisplay>,
 ): boolean {
   const me = memberOf(scope.access);
-  if (row.record_ids.length === 0) return true;
+  if (row.record_ids.length === 0 && !row.links_purged) return true;
   if (me !== undefined && row.assignee_member_id === me) return true;
   if (isCreator(row, scope.actor)) return true;
   return row.record_ids.some((id) => {
@@ -710,7 +713,7 @@ async function checkListedRecord(tx: WorkspaceTx, access: Access, recordId: stri
  * The task rule as SQL over the task aliased `t` (spec 0019's visibility
  * predicate, AC-447), for lists that don't start from one visible record (My
  * tasks' "All tasks"): it links no records at all (a link to a trashed record
- * still counts), the reader is its assignee or creator, or one of its links
+ * still counts, and so does one a purge removed), the reader is its assignee or creator, or one of its links
  * is to a live record, on a live object, that the reader may see.
  */
 function taskVisibleSql(scope: Pick<EngineScope, 'access' | 'actor'>): SQL {
@@ -731,7 +734,7 @@ function taskVisibleSql(scope: Pick<EngineScope, 'access' | 'actor'>): SQL {
     ...(me === undefined ? [] : [sql`t.assignee_member_id = ${me}::uuid`]),
     actor.id === null ? sql`false` : sql`(t.created_by_type = ${actor.type} and t.created_by_id = ${actor.id}::uuid)`,
     linkedLive,
-    sql`(select count(*) from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id) = 0`,
+    sql`(not t.links_purged and (select count(*) from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id) = 0)`,
   ];
   return sql`(${sql.join(parts, sql` or `)})`;
 }

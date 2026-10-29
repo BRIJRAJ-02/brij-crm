@@ -22,6 +22,14 @@ export const strings = {
   draftUnreadable: 'That link’s filter couldn’t be read, so the saved view is shown.',
   /** A link's draft named fields this person can't use (AC-467). */
   draftDropped: 'Some filters in this link use fields that aren’t available to you, so they were left out.',
+  /** A view filtering or sorting on archived fields (spec 0020, AC-480), naming them. */
+  archivedInView: (titles: readonly string[]) => {
+    const one = titles.length === 1;
+    const named = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(titles);
+    return one
+      ? `This view uses ${named}, which is archived. It’s left out until the attribute is restored. Saving a new filter removes it for good.`
+      : `This view uses ${named}, which are archived. They’re left out until the attributes are restored. Saving a new filter removes them for good.`;
+  },
   dismiss: 'Dismiss',
   /** A filter that matches nothing (AC-486). */
   noMatchesTitle: (plural: string) => `No ${plural.toLowerCase()} match these filters`,
@@ -101,7 +109,9 @@ export const strings = {
   locked: (name: string) => `${name} is locked.`,
   unlocked: (name: string) => `${name} is unlocked.`,
   setDefault: 'Set as default',
-  isDefaultNow: (name: string, plural: string) => `${name} is the default view for ${plural}.`,
+  // Late trap #27: a member's last opened view still wins for them (AC-462), so the toast says who lands on it.
+  isDefaultNow: (name: string, plural: string) =>
+    `${name} is the default view for ${plural}. Anyone opening ${plural} for the first time lands here.`,
   deleteView: 'Delete view',
   deleting: 'Deleting',
   deleteSharedTitle: (name: string) => `Delete ${name} for everyone?`,

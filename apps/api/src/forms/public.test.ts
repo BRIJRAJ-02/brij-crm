@@ -85,17 +85,18 @@ const submission = (extra: Record<string, unknown> = {}) => ({
 });
 
 describe('GET /api/public/forms/:publicKey', () => {
-  it('answers the live form, cacheable, noindex, and 404 for a key that names nothing', async () => {
+  it('answers the live form, never cached (crm-f7 F1: a resume showed a minute late), noindex, and 404 for a key that names nothing', async () => {
     const { live } = await liveForm();
     const response = await call(`/forms/${live.publicKey}`);
     expect(response.status).toBe(200);
     expect(response.headers.get('x-robots-tag')).toBe('noindex');
-    expect(response.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(response.headers.get('cache-control')).toBe('no-store');
     const body = (await response.json()) as { headline: string; status: string };
     expect(body).toMatchObject({ headline: 'Fill this in and we will come back to you', status: 'live' });
     expect(JSON.stringify(body)).not.toContain(live.mainObjectId);
     const missing = await call('/forms/no-such-form');
     expect(missing.status).toBe(404);
+    expect(missing.headers.get('cache-control')).toBe('no-store');
     expect(await missing.json()).toEqual({
       code: 'NOT_FOUND',
       message: 'This form doesn’t exist, or its address changed.',
@@ -157,8 +158,36 @@ describe('POST /api/public/forms/:publicKey/submissions', () => {
     const paused = await call(path, { method: 'POST', body: submission() });
     expect(paused.status).toBe(410);
     expect(await paused.json()).toMatchObject({ code: 'FORM_CLOSED' });
-    const read = (await (await call(`/forms/${live.publicKey}`)).json()) as { status: string; questions: unknown[] };
+    const pausedRead = await call(`/forms/${live.publicKey}`);
+    expect(pausedRead.headers.get('cache-control')).toBe('no-store');
+    const read = (await pausedRead.json()) as { status: string; questions: unknown[] };
     expect(read).toMatchObject({ status: 'paused', questions: [] });
+    // Resumed, the very next read says so: nothing kept the paused answer (crm-f7 F1).
+    await m.client.forms.setStatus({ workspace: m.slug, formId: live.id, status: 'live', mutationId: newId() });
+    expect(await (await call(`/forms/${live.publicKey}`)).json()).toMatchObject({ status: 'live' });
+  });
+
+  it('answers 429, never cached, past 60 reads a minute from one address (late trap #69)', async () => {
+    const { live } = await liveForm();
+    const statuses: number[] = [];
+    for (let index = 0; index < 60; index += 1) {
+      statuses.push((await call(`/forms/${live.publicKey}`, { ip: '198.51.100.69' })).status);
+    }
+    expect(statuses.every((status) => status === 200)).toBe(true);
+    const over = await call(`/forms/${live.publicKey}`, { ip: '198.51.100.69' });
+    expect(over.status).toBe(429);
+    expect(Number(over.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(over.headers.get('cache-control')).toBe('no-store');
+    // A key that names nothing counts too: guessing addresses costs the same as reading one.
+    expect((await call('/forms/no-such-form', { ip: '198.51.100.69' })).status).toBe(429);
+    // Another address still reads it, and the reads spent none of the submissions' own limits.
+    expect((await call(`/forms/${live.publicKey}`, { ip: '198.51.100.70' })).status).toBe(200);
+    const sent = await call(`/forms/${live.publicKey}/submissions`, {
+      method: 'POST',
+      ip: '198.51.100.69',
+      body: submission(),
+    });
+    expect(sent.status).toBe(200);
   });
 
   it('answers 429 with Retry-After past 5 a minute from one address', async () => {
@@ -210,6 +239,47 @@ describe('POST /api/public/forms/:publicKey/submissions', () => {
       body: text,
       origin: null,
       ip: '192.0.2.4',
+      headers: { [SIGNATURE_HEADER]: signatureOf(signed.signingSecret ?? '', text) },
+    });
+    expect(server.status).toBe(200);
+  });
+
+  it('takes a site’s own form whose HTML lacks a question added since, and refuses it on our page (late trap #55)', async () => {
+    const { m, live } = await liveForm();
+    const path = `/forms/${live.publicKey}/submissions`;
+    const site = 'https://acme.example';
+    await m.client.forms.updateSettings({
+      workspace: m.slug,
+      formId: live.id,
+      allowedOrigins: ['acme.example'],
+      mutationId: newId(),
+    });
+    // The starting form asks Name; the site's copied HTML only ever had Email.
+    const onlyEmail = submission({ answers: { email: 'site@example.com' } });
+    expect((await call(path, { method: 'POST', body: onlyEmail, origin: site, ip: '192.0.2.21' })).status).toBe(200);
+    // Our hosted page sends every question it shows, so there an absent required answer is still refused.
+    const ours = await call(path, {
+      method: 'POST',
+      body: submission({ answers: { email: 'ours@example.com' } }),
+      ip: '192.0.2.22',
+    });
+    expect(ours.status).toBe(422);
+    // A site field sent empty was asked, and is held to the question.
+    const empty = submission({ answers: { name: '', email: 'site2@example.com' } });
+    expect((await call(path, { method: 'POST', body: empty, origin: site, ip: '192.0.2.23' })).status).toBe(422);
+    // A site's server, signing its post with no Origin, is a site's own form too.
+    const signed = await m.client.forms.updateSettings({
+      workspace: m.slug,
+      formId: live.id,
+      requireSignature: true,
+      mutationId: newId(),
+    });
+    const text = JSON.stringify(submission({ answers: { email: 'server@example.com' } }));
+    const server = await call(path, {
+      method: 'POST',
+      body: text,
+      origin: null,
+      ip: '192.0.2.24',
       headers: { [SIGNATURE_HEADER]: signatureOf(signed.signingSecret ?? '', text) },
     });
     expect(server.status).toBe(200);

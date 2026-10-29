@@ -176,12 +176,56 @@ async function blockersOf(entered: Awaited<ReturnType<typeof myWorkspaces>>): Pr
     .map(({ entry }) => ({ slug: entry.slug, name: entry.name }));
 }
 
-/** The workspaces the person is the last owner of (AC-902): deleting waits until each has another owner. */
+/**
+ * The deleted workspaces, still inside their restore window, the person is the only owner of (late trap #23): a
+ * deleted workspace needs no owner, so deleting the account goes ahead, but nobody is left who could restore it.
+ * Said beforehand, never a blocker. Their names come from the directory, read with the rest.
+ */
+async function lostOf(
+  deps: AccountDeletionDeps,
+  userId: string,
+  seen: ReadonlySet<string>,
+): Promise<readonly string[]> {
+  const listed = (await deps.identity.allWorkspacesOf(userId)).filter((workspace) => !seen.has(workspace.id));
+  const lost = await Promise.all(
+    listed.map(async (workspace) => {
+      let scope: EngineScope;
+      try {
+        scope = await enterWorkspaceToLeave({ db: deps.db }, { userId, workspaceId: workspace.id });
+      } catch (error) {
+        if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') return undefined;
+        throw error;
+      }
+      const memberId = scope.actor.id;
+      const owners = await inWorkspace(scope, (tx) =>
+        tx.execute<{ me: boolean; others: number }>(sql`
+          select
+            bool_or(id = ${memberId}::uuid) as me,
+            count(*) filter (where id <> ${memberId}::uuid)::int as others
+          from members where role = 'owner' and status = 'active'
+        `),
+      );
+      const [row] = owners.rows;
+      return row?.me === true && row.others === 0 ? workspace.name : undefined;
+    }),
+  );
+  return lost.filter((name) => name !== undefined);
+}
+
+/**
+ * The workspaces the person is the last owner of (AC-902): deleting waits until each has another owner. And the
+ * deleted ones it would leave with no one to restore them (`lost`), said but never in the way.
+ */
 export async function accountDeletionCheck(
   deps: AccountDeletionDeps,
   caller: SessionCaller,
 ): Promise<AccountDeletionCheck> {
-  return { blockers: [...(await blockersOf(await myWorkspaces(deps, caller.userId)))] };
+  const entered = await myWorkspaces(deps, caller.userId);
+  const seen = new Set(entered.map((each) => each.scope.workspaceId));
+  return {
+    blockers: [...(await blockersOf(entered))],
+    lost: [...(await lostOf(deps, caller.userId, seen))],
+  };
 }
 
 /** The member's calendar grants, read before the removal deletes them, so they can be handed back after. */

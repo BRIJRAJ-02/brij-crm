@@ -60,6 +60,16 @@ export { MAX_SORTS, SortRule, SortRules } from './sorts.ts';
 export { canJump, canJumpOn, JUMP_TYPES, type JumpAttribute } from './jump.ts';
 export { ENGINE_REFUSAL_CODES, type EngineRefusal, type EngineRefusalCode } from './engine.ts';
 export { AttributeConfig, AttributeDefault, defaultKindsFor, type AttributeConfigOf } from './attribute-config.ts';
+export {
+  A_FIELD_YOU_CANT_SEE,
+  ANONYMOUS,
+  BY_MEMBER,
+  isUnfillableRequired,
+  OPTION_DEFAULT_TYPES,
+  REQUIRED_NEEDS_AN_OPTION,
+  type FillableAttribute,
+  type Filler,
+} from './required-fillable.ts';
 export { HUES } from './hue-list.ts';
 export { Uuid, uuidV7 } from './ids.ts';
 export { Hue } from './hues.ts';

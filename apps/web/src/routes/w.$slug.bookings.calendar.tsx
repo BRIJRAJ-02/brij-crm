@@ -132,9 +132,7 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
       onBlock={(draft, preview) => data.bookings.blocks.create(slug, draft, preview)}
       workingStart={(dayKey) => workingStartOf(availability, dayKey)}
       openHours={(dayKey) => openHoursOf(availability, dayKey, timeZone)}
-      onBookAsHost={async (meeting) => {
-        await data.bookings.bookAsHost(slug, { ...meeting, guests: [...meeting.guests] });
-      }}
+      onBookAsHost={(meeting) => data.bookings.bookAsHost(slug, { ...meeting, guests: [...meeting.guests] })}
       peopleSearch={peopleSearchOf(data, slug, objects)}
       pageDestination={(pageId) => data.calendar.pageDestination(slug, pageId)}
       newBookingKey={data.bookings.newKey}

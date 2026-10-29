@@ -96,6 +96,18 @@ describe('checkAnswers (spec 0023, AC-553, AC-556, AC-660)', () => {
     if (!required.ok) expect(required.fields.phone).not.toBe('Answer this question.');
   });
 
+  it('skips a question a site’s own form never sent, and still holds one it sent empty (late trap #55)', () => {
+    // The site's HTML was copied before Name and the terms box were added: their keys never come.
+    const own = checkAnswers(form, { email: 'ada@example.com', budget: '' }, { absentNotAsked: true });
+    expect(own).toEqual({ ok: true, answers: { email: 'ada@example.com' } });
+    // Sent empty, a question was asked, and a required one refuses as ever.
+    const empty = checkAnswers(form, { name: '', email: 'ada@example.com', terms: false }, { absentNotAsked: true });
+    expect(empty.ok).toBe(false);
+    if (!empty.ok) expect(Object.keys(empty.fields).sort()).toEqual(['name', 'terms']);
+    // Our own page sends every key, so without the option an absent one is refused.
+    expect(checkAnswers(form, { email: 'ada@example.com' }).ok).toBe(false);
+  });
+
   it('reads web addresses as a visitor types them', () => {
     expect(websiteOf('https://acme.com/about')).toBe('https://acme.com/about');
     expect(websiteOf('acme')).toBeUndefined();
@@ -179,6 +191,37 @@ describe('FormDocument and publishProblem (AC-655)', () => {
     );
   });
 
+  // Late trap #17: an object whose email isn't unique has no match, and the form refused with "File the email question
+  // on X" while its email question was filed on X; a publisher who can't change attributes had no way past.
+  it('says the email has to be unique, and who can make it so, when the object has nothing to match on', () => {
+    const plain = new Map(attributes);
+    plain.set(EMAIL, { ...attributes.get(EMAIL), title: 'Work email' } as PublishAttribute);
+    const unmatched = { ...document, targets: { main: { objectId: PEOPLE } } };
+    const base = { document: unmatched, attributes: plain, objectName: 'Graphic Designers' };
+    expect(check({ ...base, canChangeAttributes: false })).toBe(
+      'Work email on Graphic Designers isn’t unique, so a submission can’t find the record it belongs to. Ask a workspace admin to make it unique.',
+    );
+    expect(check({ ...base, canChangeAttributes: true })).toBe(
+      'Make Work email on Graphic Designers unique. It is how a submission finds the record it belongs to, instead of adding a new one each time.',
+    );
+    // No email on the object at all, and the question kept off it: one has to be made first.
+    const unfiled = {
+      ...unmatched,
+      questions: unmatched.questions.map((question) =>
+        question.key === 'email' ? { ...question, filedOn: undefined } : question,
+      ),
+    };
+    const noEmail = new Map([...plain].filter(([id]) => id !== EMAIL));
+    expect(check({ document: unfiled, attributes: noEmail, objectName: 'Companies', canChangeAttributes: false })).toBe(
+      'Companies has no email field to file the email question on. Ask a workspace admin to add one that is unique.',
+    );
+    // A field hidden from the publisher is never named, and counts as no email at all (hidden means absent).
+    plain.set(EMAIL, { ...attributes.get(EMAIL), canSee: false } as PublishAttribute);
+    expect(check({ ...base, attributes: plain, canChangeAttributes: false })).toBe(
+      'Graphic Designers has no email field to file the email question on. Ask a workspace admin to add one that is unique.',
+    );
+  });
+
   // The owner, 27 October 2026: every submission on a Graphic Designers form failed with "A required field isn't
   // asked by this form", after the visitor had filled the whole thing in. Publishing says it first.
   it('refuses a draft whose object insists on a field no question fills', () => {
@@ -217,7 +260,7 @@ describe('FormDocument and publishProblem (AC-655)', () => {
       ),
     };
     expect(check({ document: unfiled, objectName: 'Graphic Designers' })).toBe(
-      'File the email question on Graphic Designers. It is how a submission finds the record it belongs to, instead of adding a new one each time.',
+      'File the email question on Graphic Designers · Email addresses. It is how a submission finds the record it belongs to, instead of adding a new one each time.',
     );
     const unlabelled = {
       ...document,

@@ -413,6 +413,26 @@ describe('a page that files onto another object (booking answers parity, 27 Oct 
     expect(made.rows).toHaveLength(1);
   });
 
+  it('marks the answers not saved when the object has lost its way to find the visitor (late trap #32)', async () => {
+    const w = await workspace();
+    const object = await designers(w);
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'Portfolio', timeZone: 'UTC' }, NOW);
+    await updateBookingPage(w.owner, {
+      pageId: page.id,
+      settings: { answersObjectId: object.id, questions: askStudio(object.studio.id) },
+    });
+    // The match the page was pointed at with is gone (the guards refuse it in the app; this is how an older
+    // workspace got here), so no record of the object can be found or made for the visitor.
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update attributes set is_unique = false where id = ${object.email?.id ?? ''}::uuid`),
+    );
+    const entry = await enterBookingPage({ db }, page.publicKey);
+    await bookPublicSlot(entry, deps, bookInput({ answers: { studio: 'Bauhaus' } }));
+    const [listed] = await listWorkspaceBookings(w.owner, { when: 'upcoming' }, NOW);
+    // The host's screen said saved; the answer is kept with the booking and marked not saved.
+    expect(listed?.answers?.[0]).toEqual(expect.objectContaining({ key: 'studio', saved: false }));
+  });
+
   it('refuses an object a visitor can’t be matched on, saying what is missing', async () => {
     const w = await workspace();
     const object = await designers(w, false);
@@ -421,6 +441,58 @@ describe('a page that files onto another object (booking answers parity, 27 Oct 
       await refusalOf(updateBookingPage(w.owner, { pageId: page.id, settings: { answersObjectId: object.id } })),
     ).toEqual([expect.objectContaining({ code: 'CONFIG_INVALID', field: 'answersObjectId' })]);
     expect((await getBookingPage(w.owner, { pageId: page.id }, NOW)).answersObjectId).toBeNull();
+  });
+
+  it('refuses an object with a required field nothing fills, and refuses taking such a page live', async () => {
+    // The same wall a form's publish refuses (27 October 2026): a guest answers questions, so a required field
+    // no question and no default fills would stop the record being made at every booking.
+    const w = await workspace();
+    const object = await designers(w);
+    const status = await createAttribute(w.owner, {
+      objectId: object.id,
+      id: newId(),
+      title: 'Status',
+      type: 'status',
+      isRequired: true,
+      options: [{ id: newId(), label: 'New', hue: 'blue' }],
+    });
+    // Put it in the state production was in: required, with no default at all.
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update attributes set default_value = null where id = ${status.id}::uuid`),
+    );
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'Wall', timeZone: 'UTC' }, NOW);
+    const [refusal] = await refusalOf(
+      updateBookingPage(w.owner, { pageId: page.id, settings: { answersObjectId: object.id } }),
+    );
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID', field: 'answersObjectId' });
+    expect(refusal?.message).toContain('Status is required there');
+    expect((await getBookingPage(w.owner, { pageId: page.id }, NOW)).answersObjectId).toBeNull();
+
+    // And a new page can't be created live onto it either.
+    const [onCreate] = await refusalOf(
+      createBookingPage(
+        w.owner,
+        { id: newId(), title: 'Wall two', timeZone: 'UTC', settings: { answersObjectId: object.id } },
+        NOW,
+      ),
+    );
+    expect(onCreate).toMatchObject({ code: 'CONFIG_INVALID', field: 'answersObjectId' });
+
+    // Giving the field a default takes the wall away.
+    const [option] = await db
+      .withWorkspace(w.workspaceId, (tx) =>
+        tx.execute<{ id: string }>(
+          sql`select id::text from attribute_options where attribute_id = ${status.id}::uuid order by position limit 1`,
+        ),
+      )
+      .then((result) => result.rows);
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(
+        sql`update attributes set default_value = ${JSON.stringify({ kind: 'static', value: option?.id })}::jsonb where id = ${status.id}::uuid`,
+      ),
+    );
+    const pointed = await updateBookingPage(w.owner, { pageId: page.id, settings: { answersObjectId: object.id } });
+    expect(pointed.answersObjectId).toBe(object.id);
   });
 
   it('clears the filings the new object has no field for, keeping the questions', async () => {

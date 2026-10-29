@@ -1322,6 +1322,22 @@ describe('a booking whose event the host removes (owner report, 20 October 2026)
       meeting_id: null,
     });
   });
+
+  it('keeps the booking when the host only turns the calendar off in Timefix', async () => {
+    const w = await world();
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    const { bookingId } = await booked(w, 3);
+    await w.sync(conn.id);
+    expect(await bookingOf(w, bookingId)).toMatchObject({ status: 'confirmed' });
+    // Show in my week and Sync meetings are a display and conflicts preference. The events are still in the
+    // host's calendar at the provider, so turning them off must not cancel a meeting a customer booked.
+    const [calendar] = await w.query<{ id: string }>(
+      sql`select id::text as id from calendar_calendars where connection_id = ${conn.id}::uuid and is_primary`,
+    );
+    await updateMemberCalendar(w.owner, { calendarId: calendar?.id ?? '', showInWeek: false, sync: false });
+    expect(await bookingOf(w, bookingId)).toMatchObject({ status: 'confirmed', cancel_reason: null });
+    expect(await w.query(sql`select id from emails where kind = 'booking_calendar_removed'`)).toEqual([]);
+  });
 });
 
 describe('a cancelled booking whose event still lives in the calendar (owner report, 23 October 2026)', () => {

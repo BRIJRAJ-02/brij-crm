@@ -156,8 +156,11 @@ export const DeletionBlocker = z.object({ slug: z.string(), name: z.string() });
 /** A workspace blocking account deletion. */
 export type DeletionBlocker = z.infer<typeof DeletionBlocker>;
 
-/** What stands in the way of deleting the account: the workspaces it is the last owner of. */
-export const AccountDeletionCheck = z.object({ blockers: z.array(DeletionBlocker) });
+/**
+ * What stands in the way of deleting the account: the workspaces it is the last owner of. And `lost`: the deleted
+ * workspaces it is the only owner of, by name, which nobody could restore afterwards (said, never in the way).
+ */
+export const AccountDeletionCheck = z.object({ blockers: z.array(DeletionBlocker), lost: z.array(z.string()) });
 /** What stands in the way of deleting the account. */
 export type AccountDeletionCheck = z.infer<typeof AccountDeletionCheck>;
 

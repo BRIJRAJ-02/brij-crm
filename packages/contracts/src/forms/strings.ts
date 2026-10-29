@@ -25,6 +25,10 @@ export interface FormStrings {
   readonly tooMany: string;
   readonly failed: string;
   readonly offline: string;
+  /** A refusal naming a question this page never drew: the form was published again while it was filled in. */
+  readonly changed: string;
+  /** The same, once the page drew the new version in place with the answers kept. */
+  readonly updated: string;
   readonly thanksTitle: string;
   readonly thanks: string;
   /** The thank you's line when the form asked for no email or phone, so there is no address to come back to. */
@@ -111,6 +115,9 @@ const EN: FormStrings = {
   tooMany: 'That did not go through. Try again in a moment.',
   failed: 'That did not go through. Try again in a moment.',
   offline: 'That did not go through. Check your connection and try again.',
+  changed: 'This form changed while you were filling it in. Copy your answers first, then reload the page.',
+  updated:
+    'This form was updated while you filled it in. Your answers are kept. Answer any new questions and send again.',
   thanksTitle: 'Thank you. That is with us.',
   thanks: 'We will come back to you at the address you gave.',
   thanksNeutral: 'We have it, and the team will read it shortly.',

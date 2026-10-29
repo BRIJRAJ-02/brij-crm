@@ -71,14 +71,42 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
     }
   },
   // Shown only once the loading delay passed: its skeletons show at once.
-  pendingComponent: () => (
-    <LoadingNow>
-      <EditorPending title={strings.forms} icon="clipboard-list" cards={[strings.name]} />
-    </LoadingNow>
-  ),
+  pendingComponent: FormPending,
   errorComponent: FormError,
   component: FormRoute,
 });
+
+/**
+ * The editor while it loads, in its shape: the tab strip (Form and Settings, which every form has; Install and
+ * Submissions too when one of them is asked for, since only a published form has them), the asked one shown.
+ */
+function FormPending() {
+  const { tab } = Route.useSearch();
+  const published = tab === 'install' || tab === 'submissions';
+  const label: Readonly<Record<FormTab, string>> = {
+    form: strings.tabForm,
+    settings: strings.tabSettings,
+    install: strings.tabInstall,
+    submissions: strings.tabSubmissions,
+  };
+  return (
+    <LoadingNow>
+      <EditorPending
+        title={strings.forms}
+        icon="clipboard-list"
+        cards={[strings.name]}
+        tabs={{
+          label: strings.tabs,
+          items: FORM_TABS.filter((id) => published || id === 'form' || id === 'settings').map((id) => ({
+            id,
+            label: label[id],
+          })),
+          shown: tab,
+        }}
+      />
+    </LoadingNow>
+  );
+}
 
 function FormRoute() {
   const { page } = Route.useLoaderData();

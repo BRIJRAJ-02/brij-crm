@@ -17,7 +17,18 @@ export const strings = {
   tooManyText: (title: string, count: string) => `${title} has ${count} options.`,
   /** The grouping field was archived (AC-506). */
   groupArchivedTitle: (title: string) => `${title} is archived.`,
-  groupArchivedText: 'Pick another field to group by.',
+  /** The view's own grouping field isn't one this reader can use (late trap #29): the board stands in with another. */
+  standIn: (field: string) => `Grouped by ${field}: this view’s field is unavailable`,
+  /** Its ways out (late trap #14: it said "Pick another field" with nowhere to pick one). */
+  groupArchivedText: (title: string) => `This board is grouped by ${title}. Restore it, or show the view as a table.`,
+  groupArchivedTextReader: (title: string) =>
+    `This board is grouped by ${title}. Show the view as a table, or ask an owner or admin to restore it.`,
+  showAsTable: 'Show as table',
+  restoreGroup: (title: string) => `Restore ${title}`,
+  restoringGroup: 'Restoring…',
+  restoredGroup: (title: string) => `${title} restored.`,
+  restoreGroupFailed: (title: string, why: string) => `Couldn’t restore ${title}. ${why}`,
+  tryAgain: 'Something went wrong. Try again.',
   /** A required field's no value column, while a card moves (AC-502). */
   requiredRefuses: (title: string) => `${title} is required, so cards can’t move here.`,
   /** An object the member may only read: why no card moves. */

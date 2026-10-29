@@ -145,6 +145,15 @@ export function statusOf(
 /** Whether two documents say the same thing (key order aside). */
 export function sameDocument(a: FormDocument | undefined, b: FormDocument | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
+  return sameValue(a, b);
+}
+
+/**
+ * Whether two values say the same thing, whatever order their keys were written in (a list's order still counts).
+ * What the editor writes and what the server answers spell one value with their keys in different orders, so
+ * comparing them as plain text reads every round trip as a change.
+ */
+export function sameValue(a: unknown, b: unknown): boolean {
   const sorted = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(sorted);
     if (typeof value === 'object' && value !== null) {

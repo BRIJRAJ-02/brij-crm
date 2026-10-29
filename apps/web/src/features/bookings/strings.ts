@@ -1,6 +1,8 @@
 /** The Bookings page's copy. */
 export const strings = {
   title: 'Bookings',
+  /** After New makes a page from here: where it, and every booking page, lives (flow walks B1). */
+  pageMadeWhere: (title: string) => `Made “${title}”, in Captures › Links.`,
   /** The page's tab strip, as Captures has: its name, read by screen readers, and each tab. */
   pageTabsLabel: 'Bookings',
   pageTabs: {
@@ -119,6 +121,8 @@ export const strings = {
   hostRemoved: 'Host removed',
   eventFailed: 'This booking isn’t on your calendar: the event couldn’t be made. Add it by hand.',
   video: 'Video call',
+  /** Under a video call still to come that no calendar made a link for, as the host's email says it. */
+  videoNoLink: 'No link was made. Send the guest one.',
   phone: 'Phone call to their number',
   calendar: 'Calendar',
   /** An event's call, as the card's row. */
@@ -217,6 +221,10 @@ export const strings = {
   bookFailed: 'That booking couldn’t be made. Try again.',
   booked: (name: string) => `Booked with ${name}. The invitation is on its way from your calendar.`,
   bookedQuietly: (name: string) => `Booked with ${name}.`,
+  /** How long that notice stays: two sentences and something to fix, longer than a confirmation's 5 seconds. */
+  notInCrmToastMs: 12_000,
+  /** Booked, but the guest's records couldn't be made: the reason, so it can be fixed (late trap #71). */
+  bookedNotInCrm: (name: string, reason: string) => `Booked with ${name}, but they weren’t added to the CRM. ${reason}`,
   /** New meeting without a calendar: the guest is still emailed, with the invitation attached (Q57). What's missing
    * is the event on the member's own calendar, and a video call's link. */
   noCalendar:

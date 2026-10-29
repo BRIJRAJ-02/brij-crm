@@ -41,7 +41,19 @@ const removing = (
  * source, never at run time.
  */
 export const PURGE_DEPENDENTS: readonly PurgeDependent[] = Object.freeze([
-  removing('task_records', (ids) => sql`delete from task_records where record_id = any(${ids})`),
+  {
+    name: 'task_records',
+    // A task losing links this way is marked first: one left with none stays its creator's and assignee's, never
+    // turning into everyone's task (late trap #79: a private task linked only to a record others couldn't see).
+    remove: async (tx, recordIds) => {
+      const ids = uuidArray(recordIds);
+      await tx.execute(sql`
+        update tasks t set links_purged = true
+        where not t.links_purged and t.id in (select l.task_id from task_records l where l.record_id = any(${ids}))
+      `);
+      return (await tx.execute(sql`delete from task_records where record_id = any(${ids})`)).rowCount ?? 0;
+    },
+  },
   // The records' notes, deleted ones too, go with them (spec 0019, AC-446); notes' foreign key refuses a removal
   // that skipped this.
   removing('notes', (ids) => sql`delete from notes where record_id = any(${ids})`),

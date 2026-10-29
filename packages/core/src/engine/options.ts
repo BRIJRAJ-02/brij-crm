@@ -1,9 +1,9 @@
 // Select and status options (spec 0004, AC-4; spec 0012, AC-236 to AC-238).
 // Each change touches option rows only: renaming, recolouring, reordering or
 // archiving an option never rewrites a value.
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { nextHue } from '@crm/contracts/values';
+import { nextHue, REQUIRED_NEEDS_AN_OPTION } from '@crm/contracts/values';
 import { audit, recordDefinition, touched } from './definitions.ts';
 import { checkId, isUuid, isUuidV7 } from './ids.ts';
 import { checkOptionRoom } from './limits.ts';
@@ -310,6 +310,21 @@ export async function updateOption(
       if (onlyArchived && input.archived !== undefined && input.archived === (option.archivedAt !== null)) return ref;
       // A restore needs room among the live options (AC-237); an archived one doesn't count until then.
       if (input.archived === false && option.archivedAt !== null) await checkOptionRoom(tx, scope, owner.id);
+      // The last live option of a required attribute is the one thing filling it: archiving it brings back the
+      // trap of 27 October 2026, where every form submission and booking fails for a field nothing can fill.
+      if (input.archived === true && option.archivedAt === null && owner.isRequired) {
+        const [live] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(attributeOptions)
+          .where(
+            and(
+              eq(attributeOptions.attributeId, owner.id),
+              isNull(attributeOptions.archivedAt),
+              ne(attributeOptions.id, option.id),
+            ),
+          );
+        if ((live?.count ?? 0) === 0) throw refuseOn('CONFIG_INVALID', REQUIRED_NEEDS_AN_OPTION, 'archived');
+      }
       // Renamed, recoloured, reordered, archived or restored: its object's (or list's) screens read it again.
       recordDefinition(context, owner);
       if (input.position !== undefined) await renumber(tx, option.attributeId, option.id, input.position);

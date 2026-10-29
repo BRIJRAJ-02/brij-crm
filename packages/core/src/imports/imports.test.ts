@@ -11,13 +11,16 @@ import { testQuery } from '@crm/db/testing';
 import { afterAll, describe, expect, inject, it } from 'vitest';
 import type { RuleSource } from '../access/door.ts';
 import { NO_RULES, type AccessRules } from '../access/policy.ts';
+import { createAttribute } from '../attributes/attributes.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { createRecord, getRecords, setRecordValues } from '../engine/records.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
+import { createTask } from '../tasks/tasks.ts';
 import { rescope } from '../testing.ts';
 import { jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
 import { mergeValue } from './kind.ts';
+import { MADE_KEPT_MESSAGE } from './undo.ts';
 import {
   checkImportLinks,
   createImport,
@@ -285,6 +288,50 @@ describe('imports (AC-1117 to AC-1127)', () => {
     });
   });
 
+  it('refuses an import that creates records onto an object with a required field no column fills', async () => {
+    // The same wall a form's publish and a booking page's save refuse (27 October 2026): every new row would
+    // fail for the same field, so it is said once, before the file is staged.
+    const w = await world();
+    const status = await createAttribute(w.owner, {
+      objectId: w.people,
+      id: newId(),
+      title: 'Status',
+      type: 'status',
+      isRequired: true,
+      options: [{ id: newId(), label: 'New', hue: 'blue' }],
+    });
+    // The state production was in: required, with no default at all.
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update attributes set default_value = null where id = ${status.id}::uuid`),
+    );
+    const create = (settings: ImportSettings) =>
+      createImport(w.owner, {
+        id: newId(),
+        objectId: w.people,
+        fileName: 'a.csv',
+        rowCount: 1,
+        errorRows: 0,
+        settings,
+      });
+    const refusal = await refusalOf(create(w.settings()));
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID' });
+    expect(refusal.message).toContain('Status is required');
+    expect(refusal.message).toContain('no column fills it');
+
+    // An import that only fills records it matches never creates one, so it is let through.
+    const matchOnly = await create(w.settings({ onNoMatch: 'skip' }));
+    expect(matchOnly.id).toBeDefined();
+
+    // And so is one with a column matched to the field.
+    const mapped = await create(
+      w.settings({
+        onNoMatch: 'create',
+        columns: [...w.settings().columns, { header: 'Status', target: { attributeId: status.id } }],
+      }),
+    );
+    expect(mapped.id).toBeDefined();
+  });
+
   it('holds the limits: rows past the file, a staged row too large, a fourth unfinished import', async () => {
     const w = await world();
     const id = newId();
@@ -397,6 +444,61 @@ describe('undo (AC-1128, AC-1129)', () => {
     ]);
     // Asking again answers the undo already started.
     expect((await undoImport(w.owner, registry, id)).undoJobId).toBe(undoing.undoJobId);
+  });
+
+  it('keeps a record the import created that someone has worked on since', async () => {
+    const w = await world();
+    const { id } = await runImport(w, w.owner, w.settings({ onMatch: 'overwrite' }), [
+      w.row(2, 'Cy', 'cy@example.com', 'Intern'),
+      w.row(3, 'Dot', 'dot@example.com', 'Intern'),
+    ]);
+    const [cy] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select r.id::text as id from records r
+       join "values" e on e.record_id = r.id and e.attribute_id = $2 and e.active_until is null and not e.is_cleared
+       where r.workspace_id = $1 and e.text_value = 'cy@example.com'`,
+      [w.workspaceId, w.attribute('email_addresses')],
+    );
+    // Cy was promoted after the import. Undo used to trash the record however much had been written on it since.
+    await setRecordValues(w.owner, {
+      recordId: cy?.id ?? '',
+      values: { [w.attribute('job_title')]: { value: 'Chief' } },
+    });
+    const undoing = await undoImport(w.owner, registry, id, [outboxHook()]);
+    expect((await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).at(-1)).toBe('succeeded');
+    // Dot, untouched, goes to the trash; Cy stays, with their edit, and the summary says why.
+    expect(await trash(w)).toEqual([{ email: 'dot@example.com', batch: id }]);
+    expect(await byEmail(w)).toEqual({ 'cy@example.com': { title: 'Chief', n: 1 } });
+    expect((await listImportRefusals(w.owner, { importId: id })).rows).toEqual([
+      { rowNumber: 2, code: 'RECORD_CHANGED', message: 'This record was edited since the import, so it was kept.' },
+    ]);
+  });
+
+  it('keeps a record the import created that someone has put a task on since, though no value changed', async () => {
+    const w = await world();
+    const { id } = await runImport(w, w.owner, w.settings({ onMatch: 'overwrite' }), [
+      w.row(2, 'Cy', 'cy@example.com', 'Intern'),
+      w.row(3, 'Dot', 'dot@example.com', 'Intern'),
+    ]);
+    const [cy] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select r.id::text as id from records r
+       join "values" e on e.record_id = r.id and e.attribute_id = $2 and e.active_until is null and not e.is_cleared
+       where r.workspace_id = $1 and e.text_value = 'cy@example.com'`,
+      [w.workspaceId, w.attribute('email_addresses')],
+    );
+    // A task on Cy, no field touched (late trap #81): trashing Cy took the task's record out from under it.
+    await createTask(w.owner, {
+      id: newId(),
+      title: 'Call Cy back',
+      recordIds: [cy?.id ?? ''],
+    });
+    const undoing = await undoImport(w.owner, registry, id, [outboxHook()]);
+    expect((await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).at(-1)).toBe('succeeded');
+    expect(await trash(w)).toEqual([{ email: 'dot@example.com', batch: id }]);
+    expect((await listImportRefusals(w.owner, { importId: id })).rows.map((row) => row.code)).toEqual([
+      'RECORD_CHANGED',
+    ]);
   });
 
   it('refuses while the import is unstarted or running, after its window, and for someone else', async () => {
@@ -570,6 +672,84 @@ describe('relation columns (decision 7, milestone 5)', () => {
     expect(await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).toContain('succeeded');
     expect(await c.live()).toEqual(['Acme']);
     expect((await getImport(w.owner, id)).counts.made).toBe(0);
+  });
+
+  it('keeps a company it made once someone else has linked to it or edited it, and trashes the rest', async () => {
+    const w = await world();
+    const c = await companies(w);
+    const { id } = await runImport(w, w.owner, linkSettings(w, true), [
+      linkRow(w, 2, 'ada@example.com', ['Initech']),
+      linkRow(w, 3, 'bob@example.com', ['Hooli']),
+      linkRow(w, 4, 'cy@example.com', ['Umbrella']),
+      linkRow(w, 5, 'dee@example.com', ['Umbrella']),
+    ]);
+    const linked = await links(w);
+    // After the import: someone links a person of their own to Initech, and renames Hooli (late trap #80).
+    await createRecord(w.owner, {
+      objectId: w.people,
+      values: {
+        [w.attribute('name')]: { firstName: 'Eve' },
+        [w.attribute('email_addresses')]: ['eve@example.com'],
+        [w.attribute('company')]: { objectId: c.objectId, recordId: linked['ada@example.com'] ?? '' },
+      },
+    });
+    const names = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(
+        sql`select a.id::text from attributes a where a.object_id = ${c.objectId} and a.api_slug = 'name'`,
+      ),
+    );
+    await setRecordValues(w.owner, {
+      recordId: linked['bob@example.com'] ?? '',
+      values: { [names.rows[0]?.id ?? '']: { value: 'Hooli Inc' } },
+    });
+    const undoing = await undoImport(w.owner, registry, id);
+    expect(await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).toContain('succeeded');
+    // Umbrella, only ever the import's (its two links are the import's own rows), goes; the other two stay.
+    expect((await c.live()).sort()).toEqual(['Hooli Inc', 'Initech']);
+    // The rows that made them say so on the summary.
+    expect((await listImportRefusals(w.owner, { importId: id })).rows).toEqual([
+      { rowNumber: 2, code: 'RECORD_CHANGED', message: MADE_KEPT_MESSAGE },
+      { rowNumber: 3, code: 'RECORD_CHANGED', message: MADE_KEPT_MESSAGE },
+    ]);
+  });
+
+  it('refuses Create missing when the far object has a required field a made record can’t fill', async () => {
+    const w = await world();
+    const c = await companies(w);
+    const tier = await createAttribute(w.owner, {
+      objectId: c.objectId,
+      id: newId(),
+      title: 'Tier',
+      type: 'status',
+      isRequired: true,
+      options: [{ id: newId(), label: 'Gold', hue: 'yellow' }],
+    });
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update attributes set default_value = null where id = ${tier.id}::uuid`),
+    );
+    // Every unknown company would have been refused row by row, after the run (late trap #75).
+    const refusal = await refusalOf(
+      createImport(w.owner, {
+        id: newId(),
+        objectId: w.people,
+        fileName: 'a.csv',
+        rowCount: 1,
+        errorRows: 0,
+        settings: linkSettings(w, true),
+      }),
+    );
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID' });
+    expect(refusal.message).toContain('“Company” can’t make missing records: Tier is required there');
+    // Linking to companies that exist, making none, is still fine.
+    const linking = await createImport(w.owner, {
+      id: newId(),
+      objectId: w.people,
+      fileName: 'a.csv',
+      rowCount: 1,
+      errorRows: 0,
+      settings: linkSettings(w),
+    });
+    expect(linking.id).toBeDefined();
   });
 
   it('refuses Create missing to a member who can only read the far object', async () => {

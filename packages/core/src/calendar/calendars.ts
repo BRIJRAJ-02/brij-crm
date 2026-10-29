@@ -174,8 +174,9 @@ const touchedBy = (memberId: string | undefined) =>
 async function dropCopy(
   tx: WorkspaceTx,
   row: Pick<CalendarRow, 'id' | 'connection_id' | 'provider_calendar_id'>,
+  options: { readonly cancelBookings?: boolean } = {},
 ): Promise<readonly MeetingChange[]> {
-  const meetings = await dropSources(tx, row.connection_id, row.provider_calendar_id, 'all');
+  const meetings = await dropSources(tx, row.connection_id, row.provider_calendar_id, 'all', options);
   await dropBusyTimes(tx, row.connection_id, row.provider_calendar_id, 'all');
   await tx.execute(sql`update calendar_calendars set sync_state = '{}'::jsonb where id = ${row.id}::uuid`);
   return meetings;
@@ -427,7 +428,11 @@ export async function updateMemberCalendar(
       const wasPulled = isPulled(row);
       const nowPulled = isPulled(next);
       if (wasPulled && !nowPulled) {
-        context.record({ meetings: await dropCopy(tx, row) });
+        // The member turned the calendar off here; the events are still in their calendar at the provider. So the
+        // copy goes and nothing else does: a display and conflicts preference must never cancel a booking a
+        // customer made. Only a calendar that is gone at the provider cancels (the drop above), which is the
+        // host deleting the event.
+        context.record({ meetings: await dropCopy(tx, row, { cancelBookings: false }) });
       } else if (!wasPulled && nowPulled) {
         await tx.execute(sql`update calendar_calendars set sync_state = '{}'::jsonb where id = ${row.id}::uuid`);
         await tx.execute(sql`select crm_enqueue_calendar_sync(${row.connection_id}::uuid)`);

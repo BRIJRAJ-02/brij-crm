@@ -76,6 +76,8 @@ export interface ViewFact {
 export interface TaskFact {
   readonly creatorMemberId?: string;
   readonly assigneeMemberIds: readonly string[];
+  /** A link went with its record, removed for good: with none left, the task isn't everyone's (late trap #79). */
+  readonly linksPurged?: boolean;
   readonly records: readonly {
     readonly objectId: string;
     readonly recordId: string;
@@ -289,7 +291,7 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       const taskIds = row.taskIds.filter((id) => {
         const task = factOf(facts.tasks, id);
         if (task === undefined) return false;
-        if (task.records.length === 0) return true;
+        if (task.records.length === 0 && task.linksPurged !== true) return true;
         const involved = audience.members.every(
           (member) => member.memberId === task.creatorMemberId || task.assigneeMemberIds.includes(member.memberId),
         );

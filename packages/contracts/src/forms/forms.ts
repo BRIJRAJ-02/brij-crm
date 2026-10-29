@@ -351,6 +351,8 @@ export const SubmissionView = SubmissionSummary.extend({
   records: z.array(SubmissionRecord),
   failure: z.string().optional(),
   refused: z.array(z.object({ questionId: z.string(), message: z.string() })),
+  /** The day its files go (`YYYY-MM-DD`), for one our spam check caught: released before then, it keeps them. */
+  filesRemovedOn: z.string().optional(),
   /** Who was given the new record and why (AC-567); `rotationId` when a rotation chose them (AC-1050). */
   assignment: z.object({ memberId: Uuid.optional(), rotationId: Uuid.optional(), reason: z.string() }).optional(),
 });

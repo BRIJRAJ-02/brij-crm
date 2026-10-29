@@ -4,6 +4,7 @@
 // Remove site, which stops that site's own HTML posting.
 // Main task: read the question and the one line on what happens, then Cancel, or the verb (Delete form, Pause form).
 // Leaves out: Resume and turning a form on, which end nothing and stay one click.
+// Also here: the confirm before a form's object changes, which clears where every question is saved.
 import { isDataError, type DataLayer } from '@crm/data';
 import { Button, Callout, Modal } from '@crm/ui';
 import { useState } from 'react';
@@ -186,6 +187,77 @@ export function RemoveSiteDialog({ site, onRemove, onClose }: RemoveSiteDialogPr
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       <p>{strings.siteRemoveText}</p>
+    </Modal>
+  );
+}
+
+/** What a retarget would lose: how many questions are saved onto the object now, its name, and the one it moves to. */
+export interface RetargetAsk {
+  /** The object asked for; null turns saving to the CRM off. */
+  readonly objectId: string | null;
+  readonly filedCount: number;
+  readonly objectName: string;
+  /** The object asked for, by name; unused when `objectId` is null. */
+  readonly nextName: string;
+}
+
+/** Props for the object change confirm. */
+interface RetargetDialogProps {
+  /** What is being asked; undefined while the dialog is closed. */
+  readonly ask: RetargetAsk | undefined;
+  readonly onClose: () => void;
+  readonly onConfirm: (objectId: string | null) => void;
+}
+
+/**
+ * "Change where submissions are saved?": the questions saved onto the object
+ * now lose where they are saved, and a change can't be taken back, so it is
+ * confirmed like the other endings. Only asked when something would be lost:
+ * with no question saved anywhere, the change stays one click.
+ *
+ * Unlike the confirms above, it closes as soon as it is answered rather than
+ * waiting for the server. The change is the page's own save (flush, then the
+ * new target, then the object's fields), so its progress shows on the
+ * Settings card behind (`isBusy`), and a refusal comes back as that page's
+ * toast or its "changed by someone else" notice. Keeping the dialog open
+ * would hold Esc for the whole round trip with nothing more to say in it.
+ */
+export function RetargetFormDialog({ ask, onClose, onConfirm }: RetargetDialogProps) {
+  const [last, setLast] = useState<RetargetAsk | undefined>(undefined);
+  if (ask !== undefined && ask !== last) setLast(ask);
+  const shown = ask ?? last;
+  if (shown === undefined) return null;
+  return (
+    <Modal
+      title={shown.objectId === null ? strings.retargetOffTitle : strings.retargetTitle}
+      tone="danger"
+      isOpen={ask !== undefined}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close" kbd="ESC">
+            {strings.cancel}
+          </Button>
+          <Button
+            variant="danger-solid"
+            icon={shown.objectId === null ? 'x' : 'refresh-cw'}
+            onPress={() => {
+              onConfirm(shown.objectId);
+              onClose();
+            }}
+          >
+            {shown.objectId === null ? strings.retargetOffAction : strings.retargetAction}
+          </Button>
+        </>
+      }
+    >
+      <p>
+        {shown.objectId === null
+          ? strings.retargetOffText(shown.filedCount, shown.objectName)
+          : strings.retargetText(shown.filedCount, shown.objectName, shown.nextName)}
+      </p>
     </Modal>
   );
 }

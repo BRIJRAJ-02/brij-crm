@@ -230,6 +230,26 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     expect((await getForm(member, { formId: created.id })).signingSecret).toBeUndefined();
   });
 
+  it('keeps an old address finding the form, and no other form may take it (late trap #54)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const old = live.publicKey;
+    const moved = `moved-${String(Date.now())}`;
+    await updateFormSettings(w.scope, { formId: live.id, slug: moved });
+    // Every embed and link pasted with the old address still reaches it.
+    expect((await enterPublicForm({ db }, old)).formId).toBe(live.id);
+    expect((await enterPublicForm({ db }, moved)).formId).toBe(live.id);
+    const other = await createForm(w.scope, { id: newId() });
+    expect(await isSlugAvailable(w.scope, { formId: other.id, slug: old })).toEqual({ available: false });
+    expect(await refusalOf(updateFormSettings(w.scope, { formId: other.id, slug: old }))).toMatchObject([
+      { code: 'SLUG_TAKEN', field: 'slug' },
+    ]);
+    // The same form may take it back.
+    expect(await isSlugAvailable(w.scope, { formId: live.id, slug: old })).toEqual({ available: true });
+    await updateFormSettings(w.scope, { formId: live.id, slug: old });
+    expect((await enterPublicForm({ db }, moved)).formId).toBe(live.id);
+  });
+
   it('refuses a publish with the first problem, on the question at fault (AC-655)', async () => {
     const w = await workspace();
     const created = await createForm(w.scope, { id: newId(), name: 'Contact us' });
@@ -290,6 +310,122 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     expect(unchanged.revision).toBe(live.revision);
   });
 
+  it('tells a publisher who can’t change attributes to ask an admin when the email isn’t unique (late trap #17)', async () => {
+    // The form refused with "File the email question on Graphic Designers" while its email question was filed there,
+    // and someone who may manage forms but not attributes could never get past it.
+    const w = await workspace();
+    const designers = await createObject(w.scope, {
+      id: newId(),
+      singularName: 'Graphic Designer',
+      pluralName: 'Graphic Designers',
+      icon: 'inbox',
+      hue: 'blue',
+    });
+    const email = await createAttribute(w.scope, {
+      objectId: designers.id,
+      id: newId(),
+      title: 'Work email',
+      type: 'email',
+    });
+    const created = await createForm(w.scope, { id: newId(), name: 'Apply', mainObjectId: designers.id });
+    expect(created.draft.targets.main).toEqual({ objectId: designers.id });
+    const saved = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: {
+        ...created.draft,
+        questions: created.draft.questions.map((each) =>
+          each.answerType === 'email' ? { ...each, filedOn: { objectRole: 'main', attributeId: email.id } } : each,
+        ),
+      },
+      expectedRevision: created.revision,
+    });
+    const key = testScope({
+      db,
+      workspaceId: w.scope.workspaceId,
+      actor: { type: 'api_key', id: newId() },
+      scopes: ['forms.manage', 'data.write'],
+    });
+    expect(await refusalOf(publishForm(key, { formId: created.id, expectedRevision: saved.revision }))).toEqual([
+      expect.objectContaining({
+        code: 'CONFIG_INVALID',
+        message:
+          'Work email on Graphic Designer isn’t unique, so a submission can’t find the record it belongs to. Ask a workspace admin to make it unique.',
+      }),
+    ]);
+    const [own] = await refusalOf(publishForm(w.scope, { formId: created.id, expectedRevision: saved.revision }));
+    expect(own?.message).toContain('Make Work email on Graphic Designer unique.');
+  });
+
+  it('leaves a question kept off the CRM unfiled when the object is asked for again', async () => {
+    // Not filed, chosen (28 October 2026): the server files a form's phone, name and match email by default when its
+    // object is set, and that must not undo a person's choice to keep one of them off the CRM.
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId(), name: 'Contact us' });
+    const phone = created.draft.questions.find((each) => each.answerType === 'phone');
+    if (phone === undefined) throw new Error('The starting form asks a phone question.');
+    const { filedOn: _filed, ...unfiled } = phone;
+    const saved = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: {
+        ...created.draft,
+        questions: created.draft.questions.map((each) => (each.id === phone.id ? { ...unfiled, kept: true } : each)),
+      },
+      expectedRevision: created.revision,
+    });
+    const again = await setFormTarget(w.scope, {
+      formId: created.id,
+      mainObjectId: w.people,
+      expectedRevision: saved.revision,
+    });
+    const after = again.draft.questions.find((each) => each.id === phone.id);
+    expect(after).toMatchObject({ kept: true });
+    expect(after?.filedOn).toBeUndefined();
+  });
+
+  it('never moves the match to a later email question when the visitor’s own email is kept off the CRM', async () => {
+    // A referrer's email filed as the match would put every visitor's answers on the referrer's record.
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId(), name: 'Refer a friend' });
+    const own = created.draft.questions.find((each) => each.answerType === 'email');
+    if (own === undefined) throw new Error('The starting form asks an email question.');
+    const { filedOn: _filed, ...unfiledOwn } = own;
+    const referrer = { ...unfiledOwn, id: newId(), key: 'referrer_email', label: 'Referrer email' };
+    const saved = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: {
+        ...created.draft,
+        questions: [
+          ...created.draft.questions.map((each) =>
+            each.id === own.id ? { ...unfiledOwn, kept: true as const } : each,
+          ),
+          referrer,
+        ],
+      },
+      expectedRevision: created.revision,
+    });
+    const again = await setFormTarget(w.scope, {
+      formId: created.id,
+      mainObjectId: w.people,
+      expectedRevision: saved.revision,
+    });
+    expect(again.draft.questions.find((each) => each.id === own.id)?.filedOn).toBeUndefined();
+    expect(again.draft.questions.find((each) => each.id === referrer.id)?.filedOn).toBeUndefined();
+  });
+
+  it('starts a new form on the first object its creator may write, not People they can only read (late trap #16)', async () => {
+    const w = await workspace();
+    const readsPeople: AccessRules = {
+      levels: [
+        { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: w.people }, level: 'read' },
+      ],
+      records: [],
+    };
+    const admin = rescope(w.scope, { role: 'admin', rules: readsPeople });
+    const created = await createForm(admin, { id: newId() });
+    expect(created.mainObjectId).toBeDefined();
+    expect(created.mainObjectId).not.toBe(w.people);
+  });
+
   it('refuses a publish filing onto a field the publisher can only read, naming it (AC-546)', async () => {
     const w = await workspace();
     const created = await createForm(w.scope, { id: newId(), name: 'Contact us' });
@@ -341,13 +477,14 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     await expect(enterPublicForm({ db }, live.publicKey)).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
   });
 
-  it('changes the address at once, so the old link names nothing (AC-552)', async () => {
+  it('changes the address at once, and the old one still finds the form (AC-552, late trap #54)', async () => {
     const w = await workspace();
     const live = await liveForm(w);
     const moved = await updateFormSettings(w.scope, { formId: live.id, slug: 'talk-to-us', ownerMemberId: null });
     expect(moved).toMatchObject({ publicKey: 'talk-to-us', revision: live.revision });
     expect(moved.ownerMemberId).toBeUndefined();
-    await expect(enterPublicForm({ db }, live.publicKey)).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
+    // Before, the old address named nothing, and every embed already pasted on a site stopped working.
+    await expect(enterPublicForm({ db }, live.publicKey)).resolves.toMatchObject({ formId: live.id });
     await expect(enterPublicForm({ db }, 'talk-to-us')).resolves.toMatchObject({ formId: live.id });
   });
 
@@ -565,6 +702,21 @@ describe('the content checks and Needs review (AC-563, AC-584, the spam follow-u
       ).toEqual([{ code: 'FORM_STATE', message: NOT_IN_REVIEW }]);
     }
   });
+
+  it('refuses to release a submission held for review, so Needs review is emptied by resolve alone', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    await submit(live.publicKey, body({ name: 'Xkcdqwrt', email: 'one@mailinator.com' }));
+    const [held] = await submissionIds(w, live.id);
+    if (held === undefined) throw new Error('A submission was expected.');
+    expect(held.state).toBe('needs_review');
+    // Release is for spam only. The panel's Not spam must route a held row to `resolve`; if this
+    // ever stops refusing, that routing (and this pin) should be revisited together.
+    expect(await refusalOf(releaseSubmission(w.scope, registry, { submissionId: held.id }))).toMatchObject([
+      { code: 'FORM_STATE' },
+    ]);
+    expect((await getSubmission(w.scope, { submissionId: held.id })).state).toBe('needs_review');
+  });
 });
 
 describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-565, AC-567)', () => {
@@ -709,17 +861,35 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     expect(view.refused).toEqual([{ questionId: 'title', message: expect.any(String) as string }]);
   });
 
+  it('says an answer whose field was archived since was not saved, rather than counting it saved (late trap #50)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    await submit(live.publicKey, body({ name: 'Ada', email: 'archived@example.com', title: 'Chief engineer' }));
+    // Archived straight on the row: what matters is what filing does when it meets one, whatever path archived it.
+    await w.query(sql`update attributes set archived_at = now() where id = ${w.attribute('people.job_title')}::uuid`);
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const view = await getSubmission(w.scope, { submissionId: submission.id });
+    expect(view.state).toBe('processed');
+    // The answer stays on the submission (AC-551), and the panel learns it is not on the record.
+    expect(view.answers.find((answer) => answer.questionId === 'title')?.value).toBe('Chief engineer');
+    expect(view.refused).toEqual([{ questionId: 'title', message: 'Job title was archived.' }]);
+  });
+
   it('fails what no answer explains, retries it, and releases and marks spam (AC-566, AC-574)', async () => {
     const w = await workspace();
     const live = await liveForm(w);
     await submit(live.publicKey, body({ name: 'Ada', email: 'needs@example.com' }));
     const timezone = w.attribute('people.timezone');
-    await editAttribute(w.scope, { attributeId: timezone, isRequired: true });
+    // Required with nothing to fill it, written straight to the row: settings refuses that edit while a form
+    // is live (27 October 2026), and this test is about what the filing does when it meets one already there.
+    await w.query(sql`update attributes set is_required = true where id = ${timezone}::uuid`);
     const [submission] = await submissionIds(w, live.id);
     if (submission === undefined) throw new Error('No submission.');
     await processNow(w, submission.id);
     expect((await getSubmission(w.scope, { submissionId: submission.id })).state).toBe('failed');
-    await editAttribute(w.scope, { attributeId: timezone, isRequired: false });
+    await w.query(sql`update attributes set is_required = false where id = ${timezone}::uuid`);
     expect((await retrySubmission(w.scope, registry, { submissionId: submission.id })).state).toBe('received');
     await processNow(w, submission.id);
     expect((await markSubmissionSpam(w.scope, { submissionId: submission.id })).state).toBe('spam');

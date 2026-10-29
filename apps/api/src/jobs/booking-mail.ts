@@ -91,9 +91,19 @@ export async function runBookingMail(deps: BookingMailTaskDeps, payload: unknown
   // The footer's tag: a reminder's own, and one for every other booking email.
   const medium = kind === 'reminder_24h' || kind === 'reminder_1h' ? 'email_reminder' : 'email_booking';
   let failed = 0;
-  for (const mail of prepared.messages) {
+  for (const [index, mail] of prepared.messages.entries()) {
     try {
-      await deps.mailer.send(await bookingEmail(mail, { appOrigin: deps.links.appOrigin, medium }));
+      // The send's key, ids and a time only (never an address): the booking, the kind, when the booking was last
+      // written and the message's place in the batch. A send that reached the service but timed out here is
+      // retried under the same key, so the mail service drops the second one instead of sending it again.
+      const idempotencyKey =
+        prepared.stamp === undefined
+          ? undefined
+          : `booking/${bookingId}/${kind}/${String(prepared.stamp)}/${String(index)}`;
+      await deps.mailer.send({
+        ...(await bookingEmail(mail, { appOrigin: deps.links.appOrigin, medium })),
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     } catch (error) {
       failed += 1;
       // The error's class only: a message can quote the recipient.

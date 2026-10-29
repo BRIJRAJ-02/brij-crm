@@ -13,6 +13,7 @@ import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
+import { ensureLinkPage } from './handles.ts';
 import { createBookingPage, deleteBookingPage, updateBookingPage } from './pages.ts';
 import { getPublicBookingPage, readAddressedPage, readLinkPage } from './public.ts';
 
@@ -406,6 +407,51 @@ describe('a free address', () => {
     await updateMyMemberProfile(ada.scope, { handle: first });
     await updateMyMemberProfile(ada.scope, { handle: fresh('second') });
     expect(await readHandleOffer({ db }, first)).toBe('absent');
+  });
+
+  it('is held for 90 days after its person deletes their account, naming nobody, then free', async () => {
+    const ada = await person('Ada');
+    const handle = fresh('gone');
+    await updateMyMemberProfile(ada.scope, { handle });
+    // Their account goes (late trap #73: every handle they held was free at once, for the next Ada to be given).
+    await testQuery(ownerUrl, `delete from auth.workspace_membership where user_id = $1`, [ada.userId]);
+    await testQuery(ownerUrl, `delete from auth."user" where id = $1`, [ada.userId]);
+    const [held] = await testQuery<{ user_id: string | null; released: boolean }>(
+      ownerUrl,
+      `select user_id::text, released_at is not null as released from auth.public_handles where handle = $1`,
+      [handle],
+    );
+    expect(held).toEqual({ user_id: null, released: true });
+    expect(await readHandleOffer({ db }, handle)).toBe('absent');
+    expect(await refusalOf(enterLinkPage({ db }, handle, { max: 5 }))).toBe('NOT_FOUND');
+    const bea = await person('Bea');
+    expect(await refusalOf(updateMyMemberProfile(bea.scope, { handle }))).toBe('SLUG_TAKEN');
+    // The way it happened: a newcomer whose name makes the same handle is given the next one, not the held one.
+    const namesake = await person(handle.replaceAll('-', ' '));
+    const made = await db.withWorkspace(namesake.workspaceId, (tx) =>
+      ensureLinkPage(tx, {
+        userId: namesake.userId,
+        workspaceId: namesake.workspaceId,
+        name: handle.replaceAll('-', ' '),
+        email: `${namesake.userId}@example.com`,
+      }),
+    );
+    expect(made).toBe(`${handle}-2`);
+    // The sweep leaves it inside its 90 days, and frees it after them.
+    const sweep = () =>
+      db.withWorkspace(bea.workspaceId, (tx) =>
+        tx.execute<{ gone: number }>(sql`select crm_sweep_released_handles(100) as gone`),
+      );
+    await sweep();
+    expect(await readHandleOffer({ db }, handle)).toBe('absent');
+    await testQuery(
+      ownerUrl,
+      `update auth.public_handles set released_at = now() - interval '91 days' where handle = $1`,
+      [handle],
+    );
+    await sweep();
+    expect(await readHandleOffer({ db }, handle)).toBe('free');
+    expect(await updateMyMemberProfile(bea.scope, { handle })).toMatchObject({ handle });
   });
 
   it('is absent for every word kept for Timefix, and for anything no handle could be', async () => {

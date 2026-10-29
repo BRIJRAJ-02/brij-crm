@@ -6,6 +6,7 @@
 import {
   boardDefaults,
   effectiveColumns,
+  isGroupable,
   type AttributeDefinition,
   type BoardSettings,
   type DraftQuery,
@@ -176,8 +177,8 @@ export function boardLayout(view: View, patch: BoardPatch, isLocal: boolean): Vi
 
 /**
  * The Table and Board switch (AC-492): the kind picked, and the first time a
- * view becomes a board, the defaults (none when nothing can group, so the kind
- * goes alone). Back to Table keeps the board settings. Undefined when the
+ * view becomes a board, or when its grouping field is no longer live, the
+ * defaults (none when nothing can group, so the kind goes alone). Back to Table keeps the board settings. Undefined when the
  * view already is that kind.
  */
 export function switchPatch(
@@ -186,6 +187,12 @@ export function switchPatch(
   attributes: readonly AttributeDefinition[],
 ): BoardPatch | undefined {
   if (next === view.kind) return undefined;
-  const defaults = next === 'board' && view.config.board === undefined ? boardDefaults(attributes) : undefined;
+  // A stored grouping field no longer live (archived since, or gone) counts as none: the server refuses a board
+  // grouped by it, so picking Board would only bounce back to the table (late trap #14).
+  const stored = view.config.board;
+  const isStoredLive =
+    stored !== undefined &&
+    attributes.some((attribute) => attribute.id === stored.groupByAttributeId && isGroupable(attribute));
+  const defaults = next === 'board' && !isStoredLive ? boardDefaults(attributes) : undefined;
   return { kind: next, ...(defaults === undefined ? {} : { board: defaults }) };
 }

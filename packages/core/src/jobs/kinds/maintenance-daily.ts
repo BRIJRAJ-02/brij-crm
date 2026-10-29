@@ -20,6 +20,8 @@
 //    a year, the person's rather than the workspace's, through a definer.
 // 1h. `link_pages` (26 Oct 2026): every active member with a sign in and no link page here gets one, as the
 //    membership's own transaction would have made it (`ensureLinkPage`): the retry for one that failed there.
+// 1i. `released_handles` (migration 0126): handles held 90 days after their person's account was deleted are freed,
+//    the person's rather than the workspace's, through a definer.
 // 2. `expired`: jobs left `ready` past their hour end `cancelled` with
 //    `JOB_EXPIRED` (the queue row at the expiry normally does it first).
 // 3. `items`: the items of jobs that finished since the last cleanup, all
@@ -43,7 +45,7 @@ import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
 import { pruneNavRows } from '../../navigation/navigation.ts';
-import { UPLOAD_KEPT_HOURS } from '@crm/contracts';
+import { SPAM_FILES_KEPT_DAYS, UPLOAD_KEPT_HOURS } from '@crm/contracts';
 import { ensureLinkPage, publicProfilesOf } from '../../booking/handles.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
@@ -76,6 +78,7 @@ const PHASES = [
   'views',
   'profile_counts',
   'link_pages',
+  'released_handles',
   'expired',
   'items',
   'jobs',
@@ -127,6 +130,8 @@ const Totals = z.object({
   linkPages: Count.default(0),
   /** Members it tried and still couldn't make a page for (20 handles held, a failure): tried again tomorrow. */
   linkPagesMissed: Count.default(0),
+  /** Handles freed 90 days after their person's account was deleted (migration 0126); 0 in an older checkpoint. */
+  handles: Count.default(0),
   expired: Count,
   items: Count,
   jobs: Count,
@@ -156,6 +161,7 @@ const NO_TOTALS: Totals = {
   profileCounts: 0,
   linkPages: 0,
   linkPagesMissed: 0,
+  handles: 0,
   expired: 0,
   items: 0,
   jobs: 0,
@@ -219,6 +225,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   profileCounts: totals.profileCounts + (more.profileCounts ?? 0),
   linkPages: totals.linkPages + (more.linkPages ?? 0),
   linkPagesMissed: totals.linkPagesMissed + (more.linkPagesMissed ?? 0),
+  handles: totals.handles + (more.handles ?? 0),
   expired: totals.expired + (more.expired ?? 0),
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
@@ -351,6 +358,19 @@ async function oldProfileCounts(context: WriteContext, at: Checkpoint, limit: nu
   );
   const count = swept.rows[0]?.gone ?? 0;
   const totals = plus(at.totals, { profileCounts: count });
+  return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1i (migration 0126): handles held more than 90 days after their person's account was deleted, `limit` a batch,
+ * through `crm_sweep_released_handles`. They are nobody's workspace's, so whichever cleanup runs first frees them.
+ */
+async function releasedHandles(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const swept = await context.tx.execute<{ readonly gone: number } & Record<string, unknown>>(
+    sql`select crm_sweep_released_handles(${limit}::integer) as gone`,
+  );
+  const count = swept.rows[0]?.gone ?? 0;
+  const totals = plus(at.totals, { handles: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
 
@@ -641,9 +661,13 @@ const UPLOADS_BATCH = 100;
 /** How long an upload waits for its submission: `UPLOAD_KEPT_HOURS`, as an interval. */
 const UPLOAD_WAIT = `${String(UPLOAD_KEPT_HOURS)} hours`;
 
+/** How long a spam submission keeps its files, as an interval. */
+const SPAM_WAIT = `${String(SPAM_FILES_KEPT_DAYS)} days`;
+
 /**
- * Phase 8 (#32): uploads no submission took within a day, or whose submission is gone (a deleted submission leaves
- * its upload row on purpose). The files go from the store first, then the rows, in one transaction: a store that
+ * Phase 8 (#32): uploads no submission took within a day, whose submission is gone (a deleted submission leaves
+ * its upload row on purpose), or whose submission was judged spam more than 30 days ago (its answer then names a
+ * file that is gone, as a deleted file's does). The files go from the store first, then the rows, in one transaction: a store that
  * fails rolls the rows back and the job retries, and a file already gone is no error. Without a store the phase
  * does nothing and the rows wait.
  */
@@ -660,6 +684,12 @@ async function orphanUploads(
       (u.submission_id is null and u.created_at < now() - ${UPLOAD_WAIT}::interval)
       or (u.submission_id is not null and not exists (
         select 1 from form_submissions s where s.workspace_id = u.workspace_id and s.id = u.submission_id))
+      -- One our spam check caught keeps its files 30 days (SPAM_FILES_KEPT_DAYS), from when it arrived, which is when
+      -- it was caught; one a member marked as spam keeps them.
+      or exists (
+        select 1 from form_submissions s where s.workspace_id = u.workspace_id and s.id = u.submission_id
+          and s.state = 'spam' and coalesce(s.spam ->> 'marked', 'false') <> 'true'
+          and s.received_at < now() - ${SPAM_WAIT}::interval)
     )
     order by u.created_at limit ${UPLOADS_BATCH}
     for update skip locked
@@ -745,6 +775,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return oldProfileCounts(context, at, limit);
         case 'link_pages':
           return missingLinkPages(context, at);
+        case 'released_handles':
+          return releasedHandles(context, at, limit);
         case 'expired':
           return expired(context, at, limit);
         case 'items':

@@ -102,14 +102,18 @@ export function AppearanceCard({ theme, onChange, refusal }: AppearanceCardProps
         }}
       />
       {chips(strings.ground, 'ground', GROUNDS)}
-      <HuePicker
-        isLabelShown
-        label={strings.hue}
-        value={theme.hue}
-        onChange={(hue: Hue) => {
-          pick({ ...theme, hue });
-        }}
-      />
+      {/* The colour is the Colour background's alone: under any other it would change nothing, so it waits
+          until that background is chosen (flow walks, 29 October 2026: L1). */}
+      {theme.ground === 'tint' && (
+        <HuePicker
+          isLabelShown
+          label={strings.hue}
+          value={theme.hue}
+          onChange={(hue: Hue) => {
+            pick({ ...theme, hue });
+          }}
+        />
+      )}
       {chips(strings.mode, 'mode', MODES)}
       {chips(strings.shape, 'shape', SHAPES)}
       {chips(strings.fill, 'fill', FILLS)}
