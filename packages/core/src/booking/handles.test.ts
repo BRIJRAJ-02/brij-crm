@@ -454,6 +454,60 @@ describe('a free address', () => {
     expect(await updateMyMemberProfile(bea.scope, { handle })).toMatchObject({ handle });
   });
 
+  it('lets a person at 20 handles take another, letting their oldest unused one go into the hold', async () => {
+    const ada = await person('Ada');
+    const current = fresh('current');
+    await updateMyMemberProfile(ada.scope, { handle: current });
+    // 19 old handles beside it, the first a year old: renaming alone used to reach the cap (late trap #76).
+    const old = Array.from({ length: 19 }, (_, i) => fresh(`old${String(i)}`));
+    for (const [i, handle] of old.entries()) {
+      await testQuery(
+        ownerUrl,
+        `insert into auth.public_handles (handle, user_id, workspace_id, created_at)
+         values ($1, $2, $3, now() - make_interval(days => $4))`,
+        [handle, ada.userId, ada.workspaceId, 365 - i],
+      );
+    }
+    const held = () =>
+      testQuery<{ n: number }>(ownerUrl, `select count(*)::int as n from auth.public_handles where user_id = $1`, [
+        ada.userId,
+      ]);
+    expect(await held()).toEqual([{ n: 20 }]);
+    const next = fresh('next');
+    expect(await updateMyMemberProfile(ada.scope, { handle: next })).toMatchObject({ handle: next });
+    const [oldest] = await testQuery<{ user_id: string | null; released: boolean }>(
+      ownerUrl,
+      `select user_id::text, released_at is not null as released from auth.public_handles where handle = $1`,
+      [old[0]],
+    );
+    expect(oldest).toEqual({ user_id: null, released: true });
+    expect(await held()).toEqual([{ n: 20 }]);
+    // A new membership gets its page too, where before it silently got none.
+    const elsewhere = await person('Ada', ada.userId);
+    const made = await db.withWorkspace(elsewhere.workspaceId, (tx) =>
+      ensureLinkPage(tx, {
+        userId: ada.userId,
+        workspaceId: elsewhere.workspaceId,
+        name: 'Ada',
+        email: `${ada.userId}@example.com`,
+      }),
+    );
+    expect(made).toBeDefined();
+    expect(await held()).toEqual([{ n: 20 }]);
+    // `current`, retired by the rename, is newer than the old ones, so it still finds Ada.
+    expect(await readHandleOffer({ db }, current)).toBe('absent');
+  });
+
+  it('still refuses a 21st handle when all 20 are some page’s current one', async () => {
+    const ada = await person('Ada');
+    await updateMyMemberProfile(ada.scope, { handle: fresh('first') });
+    for (let i = 0; i < 19; i += 1) {
+      const other = await person('Ada', ada.userId);
+      await updateMyMemberProfile(other.scope, { handle: fresh(`page${String(i)}`) });
+    }
+    expect(await refusalOf(updateMyMemberProfile(ada.scope, { handle: fresh('one-more') }))).toBe('LIMIT_REACHED');
+  });
+
   it('is absent for every word kept for Timefix, and for anything no handle could be', async () => {
     for (const reserved of ['settings', 'api', 'book', 'admin', 'sign-up', 'www']) {
       expect(await readHandleOffer({ db }, reserved)).toBe('absent');

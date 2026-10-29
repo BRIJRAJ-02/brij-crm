@@ -112,7 +112,8 @@ export async function savePublicProfile(
       throw refuseOn('SLUG_TAKEN', 'That handle is taken. Pick another.', 'handle');
     }
     if (pg?.code === '54000') {
-      throw refuseOn('LIMIT_REACHED', 'You’ve changed your handle too many times. Pick one you used before.', 'handle');
+      // Only with 20 live pages: an old handle makes room for a new one (late trap #76, migration 0128).
+      throw refuseOn('LIMIT_REACHED', 'You have link pages in 20 workspaces, the most one person can have.', 'handle');
     }
     if (pg?.code === '42501') throw refuse('FORBIDDEN', 'You’re not a member of this workspace.');
     throw error;
@@ -142,7 +143,7 @@ interface EnsuredRow extends Record<string, unknown> {
  * their name (else their email's first part, `handleBaseFor`) made unique with a short number, and an empty page
  * behind it (`crm_ensure_public_profile`). Runs under its own savepoint in the caller's transaction and never
  * throws: a membership never fails because of its link page. Undefined when none was made (not an active member,
- * 20 handles held, every try taken, or a failure); the daily cleanup tries again.
+ * 20 live pages already, every try taken, or a failure); the daily cleanup tries again.
  */
 export async function ensureLinkPage(
   tx: WorkspaceTx,
