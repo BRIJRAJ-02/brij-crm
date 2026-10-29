@@ -29,6 +29,8 @@ import { useBookingsHosts } from '../features/bookings/toolbarSlot.ts';
 // TopBar and the tabs. Paging weeks changes only the search, never the loader's deps: the screen stays and holds the
 // next week's read (primed on entry for the weeks either side), so the toolbar never gives way to the pending page.
 export const Route = createFileRoute('/w/$slug/bookings/calendar')({
+  // One chunk for the page, its loading and its failure (the first load carries one import for it, not three).
+  codeSplitGroupings: [['component', 'pendingComponent', 'errorComponent']],
   validateSearch: parseBookingsSearch,
   loaderDeps: () => ({}),
   loader: async ({ context, params, location }) => {
@@ -51,7 +53,7 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
         .ready()
         .catch(() => undefined);
     const calendar = data.calendar.view(params.slug);
-    const [objects, pages, hours, , , access, visible] = await Promise.all([
+    const [objects, pages, hours, , , visible] = await Promise.all([
       data.objects.list(params.slug),
       // The Link filter's choices; a member without booking pages has none.
       data.bookingPages.held(params.slug).catch(() => []),
@@ -59,15 +61,16 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
       data.bookings.hours(params.slug, zone).catch(() => undefined),
       week.ready(),
       calendar.ready().catch(() => undefined),
-      data.access.mine(params.slug),
       // Whom the member Manages, for For on Block time and New meeting (spec 0037, AC-1272); none when it fails.
-      data.scheduling.visible(params.slug).catch(() => []),
+      data.scheduling
+        .open()
+        .then((scheduling) => scheduling.visible(params.slug))
+        .catch(() => []),
     ]);
     const state = calendar.getSnapshot();
     const connections = state.status === 'ready' ? state.connections.filter((each) => each.status !== 'revoked') : [];
-    const forPeople = visible
-      .filter((member) => member.canManage && member.id !== access.memberId)
-      .map((member) => ({ id: member.id, name: member.name }));
+    // The caller comes first in their own reach: For lists the others they Manage.
+    const forPeople = visible.slice(1).filter((member) => member.canManage);
     return { objects, pages, connections, availability: hours?.availability, forPeople };
   },
   pendingComponent: CalendarPending,

@@ -4,7 +4,15 @@
 // Main task: read each person's reach in a few words; open it to give them See or Manage over a person or everyone,
 // change a level, or take one back (asked first, AC-1445).
 // Leaves out: teams (not built), reach from custom roles (not built), "What can Priya do" (the role guide's).
-import type { DataLayer, DelegationTarget, DelegationView, MemberView, Role, SchedulingLevel } from '@crm/data';
+import type {
+  DataLayer,
+  DelegationTarget,
+  DelegationView,
+  MemberView,
+  Role,
+  SchedulingAccessStore,
+  SchedulingLevel,
+} from '@crm/data';
 import { ROLE_LABELS } from '@crm/data';
 import { useDelegations } from '@crm/data/react';
 import {
@@ -82,13 +90,42 @@ function useMemberList(data: DataLayer, slug: string): readonly MemberView[] {
  * or admin reads "Everyone" as plain text: a control that couldn't change their reach would lie (timefix's rule).
  */
 export const SchedulingAccessCell = memo(function SchedulingAccessCell(props: SchedulingAccessCellProps) {
+  const store = useStore(props.data);
   if (roleManagesEveryone(props.member.role)) return strings.everyoneByRole;
-  return <Reach {...props} />;
+  // Its place until the store is here: it loads in its own chunk with the first cell, never in the first load.
+  if (store === undefined) return <Skeleton width="short" />;
+  return <Reach {...props} store={store} />;
 });
 
+/** The scheduling access store: at once when a loader opened it, else opened here (its own chunk). */
+function useStore(data: DataLayer): SchedulingAccessStore | undefined {
+  const [store, setStore] = useState(() => data.scheduling.loaded());
+  useEffect(() => {
+    if (store !== undefined) return;
+    let isCurrent = true;
+    data.scheduling.open().then(
+      (opened) => {
+        if (isCurrent) setStore(opened);
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, store]);
+  return store;
+}
+
 /** A member whose reach comes from their delegations: the words, the popover and the confirm. */
-function Reach({ data, toasts, slug, me, member }: SchedulingAccessCellProps) {
-  const held = data.scheduling.delegations(slug, 'everyone');
+function Reach({
+  data,
+  store,
+  toasts,
+  slug,
+  me,
+  member,
+}: SchedulingAccessCellProps & { readonly store: SchedulingAccessStore }) {
+  const held = store.delegations(slug, 'everyone');
   const state = useDelegations(held);
   const members = useMemberList(data, slug);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -121,7 +158,7 @@ function Reach({ data, toasts, slug, me, member }: SchedulingAccessCellProps) {
       title: strings.removeTitle(member.name),
       text: strings.removeOver(member.name, whoseOf(delegation.target, nameOf), delegation.level),
       run: () => {
-        void data.scheduling.revoke(slug, me, delegation).then((landed) => {
+        void store.revoke(slug, me, delegation).then((landed) => {
           if (landed) toasts.toast({ tone: 'success', message: strings.removed });
         });
       },
@@ -150,6 +187,7 @@ function Reach({ data, toasts, slug, me, member }: SchedulingAccessCellProps) {
         {isOpen && (
           <Editor
             data={data}
+            store={store}
             toasts={toasts}
             slug={slug}
             me={me}
@@ -174,7 +212,7 @@ function Reach({ data, toasts, slug, me, member }: SchedulingAccessCellProps) {
 
 /** The popover's body: the role's reach, each delegation, and Give access. */
 function Editor({
-  data,
+  store,
   toasts,
   slug,
   me,
@@ -184,6 +222,7 @@ function Editor({
   nameOf,
   onRemove,
 }: SchedulingAccessCellProps & {
+  readonly store: SchedulingAccessStore;
   readonly members: readonly MemberView[];
   readonly theirs: readonly DelegationView[];
   readonly nameOf: NameOf;
@@ -218,7 +257,7 @@ function Editor({
   ];
   const grant = (to: DelegationTarget, chosen: SchedulingLevel) => {
     const whose = whoseOf(to, nameOf);
-    void data.scheduling.grant(slug, me, { delegateMemberId: member.id, target: to, level: chosen }).then((landed) => {
+    void store.grant(slug, me, { delegateMemberId: member.id, target: to, level: chosen }).then((landed) => {
       if (landed) toasts.toast({ tone: 'success', message: strings.given(member.name, chosen, whose) });
     });
   };

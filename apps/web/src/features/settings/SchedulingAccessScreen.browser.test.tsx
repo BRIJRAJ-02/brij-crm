@@ -3,13 +3,13 @@
 // words, Add someone giving See or Manage, whose scheduling I reach, and no axe violations in either theme.
 import '@crm/ui/styles.css';
 import type {
-  DataLayer,
   DelegationGrant,
   DelegationsHeld,
   DelegationsState,
   DelegationView,
   MemberView,
   MyAccess,
+  SchedulingAccessStore,
 } from '@crm/data';
 import { createToasts } from '@crm/ui';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -74,7 +74,7 @@ function fake(initial: readonly DelegationView[]) {
   const granted: DelegationGrant[] = [];
   const revoked: string[] = [];
   const data = {
-    scheduling: {
+    store: {
       delegations: () => held,
       visible: () => Promise.resolve([]),
       grant: (_workspace: string, _me: string, grant: DelegationGrant) => {
@@ -101,7 +101,7 @@ function fake(initial: readonly DelegationView[]) {
         return Promise.resolve(true);
       },
     },
-  } as unknown as DataLayer;
+  } as unknown as { readonly store: SchedulingAccessStore };
   return { data, granted, revoked };
 }
 
@@ -128,9 +128,17 @@ async function render(initial: readonly DelegationView[] = [OVER_ME, MINE]) {
   const made = fake(initial);
   const toasts = createToasts();
   shown = await renderInApp(
-    () => <SchedulingAccessScreen data={made.data} toasts={toasts} slug="acme" access={ACCESS} members={MEMBERS} />,
+    () => (
+      <SchedulingAccessScreen
+        scheduling={made.data.store}
+        toasts={toasts}
+        slug="acme"
+        access={ACCESS}
+        members={MEMBERS}
+      />
+    ),
     {
-      data: made.data,
+      data: {},
       toasts,
       pattern: '/w/$slug/settings/account/scheduling',
       at: '/w/acme/settings/account/scheduling',

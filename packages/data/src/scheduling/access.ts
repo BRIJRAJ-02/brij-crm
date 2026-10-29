@@ -57,6 +57,44 @@ export interface SchedulingAccessApi {
   readonly visible: (input: { readonly workspace: string }) => Promise<VisibleMembers>;
 }
 
+/**
+ * The procedures the store calls, as the data layer's client has them, and how it calls them (`call`, with its
+ * retries and refusals; `beforeRead`, the live head). Kept here, in the store's own chunk, not the first load.
+ */
+export interface SchedulingAccessWire<O> {
+  readonly client: {
+    readonly scheduling: {
+      readonly delegations: {
+        list(input: { readonly workspace: string; readonly everyone?: true }, options: O): Promise<DelegationsList>;
+        grant(
+          input: { readonly workspace: string; readonly mutationId: string } & DelegationGrant,
+          options: O,
+        ): Promise<DelegationView>;
+        revoke(
+          input: { readonly workspace: string; readonly id: string; readonly mutationId: string },
+          options: O,
+        ): Promise<void>;
+      };
+    };
+    readonly members: { visible(input: { readonly workspace: string }, options: O): Promise<VisibleMembers> };
+  };
+  readonly call: <T>(run: (options: O) => Promise<T>) => Promise<T>;
+  readonly beforeRead: (workspace: string) => Promise<void>;
+  readonly mintId: () => string;
+}
+
+/** The store's calls over the data layer's client (each write with its own mutation id). */
+export function wireApi<O>({ client, call, beforeRead, mintId }: SchedulingAccessWire<O>): SchedulingAccessApi {
+  const { delegations } = client.scheduling;
+  return {
+    list: (input) => beforeRead(input.workspace).then(() => call((options) => delegations.list(input, options))),
+    grant: (input) => call((options) => delegations.grant({ ...input, mutationId: mintId() }, options)),
+    revoke: (input) => call((options) => delegations.revoke({ ...input, mutationId: mintId() }, options)),
+    visible: (input) =>
+      beforeRead(input.workspace).then(() => call((options) => client.members.visible(input, options))),
+  };
+}
+
 /** What the store is made with. */
 export interface SchedulingAccessDeps {
   readonly api: SchedulingAccessApi;

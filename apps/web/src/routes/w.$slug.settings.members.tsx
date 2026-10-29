@@ -16,6 +16,8 @@ interface MembersSearch {
 // `?q=`; holders of `members.invite` also get the open invitations. Everything through the data layer. The whole
 // list is held too, so a live `members` event (a role changed, someone joined) reloads this route.
 export const Route = createFileRoute('/w/$slug/settings/members')({
+  // One chunk for the page, its loading and its failure (the first load carries one import for it, not three).
+  codeSplitGroupings: [['component', 'pendingComponent', 'errorComponent']],
   validateSearch: (search: Record<string, unknown>): MembersSearch => {
     const q = typeof search.q === 'string' ? search.q.trim().slice(0, 100) : '';
     return q === '' ? {} : { q };

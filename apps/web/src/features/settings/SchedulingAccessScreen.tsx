@@ -3,7 +3,7 @@
 // I can reach, timefix's "Sees all calendars" made personal (decision 9: a member picks their own assistant).
 // Main task: add a colleague with See or Manage, change their level, or take it back (asked first, AC-1445).
 // Leaves out: teams (not built), roles (Settings › Members), the reach of other people (the Members page's column).
-import type { DataLayer, DelegationView, MemberView, MyAccess, SchedulingLevel } from '@crm/data';
+import type { DelegationView, MemberView, MyAccess, SchedulingAccessStore, SchedulingLevel } from '@crm/data';
 import { ROLE_LABELS } from '@crm/data';
 import { useDelegations } from '@crm/data/react';
 import {
@@ -32,7 +32,8 @@ import { SettingsPage } from './SettingsPage.tsx';
 
 /** Props for the page: what its route loaded. */
 export interface SchedulingAccessScreenProps {
-  readonly data: DataLayer;
+  /** The scheduling access store, which the route's loader opened. */
+  readonly scheduling: SchedulingAccessStore;
   readonly toasts: Toasts;
   readonly slug: string;
   readonly access: MyAccess;
@@ -46,9 +47,9 @@ const levelBadge = (level: SchedulingLevel) => (
 );
 
 /** Settings › Account › Scheduling access. */
-export function SchedulingAccessScreen({ data, toasts, slug, access, members }: SchedulingAccessScreenProps) {
+export function SchedulingAccessScreen({ scheduling, toasts, slug, access, members }: SchedulingAccessScreenProps) {
   const me = access.memberId;
-  const state = useDelegations(data.scheduling.delegations(slug, 'mine'));
+  const state = useDelegations(scheduling.delegations(slug, 'mine'));
   const [isAdding, setAdding] = useState(false);
   const [question, setQuestion] = useState<RemoveAccessQuestion | undefined>(undefined);
   // Where focus goes once a confirm or the Add dialog closes: the row it came from may be gone.
@@ -70,7 +71,7 @@ export function SchedulingAccessScreen({ data, toasts, slug, access, members }: 
 
   const grant = (delegateMemberId: string, level: SchedulingLevel, isChange: boolean) => {
     const name = nameOf(delegateMemberId) ?? strings.formerMember;
-    void data.scheduling
+    void scheduling
       .grant(slug, me, { delegateMemberId, target: { type: 'member', memberId: me }, level })
       .then((landed) => {
         if (landed)
@@ -78,7 +79,7 @@ export function SchedulingAccessScreen({ data, toasts, slug, access, members }: 
       });
   };
   const revoke = (delegation: DelegationView) => {
-    void data.scheduling.revoke(slug, me, delegation).then((landed) => {
+    void scheduling.revoke(slug, me, delegation).then((landed) => {
       if (landed) toasts.toast({ tone: 'success', message: strings.removed });
     });
   };
@@ -100,11 +101,7 @@ export function SchedulingAccessScreen({ data, toasts, slug, access, members }: 
   let heldBody;
   if (state.status === 'error') {
     const failed = (
-      <EmptyState
-        tone="error"
-        title={strings.loadFailed}
-        onRetry={() => data.scheduling.delegations(slug, 'mine').reload()}
-      >
+      <EmptyState tone="error" title={strings.loadFailed} onRetry={() => scheduling.delegations(slug, 'mine').reload()}>
         {state.error.message}
       </EmptyState>
     );

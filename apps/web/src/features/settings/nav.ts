@@ -11,7 +11,7 @@ import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
-import { strings as schedulingAccess } from './scheduling-access-strings.ts';
+import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts';
 import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';

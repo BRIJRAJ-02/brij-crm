@@ -13,6 +13,8 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 // list (the virtual default, weekdays 09:00 to 17:00 in the browser's zone, until they save any), read again live,
 // so another tab's save shows here.
 export const Route = createFileRoute('/w/$slug/bookings/availability')({
+  // One chunk for the page, its loading and its failure (the first load carries one import for it, not three).
+  codeSplitGroupings: [['component', 'pendingComponent', 'errorComponent']],
   // `?member=`: an admin viewing a colleague's schedules (AC-971); anyone else sees their own. `?schedule=`: which.
   validateSearch: availabilitySearch,
   loaderDeps: ({ search }) => ({ member: search.member }),
@@ -21,7 +23,7 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
     // colleague outside it opens the reader's own. The workspace's members name whoever changed a schedule last.
     const [access, members, people] = await Promise.all([
       context.data.access.mine(params.slug),
-      context.data.scheduling.visible(params.slug),
+      context.data.scheduling.open().then((scheduling) => scheduling.visible(params.slug)),
       context.data.members.list(params.slug),
     ]);
     const member =
@@ -34,7 +36,7 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
       members,
       me: access.memberId,
       ownHours: access.permissions.includes('availability.own'),
-      names: new Map(people.map((person) => [person.id, person.name])),
+      people,
     };
   },
   // Shown only once the loading delay passed: its skeletons show at once.
@@ -48,7 +50,7 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
 });
 
 function AvailabilityRoute() {
-  const { member, members, me, ownHours, names } = Route.useLoaderData();
+  const { member, members, me, ownHours, people } = Route.useLoaderData();
   const { schedule } = Route.useSearch();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
@@ -61,7 +63,7 @@ function AvailabilityRoute() {
       members={members}
       me={me}
       ownHours={ownHours}
-      nameOf={(id) => names.get(id)}
+      nameOf={(id) => people.find((person) => person.id === id)?.name}
     />
   );
 }

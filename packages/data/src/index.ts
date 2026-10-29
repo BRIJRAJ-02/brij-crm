@@ -154,14 +154,7 @@ import {
   type ConnectReturn,
 } from './calendar/store.ts';
 import { lazySchedules } from './schedules/lazy.ts';
-import {
-  createSchedulingAccessStore,
-  type DelegationGrant,
-  type DelegationsHeld,
-  type DelegationsScope,
-  type DelegationView,
-  type VisibleMember,
-} from './scheduling/access.ts';
+import type { SchedulingAccessStore } from './scheduling/access.ts';
 export type {
   DelegationGrant,
   DelegationsHeld,
@@ -169,6 +162,7 @@ export type {
   DelegationsState,
   DelegationTarget,
   DelegationView,
+  SchedulingAccessStore,
   SchedulingLevel,
   VisibleMember,
 } from './scheduling/access.ts';
@@ -1209,7 +1203,7 @@ export function createDataLayer({
     formLists.clear();
     schedules.clear();
     preferences.clear();
-    schedulingAccess.clear();
+    accessLoaded?.clear();
     pictureChoice.clear();
     void linkPage?.then((made) => {
       made.clear();
@@ -1693,7 +1687,7 @@ export function createDataLayer({
   });
   router.on('members', (workspace, event) => {
     // Whom the caller sees in the scheduling pickers changes with who is here (spec 0037).
-    schedulingAccess.forgetReach(workspace);
+    accessLoaded?.forgetReach(workspace);
     // Every member's tab hears a role change at once: spread, and one read for a burst.
     spread(`members ${workspace}`, () => {
       reloadIfChanged([refreshHeld(members, workspace, () => readMembers(workspace))]);
@@ -1719,7 +1713,7 @@ export function createDataLayer({
         reloadBookings(workspace);
         homeReads.reloadAll(workspace);
         // Settings › Scheduling access and the members pickers read their delegations and reach again.
-        schedulingAccess.reload(workspace);
+        accessLoaded?.reload(workspace);
       });
     });
   });
@@ -2042,21 +2036,20 @@ export function createDataLayer({
       call((options) => api.bookings.link({ workspace, bookingId, recordId, mutationId: mintId() }, options)),
   });
 
-  // Scheduling access (spec 0037): delegations both ways and the caller's See reach, one copy per workspace.
-  const schedulingAccess = createSchedulingAccessStore({
-    api: {
-      list: (input) =>
-        beforeRead(input.workspace).then(() => call((options) => api.scheduling.delegations.list(input, options))),
-      grant: (input) =>
-        call((options) => api.scheduling.delegations.grant({ ...input, mutationId: mintId() }, options)),
-      revoke: (input) =>
-        call((options) => api.scheduling.delegations.revoke({ ...input, mutationId: mintId() }, options)),
-      visible: (input) =>
-        beforeRead(input.workspace).then(() => call((options) => api.members.visible(input, options))),
-    },
-    mintId,
-    notify,
-  });
+  // Scheduling access (spec 0037): delegations both ways and the caller's See reach, one copy per workspace. The
+  // store loads with the first screen that asks (`import()`), never in the first load; until then nothing is held,
+  // so a sign out or a live event has nothing of it to clear or read again.
+  let accessStore: Promise<SchedulingAccessStore> | undefined;
+  let accessLoaded: SchedulingAccessStore | undefined;
+  const schedulingAccess = (): Promise<SchedulingAccessStore> =>
+    (accessStore ??= import('./scheduling/access.ts').then(({ createSchedulingAccessStore, wireApi }) => {
+      accessLoaded = createSchedulingAccessStore({
+        api: wireApi({ client: api, call: (run) => call(run), beforeRead, mintId }),
+        mintId,
+        notify,
+      });
+      return accessLoaded;
+    }));
   // Settings › Account › Preferences: the member's own, one copy per workspace.
   const preferences = createPreferencesStore({
     api: {
@@ -3203,21 +3196,17 @@ export function createDataLayer({
         }),
     },
     /**
-     * Scheduling access (spec 0037): who may see or manage whose scheduling. `delegations` holds the member's own
-     * both ways (`mine`, Settings › Account › Scheduling access) or the workspace's (`everyone`, Settings › Members,
-     * `members.manage` only); `grant` and `revoke` show at once in every held list they belong to and are put back
-     * with a toast if refused, answering whether they landed. `visible` answers the members in the caller's See
-     * reach, the caller first, each with `canManage` (Availability's Viewing Select, the "For" pickers). An `access`
-     * change naming the member reads them all again.
+     * Scheduling access (spec 0037): who may see or manage whose scheduling, a store loaded on first use
+     * (`scheduling/access.ts`). Its `delegations` holds the member's own both ways (`mine`) or the workspace's
+     * (`everyone`, `members.manage` only); `grant` and `revoke` show at once in every held list they belong to and are
+     * put back with a toast if refused; `visible` answers the members in the caller's See reach. An `access` change
+     * naming the member reads them all again.
      */
     scheduling: {
-      delegations: (workspace: string, scope: DelegationsScope): DelegationsHeld =>
-        schedulingAccess.delegations(workspace, scope),
-      visible: (workspace: string): Promise<readonly VisibleMember[]> => schedulingAccess.visible(workspace),
-      grant: (workspace: string, me: string, grant: DelegationGrant): Promise<boolean> =>
-        schedulingAccess.grant(workspace, me, grant),
-      revoke: (workspace: string, me: string, delegation: DelegationView): Promise<boolean> =>
-        schedulingAccess.revoke(workspace, me, delegation),
+      /** Loads the store (its own chunk, never the first load): a route's loader awaits it before its screen draws. */
+      open: (): Promise<SchedulingAccessStore> => schedulingAccess(),
+      /** The store once a loader opened it, for a screen to read in render; undefined before. */
+      loaded: (): SchedulingAccessStore | undefined => accessLoaded,
     },
     /**
      * Booking pages (spec 0025): settings, not CRM data, with no live event.

@@ -161,7 +161,7 @@ Built from library parts only: SettingsLayout (through `SettingsPage`), Tabs, Fi
 
 ### Scheduling access (SchedulingAccessCell.tsx)
 
-A column for holders of `members.manage` (spec 0037, AC-1267, decision 8), after Two factor: each person's reach in a few words ("Sam and Bea", "Sam (sees everyone)", "Only their own"; `reachWords`). An owner or admin reads "Everyone" as text, since their role already reaches everyone and a control that couldn't change it would lie (timefix's rule). Anyone else's words are a quiet button opening a Popover: their role's reach, their delegations (level changed in place, Remove asked first in the shared danger Modal, the popover closing first), and Give access (Everyone or a person, See or Manage). Reads the workspace's delegations once (`data.scheduling.delegations(slug, 'everyone')`).
+A column for holders of `members.manage` (spec 0037, AC-1267, decision 8), after Two factor: each person's reach in a few words ("Sam and Bea", "Sam (sees everyone)", "Only their own"; `reachWords`). An owner or admin reads "Everyone" as text, since their role already reaches everyone and a control that couldn't change it would lie (timefix's rule). Anyone else's words are a quiet button opening a Popover: their role's reach, their delegations (level changed in place, Remove asked first in the shared danger Modal, the popover closing first), and Give access (Everyone or a person, See or Manage). Reads the workspace's delegations once from the scheduling store, which loads in its own chunk with the first cell (`data.scheduling.loaded()`, else `open()`).
 
 ### The invite dialog (InviteDialog.tsx)
 

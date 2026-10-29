@@ -1,7 +1,7 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { strings } from '../features/settings/scheduling-access-strings.ts';
+import { strings } from '../features/settings/scheduling-access-nav-strings.ts';
 import { SchedulingAccessLoading, SchedulingAccessScreen } from '../features/settings/SchedulingAccessScreen.tsx';
 import { SettingsFailed, SettingsPage } from '../features/settings/SettingsPage.tsx';
 
@@ -9,14 +9,16 @@ import { SettingsFailed, SettingsPage } from '../features/settings/SettingsPage.
 // whose they reach. The loader starts the member's delegations through the data layer, which the screen then holds,
 // so a grant or a removal by someone else (an `access` row naming them) reaches the open page.
 export const Route = createFileRoute('/w/$slug/settings/account/scheduling')({
+  // One chunk for the page, its loading and its failure (the first load carries one import for it, not three).
+  codeSplitGroupings: [['component', 'pendingComponent', 'errorComponent']],
   loader: async ({ context, params }) => {
-    const held = context.data.scheduling.delegations(params.slug, 'mine');
-    const [access, members] = await Promise.all([
+    const [access, members, scheduling] = await Promise.all([
       context.data.access.mine(params.slug),
       context.data.members.list(params.slug),
-      held.ready(),
+      context.data.scheduling.open(),
     ]);
-    return { access, members };
+    await scheduling.delegations(params.slug, 'mine').ready();
+    return { access, members, scheduling };
   },
   pendingComponent: () => (
     <LoadingNow>
@@ -30,10 +32,12 @@ export const Route = createFileRoute('/w/$slug/settings/account/scheduling')({
 });
 
 function SchedulingAccessRoute() {
-  const { access, members } = Route.useLoaderData();
+  const { access, members, scheduling } = Route.useLoaderData();
   const { slug } = Route.useParams();
-  const { data, toasts } = Route.useRouteContext();
-  return <SchedulingAccessScreen data={data} toasts={toasts} slug={slug} access={access} members={members} />;
+  const { toasts } = Route.useRouteContext();
+  return (
+    <SchedulingAccessScreen scheduling={scheduling} toasts={toasts} slug={slug} access={access} members={members} />
+  );
 }
 
 function SchedulingAccessError({ error }: ErrorComponentProps) {

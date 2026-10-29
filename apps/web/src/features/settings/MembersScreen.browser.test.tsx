@@ -165,7 +165,7 @@ function layerWith(answer: () => Promise<void>, startLink: InviteLinkView = LINK
     nav: { source: () => stillLoading, change: () => undefined },
     tasks: { due: () => stillLoading },
     // The Scheduling access column (spec 0037, AC-1267): nobody holds a delegation.
-    scheduling: { delegations: () => noDelegations },
+    scheduling: { loaded: () => ({ delegations: () => noDelegations }) },
     members: {
       watch: () => () => undefined,
       // The remove dialog reads what the removal does and who could take over (spec 0031, slice 5).
