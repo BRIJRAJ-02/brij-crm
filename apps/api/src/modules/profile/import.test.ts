@@ -70,12 +70,8 @@ describe('profile.importLinks', () => {
     // Hidden, every one: nothing a visitor sees has changed.
     expect(answer.items).toEqual([]);
     expect(answer.archived).toHaveLength(2);
-    // One import archives its rows in one statement, at one moment: newest first can't order them, and the read's
-    // tie-break (the id) is random between them, so the test compares them as a set.
-    expect(answer.archived.map((item) => (item.kind === 'link' ? item.title : item.kind)).toSorted()).toEqual([
-      'My blog',
-      'Shop',
-    ]);
+    // In the page's own order: one import archives its rows at one moment, and their ids rise in that order.
+    expect(answer.archived.map((item) => (item.kind === 'link' ? item.title : item.kind))).toEqual(['Shop', 'My blog']);
   }, 60_000);
 
   it('refuses a redirect out of the services, through the fetch’s own rule', async () => {
