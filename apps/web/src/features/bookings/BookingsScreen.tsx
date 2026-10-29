@@ -1904,12 +1904,6 @@ export function BookingsListScreen({
                       <ButtonLink variant="primary" icon="link" href={linksHref(slug)}>
                         {strings.shareBookingPage}
                       </ButtonLink>
-                      {/* An admin on Mine: everyone else's bookings may be there. */}
-                      {hosts?.value === 'mine' && (
-                        <Button variant="secondary" onPress={() => hosts.onChange('all')}>
-                          {strings.showEveryone}
-                        </Button>
-                      )}
                       {calendarList.status === 'ready' && !hasCalendar && (
                         <Link href={calendarsHref(slug)}>{strings.connectCalendar}</Link>
                       )}

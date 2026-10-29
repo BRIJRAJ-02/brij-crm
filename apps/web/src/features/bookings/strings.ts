@@ -64,8 +64,6 @@ export const strings = {
   /** Whose bookings an admin sees (HostsSwitch). */
   hostsLabel: 'Whose bookings',
   hosts: { mine: 'Mine', all: 'Everyone' },
-  /** An admin's empty Mine: everyone's may not be empty. */
-  showEveryone: 'Show everyone’s',
   /** A colleague's booking on the week (an admin's Everyone): the guest, then whose it is. */
   withHost: (guest: string, host: string) => `${guest} · ${host}`,
   /** A colleague's booking's card: whose it is. */

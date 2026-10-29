@@ -20,7 +20,7 @@ import { addDays, weekRange } from '../features/bookings/week.ts';
 import { memberZone } from '../features/booking/zone.ts';
 import { firstDayFor, useFirstDay } from '../features/workspace/first-day.ts';
 import { peopleSearchOf } from '../features/bookings/people.ts';
-import { readHosts, useHostsChoice } from '../features/bookings/hosts.ts';
+import { useHostsChoice } from '../features/bookings/HostsSwitch.tsx';
 import { useCan } from '../features/workspace/WorkspacePage.tsx';
 
 // Bookings › Calendar (spec 0025, AC-646): the week (`w`, its Monday; `d`, the day picked) with the reader's own
@@ -44,14 +44,11 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
       firstDayFor(preferences?.weekStart),
       zone,
     ).week;
-    // Whose bookings: an admin's kept Mine or Everyone (this browser's convenience), Mine for anyone else, as the
-    // screen asks (the access is cached: the workspace frame read it).
-    const access = await data.access.mine(params.slug).catch(() => undefined);
-    const hosts = readHosts(params.slug, access?.permissions.includes('booking.admin') === true);
-    const week = heldWeek(shown, data, params.slug, zone, hosts);
+    // Mine, the default whoever reads (an admin's kept Everyone is the screen's to ask for).
+    const week = heldWeek(shown, data, params.slug, zone);
     // The weeks either side, read behind, so Previous and Next show at once.
     for (const step of [-7, 7])
-      heldWeek(addDays(shown, step), data, params.slug, zone, hosts)
+      heldWeek(addDays(shown, step), data, params.slug, zone)
         .ready()
         .catch(() => undefined);
     const calendar = data.calendar.view(params.slug);
@@ -82,7 +79,7 @@ function heldWeek(
   data: DataLayer,
   slug: string,
   zone: string,
-  hosts: BookingHosts,
+  hosts?: BookingHosts,
 ): BookingsCalendarHeld {
   const range = weekRange(monday, zone);
   return data.bookings.calendar(slug, range.from, range.to, hosts);

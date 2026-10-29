@@ -119,6 +119,7 @@ describe('the bookings store', () => {
       workspace: 'acme',
       from: '2026-11-02T00:00:00.000Z',
       to: '2026-11-09T00:00:00.000Z',
+      hosts: 'mine',
     });
     store.view('acme', 'upcoming').retain();
     await settle();
