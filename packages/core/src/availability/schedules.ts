@@ -59,7 +59,7 @@ function memberOf(scope: EngineScope): string | undefined {
  * Whether the reader may change their own schedules: `booking.manage` and `availability.own` (spec 0037, AC-1260),
  * the one place a member's own edit is decided.
  */
-function mayEditOwnHours(scope: EngineScope): boolean {
+export function mayEditOwnHours(scope: EngineScope): boolean {
   return can(scope.access, 'booking.manage') && can(scope.access, 'availability.own');
 }
 

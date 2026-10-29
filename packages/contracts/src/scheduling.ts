@@ -78,8 +78,17 @@ export const RevokeDelegationInput = WorkspaceScoped.extend({ id: Uuid, mutation
 /** `scheduling.delegations.revoke`'s input. */
 export type RevokeDelegationInput = z.infer<typeof RevokeDelegationInput>;
 
-/** One member in the caller's See reach (AC-1261), and whether they may Manage them. */
-export const VisibleMember = z.object({ id: Uuid, name: z.string(), canManage: z.boolean() });
+/**
+ * One member in the caller's See reach (AC-1261): whether they may Manage them (book, block, move their meetings),
+ * and whether they may change their hours too (`canChangeHours`): not through a delegation the member granted
+ * themself while their hours are set by others (AC-1255, decision 9).
+ */
+export const VisibleMember = z.object({
+  id: Uuid,
+  name: z.string(),
+  canManage: z.boolean(),
+  canChangeHours: z.boolean(),
+});
 /** One member in the caller's See reach. */
 export type VisibleMember = z.infer<typeof VisibleMember>;
 

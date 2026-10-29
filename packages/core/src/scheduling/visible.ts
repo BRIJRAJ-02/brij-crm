@@ -7,7 +7,8 @@ import { sql } from 'drizzle-orm';
 import type { VisibleMembers } from '@crm/contracts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { canActFor, reachSummary, roleReach, schedulingReach } from '../access/scheduling.ts';
+import { mayEditOwnHours } from '../availability/schedules.ts';
+import { canActFor, reachSummary, roleReach, schedulingReach, type SchedulingReach } from '../access/scheduling.ts';
 import { uuidList } from '../engine/ids.ts';
 
 /** The most members the answer holds (the Members page's own cap). */
@@ -30,12 +31,29 @@ export async function listVisibleMembers(scope: EngineScope): Promise<VisibleMem
       order by (id = ${me}::uuid) desc, lower(name), id
       limit ${VISIBLE_MAX}
     `);
-    return {
-      members: rows.rows
-        .filter((row) => canActFor(reach, row.id, 'view'))
-        .map((row) => ({ id: row.id, name: row.name, canManage: canActFor(reach, row.id, 'manage') })),
-    };
+    return { members: visibleOf(rows.rows, reach, me, mayEditOwnHours(scope)) };
   });
+}
+
+/**
+ * The rows the caller may See, each with what they may do (pure, AC-1261): Manage over them, and their hours, which a
+ * delegation the member granted themself never reaches while their hours are set by others (AC-1255). The caller's
+ * own hours are theirs to change only with `booking.manage` and `availability.own` (AC-1260).
+ */
+export function visibleOf(
+  rows: readonly { readonly id: string; readonly name: string }[],
+  reach: SchedulingReach,
+  me: string,
+  ownHours: boolean,
+): VisibleMembers['members'] {
+  return rows
+    .filter((row) => canActFor(reach, row.id, 'view'))
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      canManage: canActFor(reach, row.id, 'manage'),
+      canChangeHours: row.id === me ? ownHours : canActFor(reach, row.id, 'manage', 'hours'),
+    }));
 }
 
 /** What `access.mine` says of the caller's reach (AC-1261): one reach read. Undefined for anyone but a member. */

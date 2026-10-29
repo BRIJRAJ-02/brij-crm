@@ -42,7 +42,7 @@ function setup(initial: readonly DelegationView[] = []) {
     list: vi.fn(() => Promise.resolve({ delegations: [...stored] })),
     grant: vi.fn<SchedulingAccessApi['grant']>(),
     revoke: vi.fn<SchedulingAccessApi['revoke']>(),
-    visible: vi.fn(() => Promise.resolve({ members: [{ id: ME, name: 'Me', canManage: true }] })),
+    visible: vi.fn(() => Promise.resolve({ members: [{ id: ME, name: 'Me', canManage: true, canChangeHours: true }] })),
   };
   let clock = 0;
   const store = createSchedulingAccessStore({

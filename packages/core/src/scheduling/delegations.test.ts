@@ -109,8 +109,8 @@ describe('a member and their own scheduling (AC-1255)', () => {
       scheduling: { seesOthers: true, managesOthers: true, seesEveryone: false, managesEveryone: false },
     });
     expect((await listVisibleMembers(t.as(priya, 'member'))).members).toEqual([
-      { id: priya, name: 'M1', canManage: true },
-      { id: bea, name: 'M0', canManage: true },
+      { id: priya, name: 'M1', canManage: true, canChangeHours: true },
+      { id: bea, name: 'M0', canManage: true, canChangeHours: true },
     ]);
   });
 

@@ -72,9 +72,11 @@ export function AvailabilityScreen({
   // A colleague's, by name, for the words that say whose they are.
   const viewed = member === undefined ? undefined : members.find((each) => each.id === member);
   const owner = viewed?.name;
-  // Whether the reader may change what shows (spec 0037): a colleague's with Manage over them, their own with
+  // Whether the reader may change what shows (spec 0037): a colleague's with Manage over their hours, their own with
   // `availability.own`. The server decides every write anyway; this only spares a save it would refuse.
-  const canChange = member === undefined ? ownHours : viewed?.canManage === true;
+  const canChange = member === undefined ? ownHours : viewed?.canChangeHours === true;
+  // Managed, but their hours set by others (a grant they made themself, AC-1255): read only, and said why.
+  const hoursHeldBack = member !== undefined && viewed?.canManage === true && !canChange;
   const state = useSchedules(view);
   const slot = useBookingsToolbarSlot();
   const actionSlot = useBookingsActionSlot();
@@ -223,7 +225,16 @@ export function AvailabilityScreen({
                 onAdopt={setAdopted}
                 onNotice={toast}
                 isReadOnly={!canChange}
-                notice={<AccessNotice owner={owner} canChange={canChange} schedule={current} me={me} nameOf={nameOf} />}
+                notice={
+                  <AccessNotice
+                    owner={owner}
+                    canChange={canChange}
+                    hoursHeldBack={hoursHeldBack}
+                    schedule={current}
+                    me={me}
+                    nameOf={nameOf}
+                  />
+                }
               />
             )}
             {memberId !== undefined && (
@@ -284,19 +295,27 @@ export function AvailabilityScreen({
 function AccessNotice({
   owner,
   canChange,
+  hoursHeldBack,
   schedule,
   me,
   nameOf,
 }: {
   readonly owner: string | undefined;
   readonly canChange: boolean;
+  /** The reader manages the colleague but not their hours (AC-1255): they still book and block for them. */
+  readonly hoursHeldBack: boolean;
   readonly schedule: ScheduleView;
   readonly me: string;
   readonly nameOf: (memberId: string) => string | undefined;
 }) {
   let line: string | undefined;
-  if (owner !== undefined) line = canChange ? scheduleStrings.toldAboutChanges(owner) : scheduleStrings.seeOnly(owner);
-  else if (!canChange) line = scheduleStrings.hoursSetByOthers;
+  if (owner !== undefined) {
+    line = canChange
+      ? scheduleStrings.toldAboutChanges(owner)
+      : hoursHeldBack
+        ? scheduleStrings.hoursHeldBack(owner)
+        : scheduleStrings.seeOnly(owner);
+  } else if (!canChange) line = scheduleStrings.hoursSetByOthers;
   const changed = schedule.changedBy;
   const by =
     changed === undefined

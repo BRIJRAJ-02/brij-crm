@@ -35,6 +35,8 @@ export const scheduleStrings = {
   // Scheduling access (spec 0037): whose hours these are, who is told, who changed them (AC-1260, AC-1265, AC-1268).
   seeOnly: (name: string) => `You can see ${name}’s hours but not change them.`,
   toldAboutChanges: (name: string) => `${name} will be told about changes.`,
+  hoursHeldBack: (name: string) =>
+    `${name}’s hours are set by others, so you can see them but not change them. You can still book and block time for them.`,
   hoursSetByOthers: 'Your hours are set by the people who manage your scheduling.',
   changedBy: (name: string) => `Changed by ${name}`,
   seeOnlyShort: 'See only',
