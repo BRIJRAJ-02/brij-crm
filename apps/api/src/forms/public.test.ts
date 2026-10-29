@@ -85,17 +85,18 @@ const submission = (extra: Record<string, unknown> = {}) => ({
 });
 
 describe('GET /api/public/forms/:publicKey', () => {
-  it('answers the live form, cacheable, noindex, and 404 for a key that names nothing', async () => {
+  it('answers the live form, never cached (crm-f7 F1: a resume showed a minute late), noindex, and 404 for a key that names nothing', async () => {
     const { live } = await liveForm();
     const response = await call(`/forms/${live.publicKey}`);
     expect(response.status).toBe(200);
     expect(response.headers.get('x-robots-tag')).toBe('noindex');
-    expect(response.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(response.headers.get('cache-control')).toBe('no-store');
     const body = (await response.json()) as { headline: string; status: string };
     expect(body).toMatchObject({ headline: 'Fill this in and we will come back to you', status: 'live' });
     expect(JSON.stringify(body)).not.toContain(live.mainObjectId);
     const missing = await call('/forms/no-such-form');
     expect(missing.status).toBe(404);
+    expect(missing.headers.get('cache-control')).toBe('no-store');
     expect(await missing.json()).toEqual({
       code: 'NOT_FOUND',
       message: 'This form doesn’t exist, or its address changed.',
@@ -157,8 +158,13 @@ describe('POST /api/public/forms/:publicKey/submissions', () => {
     const paused = await call(path, { method: 'POST', body: submission() });
     expect(paused.status).toBe(410);
     expect(await paused.json()).toMatchObject({ code: 'FORM_CLOSED' });
-    const read = (await (await call(`/forms/${live.publicKey}`)).json()) as { status: string; questions: unknown[] };
+    const pausedRead = await call(`/forms/${live.publicKey}`);
+    expect(pausedRead.headers.get('cache-control')).toBe('no-store');
+    const read = (await pausedRead.json()) as { status: string; questions: unknown[] };
     expect(read).toMatchObject({ status: 'paused', questions: [] });
+    // Resumed, the very next read says so: nothing kept the paused answer (crm-f7 F1).
+    await m.client.forms.setStatus({ workspace: m.slug, formId: live.id, status: 'live', mutationId: newId() });
+    expect(await (await call(`/forms/${live.publicKey}`)).json()).toMatchObject({ status: 'live' });
   });
 
   it('answers 429 with Retry-After past 5 a minute from one address', async () => {
