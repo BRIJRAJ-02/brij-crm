@@ -498,7 +498,10 @@ describe('a team page’s routing', () => {
     await markNoShow(w.cy.scope, { bookingId: first.bookingId, noShow: true }, after);
     const report = await routingReport(w.owner, { surface: { kind: 'booking_page', pageId: w.page.id }, days: 90 });
     expect(report.rows).toEqual([{ ruleId: 'cto', matched: 2, booked: 2, noShow: 1, qualified: 2, notQualified: 0 }]);
-    const audited = await w.query<{ action: string }>(sql`select action from audit_events order by at`);
+    // The world's set up (each member saving their hours) is audited too (spec 0037, AC-1263): only routing's rows here.
+    const audited = await w.query<{ action: string }>(
+      sql`select action from audit_events where action in ('routing.changed', 'booking.no_show') order by at`,
+    );
     expect(audited.map((row) => row.action)).toEqual(['routing.changed', 'booking.no_show']);
   });
 
