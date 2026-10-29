@@ -23,6 +23,8 @@ export interface RemovalCounts {
   readonly requiredDefaults: number;
   /** Open invitations they sent (the invite link among them), revoked: nobody vouches for them any more. */
   readonly invitations: number;
+  /** Live forms that make them the owner of each new record: their leads arrive unowned from now. */
+  readonly ownedForms: number;
 }
 
 /** One feature's part of a removal. */

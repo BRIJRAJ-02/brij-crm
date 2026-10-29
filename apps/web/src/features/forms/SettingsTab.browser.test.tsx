@@ -266,6 +266,15 @@ describe('the owner of a form’s new records', () => {
     await expect.element(owner).toHaveTextContent('Ada Lovelace');
     await expect.element(page.getByText('For new records only.')).toBeVisible();
   });
+
+  it('names an owner who has left as a former member, saying new records get no owner', async () => {
+    await show(formView({ ownerMemberId: '0199a6f2-0000-7000-8000-0000000000ff' }), []);
+    const owner = page.getByRole('button', { name: /Owner$/ });
+    await expect.element(owner).toHaveTextContent('Former member');
+    await expect
+      .element(page.getByText('They’ve left the workspace, so new records get no owner. Pick another.'))
+      .toBeVisible();
+  });
 });
 
 describe('a form that sends visitors on to a booking page (late trap #53)', () => {

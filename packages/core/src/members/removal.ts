@@ -79,6 +79,23 @@ const invitationsRemoval: RemovalEffect = {
   },
 };
 
+/**
+ * Live forms whose new records they own (a fixed owner): the forms keep working, and each lead after this arrives
+ * with no owner (`owner_removed`, spec 0023) until someone picks another in the form's Settings. Only counted, for
+ * the remove dialog to say so (late trap #88: the leads went unowned with nobody told).
+ */
+const formsOwnerRemoval: RemovalEffect = {
+  feature: 'forms',
+  constraints: [],
+  count: async (tx, workspaceId, memberId) => {
+    const found = await tx.execute<{ n: number }>(sql`
+      select count(*)::int as n from forms
+      where workspace_id = ${workspaceId}::uuid and owner_member_id = ${memberId}::uuid and archived_at is null
+    `);
+    return { ownedForms: found.rows[0]?.n ?? 0 };
+  },
+};
+
 /** Every feature's part of a removal, in the order they run. */
 export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   viewsRemoval,
@@ -93,6 +110,7 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   navRemoval,
   notificationsRemoval,
   invitationsRemoval,
+  formsOwnerRemoval,
 ];
 
 /**
@@ -159,6 +177,7 @@ export async function countRemoval(tx: WorkspaceTx, workspaceId: string, memberI
     defaults: 0,
     requiredDefaults: 0,
     invitations: 0,
+    ownedForms: 0,
   };
   let total = counted;
   for (const effect of REMOVAL_EFFECTS) {

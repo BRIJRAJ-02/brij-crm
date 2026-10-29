@@ -11,6 +11,7 @@ import { createBookingPage } from '../booking/pages.ts';
 import { defineAttribute } from '../engine/definitions.ts';
 import { newId } from '../engine/ids.ts';
 import { createRecord } from '../engine/records.ts';
+import { createForm, updateFormSettings } from '../forms/forms.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { createRotation } from '../rotation/rotations.ts';
 import { createTask } from '../tasks/tasks.ts';
@@ -90,6 +91,9 @@ describe('the remove dialog’s counts (AC-816)', () => {
     await w.ownedBy('Ben', w.gus);
     await w.ownedBy('Cat', w.hal);
     await w.task('Call Ann', w.gus);
+    // A form that makes Gus the owner of each new lead (late trap #88: its leads then went unowned, nobody told).
+    const form = await createForm(w.owner, { id: newId(), name: 'Demo request' });
+    await updateFormSettings(w.owner, { formId: form.id, ownerMemberId: w.gus });
     const done = await w.task('Done already', w.gus);
     await w.read(
       sql`update tasks set is_done = true, done_at = now(), done_by_type = 'system' where id = ${done}::uuid`,
@@ -102,6 +106,7 @@ describe('the remove dialog’s counts (AC-816)', () => {
       defaults: 0,
       requiredDefaults: 0,
       invitations: 0,
+      ownedForms: 1,
     });
     // About themself before leaving, yes; about anyone else, only with members.manage.
     expect(await previewRemoval(w.gusScope, { memberId: w.gus })).toMatchObject({ records: 2 });

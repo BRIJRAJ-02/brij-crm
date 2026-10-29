@@ -208,6 +208,9 @@ export const strings = {
   keptOnly: 'Kept with the submission only',
   owner: 'Owner',
   ownerHint: 'For new records only.',
+  /** The owner the form names, who has left the workspace (late trap #88). */
+  ownerFormer: 'Former member',
+  ownerLeftHint: 'They’ve left the workspace, so new records get no owner. Pick another.',
   nobody: 'Nobody',
   // A round robin group as the owner (spec 0029 milestone 3): in code a rotation, on screen a round robin group.
   ownerGroups: 'Round robin',

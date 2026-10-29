@@ -302,6 +302,11 @@ export function SettingsTab({
   // the reader can see under their own heading. One the form names that the reader can't list stays shown, by name.
   const chosenGroupId = groupOf(settings.values.owner);
   const chosenGroup = rotationList.find((rotation) => rotation.id === chosenGroupId);
+  // A teammate the form names who has left (late trap #88): shown as such, and the hint says their leads go unowned.
+  const ownerLeft =
+    chosenGroupId === undefined &&
+    settings.values.owner !== NOBODY &&
+    !members.some((member) => member.id === settings.values.owner);
   const takers = (rotation: (typeof rotationList)[number]) => rotation.members.filter((member) => member.isOn).length;
   const ownerItems = [
     { id: NOBODY, label: strings.nobody },
@@ -315,10 +320,12 @@ export function SettingsTab({
     ...(chosenGroupId !== undefined && chosenGroup === undefined
       ? [{ id: groupOption(chosenGroupId), label: strings.groupUnknown, group: strings.ownerGroups }]
       : []),
+    ...(ownerLeft ? [{ id: settings.values.owner, label: strings.ownerFormer }] : []),
   ];
   // One line under it: who gets new records, or why nobody will.
-  const ownerHint =
-    rotations.status === 'error'
+  const ownerHint = ownerLeft
+    ? strings.ownerLeftHint
+    : rotations.status === 'error'
       ? strings.groupsFailed
       : chosenGroupId === undefined || (chosenGroup === undefined && rotations.status !== 'ready')
         ? strings.ownerHint

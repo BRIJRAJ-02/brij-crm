@@ -86,6 +86,11 @@ export const strings = {
       counts.defaults > 0
         ? `${String(counts.defaults)} ${counts.defaults === 1 ? 'field uses them as its default, and loses it' : 'fields use them as their default, and lose it'}.`
         : '',
+      counts.ownedForms > 0
+        ? counts.ownedForms === 1
+          ? '1 form names them as owner of new records, which then get no owner. Pick another in its Settings tab.'
+          : `${String(counts.ownedForms)} forms name them as owner of new records, which then get no owner. Pick another in each form’s Settings tab.`
+        : '',
       counts.invitations > 0
         ? counts.invitations === 1
           ? 'An invitation they sent is cancelled. Invite them again from Invite people if you still want them.'
