@@ -155,6 +155,24 @@ import {
 } from './calendar/store.ts';
 import { lazySchedules } from './schedules/lazy.ts';
 import {
+  createSchedulingAccessStore,
+  type DelegationGrant,
+  type DelegationsHeld,
+  type DelegationsScope,
+  type DelegationView,
+  type VisibleMember,
+} from './scheduling/access.ts';
+export type {
+  DelegationGrant,
+  DelegationsHeld,
+  DelegationsScope,
+  DelegationsState,
+  DelegationTarget,
+  DelegationView,
+  SchedulingLevel,
+  VisibleMember,
+} from './scheduling/access.ts';
+import {
   createPreferencesStore,
   type MemberPreferences,
   type PreferencesChange,
@@ -1191,6 +1209,7 @@ export function createDataLayer({
     formLists.clear();
     schedules.clear();
     preferences.clear();
+    schedulingAccess.clear();
     pictureChoice.clear();
     void linkPage?.then((made) => {
       made.clear();
@@ -1697,6 +1716,8 @@ export function createDataLayer({
         // Team today read again. Only here, for the one person named, never on every resync (a catch up reset).
         reloadBookings(workspace);
         homeReads.reloadAll(workspace);
+        // Settings › Scheduling access and the members pickers read their delegations and reach again.
+        schedulingAccess.reload(workspace);
       });
     });
   });
@@ -2019,6 +2040,21 @@ export function createDataLayer({
       call((options) => api.bookings.link({ workspace, bookingId, recordId, mutationId: mintId() }, options)),
   });
 
+  // Scheduling access (spec 0037): delegations both ways and the caller's See reach, one copy per workspace.
+  const schedulingAccess = createSchedulingAccessStore({
+    api: {
+      list: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.scheduling.delegations.list(input, options))),
+      grant: (input) =>
+        call((options) => api.scheduling.delegations.grant({ ...input, mutationId: mintId() }, options)),
+      revoke: (input) =>
+        call((options) => api.scheduling.delegations.revoke({ ...input, mutationId: mintId() }, options)),
+      visible: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.members.visible(input, options))),
+    },
+    mintId,
+    notify,
+  });
   // Settings › Account › Preferences: the member's own, one copy per workspace.
   const preferences = createPreferencesStore({
     api: {
@@ -3163,6 +3199,23 @@ export function createDataLayer({
           if (moved.pages > 0) bookingPageLists.view(args[0]).reload();
           return moved;
         }),
+    },
+    /**
+     * Scheduling access (spec 0037): who may see or manage whose scheduling. `delegations` holds the member's own
+     * both ways (`mine`, Settings › Account › Scheduling access) or the workspace's (`everyone`, Settings › Members,
+     * `members.manage` only); `grant` and `revoke` show at once in every held list they belong to and are put back
+     * with a toast if refused, answering whether they landed. `visible` answers the members in the caller's See
+     * reach, the caller first, each with `canManage` (Availability's Viewing Select, the "For" pickers). An `access`
+     * change naming the member reads them all again.
+     */
+    scheduling: {
+      delegations: (workspace: string, scope: DelegationsScope): DelegationsHeld =>
+        schedulingAccess.delegations(workspace, scope),
+      visible: (workspace: string): Promise<readonly VisibleMember[]> => schedulingAccess.visible(workspace),
+      grant: (workspace: string, me: string, grant: DelegationGrant): Promise<boolean> =>
+        schedulingAccess.grant(workspace, me, grant),
+      revoke: (workspace: string, me: string, delegation: DelegationView): Promise<boolean> =>
+        schedulingAccess.revoke(workspace, me, delegation),
     },
     /**
      * Booking pages (spec 0025): settings, not CRM data, with no live event.
