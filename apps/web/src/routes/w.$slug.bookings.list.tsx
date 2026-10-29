@@ -8,8 +8,7 @@ import { strings } from '../features/bookings/strings.ts';
 import { hostActions } from '../features/bookings/hostActions.ts';
 import { useFirstDay } from '../features/workspace/first-day.ts';
 import { memberZone } from '../features/booking/zone.ts';
-import { useHostsChoice } from '../features/bookings/HostsSwitch.tsx';
-import { useCan } from '../features/workspace/WorkspacePage.tsx';
+import { useBookingsHosts } from '../features/bookings/toolbarSlot.ts';
 
 // Bookings › List (spec 0025, AC-646; every meeting, the owner's ask of 21 October 2026): Upcoming, Past (`tab=past`)
 // or Cancelled (`tab=cancelled`), All, Bookings or Calendar (`src`), one booking page (`link`) and the calendars the
@@ -76,13 +75,12 @@ function List({ objects, pages }: ListLoaded) {
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
   const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
-  // Mine or Everyone: only an admin chooses (`booking.admin`); anyone else sees their own.
-  const isAdmin = useCan('booking.admin');
-  const { hosts, choose } = useHostsChoice(slug, isAdmin);
+  // Mine or Everyone: an admin's choice, the layout's (its switch is on the strip); anyone else sees their own.
+  const choice = useBookingsHosts();
   return (
     <BookingsListScreen
       slug={slug}
-      hosts={isAdmin ? { value: hosts, onChange: choose } : undefined}
+      hosts={choice}
       search={search}
       meetings={(query) => data.bookings.meetings(slug, query)}
       calendars={data.calendar.calendars(slug)}

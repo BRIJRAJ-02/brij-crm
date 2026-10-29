@@ -6,11 +6,12 @@
 // Leaves out: picking one colleague (spec 0037's reach brings that), and colleagues' calendar events, which never show.
 import type { BookingHosts } from '@crm/data';
 import { SegmentedControl } from '@crm/ui';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { strings } from './strings.ts';
 
-// The choice is kept per workspace in this browser as a convenience. The routes' loaders read the default (Mine)
-// and never this, so it stays out of the first load: an admin who kept Everyone sees the week or list load once more.
+// The choice is kept per workspace in this browser as a convenience, by the Bookings layout (one switch on the strip
+// for Calendar and List). The tabs' loaders read the default (Mine) and never this, so it stays out of the first
+// load: an admin who kept Everyone sees the week or list load once more.
 
 /** Where the choice is kept, per workspace, in this browser: a convenience only, Mine when it can't be read. */
 const keyOf = (slug: string) => `crm.bookings.hosts.${slug}`;
@@ -42,13 +43,14 @@ export function useHostsChoice(slug: string, isAdmin: boolean) {
   // Another workspace: its own choice.
   if (kept.slug !== slug) setKept({ slug, value: readHosts(slug) });
   const value = kept.slug === slug ? kept.value : readHosts(slug);
-  return {
-    hosts: isAdmin ? value : ('mine' as const),
-    choose: (next: BookingHosts) => {
+  const choose = useCallback(
+    (next: BookingHosts) => {
       writeHosts(slug, next);
       setKept({ slug, value: next });
     },
-  };
+    [slug],
+  );
+  return { hosts: isAdmin ? value : ('mine' as const), choose };
 }
 
 /** Mine · Everyone, as one compact SegmentedControl (arrow keys move and choose). */

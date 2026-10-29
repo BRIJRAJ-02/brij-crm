@@ -20,8 +20,7 @@ import { addDays, weekRange } from '../features/bookings/week.ts';
 import { memberZone } from '../features/booking/zone.ts';
 import { firstDayFor, useFirstDay } from '../features/workspace/first-day.ts';
 import { peopleSearchOf } from '../features/bookings/people.ts';
-import { useHostsChoice } from '../features/bookings/HostsSwitch.tsx';
-import { useCan } from '../features/workspace/WorkspacePage.tsx';
+import { useBookingsHosts } from '../features/bookings/toolbarSlot.ts';
 
 // Bookings › Calendar (spec 0025, AC-646): the week (`w`, its Monday; `d`, the day picked) with the reader's own
 // calendar events beside the bookings, filtered by `link` (one booking page) and `cal` (the calendars the panel shows). The
@@ -118,9 +117,9 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
   const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
-  // Mine or Everyone: only an admin chooses (`booking.admin`); anyone else sees their own.
-  const isAdmin = useCan('booking.admin');
-  const { hosts, choose } = useHostsChoice(slug, isAdmin);
+  // Mine or Everyone: an admin's choice, the layout's (its switch is on the strip); anyone else sees their own.
+  const choice = useBookingsHosts();
+  const hosts = choice?.value ?? 'mine';
   const week = heldWeek(search.week, data, slug, timeZone, hosts);
   // The member's zone changed in Preferences while the page is open: the loader primed the weeks either side in the
   // old one, so prime them again in the new one (each held read is the same one for the same range).
@@ -137,7 +136,7 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
   return (
     <BookingsCalendarScreen
       slug={slug}
-      hosts={isAdmin ? { value: hosts, onChange: choose } : undefined}
+      hosts={choice}
       search={search}
       week={week}
       objects={objects}
