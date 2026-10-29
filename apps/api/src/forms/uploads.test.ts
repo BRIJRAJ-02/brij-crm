@@ -205,6 +205,17 @@ describe('form uploads', () => {
       [row?.submission_id],
     );
     expect(stored).toMatchObject({ state: 'spam', answers: { cv: { fileId: file.fileId } } });
+    // A caught bot's file id that names nothing, or isn't an id at all, is dropped: the bot hears the same thank you.
+    for (const fileId of ['x', newId()]) {
+      const again = await submit(live.publicKey, { ...answers(fileId), company_url: 'https://acme.example' });
+      expect(again.status).toBe(200);
+    }
+    const spam = await testQuery<{ answers: Record<string, unknown> }>(
+      ownerUrl,
+      `select answers from form_submissions where form_id = $1 and state = 'spam' order by received_at`,
+      [live.id],
+    );
+    expect(spam.map((row) => Object.hasOwn(row.answers, 'cv'))).toEqual([true, false, false]);
   });
 
   it('lets a member download it as an attachment, and no one else, nor from another workspace', async () => {

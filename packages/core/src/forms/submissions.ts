@@ -6,6 +6,7 @@
 // see are left out, the same rule as everywhere else (hidden means absent).
 import { and, desc, eq, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import {
+  SPAM_FILES_KEPT_DAYS,
   SubmissionContext,
   SUBMISSION_SUMMARY_QUESTIONS,
   SUBMISSIONS_PAGE,
@@ -105,6 +106,17 @@ function contextOf(stored: unknown): SubmissionContext | undefined {
   const parsed = SubmissionContext.safeParse(stored);
   return parsed.success && Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
 }
+
+/**
+ * The day a submission our spam check caught loses its files (`SPAM_FILES_KEPT_DAYS` after it arrived), as the
+ * daily cleanup judges it; undefined for any other, a member's own Mark as spam included.
+ */
+const filesRemovedOn = (state: string, spam: unknown, receivedAt: string): string | undefined => {
+  if (state !== 'spam' || record(spam).verdict !== 'spam' || record(spam).marked === true) return undefined;
+  const at = new Date(receivedAt);
+  if (Number.isNaN(at.getTime())) return undefined;
+  return new Date(at.getTime() + (SPAM_FILES_KEPT_DAYS + 1) * 86_400_000).toISOString().slice(0, 10);
+};
 
 const verdictOf = (spam: unknown): SubmissionSummary['verdict'] => {
   const verdict = record(spam).verdict;
@@ -370,6 +382,7 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
   // A failure for a required field nothing filled is named here, not where it was stored: the job that wrote it
   // runs as the system and sees every field, while this reader may not (security review, 27 October 2026).
   const failure = await failureFor(tx, scope, row.failure, record(row.outcome).requiredMissing);
+  const removedOn = filesRemovedOn(row.state, row.spam, row.receivedAt);
   return {
     id: row.id,
     formId: row.formId,
@@ -388,6 +401,7 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
     records,
     ...(failure === undefined ? {} : { failure }),
     refused,
+    ...(removedOn === undefined ? {} : { filesRemovedOn: removedOn }),
     ...(typeof assignment.reason === 'string'
       ? {
           assignment: {

@@ -43,7 +43,7 @@ import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
 import { pruneNavRows } from '../../navigation/navigation.ts';
-import { UPLOAD_KEPT_HOURS } from '@crm/contracts';
+import { SPAM_FILES_KEPT_DAYS, UPLOAD_KEPT_HOURS } from '@crm/contracts';
 import { ensureLinkPage, publicProfilesOf } from '../../booking/handles.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
@@ -641,9 +641,13 @@ const UPLOADS_BATCH = 100;
 /** How long an upload waits for its submission: `UPLOAD_KEPT_HOURS`, as an interval. */
 const UPLOAD_WAIT = `${String(UPLOAD_KEPT_HOURS)} hours`;
 
+/** How long a spam submission keeps its files, as an interval. */
+const SPAM_WAIT = `${String(SPAM_FILES_KEPT_DAYS)} days`;
+
 /**
- * Phase 8 (#32): uploads no submission took within a day, or whose submission is gone (a deleted submission leaves
- * its upload row on purpose). The files go from the store first, then the rows, in one transaction: a store that
+ * Phase 8 (#32): uploads no submission took within a day, whose submission is gone (a deleted submission leaves
+ * its upload row on purpose), or whose submission was judged spam more than 30 days ago (its answer then names a
+ * file that is gone, as a deleted file's does). The files go from the store first, then the rows, in one transaction: a store that
  * fails rolls the rows back and the job retries, and a file already gone is no error. Without a store the phase
  * does nothing and the rows wait.
  */
@@ -660,6 +664,12 @@ async function orphanUploads(
       (u.submission_id is null and u.created_at < now() - ${UPLOAD_WAIT}::interval)
       or (u.submission_id is not null and not exists (
         select 1 from form_submissions s where s.workspace_id = u.workspace_id and s.id = u.submission_id))
+      -- One our spam check caught keeps its files 30 days (SPAM_FILES_KEPT_DAYS), from when it arrived, which is when
+      -- it was caught; one a member marked as spam keeps them.
+      or exists (
+        select 1 from form_submissions s where s.workspace_id = u.workspace_id and s.id = u.submission_id
+          and s.state = 'spam' and coalesce(s.spam ->> 'marked', 'false') <> 'true'
+          and s.received_at < now() - ${SPAM_WAIT}::interval)
     )
     order by u.created_at limit ${UPLOADS_BATCH}
     for update skip locked

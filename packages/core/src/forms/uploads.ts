@@ -7,7 +7,7 @@
 // - a member reads one through `readUpload`, which holds only when they could open the submission that took it
 //   and the file is among the answers they may see (field level access included), so a link never works across
 //   workspaces, nor for a member the submission is hidden from.
-import { UPLOAD_KEPT_HOURS, type FormDocument, type SubmissionView } from '@crm/contracts';
+import { SPAM_FILES_KEPT_DAYS, UPLOAD_KEPT_HOURS, type FormDocument, type SubmissionView } from '@crm/contracts';
 import type { FileValue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -199,6 +199,75 @@ export async function claimUploads(
   }));
   if (first !== undefined) throw refuseAll([first, ...rest]);
   return { answers, ids: [...seen] };
+}
+
+/** How many files one form keeps on submissions judged spam, over the days they are kept (`SPAM_FILES_KEPT_DAYS`). */
+export const SPAM_FILES_PER_FORM = 200;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The file answers of a submission a bot signal judged spam, quarantined with it (late trap #52): a real visitor
+ * that signal caught (autofill in the honeypot) is released later, and their file has to be there to file. Each
+ * file is claimed on its own, so one stale or taken id drops only itself; an id that isn't one is dropped, never
+ * an error (a bot is told nothing). Past `SPAM_FILES_PER_FORM` files already kept on this form's spam, none is
+ * claimed, so failing the bot checks never buys storage. Answers without their file keep no file key.
+ */
+export async function claimSpamUploads(
+  tx: WorkspaceTx,
+  input: {
+    readonly formId: string;
+    readonly questions: readonly { readonly key: string; readonly answerType: string }[];
+    readonly answers: Readonly<Record<string, unknown>>;
+  },
+): Promise<ClaimedUploads> {
+  const fileKeys = new Set(input.questions.filter((each) => each.answerType === 'file').map((each) => each.key));
+  const answers: Record<string, unknown> = Object.fromEntries(
+    Object.entries(input.answers).filter(([key]) => !fileKeys.has(key)),
+  );
+  const wanted = [...fileKeys].flatMap((key) => {
+    const value = input.answers[key];
+    const fileId =
+      typeof value === 'object' && value !== null ? (value as { readonly fileId?: unknown }).fileId : undefined;
+    return typeof fileId === 'string' && UUID.test(fileId) ? [{ key, fileId: fileId.toLowerCase() }] : [];
+  });
+  if (wanted.length === 0) return { answers, ids: [] };
+  // One form's spam claims in turn, so a burst can't each read 199 and pass the cap together.
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`spam-files:${input.formId}`}, 0))`);
+  const kept = await tx.execute<{ n: number }>(sql`
+    select count(*)::int as n from form_uploads u
+    join form_submissions s on s.workspace_id = u.workspace_id and s.id = u.submission_id
+    where u.form_id = ${input.formId}::uuid and s.state = 'spam'
+      and u.created_at > now() - make_interval(days => ${SPAM_FILES_KEPT_DAYS + 1})
+      and s.received_at > now() - make_interval(days => ${SPAM_FILES_KEPT_DAYS})
+  `);
+  if ((kept.rows[0]?.n ?? 0) >= SPAM_FILES_PER_FORM) return { answers, ids: [] };
+  const ids: string[] = [];
+  for (const each of wanted) {
+    if (ids.includes(each.fileId)) continue;
+    const [row] = await tx
+      .select({
+        id: formUploads.id,
+        name: formUploads.name,
+        size: formUploads.size,
+        contentType: formUploads.contentType,
+      })
+      .from(formUploads)
+      .where(
+        and(
+          eq(formUploads.id, each.fileId),
+          eq(formUploads.formId, input.formId),
+          isNull(formUploads.submissionId),
+          sql`${formUploads.createdAt} > now() - make_interval(hours => ${UPLOAD_KEPT_HOURS})`,
+        ),
+      )
+      .for('update');
+    if (row === undefined) continue;
+    const value: FileValue = { fileId: row.id, name: row.name, size: row.size, contentType: row.contentType };
+    answers[each.key] = value;
+    ids.push(row.id);
+  }
+  return { answers, ids };
 }
 
 /** Binds claimed uploads to the submission that took them. */

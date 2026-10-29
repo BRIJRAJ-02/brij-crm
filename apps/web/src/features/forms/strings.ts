@@ -422,6 +422,10 @@ export const strings = {
   deleteSubmissionAction: 'Delete submission',
   /** Marks the answers not saved on the record, when some were. */
   notSavedMark: 'Not saved',
+  /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
+  spamFilesTitle: 'Our spam check caught this',
+  spamFiles: (day: string) =>
+    `Open its files only if you trust the sender. They’re removed on ${day}. Choose Not spam to keep them.`,
   /** Over the answers filing left off the record, each with why (late trap #50). */
   notSavedTitle: (count: number) =>
     count === 1 ? 'One answer wasn’t saved on the record' : `${String(count)} answers weren’t saved on the record`,

@@ -36,12 +36,12 @@ import {
   type TableColumn,
 } from '@crm/ui';
 // eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
-import { StatusDot } from '@crm/ui';
+import { formatDate, StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
-import { AnswerList, answerText } from '../questions/AnswerList.tsx';
+import { AnswerList, answerText, holdsFile } from '../questions/AnswerList.tsx';
 import { answerFiling, notSavedReasons } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
@@ -744,6 +744,12 @@ function SubmissionDetail({
       {submission.failure !== undefined && (
         <Callout tone="danger" title={strings.failure}>
           {submission.failure}
+        </Callout>
+      )}
+      {submission.filesRemovedOn !== undefined && submission.answers.some(holdsFile) && (
+        // Its files are kept so a real one can be released with them (late trap #52), but a bot may have sent them.
+        <Callout tone="warning" title={strings.spamFilesTitle}>
+          {strings.spamFiles(formatDate(submission.filesRemovedOn, navigator.languages[0] ?? 'en-GB'))}
         </Callout>
       )}
       {reasons.length > 0 && (

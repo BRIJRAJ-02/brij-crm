@@ -149,3 +149,9 @@ export const UPLOAD_NAME_HEADER = 'x-file-name';
 
 /** How long an upload waits for its submission before the daily cleanup removes it. */
 export const UPLOAD_KEPT_HOURS = 24;
+
+/**
+ * How long a submission our spam check caught keeps its files (late trap #52): long enough to release a real one
+ * with them, then the daily cleanup removes them and the submission stays. One a member marks as spam keeps them.
+ */
+export const SPAM_FILES_KEPT_DAYS = 30;

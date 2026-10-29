@@ -22,6 +22,11 @@ export function answerText(answer: Pick<SubmissionAnswer, 'value'>): string {
   return '';
 }
 
+/** Whether an answer holds a stored file (by its value's shape, as `answerText` reads it). */
+export function holdsFile(answer: Pick<SubmissionAnswer, 'value'>): boolean {
+  return FileValue.safeParse(answer.value).success;
+}
+
 /**
  * An answer's value as a panel shows it: a phone through the field set, spaced for reading; everything else as
  * its words, which wrap whole. An email or a website stays plain text, never a link, since a visitor typed it.

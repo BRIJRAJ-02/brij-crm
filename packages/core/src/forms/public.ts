@@ -29,7 +29,7 @@ import { pagePath } from '../booking/handles.ts';
 import { startJob } from '../jobs/service.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { FORMS_PROCESS } from './process.ts';
-import { attachUploads, claimUploads } from './uploads.ts';
+import { attachUploads, claimSpamUploads, claimUploads } from './uploads.ts';
 import { routeSubmission, storedRoute, submissionDecision } from '../routing/forms.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { loadForm, loadVersions, publicFormOf, workspacePublicKey, type FormRow } from './shared.ts';
@@ -429,23 +429,14 @@ export async function submitForm(
       if (bot.verdict === 'spam') {
         // A spam submission keeps its files with it, quarantined (late trap #52): a real visitor a bot signal caught
         // (autofill in the honeypot, 25 Oct 2026) is released later, and their file has to be there to file. They
-        // go when the submission does, as any attached upload does. An upload that can't be claimed (not this form's,
-        // taken, or past its day) is dropped, never a refusal: a bot is told nothing.
-        const kept = Object.fromEntries(Object.entries(body.answers).filter(([key]) => known.has(key)));
-        const fileKeys = new Set(rendered.questions.filter((q) => q.answerType === 'file').map((q) => q.key));
-        answers = Object.fromEntries(Object.entries(kept).filter(([key]) => !fileKeys.has(key)));
-        try {
-          const claimed = await claimUploads(tx, {
-            formId: form.id,
-            questions: rendered.questions,
-            answers: kept,
-            invalid: formStrings(rendered.language).fileInvalid,
-          });
-          answers = claimed.answers;
-          claimedIds = claimed.ids;
-        } catch (error) {
-          if (!isRefusal(error)) throw error;
-        }
+        // go when the submission does, or after 30 days (`claimSpamUploads`, which also caps them per form).
+        const claimed = await claimSpamUploads(tx, {
+          formId: form.id,
+          questions: rendered.questions,
+          answers: Object.fromEntries(Object.entries(body.answers).filter(([key]) => known.has(key))),
+        });
+        answers = claimed.answers;
+        claimedIds = claimed.ids;
         judged = bot;
       } else {
         const checked = checkAnswers(rendered, body.answers);
