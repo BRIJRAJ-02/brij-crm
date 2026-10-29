@@ -716,6 +716,7 @@ export async function publishForm(
         attributes: await publishAttributes(tx, scope.access, form.mainObjectId),
         // So a refusal names the object the form files onto, not People whatever it is (27 October 2026).
         ...(form.mainObjectId === null ? {} : { objectName: await objectName(tx, form.mainObjectId) }),
+        canChangeAttributes: can(scope.access, 'schema.manage'),
       });
       if (problem !== undefined) {
         const code = problem.code === 'FILING_FORBIDDEN' ? 'FORBIDDEN' : 'CONFIG_INVALID';

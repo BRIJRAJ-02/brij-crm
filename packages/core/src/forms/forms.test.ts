@@ -310,6 +310,52 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     expect(unchanged.revision).toBe(live.revision);
   });
 
+  it('tells a publisher who can’t change attributes to ask an admin when the email isn’t unique (late trap #17)', async () => {
+    // The form refused with "File the email question on Graphic Designers" while its email question was filed there,
+    // and someone who may manage forms but not attributes could never get past it.
+    const w = await workspace();
+    const designers = await createObject(w.scope, {
+      id: newId(),
+      singularName: 'Graphic Designer',
+      pluralName: 'Graphic Designers',
+      icon: 'inbox',
+      hue: 'blue',
+    });
+    const email = await createAttribute(w.scope, {
+      objectId: designers.id,
+      id: newId(),
+      title: 'Work email',
+      type: 'email',
+    });
+    const created = await createForm(w.scope, { id: newId(), name: 'Apply', mainObjectId: designers.id });
+    expect(created.draft.targets.main).toEqual({ objectId: designers.id });
+    const saved = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: {
+        ...created.draft,
+        questions: created.draft.questions.map((each) =>
+          each.answerType === 'email' ? { ...each, filedOn: { objectRole: 'main', attributeId: email.id } } : each,
+        ),
+      },
+      expectedRevision: created.revision,
+    });
+    const key = testScope({
+      db,
+      workspaceId: w.scope.workspaceId,
+      actor: { type: 'api_key', id: newId() },
+      scopes: ['forms.manage', 'data.write'],
+    });
+    expect(await refusalOf(publishForm(key, { formId: created.id, expectedRevision: saved.revision }))).toEqual([
+      expect.objectContaining({
+        code: 'CONFIG_INVALID',
+        message:
+          'Work email on Graphic Designer isn’t unique, so a submission can’t find the record it belongs to. Ask a workspace admin to make it unique.',
+      }),
+    ]);
+    const [own] = await refusalOf(publishForm(w.scope, { formId: created.id, expectedRevision: saved.revision }));
+    expect(own?.message).toContain('Make Work email on Graphic Designer unique.');
+  });
+
   it('leaves a question kept off the CRM unfiled when the object is asked for again', async () => {
     // Not filed, chosen (28 October 2026): the server files a form's phone, name and match email by default when its
     // object is set, and that must not undo a person's choice to keep one of them off the CRM.

@@ -315,6 +315,7 @@ export function FormEditor(props: FormEditorProps) {
       document: draft,
       attributes,
       ...(target.objectName === undefined ? {} : { objectName: target.objectName }),
+      canChangeAttributes: canBuild && canManage,
     });
     if (found !== undefined && (isPublished || (found.code !== 'NAME_MISSING' && found.code !== 'ADDRESS_INVALID'))) {
       setProblem(found);

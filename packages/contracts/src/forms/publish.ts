@@ -40,6 +40,12 @@ export interface PublishInput {
   readonly attributes: ReadonlyMap<string, PublishAttribute>;
   /** The main object's name, for the sentences that name it; "People" when it isn't given. */
   readonly objectName?: string;
+  /**
+   * Whether the publisher may change the object's attributes (`schema.manage`). Without it, an email the object
+   * can't match on is something only a workspace admin can put right, so the sentence sends them to one instead of
+   * telling them to file a question that is already filed (late trap #17).
+   */
+  readonly canChangeAttributes?: boolean;
 }
 
 /** The first problem: a stable code, the sentence, and the question it is about. */
@@ -258,6 +264,36 @@ function requiredNotAsked(input: PublishInput): PublishProblem | undefined {
 }
 
 /**
+ * Why an email question that is there doesn't match a submission to its record, said so it can be put right. Filed
+ * on an email the object holds that isn't its match: the object's own unique email is named, or, with none, the
+ * email has to become unique, which a publisher without `canChangeAttributes` asks a workspace admin for. Not
+ * filed, on an object with no email at all: the same, an email has to exist first. Otherwise, file it on the object.
+ */
+function noMatchMessage(input: PublishInput, email: FormDocument['questions'][number], where: string): string {
+  const why = 'It is how a submission finds the record it belongs to, instead of adding a new one each time.';
+  const match = input.document.targets.main?.matchAttributeId;
+  const matchAttribute = match === undefined ? undefined : input.attributes.get(match);
+  if (matchAttribute !== undefined && matchAttribute.type === 'email' && matchAttribute.canSee !== false) {
+    return `File the email question on ${where} · ${matchAttribute.title}. ${why}`;
+  }
+  const filed = email.filedOn === undefined ? undefined : input.attributes.get(email.filedOn.attributeId);
+  const needsAdmin = input.canChangeAttributes === false;
+  if (filed !== undefined && filed.type === 'email' && filed.canSee !== false) {
+    return needsAdmin
+      ? `${filed.title} on ${where} isn’t unique, so a submission can’t find the record it belongs to. Ask a workspace admin to make it unique.`
+      : `Make ${filed.title} on ${where} unique. ${why}`;
+  }
+  const hasEmail = [...input.attributes.values()].some(
+    // Hidden means absent: a hidden email is as good as none to this publisher.
+    (attribute) => attribute.type === 'email' && attribute.canSee !== false,
+  );
+  if (!hasEmail && needsAdmin) {
+    return `${where} has no email field to file the email question on. Ask a workspace admin to add one that is unique.`;
+  }
+  return `File the email question on ${where}. ${why}`;
+}
+
+/**
  * The first problem that stops a draft going live, or undefined when it can.
  * In order: the name, the address, an email question filed on the match
  * attribute (how a submission becomes a person; not asked of a form that
@@ -288,11 +324,7 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
           message: `Add an email question. It is how a submission finds the ${where} record it belongs to, instead of adding a new one each time.`,
         };
       }
-      return {
-        code: 'EMAIL_MISSING',
-        message: `File the email question on ${where}. It is how a submission finds the record it belongs to, instead of adding a new one each time.`,
-        questionId: anyEmail.id,
-      };
+      return { code: 'EMAIL_MISSING', message: noMatchMessage(input, anyEmail, where), questionId: anyEmail.id };
     }
     if (!emailQuestion.required) {
       return {

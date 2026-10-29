@@ -259,6 +259,7 @@ export function PublishDialog(props: PublishDialogProps) {
       document,
       attributes: publishAttributesOf(choices),
       ...(choices.objectName === undefined ? {} : { objectName: choices.objectName }),
+      canChangeAttributes: canBuild,
     });
     if (problem !== undefined) {
       setBusy(undefined);
