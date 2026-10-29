@@ -325,6 +325,39 @@ describe('a required field nothing can fill (27 October 2026)', () => {
     expect(refusal?.message).toContain('add a new record');
   });
 
+  it('refuses turning Unique off on People’s Email addresses while a booking page finds guests by it, and no other', async () => {
+    const w = await designers();
+    const [people] = await w.query<{ id: string; email: string }>(sql`
+      select o.id::text, a.id::text as email from objects o join attributes a on a.object_id = o.id
+      where o.standard_key = 'people' and a.api_slug = 'email_addresses'
+    `);
+    if (people === undefined) throw new Error('No People.');
+    await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const [refusal] = await refusalOf(editAttribute(w.scope, { attributeId: people.email, isUnique: false }));
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID', field: 'isUnique' });
+    expect(refusal?.message).toContain('Intro call');
+    // Another unique email on People, even placed first, isn't what a booking matches on.
+    const work = await createAttribute(w.scope, {
+      objectId: people.id,
+      id: newId(),
+      title: 'Work email',
+      type: 'email',
+      isUnique: true,
+    });
+    await w.query(sql`update attributes set position = -1 where id = ${work.id}::uuid`);
+    expect((await editAttribute(w.scope, { attributeId: work.id, isUnique: false })).isUnique).toBe(false);
+  });
+
+  it('refuses turning Unique off on the field a live form matches on (late trap #13)', async () => {
+    const w = await designers();
+    const form = await applyForm(w);
+    await publishForm(w.scope, { formId: form.formId, expectedRevision: form.revision });
+    const [refusal] = await refusalOf(editAttribute(w.scope, { attributeId: w.email.id, isUnique: false }));
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID', field: 'isUnique' });
+    expect(refusal?.message).toContain('Turning Unique off');
+    expect(refusal?.message).toContain('Apply');
+  });
+
   it('counts a live form the editor can’t see, and refuses without naming it', async () => {
     // A published form whose draft was repointed elsewhere is hidden from someone who can't see that object
     // (`canSeeForm`), so the refusal counts it and says "A live form" (security review, 27 October 2026).

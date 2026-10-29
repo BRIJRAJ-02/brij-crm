@@ -36,6 +36,7 @@ import {
   isPeopleObject,
   liveFormsOn,
   livePagesOn,
+  livePagesFilingToCrm,
   livePagesWalledBy,
 } from '../forms/dependencies.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -945,6 +946,9 @@ export async function updateAttribute(
       const turningOn = input.isUnique === true && !attribute.isUnique && attribute.archivedAt === null;
       const turningOff = input.isUnique === false && attribute.isUnique;
       if (turningOn) await fillUniqueKeys(tx, attribute, context.scope.access);
+      // Unique off is archiving by another name for a live form or page matching on it (late trap #13): the match
+      // finds nothing, and every submission adds a new record.
+      if (turningOff) await checkNotAMatch(tx, context.scope.access, [attribute], 'unique');
       if (turningOff) await clearUniqueKeys(tx, attribute.id);
       // Its rules (spec 0013), replaced as sent, under the row lock `editable` took.
       const ruled =
@@ -1063,15 +1067,26 @@ const A_FORM = 'A live form';
  * unsaved. Refused here, which is the moment someone can still choose
  * otherwise. A form the caller may not see is counted, never named.
  */
-async function checkNotAMatch(tx: WorkspaceTx, access: Access, ends: readonly AttributeDef[]): Promise<void> {
+async function checkNotAMatch(
+  tx: WorkspaceTx,
+  access: Access,
+  ends: readonly AttributeDef[],
+  change: 'archive' | 'unique' = 'archive',
+): Promise<void> {
   for (const attribute of ends) {
     if (attribute.objectId === null || attribute.archivedAt !== null) continue;
     const live = await liveFormsOn(tx, access, attribute.objectId);
     const matching = live.filter((form) => form.document.targets.main?.matchAttributeId === attribute.id);
-    // A page finds its visitor by the object's first unique email, worked out afresh at every booking.
-    const pages =
-      attribute.isUnique && attribute.type === 'email' && (await isFirstUniqueEmail(tx, attribute))
-        ? await livePagesOn(tx, attribute.objectId, await isPeopleObject(tx, attribute.objectId))
+    // What a booking finds its guest by (security review, 29 Oct 2026): every page that files to the CRM finds the
+    // Person by People's Email addresses (`matchVisitor`); a page onto another object finds its record there by that
+    // object's first unique email (`visitorMatchOf`), worked out afresh at every booking.
+    const isPeople = await isPeopleObject(tx, attribute.objectId);
+    const pages = isPeople
+      ? attribute.apiSlug === 'email_addresses'
+        ? await livePagesFilingToCrm(tx)
+        : []
+      : attribute.isUnique && attribute.type === 'email' && (await isFirstUniqueEmail(tx, attribute))
+        ? await livePagesOn(tx, attribute.objectId, false)
         : [];
     const count = matching.length + pages.length;
     if (count === 0) continue;
@@ -1080,11 +1095,11 @@ async function checkNotAMatch(tx: WorkspaceTx, access: Access, ends: readonly At
       ...pages.flatMap((page) => (page.title === undefined ? [] : [page.title])),
     ];
     const subject = breakageNames(named, count - named.length, A_FORM, FORMS);
-    throw refuse(
-      'CONFIG_INVALID',
-      `${attribute.title} is how ${subject} ${count === 1 ? 'finds' : 'find'} the record a submission belongs to. Archiving it would make every submission add a new record instead. Point ${count === 1 ? 'that one' : 'those'} at another field first, or pause ${count === 1 ? 'it' : 'them'}.`,
-      attribute.id,
-    );
+    const message = `${attribute.title} is how ${subject} ${count === 1 ? 'finds' : 'find'} the record a submission belongs to. ${change === 'archive' ? 'Archiving it' : 'Turning Unique off'} would make every submission add a new record instead. Point ${count === 1 ? 'that one' : 'those'} at another field first, or pause ${count === 1 ? 'it' : 'them'}.`;
+    // Refused on the switch the writer flicked: the attribute row for an archive, Unique for the other.
+    throw change === 'archive'
+      ? refuse('CONFIG_INVALID', message, attribute.id)
+      : refuseOn('CONFIG_INVALID', message, 'isUnique');
   }
 }
 

@@ -165,6 +165,14 @@ export async function livePagesWalledBy(tx: WorkspaceTx, field: PageField): Prom
     .map((row) => ({ id: row.id, title: row.title }));
 }
 
+/** Every live booking page that files to the CRM: each one finds or makes the guest's Person at every booking. */
+export async function livePagesFilingToCrm(tx: WorkspaceTx): Promise<readonly LivePage[]> {
+  return tx
+    .select({ id: bookingPages.id, title: bookingPages.title })
+    .from(bookingPages)
+    .where(sql`${bookingPages.status} = 'live' and ${bookingPages.deletedAt} is null and ${bookingPages.fileToCrm}`);
+}
+
 /** Whether `objectId` is the workspace's live People, the object a page means by a null answers object. */
 export async function isPeopleObject(tx: WorkspaceTx, objectId: string): Promise<boolean> {
   const [row] = await tx
