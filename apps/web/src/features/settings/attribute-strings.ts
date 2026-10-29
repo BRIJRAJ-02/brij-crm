@@ -1,5 +1,12 @@
 /** The attribute screens' copy (spec 0012, milestone 2): the Attributes tab, the dialog's toasts and the archive confirm. */
 export const strings = {
+  /** Archiving an option a default named (late trap #34): what new records get now, in the default Callout's words. */
+  defaultOptionDropped: (option: string, field: string) =>
+    `${option} archived, so ${field}’s default gives new records the others.`,
+  defaultOptionMoved: (option: string, field: string, first: string) =>
+    `${option} archived, so new records get ${first} as their ${field}.`,
+  defaultOptionGone: (option: string, field: string) => `${option} archived, so new records get no ${field}.`,
+  undo: 'Undo',
   newAttribute: 'New attribute',
   /** The attribute meter (AC-227). */
   attributes: 'Attributes',

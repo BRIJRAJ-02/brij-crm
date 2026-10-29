@@ -31,6 +31,7 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { strings } from './attribute-strings.ts';
+import { defaultArchivedNotice } from './default-notice.ts';
 import { formRefusals } from './refusals.ts';
 import { RelationshipDialog, useRelationshipCreate } from './RelationshipDialog.tsx';
 
@@ -318,7 +319,28 @@ export function AttributeDialog({
             track(optionId, () => data.options.reorder(slug, objectId, optionId, position));
           },
           onArchive: (optionId) => {
-            track(optionId, () => data.options.archive(slug, objectId, optionId));
+            track(optionId, () =>
+              data.options.archive(slug, objectId, optionId).then(() => {
+                // The default named it (late trap #34): new records quietly stopped getting it. Said once it's done.
+                // With Undo: archiving asks nothing first, and restoring brings the default back exactly.
+                const said = defaultArchivedNotice(attribute, options, optionId);
+                if (said !== undefined) {
+                  toasts.toast(
+                    {
+                      tone: 'info',
+                      message: said,
+                      action: {
+                        label: strings.undo,
+                        onAction: () => {
+                          track(optionId, () => data.options.restore(slug, objectId, optionId));
+                        },
+                      },
+                    },
+                    { timeout: 10_000 },
+                  );
+                }
+              }),
+            );
           },
           onRestore: (optionId) => {
             track(optionId, () => data.options.restore(slug, objectId, optionId));
