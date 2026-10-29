@@ -2,7 +2,8 @@
 // spec 0017's merge (rank 6). Each meeting the record shows on is one entry at
 // its start, so upcoming meetings sit ahead of today's entries (the feed
 // heads them "Upcoming"), with the meeting as the reader may see it (a
-// private one they don't hold reads "Private meeting"). The record is
+// private one they don't hold, or a colleague's booking, reads "Private
+// meeting", with no answers). The record is
 // visible (the timeline's record check), so its meetings are too; a record in
 // the trash shows none. Read from `meeting_records_by_record`, newest start
 // first, at most `limit + 1`.
@@ -12,6 +13,7 @@ import { boundSql, toMillis } from '../engine/activity-sources.ts';
 import type { ActivityBound, ActivitySource } from '../engine/activity.ts';
 import { meetingViews, micros } from './meetings.ts';
 import { answerWords, shownAnswers } from '../booking/questions.ts';
+import { bookingAlias, bookingReaderOf, seesBookingSql } from '../booking/seen.ts';
 
 /** The loose half of the bound, which the index on the start can use. */
 const nearBound = (after?: ActivityBound) =>
@@ -50,6 +52,8 @@ export const meetingSource: ActivitySource = async ({ tx, scope, record, after, 
             from bookings b
             where b.meeting_id = any(array(select jsonb_array_elements_text(${JSON.stringify(ids)}::jsonb))::uuid[])
               and b.answers ? 'questions'
+              -- Only a booking the reader may see (seen.ts): a colleague's booking's answers are never read.
+              and ${seesBookingSql(bookingReaderOf(scope.access), bookingAlias('b'))}
           `)
         ).rows;
   const shown = await shownAnswers(

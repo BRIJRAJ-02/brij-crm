@@ -109,6 +109,7 @@ export const bookingsRouter = member.bookings.router({
     listMeetings(context.scope, {
       when: input.when,
       source: input.source,
+      hosts: input.hosts,
       ...(input.calendarIds === undefined ? {} : { calendarIds: input.calendarIds }),
       ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
       limit: input.limit,
@@ -116,7 +117,7 @@ export const bookingsRouter = member.bookings.router({
   ),
   // Bookings' week: the bookings in a range and the reader's own calendar events beside them.
   calendar: member.bookings.calendar.handler(({ context, input }) =>
-    readBookingsCalendar(context.scope, { from: input.from, to: input.to }),
+    readBookingsCalendar(context.scope, { from: input.from, to: input.to, hosts: input.hosts }),
   ),
   // The member's default schedule's hours (spec 0035; `schedules.*` is the full surface).
   hours: member.bookings.hours.handler(({ context, input }) =>
@@ -150,7 +151,8 @@ export const bookingsRouter = member.bookings.router({
       return { bookingId: booked.bookingId, ...(booked.notInCrm === undefined ? {} : { notInCrm: booked.notInCrm }) };
     }),
   ),
-  // Changing a booking (AC-640): its host, the page's owner or an admin moves or cancels it; the guest is emailed.
+  // Changing a booking (AC-640): its host, a co-host, the page's owner or an admin moves or cancels it (`seen.ts`); the
+  // guest is emailed.
   // Bookings write no change event: the screen reads its lists again after the change.
   cancel: member.bookings.cancel.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
@@ -161,13 +163,14 @@ export const bookingsRouter = member.bookings.router({
       ),
     ),
   ),
-  // A no show (spec 0043, AC-1613): its host, the page's owner or an admin; audited, and counted in routing's report.
+  // A no show (spec 0043, AC-1613): its host, a co-host, the page's owner or an admin; audited, counted in routing's
+  // report.
   markNoShow: member.bookings.markNoShow.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       markNoShow(context.scope, { bookingId: input.bookingId, noShow: input.noShow }),
     ),
   ),
-  // A booking linked to a record by hand (polish F2): its host, the page's owner or an admin, then the record's own
+  // A booking linked to a record by hand (polish F2): its host, a co-host, the page's owner or an admin, then the record's own
   // access (visible, and on an object they may change); audited.
   link: member.bookings.link.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>

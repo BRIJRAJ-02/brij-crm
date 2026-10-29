@@ -30,7 +30,8 @@ export type AccessEntry =
   | { readonly publicForm: true }
   /**
    * Booking pages (spec 0025): `booking.manage` first (403 `FORBIDDEN`), then the reader's own pages, or anyone's
-   * with `booking.admin`; another's page answers as absent.
+   * with `booking.admin`; another's page answers as absent. A booking: its host, a co-host, its page's owner, or
+   * `booking.admin` (`booking/seen.ts`, the one rule); the Bookings reads take `hosts: 'mine'` unless asked for all.
    */
   | { readonly bookingPages: true }
   /**
@@ -296,6 +297,7 @@ export const ACCESS_TABLE = {
   setPageDestination: { bookingPages: true },
   // Spec 0037 (AC-1307): any member, for the members in their reach; everyone else is left out, never refused.
   readCalendarHealth: { anyMember: true },
+  // A meeting a booking made shows its details only to who may see that booking (`booking/seen.ts`), else Busy.
   listMeetingsForRecord: { data: 'read' },
   meetingFacts: { system: true },
   // Spec 0031, AC-817: the relay's read of whom a removal cuts off.
@@ -381,7 +383,8 @@ export const ACCESS_TABLE = {
   listWorkspaceBookings: { bookingPages: true },
   listMeetings: { bookingPages: true },
   readBookingsCalendar: { bookingPages: true },
-  // Home (spec 0041): Team today is scheduling (Bookings' gate), the metrics any member, each figure by its own rule.
+  // Home (spec 0041): Team today is scheduling (Bookings' gate), only the members `canActFor` views (a member: themself),
+  // a booking's title only to who may see it (`booking/seen.ts`); the metrics any member, each figure by its own rule.
   readTeamToday: { bookingPages: true },
   readHomeMetrics: { anyMember: true },
   readDefaultHours: { schedules: true },

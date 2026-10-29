@@ -4,7 +4,11 @@
 // record must be live and visible to the reader; a meeting on it is then
 // visible too, but a private one (AC-611, AC-612) shows its details only to
 // the members whose connections hold it: to everyone else it is "Private
-// meeting" with its time, and no attendees, location or link. An attendee's
+// meeting" with its time, and no attendees, location or link. A meeting a
+// booking made shows the same way to anyone but the booking's host, a
+// co-host, its page's owner or a holder of `booking.admin` (`seen.ts`, the
+// owner's ask of 29 October 2026), so a colleague's booking is never read
+// off the visitor's record. An attendee's
 // person shows only when the reader may see that person (hidden is absent).
 import { sql } from 'drizzle-orm';
 import {
@@ -25,6 +29,7 @@ import { inWorkspace } from '../access/run.ts';
 import { UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
 import { checkId, uuidList } from '../engine/ids.ts';
 import { readRecords } from '../engine/records.ts';
+import { bookingReaderOf, hiddenBookingSql } from '../booking/seen.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 
 /** What a cursor the server didn't make answers, on the `cursor` field. */
@@ -57,7 +62,12 @@ interface MeetingRow extends Record<string, unknown> {
   readonly location: string | null;
   readonly video_url: string | null;
   readonly holds: boolean;
+  /** A booking made it, and the reader is not its host, a co-host, its page's owner or an admin (`seen.ts`). */
+  readonly booking_hidden: boolean;
 }
+
+/** Whether the reader gets a meeting as Busy: private and not theirs, or a booking that isn't theirs to see. */
+const hiddenFrom = (row: MeetingRow) => (row.is_private && !row.holds) || row.booking_hidden;
 
 interface AttendeeRowRead extends Record<string, unknown> {
   readonly meeting_id: string;
@@ -89,11 +99,12 @@ export async function meetingViews(
         select 1 from meeting_sources s
         join calendar_connections c on c.workspace_id = s.workspace_id and c.id = s.connection_id
         where s.workspace_id = m.workspace_id and s.meeting_id = m.id and c.member_id = ${me}::uuid
-      ) as holds
+      ) as holds,
+      ${hiddenBookingSql(bookingReaderOf(access))} as booking_hidden
     from meetings m where m.id = any(${uuidList(ids)})
   `);
   const shown = new Map(found.rows.map((row) => [row.id, row]));
-  const open = found.rows.filter((row) => !row.is_private || row.holds).map((row) => row.id);
+  const open = found.rows.filter((row) => !hiddenFrom(row)).map((row) => row.id);
   const attendees =
     open.length === 0
       ? []
@@ -130,7 +141,7 @@ export async function meetingViews(
   return ids.flatMap((id) => {
     const row = shown.get(id);
     if (row === undefined) return [];
-    const hidden = row.is_private && !row.holds;
+    const hidden = hiddenFrom(row);
     const view: MeetingView = {
       id: row.id,
       title: hidden ? PRIVATE_MEETING_TITLE : row.title,
@@ -138,7 +149,8 @@ export async function meetingViews(
       endsAt: row.ends_at,
       allDay: row.all_day,
       status: row.status,
-      isPrivate: row.is_private,
+      // A colleague's booking reads exactly as a private meeting does (the owner's ask of 29 October 2026).
+      isPrivate: row.is_private || row.booking_hidden,
       detailsHidden: hidden,
       ...(hidden || row.location === null ? {} : { location: row.location }),
       ...(hidden || row.video_url === null ? {} : { videoUrl: row.video_url }),
