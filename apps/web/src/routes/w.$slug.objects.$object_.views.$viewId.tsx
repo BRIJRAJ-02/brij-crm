@@ -101,15 +101,15 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
     const savedRun = runningQuery(savedQuery(body.view), attributes, far);
     // A board grouped by a field no longer live may be grouped by an archived one, which the board says and offers
     // to restore (late trap #14): read for that too.
-    const storedGroup = body.view?.kind === 'board' ? body.view.config.board?.groupByAttributeId : undefined;
+    const storedGroup = body.view.kind === 'board' ? body.view.config.board?.groupByAttributeId : undefined;
     const isGroupGone = storedGroup !== undefined && !attributes.some((attribute) => attribute.id === storedGroup);
     const archivedAttributes =
       isGroupGone || [effective, savedRun].some((run) => run.status === 'ready' && run.dropped)
-      ? await context.data.attributes
-          .all(params.slug, object.id)
-          .then((all) => all.filter((attribute) => attribute.isArchived))
-          .catch(() => [])
-      : [];
+        ? await context.data.attributes
+            .all(params.slug, object.id)
+            .then((all) => all.filter((attribute) => attribute.isArchived))
+            .catch(() => [])
+        : [];
     const recordsQuery = running.status === 'ready' ? toViewQuery(running) : {};
     const [members, records] = await Promise.all([
       membersLoading,
