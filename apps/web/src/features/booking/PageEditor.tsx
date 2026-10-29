@@ -970,7 +970,11 @@ export function PageEditor({
                         )}
                         <FieldGroup
                           label={strings.whoCanBook}
-                          {...(draft.isPrivate ? { hint: strings.linkOnlyHint } : {})}
+                          // Switching a public page to Link only retires the address people already have: said
+                          // before Save, not found out later by a visitor on Page not found (flow walks, B10).
+                          {...(draft.isPrivate
+                            ? { hint: page.isPrivate ? strings.linkOnlyHint : strings.linkOnlyChanging }
+                            : {})}
                         >
                           <SegmentedControl
                             label={strings.whoCanBook}

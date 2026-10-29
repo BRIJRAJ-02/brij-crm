@@ -230,6 +230,9 @@ export const strings = {
   },
   /** Under Who can book, for Link only: what it does that Public doesn't. */
   linkOnlyHint: 'Not on your profile. It can also book your reserved time.',
+  /** Under Who can book, while a public page is being switched to Link only: the old address stops working. */
+  linkOnlyChanging:
+    'Not on your profile, and it moves to the link above. Its old address stops working once you save, so share the new one.',
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
     schedule: {
