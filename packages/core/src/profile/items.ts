@@ -837,8 +837,11 @@ export async function importProfileLinks(
   const left = input.rows.flatMap((row, index) =>
     foreign.has(index) ? [{ title: row.title, url: row.url, reason: 'not-in-workspace' as const }] : [],
   );
+  // One import archives its rows at one moment, so the archived list (newest first, then by id) orders them by id:
+  // ids handed out in ascending order keep the page's own order there.
+  const ids = kept.map(() => newId()).sort();
   const blocks = kept.map((row, index) => ({
-    id: newId(),
+    id: ids[index] ?? newId(),
     // The hue ring runs over the import itself, so one import's rows read as a set rather than all one colour.
     data: { title: row.title, url: row.url, hue: nextHue(index) },
   }));
