@@ -50,7 +50,7 @@ import { strings as attributeStrings } from '../settings/attribute-strings.ts';
 import { useBulkActions, useTableSelection } from './BulkActions.tsx';
 import type { ShownColumn, ShownLayout } from '../views/layout.ts';
 import { avatarAttribute } from './columns.ts';
-import { groupPlan, useGroupedRows } from './grouped.ts';
+import { groupingGap, groupPlan, useGroupedRows } from './grouped.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
@@ -331,6 +331,7 @@ export function RecordsScreen({
   const state = useView(view, visible);
   // Grouped (13 Oct reference batch 4): the rows through the board's per group windows, folded groups unread.
   const groupingPlan = useMemo(() => groupPlan(attributes, groupBy), [attributes, groupBy]);
+  const ungrouped = useMemo(() => groupingGap(attributes, groupBy), [attributes, groupBy]);
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
   const grouped = useGroupedRows(slug, object.id, groupingPlan, query, visible, folded);
   // The count spoken after a new question's rows are in (spec 0020, AC-487), once per question.
@@ -515,6 +516,7 @@ export function RecordsScreen({
                 {strings.livePaused}
               </Callout>
             )}
+            {ungrouped !== undefined && <Callout placement="bar">{ungrouped}</Callout>}
             {viewActions}
           </ViewBar>
         ),
