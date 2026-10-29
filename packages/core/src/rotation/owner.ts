@@ -11,7 +11,7 @@
 // lead counts on the day it was assigned, in the member's own zone), and not
 // on a day off today in their own zone (a date their default schedule gives
 // no hours; a weekday without hours is not a day off, so a lead on a Saturday
-// still gets an owner). A record that already has an owner keeps them
+// still gets an owner), and not on time off now (spec 0037, AC-1283). A record that already has an owner keeps them
 // (AC-567): the rotation counts it to them (`owner`) when it sends returning
 // people to their owner and the owner may take a lead now, and otherwise
 // takes no turn. One lead never has two live assignments in one rotation:
@@ -26,6 +26,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import { resolveMany } from '../availability/resolve.ts';
 import { uuidArray } from '../engine/ids.ts';
+import { awayAt } from '../scheduling/time-off.ts';
 import { capStarts, lockRotation, windowCounts, windowStart, writeAssignment } from './ledger.ts';
 import { evenWaiting, pickMember, type Candidate, type PickDetail, type Picked, type PickReason } from './pick.ts';
 import { candidatesOf, eligibleMembers, rulesOf, underCaps, type RotationRules } from './team.ts';
@@ -133,6 +134,8 @@ async function openCandidates(tx: WorkspaceTx, rules: RotationRules, now: Date):
     ? await capStarts(tx, rules.id, ids, new Date(now.getTime() - 8 * DAY_MS), new Date(now.getTime() + 8 * DAY_MS))
     : new Map<string, readonly Date[]>();
   const today = await todayOf(tx, ids, now);
+  // Away now (spec 0037, AC-1283): skipped, as a day off is.
+  const away = await awayAt(tx, ids, now);
   const everyone = candidatesOf({ rules, members: pool }, { counts, starts });
   const waiting = rules.strategy === 'even' ? evenWaiting(everyone, rules.evenGap) : new Set<string>();
   return everyone.filter((candidate, index) => {
@@ -143,6 +146,7 @@ async function openCandidates(tx: WorkspaceTx, rules: RotationRules, now: Date):
       day !== undefined &&
       !waiting.has(candidate.memberId) &&
       !day.isDayOff &&
+      !away.has(candidate.memberId) &&
       underCaps(member, starts.get(candidate.memberId) ?? [], day.zone, now)
     );
   });

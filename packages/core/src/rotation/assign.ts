@@ -17,6 +17,8 @@ import { lockRotation } from './ledger.ts';
 import { candidatesOf, memberSlots, readTeam, slotCandidates, type Team } from './team.ts';
 import { fillSeats, type SeatPick } from './pick.ts';
 import { lastHostOf, ownerOfEmail } from './returning.ts';
+import { awayAt } from '../scheduling/time-off.ts';
+import type { Candidate } from './pick.ts';
 
 /** The words a visitor sees when the time went while they were booking (AC-740). */
 export const SLOT_TAKEN_MESSAGE = 'That time was just taken. Pick another.';
@@ -89,8 +91,25 @@ export async function chooseHosts(
     choice.workspaceId,
     team.rotations.map((rotation) => rotation.rules.id),
   );
-  const locked = new Set([...team.fixed, ...choice.candidates.flat(), ...(choice.keep?.values() ?? [])]);
+  // Returning guests (AC-1328), read under the rotation locks and before any host lock: the owner, each rotation's
+  // last host, and (spec 0037, AC-1284) the stand in of whichever of them is away then, who joins the lock set.
+  const ownerId =
+    choice.guest !== undefined && team.rotations.some((rotation) => rotation.rules.returning === 'owner')
+      ? await ownerOfEmail(tx, choice.guest.peopleObjectId, choice.guest.email)
+      : undefined;
+  const lastHosts = new Map<string, string | undefined>();
+  for (const rotation of team.rotations) {
+    if (choice.guest !== undefined && rotation.rules.returning === 'last_host') {
+      lastHosts.set(rotation.rules.id, await lastHostOf(tx, rotation.rules.id, choice.guest.email, choice.now));
+    }
+  }
+  const known = [ownerId, ...lastHosts.values()].filter((id): id is string => id !== undefined);
+  const awayBefore = await awayAt(tx, known, choice.start);
+  const standins = [...awayBefore.values()].filter((id): id is string => id !== undefined && !team.fixed.includes(id));
+  const locked = new Set([...team.fixed, ...choice.candidates.flat(), ...(choice.keep?.values() ?? []), ...standins]);
   await lockHosts(tx, choice.workspaceId, [...locked]);
+  // Read again under the locks: a stand in counts only when still named, and locked.
+  const away = standins.length === 0 ? awayBefore : await awayAt(tx, known, choice.start);
   const reads = await readTeam(tx, page, team, choice.busy, {
     from: choice.from,
     to: choice.to,
@@ -106,10 +125,12 @@ export async function chooseHosts(
     memberSlots(page, memberId, reads, range).some((slot) => slot.start.getTime() === choice.start.getTime());
   if (!team.fixed.every(freeAt)) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
   const sets = slotCandidates(team, reads, freeAt, choice.start);
-  const ownerId =
-    choice.guest !== undefined && team.rotations.some((rotation) => rotation.rules.returning === 'owner')
-      ? await ownerOfEmail(tx, choice.guest.peopleObjectId, choice.guest.email)
-      : undefined;
+  /** The free stand in of `memberId` when they are away at the slot (AC-1284), else undefined. */
+  const standinFor = (memberId: string | undefined): string | undefined => {
+    if (memberId === undefined) return undefined;
+    const standin = away.get(memberId);
+    return standin !== undefined && !team.fixed.includes(standin) && freeAt(standin) ? standin : undefined;
+  };
   // A kept seat stays when its host is still a candidate there; its member is then nobody else's to pick.
   const kept = new Map<string, string>();
   for (const [index, rotation] of team.rotations.entries()) {
@@ -118,32 +139,38 @@ export async function chooseHosts(
   }
   const keptMembers = new Set(kept.values());
   // Each rotation's own reads once (returning guests' last host), then its seat with or without a preference.
-  const open: { index: number; rotation: (typeof team.rotations)[number]; lastHostId: string | undefined }[] = [];
+  const open: {
+    index: number;
+    rotation: (typeof team.rotations)[number];
+    lastHostId: string | undefined;
+    standinId: string | undefined;
+  }[] = [];
   for (const [index, rotation] of team.rotations.entries()) {
     if (kept.has(rotation.rules.id)) continue;
-    const lastHostId =
-      choice.guest !== undefined && rotation.rules.returning === 'last_host'
-        ? await lastHostOf(tx, rotation.rules.id, choice.guest.email, choice.now)
-        : undefined;
-    open.push({ index, rotation, lastHostId });
+    const lastHostId = lastHosts.get(rotation.rules.id);
+    const wanted = rotation.rules.returning === 'owner' ? ownerId : lastHostId;
+    open.push({ index, rotation, lastHostId, standinId: standinFor(wanted) });
   }
   const seatsOf = (prefer?: (rotationId: string, memberId: string) => boolean) =>
-    open.map(({ index, rotation, lastHostId }) => {
-      const free = new Set(
-        (sets[index] ?? []).filter(
-          (memberId) =>
-            !keptMembers.has(memberId) &&
-            (choice.allow?.(rotation.rules.id, memberId) ?? true) &&
-            (prefer?.(rotation.rules.id, memberId) ?? true),
-        ),
+    open.map(({ index, rotation, lastHostId, standinId }) => {
+      const admits = (memberId: string) =>
+        !keptMembers.has(memberId) &&
+        (choice.allow?.(rotation.rules.id, memberId) ?? true) &&
+        (prefer?.(rotation.rules.id, memberId) ?? true);
+      const free = new Set((sets[index] ?? []).filter(admits));
+      const candidates = candidatesOf(rotation, reads.standing.get(rotation.rules.id)).filter((each) =>
+        free.has(each.memberId),
       );
+      // A stand in outside the rotation joins this seat's candidates (their ledger row counts toward no share here).
+      const outside: Candidate[] =
+        standinId !== undefined && admits(standinId) && !candidates.some((each) => each.memberId === standinId)
+          ? [{ memberId: standinId, count: 0, calibration: 0, weight: 1, priority: 0 }]
+          : [];
       return {
         rotationId: rotation.rules.id,
         rules: rotation.rules,
-        candidates: candidatesOf(rotation, reads.standing.get(rotation.rules.id)).filter((each) =>
-          free.has(each.memberId),
-        ),
-        known: { ownerId, lastHostId },
+        candidates: [...candidates, ...outside],
+        known: { ownerId, lastHostId, standinId },
       };
     });
   // A routed preference (spec 0043) picks among its hosts first; when none of them is free, the rotation picks.

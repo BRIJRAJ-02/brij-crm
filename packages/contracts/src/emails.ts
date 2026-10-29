@@ -323,6 +323,21 @@ export const SchedulingChangedEmail = z.strictObject({
 /** The scheduling changed email's params. */
 export type SchedulingChangedEmail = z.infer<typeof SchedulingChangedEmail>;
 
+/**
+ * Covering for someone (spec 0037, AC-1282): to a stand in, when time off naming them is saved or its dates change.
+ * "You're covering for Sam from 3 to 7 November." Never the reason or the note.
+ */
+export const StandinCoveringEmail = z.strictObject({
+  /** Who is away, by name. */
+  memberName: Name,
+  /** The days, already worded in the away member's calendar ("from 3 to 7 November", "on 3 November"). */
+  dates: z.string().min(1).max(80),
+  /** Scheduling › Bookings, where the stand in sees what comes their way. */
+  bookingsPath: AppPath,
+});
+/** The covering for someone email's params. */
+export type StandinCoveringEmail = z.infer<typeof StandinCoveringEmail>;
+
 /** Every email with a template, and its params' schema. The sign in code is drawn on its own (`renderSignInCode`). */
 export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
@@ -335,6 +350,7 @@ export const EMAIL_PARAMS = {
   job_failed: JobFailedEmail,
   workspace_welcome: WorkspaceWelcomeEmail,
   scheduling_changed: SchedulingChangedEmail,
+  standin_covering: StandinCoveringEmail,
 } as const;
 
 /** A kind of email with a template. */
@@ -361,6 +377,7 @@ export const QUEUED_EMAIL_KINDS = [
   'job_failed',
   'workspace_welcome',
   'scheduling_changed',
+  'standin_covering',
 ] as const satisfies readonly EmailKind[];
 /** A kind that goes through the workspace email queue. */
 export const QueuedEmailKind = z.enum(QUEUED_EMAIL_KINDS);

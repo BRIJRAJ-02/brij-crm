@@ -2,7 +2,7 @@
 // (`canActFor` over the scheduling reach, `access/scheduling.ts`: a member
 // sees only themself, an owner or admin with `booking.admin` everyone; the
 // owner's ask of 29 October 2026, "don't show someone else's booking"), in
-// four reads whatever the team's size (no read per member). Each member's
+// five reads whatever the team's size (no read per member). Each member's
 // bookings, hosted or co-hosted (by `booking_hosts_by_member`), the meetings
 // their connected calendars hold (by `meetings_by_start`) and their busy
 // times with nobody else invited (by `calendar_busy_times_by_end`). A title
@@ -176,7 +176,20 @@ export async function readTeamToday(
         limit ${ROWS_MAX}
       `)
     ).rows;
-    return { members: teamDays(roster, reader, bookingRows, meetingRows, busyRows) };
+    // Time off over the day (spec 0037, AC-1287): "Away", by the member's id alone.
+    const awayRows = (
+      await tx.execute<{ member_id: string }>(sql`
+        select distinct member_id::text as member_id from booking_time_blocks
+        where kind = 'away' and repeat = 'once' and member_id = any(${ids})
+          and ends_at > ${from.toISOString()}::timestamptz and starts_at < ${to.toISOString()}::timestamptz
+      `)
+    ).rows;
+    const away = new Set(awayRows.map((row) => row.member_id));
+    return {
+      members: teamDays(roster, reader, bookingRows, meetingRows, busyRows).map((day) =>
+        away.has(day.memberId) ? { ...day, away: true } : day,
+      ),
+    };
   });
 }
 

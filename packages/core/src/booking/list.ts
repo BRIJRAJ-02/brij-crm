@@ -145,6 +145,17 @@ async function seeOnlyOf(
   );
 }
 
+/**
+ * Whether the booking's host has time off over it (spec 0037, AC-1285): "Host away", flagged for someone to move or
+ * reassign it, never moved by itself. Plain comparisons on the stored ends reach the blocks' btree index.
+ */
+const hostAwayColumn = sql<boolean>`exists (
+  select 1 from booking_time_blocks a
+  where a.workspace_id = ${bookings.workspaceId} and a.member_id = ${bookings.hostMemberId}
+    and a.repeat = 'once' and a.kind = 'away'
+    and a.ends_at > ${bookings.startsAt} and a.starts_at < ${bookings.endsAt}
+)`;
+
 /** A booking row and its page as Bookings shows it. */
 function itemOf(
   {
@@ -153,12 +164,14 @@ function itemOf(
     location,
     hostStatus,
     hostName,
+    hostAway,
   }: {
     readonly booking: typeof bookings.$inferSelect;
     readonly pageTitle: string;
     readonly location: unknown;
     readonly hostStatus?: string | null;
     readonly hostName: string | null;
+    readonly hostAway?: boolean;
   },
   seen: ReadonlySet<string>,
   linked: ReadonlyMap<string, RecordRefDisplay>,
@@ -166,6 +179,7 @@ function itemOf(
   seeOnly: ReadonlySet<string> = new Set(),
 ): BookingListItem {
   const place = BookingLocation.safeParse(location);
+  const away = hostAway === true && row.status === 'confirmed' ? { hostAway: true } : {};
   // See over the host (spec 0037, AC-1262): the guest's name, the page's title, the time and status only.
   if (seeOnly.has(row.id)) {
     return {
@@ -176,6 +190,7 @@ function itemOf(
       hostMemberId: row.hostMemberId,
       hostName: hostName ?? '',
       needsHost: row.needsHostAt !== null,
+      ...away,
       startsAt: row.startsAt.toISOString(),
       endsAt: row.endsAt.toISOString(),
       visitorName: row.visitorName,
@@ -200,6 +215,7 @@ function itemOf(
     hostMemberId: row.hostMemberId,
     hostName: hostName ?? '',
     needsHost: row.needsHostAt !== null,
+    ...away,
     ...(row.noShowAt === null ? {} : { noShow: true }),
     startsAt: row.startsAt.toISOString(),
     endsAt: row.endsAt.toISOString(),
@@ -248,6 +264,7 @@ export async function listWorkspaceBookings(
         // Whether the host is still here (spec 0031, AC-815): a removed host's bookings say so.
         hostStatus: members.status,
         hostName: members.name,
+        hostAway: hostAwayColumn,
       })
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
@@ -321,6 +338,7 @@ export async function readBookingsCalendar(
         pageOwner: bookingPages.ownerMemberId,
         location: bookingPages.location,
         hostName: members.name,
+        hostAway: hostAwayColumn,
       })
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
@@ -505,6 +523,7 @@ export async function listMeetings(
               // The host, for a colleague's booking and a removed host's (spec 0031, AC-815; spec 0037).
               hostStatus: members.status,
               hostName: members.name,
+              hostAway: hostAwayColumn,
             })
             .from(bookings)
             .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))

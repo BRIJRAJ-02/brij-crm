@@ -592,6 +592,9 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     }
     case 'block.created':
     case 'block.removed':
+    case 'time_off.created':
+    case 'time_off.changed':
+    case 'time_off.deleted':
       // Whose time and when stay in the row; the sentence names whose (a block's label is never stored).
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
     case 'booking.changed_for': {

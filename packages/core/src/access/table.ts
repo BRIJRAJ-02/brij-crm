@@ -420,6 +420,12 @@ export const ACCESS_TABLE = {
   deleteSchedule: { schedules: true },
   createTimeBlock: { scheduling: 'manage' },
   removeTimeBlock: { scheduling: 'manage' },
+  // Time off (spec 0037, AC-1282, AC-1286): read with See (reason and note with Manage), changed with Manage; the
+  // caller's own `booking.manage` first.
+  listTimeOff: { scheduling: 'view' },
+  createTimeOff: { scheduling: 'manage' },
+  updateTimeOff: { scheduling: 'manage' },
+  deleteTimeOff: { scheduling: 'manage' },
   bookAsHost: { scheduling: 'manage' },
   // Changing a booking from Bookings (spec 0025, milestone 2): booking.manage first, then the booking's row.
   hostTarget: { bookingPages: true },

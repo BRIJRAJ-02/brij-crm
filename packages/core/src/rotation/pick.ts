@@ -48,10 +48,15 @@ export interface PickRules {
 export interface Returning {
   readonly ownerId?: string | undefined;
   readonly lastHostId?: string | undefined;
+  /**
+   * The stand in of whichever of them is away then (spec 0037, AC-1284): they get it, with reason `standin`, when
+   * free, whether or not they are in the rotation; the caller puts them among the candidates only when free.
+   */
+  readonly standinId?: string | undefined;
 }
 
 /** Why a member got the work, as the ledger stores it. */
-export type PickReason = 'fair' | 'priority' | 'even' | 'owner' | 'last_host' | 'only_free';
+export type PickReason = 'fair' | 'priority' | 'even' | 'owner' | 'last_host' | 'standin' | 'only_free';
 
 /** One candidate as the ledger row's detail records them. */
 export interface ComparedMember {
@@ -116,12 +121,15 @@ function returningTo(
   open: readonly Candidate[],
   rules: PickRules,
   known: Returning,
-): { readonly memberId: string; readonly reason: 'owner' | 'last_host' } | undefined {
+): { readonly memberId: string; readonly reason: 'owner' | 'last_host' | 'standin' } | undefined {
   if (rules.returning === 'none') return undefined;
   const wanted = rules.returning === 'owner' ? known.ownerId : known.lastHostId;
   if (wanted === undefined) return undefined;
   const found = open.find((each) => each.memberId === wanted);
-  return found === undefined ? undefined : { memberId: found.memberId, reason: rules.returning };
+  if (found !== undefined) return { memberId: found.memberId, reason: rules.returning };
+  // Away, with a free stand in (AC-1284): the stand in takes it.
+  const standin = known.standinId === undefined ? undefined : open.find((each) => each.memberId === known.standinId);
+  return standin === undefined ? undefined : { memberId: standin.memberId, reason: 'standin' };
 }
 
 /** The first of `ranked` that `allowed` admits, by the rules above. */
