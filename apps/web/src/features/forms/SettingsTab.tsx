@@ -32,7 +32,7 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { linksHref } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
-import { isRedirectAddress } from './draft.ts';
+import { isRedirectAddress, sameValue } from './draft.ts';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
@@ -333,8 +333,9 @@ export function SettingsTab({
     return pool.filter((member, at) => pool.findIndex((each) => each.id === member.id) === at);
   };
   const live = form.live;
-  const routingChanged =
-    live !== undefined && JSON.stringify(live.routing.rules) !== JSON.stringify(draft.routing.rules);
+  // By value, not as text: rules the editor wrote spell their keys in another order than the published ones, so
+  // text said "waits for publish" for rules that were already live.
+  const routingChanged = live !== undefined && !sameValue(live.routing.rules, draft.routing.rules);
 
   const bookingPage = after.kind === 'booking' ? pageList.find((page) => page.id === after.bookingPageId) : undefined;
   // Where each question's answer goes: the target's attribute, or kept with the submission only.

@@ -8,12 +8,27 @@ import type { BookingPageSettings } from '@crm/data';
  */
 const NOT_EDITED: ReadonlySet<keyof BookingPageSettings> = new Set(['profilePosition']);
 
-/** The settings that differ between two drafts. */
+/**
+ * A setting as text that two spellings of one value share: every object's keys in order, a list's items left in
+ * theirs (moving a question is a change). Plain `JSON.stringify` follows the order keys were written in, and the
+ * editor writes a question's keys in another order than the server answers them (`changeQuestion` puts `filedOn`
+ * last, the schema puts it before `update`), so a question filed onto a field Save had just made never read as
+ * saved: the bar said "Unsaved changes" after every Save, and leaving the page asked first (crm-f7, 28 Oct 2026).
+ */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, inner: unknown) =>
+    inner !== null && typeof inner === 'object' && !Array.isArray(inner)
+      ? Object.fromEntries(Object.entries(inner).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : inner,
+  );
+}
+
+/** The settings that differ between two drafts, by value, whatever order their keys were written in. */
 export function changed(saved: BookingPageSettings, draft: BookingPageSettings): Partial<BookingPageSettings> {
   const keys = Object.keys(draft) as (keyof BookingPageSettings)[];
   const entries = keys
     .filter((key) => !NOT_EDITED.has(key))
-    .filter((key) => JSON.stringify(draft[key]) !== JSON.stringify(saved[key]))
+    .filter((key) => canonical(draft[key]) !== canonical(saved[key]))
     .map((key) => [key, draft[key]]);
   return Object.fromEntries(entries) as Partial<BookingPageSettings>;
 }
