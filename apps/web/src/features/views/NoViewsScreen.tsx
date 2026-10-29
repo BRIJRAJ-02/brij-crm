@@ -8,7 +8,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { CreateViewDialog } from './CreateViewDialog.tsx';
-import { startingConfig } from './layout.ts';
+import { startingConfig } from './edits.ts';
 import { strings } from './strings.ts';
 
 /** Props for the no view screen. */

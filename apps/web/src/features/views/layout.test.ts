@@ -2,16 +2,8 @@
 // change; any other view runs its own; what a change saves; the config a new view starts from; a duplicate's name.
 import type { AttributeDefinition, ObjectSummary, View } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import {
-  boardLayout,
-  copyName,
-  layoutOf,
-  startingConfig,
-  switchPatch,
-  viewColumns,
-  viewReadIds,
-  withColumn,
-} from './layout.ts';
+import { boardLayout, copyName, layoutOf, startingConfig, switchPatch, withColumn } from './edits.ts';
+import { viewColumns, viewReadIds } from './layout.ts';
 
 const attribute = (
   apiSlug: string,

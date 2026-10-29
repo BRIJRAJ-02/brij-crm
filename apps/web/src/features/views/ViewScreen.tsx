@@ -45,18 +45,8 @@ import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
 import { objectPendingPage } from '../workspace/ObjectScreen.tsx';
 import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { CreateViewDialog } from './CreateViewDialog.tsx';
-import {
-  boardLayout,
-  copyName,
-  layoutOf,
-  startingConfig,
-  viewColumns,
-  viewReadIds,
-  switchPatch,
-  withColumn,
-  type BoardPatch,
-  type ShownLayout,
-} from './layout.ts';
+import { boardLayout, copyName, layoutOf, startingConfig, switchPatch, withColumn, type BoardPatch } from './edits.ts';
+import { viewColumns, viewReadIds, type ShownLayout } from './layout.ts';
 import {
   farAttributesFrom,
   relationTarget,
