@@ -168,6 +168,8 @@ export const strings = {
   cancelled: 'Import cancelled',
   undone: 'Import undone',
   undoing: 'Undoing the import',
+  /** An undo that failed or was cancelled before it took every row back; Undo finishes it. */
+  undoStopped: 'Undo stopped part way',
   notStarted: 'Import not started',
   refusedTitle: 'Rows not imported',
   refusedLabel: 'Rows not imported',
