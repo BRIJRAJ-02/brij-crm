@@ -89,6 +89,8 @@ export interface NewMeeting {
   readonly message?: string;
   /** The member's own calendar the event goes on, only when they picked one; else the page's, else their default. */
   readonly calendarId?: string;
+  /** Who hosts it, when not the member: a colleague they Manage, on one of that colleague's pages (AC-1272). */
+  readonly forMemberId?: string;
 }
 
 /** Props for NewMeetingDialog. */
@@ -116,7 +118,15 @@ export interface NewMeetingDialogProps {
   readonly calendars?: CalendarListState | undefined;
   /** A booking page's own "Add events to": Calendar starts on it when it is one of the member's calendars. */
   readonly pageDestination?: ((pageId: string) => CalendarsHeld<PageDestinationState>) | undefined;
+  /**
+   * The colleagues the member Manages (spec 0037, AC-1272): For shows first, Me then them, when there is anyone.
+   * For a colleague the booking goes on one of their pages, on their calendars (never one the member picks).
+   */
+  readonly forPeople?: readonly { readonly id: string; readonly name: string }[] | undefined;
 }
+
+/** The For picker's own choice: the member themself. */
+const ME = '@me';
 
 /** Someone from People to book in: their record, name and the email to invite them at. */
 interface Person {
@@ -183,6 +193,7 @@ export function NewMeetingDialog({
   people,
   calendars,
   pageDestination,
+  forPeople = [],
 }: NewMeetingDialogProps) {
   const formId = useId();
   const listId = useId();
@@ -193,7 +204,12 @@ export function NewMeetingDialog({
   // The member's zone draws the span; the guest's zone starts as theirs too, until it is picked.
   const { timeZone: memberTimeZone } = useFormatSettings();
   const [timeZone, setTimeZone] = useState(memberTimeZone);
-  const [pageId, setPageId] = useState(pages[0]?.id ?? '');
+  const [forId, setForId] = useState(ME);
+  const forName = forId === ME ? undefined : forPeople.find((person) => person.id === forId)?.name;
+  // For a colleague, only their pages (the server books on one of theirs alone); for the member, theirs as before.
+  const choices = forId === ME ? pages : pages.filter((page) => page.ownerMemberId === forId);
+  const [picked, setPageId] = useState(pages[0]?.id ?? '');
+  const pageId = choices.some((page) => page.id === picked) ? picked : (choices[0]?.id ?? '');
   const [guests, setGuests] = useState<readonly string[]>([]);
   const [guestsError, setGuestsError] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState('');
@@ -275,6 +291,7 @@ export function NewMeetingDialog({
       setRefusals(missing);
       return;
     }
+    if (pageId === '') return;
     setBusy(true);
     setRefusals([]);
     setGuestsError(undefined);
@@ -288,8 +305,9 @@ export function NewMeetingDialog({
       timeZone,
       guests,
       ...(message.trim() === '' ? {} : { message: message.trim() }),
-      // Sent only when picked, and only while Calendar is offered.
-      ...(calendarId === undefined || writable.length < 2 ? {} : { calendarId }),
+      // Sent only when picked, and only while Calendar is offered: never for a colleague (their calendars stay theirs).
+      ...(calendarId === undefined || writable.length < 2 || forId !== ME ? {} : { calendarId }),
+      ...(forId === ME ? {} : { forMemberId: forId }),
     }).then(
       () => {
         setBusy(false);
@@ -319,7 +337,7 @@ export function NewMeetingDialog({
           <Button slot="close" isDisabled={busy} kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button variant="primary" type="submit" form={formId} isPending={busy} kbd="⌘↵">
+          <Button variant="primary" type="submit" form={formId} isPending={busy} isDisabled={pageId === ''} kbd="⌘↵">
             {busy ? strings.booking : strings.bookIt}
           </Button>
         </>
@@ -335,7 +353,24 @@ export function NewMeetingDialog({
         focusesFirstField
       >
         {/* First, so it is read before the form is filled in, and never below the dialog's fold. */}
-        {!hasCalendar && <Callout tone="info">{strings.noCalendar}</Callout>}
+        {!hasCalendar && forId === ME && <Callout tone="info">{strings.noCalendar}</Callout>}
+        {forPeople.length > 0 && (
+          <Select
+            label={strings.forWhom}
+            {...(forName === undefined ? {} : { hint: strings.forHint(forName) })}
+            items={[
+              { id: ME, label: strings.forMe },
+              ...forPeople.map((person) => ({ id: person.id, label: person.name })),
+            ]}
+            value={forId}
+            isDisabled={busy}
+            isSearchable={forPeople.length > 8}
+            onChange={(id) => setForId(id ?? ME)}
+          />
+        )}
+        {forName !== undefined && choices.length === 0 && (
+          <Callout tone="warning">{strings.noPagesFor(forName)}</Callout>
+        )}
         <Field
           ref={withRef}
           label={strings.with}
@@ -440,7 +475,7 @@ export function NewMeetingDialog({
           hint={strings.timesIn(zoneDisplay(memberTimeZone, start.getTime()))}
           isDisabled={busy}
         />
-        {pages.length > 1 && (
+        {choices.length > 1 && (
           <Select
             label={strings.about}
             info={
@@ -448,7 +483,7 @@ export function NewMeetingDialog({
                 {strings.aboutHelp}
               </InfoTip>
             }
-            items={pages.map((page) => ({ id: page.id, label: page.title }))}
+            items={choices.map((page) => ({ id: page.id, label: page.title }))}
             value={pageId}
             isDisabled={busy}
             onChange={(id) => {
@@ -457,7 +492,7 @@ export function NewMeetingDialog({
           />
         )}
         {/* Where the event goes, only with two or more calendars that take events (spec 0024 milestone 5). */}
-        {calendars?.status === 'ready' && writable.length > 1 && pageDestination !== undefined && (
+        {calendars?.status === 'ready' && writable.length > 1 && pageDestination !== undefined && forId === ME && (
           <CalendarChoice
             calendars={calendars}
             destination={pageDestination(pageId)}

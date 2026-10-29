@@ -76,7 +76,7 @@ import {
   type CalendarsPanel,
 } from './CalendarsAside.tsx';
 import { ALL_CALENDARS, CalendarSwitch, showsOf, switchCalendars, useCalendarChoice } from './CalendarSwitch.tsx';
-import { DrawCard } from './DrawCard.tsx';
+import { DrawCard, type ForPerson } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import type { BookingsSearch } from './search.ts';
@@ -283,10 +283,10 @@ function FilterMenu({
 /** A booking's card: its state, the guest, when, who, the note, Join call, and the host's changes while it's ahead. */
 function BookingCard({
   booking,
-  personHref,
+  personHref: hrefGiven,
   locale,
-  actions,
-  onAsk,
+  actions: actionsGiven,
+  onAsk: askGiven,
   focusOnMount,
   headingLevel = 4,
 }: {
@@ -304,6 +304,12 @@ function BookingCard({
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
   const { timeZone } = useFormatSettings();
+  // A colleague's booking the reader may only See (spec 0037, AC-1262): the guest's name, the page, the time and the
+  // status are all it holds, so it shows those and nothing to act on, rather than empty email and answer rows.
+  const isSeeOnly = booking.seeOnly === true;
+  const actions = isSeeOnly ? undefined : actionsGiven;
+  const onAsk = isSeeOnly ? undefined : askGiven;
+  const personHref = isSeeOnly ? undefined : hrefGiven;
   // Read again when its host changes (a reassign or a move through the rotation lands).
   // Read again after a reassign here (a second rotation's seat leaves the organiser as it was).
   const [reads, setReads] = useState(0);
@@ -359,9 +365,11 @@ function BookingCard({
                 action: <Button variant="ghost" icon="x" label={strings.unlink(record.name)} onPress={unlink} />,
               }),
         };
-  const hasNotice = booking.hostRemoved === true || (isConfirmed && (booking.eventFailed || booking.needsHost));
+  const hasNotice =
+    isSeeOnly || booking.hostRemoved === true || (isConfirmed && (booking.eventFailed || booking.needsHost));
   const notices = hasNotice ? (
     <>
+      {isSeeOnly && <Callout tone="info">{strings.seeOnly(booking.hostName)}</Callout>}
       {booking.hostRemoved === true && <Callout tone="info">{strings.hostRemoved}</Callout>}
       {booking.eventFailed && isConfirmed && <Callout tone="warning">{strings.eventFailed}</Callout>}
       {booking.needsHost && isConfirmed && (
@@ -407,8 +415,8 @@ function BookingCard({
             id: `${booking.id}-guest`,
             name: booking.visitorName,
             ...(personHref === undefined ? {} : { href: personHref }),
-            detail: booking.visitorEmail,
-            isDetailCopyable: true,
+            // See only holds no email (AC-1262): the guest's name alone, never an empty line to copy.
+            ...(booking.visitorEmail === '' ? {} : { detail: booking.visitorEmail, isDetailCopyable: true }),
           },
           ...booking.guests.map((guest) => ({ id: `${booking.id}-${guest}`, name: guest })),
         ]}
@@ -820,6 +828,9 @@ export type BlockDraft = Omit<CreateTimeBlockInput, 'workspace' | 'mutationId' |
 /** A block's turn to show at once, before the server answers (the data layer names it). */
 export type BlockPreview = Omit<TimeBlockOccurrence, 'key' | 'blockId'>;
 
+/** Nobody to act for: one empty list, so the cards' props stay the same between draws. */
+const NO_PEOPLE: readonly ForPerson[] = [];
+
 /** Props for the calendar: its held week, the address, and what Filter offers. */
 export interface BookingsCalendarScreenProps {
   readonly slug: string;
@@ -862,6 +873,11 @@ export interface BookingsCalendarScreenProps {
   readonly toasts: Toasts;
   /** The host's changes to a booking from its card (AC-640). */
   readonly actions?: HostBookingActions;
+  /**
+   * The colleagues the member Manages (spec 0037, AC-1272, from `members.visible`): Block this time and New meeting
+   * show For, Me first, when there is anyone. Absent or empty, neither does.
+   */
+  readonly forPeople?: readonly ForPerson[];
 }
 
 /** Bookings › Calendar: the range, previous week, Today, next week and Filter, then the grid and the week's count. */
@@ -912,6 +928,7 @@ type CardAsk = CardQuestion & { readonly opening: number };
 /** The week view's toolbar, grid and count. */
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
+  const forPeople = props.forPeople ?? NO_PEOPLE;
   const { workingStart, toasts, onBookAsHost, newBookingKey } = props;
   // The reader: a colleague's booking (an admin's Everyone) names its host on its block.
   const me = useMyAccess()?.memberId;
@@ -1403,8 +1420,13 @@ function WeekView(props: BookingsCalendarScreenProps) {
                         createLinkOnlyHref={newLinkOnlyPageHref(slug)}
                         overlapping={overlapping(bookings, draft, timeZone)}
                         onSpanChange={setDraft}
-                        onClose={({ kind, repeat, label, pageId }) => {
+                        forPeople={forPeople}
+                        onClose={({ kind, repeat, label, pageId, forMemberId }) => {
                           const drawn = draft;
+                          const forName =
+                            forMemberId === undefined
+                              ? undefined
+                              : forPeople.find((person) => person.id === forMemberId)?.name;
                           const preview: BlockPreview = {
                             kind,
                             repeat,
@@ -1422,15 +1444,22 @@ function WeekView(props: BookingsCalendarScreenProps) {
                               timeZone,
                               ...(label === undefined ? {} : { label }),
                               ...(pageId === undefined ? {} : { pageId }),
+                              ...(forMemberId === undefined ? {} : { forMemberId }),
                             },
-                            [preview],
+                            // A colleague's block isn't the member's own time: no preview on their week.
+                            forMemberId === undefined ? [preview] : [],
                           ).then(
                             (made) => {
                               // Saved: the card closes, and the toast offers Undo (as calendars do).
                               if (draftRef.current === drawn) setDraft(undefined);
                               const toast = toasts.toast({
                                 tone: 'success',
-                                message: kind === 'hold' ? strings.timeHeld : strings.timeBlocked,
+                                message:
+                                  kind === 'hold'
+                                    ? strings.timeHeld
+                                    : forName === undefined
+                                      ? strings.timeBlocked
+                                      : strings.timeBlockedFor(forName),
                                 action: {
                                   label: strings.undo,
                                   onAction: () => undoBlock(made.id),
@@ -1541,6 +1570,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           locale={locale}
           hasCalendar={connections.length > 0}
           pages={bookable}
+          forPeople={forPeople}
           newKey={newBookingKey}
           people={props.peopleSearch}
           calendars={calendarList}

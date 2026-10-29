@@ -28,6 +28,14 @@ export interface CloseInput {
   readonly label?: string;
   /** A hold for one private page; absent holds for any. */
   readonly pageId?: string;
+  /** Whose time it closes, when not the member's: a colleague they Manage (spec 0037, AC-1272). */
+  readonly forMemberId?: string;
+}
+
+/** A colleague whose scheduling the member Manages: the For picker's choices (spec 0037, AC-1272). */
+export interface ForPerson {
+  readonly id: string;
+  readonly name: string;
 }
 
 /** Props for DrawCard. */
@@ -46,12 +54,17 @@ export interface DrawCardProps {
   readonly onClose: (input: CloseInput) => Promise<void>;
   /** Book someone in: opens the New meeting dialog for the span; absent when it can't be booked (it has begun, no page). */
   readonly onBook?: () => void;
+  /** The colleagues the member Manages: Block this time shows For (Me first) when there is anyone (AC-1272). */
+  readonly forPeople?: readonly ForPerson[];
 }
 
 type Mode = { readonly kind: 'choose' } | { readonly kind: 'block' } | { readonly kind: 'hold' };
 
 /** Any link only page: reserved time's shared choice. */
 const ANY_PAGE = 'any';
+
+/** The For picker's own choice: the member themself. */
+const ME = '@me';
 
 /** The drawn span's card: its choices, then the picked one's form; saving closes it (the screen does). */
 export function DrawCard({
@@ -63,6 +76,7 @@ export function DrawCard({
   onSpanChange,
   onClose,
   onBook,
+  forPeople = [],
 }: DrawCardProps) {
   const [mode, setMode] = useState<Mode>({ kind: 'choose' });
   // Saving: the span, Back and the form wait, so nothing changes under the save.
@@ -87,6 +101,7 @@ export function DrawCard({
           pending={pending}
           onPending={setPending}
           onClose={onClose}
+          forPeople={isHold ? [] : forPeople}
         />
       </SpanCard>
     );
@@ -113,7 +128,9 @@ function CloseForm({
   pending,
   onPending,
   onClose,
+  forPeople,
 }: {
+  readonly forPeople: readonly ForPerson[];
   readonly weekday: string;
   readonly isHold: boolean;
   readonly privatePages: readonly { readonly id: string; readonly title: string }[];
@@ -125,6 +142,7 @@ function CloseForm({
   const [repeat, setRepeat] = useState<TimeBlockRepeat>('once');
   const [page, setPage] = useState(ANY_PAGE);
   const [label, setLabel] = useState('');
+  const [forId, setForId] = useState(ME);
   const [failure, setFailure] = useState<string | undefined>(undefined);
   const submit = () => {
     // Enter in Why while saving would send it twice.
@@ -137,6 +155,7 @@ function CloseForm({
       repeat: isHold ? 'once' : repeat,
       ...(trimmed === '' ? {} : { label: trimmed }),
       ...(isHold && page !== ANY_PAGE ? { pageId: page } : {}),
+      ...(isHold || forId === ME ? {} : { forMemberId: forId }),
     })
       .catch((error: unknown) => {
         setFailure(isDataError(error) ? error.message : isHold ? strings.holdFailed : strings.blockFailed);
@@ -160,6 +179,19 @@ function CloseForm({
   }
   return (
     <>
+      {forPeople.length > 0 && (
+        <Select
+          label={strings.forWhom}
+          items={[
+            { id: ME, label: strings.forMe },
+            ...forPeople.map((person) => ({ id: person.id, label: person.name })),
+          ]}
+          value={forId}
+          isDisabled={pending}
+          isSearchable={forPeople.length > 8}
+          onChange={(id) => setForId(id ?? ME)}
+        />
+      )}
       {isHold ? (
         <Select
           label={strings.holdFor}

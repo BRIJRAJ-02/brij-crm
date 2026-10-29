@@ -51,7 +51,7 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
         .ready()
         .catch(() => undefined);
     const calendar = data.calendar.view(params.slug);
-    const [objects, pages, hours] = await Promise.all([
+    const [objects, pages, hours, , , access, visible] = await Promise.all([
       data.objects.list(params.slug),
       // The Link filter's choices; a member without booking pages has none.
       data.bookingPages.held(params.slug).catch(() => []),
@@ -59,10 +59,16 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
       data.bookings.hours(params.slug, zone).catch(() => undefined),
       week.ready(),
       calendar.ready().catch(() => undefined),
+      data.access.mine(params.slug),
+      // Whom the member Manages, for For on Block time and New meeting (spec 0037, AC-1272); none when it fails.
+      data.scheduling.visible(params.slug).catch(() => []),
     ]);
     const state = calendar.getSnapshot();
     const connections = state.status === 'ready' ? state.connections.filter((each) => each.status !== 'revoked') : [];
-    return { objects, pages, connections, availability: hours?.availability };
+    const forPeople = visible
+      .filter((member) => member.canManage && member.id !== access.memberId)
+      .map((member) => ({ id: member.id, name: member.name }));
+    return { objects, pages, connections, availability: hours?.availability, forPeople };
   },
   pendingComponent: CalendarPending,
   errorComponent: CalendarError,
@@ -90,6 +96,8 @@ interface CalendarLoaded {
   readonly pages: readonly BookingPageView[];
   readonly connections: readonly CalendarConnectionView[];
   readonly availability: BookingAvailability | undefined;
+  /** The colleagues the member Manages: For on Block time and New meeting (AC-1272). */
+  readonly forPeople: readonly { readonly id: string; readonly name: string }[];
 }
 
 function CalendarRoute() {
@@ -103,12 +111,12 @@ function CalendarRoute() {
 function CalendarPending() {
   return (
     <LoadingNow>
-      <Calendar objects={[]} pages={[]} connections={[]} availability={undefined} />
+      <Calendar objects={[]} pages={[]} connections={[]} availability={undefined} forPeople={[]} />
     </LoadingNow>
   );
 }
 
-function Calendar({ objects, pages, connections, availability }: CalendarLoaded) {
+function Calendar({ objects, pages, connections, availability, forPeople }: CalendarLoaded) {
   const { slug } = Route.useParams();
   // The member's zone, as the workspace frame's FormatScope holds it (their Preferences, else the browser's).
   const { timeZone } = useFormatSettings();
@@ -153,6 +161,7 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
       peopleSearch={peopleSearchOf(data, slug, objects)}
       pageDestination={(pageId) => data.calendar.pageDestination(slug, pageId)}
       newBookingKey={data.bookings.newKey}
+      forPeople={forPeople}
       toasts={toasts}
       actions={actions}
       onSearch={(next) =>
