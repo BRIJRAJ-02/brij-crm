@@ -12,7 +12,7 @@
 // demoted since the request came in acts with their role now. Two grants at
 // once take the delegate's and the target's advisory locks in key order, so
 // neither cap can be passed (AC-1256).
-import { and, asc, count, eq, or } from 'drizzle-orm';
+import { and, asc, count, eq, or, sql } from 'drizzle-orm';
 import {
   DELEGATES_PER_MEMBER,
   DELEGATIONS_PER_DELEGATE,
@@ -29,7 +29,7 @@ import { inWorkspace } from '../access/run.ts';
 import { parseSchedulingLevel, type SchedulingLevel } from '../access/scheduling.ts';
 import { lockKey } from '../booking/locks.ts';
 import { audit, touched } from '../engine/definitions.ts';
-import { checkId, newId } from '../engine/ids.ts';
+import { checkId, newId, uuidList } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
@@ -233,7 +233,10 @@ export async function grantDelegation(
         .for('update');
       if (existing !== undefined) {
         const view = toView(existing);
-        if (view !== undefined && existing.level === level && existing.grantedBySelf === overSelf) return view;
+        // The same grant by the same granter changes nothing; by someone else it becomes theirs (decision 7 reads
+        // who last set it), so an owner's grant again over a member since made an admin takes effect.
+        const same = existing.level === level && existing.grantedBySelf === overSelf;
+        if (view !== undefined && same && existing.updatedByMemberId === me) return view;
         const [changed] = await tx
           .update(scheduleDelegations)
           .set({ level, grantedBySelf: overSelf, ...touched(scope) })
@@ -388,7 +391,8 @@ async function mayManageOver(
   const [target] = await tx
     .select({ role: members.role })
     .from(members)
-    .where(and(eq(members.workspaceId, workspaceId), eq(members.id, targetMemberId)));
+    .where(and(eq(members.workspaceId, workspaceId), eq(members.id, targetMemberId), eq(members.status, 'active')))
+    .for('share');
   if (target === undefined) return false;
   if (target.role === 'member') return true;
   return target.role === 'admin' && role === 'owner';
@@ -401,6 +405,8 @@ async function mayManageOver(
  */
 async function deleteMemberDelegations(context: WriteContext, memberId: string): Promise<void> {
   const { tx, scope } = context;
+  // Everyone delegations stop reaching them, and grants they last set over admins stop counting (decision 7).
+  const reached = await delegatesReachedBy(tx, scope.workspaceId, [memberId]);
   const gone = await tx
     .delete(scheduleDelegations)
     .where(
@@ -410,7 +416,7 @@ async function deleteMemberDelegations(context: WriteContext, memberId: string):
       ),
     )
     .returning({ delegate: scheduleDelegations.delegateMemberId });
-  const delegates = [...new Set(gone.map((row) => row.delegate))].filter((id) => id !== memberId);
+  const delegates = [...new Set([...reached, ...gone.map((row) => row.delegate)])].filter((id) => id !== memberId);
   if (delegates.length > 0) context.record({ access: delegates });
 }
 
@@ -420,3 +426,24 @@ export const delegationsRemoval: RemovalEffect = {
   constraints: ['schedule_delegations_delegate', 'schedule_delegations_target_member'],
   run: deleteMemberDelegations,
 };
+
+/**
+ * The delegates whose reach changes when `memberIds` change role, leave or join (spec 0037, AC-1274): those holding
+ * a delegation over one of them, every holder of an everyone delegation (owners and admins are left out of it), and
+ * those holding a delegation one of them last set (decision 7 reads the granter's role now). One indexed read inside
+ * the change's own transaction; the caller names them in its `access` row.
+ */
+export async function delegatesReachedBy(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  memberIds: readonly string[],
+): Promise<readonly string[]> {
+  if (memberIds.length === 0) return [];
+  const ids = uuidList(memberIds);
+  const found = await tx.execute<{ id: string }>(sql`
+    select distinct delegate_member_id::text as id from schedule_delegations
+    where workspace_id = ${workspaceId}::uuid
+      and (target_member_id = any(${ids}) or target_type = 'everyone' or updated_by_member_id = any(${ids}))
+  `);
+  return found.rows.map((row) => row.id);
+}

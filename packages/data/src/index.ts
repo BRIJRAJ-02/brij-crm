@@ -1693,6 +1693,10 @@ export function createDataLayer({
       spread(`resync ${workspace}`, () => {
         access.delete(workspace);
         router.resync(workspace);
+        // Whose scheduling they reach may have changed too (spec 0037, AC-1274): Bookings' lists and weeks and Home's
+        // Team today read again. Only here, for the one person named, never on every resync (a catch up reset).
+        reloadBookings(workspace);
+        homeReads.reloadAll(workspace);
       });
     });
   });
@@ -2133,10 +2137,6 @@ export function createDataLayer({
   router.onResync((workspace) => {
     calendar.changed(workspace);
     calendars.changed(workspace);
-    // Every scheduling read too (spec 0037, AC-1274): an `access` row naming the person resyncs, and whose
-    // scheduling they reach may have changed, so Bookings' lists and weeks and Home's Team today read again.
-    reloadBookings(workspace);
-    homeReads.reloadAll(workspace);
   });
 
   // Captures › Links and Forms: one held list per workspace each, patched by every write below (the list's menu, the

@@ -13,7 +13,7 @@ import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
-import { getMyAccess, removeMember } from '../members/members.ts';
+import { getMyAccess, removeMember, setMemberRole } from '../members/members.ts';
 import { testScope } from '../testing.ts';
 import { grantDelegation, listDelegations, revokeDelegation } from './delegations.ts';
 import { listVisibleMembers } from './visible.ts';
@@ -266,6 +266,21 @@ describe('admins and owners (AC-1253, AC-1255, decision 7)', () => {
         grantDelegation(stale, { delegateMemberId: priya, target: { type: 'member', memberId: bea }, level: 'view' }),
       ),
     ).toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+describe('role changes (AC-1274, decision 7)', () => {
+  it('names the delegates whose reach a promotion cut, and an owner’s grant again over the new admin takes effect', async () => {
+    const t = await team(['admin', 'member', 'member']);
+    const [admin = '', priya = '', bea = ''] = t.ids;
+    const target = { type: 'member' as const, memberId: bea };
+    await grantDelegation(t.as(admin, 'admin'), { delegateMemberId: priya, target, level: 'manage' });
+    await setMemberRole(t.as(t.owner, 'owner'), { memberId: bea, role: 'admin' }, hooks());
+    expect((await t.accessRows()).at(-1)?.sort()).toEqual([bea, priya].sort());
+    // An admin's grant no longer reaches an admin; the owner granting the same again makes it theirs.
+    expect(canActFor(await t.reachOf(priya, 'member'), bea, 'view')).toBe(false);
+    await grantDelegation(t.as(t.owner, 'owner'), { delegateMemberId: priya, target, level: 'manage' });
+    expect(canActFor(await t.reachOf(priya, 'member'), bea, 'manage')).toBe(true);
   });
 });
 

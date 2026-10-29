@@ -104,9 +104,8 @@ describe('the reach from the role', () => {
     expect(roleReach(SYSTEM_ACCESS)).toBe('manage');
   });
 
-  it('gives a key the reach its scopes name, and nothing to an email link', () => {
-    expect(roleReach(keyAccess('k', ['schedule.view']))).toBe('view');
-    expect(roleReach(keyAccess('k', ['schedule.manage', 'schedule.view']))).toBe('manage');
+  it('gives a key no reach (keys never hold schedule.*, decision 7), and nothing to an email link', () => {
+    expect(roleReach(keyAccess('k', ['schedule.view', 'schedule.manage']))).toBeUndefined();
     // `booking.admin` is for things, not people's time (decision 12).
     expect(roleReach(keyAccess('k', ['booking.admin']))).toBeUndefined();
     expect(roleReach(emailLinkAccess(ME))).toBeUndefined();

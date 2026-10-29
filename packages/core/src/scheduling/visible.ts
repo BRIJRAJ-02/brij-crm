@@ -7,7 +7,8 @@ import { sql } from 'drizzle-orm';
 import type { VisibleMembers } from '@crm/contracts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { canActFor, reachSummary, schedulingReach } from '../access/scheduling.ts';
+import { canActFor, reachSummary, roleReach, schedulingReach } from '../access/scheduling.ts';
+import { uuidList } from '../engine/ids.ts';
 
 /** The most members the answer holds (the Members page's own cap). */
 const VISIBLE_MAX = 1000;
@@ -22,16 +23,10 @@ export async function listVisibleMembers(scope: EngineScope): Promise<VisibleMem
     const reach = await schedulingReach(tx, scope);
     // Without a reach over everyone, only the caller and the members reached one by one are named in the read.
     const named = reach.all === undefined ? [me, ...reach.members.keys()] : undefined;
-    const within =
-      named === undefined
-        ? sql`true`
-        : sql`id = any(array[${sql.join(
-            named.map((id) => sql`${id}`),
-            sql`, `,
-          )}]::uuid[])`;
+    const within = named === undefined ? sql`true` : sql`id = any(${uuidList(named)})`;
     const rows = await tx.execute<{ id: string; name: string }>(sql`
       select id::text as id, name from members
-      where status = 'active' and ${within}
+      where workspace_id = ${scope.workspaceId}::uuid and status = 'active' and ${within}
       order by (id = ${me}::uuid) desc, lower(name), id
       limit ${VISIBLE_MAX}
     `);
@@ -46,6 +41,11 @@ export async function listVisibleMembers(scope: EngineScope): Promise<VisibleMem
 /** What `access.mine` says of the caller's reach (AC-1261): one reach read. Undefined for anyone but a member. */
 export async function mySchedulingReach(scope: EngineScope): Promise<ReturnType<typeof reachSummary> | undefined> {
   checkScope(scope);
-  if (scope.access.principal.kind !== 'member') return undefined;
+  const { principal } = scope.access;
+  if (principal.kind !== 'member') return undefined;
+  // Owners and admins manage everyone through their role: nothing to read.
+  if (roleReach(scope.access) === 'manage') {
+    return reachSummary({ self: principal.memberId, all: 'manage', members: new Map(), hoursSeenOnly: new Set() });
+  }
   return inWorkspace(scope, async (tx) => reachSummary(await schedulingReach(tx, scope)));
 }

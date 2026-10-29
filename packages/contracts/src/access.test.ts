@@ -174,7 +174,7 @@ describe('the role table', () => {
 });
 
 describe('the key scope catalog', () => {
-  it('holds every permission but the nine that stay with people, plus the two data levels', () => {
+  it('holds every permission but the thirteen that stay with people, plus the two data levels', () => {
     for (const forbidden of [
       'security.manage',
       'members.manage',
@@ -185,13 +185,17 @@ describe('the key scope catalog', () => {
       'workspace.delete',
       'support.grant',
       'audit.read',
+      'schedule.view',
+      'schedule.view.team',
+      'schedule.manage',
+      'schedule.manage.team',
     ]) {
       expect(KEY_SCOPES).not.toContain(forbidden);
     }
     expect(KEY_SCOPES).toContain('schema.manage');
     expect(KEY_SCOPES).toContain('records.export');
     expect(KEY_SCOPES.slice(-2)).toEqual([...KEY_DATA_SCOPES]);
-    expect(KEY_SCOPES).toHaveLength(PERMISSION_NAMES.length - 9 + 2);
+    expect(KEY_SCOPES).toHaveLength(PERMISSION_NAMES.length - 13 + 2);
   });
 });
 

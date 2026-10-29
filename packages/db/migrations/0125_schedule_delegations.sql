@@ -48,7 +48,6 @@ ALTER TABLE "schedule_delegations" ADD CONSTRAINT "schedule_delegations_target_m
 ALTER TABLE "schedule_delegations" ADD CONSTRAINT "schedule_delegations_created_by" FOREIGN KEY ("workspace_id","created_by_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "schedule_delegations" ADD CONSTRAINT "schedule_delegations_updated_by" FOREIGN KEY ("workspace_id","updated_by_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "schedule_delegations_one" ON "schedule_delegations" USING btree ("workspace_id","delegate_member_id","target_type",coalesce("target_member_id", "target_team_id", '00000000-0000-0000-0000-000000000000'::uuid));--> statement-breakpoint
-CREATE INDEX "schedule_delegations_by_delegate" ON "schedule_delegations" USING btree ("workspace_id","delegate_member_id");--> statement-breakpoint
 CREATE INDEX "schedule_delegations_by_target_member" ON "schedule_delegations" USING btree ("workspace_id","target_member_id") WHERE "schedule_delegations"."target_member_id" is not null;--> statement-breakpoint
 CREATE INDEX "schedule_delegations_by_target_team" ON "schedule_delegations" USING btree ("workspace_id","target_team_id") WHERE "schedule_delegations"."target_team_id" is not null;--> statement-breakpoint
 -- Hand written from here.
