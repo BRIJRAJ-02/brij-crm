@@ -156,6 +156,14 @@ async function moveTasks(
   return { ...next, counts: { done: ids.length, refused } };
 }
 
+/** Why a hand on stopped: the remover no longer manages members. */
+export const REASSIGN_FORBIDDEN =
+  'You no longer manage members, so the rest of their records and tasks weren’t handed on.';
+
+/** Why a hand on stopped: the member chosen to take over left the workspace. */
+export const REASSIGN_HEIR_GONE =
+  'The member chosen to take over left the workspace, so the rest of the records and tasks weren’t handed on.';
+
 /** The reassignment kind: a member's heavy cursor job, cancellable, 200 records or tasks a batch. */
 export function reassignKind(): KindDefinition<ReassignParams> {
   return defineKind<ReassignParams>({
@@ -172,8 +180,11 @@ export function reassignKind(): KindDefinition<ReassignParams> {
       toMemberId: '00000000-0000-7000-8000-000000000002',
     },
     async step(context, input) {
-      // A remover who no longer manages members (demoted since) hands nothing more on.
-      if (!can(context.scope.access, 'members.manage')) return { finished: true, counts: { done: 0 } };
+      // A remover who no longer manages members (demoted since) hands nothing more on, and the job says it stopped
+      // rather than reporting success (late trap #24).
+      if (!can(context.scope.access, 'members.manage')) {
+        return { finished: true, counts: { done: 0 }, failed: { code: 'FORBIDDEN', message: REASSIGN_FORBIDDEN } };
+      }
       // The chosen member may have left since: their work is never handed to someone no longer here.
       const heir = await context.tx.execute(sql`
         select 1 from members
@@ -181,7 +192,9 @@ export function reassignKind(): KindDefinition<ReassignParams> {
           and status = 'active'
         for share
       `);
-      if (heir.rows.length === 0) return { finished: true, counts: { done: 0 } };
+      if (heir.rows.length === 0) {
+        return { finished: true, counts: { done: 0 }, failed: { code: 'NOT_FOUND', message: REASSIGN_HEIR_GONE } };
+      }
       const at = Checkpoint.safeParse(input.job.checkpoint);
       const checkpoint = at.success ? at.data : { phase: 'records' as const };
       return checkpoint.phase === 'records'

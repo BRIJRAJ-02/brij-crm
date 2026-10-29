@@ -287,6 +287,8 @@ describe('handing their work on (AC-816)', () => {
     });
     await setMemberRole(w.owner, { memberId: w.ann, role: 'member' });
     await drive(runnerFor(registry), w.workspaceId, jobId);
+    // Said as stopped, never as done (late trap #24).
+    expect((await jobRow(jobId))?.status).toBe('failed');
     expect(await w.ownerOf(record)).toEqual([w.gus]);
     expect(await w.assigneeOf(open)).toBe(w.gus);
     // Leaving with someone named is refused: the job would run as someone no longer here.
@@ -307,7 +309,7 @@ describe('handing their work on (AC-816)', () => {
     const { jobId = '' } = await removeMember(w.owner, { memberId: w.gus, reassignTo: w.hal }, [], { jobs: registry });
     await leaveWorkspace(w.halScope);
     await drive(runnerFor(registry), w.workspaceId, jobId);
-    expect((await jobRow(jobId))?.status).toBe('succeeded');
+    expect((await jobRow(jobId))?.status).toBe('failed');
     expect(await w.ownerOf(record)).toEqual([w.gus]);
   });
 });
