@@ -1,6 +1,6 @@
 // The link page journey end to end (flow walks, 29 October 2026): a new workspace's link page is live from the
-// start; Edit page adds a link (refused until it has a title) and an email signup, and Done shows them in the
-// preview; a visitor on a phone opens the page, finds both, and signs up; the owner finds the signup under
+// start; Edit page adds a link by its address alone (its site becomes its title) and an email signup, and Done
+// shows them in the preview; a visitor on a phone opens the page, finds both, and signs up; the owner finds the signup under
 // Captures › Forms with its one submission.
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
@@ -38,13 +38,11 @@ test.describe('the link page journey', () => {
     await page.getByRole('button', { name: 'Edit page' }).click();
     await expect(page).toHaveURL(/edit=true/);
 
-    // A link: the address alone is refused, named on its Title.
+    // A link by its address alone: left empty, its title is the site, said in the Title's placeholder first.
     await page.getByRole('button', { name: 'Add item' }).click();
     const add = page.getByRole('dialog', { name: 'Add to your link page' });
-    await add.getByLabel('Address').fill('example.com/portfolio');
-    await add.getByRole('button', { name: /^Add item/ }).click();
-    await expect(add.getByText('Give the link a title.')).toBeVisible();
-    await add.getByLabel('Title').fill('Portfolio');
+    await add.getByLabel('Address').fill('www.example.com/portfolio');
+    await expect(add.getByLabel('Title')).toHaveAttribute('placeholder', 'example.com');
     await add.getByRole('button', { name: /^Add item/ }).click();
     await expect(add).toBeHidden();
 
@@ -55,7 +53,7 @@ test.describe('the link page journey', () => {
     await expect(add).toBeHidden();
 
     const preview = page.getByRole('region', { name: 'Preview' }).or(page.locator('main'));
-    await expect(preview.getByText('Portfolio').first()).toBeVisible();
+    await expect(preview.getByText('example.com', { exact: true }).first()).toBeVisible();
     await expect(preview.getByText('Join the list').first()).toBeVisible();
     await page.getByRole('button', { name: 'Done' }).click();
 
@@ -63,7 +61,10 @@ test.describe('the link page journey', () => {
     const visitorContext = await browser.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true });
     const visitor = await visitorContext.newPage();
     await visitor.goto(publicPage ?? '');
-    await expect(visitor.getByRole('link', { name: /Portfolio/ })).toHaveAttribute('href', /example\.com\/portfolio/);
+    await expect(visitor.getByRole('link', { name: /^example\.com/ })).toHaveAttribute(
+      'href',
+      /example\.com\/portfolio/,
+    );
     await visitor.getByText('Join the list').click();
     await expect(visitor).toHaveURL(/\/f\//);
     await visitor.getByLabel('Email').fill(`subscriber-${tag}@example.com`);

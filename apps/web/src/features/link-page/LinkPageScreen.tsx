@@ -773,22 +773,8 @@ function Blocks({
   }
   return (
     <PreviewLayout preview={preview} previewShare="wide">
-      {/* Only where there is a page to dress: the screen already sends a person with no handle to Profile. */}
-      <AppearanceCard
-        theme={theme}
-        onChange={chooseTheme}
-        {...(themeRefusal === undefined ? {} : { refusal: themeRefusal })}
-      />
-      <SharingCard
-        indexable={indexable}
-        {...(shareImage === undefined ? {} : { shareImage })}
-        onShareImage={chooseShareImage}
-        onChange={chooseIndexable}
-        {...(indexableRefusal === undefined ? {} : { refusal: indexableRefusal })}
-      />
-      {/* Their own set of links, changed here rather than only inside a booking page's editor (the owner, 26
-          October 2026): a link page always shows them, so this card has no switch. */}
-      <SocialsCardSlot data={data} slug={slug} onPreviewLinks={setSocialPreview} isTeam={false} isOwner />
+      {/* What is on the page comes first (its blocks, the archived ones, the social links), then how it looks:
+          content is what the editor is opened for (flow walks, 29 October 2026: L2). */}
       <Card
         title={strings.blocks}
         description={[
@@ -840,6 +826,22 @@ function Blocks({
           />
         </Card>
       )}
+      {/* Their own set of links, changed here rather than only inside a booking page's editor (the owner, 26
+          October 2026): a link page always shows them, so this card has no switch. */}
+      <SocialsCardSlot data={data} slug={slug} onPreviewLinks={setSocialPreview} isTeam={false} isOwner />
+      {/* Only where there is a page to dress: the screen already sends a person with no handle to Profile. */}
+      <AppearanceCard
+        theme={theme}
+        onChange={chooseTheme}
+        {...(themeRefusal === undefined ? {} : { refusal: themeRefusal })}
+      />
+      <SharingCard
+        indexable={indexable}
+        {...(shareImage === undefined ? {} : { shareImage })}
+        onShareImage={chooseShareImage}
+        onChange={chooseIndexable}
+        {...(indexableRefusal === undefined ? {} : { refusal: indexableRefusal })}
+      />
       {Editor !== undefined && editing !== undefined && (
         <EditorOrFrame
           // Adding keeps one dialog across the kinds (the frame owns it); editing opens the kind's own, as before.
