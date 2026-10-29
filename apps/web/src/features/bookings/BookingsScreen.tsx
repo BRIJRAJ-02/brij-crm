@@ -116,15 +116,24 @@ const CALENDAR_HUES: readonly Hue[] = ['blue', 'green', 'purple', 'orange', 'sky
 
 /**
  * Where, as the card's row: a call by its provider ("Google Meet", never its address; Join is in the footer), a
- * phone call, or the place.
+ * phone call, or the place. A video call no calendar made a link for, still to come, says under it that the host
+ * owes one: the guest was told the host will send it, and nothing here said so (crm-f7's booking walk, 28 Oct 2026).
  */
-function whereRowOf(booking: BookingListItem): Pick<MeetingCardRow, 'icon' | 'label' | 'value'> {
+function whereRowOf(
+  booking: BookingListItem,
+  isAhead: boolean,
+): Pick<MeetingCardRow, 'icon' | 'label' | 'value' | 'detail'> {
   switch (booking.location.type) {
     case 'video':
       return {
         icon: 'video',
         label: strings.where,
         value: booking.videoUrl === undefined ? strings.video : providerOf(booking.videoUrl),
+        // Under it, quieter, in the words of the host's email. Not beside a failed event, whose notice already asks
+        // the host to add the meeting by hand.
+        ...(booking.videoUrl === undefined && isAhead && booking.status === 'confirmed' && !booking.eventFailed
+          ? { detail: strings.videoNoLink }
+          : {}),
       };
     case 'phone':
       return { icon: 'phone', label: strings.where, value: strings.phone };
@@ -401,7 +410,7 @@ function BookingCard({
           ...booking.guests.map((guest) => ({ id: `${booking.id}-${guest}`, name: guest })),
         ]}
         rows={[
-          { id: 'where', ...whereRowOf(booking) },
+          { id: 'where', ...whereRowOf(booking, Date.parse(booking.endsAt) > now.getTime()) },
           ...(linked === undefined ? [] : [linked]),
           ...(booking.note === undefined
             ? []

@@ -119,6 +119,8 @@ export const strings = {
   hostRemoved: 'Host removed',
   eventFailed: 'This booking isn’t on your calendar: the event couldn’t be made. Add it by hand.',
   video: 'Video call',
+  /** Under a video call still to come that no calendar made a link for, as the host's email says it. */
+  videoNoLink: 'No link was made. Send the guest one.',
   phone: 'Phone call to their number',
   calendar: 'Calendar',
   /** An event's call, as the card's row. */

@@ -582,6 +582,62 @@ describe('the list rows', () => {
       .toHaveAttribute('href', '/w/acme/objects/people/0199f0a0-0000-7000-8000-0000000000f3/overview');
   });
 
+  it('says the host owes a link when a video call still to come has none (crm-f7, 28 Oct 2026)', async () => {
+    // The guest is told the host will send the link; nothing here used to tell the host so.
+    const listOf = (booking: BookingListItem): MeetingsHeld => {
+      const state: MeetingsState = { ...ready, items: [{ kind: 'booking', booking }] };
+      return {
+        subscribe: () => () => undefined,
+        getSnapshot: () => state,
+        retain: () => () => undefined,
+        ready: () => Promise.resolve(),
+        loadMore: () => undefined,
+        reload: () => undefined,
+      };
+    };
+    const render = (booking: BookingListItem) =>
+      renderInApp(
+        () => (
+          <BookingsListScreen
+            slug="acme"
+            search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
+            meetings={() => listOf(booking)}
+            calendars={noCalendars}
+            onDismissNotice={() => undefined}
+            objects={[]}
+            pages={[]}
+            locale="en-GB"
+            actions={{
+              cancel: vi.fn(),
+              move: vi.fn(),
+              moveSlots: vi.fn(),
+              guestLink: vi.fn(),
+              notify: vi.fn(),
+              assignments: vi.fn(() => Promise.resolve([])),
+              reassign: vi.fn(),
+              rotations: vi.fn(() => Promise.resolve([])),
+              markNoShow: vi.fn(() => Promise.resolve()),
+            }}
+            onSearch={() => undefined}
+          />
+        ),
+        { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
+      );
+    // The booking's panel, opened as the host opens it, from its row.
+    const open = async () => {
+      await userEvent.click(page.getByRole('button', { name: 'Quick chat', exact: true }));
+    };
+    shown = await render(bookingOf());
+    await open();
+    await expect.element(page.getByText('No link was made. Send the guest one.')).toBeVisible();
+    shown.unmount();
+    // With a link made, the panel names its provider and says nothing is owed.
+    shown = await render({ ...bookingOf(), videoUrl: 'https://meet.google.com/abc-defg-hij' });
+    await open();
+    await expect.element(page.getByText('Google Meet').first()).toBeVisible();
+    await expect.element(page.getByText('No link was made. Send the guest one.')).not.toBeInTheDocument();
+  });
+
   it('with no calendar connected, starts without the calendars panel and offers Connect a calendar in the bar', async () => {
     const none = { status: 'ready', accounts: [] } as unknown as CalendarListState;
     const noneConnected: CalendarsHeld<CalendarListState> = {
