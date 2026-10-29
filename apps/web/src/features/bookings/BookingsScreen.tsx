@@ -5,7 +5,6 @@
 import {
   isDataError,
   type BookingAssignment,
-  type BookingHosts,
   type BookingListItem,
   type BookingPageView,
   type BookingsCalendarHeld,
@@ -86,8 +85,7 @@ import { assignedItems } from './assignment.ts';
 import { ReassignDialog } from './ReassignDialog.tsx';
 import { BookingDialog, useBookingActions, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
-import { useBookingsToolbarSlot } from './toolbarSlot.ts';
-import { HostsSwitch } from './HostsSwitch.tsx';
+import { useBookingsToolbarSlot, type HostsChoice } from './toolbarSlot.ts';
 import {
   addDays,
   bookingPieces,
@@ -822,16 +820,10 @@ export type BlockDraft = Omit<CreateTimeBlockInput, 'workspace' | 'mutationId' |
 /** A block's turn to show at once, before the server answers (the data layer names it). */
 export type BlockPreview = Omit<TimeBlockOccurrence, 'key' | 'blockId'>;
 
-/** Whose bookings an admin sees, and how they change it (HostsSwitch); absent for anyone else. */
-export interface HostsChoice {
-  readonly value: BookingHosts;
-  readonly onChange: (next: BookingHosts) => void;
-}
-
 /** Props for the calendar: its held week, the address, and what Filter offers. */
 export interface BookingsCalendarScreenProps {
   readonly slug: string;
-  /** Mine or Everyone, for a holder of `booking.admin` only. */
+  /** Mine or Everyone, for a holder of `booking.admin` only (the switch itself is on the strip, the layout's). */
   readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
   readonly week: BookingsCalendarHeld;
@@ -1121,12 +1113,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           <CalendarSwitch calendars={switchable} choice={choice} onChoose={choose} />
         )
       }
-      end={
-        <>
-          {props.hosts !== undefined && <HostsSwitch value={props.hosts.value} onChange={props.hosts.onChange} />}
-          <FilterMenu search={search} pages={pages} onSearch={onSearch} />
-        </>
-      }
+      end={<FilterMenu search={search} pages={pages} onSearch={onSearch} />}
     />
   );
   if (state.status === 'loading') {
@@ -1702,14 +1689,12 @@ function ListBar({
   pages,
   panel,
   hasNoCalendar,
-  hosts,
   onSearch,
 }: {
   readonly slug: string;
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
   readonly panel: CalendarsPanel;
-  readonly hosts?: HostsChoice | undefined;
   /** The calendars read and none is connected: Connect calendar in the toggle's place. */
   readonly hasNoCalendar: boolean;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
@@ -1729,7 +1714,6 @@ function ListBar({
       }
       end={
         <>
-          {hosts !== undefined && <HostsSwitch value={hosts.value} onChange={hosts.onChange} />}
           {search.source !== 'bookings' && search.link === undefined && (
             <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={hasNoCalendar} />
           )}
@@ -1748,7 +1732,7 @@ const SOURCES: readonly MeetingSource[] = ['all', 'bookings', 'calendar'];
 /** Props for the list: its held pages, the address, the calendars and what Filter offers. */
 export interface BookingsListScreenProps {
   readonly slug: string;
-  /** Mine or Everyone, for a holder of `booking.admin` only. */
+  /** Mine or Everyone, for a holder of `booking.admin` only (the switch itself is on the strip, the layout's). */
   readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
   /** The data layer's held list for a question (tab, source, the calendars picked): the same one every time. */
@@ -1875,7 +1859,6 @@ export function BookingsListScreen({
       pages={pages}
       panel={panel}
       hasNoCalendar={hasNoCalendar}
-      hosts={hosts}
       onSearch={onSearch}
     />
   );

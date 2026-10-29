@@ -7,7 +7,8 @@ import { useNavigate } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 import { BOOKINGS_TABS, bookingsTabHref, isBookingsPageTab, type BookingsPageTab } from './tabs.ts';
-import { BookingsToolbarSlot } from './toolbarSlot.ts';
+import { HostsSwitch } from './HostsSwitch.tsx';
+import { BookingsToolbarSlot, type HostsChoice } from './toolbarSlot.ts';
 
 /** Props for BookingsTabs. */
 export interface BookingsTabsProps {
@@ -16,20 +17,30 @@ export interface BookingsTabsProps {
   readonly tab: BookingsPageTab;
   /** The child route's page (an `Outlet`), drawn in the chosen tab's panel. */
   readonly children: ReactNode;
+  /**
+   * Mine · Everyone at the strip's very end, after the tab's tools, for an admin on Calendar and List: drawn by the
+   * layout, so it stands still as those tabs swap their tools in beside it.
+   */
+  readonly hosts?: HostsChoice | undefined;
 }
 
 /**
  * Calendar · List · Availability. Choosing a tab moves to its address; the panel holds whatever that address
  * renders, and the strip's end holds that tab's tools.
  */
-export function BookingsTabs({ slug, tab, children }: BookingsTabsProps) {
+export function BookingsTabs({ slug, tab, children, hosts }: BookingsTabsProps) {
   const navigate = useNavigate();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   return (
     <BookingsToolbarSlot.Provider value={slot}>
       <Tabs
         variant="bar"
-        end={<div ref={setSlot} />}
+        end={
+          <>
+            <div ref={setSlot} />
+            {hosts !== undefined && <HostsSwitch value={hosts.value} onChange={hosts.onChange} />}
+          </>
+        }
         label={strings.pageTabsLabel}
         selectedKey={tab}
         onSelectionChange={(next) => {
