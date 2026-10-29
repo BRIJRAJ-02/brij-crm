@@ -87,6 +87,11 @@ export interface ViewScreenProps {
   readonly slug: string;
   readonly object: ObjectSummary;
   readonly attributes: readonly AttributeDefinition[];
+  /**
+   * The object's archived attributes the reader may see. Only the query is run over them, so a condition or sort on
+   * one reads as archived, which the view then names (AC-480), rather than as unknown.
+   */
+  readonly archivedAttributes?: readonly AttributeDefinition[];
   readonly members: readonly MemberSummary[];
   readonly view: SavedViewSource;
   readonly views: ViewsListSource;
@@ -138,6 +143,12 @@ const FOLLOW_SPREAD_MS = 600;
 /** One view of an object: the bars, the Toolbar with its draft, and the table running the view. */
 export function ViewScreen(props: ViewScreenProps) {
   const { slug, object, attributes, members, records, opened, param, writeParam } = props;
+  // What the query runs over: the live attributes and the archived ones the reader may see (AC-480).
+  const archived = props.archivedAttributes;
+  const queried = useMemo(
+    () => (archived === undefined ? attributes : [...attributes, ...archived]),
+    [attributes, archived],
+  );
   // The object's key, so a url field (here and in the filter's value editor) checks a company's handle as its page.
   const objectKey = object.standardKey ?? object.apiSlug;
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -243,10 +254,10 @@ export function ViewScreen(props: ViewScreenProps) {
     () =>
       runningQuery(
         draft.query,
-        attributes,
+        queried,
         farAttributesFrom(attributes, (id) => far.get(id)),
       ),
-    [draft.query, attributes, far],
+    [draft.query, queried, attributes, far],
   );
   // While a through filter's far attributes load, the table keeps what it ran last (the bar says it is working).
   const [lastReady, setLastReady] = useState(effective.status === 'ready' ? effective : undefined);
@@ -261,17 +272,17 @@ export function ViewScreen(props: ViewScreenProps) {
     const savedRun = draft.isDraft
       ? runningQuery(
           saved,
-          attributes,
+          queried,
           farAttributesFrom(attributes, (id) => far.get(id)),
         )
       : undefined;
     const ids = new Set([...(running?.skipped ?? []), ...(savedRun?.status === 'ready' ? savedRun.skipped : [])]);
-    const known = [...attributes, ...[...far.values()].flat()];
+    const known = [...queried, ...[...far.values()].flat()];
     return [...ids].flatMap((id) => {
       const title = known.find((attribute) => attribute.id === id)?.title;
       return title === undefined ? [] : [title];
     });
-  }, [running, saved, draft.isDraft, attributes, far]);
+  }, [running, saved, draft.isDraft, queried, attributes, far]);
 
   // Whether the table holds ticked rows: a new query clears them, and the toast below says so (spec 0022, AC-522).
   const isTicked = useRef(false);

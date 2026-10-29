@@ -55,8 +55,15 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
     const view = context.data.views.get(params.slug, params.viewId);
     const views = context.data.views.list(params.slug, object.id);
     const membersLoading = context.data.members.list(params.slug);
-    const [attributes] = await Promise.all([
+    const [attributes, archivedAttributes] = await Promise.all([
       context.data.attributes.list(params.slug, object.id),
+      // The archived ones the reader may see, so the view can say which it runs without (spec 0020, AC-480): the
+      // live list leaves them out, so they read as unknown rather than archived. The same list settings reads, held
+      // apart; a failed read only leaves the view unexplained, never unopened.
+      context.data.attributes
+        .all(params.slug, object.id)
+        .then((all) => all.filter((attribute) => attribute.isArchived))
+        .catch(() => []),
       view.ready(),
       views.ready(),
     ]);
@@ -93,6 +100,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
       screen: {
         object,
         attributes,
+        archivedAttributes,
         members,
         view,
         views,
