@@ -335,7 +335,10 @@ describe('deleting and restoring (AC-823)', () => {
     const entry = await enterDeletedWorkspace(t.doorDeps, { userId: t.ownerUser, slug: t.slug });
     expect(entry.purgeAfter).toBe(deletion.deleted.purgeAfter);
     const restored = await restoreWorkspace(entry.scope);
-    expect(restored.name).toBe('Acme');
+    expect(restored.settings.name).toBe('Acme');
+    // Everyone told of the deletion but the owner who brought it back hears it is back (late trap #89).
+    expect(restored.notify.map((person) => person.name)).not.toContain(restored.restoredBy);
+    expect(restored.restoredBy).toBe('Ada');
     expect(await refusalOf(restoreWorkspace(entry.scope))).toMatchObject({ code: 'NOT_FOUND' });
     await expect(
       enterAsActor(

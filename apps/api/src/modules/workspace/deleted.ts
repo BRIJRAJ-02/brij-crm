@@ -2,7 +2,7 @@ import { enterDeletedWorkspace, restoreWorkspace } from '@crm/core';
 import { commitWrite } from '../../hooks.ts';
 import { authed, memberDoor } from '../../orpc.ts';
 import { sourceOf } from '../../source.ts';
-import { followInDirectory } from './router.ts';
+import { followInDirectory, tellMembersRestored } from './router.ts';
 
 /**
  * A deleted workspace's owners (bootstrap): the door refuses a deleted
@@ -23,10 +23,13 @@ export const deletedWorkspaceRouter = {
       userId: context.user.id,
       slug: input.workspace,
     });
-    const settings = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+    const restoration = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       restoreWorkspace(entry.scope, hooks, sourceOf(context)),
     );
+    const { settings } = restoration;
     await followInDirectory('restore', () => context.directory.setWorkspaceDeleted(settings.id, false));
+    // Everyone told it was deleted hears it is back, after the commit and without holding up the answer.
+    context.keepAlive(tellMembersRestored(context, restoration));
     return settings;
   }),
 };

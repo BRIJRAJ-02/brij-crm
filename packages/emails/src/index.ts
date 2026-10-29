@@ -10,6 +10,7 @@ import {
   MemberInviteEmail,
   NotificationsEmail,
   WorkspaceDeletedEmail,
+  WorkspaceRestoredEmail,
   type EmailKind,
 } from '@crm/contracts/emails';
 import { CATALOG, topicOf } from './catalog.ts';
@@ -20,7 +21,7 @@ import { bookingDocument, type BookingWords } from './templates/booking.ts';
 import { memberInvite } from './templates/invite.ts';
 import { notifications } from './templates/notifications.ts';
 import { joinApproved, joinRequest } from './templates/join.ts';
-import { workspaceDeleted } from './templates/workspace.ts';
+import { workspaceDeleted, workspaceRestored } from './templates/workspace.ts';
 import { accountDeleted } from './templates/account-deleted.ts';
 import { signInAlert } from './templates/sign-in-alert.ts';
 import { SIGN_IN_CODE_MINUTES, signInCode } from './templates/sign-in-code.ts';
@@ -48,6 +49,7 @@ export type {
   MemberInviteEmail,
   NotificationsEmail,
   WorkspaceDeletedEmail,
+  WorkspaceRestoredEmail,
   WorkspaceWelcomeEmail,
 } from '@crm/contracts/emails';
 
@@ -217,6 +219,21 @@ export async function renderJoinApproved(
     appOrigin: context.appOrigin,
     medium: 'email_invite',
   });
+}
+
+/** A restored workspace (late trap #89), to one of its active members, tagged `email_invite` as its deletion is. */
+export async function renderWorkspaceRestored(
+  params: WorkspaceRestoredEmail,
+  context: { readonly appOrigin: string; readonly workspaceName: string },
+): Promise<RenderedEmail> {
+  const parsed = WorkspaceRestoredEmail.parse(params);
+  return renderDocument(
+    workspaceRestored(parsed, {
+      workspaceName: context.workspaceName,
+      link: (path) => appUrl(context.appOrigin, path),
+    }),
+    { appOrigin: context.appOrigin, medium: 'email_invite' },
+  );
 }
 
 /** A deleted workspace (spec 0031, AC-823), to one of its active members, tagged `email_invite`. */

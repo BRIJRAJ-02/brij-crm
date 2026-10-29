@@ -59,7 +59,7 @@ async function teammate(owner: Owner) {
   await client.invitations.accept({ token: tokens.get(person.email) ?? '' });
   const me = await client.me.get();
   const { memberId } = await client.access.mine({ workspace: owner.slug });
-  return { client, memberId, userId: me.user.id };
+  return { client, memberId, userId: me.user.id, email: person.email };
 }
 
 const NOT_FOUND = { code: 'NOT_FOUND', status: 404 };
@@ -303,5 +303,8 @@ describe('deleting and restoring a workspace (AC-823)', () => {
     expect(restored.slug).toBe(owner.slug);
     expect((await mate.client.members.list({ workspace: owner.slug })).total).toBe(2);
     expect((await owner.client.me.get()).workspaces.map((w) => w.slug)).toContain(owner.slug);
+    // The teammate told it was deleted hears it is back; the owner who restored it isn't told what they did.
+    await expect.poll(() => subjects.get(mate.email)?.at(-1)).toBe(`${name} was restored`);
+    expect(subjects.get(owner.email)?.at(-1)).toBe(`${name} was deleted`);
   });
 });

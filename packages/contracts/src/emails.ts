@@ -221,6 +221,18 @@ export const WorkspaceDeletedEmail = z.strictObject({
 });
 /** A deleted workspace's notice. */
 export type WorkspaceDeletedEmail = z.infer<typeof WorkspaceDeletedEmail>;
+
+/**
+ * A restored workspace (late trap #89), to each of its active members but the owner who restored it: who did, and
+ * the way back in. Each was told it was deleted and going for good, and heard nothing when it came back.
+ */
+export const WorkspaceRestoredEmail = z.strictObject({
+  restoredBy: Name,
+  /** The workspace's address. */
+  openPath: AppPath,
+});
+/** A restored workspace's notice. */
+export type WorkspaceRestoredEmail = z.infer<typeof WorkspaceRestoredEmail>;
 /**
  * A sign in from a device not seen for the account in 90 days (spec 0033,
  * AC-897): when, the device, the approximate place, and a link to the
