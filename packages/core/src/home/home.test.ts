@@ -1,7 +1,8 @@
-// Home's own reads (spec 0041), against the real Postgres. Team today: every
-// member's day, with titles only where the reader may see them (a teammate's
-// Busy only calendar, a private event and a booking the reader can't see on
-// Bookings all read as Busy, never their titles); nothing for a key. The
+// Home's own reads (spec 0041), against the real Postgres. Team today: the
+// days of the members the reader may view (a member only their own, an admin
+// everyone's), with titles only where the reader may see them (a teammate's
+// Busy only calendar and a private event read as Busy, never their titles; a
+// co-hosted booking once in the co-host's day); nothing for a key. The
 // metrics row: this week against last, a tile the reader may not see absent,
 // the won value in the Value attribute's currency, and the figures kept a
 // minute per workspace.
@@ -113,7 +114,7 @@ const book = async (publicKey: string, start: string, name: string) => {
 };
 
 describe('Team today', () => {
-  it('shows every member’s day, titles only where the reader may see them', async () => {
+  it('shows a member only their own day, and an admin everyone’s, titles only where the reader may see them', async () => {
     const w = await workspace();
     const grace = await w.addMember('Grace', 'member');
     const linus = await w.addMember('Linus', 'member');
@@ -127,34 +128,62 @@ describe('Team today', () => {
     await meeting(w.workspaceId, [graceOpen], 'Tomorrow', '2026-11-03T10:00:00Z', '2026-11-03T11:00:00Z');
     const linusPage = await createBookingPage(linus, { id: newId(), title: 'Linus intro', timeZone: 'UTC' }, NOW);
     await book(linusPage.publicKey, '2026-11-02T09:00:00.000Z', 'Visitor');
-
-    const seen = await readTeamToday(grace, DAY, { now: NOW });
-    expect(seen.members[0]?.memberId).toBe(memberOf(grace));
-    expect(seen.members.map((each) => each.memberId).sort()).toEqual(
-      [w.memberId, memberOf(grace), memberOf(linus), memberOf(admin)].sort(),
-    );
-    const day = (scope: EngineScope, view: typeof seen) =>
+    const day = (scope: EngineScope, view: Awaited<ReturnType<typeof readTeamToday>>) =>
       view.members.find((each) => each.memberId === memberOf(scope))?.items ?? [];
-    // Her own day in full, the private event too.
+
+    // A member sees their own day alone (the owner's ask of 29 October 2026): no colleague, no colleague's booking.
+    const seen = await readTeamToday(grace, DAY, { now: NOW });
+    expect(seen.members.map((each) => each.memberId)).toEqual([memberOf(grace)]);
     expect(day(grace, seen).map((item) => item.title)).toEqual(['Pipeline review', 'Doctor']);
-    // Linus's Busy only calendar and his booking on a page Grace can't see: times only, never a title.
-    expect(day(linus, seen)).toEqual([
-      expect.objectContaining({ kind: 'booking', startsAt: '2026-11-02T09:00:00.000Z' }),
-      expect.objectContaining({ kind: 'meeting', startsAt: '2026-11-02T14:00:00.000Z' }),
-    ]);
-    expect(day(linus, seen).some((item) => item.title !== undefined)).toBe(false);
     expect(JSON.stringify(seen)).not.toContain('Salary talk');
     expect(JSON.stringify(seen)).not.toContain('Linus intro');
+    expect(JSON.stringify(seen)).not.toContain('2026-11-02T09:00:00.000Z');
 
-    // Linus sees Grace's shared meeting by its title, her private event as Busy.
     const fromLinus = await readTeamToday(linus, DAY, { now: NOW });
-    expect(day(grace, fromLinus).map((item) => item.title)).toEqual(['Pipeline review', undefined]);
-    expect(JSON.stringify(fromLinus)).not.toContain('Doctor');
+    expect(fromLinus.members.map((each) => each.memberId)).toEqual([memberOf(linus)]);
     expect(day(linus, fromLinus).map((item) => item.title)).toEqual(['Linus intro', 'Salary talk']);
+    expect(JSON.stringify(fromLinus)).not.toContain('Pipeline review');
 
-    // An admin sees every booking's page title (as on Bookings), still never a Busy only calendar's titles.
+    // An admin sees everyone, the reader first: every booking's page title (as on Bookings), a shared calendar's
+    // titles, and still never a Busy only calendar's or a private event's.
     const fromAdmin = await readTeamToday(admin, DAY, { now: NOW });
+    expect(fromAdmin.members[0]?.memberId).toBe(memberOf(admin));
+    expect(fromAdmin.members.map((each) => each.memberId).sort()).toEqual(
+      [w.memberId, memberOf(grace), memberOf(linus), memberOf(admin)].sort(),
+    );
     expect(day(linus, fromAdmin).map((item) => item.title)).toEqual(['Linus intro', undefined]);
+    expect(day(grace, fromAdmin).map((item) => item.title)).toEqual(['Pipeline review', undefined]);
+    expect(JSON.stringify(fromAdmin)).not.toContain('Doctor');
+    expect(JSON.stringify(fromAdmin)).not.toContain('Salary talk');
+  });
+
+  it('holds a co-hosted booking in the co-host’s day once, its synced event not beside it', async () => {
+    const w = await workspace();
+    const grace = await w.addMember('Grace', 'member');
+    const admin = await w.addMember('Barbara', 'admin');
+    const graceCalendar = await connect(grace, 'shared');
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'Team demo', timeZone: 'UTC' }, NOW);
+    const booked = await book(page.publicKey, '2026-11-02T09:00:00.000Z', 'Visitor');
+    // Grace co-hosts it (a collective page's other member), and her calendar holds its event too.
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into booking_hosts (workspace_id, booking_id, member_id, during, status)
+        select workspace_id, id, ${memberOf(grace)}::uuid, during, status from bookings where id = ${booked.bookingId}::uuid
+      `),
+    );
+    await meeting(
+      w.workspaceId,
+      [graceCalendar],
+      'Team demo with Visitor',
+      '2026-11-02T09:00:00Z',
+      '2026-11-02T09:30:00Z',
+    );
+    const graceDay = (await readTeamToday(grace, DAY, { now: NOW })).members[0]?.items ?? [];
+    expect(graceDay).toEqual([expect.objectContaining({ kind: 'booking', id: booked.bookingId, title: 'Team demo' })]);
+    const fromAdmin = await readTeamToday(admin, DAY, { now: NOW });
+    const of = (id: string) => fromAdmin.members.find((each) => each.memberId === id)?.items ?? [];
+    expect(of(memberOf(grace)).map((item) => [item.kind, item.title])).toEqual([['booking', 'Team demo']]);
+    expect(of(w.memberId).map((item) => [item.kind, item.title])).toEqual([['booking', 'Team demo']]);
   });
 
   it('shows a meeting the reader’s own calendar also holds in full, and busy time by its time alone', async () => {

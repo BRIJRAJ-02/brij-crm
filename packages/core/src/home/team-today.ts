@@ -1,17 +1,21 @@
-// Team today (spec 0041): every active member's day as the reader may see it,
-// in four reads whatever the team's size (no read per member). Each member's
-// bookings (by `bookings_by_host`), the meetings their connected calendars
-// hold (by `meetings_by_start`) and their busy times with nobody else invited
-// (by `calendar_busy_times_by_end`). A title shows only where the reader may
-// see it: everything of their own; a booking they may see on Bookings (their
-// page's, one they host, or everyone's with `booking.admin`); a meeting the
-// reader's own calendar holds too, or one that isn't private and whose every
-// holding calendar of that member shows Full details to teammates (sharing
-// `shared`, the setting Teammates see: Full details, the owner's call of
-// 22 October 2026). Anything else is Busy, by its time alone: never its
-// title, place, link or attendees. It needs `booking.manage` (scheduling:
-// Bookings' own gate), only a member reads it (a key reads an empty team), the
-// day must be today's (within 36 hours of now), and it writes nothing.
+// Team today (spec 0041): the day of every active member the reader may view
+// (`canActFor` over the scheduling reach, `access/scheduling.ts`: a member
+// sees only themself, an owner or admin with `booking.admin` everyone; the
+// owner's ask of 29 October 2026, "don't show someone else's booking"), in
+// four reads whatever the team's size (no read per member). Each member's
+// bookings, hosted or co-hosted (by `booking_hosts_by_member`), the meetings
+// their connected calendars hold (by `meetings_by_start`) and their busy
+// times with nobody else invited (by `calendar_busy_times_by_end`). A title
+// shows only where the reader may see it: everything of their own; a booking
+// they may see (`booking/seen.ts`: its host, a co-host, its page's owner, or
+// `booking.admin`); a meeting the reader's own calendar holds too, or one
+// that isn't private and whose every holding calendar of that member shows
+// Full details to teammates (sharing `shared`, the setting Teammates see:
+// Full details, the owner's call of 22 October 2026). Anything else is Busy,
+// by its time alone: never its title, place, link or attendees. It needs
+// `booking.manage` (scheduling: Bookings' own gate), only a member reads it (a
+// key reads an empty team), the day must be today's (within 36 hours of now),
+// and it writes nothing.
 import { sql } from 'drizzle-orm';
 import {
   TEAM_TODAY_ITEMS_MAX,
@@ -22,9 +26,10 @@ import {
 } from '@crm/contracts';
 import type { EngineScope } from '../access/mint.ts';
 import { requirePermission } from '../access/check.ts';
-import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
+import { canActFor, schedulingReach } from '../access/scheduling.ts';
 import { shownAsEvent } from '../booking/owned.ts';
+import { bookingAlias, bookingReaderOf, seesBookingSql } from '../booking/seen.ts';
 import { inputInvalid } from '../engine/refusals.ts';
 
 /** How far before the day a meeting may start and still reach into it (all day and multi day events). */
@@ -66,7 +71,10 @@ interface BusyRow extends Record<string, unknown> {
   readonly ends_at: Date | string;
 }
 
-/** Every active member's day in [from, to), the reader first, each by start; nothing for anyone but a member. */
+/**
+ * The day in [from, to) of every active member the reader may view, the reader first, each by start; nothing for
+ * anyone but a member.
+ */
 export async function readTeamToday(
   scope: EngineScope,
   input: { readonly from: string; readonly to: string },
@@ -76,7 +84,7 @@ export async function readTeamToday(
   const { principal } = scope.access;
   if (principal.kind !== 'member') return { members: [] };
   const reader = principal.memberId;
-  const everyone = can(scope.access, 'booking.admin');
+  const seer = bookingReaderOf(scope.access);
   const from = new Date(input.from);
   const to = new Date(input.to);
   const now = deps.now ?? new Date();
@@ -84,29 +92,48 @@ export async function readTeamToday(
     throw inputInvalid('from', 'Ask for today.');
   }
   return inWorkspace(scope, async (tx) => {
+    const reach = await schedulingReach(tx, scope);
+    // Only those the reach shows (spec 0037's one check): without a reach over everyone, the reader and the members
+    // reached one by one, named in the read so the cut never fills with members left out.
+    const named = reach.all === undefined ? [reader, ...reach.members.keys()] : undefined;
+    const within =
+      named === undefined
+        ? sql`true`
+        : sql`id = any(array[${sql.join(
+            named.map((id) => sql`${id}`),
+            sql`, `,
+          )}]::uuid[])`;
     const roster = (
       await tx.execute<{ id: string }>(sql`
         select id::text as id from members
-        where status = 'active'
+        where status = 'active' and ${within}
         order by (id = ${reader}::uuid) desc, lower(name), id
         limit ${TEAM_TODAY_MEMBERS_MAX}
       `)
-    ).rows.map((row) => row.id);
+    ).rows
+      .map((row) => row.id)
+      .filter((id) => canActFor(reach, id, 'view'));
     if (roster.length === 0) return { members: [] };
     const ids = sql`array[${sql.join(
       roster.map((id) => sql`${id}`),
       sql`, `,
     )}]::uuid[]`;
+    // Every booking each member hosts or co-hosts (`booking_hosts`, the host's row and a collective page's other
+    // members'), so a co-host's day holds it too and its event synced back to their calendar shows once.
     const bookingRows = (
       await tx.execute<BookingRow>(sql`
-        select b.id::text as id, b.host_member_id::text as member_id, b.starts_at, b.ends_at, p.title,
-          (${everyone} or b.host_member_id = ${reader}::uuid or p.owner_member_id = ${reader}::uuid) as seen
-        from bookings b
+        select b.id::text as id, h.member_id::text as member_id, b.starts_at, b.ends_at, p.title,
+          ${seesBookingSql(seer, bookingAlias('b'))} as seen
+        from booking_hosts h
+        join bookings b on b.workspace_id = h.workspace_id and b.id = h.booking_id
         join booking_pages p on p.workspace_id = b.workspace_id and p.id = b.page_id
-        where b.status = 'confirmed' and b.host_member_id = any(${ids})
+        where h.status = 'confirmed' and h.member_id = any(${ids})
+          -- Widened by the page's buffers, so a day further back than the booking's own bound.
+          and h.starts_at >= ${iso(new Date(from.getTime() - LOOKBACK_MS))}::timestamptz
+          and h.starts_at < ${to.toISOString()}::timestamptz
           and b.starts_at >= ${iso(new Date(from.getTime() - BOOKING_LOOKBACK_MS))}::timestamptz
           and b.starts_at < ${to.toISOString()}::timestamptz and b.ends_at > ${from.toISOString()}::timestamptz
-        order by b.starts_at, b.id
+        order by b.starts_at, b.id, h.member_id
         limit ${ROWS_MAX}
       `)
     ).rows;
