@@ -294,11 +294,14 @@ export async function storeCalendars(
     }
   }
   const meetings: MeetingChange[] = [];
-  // Gone at the provider (or past the 50): its copy first, then the row; a destination falls back.
+  // Gone from the list (or past the 50): its copy first, then the row; a destination falls back. Never its bookings:
+  // a calendar leaves the list when it is unsubscribed, unshared or crowded past the 50, none of which is the host
+  // deleting an event, so the guest's booking stands and its time stays taken (late trap #82). Only an event the
+  // host deletes cancels its booking, in the sync.
   const gone = existing.filter((row) => !listedIds.has(row.provider_calendar_id));
   let lostDestination: string | undefined;
   for (const row of gone) {
-    meetings.push(...(await dropCopy(tx, row)));
+    meetings.push(...(await dropCopy(tx, row, { cancelBookings: false })));
     await tx.execute(sql`delete from calendar_calendars where id = ${row.id}::uuid`);
     if (row.is_destination) lostDestination = row.name;
   }
@@ -430,8 +433,7 @@ export async function updateMemberCalendar(
       if (wasPulled && !nowPulled) {
         // The member turned the calendar off here; the events are still in their calendar at the provider. So the
         // copy goes and nothing else does: a display and conflicts preference must never cancel a booking a
-        // customer made. Only a calendar that is gone at the provider cancels (the drop above), which is the
-        // host deleting the event.
+        // customer made. Only the host deleting the event itself cancels its booking, in the sync.
         context.record({ meetings: await dropCopy(tx, row, { cancelBookings: false }) });
       } else if (!wasPulled && nowPulled) {
         await tx.execute(sql`update calendar_calendars set sync_state = '{}'::jsonb where id = ${row.id}::uuid`);

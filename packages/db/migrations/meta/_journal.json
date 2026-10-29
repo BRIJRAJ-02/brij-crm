@@ -862,6 +862,20 @@
       "when": 1794000000000,
       "tag": "0122_handle_hold",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1794100000000,
+      "tag": "0123_purge_link_pages",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1794200000000,
+      "tag": "0124_handle_cap",
+      "breakpoints": true
     }
   ]
 }

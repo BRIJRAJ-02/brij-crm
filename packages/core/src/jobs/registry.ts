@@ -60,6 +60,13 @@ export interface FailedJob<P> {
   readonly error: { readonly code: string; readonly message: string };
 }
 
+/** What a kind's `onSucceeded` hook gets: the job as it ended. */
+export interface SucceededJob<P> {
+  readonly id: string;
+  readonly params: P;
+  readonly startedBy: { readonly type: 'member' | 'system'; readonly memberId?: string };
+}
+
 /**
  * One kind. `mode` says whether it works through items (`job_items`, given
  * at start) or a cursor of its own (its checkpoint). Its step works only
@@ -118,6 +125,16 @@ export interface KindDefinition<P> {
    * throws. Cancelling and `WORKSPACE_GONE` don't run it.
    */
   onFailed?(context: WriteContext, job: FailedJob<P>): Promise<void>;
+  /**
+   * Runs when a step finishes the job `succeeded`, in the transaction that sets it, under the system's scope, like
+   * `onFailed`: short and idempotent, and a throw rolls the ending back to be tried again.
+   */
+  onSucceeded?(context: WriteContext, job: SucceededJob<P>): Promise<void>;
+  /**
+   * The kind tells its starter how it ended itself (an import's result email), so the runner's own email for a
+   * member's job that ended `failed` (late trap #20) leaves it out.
+   */
+  readonly tellsStarter?: boolean;
 }
 
 /** A kind of any params, as the registry holds it. */

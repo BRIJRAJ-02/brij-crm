@@ -17,6 +17,7 @@ import {
   type FormConfirmationEmail,
   type FormSubmissionEmail,
   type ImportFinishedEmail,
+  type JobFailedEmail,
   type QueuedEmailKind,
   type WorkspaceWelcomeEmail,
 } from '@crm/contracts/emails';
@@ -243,6 +244,19 @@ export function queueImportFinished(
   return queueEmail(tx, {
     kind: 'import_finished',
     ids: [input.importId],
+    to: { memberId: input.memberId },
+    params: input.params,
+  });
+}
+
+/** A member's background job that ended `failed`, to them (late trap #20): once per job. */
+export function queueJobFailed(
+  tx: WorkspaceTx,
+  input: { readonly jobId: string; readonly memberId: string; readonly params: JobFailedEmail },
+): Promise<QueuedEmail> {
+  return queueEmail(tx, {
+    kind: 'job_failed',
+    ids: [input.jobId],
     to: { memberId: input.memberId },
     params: input.params,
   });

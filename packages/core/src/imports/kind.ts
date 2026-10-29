@@ -15,6 +15,9 @@ import { ImportSettings, type EngineRefusal } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId } from '../engine/ids.ts';
 import { checkObject } from '../access/visibility.ts';
+import { memberScopeIn, type RuleSource } from '../access/door.ts';
+import { objectLevel } from '../access/policy.ts';
+import { queueImportFinished } from '../emails/queue.ts';
 import { limitsOf, takeRecordSlots } from '../engine/limits.ts';
 import { insertRecord, readRecords, updateRecord } from '../engine/records.ts';
 import { isRefusal, refuse } from '../engine/refusals.ts';
@@ -34,7 +37,7 @@ import {
   type Resolved,
 } from './links.ts';
 import { RECORDS_IMPORT, readableMatches } from './service.ts';
-import { checkSettings } from './shared.ts';
+import { checkSettings, countRows } from './shared.ts';
 import { parseAttributeInput } from '../engine/parse-value.ts';
 
 const { imports, objects, workspaceCounters } = schema;
@@ -488,8 +491,62 @@ async function liveImportObject(tx: WorkspaceTx, objectId: string): Promise<void
   if (row.archivedAt !== null) throw refuse('NOT_FOUND', 'That object is archived. Restore it first.');
 }
 
-/** The import kind. */
-export function recordsImport(): KindDefinition<ImportJobParams> {
+/**
+ * Emails the member who started an import how it ended (#30, late trap #74), in the transaction that ends its job:
+ * its counts and its summary page. Before, only a toast told them, and only while they had the app open. Nothing for
+ * a starter who can no longer read the object (an import ended by losing access says nothing of it: hidden means
+ * absent) or is no longer a member.
+ */
+async function tellStarter(
+  context: WriteContext,
+  rules: RuleSource | undefined,
+  importId: string,
+  outcome: 'done' | 'failed',
+): Promise<void> {
+  // No rules to read the starter with (a registry built with none): tell nothing rather than read them with none.
+  if (rules === undefined) return;
+  const { tx, scope } = context;
+  const { workspaceId } = scope;
+  const found = await tx.execute<{
+    file_name: string;
+    error_rows: number;
+    starter: string;
+    object_id: string;
+    plural_name: string;
+    api_slug: string;
+    slug: string;
+  }>(sql`
+    select i.file_name, i.error_rows, i.created_by_member_id::text as starter, i.object_id::text, o.plural_name,
+      o.api_slug, w.slug
+    from imports i
+    join objects o on o.workspace_id = i.workspace_id and o.id = i.object_id
+    join workspaces w on w.id = i.workspace_id
+    where i.workspace_id = ${workspaceId} and i.id = ${importId}
+  `);
+  const row = found.rows[0];
+  if (row === undefined) return;
+  const starter = await memberScopeIn(tx, scope, rules, row.starter);
+  if (starter === undefined || objectLevel(starter.access, row.object_id) === 'none') return;
+  const counts = await countRows(tx, workspaceId, importId);
+  await queueImportFinished(tx, {
+    importId,
+    memberId: row.starter,
+    params: {
+      objectName: row.plural_name,
+      // A file's name may run to 255 characters; an email's line holds 200.
+      fileName: row.file_name.slice(0, 200),
+      outcome,
+      created: counts.created,
+      updated: counts.updated,
+      skipped: counts.skipped,
+      failed: counts.refused + row.error_rows,
+      resultPath: `/w/${encodeURIComponent(row.slug)}/objects/${encodeURIComponent(row.api_slug)}/imports/${importId}`,
+    },
+  });
+}
+
+/** The import kind; `rules` are the ones its starter is read with when it tells them how it ended. */
+export function recordsImport(rules?: RuleSource): KindDefinition<ImportJobParams> {
   return defineKind<ImportJobParams>({
     kind: RECORDS_IMPORT,
     lane: 'heavy',
@@ -500,6 +557,15 @@ export function recordsImport(): KindDefinition<ImportJobParams> {
     maxAttempts: MAX_ATTEMPTS.heavy,
     batchSize: IMPORT_BATCH,
     sample: { importId: '0192f1a4-0000-7000-8000-000000000001' },
+    tellsStarter: true,
+    async onSucceeded(context, job) {
+      await tellStarter(context, rules, job.params.importId, 'done');
+    },
+    async onFailed(context, job) {
+      // A removed starter isn't told about the job their removal ended.
+      if (job.params === undefined || job.error.code === 'ACTOR_REMOVED') return;
+      await tellStarter(context, rules, job.params.importId, 'failed');
+    },
     async step(context, { job, items = [] }) {
       const { tx, scope } = context;
       const plan = await loadPlan(tx, scope, job.params.importId);

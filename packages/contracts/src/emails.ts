@@ -95,6 +95,10 @@ export const FormSubmissionEmail = z.strictObject({
   timeZone: EmailTimeZone.optional(),
   /** Where the submission opens in the app. */
   submissionPath: AppPath,
+  /** Why this member is told: the lead went to them, or they made the form (a member who is both reads `lead`). */
+  reason: z.enum(['lead', 'maker']).optional(),
+  /** False when it couldn't be added to the CRM (it ended `failed`), so the reader knows to act on it. */
+  filed: z.boolean().optional(),
 });
 /** A new submission to a form. */
 export type FormSubmissionEmail = z.infer<typeof FormSubmissionEmail>;
@@ -221,6 +225,18 @@ export const WorkspaceDeletedEmail = z.strictObject({
 });
 /** A deleted workspace's notice. */
 export type WorkspaceDeletedEmail = z.infer<typeof WorkspaceDeletedEmail>;
+
+/**
+ * A restored workspace (late trap #89), to each of its active members but the owner who restored it: who did, and
+ * the way back in. Each was told it was deleted and going for good, and heard nothing when it came back.
+ */
+export const WorkspaceRestoredEmail = z.strictObject({
+  restoredBy: Name,
+  /** The workspace's address. */
+  openPath: AppPath,
+});
+/** A restored workspace's notice. */
+export type WorkspaceRestoredEmail = z.infer<typeof WorkspaceRestoredEmail>;
 /**
  * A sign in from a device not seen for the account in 90 days (spec 0033,
  * AC-897): when, the device, the approximate place, and a link to the
@@ -262,6 +278,20 @@ export const ImportFinishedEmail = z.strictObject({
 export type ImportFinishedEmail = z.infer<typeof ImportFinishedEmail>;
 
 /**
+ * A member's background job ended `failed` (late trap #20): which job, the runner's plain sentence for why (never a
+ * value, spec 0008 AC-124), and the Background jobs page. An import says how it ended in its own email instead.
+ */
+export const JobFailedEmail = z.strictObject({
+  /** The kind's label (`jobLabel`), such as "Bulk edit". */
+  jobLabel: Line,
+  /** Why it stopped, as the job's page says it. */
+  reason: Paragraph,
+  jobsPath: AppPath,
+});
+/** A member's background job failed. */
+export type JobFailedEmail = z.infer<typeof JobFailedEmail>;
+
+/**
  * Welcome to a workspace (26 Oct 2026), to a new member once their membership exists (they made the workspace, or
  * accepted an invitation or the invite link): the button into it, and their link page, live already, with its
  * address and where to edit it. Once per membership. An approved request to join says the same in its own email.
@@ -285,6 +315,7 @@ export const EMAIL_PARAMS = {
   member_invite: MemberInviteEmail,
   sign_in_alert: SignInAlertEmail,
   import_finished: ImportFinishedEmail,
+  job_failed: JobFailedEmail,
   workspace_welcome: WorkspaceWelcomeEmail,
 } as const;
 
@@ -309,6 +340,7 @@ export const QUEUED_EMAIL_KINDS = [
   'calendar_disconnected',
   'booking_calendar_removed',
   'import_finished',
+  'job_failed',
   'workspace_welcome',
 ] as const satisfies readonly EmailKind[];
 /** A kind that goes through the workspace email queue. */
@@ -321,7 +353,7 @@ export type QueuedEmailKind = z.infer<typeof QueuedEmailKind>;
  * of them (with `EMAIL_KIND_TOPICS` below), so a change of mind is one edit.
  * An email of a topic carries a link to the member's email preferences, and
  * is skipped once its topic is off. Everything else (sign in, security,
- * calendar alerts, bookings, invitations, an import's result) always goes:
+ * calendar alerts, bookings, invitations, an import's result, a failed job) always goes:
  * the owner's default of 21 October 2026. `mentions` has no queued kind: a
  * mention is emailed once, in the notifications email (spec 0038), which
  * leaves mentions out while the topic is off.

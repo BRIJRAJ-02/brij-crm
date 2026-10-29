@@ -108,7 +108,11 @@ export async function checkFormRoutes(
         );
       }
     }
-    if (rule.then.hosts !== undefined) await checkHosts(tx, pageId, rule.then.hosts, name);
+    // Hosts checked when the route is new or changed, and on publish: a host who left the rotation after the rule was
+    // saved blocked every later autosave of the form, a label edit included (late trap #83). Publish still says so.
+    if (rule.then.hosts !== undefined && (check === 'live' || !known.has(routeKey(pageId, rule.then.hosts)))) {
+      await checkHosts(tx, pageId, rule.then.hosts, name);
+    }
   }
 }
 
@@ -160,6 +164,7 @@ export async function checkPageRoutes(
 ): Promise<void> {
   // Always given, so no write path (a copy, an import) can keep a rule over a field its writer can't see.
   await checkRuleFields(tx, fields.access, rules, fields.before);
+  const kept = new Set(fields.before.map((rule) => JSON.stringify(rule)));
   for (const [index, rule] of rules.entries()) {
     const name = ruleName(rule, index);
     if (rule.then.kind !== 'hosts') {
@@ -173,7 +178,9 @@ export async function checkPageRoutes(
     if (rule.when.rules.some((condition) => isHiddenFact(condition.key) && NUMBER_OPS.includes(condition.op))) {
       throw refuseOn('CONFIG_INVALID', `${name} compares a hidden field as a number, but it holds text.`, 'routing');
     }
-    await checkHosts(tx, pageId, rule.then.hosts, name);
+    // Only a new or changed rule's hosts: one a host has since left stays, as it is, for the page's other edits
+    // (late trap #83); at booking time a host who left is passed over, the rotation's others taking the visit.
+    if (!kept.has(JSON.stringify(rule))) await checkHosts(tx, pageId, rule.then.hosts, name);
   }
 }
 

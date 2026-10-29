@@ -1,5 +1,11 @@
-import { deleteWorkspace, getWorkspaceSettings, updateWorkspace, type WorkspaceDeletion } from '@crm/core';
-import { renderWorkspaceDeleted } from '@crm/emails';
+import {
+  deleteWorkspace,
+  getWorkspaceSettings,
+  updateWorkspace,
+  type WorkspaceDeletion,
+  type WorkspaceRestoration,
+} from '@crm/core';
+import { renderWorkspaceDeleted, renderWorkspaceRestored } from '@crm/emails';
 import { commitWrite } from '../../hooks.ts';
 import { errorFields, log } from '../../log.ts';
 import { captureFault } from '../../monitoring/sentry.ts';
@@ -54,6 +60,35 @@ async function tellMembersDeleted(
         ...errorFields(error),
       });
       captureFault(error, { task: 'workspace-deleted-mail' });
+    }
+  }
+}
+
+/**
+ * Emails every active member but the restorer that the workspace is back (late trap #89): each was told it was
+ * deleted and going for good. One at a time, never throwing: a failed send is logged without the address.
+ */
+export async function tellMembersRestored(
+  context: Pick<RequestContext, 'mailer' | 'appUrl' | 'requestId'>,
+  restoration: WorkspaceRestoration,
+): Promise<void> {
+  const { name, slug } = restoration.settings;
+  const appOrigin = new URL(context.appUrl).origin;
+  for (const person of restoration.notify) {
+    if (person.email === '') continue;
+    try {
+      const message = await renderWorkspaceRestored(
+        { restoredBy: restoration.restoredBy, openPath: `/w/${slug}` },
+        { appOrigin, workspaceName: name },
+      );
+      await context.mailer.send({ to: person.email, ...message });
+    } catch (error) {
+      log.error('A workspace restored email was not sent', {
+        requestId: context.requestId,
+        mail: context.mailer.transport,
+        ...errorFields(error),
+      });
+      captureFault(error, { task: 'workspace-restored-mail' });
     }
   }
 }

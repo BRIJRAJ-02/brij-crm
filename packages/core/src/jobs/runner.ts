@@ -14,10 +14,11 @@
 // the database, the hooks, the scope makers, the log and the shutdown signal.
 import { hostname } from 'node:os';
 import { and, eq, sql } from 'drizzle-orm';
-import { isFinishedJob, REFUSAL_GROUP_IDS, type QueuePayload } from '@crm/contracts';
+import { isFinishedJob, jobLabel, REFUSAL_GROUP_IDS, type QueuePayload } from '@crm/contracts';
 import { ERROR_CODES } from '@crm/contracts/codes';
 import { schema, type Database, type WorkspaceTx } from '@crm/db';
 import { inWorkspace } from '../access/run.ts';
+import { queueJobFailed } from '../emails/queue.ts';
 import { isUuid } from '../engine/ids.ts';
 import { limitsOf } from '../engine/limits.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -133,6 +134,35 @@ function starterOf(row: JobRow): FailedJob<unknown>['startedBy'] {
 }
 
 /**
+ * Emails the member who started a job that ended `failed` (late trap #20), in the ending's transaction: which job,
+ * and the runner's plain sentence why. Before, only a toast told them, and only while they had the app open. Not for
+ * the system's jobs, a kind that tells its starter itself (`tellsStarter`), or a starter whose removal ended it.
+ */
+async function tellStarterFailed(
+  tx: WorkspaceTx,
+  row: JobRow,
+  kind: AnyKind | undefined,
+  error: { readonly code: string; readonly message: string },
+): Promise<void> {
+  if (row.createdByType !== 'member' || row.createdByMemberId === null) return;
+  if (kind?.tellsStarter === true || error.code === 'ACTOR_REMOVED') return;
+  const [workspace] = await tx
+    .select({ slug: workspaces.slug })
+    .from(workspaces)
+    .where(eq(workspaces.id, row.workspaceId));
+  if (workspace === undefined) return;
+  await queueJobFailed(tx, {
+    jobId: row.id,
+    memberId: row.createdByMemberId,
+    params: {
+      jobLabel: jobLabel(row.kind),
+      reason: error.message,
+      jobsPath: `/w/${encodeURIComponent(workspace.slug)}/settings/jobs`,
+    },
+  });
+}
+
+/**
  * A write context whose scope is the system's, on the same transaction (and
  * its savepoints): what `onFailed` works through (AC-124), since the starter
  * may be gone.
@@ -188,25 +218,37 @@ export function createRunner(deps: RunnerDeps): Runner {
     params: unknown,
     error: { readonly code: string; readonly message: string },
   ): Promise<void> {
-    if (kind?.onFailed === undefined) return;
-    try {
-      await kind.onFailed(asSystem(context, deps.systemScope(row.workspaceId)), {
-        id: row.id,
-        params,
-        checkpoint: row.checkpoint,
-        startedBy: starterOf(row),
-        error,
-      });
-    } catch (failure) {
-      deps.log.error('job.onFailed.failed', {
-        jobId: row.id,
-        kind: row.kind,
-        workspaceId: row.workspaceId,
-        // The error's class only: a message may quote a value.
-        error: failure instanceof Error ? failure.name : 'unknown',
-      });
-      throw failure;
+    if (kind?.onFailed !== undefined) {
+      try {
+        await kind.onFailed(asSystem(context, deps.systemScope(row.workspaceId)), {
+          id: row.id,
+          params,
+          checkpoint: row.checkpoint,
+          startedBy: starterOf(row),
+          error,
+        });
+      } catch (failure) {
+        deps.log.error('job.onFailed.failed', {
+          jobId: row.id,
+          kind: row.kind,
+          workspaceId: row.workspaceId,
+          // The error's class only: a message may quote a value.
+          error: failure instanceof Error ? failure.name : 'unknown',
+        });
+        throw failure;
+      }
     }
+    await tellStarterFailed(context.tx, row, kind, error);
+  }
+
+  /** Runs the kind's `onSucceeded` for a job a step just finished, in that transaction, as the system. */
+  async function runOnSucceeded(context: WriteContext, row: JobRow, kind: AnyKind, params: unknown): Promise<void> {
+    if (kind.onSucceeded === undefined) return;
+    await kind.onSucceeded(asSystem(context, deps.systemScope(row.workspaceId)), {
+      id: row.id,
+      params,
+      startedBy: starterOf(row),
+    });
   }
 
   /**
@@ -509,6 +551,7 @@ export function createRunner(deps: RunnerDeps): Runner {
           .where(and(eq(jobs.workspaceId, scope.workspaceId), eq(jobs.id, jobId)));
         // The step ended the job: its hook runs here, in the same transaction (AC-124).
         if (failed !== undefined) await runOnFailed(context, row, kind, params, failed);
+        if (finished) await runOnSucceeded(context, row, kind, params);
         // Progress at most once a second per job, and always the last (AC-106).
         if (progressDue(jobId, ends)) {
           context.record({ jobs: [starter] });

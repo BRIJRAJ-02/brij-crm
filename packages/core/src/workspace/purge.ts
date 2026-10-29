@@ -7,14 +7,18 @@
 //      workspace's connection still holds the account) and deletes the row.
 //      It waits up to a day for those.
 //   2. `crm_purge_workspace_begin` removes what the worker can't and what
-//      points at its members; then every tenant table's rows go inside
-//      withWorkspace, children before the rows they point at, in batches.
+//      points at its members; then the files its form uploads and record
+//      files hold go from the store, their rows with them (nothing else could
+//      find those bytes once the rows were gone: late trap #84); then every
+//      tenant table's rows go inside withWorkspace, children before the rows
+//      they point at, in batches.
 //   3. `crm_purge_workspace_end` removes the directory row and the workspace.
 // Each function acts only on a workspace deleted and past `purge_after`, so a
 // live one is never touched. Counts per table go to the log, ids and numbers
 // only.
 import { sql } from 'drizzle-orm';
 import type { Database, WorkspaceTx } from '@crm/db';
+import type { UploadStore } from '../forms/uploads.ts';
 import { CALENDAR_SPREAD_SECONDS } from './settings.ts';
 
 /** Rows one delete statement removes at most. */
@@ -46,6 +50,69 @@ export interface PurgeDeps {
   readonly log: PurgeLog;
   /** The clock, in milliseconds; tests pass one they move. */
   readonly now?: () => number;
+  /**
+   * The file store its uploads and record files live in. Without one (no store configured) their rows go with the
+   * rest and the purge logs how many files it couldn't remove.
+   */
+  readonly files?: UploadStore;
+}
+
+/** How many stored files one step removes from each table: few, since the store call runs inside the transaction. */
+const FILES_BATCH = 50;
+
+/** Whether a stored path is this workspace's own: the purge never asks the store to remove another workspace's bytes. */
+function ownPath(kind: string, pathname: string, workspaceId: string): boolean {
+  return pathname.startsWith(`${kind === 'upload' ? 'forms' : 'records'}/${workspaceId}/`);
+}
+
+/**
+ * One batch of the workspace's stored files: from the store first, then their rows, in one transaction, so a store
+ * that fails rolls the rows back and the next call tries again (a file already gone is no error). A path outside the
+ * workspace's own folder is never removed: its row goes and its id is logged. Answers how many rows.
+ */
+async function removeStoredFiles(
+  db: Database,
+  store: UploadStore,
+  log: PurgeLog,
+  workspaceId: string,
+): Promise<number> {
+  return db.withWorkspace(workspaceId, async (tx) => {
+    const found = await tx.execute<{ kind: string; id: string; pathname: string }>(sql`
+      (select 'upload' as kind, id::text, pathname from form_uploads
+        where workspace_id = ${workspaceId}::uuid and ${stillDeleted(workspaceId)} limit ${FILES_BATCH})
+      union all
+      (select 'record' as kind, id::text, pathname from record_files
+        where workspace_id = ${workspaceId}::uuid and ${stillDeleted(workspaceId)} limit ${FILES_BATCH})
+    `);
+    if (found.rows.length === 0) return 0;
+    const own = found.rows.filter((row) => ownPath(row.kind, row.pathname, workspaceId));
+    const foreign = found.rows.filter((row) => !ownPath(row.kind, row.pathname, workspaceId));
+    if (foreign.length > 0) {
+      log.info('workspace.purge.foreign_paths', { workspaceId, ids: foreign.map((row) => row.id) });
+    }
+    if (own.length > 0) await store.remove(own.map((row) => row.pathname));
+    const ids = (kind: string) => JSON.stringify(found.rows.filter((row) => row.kind === kind).map((row) => row.id));
+    await tx.execute(sql`
+      delete from form_uploads where workspace_id = ${workspaceId}::uuid
+        and id in (select jsonb_array_elements_text(${ids('upload')}::jsonb)::uuid)
+    `);
+    await tx.execute(sql`
+      delete from record_files where workspace_id = ${workspaceId}::uuid
+        and id in (select jsonb_array_elements_text(${ids('record')}::jsonb)::uuid)
+    `);
+    return found.rows.length;
+  });
+}
+
+/** How many stored files the workspace still names: what a purge with no store leaves in it. */
+async function storedFiles(db: Database, workspaceId: string): Promise<number> {
+  const found = await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute<{ n: number }>(sql`
+      select (select count(*) from form_uploads where workspace_id = ${workspaceId}::uuid)::int
+        + (select count(*) from record_files where workspace_id = ${workspaceId}::uuid)::int as n
+    `),
+  );
+  return found.rows[0]?.n ?? 0;
 }
 
 /**
@@ -230,6 +297,19 @@ export async function purgeWorkspace(deps: PurgeDeps, workspaceId: string, deadl
     return 'waiting';
   }
   await db.withWorkspace(workspaceId, (tx) => tx.execute(sql`select crm_purge_workspace_begin(${workspaceId}::uuid)`));
+  if (deps.files === undefined) {
+    const left = await storedFiles(db, workspaceId);
+    if (left > 0) deps.log.info('workspace.purge.files_left', { workspaceId, files: left });
+  } else {
+    for (;;) {
+      if (now() > deadline) {
+        deps.log.info('workspace.purge', { workspaceId, counts: {}, done: false });
+        return 'more';
+      }
+      const gone = await removeStoredFiles(db, deps.files, deps.log, workspaceId);
+      if (gone === 0) break;
+    }
+  }
   const steps = deleteOrder(await db.withWorkspace(workspaceId, tenantTables));
   const counts: Record<string, number> = {};
   for (const step of steps) {

@@ -11,6 +11,7 @@ import { enterAsActor, enterDeletedWorkspace, NO_RULE_SOURCE } from '../access/d
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
+import { createForm } from '../forms/forms.ts';
 import { purgeWorkspace } from './purge.ts';
 import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
@@ -334,7 +335,10 @@ describe('deleting and restoring (AC-823)', () => {
     const entry = await enterDeletedWorkspace(t.doorDeps, { userId: t.ownerUser, slug: t.slug });
     expect(entry.purgeAfter).toBe(deletion.deleted.purgeAfter);
     const restored = await restoreWorkspace(entry.scope);
-    expect(restored.name).toBe('Acme');
+    expect(restored.settings.name).toBe('Acme');
+    // Everyone told of the deletion but the owner who brought it back hears it is back (late trap #89).
+    expect(restored.notify.map((person) => person.name)).not.toContain(restored.restoredBy);
+    expect(restored.restoredBy).toBe('Ada');
     expect(await refusalOf(restoreWorkspace(entry.scope))).toMatchObject({ code: 'NOT_FOUND' });
     await expect(
       enterAsActor(
@@ -438,6 +442,80 @@ describe('the purge (AC-823)', () => {
       directory: 0,
       memberships: 0,
     });
+  });
+
+  it('removes the files its uploads hold from the store, not only their rows', async () => {
+    const t = await team();
+    const owner = t.as(t.owner, 'owner');
+    const form = await createForm(owner, { id: newId(), name: 'Apply' });
+    const fileId = newId();
+    const pathname = `forms/${t.workspaceId}/${form.id}/${fileId}.pdf`;
+    await testQuery(
+      ownerUrl,
+      `insert into form_uploads (workspace_id, id, form_id, pathname, name, size, content_type)
+       values ($1, $2, $3, $4, 'cv.pdf', 1024, 'application/pdf')`,
+      [t.workspaceId, fileId, form.id, pathname],
+    );
+    // A row naming another workspace's path loses its row, never that workspace's bytes.
+    const strayId = newId();
+    await testQuery(
+      ownerUrl,
+      `insert into form_uploads (workspace_id, id, form_id, pathname, name, size, content_type)
+       values ($1, $2, $3, $4, 'other.pdf', 1024, 'application/pdf')`,
+      [t.workspaceId, strayId, form.id, `forms/${newId()}/${form.id}/${strayId}.pdf`],
+    );
+    await deleteWorkspace(owner, { confirmName: 'Acme' });
+    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '2 hours' where id = $1`, [
+      t.workspaceId,
+    ]);
+    // A purge used to delete the rows only, after which nothing could ever find those bytes (late trap #84).
+    const removed: string[] = [];
+    const files = {
+      remove: (pathnames: readonly string[]) => {
+        removed.push(...pathnames);
+        return Promise.resolve();
+      },
+    };
+    expect(await purgeWorkspace({ db: worker, log, files }, t.workspaceId, Date.now() + 60_000)).toBe('done');
+    expect(removed).toEqual([pathname]);
+    expect((await left(t.workspaceId))?.workspaces).toBe(0);
+  });
+
+  it('takes its members’ link pages with it, and holds their handles rather than keeping them bound to it', async () => {
+    const t = await team();
+    const other = await team();
+    const pagesOf = (workspaceId: string) =>
+      testQuery<{ pages: number; held: number; bound: number }>(
+        ownerUrl,
+        `select (select count(*)::int from auth.public_profiles where workspace_id = $1) as pages,
+          (select count(*)::int from auth.public_handles where workspace_id = $1 and user_id is null
+            and released_at is not null) as held,
+          (select count(*)::int from auth.public_handles where workspace_id = $1 and user_id is not null) as bound`,
+        [workspaceId],
+      ).then((rows) => rows[0]);
+    const pages = () =>
+      testQuery<{ pages: number; held: number; bound: number }>(
+        ownerUrl,
+        `select (select count(*)::int from auth.public_profiles where workspace_id = $1) as pages,
+          (select count(*)::int from auth.public_handles where workspace_id = $1 and user_id is null
+            and released_at is not null) as held,
+          (select count(*)::int from auth.public_handles where workspace_id = $1 and user_id is not null) as bound`,
+        [t.workspaceId],
+      ).then((rows) => rows[0]);
+    // The owner's page, made with the membership.
+    expect(await pages()).toEqual({ pages: 1, held: 0, bound: 1 });
+    await deleteWorkspace(t.as(t.owner, 'owner'), { confirmName: 'Acme' });
+    // Deleted but inside its window: nothing of its pages goes yet.
+    expect(await purgeWorkspace({ db: worker, log }, t.workspaceId, Date.now() + 60_000)).toBe('skipped');
+    expect(await pages()).toEqual({ pages: 1, held: 0, bound: 1 });
+    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '2 hours' where id = $1`, [
+      t.workspaceId,
+    ]);
+    expect(await purgeWorkspace({ db: worker, log }, t.workspaceId, Date.now() + 60_000)).toBe('done');
+    // Late trap #86: the page stayed stored and its handle bound to a workspace that no longer exists, for good.
+    expect(await pages()).toEqual({ pages: 0, held: 1, bound: 0 });
+    // Another workspace's page and handle stand.
+    expect(await pagesOf(other.workspaceId)).toEqual({ pages: 1, held: 0, bound: 1 });
   });
 
   it('stops where its time ran out and finishes on the next call', async () => {

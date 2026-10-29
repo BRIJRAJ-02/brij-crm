@@ -55,6 +55,14 @@ const systemOnce = defineKind({
 
 const { team, runnerFor, queueRows, jobEvents, itemStates, drive } = jobTestKit(db, ownerUrl);
 
+/** The workspace's queued emails about jobs, as the owner login reads them. */
+const emailsOf = (workspaceId: string) =>
+  testQuery<{ kind: string; key: string; to_member_id: string; params: unknown }>(
+    ownerUrl,
+    `select kind, key, to_member_id::text, params from emails where workspace_id = $1 and kind = 'job_failed'`,
+    [workspaceId],
+  );
+
 describe('starting a job (AC-102, AC-116, AC-125)', () => {
   it('commits with its write and goes on the queue; a write that rolls back leaves no job and no queue row', async () => {
     const t = await team();
@@ -279,6 +287,20 @@ describe('the runner (AC-103 to AC-107, AC-113, AC-120)', () => {
       error: { code: 'JOB_FAILED', message: 'This job stopped after repeated errors. What it finished is kept.' },
       done: 0,
     });
+    // Its starter is emailed (late trap #20): before, only a toast told them, if they had the app open. The job
+    // that succeeded sends nothing.
+    expect(await emailsOf(t.workspaceId)).toEqual([
+      {
+        kind: 'job_failed',
+        key: `job_failed:${result.jobId}`,
+        to_member_id: t.ownerId,
+        params: {
+          jobLabel: 'Background job',
+          reason: 'This job stopped after repeated errors. What it finished is kept.',
+          jobsPath: expect.stringMatching(/^\/w\/[^/]+\/settings\/jobs$/) as unknown,
+        },
+      },
+    ]);
   });
 
   it('stops a running job before its next batch when it is cancelled', async () => {
@@ -308,6 +330,8 @@ describe('the runner (AC-103 to AC-107, AC-113, AC-120)', () => {
     const run = runnerFor(registry);
     expect(await run.runner.runSlice({ workspaceId: t.workspaceId, jobId: id })).toBe('failed');
     expect(await getJob(t.owner, registry, id)).toMatchObject({ status: 'failed', error: { code: 'ACTOR_REMOVED' } });
+    // A removed member is not emailed about the job their removal ended.
+    expect(await emailsOf(t.workspaceId)).toEqual([]);
 
     const system = createRegistry([systemOnce]);
     const { result } = await runWrite(t.owner, (context) =>

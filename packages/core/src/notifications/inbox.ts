@@ -411,12 +411,30 @@ async function settingsRow(tx: WorkspaceTx, me: string, lock = false): Promise<S
   return rows.rows[0];
 }
 
+/** Whether `me` turned mentions off from an email's preferences link (the `mentions` topic). */
+async function mentionsTopicOff(tx: WorkspaceTx, me: string): Promise<boolean> {
+  const rows = await tx.execute(sql`
+    select 1 from email_preferences where member_id = ${me}::uuid and topic = 'mentions' and not subscribed
+  `);
+  return rows.rows.length > 0;
+}
+
+/**
+ * The caller's switches as they act: Email mentions reads off when the `mentions` topic was turned off from an
+ * email's link, since no mention email or digest line goes then (late trap #87: Settings showed it on, and turning
+ * it on there changed nothing).
+ */
+async function actingSettings(tx: WorkspaceTx, me: string, lock = false): Promise<NotificationSettings> {
+  const settings = settingsOf(await settingsRow(tx, me, lock));
+  return settings.emailMentions && (await mentionsTopicOff(tx, me)) ? { ...settings, emailMentions: false } : settings;
+}
+
 /** The caller's email settings for this workspace (AC-1179); no row means the defaults. */
 export async function getNotificationSettings(scope: EngineScope): Promise<NotificationSettings> {
   checkScope(scope);
   const me = callerOf(scope);
   if (me === undefined) return DEFAULT_NOTIFICATION_SETTINGS;
-  return inWorkspace(scope, async (tx) => settingsOf(await settingsRow(tx, me)));
+  return inWorkspace(scope, async (tx) => actingSettings(tx, me));
 }
 
 /** What `setNotificationSettings` takes: only the switches given change. */
@@ -447,9 +465,12 @@ export async function setNotificationSettings(
     scope,
     async (context) => {
       const { tx } = context;
-      const before = settingsOf(await settingsRow(tx, me, true));
+      // The stored switches, which the row keeps; what the caller saw (`before`) reads mentions off while its email
+      // topic is, so turning it on here is a change even when the stored switch was on all along.
+      const stored = settingsOf(await settingsRow(tx, me, true));
+      const before = await actingSettings(tx, me);
       const next = {
-        emailMentions: input.emailMentions ?? before.emailMentions,
+        emailMentions: input.emailMentions ?? stored.emailMentions,
         emailReplies: input.emailReplies ?? before.emailReplies,
         emailAssignments: input.emailAssignments ?? before.emailAssignments,
         digest: input.digest ?? before.digest,
@@ -468,6 +489,16 @@ export async function setNotificationSettings(
         next.digest === before.digest &&
         next.timeZone === before.timeZone;
       if (same) return before;
+      if (
+        input.emailMentions !== true &&
+        next.emailMentions === stored.emailMentions &&
+        next.emailReplies === stored.emailReplies &&
+        next.emailAssignments === stored.emailAssignments &&
+        next.digest === stored.digest &&
+        next.timeZone === stored.timeZone
+      ) {
+        return before;
+      }
       const rows = await tx.execute<SettingsRow>(sql`
         insert into notification_settings (workspace_id, member_id, email_mentions, email_replies, email_assignments,
           digest, time_zone, version)
@@ -479,8 +510,16 @@ export async function setNotificationSettings(
           version = notification_settings.version + 1, updated_at = now()
         returning email_mentions, email_replies, email_assignments, digest, time_zone, version
       `);
+      // Turned on here, mentions are on: the `mentions` topic an email's link turned off goes back on with it.
+      if (input.emailMentions === true) {
+        await tx.execute(sql`
+          update email_preferences set subscribed = true, updated_via = 'app', updated_at = now()
+          where member_id = ${me}::uuid and topic = 'mentions' and not subscribed
+        `);
+      }
       context.record({ notifications: [me] });
-      return settingsOf(rows.rows[0]);
+      const saved = settingsOf(rows.rows[0]);
+      return saved.emailMentions && (await mentionsTopicOff(tx, me)) ? { ...saved, emailMentions: false } : saved;
     },
     hooks,
   );

@@ -28,7 +28,7 @@ import { uniqueKeyOf } from '../engine/unique.ts';
 import { currentItems, isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { WriteContext } from '../engine/write.ts';
-import { enterAsForm } from '../access/door.ts';
+import { enterAsForm, type RuleSource } from '../access/door.ts';
 import { formAccess } from '../access/policy.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition } from '../jobs/registry.ts';
 import { liveOptions, loadForm, loadVersions, type FormRow } from './shared.ts';
@@ -37,6 +37,7 @@ import { lockRotation } from '../rotation/ledger.ts';
 import { pickLeadOwner, recordLeadOwner, type LeadOwner } from '../rotation/owner.ts';
 import { copyFiledFile, type RecordFileStore } from '../records/files.ts';
 import { newId } from '../engine/ids.ts';
+import { tellTeam } from './notify.ts';
 
 const { formSubmissionRecords, formSubmissions, members } = schema;
 
@@ -884,13 +885,16 @@ export function heldValues(index: HeldIndex, recordId: string): (attribute: Attr
  * Processes one submission (see the file's header). Does nothing for a
  * submission that is gone or no longer `received` (processed already, spam,
  * failed), so a job run twice never writes twice. Runs inside the job's
- * transaction with the system's scope (`context`), writing as the form.
+ * transaction with the system's scope (`context`), writing as the form, then
+ * tells the team (`tellTeam`), each member cut to what `rules` let them see
+ * (no `rules`, no notice: the worker passes the api's `APP_RULES`).
  */
 export async function processSubmission(
   context: WriteContext,
   submissionId: string,
   now: Date = new Date(),
   files?: RecordFileStore,
+  rules?: RuleSource,
 ): Promise<void> {
   const { tx } = context;
   const found = await tx.execute<SubmissionRow>(sql`
@@ -908,6 +912,7 @@ export async function processSubmission(
   const target = document.targets.main;
   if (target === undefined) {
     await keep(tx, submission.id);
+    await tellTeam(context, rules, submission.id);
     return;
   }
   const attributes = await loadAttributes(tx, target.objectId);
@@ -934,6 +939,7 @@ export async function processSubmission(
       ),
   });
   await settle(tx, submission.id, filed);
+  await tellTeam(context, rules, submission.id);
 }
 
 /** A stored assignment as filing's `previous`, when there is one. */
@@ -997,7 +1003,7 @@ export async function settle(
  * cancelled, 5 tries with the lane's backoff, then the submission ends
  * `failed` with a reason a member can act on (AC-566).
  */
-export function formsProcess(files?: RecordFileStore): KindDefinition<FormsProcessParams> {
+export function formsProcess(files?: RecordFileStore, rules?: RuleSource): KindDefinition<FormsProcessParams> {
   return defineKind<FormsProcessParams>({
     kind: FORMS_PROCESS,
     lane: 'light',
@@ -1009,7 +1015,7 @@ export function formsProcess(files?: RecordFileStore): KindDefinition<FormsProce
     batchSize: 1,
     sample: { submissionId: '0199f0a0-0000-7000-8000-000000000001' },
     async step(context, { job }) {
-      await processSubmission(context, job.params.submissionId, new Date(), files);
+      await processSubmission(context, job.params.submissionId, new Date(), files, rules);
       return { finished: true };
     },
     async onFailed(context, job) {
@@ -1018,6 +1024,8 @@ export function formsProcess(files?: RecordFileStore): KindDefinition<FormsProce
         .update(formSubmissions)
         .set({ state: 'failed', failure: PROCESS_GAVE_UP, updatedAt: sql`now()` })
         .where(sql`${formSubmissions.id} = ${job.params.submissionId} and ${formSubmissions.state} = 'received'`);
+      // The visitor's submission still came in: the team hears of it, failure and all.
+      await tellTeam(context, rules, job.params.submissionId);
     },
   });
 }

@@ -97,6 +97,8 @@ export const RemovalPreview = z.object({
   requiredDefaults: z.number().int().min(0),
   /** Open invitations they sent (the invite link among them), revoked with them: nobody vouches for them any more. */
   invitations: z.number().int().min(0),
+  /** Live forms that make them the owner of each new record: their leads arrive with no owner from now. */
+  ownedForms: z.number().int().min(0),
 });
 /** What removing a member will do. */
 export type RemovalPreview = z.infer<typeof RemovalPreview>;

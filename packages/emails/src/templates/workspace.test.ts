@@ -1,6 +1,6 @@
 // A deleted workspace's notice (spec 0031, AC-823): an owner's has the way back, anyone else's doesn't.
 import { describe, expect, it } from 'vitest';
-import { renderWorkspaceDeleted } from '../index.ts';
+import { renderWorkspaceDeleted, renderWorkspaceRestored } from '../index.ts';
 
 const ORIGIN = 'https://app.example.com';
 const context = { appOrigin: ORIGIN, workspaceName: 'Acme' };
@@ -20,5 +20,14 @@ describe('the workspace deleted email', () => {
     const email = await renderWorkspaceDeleted({ deletedBy: 'Ada Lovelace', until: '19 November 2026' }, context);
     expect(email.html).not.toContain(`href="${ORIGIN}/w/acme"`);
     expect(email.text).toContain('Its owners can restore it until 19 November 2026.');
+  });
+});
+
+describe('the workspace restored email', () => {
+  it('says who restored it, and opens it', async () => {
+    const email = await renderWorkspaceRestored({ restoredBy: 'Ada Lovelace', openPath: '/w/acme' }, context);
+    expect(email.subject).toBe('Acme was restored');
+    expect(email.html).toContain(`href="${ORIGIN}/w/acme"`);
+    expect(email.text).toContain('Ada Lovelace restored Acme, so it won’t be deleted.');
   });
 });

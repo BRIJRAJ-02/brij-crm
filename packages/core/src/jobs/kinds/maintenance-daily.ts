@@ -128,7 +128,7 @@ const Totals = z.object({
   profileCounts: Count.default(0),
   // Added 26 Oct 2026: the link pages a membership's own transaction didn't make.
   linkPages: Count.default(0),
-  /** Members it tried and still couldn't make a page for (20 handles held, a failure): tried again tomorrow. */
+  /** Members it tried and still couldn't make a page for (20 live pages, a failure): tried again tomorrow. */
   linkPagesMissed: Count.default(0),
   /** Handles freed 90 days after their person's account was deleted (migration 0126); 0 in an older checkpoint. */
   handles: Count.default(0),
@@ -380,7 +380,7 @@ const LINK_PAGE_BATCH = 25;
 /**
  * Phase 1h (26 Oct 2026): the active members with a sign in, `LINK_PAGE_BATCH` at a time by id, and a link page
  * made for each one who has none here (`ensureLinkPage`, which never throws and answers nothing for one it can't
- * make, such as a person holding 20 handles). Tried again tomorrow for any still without one.
+ * make, such as a person with 20 live pages). Tried again tomorrow for any still without one.
  */
 async function missingLinkPages(context: WriteContext, at: Checkpoint): Promise<StepOutcome> {
   const { tx, scope } = context;

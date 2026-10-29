@@ -302,6 +302,10 @@ describe("migration 0018's closing check", () => {
     'revoke all on auth.workspace_membership, auth.workspace_directory, auth.user_prefs from crm_purge',
     'revoke all (workspace_id) on auth.workspace_membership, auth.workspace_directory from crm_purge',
     'revoke all (last_workspace_id) on auth.user_prefs from crm_purge',
+    // And migration 0127's link pages of a purged workspace, with its own closing check.
+    'revoke all on auth.profile_items, auth.profile_views, auth.profile_view_days, auth.public_profiles from crm_purge',
+    'revoke all (workspace_id) on auth.profile_items, auth.profile_views, auth.profile_view_days, auth.public_profiles from crm_purge',
+    'revoke all (workspace_id, user_id) on auth.public_handles from crm_purge',
     // And migration 0083's address claim, with its own closing check.
     'revoke all on auth.workspace_addresses from crm_address',
     'revoke all (workspace_id, slug) on auth.workspace_directory from crm_address',

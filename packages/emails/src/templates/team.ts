@@ -1,8 +1,11 @@
-// Emails for the lanes still to come, ready for them to queue: an import's
-// result (#30). A mention has no email of its own: it goes in the
+// Emails about a member's own background work: an import's result (#30), and
+// any other job of theirs that failed (late trap #20). A mention has no email of its own: it goes in the
 // notifications email (spec 0038), the one email a mention sends.
-import type { ImportFinishedEmail } from '@crm/contracts/emails';
+import type { ImportFinishedEmail, JobFailedEmail } from '@crm/contracts/emails';
 import { plural } from '../format.ts';
+
+/** A count as the app writes it (1,204). */
+const number = (count: number): string => new Intl.NumberFormat('en-GB').format(count);
 import { workspaceOf, type Template } from '../template.ts';
 
 /** An import's ending, in a heading's words. */
@@ -19,28 +22,47 @@ export const importFinished: Template<ImportFinishedEmail> = (params, context) =
     params.outcome === 'done'
       ? `Timefix finished importing ${file} into ${params.objectName}.`
       : params.outcome === 'failed'
-        ? `Timefix couldn’t finish importing ${file} into ${params.objectName}. What it did before it stopped is kept.`
+        ? `Timefix couldn’t finish importing ${file} into ${params.objectName}. The rows it imported before it stopped are kept. Open the import to see what’s left, and import the rest again or undo it.`
         : `The import of ${file} into ${params.objectName} was cancelled. What it did before it stopped is kept.`;
-  const counts = `${plural(params.created, 'record', 'records')} created, ${String(params.updated)} updated, ${String(params.skipped)} skipped`;
+  const counts = `${plural(params.created, 'record', 'records')} created, ${number(params.updated)} updated, ${number(params.skipped)} skipped`;
+  // A finished import that left rows out says so up front, so the reader knows to open it.
+  const ending =
+    params.outcome === 'done' && params.failed > 0
+      ? `Import finished, ${plural(params.failed, 'row', 'rows')} not imported`
+      : ENDINGS[params.outcome];
   return {
-    subject: `${ENDINGS[params.outcome]}: ${params.objectName}`,
+    subject: `${ending}: ${params.objectName}`,
     preheader: `${counts}.`,
     eyebrow: workspaceOf(context),
-    heading: ENDINGS[params.outcome],
+    heading: ending,
     blocks: [
       { type: 'paragraph', text: what },
       {
         type: 'rows',
         layout: 'compact',
         rows: [
-          { label: 'Created', value: String(params.created) },
-          { label: 'Updated', value: String(params.updated) },
-          { label: 'Skipped', value: String(params.skipped) },
-          ...(params.failed === 0 ? [] : [{ label: 'Failed', value: String(params.failed) }]),
+          { label: 'Created', value: number(params.created) },
+          { label: 'Updated', value: number(params.updated) },
+          { label: 'Skipped', value: number(params.skipped) },
+          ...(params.failed === 0 ? [] : [{ label: 'Not imported', value: number(params.failed) }]),
         ],
       },
-      { type: 'button', label: 'View the results', url: context.link(params.resultPath) },
+      { type: 'button', label: 'View import', url: context.link(params.resultPath) },
     ],
     why: `You got this email because you started this import in ${workspaceOf(context)}.`,
   };
 };
+
+/** A background job a member started ended `failed`: which, why, and where their jobs are. */
+export const jobFailed: Template<JobFailedEmail> = (params, context) => ({
+  // "Didn't finish" reads with any job's name, a long one ("Hand on a removed member's work") included.
+  subject: `Didn’t finish: ${params.jobLabel}`,
+  preheader: params.reason,
+  eyebrow: workspaceOf(context),
+  heading: `Didn’t finish: ${params.jobLabel}`,
+  blocks: [
+    { type: 'paragraph', text: params.reason },
+    { type: 'button', label: 'Open Background jobs', url: context.link(params.jobsPath) },
+  ],
+  why: `You got this email because you started this job in ${workspaceOf(context)}.`,
+});

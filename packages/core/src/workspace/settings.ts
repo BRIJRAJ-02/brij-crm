@@ -213,6 +213,15 @@ function messageChain(error: Error): string {
   return error.cause instanceof Error ? `${error.message} ${messageChain(error.cause)}` : error.message;
 }
 
+/** A restored workspace: its settings, and who to tell and in whose name. */
+export interface WorkspaceRestoration {
+  readonly settings: WorkspaceSettings;
+  /** The active members but the restorer, for the email each gets. */
+  readonly notify: readonly { readonly email: string; readonly name: string }[];
+  /** The restoring owner's name in this workspace, for the email. */
+  readonly restoredBy: string;
+}
+
 /** What a delete did: the workspace as its owners see it in the window, and who to tell. */
 export interface WorkspaceDeletion {
   readonly deleted: DeletedWorkspace;
@@ -304,12 +313,14 @@ export async function deleteWorkspace(
  * an owner's, made by `enterDeletedWorkspace` (the door refuses a deleted
  * workspace otherwise). Clears `deleted_at` and `purge_after` with the audit
  * row; NOT_FOUND once the window has passed or it was restored already.
+ * Answers its settings, and who to tell: every active member but the one who
+ * restored it, each told of the deletion (late trap #89).
  */
 export async function restoreWorkspace(
   scope: EngineScope,
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
-): Promise<WorkspaceSettings> {
+): Promise<WorkspaceRestoration> {
   requirePermission(scope, 'workspace.delete');
   const { result } = await runWrite(
     scope,
@@ -376,7 +387,17 @@ export async function restoreWorkspace(
         },
         source,
       );
-      return toSettings(row);
+      const people = await tx
+        .select({ id: members.id, email: members.email, name: members.name })
+        .from(members)
+        .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.status, 'active')));
+      return {
+        settings: toSettings(row),
+        notify: people
+          .filter((person) => person.id !== actor)
+          .map((person) => ({ email: person.email, name: person.name })),
+        restoredBy: people.find((person) => person.id === actor)?.name ?? 'An owner',
+      };
     },
     hooks,
   );

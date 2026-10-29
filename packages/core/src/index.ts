@@ -130,6 +130,7 @@ export {
   updateWorkspace,
   type UpdatedWorkspace,
   type WorkspaceDeletion,
+  type WorkspaceRestoration,
 } from './workspace/settings.ts';
 export { getMyProfile, showMyLinkPage, updateMyMemberProfile, type ProfileExtras } from './members/profile.ts';
 // The link page's blocks (spec 0051): the caller's own, in schema auth, through crm_handle's definers.
@@ -535,6 +536,7 @@ export {
   type KindDefinition,
   type StepInput,
   type StepOutcome,
+  type SucceededJob,
 } from './jobs/registry.ts';
 export { jobKinds, type JobKindsOptions } from './jobs/kinds/index.ts';
 export { MAINTENANCE_DAILY, type QueueRows } from './jobs/kinds/maintenance-daily.ts';
