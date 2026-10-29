@@ -21,7 +21,7 @@ import { refuse, refuseOn } from '../engine/refusals.ts';
 import { uuidArray } from '../engine/ids.ts';
 import { actorRow } from '../engine/scope.ts';
 import { lockRotation, windowCounts, windowStart } from './ledger.ts';
-import { ROTATION_ROLES, rulesOf } from './team.ts';
+import { eligibleMembers, ROTATION_ROLES, rulesOf } from './team.ts';
 
 const {
   availabilitySchedules,
@@ -327,9 +327,48 @@ export async function updateRotation(
       .where(eq(rotations.id, current.id))
       .returning();
     if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
-    if (input.members !== undefined) await replaceMembers(tx, scope, row, input.members, now);
+    if (input.members !== undefined) {
+      await replaceMembers(tx, scope, row, input.members, now);
+      await checkStillBooks(tx, row.id);
+    }
     return firstOf(await viewsOf(tx, scope, [row], now));
   });
+}
+
+/**
+ * Refuses IN_USE when a change leaves the rotation with nobody who may take work (switched on, active, not a guest)
+ * while a live page books through it (late trap #22): every booking on a round robin page seats one of each of its
+ * rotations, so the page would stay Live offering no times at all, and nobody would be told. Pausing the page first,
+ * or moving it to another rotation, lets the change through.
+ */
+async function checkStillBooks(tx: WorkspaceTx, rotationId: string): Promise<void> {
+  if ((await eligibleMembers(tx, [rotationId])).get(rotationId)?.length !== 0) return;
+  const pages = await tx
+    .select({ title: bookingPages.title })
+    .from(bookingPageRotations)
+    .innerJoin(
+      bookingPages,
+      and(
+        eq(bookingPages.workspaceId, bookingPageRotations.workspaceId),
+        eq(bookingPages.id, bookingPageRotations.pageId),
+      ),
+    )
+    .where(
+      and(
+        eq(bookingPageRotations.rotationId, rotationId),
+        isNull(bookingPages.deletedAt),
+        eq(bookingPages.status, 'live'),
+      ),
+    )
+    .orderBy(asc(bookingPages.title));
+  const [first] = pages;
+  if (first === undefined) return;
+  const named = pages.length === 1 ? `“${first.title}”` : `“${first.title}” and ${String(pages.length - 1)} more`;
+  throw refuseOn(
+    'IN_USE',
+    `${named} ${pages.length === 1 ? 'books' : 'book'} through this group, so it needs someone switched on. Keep someone on, or pause ${pages.length === 1 ? 'that page' : 'those pages'} first.`,
+    'members',
+  );
 }
 
 /** Replaces a rotation's members, keeping the stayers' counts and calibrating the joiners (AC-730). */

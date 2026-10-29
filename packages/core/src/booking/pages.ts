@@ -45,7 +45,8 @@ import { ownerSlugs, publicProfilesOf } from './handles.ts';
 import { placeNewPage } from '../profile/items.ts';
 import { linksOf, seenLinks } from './links.ts';
 import { lockKey } from './locks.ts';
-import { ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
+import { lockRotations } from '../rotation/assign.ts';
+import { eligibleMembers, pageRotations, ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 import {
   checkAnswersObject,
@@ -384,6 +385,33 @@ async function setPageHosts(tx: WorkspaceTx, workspaceId: string, pageId: string
 }
 
 /**
+ * Refuses HOSTS_INVALID when a round robin page that is, or is going, live books through a rotation with nobody who may
+ * take work (late trap #22): every booking seats one of each, so the page would offer no times at all. Under each
+ * rotation's lock, so a rotation change that switches its last member off waits for this page's write, and its own
+ * check (`updateRotation`) then sees the page live.
+ */
+async function checkRotationsBook(tx: WorkspaceTx, workspaceId: string, pageId: string): Promise<void> {
+  const rules = await pageRotations(tx, pageId);
+  await lockRotations(
+    tx,
+    workspaceId,
+    rules.map((rule) => rule.id),
+  );
+  const eligible = await eligibleMembers(
+    tx,
+    rules.map((rule) => rule.id),
+  );
+  const empty = rules.find((rule) => (eligible.get(rule.id)?.length ?? 0) === 0);
+  if (empty !== undefined) {
+    throw refuseOn(
+      'HOSTS_INVALID',
+      `Nobody is switched on in ${empty.name}, so this page would offer no times. Switch someone on there, or pick another rotation.`,
+      'hosts',
+    );
+  }
+}
+
+/**
  * A team page books each member by their own default schedule (spec 0037, AC-1336's rule for members, read for
  * round robin: the open question in spec 0029 notes it), so it names no schedule of its owner.
  */
@@ -586,6 +614,7 @@ export async function createBookingPage(
       if (!row.isPrivate) await placeNewPage(tx, scope, row);
       if (kind === 'round_robin' && input.hosts !== undefined) {
         await setPageHosts(tx, scope.workspaceId, row.id, input.hosts);
+        if (row.status === 'live') await checkRotationsBook(tx, scope.workspaceId, row.id);
         const [team] = await pagesOf(tx, [row]);
         if (team === undefined) throw new Error('The booking page was not created.');
         return await viewWithCounts(tx, scope, team, now);
@@ -671,6 +700,14 @@ export async function updateBookingPage(
         throw refuseOn('CONFIG_INVALID', 'Only a round robin page books from rotations.', 'hosts');
       }
       await setPageHosts(tx, scope.workspaceId, page.id, input.hosts);
+    }
+    // Live afterwards, with its rotations new or the page just turned on: each has to have someone to seat.
+    if (
+      page.kind === 'round_robin' &&
+      (settings.status ?? page.status) === 'live' &&
+      (input.hosts !== undefined || page.status !== 'live')
+    ) {
+      await checkRotationsBook(tx, scope.workspaceId, page.id);
     }
     // Routing rules (spec 0043, AC-1608): only a round robin page's, each naming members of its rotations; audited.
     // The writer sends the rules they see; those over a field hidden from them are put back as they were, in place.
@@ -903,20 +940,50 @@ export async function listBookings(
   });
 }
 
-/** The live pages nobody would be left to host once `memberId` is gone: theirs alone, or pools they were the last of. */
+/**
+ * The live pages nobody would be left to host once `memberId` is gone: theirs alone, or pools they were the last of.
+ * A round robin page books a seat from every one of its groups, so it is left with nobody when a group they were the
+ * last one switched on in empties (late trap #22: it stayed live, offering an empty calendar for ever); its fixed
+ * hosts are extras, and it never stops for losing one.
+ */
 const hostlessPages = (memberId: string) => sql`
   p.status = 'live' and p.deleted_at is null
   and (
-    p.owner_member_id = ${memberId}::uuid
-    or exists (
-      select 1 from booking_page_members pool
-      where pool.workspace_id = p.workspace_id and pool.page_id = p.id and pool.member_id = ${memberId}::uuid
+    (
+      p.kind <> 'round_robin'
+      and (
+        p.owner_member_id = ${memberId}::uuid
+        or exists (
+          select 1 from booking_page_members pool
+          where pool.workspace_id = p.workspace_id and pool.page_id = p.id and pool.member_id = ${memberId}::uuid
+        )
+      )
+      and not exists (
+        select 1 from booking_page_members m
+        join members h on h.workspace_id = m.workspace_id and h.id = m.member_id and h.status = 'active'
+        where m.workspace_id = p.workspace_id and m.page_id = p.id and m.member_id <> ${memberId}::uuid
+      )
     )
-  )
-  and not exists (
-    select 1 from booking_page_members m
-    join members h on h.workspace_id = m.workspace_id and h.id = m.member_id and h.status = 'active'
-    where m.workspace_id = p.workspace_id and m.page_id = p.id and m.member_id <> ${memberId}::uuid
+    or (
+      p.kind = 'round_robin'
+      and exists (
+        select 1 from booking_page_rotations pr
+        join rotations r on r.workspace_id = pr.workspace_id and r.id = pr.rotation_id and r.deleted_at is null
+        join rotation_members theirs on theirs.workspace_id = pr.workspace_id and theirs.rotation_id = pr.rotation_id
+          and theirs.member_id = ${memberId}::uuid and theirs.is_on
+        where pr.workspace_id = p.workspace_id and pr.page_id = p.id
+          and not exists (
+            select 1 from rotation_members other
+            join members h on h.workspace_id = other.workspace_id and h.id = other.member_id and h.status = 'active'
+              and h.role::text in (${sql.join(
+                ROTATION_ROLES.map((role) => sql`${role}`),
+                sql`, `,
+              )})
+            where other.workspace_id = pr.workspace_id and other.rotation_id = pr.rotation_id
+              and other.member_id <> ${memberId}::uuid and other.is_on
+          )
+      )
+    )
   )
 `;
 
@@ -941,6 +1008,16 @@ export const bookingPagesRemoval: RemovalEffect = {
   run: async (context, memberId) => {
     const { tx, scope } = context;
     const by = actorRow(scope.actor);
+    // Their rotations' locks first, as `rotationsRemoval` takes them: a rotation change switching off the one other
+    // member waits, and then sees them gone, so no page is left live on a rotation with nobody (late trap #22).
+    const theirs = await tx.execute<{ id: string }>(
+      sql`select rotation_id::text as id from rotation_members where member_id = ${memberId}::uuid`,
+    );
+    await lockRotations(
+      tx,
+      scope.workspaceId,
+      theirs.rows.map((row) => row.id),
+    );
     // Paused first, while the pools still say whom they held; then they leave every pool.
     await tx.execute(sql`
       update booking_pages p

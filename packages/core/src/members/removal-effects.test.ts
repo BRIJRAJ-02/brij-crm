@@ -4,12 +4,15 @@
 // open tasks to someone else.
 import { sql } from 'drizzle-orm';
 import { afterAll, describe, expect, inject, it } from 'vitest';
+import { defaultAvailability } from '@crm/contracts';
 import { createDatabase } from '@crm/db';
+import { saveDefaultHours } from '../availability/schedules.ts';
 import { createBookingPage } from '../booking/pages.ts';
 import { defineAttribute } from '../engine/definitions.ts';
 import { newId } from '../engine/ids.ts';
 import { createRecord } from '../engine/records.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
+import { createRotation } from '../rotation/rotations.ts';
 import { createTask } from '../tasks/tasks.ts';
 import { jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
 import { leaveWorkspace, previewRemoval, removeMember, setMemberRole } from './members.ts';
@@ -166,6 +169,91 @@ describe('booking pages on removal (AC-814)', () => {
       await w.read(sql`select page_id::text as page from booking_page_members where member_id = ${w.gus}::uuid`),
     ).toEqual([]);
     expect(own.id).not.toBe(shared.id);
+  });
+});
+
+describe('round robin pages on removal (late trap #22)', () => {
+  it('pauses one whose rotation they were the last one on in, and keeps one another member still fills', async () => {
+    const w = await world();
+    // A rotation takes only members with hours of their own.
+    for (const scope of [w.gusScope, w.halScope]) {
+      await saveDefaultHours(scope, { availability: defaultAvailability('UTC') });
+    }
+    const pool = (name: string, memberIds: readonly string[]) =>
+      createRotation(w.owner, {
+        id: newId(),
+        settings: { name, strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' },
+        members: memberIds.map((memberId) => ({
+          memberId,
+          weight: 100,
+          priority: 2,
+          dailyCap: null,
+          weeklyCap: null,
+          isOn: true,
+        })),
+      });
+    const page = (title: string, rotationId: string) =>
+      createBookingPage(
+        w.owner,
+        { id: newId(), title, timeZone: 'UTC', kind: 'round_robin', hosts: { fixed: [], rotations: [rotationId] } },
+        NOW,
+      );
+    const alone = await pool('Gus only', [w.gus]);
+    const shared = await pool('Gus and Hal', [w.gus, w.hal]);
+    await page('Gus only demo', alone.id);
+    await page('Shared demo', shared.id);
+    // Gus has no page of his own, so the one that pauses is the round robin page with nobody else to seat.
+    expect(await previewRemoval(w.owner, { memberId: w.gus })).toMatchObject({ pausedPages: 1 });
+    await removeMember(w.owner, { memberId: w.gus });
+    expect(
+      await w.read(sql`select title, status::text as status, paused_reason from booking_pages order by title`),
+    ).toEqual([
+      { title: 'Gus only demo', status: 'paused', paused_reason: 'host_removed' },
+      { title: 'Shared demo', status: 'live', paused_reason: null },
+    ]);
+  });
+
+  it('keeps one live when its owner or a fixed host leaves while its rotations still seat someone', async () => {
+    const w = await world();
+    for (const scope of [w.gusScope, w.halScope]) {
+      await saveDefaultHours(scope, { availability: defaultAvailability('UTC') });
+    }
+    const rotation = await createRotation(w.owner, {
+      id: newId(),
+      settings: { name: 'Hal', strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' },
+      members: [{ memberId: w.hal, weight: 100, priority: 2, dailyCap: null, weeklyCap: null, isOn: true }],
+    });
+    // Ann's own page, and one with Gus as its fixed host: the old rule paused both.
+    await createBookingPage(
+      w.annScope,
+      {
+        id: newId(),
+        title: 'Ann’s',
+        timeZone: 'UTC',
+        kind: 'round_robin',
+        hosts: { fixed: [], rotations: [rotation.id] },
+      },
+      NOW,
+    );
+    await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'With Gus',
+        timeZone: 'UTC',
+        kind: 'round_robin',
+        hosts: { fixed: [w.gus], rotations: [rotation.id] },
+      },
+      NOW,
+    );
+    expect(await previewRemoval(w.owner, { memberId: w.gus })).toMatchObject({ pausedPages: 0 });
+    expect(await previewRemoval(w.owner, { memberId: w.ann })).toMatchObject({ pausedPages: 0 });
+    await removeMember(w.owner, { memberId: w.gus });
+    await removeMember(w.owner, { memberId: w.ann });
+    expect(await w.read(sql`select title, status::text as status from booking_pages order by title`)).toEqual([
+      { title: 'Ann’s', status: 'live' },
+      { title: 'With Gus', status: 'live' },
+    ]);
   });
 });
 
