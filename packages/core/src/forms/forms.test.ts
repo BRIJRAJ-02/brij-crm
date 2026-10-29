@@ -230,6 +230,26 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     expect((await getForm(member, { formId: created.id })).signingSecret).toBeUndefined();
   });
 
+  it('keeps an old address finding the form, and no other form may take it (late trap #54)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const old = live.publicKey;
+    const moved = `moved-${String(Date.now())}`;
+    await updateFormSettings(w.scope, { formId: live.id, slug: moved });
+    // Every embed and link pasted with the old address still reaches it.
+    expect((await enterPublicForm({ db }, old)).formId).toBe(live.id);
+    expect((await enterPublicForm({ db }, moved)).formId).toBe(live.id);
+    const other = await createForm(w.scope, { id: newId() });
+    expect(await isSlugAvailable(w.scope, { formId: other.id, slug: old })).toEqual({ available: false });
+    expect(await refusalOf(updateFormSettings(w.scope, { formId: other.id, slug: old }))).toMatchObject([
+      { code: 'SLUG_TAKEN', field: 'slug' },
+    ]);
+    // The same form may take it back.
+    expect(await isSlugAvailable(w.scope, { formId: live.id, slug: old })).toEqual({ available: true });
+    await updateFormSettings(w.scope, { formId: live.id, slug: old });
+    expect((await enterPublicForm({ db }, moved)).formId).toBe(live.id);
+  });
+
   it('refuses a publish with the first problem, on the question at fault (AC-655)', async () => {
     const w = await workspace();
     const created = await createForm(w.scope, { id: newId(), name: 'Contact us' });
@@ -411,13 +431,14 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     await expect(enterPublicForm({ db }, live.publicKey)).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
   });
 
-  it('changes the address at once, so the old link names nothing (AC-552)', async () => {
+  it('changes the address at once, and the old one still finds the form (AC-552, late trap #54)', async () => {
     const w = await workspace();
     const live = await liveForm(w);
     const moved = await updateFormSettings(w.scope, { formId: live.id, slug: 'talk-to-us', ownerMemberId: null });
     expect(moved).toMatchObject({ publicKey: 'talk-to-us', revision: live.revision });
     expect(moved.ownerMemberId).toBeUndefined();
-    await expect(enterPublicForm({ db }, live.publicKey)).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
+    // Before, the old address named nothing, and every embed already pasted on a site stopped working.
+    await expect(enterPublicForm({ db }, live.publicKey)).resolves.toMatchObject({ formId: live.id });
     await expect(enterPublicForm({ db }, 'talk-to-us')).resolves.toMatchObject({ formId: live.id });
   });
 

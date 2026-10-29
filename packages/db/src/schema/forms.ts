@@ -48,7 +48,7 @@ export const forms = pgTable(
     /**
      * The form's public address, after `/f/` (`form-a1b2c3`, or one the member
      * chose): unique across every workspace, in every link and embed; internal
-     * ids never appear publicly (AC-552). Changing it stops the old link.
+     * ids never appear publicly (AC-552). An old one keeps finding the form (`formPublicKeys`, 0120).
      */
     publicKey: text('public_key').notNull(),
     /** Who owns a record the form creates (AC-567); applies at once. Null: nobody. */
@@ -126,6 +126,33 @@ export const forms = pgTable(
 );
 
 const publishedBy = actorColumns('published_by');
+
+/**
+ * Every address a form holds or held, after `/f/` (late trap #54, 29 Oct 2026): its current one and up to 5 old
+ * ones (none kept past 180 days once left), which keep finding the form, so an embed or link already pasted survives a change. Kept only by the trigger
+ * crm_form_public_keys_keep (0120) on `forms`; a deleted form takes its rows with it. `form_public_keys_key` keeps
+ * an address one form holds or held from every other form, in any workspace; the same form may take it back.
+ */
+export const formPublicKeys = pgTable(
+  'form_public_keys',
+  {
+    workspaceId: workspaceId(),
+    formId: uuid('form_id').notNull(),
+    publicKey: text('public_key').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    /** When the form last took or left this address: the oldest past the cap of 5 old ones goes first. */
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'form_public_keys_pkey', columns: [t.workspaceId, t.formId, t.publicKey] }),
+    foreignKey({
+      name: 'form_public_keys_form',
+      columns: [t.workspaceId, t.formId],
+      foreignColumns: [forms.workspaceId, forms.id],
+    }).onDelete('cascade'),
+    uniqueIndex('form_public_keys_key').on(t.publicKey),
+  ],
+);
 
 /**
  * One numbered version of a form's document (`FormDocument` in

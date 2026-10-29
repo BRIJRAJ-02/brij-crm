@@ -89,6 +89,9 @@ describe('every tenant table', () => {
             row.index === 'workspaces_slug' ||
             // A form's public key finds it before the workspace is known (spec 0023), so it is unique everywhere.
             row.index === 'forms_public_key' ||
+            // An old form address (0120) likewise, read only through crm_form_by_key; unique everywhere, so no other
+            // form takes an address one held while it still finds that one.
+            row.index === 'form_public_keys_key' ||
             row.index === 'booking_pages_public_key' ||
             // `/<handle>/<slug>` and a profile's pages are found before the workspace is known (22 Oct 2026), read
             // only through crm_booking_lookup's crm_booking_page_by_address and crm_booking_profile_pages.
