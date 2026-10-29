@@ -1,6 +1,7 @@
 // Attributes without setup (spec 0012, milestone 2), end to end: an owner
 // adds one attribute of each of the ten types without setup from settings, with a
-// description, Unique, Required, Allow multiple and defaults; edits one through
+// description, Unique, Allow multiple and defaults, and is refused Required while the first run's live Intro call
+// books guests into People with nothing for it (late trap #11); edits one through
 // `?attribute=<id>`; moves, archives and restores one; and the table shows the
 // new columns, the "+" header and the column menu's schema items.
 import { expect, test, type Page } from '@playwright/test';
@@ -12,7 +13,7 @@ const TYPES = [
   { type: 'Long text', name: 'Background' },
   { type: 'Date', name: 'Follow up', days: '7' },
   { type: 'Checkbox', name: 'Is partner' },
-  { type: 'Rating', name: 'Warmth', required: true },
+  { type: 'Rating', name: 'Warmth' },
   { type: 'Email', name: 'Billing email', multiple: true },
   { type: 'Phone', name: 'Office phone' },
   { type: 'Link', name: 'Portfolio' },
@@ -74,7 +75,6 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   const own = page.getByRole('grid', { name: 'Attributes' });
   await expect(own.getByRole('row').last()).toContainText('Account manager');
   await expect(own.getByRole('row', { name: /Code/ })).toContainText('Unique');
-  await expect(own.getByRole('row', { name: /Warmth/ })).toContainText('Required');
   await expect(own.getByRole('row', { name: /Follow up/ })).toContainText('Default');
 
   // A taken API name is refused on its field (AC-245).
@@ -84,6 +84,19 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   await dialog.getByRole('button', { name: 'Create attribute' }).click();
   await expect(dialog.getByText('An attribute here already uses this API name. Pick another.')).toBeVisible();
   await checkScreen(page, 'attribute-refused');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+
+  // Required is refused while the first run's Intro call is live and books guests into People with nothing for it:
+  // each guest would quietly be left out of the CRM (late trap #11). The refusal says how to get past it.
+  await page.getByRole('button', { name: 'New attribute' }).click();
+  await dialog.getByLabel('Name', { exact: true }).fill('Score');
+  await dialog.getByRole('button', { name: /Type$/ }).click();
+  await page.getByRole('option', { name: 'Rating', exact: true }).click();
+  await expect(page.getByRole('listbox')).toBeHidden();
+  await dialog.getByText('Required', { exact: true }).click();
+  await dialog.getByRole('button', { name: 'Create attribute' }).click();
+  await expect(dialog.getByText(/Intro call is live and makes records here at bookings/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
 
