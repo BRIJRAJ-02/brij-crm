@@ -522,6 +522,8 @@ export const Folders: Story = {
     await expect(fold).toHaveAttribute('aria-expanded', 'false');
     // Closed, the blocks under it are out of the page: not hidden by a colour, gone from the tree.
     await expect(canvas.queryByRole('link', { name: /timefix\.com/ })).toBeNull();
+    // And not drawn either: the role query reads the hidden attribute, but a panel's own display once overrode it.
+    await expect(canvasElement.querySelector('a[href="https://www.timefix.com"]')).not.toBeVisible();
     await userEvent.click(fold);
     await expect(fold).toHaveAttribute('aria-expanded', 'true');
     await expect(canvas.getByRole('link', { name: /timefix\.com/ })).toBeVisible();

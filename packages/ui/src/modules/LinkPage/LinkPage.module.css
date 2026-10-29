@@ -328,6 +328,11 @@
     padding-inline-start: var(--space-12);
   }
 
+  /* Shut: the flex display above would otherwise win over the hidden attribute and leave the fold open. */
+  .panel[hidden] {
+    display: none;
+  }
+
   /* Writing: the person's own words, not a row. No frame and nothing to press, so it reads as the page talking
      rather than as one more thing to tap, and its line breaks are kept as typed. */
   .writing {
