@@ -129,6 +129,16 @@ export const strings = {
   answersObjectMoved: (objectName: string) =>
     `Answers now go to ${objectName}. Choose a field for each question again.`,
   answersObjectFailed: 'That object couldn’t be used for the answers.',
+  /** Under an object a booking can't file onto, in the list. */
+  answersObjectNoEmail: 'Needs a unique email field',
+  /** The rule under the object picker, while some object breaks it: said where the keyboard and a reader reach it too. */
+  answersObjectRule: 'Only objects with a unique email field can take booking answers.',
+  /** The object chosen can no longer take answers: its unique email field was archived or made not unique since. */
+  answersObjectBrokenTitle: (pluralName: string) => `Bookings can’t find the visitor in ${pluralName}`,
+  answersObjectBroken: 'It has no unique email field now, so a booking can’t find or make the visitor’s record.',
+  answersObjectBrokenAsk:
+    'It has no unique email field now, so a booking can’t find or make the visitor’s record. Ask an admin to add one.',
+  answersObjectAddField: 'Add an email field',
   tryAgain: 'Try again',
   /** Book by chat (spec 0042) doesn't ask the page's questions yet (spec 0057 follow up). */
   chatAsksNone: 'Visitors who book by chat skip these questions, since they’re all optional.',
