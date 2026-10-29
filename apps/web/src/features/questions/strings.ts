@@ -29,6 +29,8 @@ export const strings = {
   notFiledShort: 'Not filed',
   willCreate: (title: string, objectName: string) => `Creates “${title}” on ${objectName}`,
   willCreateShort: (title: string) => `Creates “${title}”`,
+  /** The Create choice before the question has words to name its field by. */
+  willCreateUnnamed: (objectName: string) => `Creates a field on ${objectName} from this question`,
   cantCreate: 'You can’t add attributes, so this stays with the submission.',
   /** Save couldn't make some planned attributes: those questions stay unfiled. */
   notCreated: (titles: readonly string[], objectName: string) =>

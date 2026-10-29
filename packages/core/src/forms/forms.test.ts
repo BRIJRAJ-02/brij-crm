@@ -290,6 +290,62 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     expect(unchanged.revision).toBe(live.revision);
   });
 
+  it('leaves a question kept off the CRM unfiled when the object is asked for again', async () => {
+    // Not filed, chosen (28 October 2026): the server files a form's phone, name and match email by default when its
+    // object is set, and that must not undo a person's choice to keep one of them off the CRM.
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId(), name: 'Contact us' });
+    const phone = created.draft.questions.find((each) => each.answerType === 'phone');
+    if (phone === undefined) throw new Error('The starting form asks a phone question.');
+    const { filedOn: _filed, ...unfiled } = phone;
+    const saved = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: {
+        ...created.draft,
+        questions: created.draft.questions.map((each) => (each.id === phone.id ? { ...unfiled, kept: true } : each)),
+      },
+      expectedRevision: created.revision,
+    });
+    const again = await setFormTarget(w.scope, {
+      formId: created.id,
+      mainObjectId: w.people,
+      expectedRevision: saved.revision,
+    });
+    const after = again.draft.questions.find((each) => each.id === phone.id);
+    expect(after).toMatchObject({ kept: true });
+    expect(after?.filedOn).toBeUndefined();
+  });
+
+  it('never moves the match to a later email question when the visitor’s own email is kept off the CRM', async () => {
+    // A referrer's email filed as the match would put every visitor's answers on the referrer's record.
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId(), name: 'Refer a friend' });
+    const own = created.draft.questions.find((each) => each.answerType === 'email');
+    if (own === undefined) throw new Error('The starting form asks an email question.');
+    const { filedOn: _filed, ...unfiledOwn } = own;
+    const referrer = { ...unfiledOwn, id: newId(), key: 'referrer_email', label: 'Referrer email' };
+    const saved = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: {
+        ...created.draft,
+        questions: [
+          ...created.draft.questions.map((each) =>
+            each.id === own.id ? { ...unfiledOwn, kept: true as const } : each,
+          ),
+          referrer,
+        ],
+      },
+      expectedRevision: created.revision,
+    });
+    const again = await setFormTarget(w.scope, {
+      formId: created.id,
+      mainObjectId: w.people,
+      expectedRevision: saved.revision,
+    });
+    expect(again.draft.questions.find((each) => each.id === own.id)?.filedOn).toBeUndefined();
+    expect(again.draft.questions.find((each) => each.id === referrer.id)?.filedOn).toBeUndefined();
+  });
+
   it('refuses a publish filing onto a field the publisher can only read, naming it (AC-546)', async () => {
     const w = await workspace();
     const created = await createForm(w.scope, { id: newId(), name: 'Contact us' });

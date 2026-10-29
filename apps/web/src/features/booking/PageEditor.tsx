@@ -532,7 +532,8 @@ export function PageEditor({
   // saved at once, and the attributes are archived. A refused save puts the draft's filings back.
   const undoAttributes = (made: readonly MadeAttribute[]) => {
     const unfile = (list: Questions) => [
-      ...made.reduce((each, one) => changeQuestion(each, one.questionId, { filedOn: null }), list),
+      // Undo says the field wasn't wanted: kept off the CRM, so the next Save doesn't make it again.
+      ...made.reduce((each, one) => changeQuestion(each, one.questionId, { filedOn: null, kept: true }), list),
     ];
     const refile = (list: Questions) => [
       ...made.reduce((each, one) => changeQuestion(each, one.questionId, { filedOn: one.attributeId }), list),

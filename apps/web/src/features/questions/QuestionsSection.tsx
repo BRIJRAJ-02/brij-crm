@@ -98,6 +98,10 @@ export interface QuestionsSectionProps {
   readonly isReadOnly: boolean;
 }
 
+/** Where it goes' two choices that are not a field: a new field made on Save, and the answer kept off the CRM. */
+const CREATE = 'create';
+const NOT_FILED = 'none';
+
 /** The answer types a question may take now (file questions wait for file attachments). */
 const TYPE_ITEMS = ANSWER_TYPES.map((type) => ({
   id: type,
@@ -144,6 +148,21 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       new Map(
         planNewAttributes(
           questions,
+          attributes,
+          objectName !== undefined && !isFilingOff && props.canCreate === true && !isReadOnly,
+        ).map((plan) => [plan.questionId, plan.title]),
+      ),
+    [questions, attributes, objectName, isFilingOff, props.canCreate, isReadOnly],
+  );
+  // The field each question would get if it asked for one, kept ones included: what the Create choice is titled.
+  const creatable = useMemo(
+    () =>
+      new Map(
+        planNewAttributes(
+          questions.map((question) => {
+            const { kept: _kept, ...rest } = question;
+            return rest;
+          }),
           attributes,
           objectName !== undefined && !isFilingOff && props.canCreate === true && !isReadOnly,
         ).map((plan) => [plan.questionId, plan.title]),
@@ -311,6 +330,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             words={words}
             {...(objectName === undefined ? {} : { objectName })}
             {...(planned.has(id) ? { willCreate: planned.get(id) ?? '' } : {})}
+            {...(creatable.has(id) ? { createTitle: creatable.get(id) ?? '' } : {})}
             canCreate={props.canCreate === true}
             isReadOnly={isReadOnly}
             // A question just added, or one a publish refused, takes focus and comes into view.
@@ -402,6 +422,8 @@ interface QuestionEditorProps {
   readonly objectName?: string;
   /** The title of the attribute publishing will create for this question, when it will. */
   readonly willCreate?: string;
+  /** The title it would get if it asked for a field, even while kept off the CRM: the Create choice's words. */
+  readonly createTitle?: string;
   readonly canCreate: boolean;
   readonly isReadOnly: boolean;
   /** Just added: its Question field takes focus, and the card scrolls into view. */
@@ -423,6 +445,7 @@ function QuestionEditor({
   words,
   objectName,
   willCreate,
+  createTitle,
   canCreate,
   isReadOnly,
   isJustAdded,
@@ -430,6 +453,10 @@ function QuestionEditor({
   onChange,
   onChoicesInvalid,
 }: QuestionEditorProps) {
+  // Whether Save may make this question a field of its own: filing on, a member who may add fields, an answer type
+  // a field can hold (a file answer files onto a file field only, which Save never makes).
+  const couldCreate =
+    objectName !== undefined && !isFilingOff && canCreate && !isReadOnly && question.answerType !== 'file';
   const labelRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
   // A question just added takes focus without jumping, then glides into view (at once with reduced motion).
@@ -508,16 +535,22 @@ function QuestionEditor({
             </InfoTip>
           }
           items={[
-            {
-              id: 'none',
-              label:
-                willCreate === undefined || objectName === undefined || isFilingOff
-                  ? words.notFiled
-                  : strings.willCreate(willCreate, objectName),
-              ...(!isFilingOff && !canCreate && question.label.trim() !== '' && question.filedOn === undefined
-                ? { description: words.cantCreate }
-                : {}),
-            },
+            // A new field, and Not filed, are two choices: one choice that read as either, by whether a field would be
+            // made, left no way to keep an answer off the CRM (every booking question became a People column).
+            // Offered from the start, before the question has words: with Not filed the only item there, choosing it
+            // chose what was already showing, so the choice was lost when the label was typed (UX review).
+            ...(!couldCreate
+              ? []
+              : [
+                  {
+                    id: CREATE,
+                    // The title Save will really use, when it will make one; else the one it would (kept, or no words yet).
+                    label:
+                      (willCreate ?? createTitle) === undefined
+                        ? strings.willCreateUnnamed(objectName)
+                        : strings.willCreate(willCreate ?? createTitle ?? '', objectName),
+                  },
+                ]),
             ...fitting.map((attribute) => {
               const holder = usedBy.get(attribute.attributeId);
               return {
@@ -527,13 +560,34 @@ function QuestionEditor({
                 ...(attribute.canWrite ? {} : { description: strings.cantWrite, isArchived: true }),
               };
             }),
+            // A filing whose field is gone (archived, or no longer fits the answer type) still shows, muted, as the card
+            // names it: the Select was blank while the card said the field no longer exists.
+            ...(question.filedOn === undefined ||
+            fitting.some((attribute) => attribute.attributeId === question.filedOn?.attributeId)
+              ? []
+              : [{ id: question.filedOn.attributeId, label: strings.goneAttribute, isArchived: true }]),
+            // Apart from the fields, as a form's "Don't add to the CRM" is: not one more place an answer could go.
+            {
+              id: NOT_FILED,
+              label: words.notFiled,
+              isApart: fitting.length > 0 || couldCreate,
+              ...(!isFilingOff && !canCreate && question.label.trim() !== '' && question.filedOn === undefined
+                ? { description: words.cantCreate }
+                : {}),
+            },
           ]}
-          value={isFilingOff ? 'none' : (question.filedOn?.attributeId ?? 'none')}
+          value={
+            isFilingOff
+              ? NOT_FILED
+              : (question.filedOn?.attributeId ?? (question.kept !== true && couldCreate ? CREATE : NOT_FILED))
+          }
           isReadOnly={isReadOnly || isLocked}
           isDisabled={isFilingOff}
           {...(isFilingOff ? { hint: strings.offCrm } : {})}
           onChange={(id) => {
-            onChange({ filedOn: id === null || id === 'none' ? null : id });
+            if (id === null || id === NOT_FILED) onChange({ filedOn: null, kept: true });
+            else if (id === CREATE) onChange({ filedOn: null, kept: false });
+            else onChange({ filedOn: id });
           }}
         />
       )}

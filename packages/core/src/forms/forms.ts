@@ -936,9 +936,13 @@ function fileDefaults(
     used.add(attribute.id);
     return { objectRole: 'main' as const, attributeId: attribute.id };
   };
+  // The first unfiled email is the visitor's own. Kept off the CRM, it stays where it is, and no later email question
+  // takes the match in its place: a referrer's email filed as the match would put every visitor's answers on the
+  // referrer's record (security review, 28 October 2026).
   const firstEmail = questions.find((question) => question.answerType === 'email' && question.filedOn === undefined);
   return questions.map((question) => {
-    if (question.filedOn !== undefined) return question;
+    // Filed already, or kept off the CRM by choice: either way, not ours to file.
+    if (question.filedOn !== undefined || question.kept === true) return question;
     const filedOn =
       question === firstEmail && match?.type === 'email'
         ? take(match)

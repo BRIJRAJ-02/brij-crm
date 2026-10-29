@@ -247,7 +247,11 @@ export function FormEditor(props: FormEditorProps) {
         label: strings.undo,
         onAction: () => {
           setDraft((before) =>
-            made.reduce((document, each) => changeQuestion(document, each.questionId, { filedOn: null }), before),
+            // Undo says the field wasn't wanted: kept off the CRM, so the next Save doesn't make it again.
+            made.reduce(
+              (document, each) => changeQuestion(document, each.questionId, { filedOn: null, kept: true }),
+              before,
+            ),
           );
           archiveMadeAttributes(data, slug, made).then(
             () => data.forms.attributes(slug, form.id).then(setTarget, failed),

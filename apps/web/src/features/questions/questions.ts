@@ -102,6 +102,8 @@ export interface QuestionChange {
   readonly placeholder?: string;
   readonly required?: boolean;
   readonly filedOn?: string | null;
+  /** True: keep the answer off the CRM (Not filed, chosen). False: let Save give it a field again. */
+  readonly kept?: boolean;
   /** Show when (spec 0043): new conditions, or null to always show it. */
   readonly showWhen?: FormQuestion['showWhen'] | null;
 }
@@ -123,12 +125,13 @@ export function changeQuestion(
   const changed = questions.map((question): FormQuestion => {
     if (question.id !== id) {
       if (moving !== undefined && question.filedOn?.attributeId === moving) {
+        // Kept, so it stays Not filed as "choosing it moves it here" promised: unkept, Save would make it a new field.
         const { filedOn: _gone, ...rest } = question;
-        return rest;
+        return { ...rest, kept: true as const };
       }
       return question;
     }
-    const { filedOn, showWhen: shownWhen, ...rest } = question;
+    const { filedOn, showWhen: shownWhen, kept: wasKept, ...rest } = question;
     const showWhen = change.showWhen === null ? undefined : (change.showWhen ?? shownWhen);
     const label = change.label ?? question.label;
     const answerType = change.answerType ?? question.answerType;
@@ -143,7 +146,15 @@ export function changeQuestion(
           ? []
           : question.choices;
     const filing =
-      change.filedOn === null ? undefined : change.filedOn === undefined ? filedOn?.attributeId : change.filedOn;
+      change.kept === true
+        ? undefined
+        : change.filedOn === null
+          ? undefined
+          : change.filedOn === undefined
+            ? filedOn?.attributeId
+            : change.filedOn;
+    // Kept off the CRM only while it is filed nowhere: filing it anywhere, or asking for a field again, ends that.
+    const kept = filing === undefined && (change.kept ?? wasKept === true);
     return {
       ...rest,
       key,
@@ -157,6 +168,7 @@ export function changeQuestion(
           : { placeholder: question.placeholder }),
       required: change.required ?? question.required,
       ...(filing === undefined ? {} : { filedOn: { objectRole: 'main' as const, attributeId: filing } }),
+      ...(kept ? { kept: true as const } : {}),
       ...(showWhen === undefined ? {} : { showWhen }),
     };
   });
@@ -217,7 +229,7 @@ export function fileByLabel(questions: Questions, attributes: readonly FormAttri
   const used = new Set(questions.flatMap((question) => question.filedOn?.attributeId ?? []));
   const plain = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '');
   return questions.map((question): FormQuestion => {
-    if (question.filedOn !== undefined) return question;
+    if (question.filedOn !== undefined || question.kept === true) return question;
     const names = [plain(question.label), plain(question.key)];
     const match = attributes.find(
       (attribute) =>
@@ -296,7 +308,8 @@ export function planNewAttributes(
   const plans: PlannedAttribute[] = [];
   for (const question of questions) {
     const label = question.label.trim();
-    if (question.filedOn !== undefined || label === '' || question.answerType === 'file') continue;
+    if (question.filedOn !== undefined || question.kept === true || label === '' || question.answerType === 'file')
+      continue;
     const title = freeTitle(label, taken);
     taken.add(title.toLowerCase());
     const type = plannedType(question.answerType);

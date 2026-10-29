@@ -59,6 +59,13 @@ export const FormQuestion = z.strictObject({
   required: z.boolean(),
   /** Absent: not filed, kept with the enquiry. */
   filedOn: FiledOn.optional(),
+  /**
+   * The person chose to keep this answer off the CRM: an unfiled question that is not given a field of its own on
+   * Save or Publish, nor filed again by its label when the object changes. Without it an unfiled, labelled question
+   * gets a new field, so "Not filed" could never be chosen and every booking question became a People column
+   * (28 October 2026). Meaningless beside `filedOn`, which a filing clears it for.
+   */
+  kept: z.literal(true).optional(),
   /** `fill` writes only an empty value (the default, AC-558); `always` overwrites. */
   update: z.enum(['fill', 'always']).default('fill'),
   /** Shown only when earlier answers match (spec 0043, AC-1614); absent, it always shows. */
