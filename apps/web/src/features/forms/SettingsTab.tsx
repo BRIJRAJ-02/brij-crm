@@ -17,6 +17,7 @@ import type {
 import { useCaptureList } from '@crm/data/react';
 import {
   ButtonLink,
+  Callout,
   Card,
   EmptyState,
   Field,
@@ -30,8 +31,9 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
-import { linksHref } from '../booking/links.ts';
+import { linksHref, pageEditorHref } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
+import { afterPageProblem } from './after-page.ts';
 import { isRedirectAddress, sameValue } from './draft.ts';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
@@ -39,6 +41,7 @@ import { strings } from './strings.ts';
 import { questionFacts } from '../routing/facts.ts';
 import { RulesCard } from '../routing/RulesCard.tsx';
 import { strings as routingStrings } from '../routing/strings.ts';
+import { useCan } from '../workspace/WorkspacePage.tsx';
 
 const NOBODY = 'nobody';
 
@@ -216,6 +219,7 @@ export function SettingsTab({
   });
   // The booking pages a visitor can be sent on to: the reader's own, or everyone's with booking.admin, live ones.
   const pages = useCaptureList(data.bookingPages.view(slug));
+  const seesAllPages = useCan('booking.admin');
   const pageList: readonly BookingPageView[] = pages.status === 'ready' ? pages.items : [];
   const usable = pageList.filter((page) => page.canChange && page.status === 'live');
 
@@ -338,6 +342,7 @@ export function SettingsTab({
   const routingChanged = live !== undefined && !sameValue(live.routing.rules, draft.routing.rules);
 
   const bookingPage = after.kind === 'booking' ? pageList.find((page) => page.id === after.bookingPageId) : undefined;
+  const afterProblem = afterPageProblem(draft, pages.status === 'ready' ? pages.items : undefined, seesAllPages);
   // Where each question's answer goes: the target's attribute, or kept with the submission only.
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
   const objectName = target.objectName ?? '';
@@ -414,6 +419,34 @@ export function SettingsTab({
         )}
         {after.kind === 'booking' && (
           <>
+            {/* Late trap #53: the page paused (by hand, or its last host left) or went, and every visitor quietly got
+                the message instead of a meeting. Said here, beside the choice that fixes it. */}
+            {afterProblem?.kind === 'paused' && (
+              <Callout
+                tone="warning"
+                title={strings.pagePausedTitle(afterProblem.page.title)}
+                {...(afterProblem.page.canChange
+                  ? {
+                      actions: (
+                        <ButtonLink href={pageEditorHref(slug, afterProblem.page.id)} variant="secondary">
+                          {strings.openPage}
+                        </ButtonLink>
+                      ),
+                    }
+                  : {})}
+              >
+                {strings.pagePaused({
+                  hostLeft: afterProblem.page.pausedReason === 'host_removed',
+                  canResume: afterProblem.page.canChange,
+                  canPick: !isReadOnly,
+                })}
+              </Callout>
+            )}
+            {afterProblem?.kind === 'gone' && (
+              <Callout tone="warning" title={strings.pageGoneTitle}>
+                {strings.pageGone(!isReadOnly)}
+              </Callout>
+            )}
             <Select
               label={strings.bookingPage}
               items={[

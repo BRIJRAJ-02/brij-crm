@@ -14,8 +14,10 @@ import {
   type SubmissionView,
 } from '@crm/data';
 import { FORM_QUESTIONS_MAX, previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
+import { useCaptureList } from '@crm/data/react';
 import {
   Button,
+  ButtonLink,
   Callout,
   Card,
   EditorStatus,
@@ -52,6 +54,7 @@ import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from '.
 import { PublishDialog } from './PublishDialog.tsx';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
 import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
+import { afterPageProblem } from './after-page.ts';
 import { readyMatch } from './match.ts';
 import { firstRefusal, saveFailureMessage } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
@@ -494,6 +497,7 @@ export function FormEditor(props: FormEditorProps) {
     </TopBar>
   );
 
+  const current: FormTab = isPublished ? tab : 'form';
   const notices = (
     <>
       {form.status === 'paused' && (
@@ -504,6 +508,10 @@ export function FormEditor(props: FormEditorProps) {
         >
           {strings.pausedText}
         </Callout>
+      )}
+      {/* On every tab but Settings, which says it beside the choice: visitors quietly get the message (late trap #53). */}
+      {current !== 'settings' && form.live?.after.kind === 'booking' && (
+        <AfterPageNotice slug={slug} formId={form.id} live={form.live} />
       )}
       {!canManage && (
         <Callout tone="info" title={strings.readOnlyTitle}>
@@ -535,7 +543,6 @@ export function FormEditor(props: FormEditorProps) {
     </>
   );
 
-  const current: FormTab = isPublished ? tab : 'form';
   const body = (() => {
     switch (current) {
       case 'settings':
@@ -785,6 +792,38 @@ export function FormEditor(props: FormEditorProps) {
 }
 
 /** A draft's name, as a field: blur saves it, an empty one says so. */
+/**
+ * The live form's After page can't take visitors (late trap #53): paused, or deleted. Its own component, so the
+ * booking pages are read only for a form that sends visitors to one.
+ */
+function AfterPageNotice({
+  slug,
+  formId,
+  live,
+}: {
+  readonly slug: string;
+  readonly formId: string;
+  readonly live: FormDocument;
+}) {
+  const { data } = useRouteContext({ from: '__root__' });
+  const pages = useCaptureList(data.bookingPages.view(slug));
+  const problem = afterPageProblem(live, pages.status === 'ready' ? pages.items : undefined, useCan('booking.admin'));
+  if (problem === undefined) return null;
+  return (
+    <Callout
+      tone="warning"
+      title={problem.kind === 'paused' ? strings.afterPagePausedTitle(problem.page.title) : strings.afterPageGoneTitle}
+      actions={
+        <ButtonLink href={formHref(slug, formId, 'settings')} variant="secondary">
+          {strings.afterPageFix}
+        </ButtonLink>
+      }
+    >
+      {strings.afterPageText}
+    </Callout>
+  );
+}
+
 function DraftName({ name, onRename }: { readonly name: string; readonly onRename: (name: string) => void }) {
   const [value, setValue] = useState(name);
   const [error, setError] = useState<string | undefined>(undefined);

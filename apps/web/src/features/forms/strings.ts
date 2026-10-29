@@ -154,6 +154,22 @@ export const strings = {
   pickBookingPage: 'Pick a booking page',
   pageItem: (title: string, minutes: number) => `${title} · ${String(minutes)} min`,
   pageNotUsable: 'Paused, or not yours to use: pick another',
+  pagePausedTitle: (title: string) => `${title} is paused`,
+  pagePaused: (when: { readonly hostLeft: boolean; readonly canResume: boolean; readonly canPick: boolean }) =>
+    [
+      when.hostLeft
+        ? 'Its last host left the workspace, so visitors see your message instead of booking a meeting.'
+        : 'Visitors see your message instead of booking a meeting.',
+      when.canResume ? (when.hostLeft ? 'Give it a host, then resume it' : 'Resume it') : 'Ask its owner to resume it',
+    ].join(' ') + (when.canPick ? ', or pick another page.' : '.'),
+  pageGoneTitle: 'Its booking page was deleted',
+  pageGone: (canPick: boolean) =>
+    `Visitors see your message instead of booking a meeting.${canPick ? ' Pick another page.' : ''}`,
+  afterPagePausedTitle: (title: string) => `Visitors can’t book: ${title} is paused`,
+  afterPageGoneTitle: 'Visitors can’t book: the booking page was deleted',
+  afterPageText: 'They see the form’s message instead of booking a meeting.',
+  afterPageFix: 'Change where it sends',
+  openPage: 'Open page',
   noBookingPages: 'No live booking pages',
   keepsMessage: 'Visitors see your message until then.',
   keepsWebPage: 'Visitors go to your web page until then.',

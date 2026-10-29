@@ -2,7 +2,15 @@
 // lists Nobody, the teammates and, under Round robin, the groups the reader can see with how many are switched on.
 // Choosing a group says who gets each new record and saves the group alone (never a teammate beside it) from the
 // SaveBar; a group with nobody switched on, and one the reader can't list, each say so in the one line under it.
-import type { DataLayer, FormDocument, FormView, MemberSummary, ObjectSummary, RotationView } from '@crm/data';
+import type {
+  BookingPageView,
+  DataLayer,
+  FormDocument,
+  FormView,
+  MemberSummary,
+  ObjectSummary,
+  RotationView,
+} from '@crm/data';
 import { useState } from 'react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -126,10 +134,10 @@ function readyList<Item>(items: readonly Item[]) {
 }
 
 /** A data layer holding the workspace's groups and the settings saves, kept. */
-function fakeData(groups: readonly RotationView[]) {
+function fakeData(groups: readonly RotationView[], bookingPages: readonly BookingPageView[] = []) {
   const saves: Record<string, unknown>[] = [];
   const rotations = readyList(groups);
-  const pages = readyList([]);
+  const pages = readyList(bookingPages);
   const data = {
     rotations: { view: () => rotations },
     bookingPages: { view: () => pages },
@@ -186,10 +194,16 @@ afterEach(() => {
   shown = undefined;
 });
 
-async function show(initial: FormView, groups: readonly RotationView[]) {
-  const fake = fakeData(groups);
+async function show(
+  initial: FormView,
+  groups: readonly RotationView[],
+  pages: readonly BookingPageView[] = [],
+  permissions?: readonly string[],
+) {
+  const fake = fakeData(groups, pages);
   shown = await renderInApp(() => <Editor initial={initial} />, {
     data: fake.data,
+    ...(permissions === undefined ? {} : { permissions }),
     pattern: '/w/$slug/captures/forms/$formId',
     at: '/w/acme/captures/forms/form-1',
   });
@@ -251,5 +265,53 @@ describe('the owner of a form’s new records', () => {
     await userEvent.keyboard('{Home}{ArrowDown}{Enter}');
     await expect.element(owner).toHaveTextContent('Ada Lovelace');
     await expect.element(page.getByText('For new records only.')).toBeVisible();
+  });
+});
+
+describe('a form that sends visitors on to a booking page (late trap #53)', () => {
+  const DEMO = '0199f0a0-0000-7000-8000-0000000000d1';
+  const sending = (status: 'live' | 'paused') => {
+    const draft: FormDocument = {
+      ...DRAFT,
+      after: { kind: 'booking', bookingPageId: DEMO, countdownSeconds: 5, message: 'Thanks' },
+    };
+    const form = { ...formView({}), draft, live: draft };
+    const demo = {
+      id: DEMO,
+      title: 'Demo call',
+      status,
+      durations: [30],
+      canChange: true,
+      ...(status === 'paused' ? { pausedReason: 'host_removed' } : {}),
+    } as unknown as BookingPageView;
+    return { form, demo };
+  };
+
+  it('says when the page is paused, why, and offers the way to it', async () => {
+    const { form, demo } = sending('paused');
+    await show(form, [], [demo]);
+    await expect.element(page.getByText('Demo call is paused')).toBeVisible();
+    await expect.element(page.getByText(/Its last host left the workspace/)).toBeVisible();
+    await expect
+      .element(page.getByRole('link', { name: 'Open page' }))
+      .toHaveAttribute('href', `/w/acme/captures/links/${DEMO}`);
+  });
+
+  it('says a deleted page is gone to a reader who sees every page, and nothing to one who may not', async () => {
+    const { form } = sending('paused');
+    await show(form, [], [], ['forms.manage', 'booking.admin']);
+    await expect.element(page.getByText('Its booking page was deleted')).toBeVisible();
+    await expect.element(page.getByText(/Pick another page\./)).toBeVisible();
+    shown?.unmount();
+    await show(form, [], [], ['forms.manage']);
+    await expect.element(page.getByRole('button', { name: /Booking page/ })).toBeVisible();
+    expect(page.getByText('Its booking page was deleted').query()).toBeNull();
+  });
+
+  it('says nothing while the page is live', async () => {
+    const { form, demo } = sending('live');
+    await show(form, [], [demo]);
+    await expect.element(page.getByRole('button', { name: /Booking page/ })).toBeVisible();
+    expect(page.getByText('Demo call is paused').query()).toBeNull();
   });
 });
