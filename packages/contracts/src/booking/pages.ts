@@ -492,7 +492,8 @@ export const bookingsContract = {
   hours: oc.input(GetMemberHoursInput).output(MemberHours),
   setHours: oc.input(UpdateMemberHoursInput).output(MemberHours),
   /** Book someone in, in the caller's own time (spec 0027). */
-  bookAsHost: oc.input(BookAsHostInput).output(z.object({ bookingId: Uuid })),
+  /** `notInCrm`: why the guest's records couldn't be made; the booking stands either way. */
+  bookAsHost: oc.input(BookAsHostInput).output(z.object({ bookingId: Uuid, notInCrm: z.string().optional() })),
   /** Cancel a booking: the guest is told (AC-640). */
   cancel: oc.input(CancelBookingInput).output(z.object({ cancelled: z.boolean() })),
   /** Move a booking to a time its page offers (AC-640). */

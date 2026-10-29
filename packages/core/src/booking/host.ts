@@ -13,6 +13,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { HOST_BOOKING_LIMITS, PERMISSIONS } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
+import { objectLevel } from '../access/policy.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isUuid } from '../engine/ids.ts';
@@ -25,7 +26,7 @@ import { loadPage } from './slots.ts';
 import { manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { matchVisitor } from './visitor.ts';
 
-const { bookingPageMembers, bookings, members, objects } = schema;
+const { attributes, bookingPageMembers, bookings, members, objects } = schema;
 
 /** The shortest and longest meeting a member books in themselves, in minutes: the contract's bounds, so they can't drift. */
 export const HOST_BOOKING_MINUTES = HOST_BOOKING_LIMITS;
@@ -93,12 +94,36 @@ async function checkCalendar(tx: WorkspaceTx, host: string, calendarId: string):
  * the member isn't on, CONFIG_INVALID for a length out of bounds or a time
  * gone by, SLOT_TAKEN when it overlaps another of their bookings.
  */
+/** Why a guest booked in isn't in the CRM, when the refusal says nothing itself. */
+const NOT_IN_CRM = 'Something stopped their record being made. Ask a workspace admin.';
+
+/**
+ * Why the guest's record couldn't be made, for the member who booked them in: a required field named with its
+ * object and what fixes it ("Desk phone on People is required and nothing fills it."), since the record form's
+ * "Give it a value." has nowhere to go after a booking. A field the member can't see stays unnamed (its refusal
+ * carries no attribute), and any other refusal says what it says.
+ */
+async function notInCrmReason(
+  tx: WorkspaceTx,
+  refusal: { readonly code: string; readonly message: string; readonly attributeId?: string } | undefined,
+): Promise<string> {
+  if (refusal === undefined) return NOT_IN_CRM;
+  if (refusal.code !== 'VALUE_REQUIRED' || refusal.attributeId === undefined) return refusal.message;
+  const [field] = await tx
+    .select({ title: attributes.title, object: objects.pluralName })
+    .from(attributes)
+    .innerJoin(objects, eq(objects.id, attributes.objectId))
+    .where(eq(attributes.id, refusal.attributeId));
+  if (field === undefined) return refusal.message;
+  return `${field.title} on ${field.object} is required and nothing fills it. Give it a default, or make it optional.`;
+}
+
 export async function bookAsHost(
   scope: EngineScope,
   deps: HostBookingDeps,
   input: HostBookingInput,
   hooks: readonly AfterWrite[] = [],
-): Promise<{ readonly bookingId: string; readonly replayed: boolean }> {
+): Promise<{ readonly bookingId: string; readonly replayed: boolean; readonly notInCrm?: string }> {
   const host = bookingHost(scope);
   const now = deps.now?.() ?? new Date();
   if (
@@ -191,6 +216,7 @@ export async function bookAsHost(
         throw error;
       }
       // The guest's records, as for a visitor, in a savepoint: a refusal (no right to add people) keeps the booking.
+      let notInCrm: string | undefined;
       const standard = await tx
         .select({ id: objects.id, key: objects.standardKey })
         .from(objects)
@@ -202,6 +228,13 @@ export async function bookAsHost(
         const matched = await context.perRecord((step) =>
           matchVisitor(step, { people, companies }, { name: input.name, email: input.email, timeZone: input.timeZone }),
         );
+        // Refused (a required field nothing fills, no right to add people): the booking stands, and the member who
+        // booked it is told why the guest isn't in the CRM, rather than finding out later (late trap #71).
+        // Only to a member who may see both objects: for one who can't, a refusal would tell a new guest from one
+        // already in the CRM, since a match reads past their access (security review, 29 Oct 2026).
+        const seesBoth =
+          objectLevel(scope.access, people) !== 'none' && objectLevel(scope.access, companies) !== 'none';
+        if (!matched.ok && seesBoth) notInCrm = await notInCrmReason(tx, matched.refusals[0]);
         if (matched.ok && (matched.value.personId !== undefined || matched.value.companyId !== undefined)) {
           await tx
             .update(bookings)
@@ -209,7 +242,7 @@ export async function bookAsHost(
             .where(eq(bookings.id, bookingId));
         }
       }
-      return { bookingId, replayed: false, title: page.title, place: page.location };
+      return { bookingId, replayed: false, title: page.title, place: page.location, notInCrm };
     },
     hooks,
   );
@@ -267,5 +300,9 @@ export async function bookAsHost(
     await recordEvent(tx, result.bookingId, written);
     await enqueueBookingMail(tx, result.bookingId, ['confirmed']);
   });
-  return { bookingId: result.bookingId, replayed: false };
+  return {
+    bookingId: result.bookingId,
+    replayed: false,
+    ...(result.notInCrm === undefined ? {} : { notInCrm: result.notInCrm }),
+  };
 }

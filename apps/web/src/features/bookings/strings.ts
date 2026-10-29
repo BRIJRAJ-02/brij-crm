@@ -219,6 +219,10 @@ export const strings = {
   bookFailed: 'That booking couldn’t be made. Try again.',
   booked: (name: string) => `Booked with ${name}. The invitation is on its way from your calendar.`,
   bookedQuietly: (name: string) => `Booked with ${name}.`,
+  /** How long that notice stays: two sentences and something to fix, longer than a confirmation's 5 seconds. */
+  notInCrmToastMs: 12_000,
+  /** Booked, but the guest's records couldn't be made: the reason, so it can be fixed (late trap #71). */
+  bookedNotInCrm: (name: string, reason: string) => `Booked with ${name}, but they weren’t added to the CRM. ${reason}`,
   /** New meeting without a calendar: the guest is still emailed, with the invitation attached (Q57). What's missing
    * is the event on the member's own calendar, and a video call's link. */
   noCalendar:

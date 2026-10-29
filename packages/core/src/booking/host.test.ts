@@ -207,6 +207,30 @@ describe('book someone in (AC-709, AC-710)', () => {
     ).toMatchObject({ code: 'ID_TAKEN' });
   });
 
+  it('says why the guest isn’t in the CRM when their record can’t be made, and the booking stands (late trap #71)', async () => {
+    const w = await workspace();
+    const page = await pageOf(w.owner);
+    // Required with nothing to fill it, written straight to the row: settings refuses it while a page is live.
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into attributes (workspace_id, id, object_id, api_slug, title, type, is_required, position,
+          created_by_type, updated_by_type)
+        select ${w.workspaceId}::uuid, ${newId()}::uuid, id, 'desk_phone', 'Desk phone', 'text', true, 99, 'system', 'system'
+        from objects where standard_key = 'people'
+      `),
+    );
+    const booked = await bookAsHost(w.owner, calendar().deps, input(page.id));
+    expect(booked.notInCrm).toBe(
+      'Desk phone on People is required and nothing fills it. Give it a default, or make it optional.',
+    );
+    const week = await readBookingsCalendar(w.owner, {
+      from: '2026-11-02T00:00:00.000Z',
+      to: '2026-11-03T00:00:00.000Z',
+    });
+    expect(week.bookings).toHaveLength(1);
+    expect(week.bookings[0]).not.toHaveProperty('personRecordId');
+  });
+
   it('a host who can’t see People and Companies learns nothing of the guest’s records', async () => {
     const w = await workspace();
     // Ada files Grace first, so the person and company already exist.
@@ -224,7 +248,13 @@ describe('book someone in (AC-709, AC-710)', () => {
     };
     const bea = rescope(await w.addMember('Bea'), { rules });
     const page = await createBookingPage(bea, { id: newId(), title: 'Bea’s call', timeZone: 'UTC' }, NOW);
-    await bookAsHost(bea, calendar().deps, input(page.id, { start: new Date('2026-11-03T20:00:00.000Z') }));
+    const booked = await bookAsHost(
+      bea,
+      calendar().deps,
+      input(page.id, { start: new Date('2026-11-03T20:00:00.000Z') }),
+    );
+    // Nothing says whether the guest was new: a new one would be refused, a matched one not.
+    expect(booked.notInCrm).toBeUndefined();
     const week = await readBookingsCalendar(bea, { from: '2026-11-03T00:00:00.000Z', to: '2026-11-04T00:00:00.000Z' });
     expect(week.bookings).toHaveLength(1);
     expect(week.bookings[0]).not.toHaveProperty('personRecordId');

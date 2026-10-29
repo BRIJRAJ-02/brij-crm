@@ -198,7 +198,7 @@ async function renderWeek(
           onSearch={() => undefined}
           onRemoveBlock={onRemoveBlock}
           onBlock={() => Promise.resolve({ id: 'x' })}
-          onBookAsHost={() => Promise.resolve()}
+          onBookAsHost={() => Promise.resolve({})}
           newBookingKey={() => 'key'}
           workingStart={() => 9 * 60}
           toasts={toasts}

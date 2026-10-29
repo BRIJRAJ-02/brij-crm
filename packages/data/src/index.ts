@@ -3633,7 +3633,7 @@ export function createDataLayer({
       bookAsHost: async (
         workspace: string,
         input: Omit<BookAsHostInput, 'workspace' | 'mutationId'>,
-      ): Promise<{ bookingId: string }> => {
+      ): Promise<{ bookingId: string; notInCrm?: string }> => {
         const booked = await call((options) =>
           api.bookings.bookAsHost({ ...input, workspace, mutationId: mintId() }, options),
         );

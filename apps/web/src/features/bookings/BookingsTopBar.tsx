@@ -208,11 +208,13 @@ function NewMeetingFromTopBar({
       calendars={calendarList}
       pageDestination={(pageId) => data.calendar.pageDestination(slug, pageId)}
       onBook={async (input) => {
-        await data.bookings.bookAsHost(slug, { ...input, guests: [...input.guests] });
-        toasts.toast({
-          tone: 'success',
-          message: hasCalendar ? strings.booked(input.name) : strings.bookedQuietly(input.name),
-        });
+        const booked = await data.bookings.bookAsHost(slug, { ...input, guests: [...input.guests] });
+        toasts.toast(
+          booked.notInCrm === undefined
+            ? { tone: 'success', message: hasCalendar ? strings.booked(input.name) : strings.bookedQuietly(input.name) }
+            : { tone: 'info', message: strings.bookedNotInCrm(input.name, booked.notInCrm) },
+          booked.notInCrm === undefined ? undefined : { timeout: strings.notInCrmToastMs },
+        );
       }}
       onClose={onClose}
     />

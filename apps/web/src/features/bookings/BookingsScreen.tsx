@@ -840,7 +840,8 @@ export interface BookingsCalendarScreenProps {
    */
   readonly onBlock: (draft: BlockDraft, preview: readonly BlockPreview[]) => Promise<{ readonly id: string }>;
   /** Books someone into a drawn span (spec 0027); settles once made, throws a data error on a refusal. */
-  readonly onBookAsHost: (meeting: NewMeeting) => Promise<void>;
+  /** Books them in; answers why the guest isn't in the CRM when their records couldn't be made. */
+  readonly onBookAsHost: (meeting: NewMeeting) => Promise<{ readonly notInCrm?: string }>;
   /** New meeting's With: People as the member types, when they may see People (one search per dialog). */
   readonly peopleSearch?: (() => RecordSearch) | undefined;
   /** A booking page's own "Add events to", which New meeting's Calendar starts on. */
@@ -1531,11 +1532,16 @@ function WeekView(props: BookingsCalendarScreenProps) {
           calendars={calendarList}
           pageDestination={props.pageDestination}
           onBook={async (input) => {
-            await onBookAsHost(input);
-            toasts.toast({
-              tone: 'success',
-              message: connections.length > 0 ? strings.booked(input.name) : strings.bookedQuietly(input.name),
-            });
+            const booked = await onBookAsHost(input);
+            toasts.toast(
+              booked.notInCrm === undefined
+                ? {
+                    tone: 'success',
+                    message: connections.length > 0 ? strings.booked(input.name) : strings.bookedQuietly(input.name),
+                  }
+                : { tone: 'info', message: strings.bookedNotInCrm(input.name, booked.notInCrm) },
+              booked.notInCrm === undefined ? undefined : { timeout: strings.notInCrmToastMs },
+            );
           }}
           onClose={() => setMeeting(undefined)}
         />

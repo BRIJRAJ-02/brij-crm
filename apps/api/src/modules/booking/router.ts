@@ -147,7 +147,7 @@ export const bookingsRouter = member.bookings.router({
         },
         hooks,
       );
-      return { bookingId: booked.bookingId };
+      return { bookingId: booked.bookingId, ...(booked.notInCrm === undefined ? {} : { notInCrm: booked.notInCrm }) };
     }),
   ),
   // Changing a booking (AC-640): its host, the page's owner or an admin moves or cancels it; the guest is emailed.
