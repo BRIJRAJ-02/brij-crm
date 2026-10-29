@@ -109,7 +109,9 @@ export const strings = {
   locked: (name: string) => `${name} is locked.`,
   unlocked: (name: string) => `${name} is unlocked.`,
   setDefault: 'Set as default',
-  isDefaultNow: (name: string, plural: string) => `${name} is the default view for ${plural}.`,
+  // Late trap #27: a member's last opened view still wins for them (AC-462), so the toast says who lands on it.
+  isDefaultNow: (name: string, plural: string) =>
+    `${name} is the default view for ${plural}, where anyone opening ${plural} for the first time lands.`,
   deleteView: 'Delete view',
   deleting: 'Deleting',
   deleteSharedTitle: (name: string) => `Delete ${name} for everyone?`,
