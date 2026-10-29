@@ -145,3 +145,24 @@ export const Leading: Story = {
     await expect(canvas.getByRole('button', { name: /ada@acme\.dev/ })).toHaveAttribute('aria-expanded', 'true');
   },
 };
+
+/** A default fold inside an open quiet one: the inner keeps its own look, closed and unturned (flow walks, 29 October 2026). */
+export const Nested: Story = {
+  render: () => (
+    <Stage width="narrow-fill">
+      <Disclosure title="What each role can do" variant="quiet" defaultExpanded>
+        <Disclosure title="Records">Export records</Disclosure>
+      </Disclosure>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const outer = canvas.getByRole('button', { name: 'What each role can do' });
+    const inner = canvas.getByRole('button', { name: 'Records' });
+    await expect(outer).toHaveAttribute('aria-expanded', 'true');
+    await expect(inner).toHaveAttribute('aria-expanded', 'false');
+    // The inner chevron hasn't turned with the outer one, and the inner title is a full width row, not a quiet pill.
+    const chevron = inner.querySelector('span');
+    await expect(chevron === null ? '' : getComputedStyle(chevron).rotate).not.toBe('90deg');
+    await expect(inner.getBoundingClientRect().width).toBeGreaterThan(outer.getBoundingClientRect().width);
+  },
+};
