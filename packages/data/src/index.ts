@@ -69,6 +69,7 @@ import type {
   MemberView,
   MyAccess,
   ObjectSummary,
+  SetRoleResult,
   RecordView,
   SessionLengthDays,
   WorkspaceSecurity,
@@ -3862,9 +3863,10 @@ export function createDataLayer({
       /**
        * Changes a member's role (spec 0031, AC-811), waiting for the server:
        * the owner rules live there. Refusals: `FORBIDDEN`, `LAST_OWNER`,
-       * `NOT_FOUND`. The list, and the person's own access, are read again after.
+       * `NOT_FOUND`. The list, and the person's own access, are read again after. Answers how many open invitations
+       * they sent the change cancelled, when any (their new role can't send them).
        */
-      async setRole(workspace: string, memberId: string, role: Role): Promise<MemberView> {
+      async setRole(workspace: string, memberId: string, role: Role): Promise<SetRoleResult> {
         const changed = await call((options) =>
           api.members.setRole({ workspace, memberId, role, mutationId: mintId() }, options),
         );

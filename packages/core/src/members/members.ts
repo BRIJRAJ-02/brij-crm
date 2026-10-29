@@ -20,6 +20,7 @@ import {
   type RemovalPreview,
   type Role,
   type RolesList,
+  type SetRoleResult,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
@@ -35,6 +36,7 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { REASSIGN_KIND } from './reassign.ts';
 import { countRemoval, runRemovalEffects } from './removal.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
+import { revokeUnvouched } from './invitations.ts';
 
 const { members, workspaces } = schema;
 
@@ -333,14 +335,15 @@ function checkChangesRoles(scope: EngineScope, role: Role | undefined): void {
  * their own role within these rules. Demoting the only active owner of a live
  * workspace is refused 409 `LAST_OWNER`. Answers the member with their role.
  * The actor's role is checked as the door saw it before any read, then again
- * as it is now, under lock.
+ * as it is now, under lock. Open invitations they sent that the new role can't
+ * vouch for are revoked with it, and counted in the answer.
  */
 export async function setMemberRole(
   scope: EngineScope,
   input: { readonly memberId: string; readonly role: Role },
   hooks: readonly AfterWrite[] = [],
   options: MemberWriteOptions = {},
-): Promise<MemberWithRole> {
+): Promise<SetRoleResult> {
   checkScope(scope);
   const memberId = checkId(input.memberId, MEMBER_NOT_FOUND);
   if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick owner, admin or member.');
@@ -372,9 +375,11 @@ export async function setMemberRole(
         },
         options.source,
       );
+      // What they sent and can't send now opens nothing: revoked, and said (late trap: invitations died untold).
+      const cancelled = await revokeUnvouched(tx, scope, target.id, role, options.source);
       // Everyone's member list reads them again, and the relay drops the workspace's audiences (spec 0007, AC-82).
       context.record({ members: [target.id] });
-      return toView({ ...target, role });
+      return { ...toView({ ...target, role }), ...(cancelled > 0 ? { cancelledInvitations: cancelled } : {}) };
     },
     hooks,
   );
@@ -448,7 +453,7 @@ export async function removeMember(
         options.source,
       );
       // Every feature's part (spec 0031, AC-814; spec 0037, AC-1440): views, calendars, booking pages, in order.
-      await runRemovalEffects(context, target.id);
+      await runRemovalEffects(context, target.id, options.source);
       // Their work handed on, as the remover's job, once this commits (AC-816).
       const job =
         reassignTo === undefined || options.jobs === undefined
@@ -556,6 +561,8 @@ export async function transferOwnership(
         .update(members)
         .set({ role: 'admin', ...touched(scope) })
         .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, principal.memberId)));
+      // An admin can't send owner invitations: any they sent as owner opens nothing now, so it is revoked.
+      await revokeUnvouched(tx, scope, principal.memberId, 'admin', options.source);
       await writeAudit(
         tx,
         scope.workspaceId,

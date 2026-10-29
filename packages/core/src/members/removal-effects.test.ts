@@ -101,6 +101,7 @@ describe('the remove dialog’s counts (AC-816)', () => {
       records: 2,
       defaults: 0,
       requiredDefaults: 0,
+      invitations: 0,
     });
     // About themself before leaving, yes; about anyone else, only with members.manage.
     expect(await previewRemoval(w.gusScope, { memberId: w.gus })).toMatchObject({ records: 2 });

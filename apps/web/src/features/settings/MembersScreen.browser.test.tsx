@@ -158,7 +158,15 @@ function layerWith(answer: () => Promise<void>, startLink: InviteLinkView = LINK
       watch: () => () => undefined,
       // The remove dialog reads what the removal does and who could take over (spec 0031, slice 5).
       removalPreview: () =>
-        Promise.resolve({ pausedPages: 0, calendars: 0, openTasks: 1, records: 2, defaults: 0, requiredDefaults: 0 }),
+        Promise.resolve({
+          pausedPages: 0,
+          calendars: 0,
+          openTasks: 1,
+          records: 2,
+          defaults: 0,
+          requiredDefaults: 0,
+          invitations: 0,
+        }),
       list: () => Promise.resolve([ADA, LINUS]),
       remove: async () => {
         calls.remove += 1;
@@ -222,6 +230,8 @@ interface Extras {
   readonly access?: MyAccess;
   /** `none` for someone who can't invite (no tabs at all). */
   readonly invitations?: readonly InvitationView[] | 'none';
+  /** The page's members, Ada and Linus by default. */
+  readonly members?: readonly MemberView[];
 }
 
 /** Renders the Members page at its address inside a memory router, as an owner with one open invitation. */
@@ -248,7 +258,7 @@ async function renderMembers(
         toasts={toasts}
         slug="acme"
         workspaceName="Acme"
-        page={{ members: [ADA, LINUS], total: 2 }}
+        page={{ members: [...(extras.members ?? [ADA, LINUS])], total: 2 }}
         search=""
         onSearch={() => undefined}
         invitations={extras.invitations === 'none' ? undefined : (extras.invitations ?? [GRACE])}
@@ -423,6 +433,33 @@ describe('changing roles', () => {
     expect(document.querySelector('[role="alertdialog"][aria-modal="true"]')).toBeNull();
     expect(counted.calls.setRole).toBe(1);
     await expect.element(page.getByText('Linus Torvalds is now an Admin.')).toBeVisible();
+  });
+
+  it('says how many invitations the change cancelled, and offers Invite people to send them again', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    const layer = {
+      ...counted.layer,
+      members: {
+        ...counted.layer.members,
+        setRole: async () => {
+          await Promise.resolve();
+          return { ...LINUS, cancelledInvitations: 2 };
+        },
+      },
+    };
+    // Linus is an admin, made a member: what he sent as an admin opens nothing now.
+    await renderMembers(layer, { members: [ADA, { ...LINUS, role: 'admin' }] });
+    await page.getByRole('button', { name: /Role for Linus Torvalds/ }).click();
+    await page.getByRole('option', { name: 'Member' }).click();
+    await expect
+      .element(
+        page.getByText(
+          'Linus Torvalds is now a Member. 2 invitations they sent were cancelled, since their new role can’t send them.',
+        ),
+      )
+      .toBeVisible();
+    await page.getByRole('button', { name: 'Invite people' }).last().click();
+    await expect.element(page.getByRole('dialog', { name: /Invite/ })).toBeVisible();
   });
 
   it('shows your own role as text, with no picker: an owner hands on through Transfer (owner, 22 October 2026)', async () => {

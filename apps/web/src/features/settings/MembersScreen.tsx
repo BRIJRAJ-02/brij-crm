@@ -227,10 +227,21 @@ export function MembersScreen({
   const changeRole = (member: MemberView, role: Role) => {
     setPendingRoles((pending) => new Map(pending).set(member.id, role));
     data.members.setRole(slug, member.id, role).then(
-      async () => {
+      async (changed) => {
         await reload();
         settleRole(member.id);
-        toasts.toast({ tone: 'success', message: strings.roleChanged(member.name, labelOf(role)) });
+        const cancelled = changed.cancelledInvitations;
+        const message = strings.roleChanged(member.name, labelOf(role));
+        // Cancelled invitations are sent again from Invite people, which stays on the toast until dismissed.
+        toasts.toast(
+          cancelled === undefined
+            ? { tone: 'success', message }
+            : {
+                tone: 'success',
+                message: `${message} ${strings.roleInvitationsCancelled(cancelled)}`,
+                action: { label: strings.invite, onAction: () => setInviting(true) },
+              },
+        );
       },
       (error: unknown) => {
         settleRole(member.id);

@@ -16,6 +16,8 @@ import { notificationsRemoval } from '../notifications/inbox.ts';
 import { rotationsRemoval } from '../rotation/removal.ts';
 import { recentsRemoval } from '../search/recents.ts';
 import { viewsRemoval } from '../views/manage.ts';
+import type { AuditSource } from './audit.ts';
+import { countUnvouched, revokeUnvouched } from './invitations.ts';
 import type { RemovalCounts, RemovalEffect } from './removal-effect.ts';
 
 /**
@@ -61,6 +63,22 @@ const recordsRemoval: RemovalEffect = {
   },
 };
 
+/**
+ * Open invitations they last sent, email ones and the invite link: nobody vouches for them once they have gone, so
+ * they open nothing (spec 0031). They are revoked, so the Invitations tab stops listing them and they free their
+ * seats, and the remove dialog says how many, so they can be sent again.
+ */
+const invitationsRemoval: RemovalEffect = {
+  feature: 'invitations',
+  constraints: [],
+  count: async (tx, workspaceId, memberId) => ({
+    invitations: await countUnvouched(tx, workspaceId, memberId, 'removed'),
+  }),
+  run: async ({ tx, scope }, memberId, source) => {
+    await revokeUnvouched(tx, scope, memberId, 'removed', source);
+  },
+};
+
 /** Every feature's part of a removal, in the order they run. */
 export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   viewsRemoval,
@@ -74,6 +92,7 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   recentsRemoval,
   navRemoval,
   notificationsRemoval,
+  invitationsRemoval,
 ];
 
 /**
@@ -126,8 +145,8 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
 };
 
 /** Runs every feature's part of a removal of `memberId`, in order, inside the removal's write. */
-export async function runRemovalEffects(context: WriteContext, memberId: string): Promise<void> {
-  for (const effect of REMOVAL_EFFECTS) await effect.run?.(context, memberId);
+export async function runRemovalEffects(context: WriteContext, memberId: string, source?: AuditSource): Promise<void> {
+  for (const effect of REMOVAL_EFFECTS) await effect.run?.(context, memberId, source);
 }
 
 /** What removing `memberId` will do, every feature counted, read with no lock (AC-816). */
@@ -139,6 +158,7 @@ export async function countRemoval(tx: WorkspaceTx, workspaceId: string, memberI
     records: 0,
     defaults: 0,
     requiredDefaults: 0,
+    invitations: 0,
   };
   let total = counted;
   for (const effect of REMOVAL_EFFECTS) {

@@ -5,6 +5,7 @@
 // members module only runs them in order (`removal.ts`).
 import type { WorkspaceTx } from '@crm/db';
 import type { WriteContext } from '../engine/write.ts';
+import type { AuditSource } from './audit.ts';
 
 /** What a removal will do, as the remove dialog lists it (AC-816). */
 export interface RemovalCounts {
@@ -20,6 +21,8 @@ export interface RemovalCounts {
   readonly defaults: number;
   /** Of those, required ones left with no default: every new record then needs a value for them. */
   readonly requiredDefaults: number;
+  /** Open invitations they sent (the invite link among them), revoked: nobody vouches for them any more. */
+  readonly invitations: number;
 }
 
 /** One feature's part of a removal. */
@@ -33,6 +36,9 @@ export interface RemovalEffect {
   readonly constraints: readonly string[];
   /** Its counts for the remove dialog, read inside the workspace with no lock. */
   readonly count?: (tx: WorkspaceTx, workspaceId: string, memberId: string) => Promise<Partial<RemovalCounts>>;
-  /** Its change, inside the removal's transaction, after the member row is marked removed; none when it only counts. */
-  readonly run?: (context: WriteContext, memberId: string) => Promise<void>;
+  /**
+   * Its change, inside the removal's transaction, after the member row is marked removed; none when it only counts.
+   * `source` is the removal's, for any audit row the effect writes.
+   */
+  readonly run?: (context: WriteContext, memberId: string, source?: AuditSource) => Promise<void>;
 }
