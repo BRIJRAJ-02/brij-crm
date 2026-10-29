@@ -18,6 +18,8 @@ export const strings = {
   /** The grouping field was archived (AC-506). */
   groupArchivedTitle: (title: string) => `${title} is archived.`,
   groupArchivedText: 'Pick another field to group by.',
+  /** The view's own grouping field isn't one this reader can use (late trap #29): the board stands in with another. */
+  standIn: (field: string) => `Grouped by ${field}: this view’s field is unavailable`,
   /** A required field's no value column, while a card moves (AC-502). */
   requiredRefuses: (title: string) => `${title} is required, so cards can’t move here.`,
   /** An object the member may only read: why no card moves. */

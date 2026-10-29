@@ -184,6 +184,9 @@ export function BoardScreen(props: BoardScreenProps) {
                 {workspaceStrings.livePaused}
               </Callout>
             )}
+            {outcome.kind === 'board' && outcome.isStandIn && (
+              <Callout placement="bar">{strings.standIn(outcome.groupBy.title)}</Callout>
+            )}
             {viewActions}
           </ViewBar>
         ),

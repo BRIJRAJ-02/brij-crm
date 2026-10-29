@@ -26,6 +26,11 @@ export interface BoardPlan {
   readonly cardFields: readonly AttributeDefinition[];
   /** Whether settings came from the view (false: the defaults, this visit, AC-492). */
   readonly isStored: boolean;
+  /**
+   * The view names a grouping field this reader can't group by (hidden from them, gone, or no longer groupable), so
+   * the defaults stand in: said on the board, never quietly (late trap #29).
+   */
+  readonly isStandIn: boolean;
 }
 
 /** What a board view shows: its board, or why it can't. */
@@ -68,5 +73,6 @@ export function planBoard(attributes: readonly AttributeDefinition[], stored: Bo
     archivedIds: options.filter((option) => option.isArchived).map((option) => option.id),
     cardFields,
     isStored,
+    isStandIn: stored !== undefined && !isStored,
   };
 }
