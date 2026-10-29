@@ -97,8 +97,10 @@ test.describe('a form that sends its visitor on to book', () => {
     await expect(visitor.getByRole('heading', { name: 'Thank you. That is with us.' })).toBeVisible();
     await expect(visitor.getByRole('button', { name: 'Book now' })).toBeVisible();
 
-    // On to the booking page with the signed hand off, and nothing else in the address.
-    await visitor.waitForURL(new RegExp(`/b/${booking.publicKey}\\?p=fb1\\.`));
+    // On to the booking page with the signed hand off, and nothing else in the address. Its address is the host's
+    // handle and the page's slug, since every member has a link page from the start (26 Oct 2026, migration 0116);
+    // a page with no handle behind it keeps /b/<key>.
+    await visitor.waitForURL(new RegExp(`(/b/${booking.publicKey}|/[a-z0-9-]+/intro-call)\\?p=fb1\\.`));
     expect(new URL(visitor.url()).searchParams.get('name')).toBeNull();
     const handoff = new URL(visitor.url()).searchParams.get('p') ?? '';
 
