@@ -422,6 +422,15 @@ export const strings = {
   deleteSubmissionAction: 'Delete submission',
   /** Marks the answers not saved on the record, when some were. */
   notSavedMark: 'Not saved',
+  /** Over the answers filing left off the record, each with why (late trap #50). */
+  notSavedTitle: (count: number) =>
+    count === 1 ? 'One answer wasn’t saved on the record' : `${String(count)} answers weren’t saved on the record`,
+  /** Several questions' labels as one line ("Job title and Budget"), in English as the rest of the copy is. */
+  questionList: (labels: readonly string[]) =>
+    new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(labels),
+  /** The way forward under them: put the field back or file the question elsewhere, then file again. */
+  notSavedNext:
+    'To save them, restore the field or save the question to another one, then sync earlier submissions. Or copy the answer onto the record.',
   /** After Answers, once for the section: what went to the CRM. */
   answersKeptOnly: 'Not added to the CRM',
   answersNotInCrm: 'Not in the CRM',

@@ -780,6 +780,22 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     expect(view.refused).toEqual([{ questionId: 'title', message: expect.any(String) as string }]);
   });
 
+  it('says an answer whose field was archived since was not saved, rather than counting it saved (late trap #50)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    await submit(live.publicKey, body({ name: 'Ada', email: 'archived@example.com', title: 'Chief engineer' }));
+    // Archived straight on the row: what matters is what filing does when it meets one, whatever path archived it.
+    await w.query(sql`update attributes set archived_at = now() where id = ${w.attribute('people.job_title')}::uuid`);
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const view = await getSubmission(w.scope, { submissionId: submission.id });
+    expect(view.state).toBe('processed');
+    // The answer stays on the submission (AC-551), and the panel learns it is not on the record.
+    expect(view.answers.find((answer) => answer.questionId === 'title')?.value).toBe('Chief engineer');
+    expect(view.refused).toEqual([{ questionId: 'title', message: 'Job title was archived.' }]);
+  });
+
   it('fails what no answer explains, retries it, and releases and marks spam (AC-566, AC-574)', async () => {
     const w = await workspace();
     const live = await liveForm(w);

@@ -180,6 +180,13 @@ export async function optionsFor(
   return liveOptions(tx, filedSelects);
 }
 
+/** Why an answer filed on a field archived or deleted since stays on the submission only, naming it while it exists. */
+export const fieldGone = (attribute: AttributeDef | undefined): string =>
+  attribute === undefined ? 'Its field was deleted.' : `${attribute.title} was archived.`;
+/** Why an answer filed on a field whose type changed since stays on the submission only. */
+export const fieldChanged = (attribute: AttributeDef): string =>
+  `${attribute.title} no longer takes this kind of answer.`;
+
 /**
  * The answers a version's questions file on live attributes, as each attribute takes them now (no I/O). A booking
  * page's questions (spec 0057) are planned here too.
@@ -195,9 +202,16 @@ export function plan(
   for (const question of document.questions) {
     if (question.filedOn === undefined || !Object.hasOwn(answers, question.key)) continue;
     const attribute = attributes.get(question.filedOn.attributeId);
-    // An answer filed on an attribute archived, deleted or changed since stays on the submission only (AC-551).
-    if (attribute === undefined || attribute.isSystem || isArchivedNow(attribute)) continue;
-    if (!fitsAttribute(question.answerType, attribute.type)) continue;
+    // An answer filed on an attribute archived, deleted or changed since stays on the submission only (AC-551), and
+    // says so (late trap #50): before, it was dropped with no word, and the panel counted it saved on the record.
+    if (attribute === undefined || attribute.isSystem || isArchivedNow(attribute)) {
+      refused.push({ questionId: question.id, message: fieldGone(attribute) });
+      continue;
+    }
+    if (!fitsAttribute(question.answerType, attribute.type)) {
+      refused.push({ questionId: question.id, message: fieldChanged(attribute) });
+      continue;
+    }
     const converted = valueFor(attribute, answers[question.key], options);
     if ('refused' in converted) {
       refused.push({ questionId: question.id, message: converted.refused });

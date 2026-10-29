@@ -42,7 +42,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
 import { AnswerList, answerText } from '../questions/AnswerList.tsx';
-import { answerFiling } from './answer-filing.ts';
+import { answerFiling, notSavedReasons } from './answer-filing.ts';
 import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
@@ -737,12 +737,27 @@ function SubmissionDetail({
   readonly isFiling: boolean;
 }) {
   const source = cameFromOf(submission);
-  const filing = answerFiling(submission.answers, submission.crm, isFiling);
+  const filing = answerFiling(submission.answers, submission.crm, isFiling, submission.refused);
+  const reasons = submission.crm.state === 'linked' ? notSavedReasons(submission.answers, submission.refused) : [];
   return (
     <>
       {submission.failure !== undefined && (
         <Callout tone="danger" title={strings.failure}>
           {submission.failure}
+        </Callout>
+      )}
+      {reasons.length > 0 && (
+        // What filing left off the record, and why: the answers stay here, so nothing is lost, but the record lacks them.
+        <Callout tone="warning" title={strings.notSavedTitle(submission.refused.length)}>
+          <DescriptionList
+            layout="stacked"
+            items={reasons.map((reason) => ({
+              id: reason.message,
+              term: strings.questionList(reason.labels),
+              description: reason.message,
+            }))}
+          />
+          <p>{strings.notSavedNext}</p>
         </Callout>
       )}
       <FieldGroup
