@@ -310,6 +310,28 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, actor: { kind: 'unknown' }, action: 'booking.record_unlinked', target: booking, params: {} },
     'Unknown person unlinked a record from Intro call on dayTime(2026-10-24T09:30)',
   ],
+  // Scheduling access (spec 0037, AC-1257): over one person, or everyone's.
+  [
+    { ...base, action: 'delegation.granted', target: member(bea), params: { level: 'manage', over: ada } },
+    'Ada Lovelace let Bea Rao manage Ada Lovelace’s scheduling',
+  ],
+  [
+    { ...base, action: 'delegation.granted', target: member(bea), params: { level: 'view' } },
+    'Ada Lovelace let Bea Rao see everyone’s scheduling',
+  ],
+  [
+    {
+      ...base,
+      action: 'delegation.changed',
+      target: member(bea),
+      params: { level: 'manage', from: 'view', over: gone },
+    },
+    'Ada Lovelace changed what Bea Rao can do with a deleted user’s scheduling to manage it',
+  ],
+  [
+    { ...base, action: 'delegation.revoked', target: member(bea), params: { level: 'view' } },
+    'Ada Lovelace stopped Bea Rao being able to see everyone’s scheduling',
+  ],
 ];
 
 describe('every listed action', () => {
