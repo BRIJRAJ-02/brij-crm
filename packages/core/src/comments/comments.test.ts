@@ -485,6 +485,29 @@ describe('the inbox (AC-1169 to AC-1171, AC-1179, AC-1181)', () => {
     expect((await getNotificationSettings(w.scope)).emailReplies).toBe(false);
     expect((await w.outbox('notifications')).at(-1)?.item_ids).toEqual([w.bea]);
   });
+
+  it('shows mentions off once an email’s link turned them off, and turning them on here turns that back on', async () => {
+    const w = await workspace();
+    const bea = w.as(w.bea);
+    // One click in a mention email (late trap #87: Settings still said on, and turning it on there changed nothing).
+    await db.withWorkspace(w.scope.workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into email_preferences (workspace_id, member_id, topic, subscribed, updated_via)
+        values (${w.scope.workspaceId}::uuid, ${w.bea}::uuid, 'mentions', false, 'email_link')
+      `),
+    );
+    expect((await getNotificationSettings(bea)).emailMentions).toBe(false);
+    // Another switch leaves it as it is.
+    expect((await setNotificationSettings(bea, { emailReplies: true })).emailMentions).toBe(false);
+    expect((await setNotificationSettings(bea, { emailMentions: true })).emailMentions).toBe(true);
+    expect((await getNotificationSettings(bea)).emailMentions).toBe(true);
+    const topic = await db.withWorkspace(w.scope.workspaceId, (tx) =>
+      tx.execute<{ subscribed: boolean; updated_via: string }>(
+        sql`select subscribed, updated_via from email_preferences where member_id = ${w.bea}::uuid`,
+      ),
+    );
+    expect(topic.rows).toEqual([{ subscribed: true, updated_via: 'app' }]);
+  });
 });
 
 describe('task assignments (AC-1165)', () => {
