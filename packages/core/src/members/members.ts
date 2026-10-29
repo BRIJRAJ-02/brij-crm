@@ -31,6 +31,7 @@ import { checkScope } from '../access/mint.ts';
 import { can, isRole } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { startJob } from '../jobs/service.ts';
+import { mySchedulingReach } from '../scheduling/visible.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { REASSIGN_KIND } from './reassign.ts';
 import { countRemoval, runRemovalEffects } from './removal.ts';
@@ -173,18 +174,21 @@ export function listRoles(scope: EngineScope): RolesList {
 
 /**
  * The caller's own access (`access.mine`, spec 0009, AC-136): their role, its
- * label and their permissions, from the scope the door sealed, with no read.
- * Only a member has a role.
+ * label and their permissions, from the scope the door sealed, and whose
+ * scheduling they reach beyond their own (spec 0037, AC-1261), one read of the
+ * reach. Only a member has a role.
  */
-export function getMyAccess(scope: EngineScope): MyAccess {
+export async function getMyAccess(scope: EngineScope): Promise<MyAccess> {
   checkScope(scope);
   const { principal, permissions } = scope.access;
   if (principal.kind !== 'member') throw new Error('Only a member has a role to show.');
+  const scheduling = await mySchedulingReach(scope);
   return {
     memberId: principal.memberId,
     role: principal.role,
     roleLabel: ROLE_LABELS[principal.role],
     permissions: [...permissions],
+    ...(scheduling === undefined ? {} : { scheduling }),
   };
 }
 
@@ -373,7 +377,8 @@ export async function setMemberRole(
         options.source,
       );
       // Everyone's member list reads them again, and the relay drops the workspace's audiences (spec 0007, AC-82).
-      context.record({ members: [target.id] });
+      // Their scheduling reach changed with their role, so their own tabs read it again (spec 0037, AC-1274).
+      context.record({ members: [target.id], access: [target.id] });
       return toView({ ...target, role });
     },
     hooks,

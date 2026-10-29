@@ -6,6 +6,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Role } from './access.ts';
 import { MEMBER_SEARCH_MAX, MEMBERS_PAGE_MAX } from './team-limits.ts';
+import { VisibleMembers } from './scheduling.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid } from './values/ids.ts';
 
@@ -128,4 +129,9 @@ export const membersContract = {
    * only; in one transaction they become an owner and the caller an admin.
    */
   transferOwnership: oc.input(MemberInput).output(z.void()),
+  /**
+   * The members in the caller's See reach (spec 0037, AC-1261): the caller first, then by name, each with whether
+   * the caller may Manage them. Any member may call it; someone with no reach gets themself alone.
+   */
+  visible: oc.input(WorkspaceScoped).output(VisibleMembers),
 };

@@ -267,6 +267,19 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     booking,
     NoParams,
   ),
+  /**
+   * Scheduling access (spec 0037, AC-1257): the target is the delegate; `over` the member whose scheduling it is,
+   * absent for everyone's; `from` the level before a change.
+   */
+  entry(
+    ['delegation.granted', 'delegation.changed', 'delegation.revoked'],
+    member,
+    z.strictObject({
+      level: z.enum(['view', 'manage']),
+      from: z.enum(['view', 'manage']).optional(),
+      over: AuditPerson.optional(),
+    }),
+  ),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;

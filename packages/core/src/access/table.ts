@@ -50,7 +50,24 @@ export type AccessEntry =
    * user id is ever taken. A principal that isn't a signed in member (a key, a form, the system) is `FORBIDDEN`, and
    * another person's block answers as absent (`NOT_FOUND`).
    */
-  | { readonly ownLinkPage: true };
+  | { readonly ownLinkPage: true }
+  /**
+   * Someone else's scheduling (spec 0037, AC-1258, AC-1422): the actor's own permission from the services table,
+   * then `canActFor` over the one member it names. Outside See reach that member answers NOT_FOUND, as an unknown
+   * one; Seen but not Managed, a Manage service is 403 FORBIDDEN. Job J4 moves the schedules, blocks, time off and
+   * booking actions onto it.
+   */
+  | { readonly scheduling: 'view' | 'manage' }
+  /**
+   * Any member may call it; rows are filtered inside the service by the named rule, so a principal with no reach
+   * gets an empty answer (or themself alone), never a refusal (spec 0037, AC-1422). `schedulingReach`: See reach.
+   */
+  | { readonly filtered: 'schedulingReach' }
+  /**
+   * Delegations (spec 0037, AC-1255): over yourself with `booking.manage`, otherwise `members.manage` (never over an
+   * owner; over an admin only by an owner); the delegate may remove their own; someone else's answer as absent.
+   */
+  | { readonly delegation: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -296,7 +313,8 @@ export const ACCESS_TABLE = {
   readPageDestination: { bookingPages: true },
   setPageDestination: { bookingPages: true },
   // Spec 0037 (AC-1307): any member, for the members in their reach; everyone else is left out, never refused.
-  readCalendarHealth: { anyMember: true },
+  // Spec 0037, AC-1307: statuses for the members in See reach, everyone else left out.
+  readCalendarHealth: { filtered: 'schedulingReach' },
   // A meeting a booking made shows its details only to who may see that booking (`booking/seen.ts`), else Busy.
   listMeetingsForRecord: { data: 'read' },
   meetingFacts: { system: true },
@@ -422,4 +440,9 @@ export const ACCESS_TABLE = {
   // Count adjustments (AC-1329): booking.admin's until rotation editors arrive (J14).
   adjustCount: { permission: 'booking.admin' },
   undoAdjustment: { permission: 'booking.admin' },
+  // Scheduling access (spec 0037, J1): delegations, and the members in See reach (`members.visible`, AC-1261).
+  listDelegations: { delegation: true },
+  grantDelegation: { delegation: true },
+  revokeDelegation: { delegation: true },
+  listVisibleMembers: { filtered: 'schedulingReach' },
 } as const satisfies Record<string, AccessEntry>;

@@ -36,6 +36,7 @@ import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
 import { deletedWorkspaceContract, workspaceContract } from './workspace-settings.ts';
 import { profileContract } from './profile.ts';
+import { schedulingContract } from './scheduling.ts';
 
 export * from './access.ts';
 export * from './account.ts';
@@ -58,6 +59,7 @@ export * from './errors.ts';
 export * from './forms/index.ts';
 export * from './imports.ts';
 export * from './jobs.ts';
+export * from './scheduling.ts';
 export * from './csv.ts';
 export * from './me.ts';
 export * from './pictures.ts';
@@ -125,6 +127,8 @@ export const contract = {
   joinRequests: joinRequestsContract,
   access: accessContract,
   roles: rolesContract,
+  // Scheduling access (spec 0037): delegations of See or Manage over someone's scheduling.
+  scheduling: schedulingContract,
   realtime: realtimeContract,
   jobs: jobsContract,
   usage: usageContract,

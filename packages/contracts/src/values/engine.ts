@@ -64,6 +64,10 @@ export const ENGINE_REFUSAL_CODES = [
   'IN_USE',
   // A round robin page's hosts don't fit (spec 0037): 1 to 3 rotations and at most 8 hosts in all.
   'HOSTS_INVALID',
+  // Scheduling access (spec 0037, AC-1255, AC-1256): a delegate who can't hold one (removed, the target themself, a
+  // team before teams exist); a delegate holding 50 or a member with 20 delegates.
+  'DELEGATE_INVALID',
+  'DELEGATION_LIMIT',
   // The sidebar (spec 0034, AC-934): 50 favourites, or 400 stored items.
   'NAV_LIMIT',
   // Domain join (spec 0031, AC-819): a domain the admin's own verified email isn't at, or a public mail domain.

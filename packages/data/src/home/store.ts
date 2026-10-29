@@ -173,6 +173,17 @@ export function createHomeStore(deps: HomeDeps) {
     recents(workspace: string): HomeHeld<HomeRecentsState> {
       return keep(`recents:${workspace}`, () => makeHeld(() => deps.api.recents({ workspace })));
     },
+    /**
+     * Reads every held read of the workspace again, and forgets the unheld ones (spec 0037, AC-1274: the person's
+     * scheduling reach changed, so Team today may show more or fewer people).
+     */
+    reloadAll(workspace: string): void {
+      for (const [key, view] of [...reads]) {
+        if (key.split(':')[1] !== workspace) continue;
+        if (view.isHeld()) view.reload();
+        else reads.delete(key);
+      }
+    },
   };
 }
 

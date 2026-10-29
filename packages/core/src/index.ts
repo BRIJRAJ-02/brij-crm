@@ -360,7 +360,7 @@ export {
 } from './calendar/calendars.ts';
 export { readPageDestination, setPageDestination, type PageDestination } from './calendar/page-destination.ts';
 // Calendar health for a team (spec 0037, AC-1307): statuses only.
-export { healthReach, readCalendarHealth } from './calendar/health.ts';
+export { readCalendarHealth } from './calendar/health.ts';
 export { nearestHue } from './calendar/hues.ts';
 export { listMeetingsForRecord, type ListMeetingsInput } from './calendar/meetings.ts';
 export {
@@ -498,6 +498,13 @@ export {
   type MemberWriteOptions,
   type RemovedMember,
 } from './members/members.ts';
+export {
+  grantDelegation,
+  listDelegations,
+  revokeDelegation,
+  type DelegationWriteOptions,
+} from './scheduling/delegations.ts';
+export { listVisibleMembers } from './scheduling/visible.ts';
 export { PREFERENCES_MEMBERS_ONLY, readMyPreferences, updateMyPreferences } from './members/preferences.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {

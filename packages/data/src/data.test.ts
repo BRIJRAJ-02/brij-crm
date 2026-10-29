@@ -453,6 +453,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       remove: os.members.remove.handler(notServed),
       leave: os.members.leave.handler(notServed),
       transferOwnership: os.members.transferOwnership.handler(notServed),
+      visible: os.members.visible.handler(notServed),
     },
     workspaceSecurity: {
       get: os.workspaceSecurity.get.handler(() => behaviour.workspaceSecurityGet()),
@@ -519,6 +520,13 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
     roles: { list: os.roles.list.handler(notServed) },
+    scheduling: {
+      delegations: {
+        list: os.scheduling.delegations.list.handler(notServed),
+        grant: os.scheduling.delegations.grant.handler(notServed),
+        revoke: os.scheduling.delegations.revoke.handler(notServed),
+      },
+    },
     realtime: {
       connectionToken: os.realtime.connectionToken.handler(() => ({ token: 'connection-token' })),
       subscriptionToken: os.realtime.subscriptionToken.handler(({ input }) => ({

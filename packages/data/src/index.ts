@@ -2123,6 +2123,10 @@ export function createDataLayer({
   router.onResync((workspace) => {
     calendar.changed(workspace);
     calendars.changed(workspace);
+    // Every scheduling read too (spec 0037, AC-1274): an `access` row naming the person resyncs, and whose
+    // scheduling they reach may have changed, so Bookings' lists and weeks and Home's Team today read again.
+    reloadBookings(workspace);
+    homeReads.reloadAll(workspace);
   });
 
   // Captures › Links and Forms: one held list per workspace each, patched by every write below (the list's menu, the

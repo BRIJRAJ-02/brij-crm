@@ -189,7 +189,30 @@ const SENTENCES: SentenceTemplates = {
   'booking.no_show_undone': (entry, w) => actor(`took back the no show on ${w.booking(entry.target)}`),
   'booking.record_linked': (entry, w) => actor(`linked ${w.booking(entry.target)} to a record`),
   'booking.record_unlinked': (entry, w) => actor(`unlinked a record from ${w.booking(entry.target)}`),
+  // Scheduling access (spec 0037, AC-1257): "Ada let Priya manage Bea’s scheduling".
+  'delegation.granted': (entry, w) =>
+    actor(
+      `let ${w.person(entry.target.person)} ${verbOf(entry.params.level)} ${whoseScheduling(entry.params.over, w)}`,
+    ),
+  'delegation.changed': (entry, w) =>
+    actor(
+      `changed what ${w.person(entry.target.person)} can do with ${whoseScheduling(entry.params.over, w)} to ${verbOf(entry.params.level)} it`,
+    ),
+  'delegation.revoked': (entry, w) =>
+    actor(
+      `stopped ${w.person(entry.target.person)} being able to ${verbOf(entry.params.level)} ${whoseScheduling(entry.params.over, w)}`,
+    ),
 };
+
+/** A delegation's level as its verb: See or Manage. */
+function verbOf(level: 'view' | 'manage'): string {
+  return level === 'manage' ? 'manage' : 'see';
+}
+
+/** Whose scheduling a delegation is over: "Bea’s scheduling", or "everyone’s scheduling" with nobody named. */
+function whoseScheduling(over: AuditPerson | undefined, w: SentenceWords): string {
+  return over === undefined ? 'everyone’s scheduling' : `${w.persons(over)} scheduling`;
+}
 
 export const strings = {
   /** The page's tabs (owners and admins see both). */

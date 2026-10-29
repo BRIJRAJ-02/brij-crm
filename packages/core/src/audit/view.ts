@@ -137,6 +137,9 @@ export function auditNameIds(rows: readonly AuditRow[]): AuditNameIds {
     if (row.action === 'booking.reassigned') {
       for (const seat of [...seatsOf(before.seats), ...seatsOf(after.seats)]) add(sets.members, seat.memberId);
     }
+    if (row.action.startsWith('delegation.')) {
+      for (const side of [before, after]) add(sets.members, side.targetMemberId);
+    }
     if (row.action === 'form.owner_changed') {
       for (const side of [before, after]) {
         add(sets.members, side.ownerMemberId);
@@ -545,6 +548,24 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'booking.record_unlinked':
       // A record link names the booking only: the record's id stays in the row, unread (it may be hidden).
       return { ...base, action, target: bookingTarget(), params: {}, changes: [] };
+    case 'delegation.granted':
+    case 'delegation.changed':
+    case 'delegation.revoked': {
+      // Scheduling access (spec 0037, AC-1257): the delegate is the target; a level the code doesn't know is no row.
+      const levelOf = (value: unknown) => (value === 'view' || value === 'manage' ? value : undefined);
+      const stored = action === 'delegation.revoked' ? before : after;
+      const level = levelOf(stored.level);
+      if (level === undefined || (stored.targetType !== 'member' && stored.targetType !== 'everyone')) return undefined;
+      const from = action === 'delegation.changed' ? levelOf(before.level) : undefined;
+      const over = stored.targetType === 'member' ? person(stored.targetMemberId) : undefined;
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: { level, ...(from === undefined ? {} : { from }), ...(over === undefined ? {} : { over }) },
+        changes: [],
+      };
+    }
     default:
       return undefined;
   }
