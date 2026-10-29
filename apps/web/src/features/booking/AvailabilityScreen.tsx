@@ -2,9 +2,20 @@
 // Purpose: Bookings › Availability (spec 0035, AC-969, AC-970), the Calendly way (22 October 2026): the tab is the open schedule's editor, the default first, with a switcher to the member's other schedules.
 // Main task: change the open schedule's hours, zone and days off (each saves as it changes), or switch, make, rename, set as default, duplicate or delete a schedule from the switcher.
 // Leaves out: a list of schedules as rows (the switcher's menu lists them) and a calendar view of a schedule (a follow up).
-import { isDataError, type DataLayer, type ScheduleMember, type ScheduleView } from '@crm/data';
+import { isDataError, type DataLayer, type ScheduleView, type VisibleMember } from '@crm/data';
 import { useSchedules } from '@crm/data/react';
-import { Button, EmptyState, focusLater, PageColumn, SectionBar, Select, Tooltip, TopBar } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  EmptyState,
+  focusLater,
+  PageColumn,
+  RelativeTime,
+  SectionBar,
+  Select,
+  Tooltip,
+  TopBar,
+} from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -29,21 +40,41 @@ export interface AvailabilityScreenProps {
   readonly scheduleId: string | undefined;
   /** Whose schedules show, when they aren't the reader's: an admin viewing a colleague's (AC-971). */
   readonly member: string | undefined;
-  /** Whose schedules the reader may view (`schedules.members`): the Viewing Select's choices, for an admin. */
-  readonly members: readonly ScheduleMember[];
+  /**
+   * Whose schedules the reader may see (`members.visible`, spec 0037, AC-1261): the Viewing Select's choices, the
+   * reader first, each with whether they may change them.
+   */
+  readonly members: readonly VisibleMember[];
   /** The reader's own member id. */
   readonly me: string;
+  /** The reader may change their own hours (`availability.own`); without it they are set by others (AC-1260). */
+  readonly ownHours: boolean;
+  /** A member's name by id, for "Changed by" (the workspace's members, AC-1265). */
+  readonly nameOf: (memberId: string) => string | undefined;
 }
 
 /** The tab: the open schedule's editor, its switcher, the admin's Viewing Select and New schedule. */
-export function AvailabilityScreen({ data, slug, scheduleId, member, members, me }: AvailabilityScreenProps) {
+export function AvailabilityScreen({
+  data,
+  slug,
+  scheduleId,
+  member,
+  members,
+  me,
+  ownHours,
+  nameOf,
+}: AvailabilityScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const view = data.schedules.view(slug, member, memberZone(data, slug));
   // An admin (the server's `canActFor`; today `booking.admin`, AC-971) picks whose show, once there is a colleague.
   const hasColleagues = showsViewing(members, member);
   // A colleague's, by name, for the words that say whose they are.
-  const owner = member === undefined ? undefined : members.find((each) => each.id === member)?.name;
+  const viewed = member === undefined ? undefined : members.find((each) => each.id === member);
+  const owner = viewed?.name;
+  // Whether the reader may change what shows (spec 0037): a colleague's with Manage over them, their own with
+  // `availability.own`. The server decides every write anyway; this only spares a save it would refuse.
+  const canChange = member === undefined ? ownHours : viewed?.canManage === true;
   const state = useSchedules(view);
   const slot = useBookingsToolbarSlot();
   const actionSlot = useBookingsActionSlot();
@@ -120,6 +151,7 @@ export function AvailabilityScreen({ data, slug, scheduleId, member, members, me
         schedules={schedules}
         current={current}
         isFull={isFull}
+        isReadOnly={!canChange}
         triggerRef={switcherRef}
         onOpen={(schedule) => open(schedule.id)}
         onCreate={() => setCreating(true)}
@@ -132,7 +164,7 @@ export function AvailabilityScreen({ data, slug, scheduleId, member, members, me
   // New schedule is the screen's one primary, at the TopBar's end in place of New meeting (the owner, 22 October
   // 2026); with no TopBar slot it stays at the strip's end.
   const newButton = (
-    <NewScheduleButton isDisabled={memberId === undefined || isFull} onPress={() => setCreating(true)} />
+    <NewScheduleButton isDisabled={memberId === undefined || isFull || !canChange} onPress={() => setCreating(true)} />
   );
   const newAction = isFull ? <Tooltip content={scheduleStrings.limitReached}>{newButton}</Tooltip> : newButton;
   // The strip's end, as the Calendar tab's tools are (the owner, 22 October 2026: no row of its own over the card):
@@ -185,6 +217,8 @@ export function AvailabilityScreen({ data, slug, scheduleId, member, members, me
                 onReload={() => view.reload()}
                 onAdopt={setAdopted}
                 onNotice={toast}
+                isReadOnly={!canChange}
+                notice={<AccessNotice owner={owner} canChange={canChange} schedule={current} me={me} nameOf={nameOf} />}
               />
             )}
             {memberId !== undefined && (
@@ -237,6 +271,48 @@ export function AvailabilityScreen({ data, slug, scheduleId, member, members, me
   );
 }
 
+/**
+ * What the reader should know above the week (spec 0037): a colleague's hours they may only See (AC-1268), a
+ * colleague who is told about their changes, their own hours set by others (AC-1260), and who changed them last when
+ * that wasn't their member (AC-1265). Nothing for one's own hours one changes oneself.
+ */
+function AccessNotice({
+  owner,
+  canChange,
+  schedule,
+  me,
+  nameOf,
+}: {
+  readonly owner: string | undefined;
+  readonly canChange: boolean;
+  readonly schedule: ScheduleView;
+  readonly me: string;
+  readonly nameOf: (memberId: string) => string | undefined;
+}) {
+  let line: string | undefined;
+  if (owner !== undefined) line = canChange ? scheduleStrings.toldAboutChanges(owner) : scheduleStrings.seeOnly(owner);
+  else if (!canChange) line = scheduleStrings.hoursSetByOthers;
+  const changed = schedule.changedBy;
+  const by =
+    changed === undefined
+      ? undefined
+      : changed.memberId === me
+        ? scheduleStrings.you
+        : (nameOf(changed.memberId) ?? scheduleStrings.someone);
+  if (line === undefined && by === undefined) return null;
+  return (
+    <Callout tone="info">
+      {line}
+      {line !== undefined && by !== undefined && ' '}
+      {changed !== undefined && by !== undefined && (
+        <>
+          {scheduleStrings.changedBy(by)}, <RelativeTime value={changed.at} />.
+        </>
+      )}
+    </Callout>
+  );
+}
+
 /** The switcher's place while the schedules load: a disabled button the width of a name. */
 function SwitcherPending() {
   return (
@@ -247,8 +323,8 @@ function SwitcherPending() {
 }
 
 /**
- * An admin's Viewing Select (AC-971): their own schedules or a colleague's, by name, each at its own address. One
- * service answers the choices (`schedules.members`), so spec 0037's reach changes it there.
+ * The Viewing Select (AC-971; spec 0037, AC-1268): the reader's own schedules or a colleague's in their See reach, by
+ * name, each at its own address, the ones they may only See marked so. `members.visible` answers the choices.
  */
 function Viewing({
   members,
@@ -257,7 +333,7 @@ function Viewing({
   onChange,
   isDisabled = false,
 }: {
-  readonly members: readonly ScheduleMember[];
+  readonly members: readonly VisibleMember[];
   readonly me: string;
   readonly value: string;
   readonly onChange: (id: string) => void;
@@ -270,9 +346,12 @@ function Viewing({
       size="sm"
       isSearchable
       isDisabled={isDisabled}
+      // A colleague the reader may only See says so in the list, before they open them (AC-1268).
+      showsDescription
       items={members.map((each) => ({
         id: each.id,
         label: each.id === me ? scheduleStrings.viewingMine : scheduleStrings.viewingTheirs(each.name),
+        ...(each.id === me || each.canManage ? {} : { description: scheduleStrings.seeOnlyShort }),
       }))}
       value={value}
       onChange={(id) => {

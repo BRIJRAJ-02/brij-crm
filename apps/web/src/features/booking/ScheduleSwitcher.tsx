@@ -17,6 +17,11 @@ export interface ScheduleSwitcherProps {
   readonly isFull: boolean;
   /** Nothing is ready to act on yet (the switcher while the tab loads). */
   readonly isDisabled?: boolean;
+  /**
+   * The schedules can be read but not changed (spec 0037: a colleague the reader may only See, or one's own hours set
+   * by others): the menu only switches between them.
+   */
+  readonly isReadOnly?: boolean;
   /** The trigger, so the screen can bring focus back to it after a switch remounts the editor. */
   readonly triggerRef?: Ref<HTMLButtonElement>;
   readonly onOpen: (schedule: ScheduleView) => void;
@@ -47,6 +52,7 @@ export function ScheduleSwitcher({
   current,
   isFull,
   isDisabled = false,
+  isReadOnly = false,
   triggerRef,
   onOpen,
   onCreate,
@@ -83,7 +89,8 @@ export function ScheduleSwitcher({
       applies: isSaved && !current.isDefault && schedules.length > 1,
     },
   ];
-  const actions = all.filter((action) => action.applies);
+  const actions = isReadOnly ? [] : all.filter((action) => action.applies);
+  const canCreate = !isFull && !isReadOnly;
   const hasHeadings = schedules.length > 1;
   // A copy on its way can't be opened until the server made it.
   const disabled = schedules.filter((each) => each.id !== null && each.updatedAt === null).map(keyOf);
@@ -129,8 +136,8 @@ export function ScheduleSwitcher({
               </MenuItem>
             ))}
           </MenuSection>
-          {isFull ? null : <MenuSeparator />}
-          {isFull ? null : (
+          {canCreate ? <MenuSeparator /> : null}
+          {!canCreate ? null : (
             <MenuSection label={scheduleStrings.newSchedule} isLabelHidden selectionMode="none">
               <MenuItem id={CREATE} icon="plus">
                 {scheduleStrings.newSchedule}

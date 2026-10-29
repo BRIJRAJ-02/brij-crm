@@ -17,18 +17,25 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
   validateSearch: availabilitySearch,
   loaderDeps: ({ search }) => ({ member: search.member }),
   loader: async ({ context, params, deps }) => {
-    // Whose schedules the reader may view comes from the server's reach (`canActFor`, spec 0037): a colleague
-    // outside it opens the reader's own.
-    const [access, members] = await Promise.all([
+    // Whose schedules the reader may see comes from the server's reach (`members.visible`, spec 0037, AC-1268): a
+    // colleague outside it opens the reader's own. The workspace's members name whoever changed a schedule last.
+    const [access, members, people] = await Promise.all([
       context.data.access.mine(params.slug),
-      context.data.schedules.members(params.slug),
+      context.data.scheduling.visible(params.slug),
+      context.data.members.list(params.slug),
     ]);
     const member =
       deps.member !== undefined && deps.member !== access.memberId && members.some((each) => each.id === deps.member)
         ? deps.member
         : undefined;
     await context.data.schedules.view(params.slug, member, memberZone(context.data, params.slug)).ready();
-    return { member, members, me: access.memberId };
+    return {
+      member,
+      members,
+      me: access.memberId,
+      ownHours: access.permissions.includes('availability.own'),
+      names: new Map(people.map((person) => [person.id, person.name])),
+    };
   },
   // Shown only once the loading delay passed: its skeletons show at once.
   pendingComponent: () => (
@@ -41,11 +48,22 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
 });
 
 function AvailabilityRoute() {
-  const { member, members, me } = Route.useLoaderData();
+  const { member, members, me, ownHours, names } = Route.useLoaderData();
   const { schedule } = Route.useSearch();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
-  return <AvailabilityScreen data={data} slug={slug} scheduleId={schedule} member={member} members={members} me={me} />;
+  return (
+    <AvailabilityScreen
+      data={data}
+      slug={slug}
+      scheduleId={schedule}
+      member={member}
+      members={members}
+      me={me}
+      ownHours={ownHours}
+      nameOf={(id) => names.get(id)}
+    />
+  );
 }
 
 function AvailabilityError({ error }: ErrorComponentProps) {

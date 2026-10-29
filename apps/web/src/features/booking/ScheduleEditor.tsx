@@ -38,6 +38,13 @@ export interface ScheduleEditorProps {
   readonly onAdopt: (id: string) => void;
   /** A save landed, or another tab's beat it: the screen raises it as a toast. */
   readonly onNotice: (notice: ScheduleSaveNotice) => void;
+  /**
+   * The hours show with nothing to change (spec 0037: a colleague the reader may only See, AC-1268; or the reader's
+   * own hours, set by others, AC-1260). No Unsaved changes bar, no Add day off.
+   */
+  readonly isReadOnly?: boolean;
+  /** Above the week: whose hours these are and who is told, and who changed them last (AC-1265, AC-1268). */
+  readonly notice?: ReactNode;
 }
 
 /**
@@ -45,7 +52,17 @@ export interface ScheduleEditorProps {
  * beside it. Changes wait on screen until Save in the Unsaved changes bar (⌘S), and Discard puts them back; leaving
  * with changes asks first (the owner, 22 October 2026: it saves like the booking page editor).
  */
-export function ScheduleEditor({ data, slug, member, schedule, onReload, onAdopt, onNotice }: ScheduleEditorProps) {
+export function ScheduleEditor({
+  data,
+  slug,
+  member,
+  schedule,
+  onReload,
+  onAdopt,
+  onNotice,
+  isReadOnly = false,
+  notice,
+}: ScheduleEditorProps) {
   const draft = useScheduleDraft({
     data,
     slug,
@@ -64,6 +81,24 @@ export function ScheduleEditor({ data, slug, member, schedule, onReload, onAdopt
       : draft.error === undefined
         ? 'unsaved'
         : 'error';
+  if (isReadOnly) {
+    return (
+      <Layout
+        week={
+          <>
+            {notice}
+            <WeekCard availability={shown} onChange={() => undefined} isReadOnly />
+          </>
+        }
+        aside={
+          <>
+            <DaysOff availability={shown} onChange={() => undefined} isReadOnly />
+            <UsedBy slug={slug} schedule={schedule} />
+          </>
+        }
+      />
+    );
+  }
   return (
     <Layout
       footer={
@@ -80,7 +115,12 @@ export function ScheduleEditor({ data, slug, member, schedule, onReload, onAdopt
           <LeaveGuard isDirty={draft.isDirty} />
         </>
       }
-      week={<WeekCard availability={shown} onChange={draft.change} />}
+      week={
+        <>
+          {notice}
+          <WeekCard availability={shown} onChange={draft.change} />
+        </>
+      }
       aside={
         <>
           <DaysOff availability={shown} onChange={change} />
