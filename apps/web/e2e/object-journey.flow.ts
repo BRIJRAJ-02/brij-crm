@@ -72,10 +72,8 @@ test.describe('the object journey', () => {
     ).toHaveCount(1);
   });
 
-  // The name's placeholder offers plurals ("Projects, Partners, Invoices…"), so a person types one; it must not
-  // come back doubled as "Projectses". Fails until the walk's finding O1 is fixed; then drop test.fail.
+  // A person may type the plural as the name; it must not come back doubled as "Invoiceses" (the walk's O1).
   test('a plural typed as the name is not made plural again', async ({ page }) => {
-    test.fail();
     test.setTimeout(120_000);
     const tag = randomUUID().slice(0, 8);
     const slug = `objplural-${tag}`;
@@ -86,5 +84,6 @@ test.describe('the object journey', () => {
     await create.getByLabel('Name', { exact: true }).fill('Invoices');
     await create.getByRole('button', { name: 'Create object' }).click();
     await expect(page.getByText('Invoices created.')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('link', { name: 'Invoiceses' })).toHaveCount(0);
   });
 });
