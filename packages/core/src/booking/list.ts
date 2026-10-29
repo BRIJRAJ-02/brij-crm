@@ -180,7 +180,7 @@ function itemOf(
       endsAt: row.endsAt.toISOString(),
       visitorName: row.visitorName,
       visitorEmail: '',
-      visitorTimeZone: row.visitorTimeZone,
+      visitorTimeZone: '',
       status: row.status === 'cancelled' ? 'cancelled' : 'confirmed',
       reschedules: row.reschedules,
       guests: [],

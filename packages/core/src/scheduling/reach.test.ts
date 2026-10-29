@@ -306,6 +306,16 @@ describe('the member told (AC-1264)', () => {
         { before: { schedules: [at('10:00-18:00')] }, after: { schedules: [at('09:00-17:00')] } },
       ]),
     ).toEqual([]);
+    // A long day (a 60 character name, six ranges a side) is cut to what the email takes, never refused.
+    const six = ['08:00-09:00', '10:00-11:00', '12:00-13:00', '14:00-15:00', '16:00-17:00', '18:00-19:00'];
+    const day = (ranges: readonly string[]) => ({
+      id: 's3',
+      name: 'N'.repeat(60),
+      weekly: { ...WEEK, wed: ranges.map((range) => range.split('-')) },
+    });
+    const [cut] = noticeLines([{ before: { schedules: [day(six)] }, after: { schedules: [day(six.slice(1))] } }]);
+    expect(cut?.length).toBeLessThanOrEqual(200);
+    expect(cut?.endsWith('…')).toBe(true);
     expect(
       noticeLines([{ before: { schedules: [] }, after: { schedules: [{ id: 's2', name: 'Evenings' }] } }]),
     ).toEqual(['New schedule: Evenings']);
