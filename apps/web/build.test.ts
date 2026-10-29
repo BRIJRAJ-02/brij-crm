@@ -3,6 +3,7 @@
 // same origin files under /assets/, never data: URIs the CSP would refuse (AC-11).
 // It also checks the first load (spec 0003, AC-18): the heavy library entries
 // (grid, editor, charts, schema map) never sit in index.html's static graph.
+import { isBuiltin } from 'node:module';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -128,6 +129,29 @@ describe('the built page', () => {
     // The meta block replaces the shell's own title and its noindex, so both have to be there to replace.
     expect(BOOKING_SHELL).toContain('<title>');
     expect(BOOKING_SHELL).toContain('name="robots"');
+  });
+});
+
+describe("the api function's bundle (api-bundle.ts)", () => {
+  const bundle = () => readFileSync(path.join(import.meta.dirname, 'api', 'api.generated.mjs'), 'utf8');
+
+  // A cold start loads one module, not about 1,300, so the bundle holds everything but Node's own: a package it
+  // imported instead would have to be traced and shipped beside it, and pnpm keeps most of them out of reach.
+  it('imports nothing but Node built ins', () => {
+    const imports = [...bundle().matchAll(/(?:^|;)import\s*(?:[^;"']*?from\s*)?"([^"]+)"/gm)].map((match) => match[1]);
+    expect(imports.length).toBeGreaterThan(0);
+    expect(imports.filter((specifier) => specifier === undefined || !isBuiltin(specifier))).toEqual([]);
+  });
+
+  it('leaves the TypeScript compiler out', () => {
+    expect(bundle()).toContain('TypeScript is not part of the api function bundle.');
+    expect(bundle().length).toBeLessThan(12_000_000);
+  });
+
+  it('is what the function serves', () => {
+    expect(readFileSync(path.join(import.meta.dirname, 'api', 'index.mjs'), 'utf8')).toContain(
+      "from './api.generated.mjs';",
+    );
   });
 });
 

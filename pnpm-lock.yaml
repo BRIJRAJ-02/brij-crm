@@ -524,6 +524,9 @@ importers:
       playwright:
         specifier: 'catalog:'
         version: 1.63.0
+      rolldown:
+        specifier: 'catalog:'
+        version: 1.2.12
       size-limit:
         specifier: 'catalog:'
         version: 14.1.0

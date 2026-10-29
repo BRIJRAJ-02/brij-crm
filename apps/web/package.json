@@ -39,6 +39,7 @@
     "axe-core": "catalog:",
     "eslint": "catalog:",
     "playwright": "catalog:",
+    "rolldown": "catalog:",
     "size-limit": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

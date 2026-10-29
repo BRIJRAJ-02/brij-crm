@@ -1,4 +1,18 @@
 {
   "extends": ["//"],
-  "tags": ["client"]
+  "tags": ["client"],
+  "tasks": {
+    "build": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.env",
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/package.json",
+        "$TURBO_ROOT$/packages/*/src/**",
+        "$TURBO_ROOT$/packages/*/package.json",
+        "$TURBO_ROOT$/pnpm-lock.yaml"
+      ],
+      "outputs": ["dist/**", "api/*.generated.mjs"]
+    }
+  }
 }

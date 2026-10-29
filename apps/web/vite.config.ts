@@ -5,6 +5,7 @@ import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
+import { apiBundle } from './api-bundle.ts';
 import { contentSecurityPolicy, directiveSources, policyForPath, sentryDsnProblem } from './csp.ts';
 import { embedScript } from './embed-script.ts';
 import { HANDLE_PATH } from './public-paths.ts';
@@ -237,6 +238,8 @@ export default defineConfig({
     checkSentryDsn(),
     // The built booking shell, inlined into the handle Function that serves `/<handle>`.
     inlineBookingShell(),
+    // The api's function as one file beside api/index.mjs, so a cold start loads one module (api-bundle.ts).
+    apiBundle(),
     uploadSourceMaps(),
     deleteSourceMaps(),
     deployedStylePolicy(),

@@ -27,3 +27,5 @@ playwright-report/
 
 # The booking shell the build writes beside the handle Function (spec 0055), never committed.
 apps/web/api/shell.generated.mjs
+# The api's function bundle the build writes beside api/index.mjs, never committed.
+apps/web/api/api.generated.mjs
