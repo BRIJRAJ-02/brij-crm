@@ -449,6 +449,32 @@ describe('the task rule (AC-447)', () => {
     });
   });
 
+  it('keeps a task its creator and assignee’s once its last link is removed for good, never everyone’s', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const task = await createTask(w.scope, {
+      id: newId(),
+      title: 'Offer terms',
+      recordIds: [acme],
+      assigneeMemberId: w.bea,
+    });
+    const loose = await createTask(w.scope, { id: newId(), title: 'Made with no links' });
+    await deleteRecord(w.scope, { recordId: acme });
+    // The purge takes the record for good, and the link with it (late trap #79: the task then showed to everyone).
+    await eraseRecord(w.scope, { recordId: acme });
+    expect(await getTasks(w.as(w.bea), { ids: [task.id] })).toHaveLength(1);
+    expect(await getTasks(w.as(w.cal), { ids: [task.id, loose.id] })).toEqual([
+      expect.objectContaining({ id: loose.id }),
+    ]);
+    expect(await refusalOf(updateTask(w.as(w.cal), { taskId: task.id, title: 'Hm' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    const all = await listTasks(w.as(w.cal), { scope: { mine: 'all' }, status: 'open' });
+    expect(all.items.map((each) => each.id)).toEqual([loose.id]);
+    const facts = await db.withWorkspace(w.scope.workspaceId, (tx) => readTaskFacts(tx, [task.id]));
+    expect(facts[task.id]).toMatchObject({ linksPurged: true, records: [] });
+  });
+
   it('reads facts for the relay: people, links and the trash', async () => {
     const w = await workspace();
     const acme = await w.company('Acme');

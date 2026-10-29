@@ -20,6 +20,7 @@ interface FactRow extends Record<string, unknown> {
   readonly id: string;
   readonly creator: string | null;
   readonly assignee: string | null;
+  readonly links_purged: boolean;
   readonly records: { readonly objectId: string; readonly recordId: string; readonly trashed: boolean }[] | null;
 }
 
@@ -39,6 +40,7 @@ export async function readTaskFacts(
   if (ids.length === 0) return facts;
   const rows = await tx.execute<FactRow>(sql`
     select t.id::text as id, t.created_by_member_id::text as creator, t.assignee_member_id::text as assignee,
+      t.links_purged,
       (select json_agg(json_build_object('objectId', r.object_id, 'recordId', r.id,
             'trashed', r.deleted_at is not null or o.archived_at is not null)
           order by l.position)
@@ -52,6 +54,7 @@ export async function readTaskFacts(
     facts[row.id] = {
       ...(row.creator === null ? {} : { creatorMemberId: row.creator }),
       assigneeMemberIds: row.assignee === null ? [] : [row.assignee],
+      ...(row.links_purged ? { linksPurged: true } : {}),
       records: (row.records ?? []).map((record) => ({
         objectId: record.objectId,
         recordId: record.recordId,

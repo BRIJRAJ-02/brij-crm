@@ -436,6 +436,14 @@ describe('tasks', () => {
     expect(filterEvent(open, row, trashed)).toMatchObject({ taskIds: [], recordIds: [], coarse: true });
     expect(filterEvent(audience([{ id: BEA, role: 'member' }]), row, trashed)).toEqual(row);
   });
+
+  it('shows a task whose links went with their records, removed for good, to its assignee and creator only', () => {
+    // No links left, but they were purged, not never made (late trap #79): not everyone's task.
+    const purged = { tasks: { t1: { creatorMemberId: BEA, assigneeMemberIds: [], records: [], linksPurged: true } } };
+    const row: EventRow = { ...tasks, recordIds: [], taskIds: ['t1'] };
+    expect(filterEvent(open, row, purged)).toMatchObject({ taskIds: [] });
+    expect(filterEvent(audience([{ id: BEA, role: 'member' }]), row, purged)).toEqual(row);
+  });
 });
 
 describe('members, access and jobs', () => {
