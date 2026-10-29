@@ -28,7 +28,7 @@ import { uniqueKeyOf } from '../engine/unique.ts';
 import { currentItems, isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { WriteContext } from '../engine/write.ts';
-import { enterAsForm, NO_RULE_SOURCE, type RuleSource } from '../access/door.ts';
+import { enterAsForm, type RuleSource } from '../access/door.ts';
 import { formAccess } from '../access/policy.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition } from '../jobs/registry.ts';
 import { liveOptions, loadForm, loadVersions, type FormRow } from './shared.ts';
@@ -886,14 +886,15 @@ export function heldValues(index: HeldIndex, recordId: string): (attribute: Attr
  * submission that is gone or no longer `received` (processed already, spam,
  * failed), so a job run twice never writes twice. Runs inside the job's
  * transaction with the system's scope (`context`), writing as the form, then
- * tells the team (`tellTeam`), each member cut to what `rules` let them see.
+ * tells the team (`tellTeam`), each member cut to what `rules` let them see
+ * (no `rules`, no notice: the worker passes the api's `APP_RULES`).
  */
 export async function processSubmission(
   context: WriteContext,
   submissionId: string,
   now: Date = new Date(),
   files?: RecordFileStore,
-  rules: RuleSource = NO_RULE_SOURCE,
+  rules?: RuleSource,
 ): Promise<void> {
   const { tx } = context;
   const found = await tx.execute<SubmissionRow>(sql`
@@ -1002,10 +1003,7 @@ export async function settle(
  * cancelled, 5 tries with the lane's backoff, then the submission ends
  * `failed` with a reason a member can act on (AC-566).
  */
-export function formsProcess(
-  files?: RecordFileStore,
-  rules: RuleSource = NO_RULE_SOURCE,
-): KindDefinition<FormsProcessParams> {
+export function formsProcess(files?: RecordFileStore, rules?: RuleSource): KindDefinition<FormsProcessParams> {
   return defineKind<FormsProcessParams>({
     kind: FORMS_PROCESS,
     lane: 'light',

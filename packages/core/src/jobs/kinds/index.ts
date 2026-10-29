@@ -36,7 +36,8 @@ export interface JobKindsOptions {
   /**
    * The access rules a member is read with when a job cuts what it tells them (a form's submission notice, an
    * import's result):
-   * the api's `APP_RULES`, the same its door and its job runner take. None until #24 stores rules.
+   * the api's `APP_RULES`, the same its door and its job runner take. Without them those jobs tell nobody (fail
+   * closed), rather than read members with no rules.
    */
   readonly rules?: RuleSource;
   /** Extra kinds: a test setup registers its own. */

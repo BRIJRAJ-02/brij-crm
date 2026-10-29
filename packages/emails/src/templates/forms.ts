@@ -37,20 +37,34 @@ export const formSubmission: Template<FormSubmissionEmail> = (params, context) =
     {
       type: 'rows',
       layout: 'compact',
-      rows: [...(from === undefined ? [] : [{ label: 'From', value: from }]), { label: 'Sent', value: when }],
+      rows: [...(from === undefined ? [] : [{ label: 'From', value: from }]), { label: 'Submitted', value: when }],
     },
   ];
+  const unfiled = params.filed === false;
+  if (unfiled) {
+    blocks.unshift({
+      type: 'note',
+      text: 'This submission couldn’t be added to the CRM. Open it to add it with Add to CRM.',
+    });
+  }
   if (params.answers.length > 0) {
     blocks.push({ type: 'rows', layout: 'stacked', rows: answerRows(params.answers, context) });
   }
   blocks.push({ type: 'button', label: 'Open submission', url: context.link(params.submissionPath) });
   return {
     subject: who === undefined ? `New submission to ${params.formName}` : `${who} filled in ${params.formName}`,
-    preheader: answersPreview(params.answers) ?? `Sent ${when}.`,
+    preheader: answersPreview(params.answers) ?? `Submitted ${when}.`,
     eyebrow: workspaceOf(context),
-    heading: `New submission to ${params.formName}`,
+    heading: unfiled
+      ? `New submission to ${params.formName}, not added to the CRM`
+      : `New submission to ${params.formName}`,
     blocks,
-    why: `You got this email because you’re told about new submissions to ${params.formName} in ${workspaceOf(context)}.`,
+    why:
+      params.reason === 'lead'
+        ? `You got this email because this lead was given to you in ${workspaceOf(context)}.`
+        : params.reason === 'maker'
+          ? `You got this email because you made the form ${params.formName} in ${workspaceOf(context)}.`
+          : `You got this email because you made ${params.formName} or its lead was given to you, in ${workspaceOf(context)}.`,
   };
 };
 

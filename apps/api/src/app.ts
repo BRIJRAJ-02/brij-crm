@@ -260,7 +260,7 @@ export function createApp({
   const signupAllowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
   const signedOut = services.signedOut ?? NO_SIGNED_OUT;
   // The job kinds (spec 0008): the test kind only locally and in previews.
-  const jobs = services.jobs ?? jobKinds({ environment: env.APP_ENV });
+  const jobs = services.jobs ?? jobKinds({ environment: env.APP_ENV, rules });
   const rpc = createRpcHandler(router);
   const edge = createEdgeGuard({ secret: env.EDGE_SECRET, environment: env.APP_ENV });
   const allowedOrigins = new Set([new URL(env.APP_URL).origin, ...(env.TRUSTED_ORIGINS ?? [])]);

@@ -15,7 +15,7 @@ import { ImportSettings, type EngineRefusal } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId } from '../engine/ids.ts';
 import { checkObject } from '../access/visibility.ts';
-import { memberScopeIn, NO_RULE_SOURCE, type RuleSource } from '../access/door.ts';
+import { memberScopeIn, type RuleSource } from '../access/door.ts';
 import { objectLevel } from '../access/policy.ts';
 import { queueImportFinished } from '../emails/queue.ts';
 import { limitsOf, takeRecordSlots } from '../engine/limits.ts';
@@ -499,10 +499,12 @@ async function liveImportObject(tx: WorkspaceTx, objectId: string): Promise<void
  */
 async function tellStarter(
   context: WriteContext,
-  rules: RuleSource,
+  rules: RuleSource | undefined,
   importId: string,
   outcome: 'done' | 'failed',
 ): Promise<void> {
+  // No rules to read the starter with (a registry built with none): tell nothing rather than read them with none.
+  if (rules === undefined) return;
   const { tx, scope } = context;
   const { workspaceId } = scope;
   const found = await tx.execute<{
@@ -544,7 +546,7 @@ async function tellStarter(
 }
 
 /** The import kind; `rules` are the ones its starter is read with when it tells them how it ended. */
-export function recordsImport(rules: RuleSource = NO_RULE_SOURCE): KindDefinition<ImportJobParams> {
+export function recordsImport(rules?: RuleSource): KindDefinition<ImportJobParams> {
   return defineKind<ImportJobParams>({
     kind: RECORDS_IMPORT,
     lane: 'heavy',

@@ -375,6 +375,9 @@ export async function memberScopeIn(
   rules: RuleSource,
   memberId: string,
 ): Promise<EngineScope | undefined> {
+  // Only the system's work reads another member's scope: from a member's request it would be a way into theirs.
+  checkScope(beside);
+  if (beside.actor.type !== 'system') throw new Error('Only system work reads a member’s scope.');
   const { workspaceId } = beside;
   if (!isUuid(memberId)) return undefined;
   const [row] = await tx

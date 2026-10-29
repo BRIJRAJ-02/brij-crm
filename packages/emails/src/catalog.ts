@@ -46,6 +46,7 @@ export const CATALOG: Catalog = {
       submittedAt: AT,
       timeZone: 'Europe/London',
       submissionPath: '/w/acme/captures/forms/0199f1d2-7c3a-7cc1-9a51-0d5f1e2a3b4c',
+      reason: 'lead',
     },
   },
   form_confirmation: {

@@ -43,7 +43,7 @@ const rules: RuleSource = async (tx) => {
   return rulesByWorkspace.get(rows[0]?.id ?? '') ?? NO_RULES;
 };
 const { team, runnerFor, drive } = jobTestKit(db, ownerUrl, { rules });
-const registry = jobKinds({ environment: 'local' });
+const registry = jobKinds({ environment: 'local', rules });
 
 async function world() {
   const t = await team(['member', 'admin', 'member']);
@@ -599,7 +599,6 @@ describe('who sees and undoes an import (security review)', () => {
 describe('the result email (late trap #74, security review)', () => {
   it('tells nothing of an object its starter lost access to while it ran', async () => {
     const w = await world();
-    const ruled = jobKinds({ environment: 'local', rules });
     const id = newId();
     await createImport(w.admin, {
       id,
@@ -610,7 +609,7 @@ describe('the result email (late trap #74, security review)', () => {
       settings: w.settings(),
     });
     await stageImportRows(w.admin, { importId: id, rows: [w.row(2, 'Ada', 'ada@example.com')] }, [outboxHook()]);
-    const started = await startImport(w.admin, ruled, id, [outboxHook()]);
+    const started = await startImport(w.admin, registry, id, [outboxHook()]);
     // The object is hidden from the starter's role, as an admin renames it: the email must not name it.
     rulesByWorkspace.set(w.workspaceId, {
       levels: [
@@ -618,7 +617,38 @@ describe('the result email (late trap #74, security review)', () => {
       ],
       records: [],
     });
-    const outcomes = await drive(runnerFor(ruled), w.workspaceId, started.jobId ?? '');
+    const outcomes = await drive(runnerFor(registry), w.workspaceId, started.jobId ?? '');
+    expect(outcomes.at(-1)).toBe('failed');
+    // Ended by the object check itself, not by the starter's removal.
+    const [ended] = await testQuery<{ error_code: string }>(ownerUrl, `select error_code from jobs where id = $1`, [
+      started.jobId,
+    ]);
+    expect(ended?.error_code).not.toBe('ACTOR_REMOVED');
+    const sent = await testQuery<{ kind: string }>(
+      ownerUrl,
+      `select kind from emails where workspace_id = $1 and kind in ('import_finished', 'job_failed')`,
+      [w.workspaceId],
+    );
+    expect(sent).toEqual([]);
+  });
+});
+
+describe('the result email to a removed starter', () => {
+  it('sends nothing to a starter whose removal ended it', async () => {
+    const w = await world();
+    const id = newId();
+    await createImport(w.member, {
+      id,
+      objectId: w.people,
+      fileName: 'people.csv',
+      rowCount: 1,
+      errorRows: 0,
+      settings: w.settings(),
+    });
+    await stageImportRows(w.member, { importId: id, rows: [w.row(2, 'Ada', 'ada@example.com')] }, [outboxHook()]);
+    const started = await startImport(w.member, registry, id, [outboxHook()]);
+    await testQuery(ownerUrl, `update members set status = 'removed' where id = $1`, [w.memberId]);
+    const outcomes = await drive(runnerFor(registry), w.workspaceId, started.jobId ?? '');
     expect(outcomes.at(-1)).toBe('failed');
     const sent = await testQuery<{ kind: string }>(
       ownerUrl,

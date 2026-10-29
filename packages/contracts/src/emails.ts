@@ -95,6 +95,10 @@ export const FormSubmissionEmail = z.strictObject({
   timeZone: EmailTimeZone.optional(),
   /** Where the submission opens in the app. */
   submissionPath: AppPath,
+  /** Why this member is told: the lead went to them, or they made the form (a member who is both reads `lead`). */
+  reason: z.enum(['lead', 'maker']).optional(),
+  /** False when it couldn't be added to the CRM (it ended `failed`), so the reader knows to act on it. */
+  filed: z.boolean().optional(),
 });
 /** A new submission to a form. */
 export type FormSubmissionEmail = z.infer<typeof FormSubmissionEmail>;
