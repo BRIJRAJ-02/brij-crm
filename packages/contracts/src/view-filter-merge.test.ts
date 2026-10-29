@@ -5,7 +5,7 @@
 // everyone, for good. One flipped sort was enough.
 import { describe, expect, it } from 'vitest';
 import type { FilterGroup } from './values/filters.ts';
-import { hasUnseenConditions, mergeFilter } from './view-model.ts';
+import { hasUnseenConditions, mergeFilter, mergeSorts } from './view-model.ts';
 
 const is = (attributeId: string, value: string) => ({ attributeId, operator: 'is' as const, value });
 const and = (...conditions: FilterGroup['conditions']): FilterGroup => ({ conjunction: 'and', conditions });
@@ -13,14 +13,14 @@ const or = (...conditions: FilterGroup['conditions']): FilterGroup => ({ conjunc
 
 const STAGE = 'a1';
 const SALARY = 'a2';
-/** Stage is visible; Salary band is archived or hidden, so it never reached the saver's screen. */
-const visible = new Set([STAGE]);
+/** Stage is visible; Salary band is hidden from the saver, so it never reached their screen. */
+const visible = { seeable: new Set([STAGE]), live: new Set([STAGE]) };
 
 describe('mergeFilter', () => {
   it('leaves an ordinary save alone when every condition was visible', () => {
     const stored = and(is(STAGE, 'open'));
     const incoming = and(is(STAGE, 'won'));
-    expect(hasUnseenConditions(stored, visible)).toBe(false);
+    expect(hasUnseenConditions(stored, visible.live)).toBe(false);
     expect(mergeFilter(stored, incoming, visible)).toEqual({ kind: 'keep', filter: incoming });
   });
 
@@ -28,7 +28,7 @@ describe('mergeFilter', () => {
     // They flipped a sort and pressed Save; the filter they sent back is the one they were shown.
     const stored = and(is(STAGE, 'open'), is(SALARY, 'senior'));
     const shown = and(is(STAGE, 'open'));
-    expect(hasUnseenConditions(stored, visible)).toBe(true);
+    expect(hasUnseenConditions(stored, visible.live)).toBe(true);
     expect(mergeFilter(stored, shown, visible)).toEqual({ kind: 'keep', filter: stored });
   });
 
@@ -53,10 +53,51 @@ describe('mergeFilter', () => {
   });
 
   it('has nothing to protect when the view has no filter at all', () => {
-    expect(hasUnseenConditions(undefined, visible)).toBe(false);
+    expect(hasUnseenConditions(undefined, visible.live)).toBe(false);
     expect(mergeFilter(undefined, and(is(STAGE, 'open')), visible)).toEqual({
       kind: 'keep',
       filter: and(is(STAGE, 'open')),
     });
+  });
+});
+
+describe('mergeFilter with an archived field the saver can see (spec 0020, AC-480)', () => {
+  // Salary band is archived: the saver sees it in settings, and the view's Callout names it.
+  const archived = { seeable: new Set([STAGE, SALARY]), live: new Set([STAGE]) };
+
+  it('keeps the archived condition through a save that leaves the filter alone, so restoring brings it back', () => {
+    const stored = and(is(STAGE, 'open'), is(SALARY, 'senior'));
+    expect(mergeFilter(stored, and(is(STAGE, 'open')), archived)).toEqual({ kind: 'keep', filter: stored });
+  });
+
+  it('lets a new filter replace it, as the Callout warned, instead of refusing the saver', () => {
+    const stored = and(is(STAGE, 'open'), is(SALARY, 'senior'));
+    const incoming = and(is(STAGE, 'won'));
+    expect(mergeFilter(stored, incoming, archived)).toEqual({ kind: 'keep', filter: incoming });
+  });
+
+  it('still refuses a new filter when a hidden condition sits beside the archived one', () => {
+    const HIDDEN = 'a3';
+    const stored = and(is(STAGE, 'open'), is(SALARY, 'senior'), is(HIDDEN, 'x'));
+    expect(mergeFilter(stored, and(is(STAGE, 'won')), archived)).toEqual({ kind: 'blocked' });
+  });
+});
+
+describe('mergeSorts (spec 0020, AC-480)', () => {
+  const live = new Set([STAGE]);
+  const byStage = { attributeId: STAGE, direction: 'ascending' as const };
+  const bySalary = { attributeId: SALARY, direction: 'descending' as const };
+
+  it('keeps a sort on an archived field through a save that left the sorts alone', () => {
+    expect(mergeSorts([bySalary, byStage], [byStage], live)).toEqual([bySalary, byStage]);
+  });
+
+  it('stores what was sent once the sorts were changed', () => {
+    const flipped = { ...byStage, direction: 'descending' as const };
+    expect(mergeSorts([bySalary, byStage], [flipped], live)).toEqual([flipped]);
+  });
+
+  it('stores what was sent when every stored sort was on screen', () => {
+    expect(mergeSorts([byStage], [], live)).toEqual([]);
   });
 });

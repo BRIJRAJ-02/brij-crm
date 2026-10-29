@@ -17,14 +17,14 @@ import {
 import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
 import { checkViewQuery } from '../engine/query/page.ts';
-import { isArchivedNow, loadAttributes } from '../engine/values.ts';
+import { isArchivedNow, loadAttributes, loadAttributesById, type AttributeDef } from '../engine/values.ts';
 import { postgresError, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
-import { can, fieldLevel, type Access } from '../access/policy.ts';
+import { can, fieldLevel, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject } from '../access/visibility.ts';
-import { mergeFilter, viewRule, type ViewRuleCaller } from '@crm/contracts/views';
+import { filterAttributeIds, mergeFilter, mergeSorts, viewRule, type ViewRuleCaller } from '@crm/contracts/views';
 import { defaultViewConfig } from './seed.ts';
 
 const { memberViewState, members, objects, views } = schema;
@@ -274,16 +274,35 @@ async function saverName(tx: WorkspaceTx, memberId: string | null): Promise<stri
  * run (an attribute not on it, archived, hidden, or not sortable), and
  * `CONFIG_INVALID` past 64 kB. A refused save writes nothing.
  */
-/** The object's live attributes the caller may see: what `mergeFilter` and `mergeLayout` mean by visible. */
-async function visibleLiveIds(tx: WorkspaceTx, scope: EngineScope, objectId: string): Promise<ReadonlySet<string>> {
-  const attributes = await loadAttributes(tx, objectId);
-  return new Set(
-    [...attributes.values()].flatMap((attribute) =>
-      isArchivedNow(attribute) || fieldLevel(scope.access, { id: attribute.id, objectId }) === 'hidden'
-        ? []
-        : [attribute.id],
-    ),
+/**
+ * The object's attributes the caller may see, archived or not (`seeable`), and those of them not archived (`live`):
+ * what `mergeFilter` tells apart, since an archived condition the saver can see may go with a new filter (AC-480)
+ * while a hidden one may not.
+ */
+async function filterIds(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  objectId: string,
+  stored: ViewConfig['filter'],
+): Promise<{ readonly seeable: ReadonlySet<string>; readonly live: ReadonlySet<string> }> {
+  const own = await loadAttributes(tx, objectId);
+  // The far fields a `through` condition reaches live on other objects: each is judged on its own object, so one
+  // hidden from the saver, or on an object they can't read, is unseen however visible the relation leading to it.
+  const farIds = filterAttributeIds(stored).filter((id) => !own.has(id));
+  const far = farIds.length === 0 ? new Map<string, AttributeDef>() : await loadAttributesById(tx, farIds);
+  const attributes = [...own.values(), ...far.values()].filter(
+    (attribute) =>
+      attribute.objectId !== null &&
+      objectLevel(scope.access, attribute.objectId) !== 'none' &&
+      fieldLevel(scope.access, { id: attribute.id, objectId: attribute.objectId }) !== 'hidden',
   );
+  // A field gone for good (its object's deleted, the attribute purged) is no one's to protect: it may go like an
+  // archived one, rather than refuse every later edit of the filter.
+  const gone = farIds.filter((id) => !far.has(id));
+  return {
+    seeable: new Set([...attributes.map((attribute) => attribute.id), ...gone]),
+    live: new Set(attributes.flatMap((attribute) => (isArchivedNow(attribute) ? [] : [attribute.id]))),
+  };
 }
 
 export async function saveViewQuery(
@@ -305,7 +324,8 @@ export async function saveViewQuery(
       const sent = input.filter === undefined || input.filter.conditions.length === 0 ? undefined : input.filter;
       // A condition on a field the saver can't see never reached their screen, so what they send back leaves it
       // out. Writing that would delete it for everyone, for good (27 October 2026): one flipped sort was enough.
-      const merged = mergeFilter(configOf(row.config).filter, sent, await visibleLiveIds(tx, scope, row.objectId));
+      const ids = await filterIds(tx, scope, row.objectId, configOf(row.config).filter);
+      const merged = mergeFilter(configOf(row.config).filter, sent, ids);
       if (merged.kind === 'blocked') {
         throw refuse(
           'FORBIDDEN',
@@ -321,7 +341,9 @@ export async function saveViewQuery(
       });
       const filter = merged.filter;
       const { filter: _previous, ...rest } = configOf(row.config);
-      const config = ViewConfig.safeParse({ ...rest, ...(filter === undefined ? {} : { filter }), sorts: input.sorts });
+      // A sort on an archived or hidden field is kept through a save that left the sorts alone (AC-480).
+      const sorts = mergeSorts(rest.sorts, input.sorts, ids.live);
+      const config = ViewConfig.safeParse({ ...rest, ...(filter === undefined ? {} : { filter }), sorts });
       if (!config.success) throw refuse('CONFIG_INVALID', 'This view’s settings are not valid.');
       if (new TextEncoder().encode(JSON.stringify(config.data)).length > MAX_VIEW_CONFIG_BYTES) {
         throw refuse('CONFIG_INVALID', 'This view has too many settings to save.');

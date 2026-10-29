@@ -409,6 +409,25 @@ function sameFilter(left: FilterGroup | undefined, right: FilterGroup | undefine
   });
 }
 
+/**
+ * Every attribute one condition names: a `through` condition's relations, hop by hop, then the field it reaches on
+ * the far object. A condition is seen only when every one of them is: a far field hidden from the saver never
+ * reached their screen, however visible the relation leading to it (security review, 28 October 2026).
+ */
+function conditionIds(condition: FilterCondition): readonly string[] {
+  return condition.operator === 'through'
+    ? [...condition.path, ...conditionIds(condition.condition)]
+    : [condition.attributeId];
+}
+
+/** Every attribute a filter names, along `through` paths too: what the server reads to tell seen from unseen. */
+export function filterAttributeIds(group: FilterGroup | undefined): readonly string[] {
+  if (group === undefined) return [];
+  return [
+    ...new Set(group.conditions.flatMap((item) => (isGroupItem(item) ? filterAttributeIds(item) : conditionIds(item)))),
+  ];
+}
+
 /** The stored filter with every condition the saver can't see taken out: what their screen showed them. */
 function asSeen(group: FilterGroup, visibleIds: ReadonlySet<string>): FilterGroup | undefined {
   const conditions = group.conditions.flatMap((item): (FilterCondition | FilterGroup)[] => {
@@ -416,14 +435,12 @@ function asSeen(group: FilterGroup, visibleIds: ReadonlySet<string>): FilterGrou
       const kept = asSeen(item, visibleIds);
       return kept === undefined ? [] : [kept];
     }
-    // A through condition is seen when its relations are: the far side's visibility is the server's to judge.
-    const ids = item.operator === 'through' ? item.path : [item.attributeId];
-    return ids.every((id) => visibleIds.has(id)) ? [item] : [];
+    return conditionIds(item).every((id) => visibleIds.has(id)) ? [item] : [];
   });
   return conditions.length === 0 ? undefined : { conjunction: group.conjunction, conditions };
 }
 
-/** Whether a stored filter holds a condition on an attribute the saver can't see (hidden from them, or archived). */
+/** Whether a stored filter holds a condition on an attribute outside `visibleIds` (hidden from the saver, or archived). */
 export function hasUnseenConditions(stored: FilterGroup | undefined, visibleIds: ReadonlySet<string>): boolean {
   if (stored === undefined) return false;
   return !sameFilter(stored, asSeen(stored, visibleIds));
@@ -435,32 +452,61 @@ export type FilterMerge =
 
 /**
  * The filter a save should store, for a view whose stored filter holds
- * conditions the saver can't see (27 October 2026). Their screen is built
- * from `effectiveQuery`, which leaves those conditions out, so what they send
- * back is the filter without them — and writing that deletes, for everyone
- * and for good, a condition they never knew was there. One flipped sort used
- * to be enough to widen a shared view permanently.
+ * conditions the saver's screen leaves out (27 October 2026): on an attribute
+ * hidden from them, or archived. Their screen is built from `effectiveQuery`,
+ * which leaves those conditions out, so what they send back is the filter
+ * without them, and writing that deleted, for everyone and for good, a
+ * condition they never touched. One flipped sort used to be enough to widen a
+ * shared view permanently.
  *
  * `mergeLayout` solves the same problem for columns by putting the unseen
  * ones back. A filter can't be merged that way: the stored tree may be an
  * `or`, and grafting the saver's branch onto it would change what the view
- * asks rather than restore it. So the rule is narrower and always honest:
+ * asks rather than restore it. So:
  *
  * - the saver left the filter alone (what they sent is exactly what they were
- *   shown) → store the filter as it was, unseen conditions and all;
- * - they changed it → `blocked`, and the caller refuses saying why.
+ *   shown) → store the filter as it was, every condition kept;
+ * - they changed it, and a condition is on an attribute hidden from them →
+ *   `blocked`: they may not delete what they can't see, and the caller says so;
+ * - they changed it, and the conditions left out are only on archived
+ *   attributes they can see → store what they sent. The view's Callout told
+ *   them, "Saving a new filter removes it for good" (spec 0020, AC-480).
  *
- * `visibleIds` are the attributes the saver sees, live, as `mergeLayout`
- * takes them.
+ * `seeable` are the attributes the saver may see, archived or not, on this
+ * object and on every far object a `through` condition reaches
+ * (`filterAttributeIds`); `live` those of them not archived.
  */
 export function mergeFilter(
   stored: FilterGroup | undefined,
   incoming: FilterGroup | undefined,
-  visibleIds: ReadonlySet<string>,
+  ids: { readonly seeable: ReadonlySet<string>; readonly live: ReadonlySet<string> },
 ): FilterMerge {
-  if (!hasUnseenConditions(stored, visibleIds)) return { kind: 'keep', filter: incoming };
-  const seen = stored === undefined ? undefined : asSeen(stored, visibleIds);
-  return sameFilter(seen, incoming) ? { kind: 'keep', filter: stored } : { kind: 'blocked' };
+  if (!hasUnseenConditions(stored, ids.live)) return { kind: 'keep', filter: incoming };
+  const seen = stored === undefined ? undefined : asSeen(stored, ids.live);
+  if (sameFilter(seen, incoming)) return { kind: 'keep', filter: stored };
+  return hasUnseenConditions(stored, ids.seeable) ? { kind: 'blocked' } : { kind: 'keep', filter: incoming };
+}
+
+/**
+ * The sorts a save should store (spec 0020, AC-480). A sort on an attribute archived or hidden from the saver
+ * never reached their screen, so what they send back leaves it out, and storing that loses it for good: a view
+ * sorted on an archived field came back without its sort on restore, after any save at all. So a saver who left
+ * the sorts as they were shown keeps the stored list, every sort in its place; one who changed them stores what
+ * they sent. A sort, unlike a condition, never widens what a view shows, so nothing is refused.
+ */
+export function mergeSorts(
+  stored: readonly SortRule[],
+  incoming: readonly SortRule[],
+  live: ReadonlySet<string>,
+): readonly SortRule[] {
+  const seen = stored.filter((sort) => live.has(sort.attributeId));
+  if (seen.length === stored.length) return incoming;
+  const same =
+    seen.length === incoming.length &&
+    seen.every(
+      (sort, at) => sort.attributeId === incoming[at]?.attributeId && sort.direction === incoming[at].direction,
+    );
+  return same ? stored : incoming;
 }
 
 /**

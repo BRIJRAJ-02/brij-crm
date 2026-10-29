@@ -13,7 +13,7 @@ import { baseLevel, compileSorts, type CompileContext } from '../engine/query/co
 import { isRefusal } from '../engine/refusals.ts';
 import type { AttributeDef } from '../engine/values.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
-import { createAttribute } from '../attributes/attributes.ts';
+import { archiveAttributes, createAttribute, restoreAttributes } from '../attributes/attributes.ts';
 import { createObject } from '../objects/objects.ts';
 import { systemScope } from '../access/door.ts';
 import { SYSTEM_ACCESS, type AccessRules } from '../access/policy.ts';
@@ -297,6 +297,107 @@ describe('saveViewQuery (AC-468, AC-469, AC-476, AC-482)', () => {
       baseQueryVersion: 3,
     });
     expect(owned.config.filter).toEqual(shown);
+  });
+
+  it('keeps a condition reaching a field hidden from the saver on a linked object (security review, 28 Oct)', async () => {
+    // "Company → Description contains saas": the relation is Bea's to see, the far field is not. Her screen leaves
+    // the condition out, so a save from her sends it back missing. Counting it seen by its path alone deleted it,
+    // for everyone, on a sort change.
+    const w = await workspace();
+    const companies = w.objects.companies ?? '';
+    const title = w.attribute('job_title');
+    const farNotes = w.attribute('description', companies);
+    const viaCompany = {
+      operator: 'through' as const,
+      path: [w.attribute('company')],
+      condition: { attributeId: farNotes, operator: 'contains' as const, value: 'saas' },
+    };
+    const both = {
+      conjunction: 'and' as const,
+      conditions: [{ attributeId: title, operator: 'contains' as const, value: 'pilot' }, viaCompany],
+    };
+    const shown = {
+      conjunction: 'and' as const,
+      conditions: [{ attributeId: title, operator: 'contains' as const, value: 'pilot' }],
+    };
+    await saveViewQuery(w.owner, { viewId: w.peopleView, filter: both, sorts: [], baseQueryVersion: 1 });
+    const blind = rescope(w.bea, {
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: companies, attributeId: farNotes },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    const sorted = await saveViewQuery(blind, {
+      viewId: w.peopleView,
+      filter: shown,
+      sorts: [{ attributeId: w.attribute('name'), direction: 'ascending' as const }],
+      baseQueryVersion: 2,
+    });
+    expect(sorted.config.filter).toEqual(both);
+    const refusal = await refusalOf(
+      saveViewQuery(blind, {
+        viewId: w.peopleView,
+        filter: { conjunction: 'and', conditions: [{ attributeId: title, operator: 'contains', value: 'captain' }] },
+        sorts: [],
+        baseQueryVersion: 3,
+      }),
+    );
+    expect(refusal.code).toBe('FORBIDDEN');
+    expect((await getView(w.owner, w.peopleView)).config.filter).toEqual(both);
+  });
+
+  it('keeps an archived field’s condition through a sort save, and lets a new filter replace it (AC-480)', async () => {
+    // Archived, the field's condition is left out when the view runs, and the screen says so. Saving a sort must not
+    // delete it, so restoring the field brings the view back as it was; a new filter may replace it, as the
+    // Callout warned. Before, a sort save deleted it, and then a filter edit was refused as "a field you can't see".
+    const w = await workspace();
+    const title = w.attribute('job_title');
+    // A field both filtered and sorted on, so archiving it takes a condition and a sort out of the running query.
+    const { id: notes } = await createAttribute(w.owner, {
+      objectId: w.people,
+      id: newId(),
+      title: 'Level',
+      type: 'text',
+    });
+    const both = {
+      conjunction: 'and' as const,
+      conditions: [
+        { attributeId: title, operator: 'contains' as const, value: 'pilot' },
+        { attributeId: notes, operator: 'contains' as const, value: 'senior' },
+      ],
+    };
+    const shown = {
+      conjunction: 'and' as const,
+      conditions: [{ attributeId: title, operator: 'contains' as const, value: 'pilot' }],
+    };
+    const byNotes = { attributeId: notes, direction: 'descending' as const };
+    await saveViewQuery(w.owner, { viewId: w.peopleView, filter: both, sorts: [byNotes], baseQueryVersion: 1 });
+    await archiveAttributes(w.owner, { attributeId: notes });
+
+    // A filter-and-sort save sending back exactly what the screen showed keeps the archived condition and sort.
+    const kept = await saveViewQuery(w.owner, { viewId: w.peopleView, filter: shown, sorts: [], baseQueryVersion: 2 });
+    expect(kept.config.filter).toEqual(both);
+    expect(kept.config.sorts).toEqual([byNotes]);
+    await restoreAttributes(w.owner, { attributeId: notes });
+    expect((await getView(w.owner, w.peopleView)).config).toMatchObject({ filter: both, sorts: [byNotes] });
+
+    await archiveAttributes(w.owner, { attributeId: notes });
+    const replaced = await saveViewQuery(w.owner, {
+      viewId: w.peopleView,
+      filter: { conjunction: 'and', conditions: [{ attributeId: title, operator: 'contains', value: 'captain' }] },
+      sorts: [],
+      baseQueryVersion: 3,
+    });
+    expect(replaced.config.filter).toEqual({
+      conjunction: 'and',
+      conditions: [{ attributeId: title, operator: 'contains', value: 'captain' }],
+    });
   });
 
   it('refuses a save over someone else’s since the draft began, naming them, unless forced (Replace)', async () => {

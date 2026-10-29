@@ -253,6 +253,25 @@ export function ViewScreen(props: ViewScreenProps) {
   if (effective.status === 'ready' && effective !== lastReady) setLastReady(effective);
   const running = effective.status === 'ready' ? effective : lastReady;
   const query = useMemo(() => (running === undefined ? { sorts: [] } : toViewQuery(running)), [running]);
+  // The archived fields this person can see that the view's filter or sorts use, by title (AC-480). A draft is
+  // built from the query that runs, so its first filter edit already leaves them out; the saved view's are named
+  // too while a draft is open, so the warning stays up until the save it warns about. A through filter's archived
+  // attribute is on the far object, so its title is looked up there as well.
+  const archivedTitles = useMemo(() => {
+    const savedRun = draft.isDraft
+      ? runningQuery(
+          saved,
+          attributes,
+          farAttributesFrom(attributes, (id) => far.get(id)),
+        )
+      : undefined;
+    const ids = new Set([...(running?.skipped ?? []), ...(savedRun?.status === 'ready' ? savedRun.skipped : [])]);
+    const known = [...attributes, ...[...far.values()].flat()];
+    return [...ids].flatMap((id) => {
+      const title = known.find((attribute) => attribute.id === id)?.title;
+      return title === undefined ? [] : [title];
+    });
+  }, [running, saved, draft.isDraft, attributes, far]);
 
   // Whether the table holds ticked rows: a new query clears them, and the toast below says so (spec 0022, AC-522).
   const isTicked = useRef(false);
@@ -659,6 +678,13 @@ export function ViewScreen(props: ViewScreenProps) {
         {...(focusRequest === undefined ? {} : { focusRequest })}
         {...(announced === undefined ? {} : { status: announced })}
       />
+      {archivedTitles.length > 0 && (
+        // Spec 0020, AC-480: archived fields the view filters or sorts on are left out when it runs, so it shows
+        // more than it was saved to. Nothing said so, and the view simply looked wrong.
+        <Callout tone="info" placement="banner">
+          {strings.archivedInView(archivedTitles)}
+        </Callout>
+      )}
       {showDropped && draft.isDraft && (
         <Callout
           tone="warning"
