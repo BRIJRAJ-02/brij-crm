@@ -18,6 +18,7 @@ import { createHandleClient, isDataError } from '@crm/data/booking';
 import { BookingMessage, BookingProfile, BookingProvider } from '@crm/ui/public-booking';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
+import { readBoot } from './boot.ts';
 import { BookingPage, LoadingBooking } from './BookingPage.tsx';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
 import { forgetHandoff, takeHandoff, type HandoffStorage } from './prefill.ts';
@@ -50,6 +51,8 @@ const storage = ((): HandoffStorage | undefined => {
   }
 })();
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+// What the handle address's shell already read (boot.ts): only a handle address's shell carries one.
+const boot = path === null ? readBoot(document) : undefined;
 
 const embed = embedOf({
   search: address.search,
@@ -164,11 +167,19 @@ if (path !== null) {
       <BookingProvider locale={locale} timeZone={timeZone}>
         {/* The profile's own shape while its module loads, so the page never swaps one card for another. */}
         <Suspense fallback={<BookingProfile />}>
-          <ProfilePage handle={handled.handle} onMoved={(current) => showAddress(`/${current}`)} />
+          <ProfilePage
+            handle={handled.handle}
+            {...(boot?.kind === 'profile' ? { initial: boot.profile } : {})}
+            onMoved={(current) => showAddress(`/${current}`)}
+          />
         </Suspense>
       </BookingProvider>
     </StrictMode>,
   );
+} else if (handled?.kind === 'page' && boot?.kind === 'page') {
+  // The shell already found the page's key: no lookup before the page's own reads start.
+  if (boot.handle !== handled.handle || boot.slug !== handled.slug) showAddress(`/${boot.handle}/${boot.slug}`);
+  renderBooking(boot.publicKey);
 } else if (handled?.kind === 'page') {
   // The booking page's own shape while the address is looked up: `/<handle>/<slug>` draws exactly what
   // `/b/<key>` draws, so finding the key fills the page in rather than replacing it.

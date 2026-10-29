@@ -75,6 +75,11 @@ export interface ProfilePageProps {
   readonly handle: string;
   /** The person's current handle differs from the address's: the page puts it in the address. */
   readonly onMoved: (handle: string) => void;
+  /**
+   * The profile the shell already read (boot.ts), drawn at once while the page's own read, which is still its view,
+   * is out. Left out, the page draws its loading shape until that read lands.
+   */
+  readonly initial?: PublicProfile;
 }
 
 type Loaded =
@@ -112,9 +117,18 @@ const footOf = (mode: 'light' | 'dark') => (
 );
 
 /** The link page: the person, then their blocks a page at a time, with a search once there are many. */
-export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
+export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
   const client = useMemo(() => createHandleClient({ origin: globalThis.location.origin }), []);
-  const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
+  const [loaded, setLoaded] = useState<Loaded>(() =>
+    initial === undefined
+      ? { state: 'loading' }
+      : {
+          state: 'ready',
+          profile: initial,
+          items: initial.items,
+          ...(initial.next === undefined ? {} : { next: initial.next }),
+        },
+  );
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState('');
   const [isMoreLoading, setMoreLoading] = useState(false);
@@ -122,11 +136,17 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
   // A search that failed: said under the search, the page stays.
   const [searchFailed, setSearchFailed] = useState(false);
   // Whether the unsearched page is long enough for a search: once true, it stays while the person searches.
-  const [isLong, setLong] = useState(false);
+  const [isLong, setLong] = useState(
+    () =>
+      initial !== undefined &&
+      (initial.items.filter((item) => item.kind !== 'heading').length > SEARCH_FROM || initial.next !== undefined),
+  );
   // Only the newest read lands: a slow answer to an older search never replaces a newer one.
   const latest = useRef(0);
   // Whether the page has drawn once, read by a failed search without a state updater's side effect.
-  const loadedRef = useRef<Loaded['state']>('loading');
+  const loadedRef = useRef<Loaded['state']>(initial === undefined ? 'loading' : 'ready');
+  // Whether the page's first read, its view (AC-5124), has landed: a page drawn from the shell's copy still makes it.
+  const viewed = useRef(false);
   // The open folded section lives in the address, so a link opens one and the back button closes it (AC-5417).
   const [openFolder, setOpenFolder] = useState(folderInAddress);
   // Only the section the page was opened at is scrolled to; one a visitor presses is already under their thumb.
@@ -139,10 +159,11 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
     (search: string) => {
       const ticket = (latest.current += 1);
       // The page's first read is its view (AC-5124); a cleared search reads it again as a search, never a view.
-      const isFirst = loadedRef.current !== 'ready';
+      const isFirst = !viewed.current;
       client.profile(handle, search === '' && isFirst ? {} : { q: search }).then(
         (profile) => {
           if (ticket !== latest.current) return;
+          if (search === '' && isFirst) viewed.current = true;
           if (profile.handle !== handle) onMoved(profile.handle);
           // Rows, not headings: a page of eight links under two headings needs no search.
           const rows = profile.items.filter((item) => item.kind !== 'heading').length;
@@ -160,7 +181,8 @@ export function ProfilePage({ handle, onMoved }: ProfilePageProps) {
           if (ticket !== latest.current) return;
           // Only the first read takes the page: a search that fails says so under the search.
           if (loadedRef.current === 'ready') {
-            setSearchFailed(true);
+            // The view read behind the shell's copy failing changes nothing the visitor sees: the copy stays.
+            if (!isFirst) setSearchFailed(true);
             return;
           }
           // Nothing to show: which of the three reasons comes next, from the server (the effect below).

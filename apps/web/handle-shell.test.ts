@@ -3,7 +3,17 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { cardUrl, lookOf, partsOf, shellFor, type ShellDeps, type ShellProfile } from './handle-shell.ts';
+import {
+  BOOT_ID,
+  cardUrl,
+  lookOf,
+  partsOf,
+  shellFor,
+  withBoot,
+  type ShellDeps,
+  type ShellProfile,
+} from './handle-shell.ts';
+import { bootOf, BOOT_ID as PAGE_BOOT_ID } from './src/public/booking/boot.ts';
 
 const shell = readFileSync(path.join(import.meta.dirname, 'book.html'), 'utf8');
 
@@ -212,5 +222,54 @@ describe('shellFor', () => {
 
   it('leaves a path that names no handle alone', async () => {
     expect((await shellFor('/settings', deps())).body).toBe(shell);
+  });
+});
+
+/** The boot block's JSON in a shell, as the page reads it. */
+const bootIn = (html: string) =>
+  new RegExp(`<script type="application/json" id="${BOOT_ID}">(.*?)</script>`).exec(html)?.[1];
+
+describe('the boot block (29 Oct 2026)', () => {
+  it('is the id the page reads', () => {
+    expect(PAGE_BOOT_ID).toBe(BOOT_ID);
+  });
+
+  it('hands a profile to the page, in the head, and preloads its picture', async () => {
+    const image = '/api/public/profiles/anish/picture?v=a1b2c3';
+    const { body } = await shellFor('/anish', deps({ readProfile: () => Promise.resolve({ ...profile, image }) }));
+    const head = body.slice(0, body.indexOf('</head>'));
+    expect(head).toContain(`<link rel="preload" as="image" href="${image}">`);
+    expect(JSON.parse(bootIn(head) ?? '')).toMatchObject({ kind: 'profile', profile: { handle: 'anish', image } });
+  });
+
+  it('hands a booking page its key and current address, so it never looks the address up', async () => {
+    const { body } = await shellFor(
+      '/anish/intro',
+      deps({ readPage: () => Promise.resolve({ publicKey: 'k123', handle: 'anish-rao', slug: 'intro-call' }) }),
+    );
+    expect(bootOf(bootIn(body))).toEqual({ kind: 'page', publicKey: 'k123', handle: 'anish-rao', slug: 'intro-call' });
+  });
+
+  it('writes none for a page read without a key, nor when the read misses', async () => {
+    const keyless = await shellFor('/anish/intro', deps({ readPage: () => Promise.resolve({ title: 'Intro' }) }));
+    expect(bootIn(keyless.body)).toBeUndefined();
+    const missed = await shellFor('/anish', deps({ readProfile: () => Promise.reject(new Error('down')) }));
+    expect(bootIn(missed.body)).toBeUndefined();
+  });
+
+  it('cannot be closed early by anything a person wrote', () => {
+    const bio = '</script><script>alert(1)</script><!--';
+    const html = withBoot(shell, { kind: 'profile', profile: { ...profile, bio } });
+    const json = bootIn(html) ?? '';
+    expect(json).not.toContain('<');
+    expect((JSON.parse(json) as { profile: { bio: string } }).profile.bio).toBe(bio);
+    expect(html.match(/<\/script>/g)?.length).toBe((shell.match(/<\/script>/g)?.length ?? 0) + 1);
+  });
+
+  it('preloads only a picture on our own api, and never one that could leave its attribute', () => {
+    const outside = withBoot(shell, { kind: 'profile', profile: { ...profile, image: 'https://evil.test/x.png' } });
+    const quoted = withBoot(shell, { kind: 'profile', profile: { ...profile, image: '/api/public/x"><b>' } });
+    expect(outside).not.toContain('rel="preload" as="image"');
+    expect(quoted).not.toContain('rel="preload" as="image"');
   });
 });

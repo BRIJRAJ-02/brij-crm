@@ -24,6 +24,7 @@ export function cardUrl(origin: string, handle: string, version: string | undefi
 /** What a profile read gives the shell. Everything is optional: a read answers what it has, and misses are normal. */
 export interface ShellProfile {
   readonly handle?: unknown;
+  readonly image?: unknown;
   readonly name?: unknown;
   readonly bio?: unknown;
   readonly theme?: unknown;
@@ -59,9 +60,43 @@ export function partsOf(pathname: string): { readonly handle: string; readonly s
 
 /** What a booking page read gives the shell: its own title and note, and the host it belongs to. */
 export interface ShellPage {
+  readonly publicKey?: unknown;
+  readonly handle?: unknown;
+  readonly slug?: unknown;
   readonly title?: unknown;
   readonly description?: unknown;
   readonly hostName?: unknown;
+}
+
+/** The id of the shell's boot block, which the public bundle reads before it asks the api anything. */
+export const BOOT_ID = 'crm-boot';
+
+/**
+ * What the shell already read, handed to the page so it never asks again before drawing (29 Oct 2026): a profile
+ * draws from it at once, and a booking page starts from its key rather than looking the address up first, which
+ * was a whole round trip to the api before anything else could start. The page still reads afresh behind it, so a
+ * shell the edge kept for a few minutes never decides what is shown for long.
+ */
+export type ShellBoot =
+  | { readonly kind: 'profile'; readonly profile: ShellProfile }
+  | { readonly kind: 'page'; readonly publicKey: string; readonly handle: string; readonly slug: string };
+
+/**
+ * The boot block, before `</head>`: JSON in a script the browser never runs (so the CSP has nothing to say), with
+ * every `<` escaped so nothing a person wrote in their bio can close the element. A profile's picture is preloaded
+ * beside it, so it is on its way while the bundle loads rather than after the page draws.
+ */
+export function withBoot(shell: string, boot: ShellBoot): string {
+  const headEnd = shell.indexOf('</head>');
+  if (headEnd < 0) return shell;
+  const json = JSON.stringify(boot).replace(/</g, '\\u003c');
+  const image = boot.kind === 'profile' ? text(boot.profile.image) : undefined;
+  const preload =
+    image !== undefined && image.startsWith('/api/public/') && !/["<>]/.test(image)
+      ? `    <link rel="preload" as="image" href="${image.replace(/&/g, '&amp;')}">\n`
+      : '';
+  const block = `${preload}    <script type="application/json" id="${BOOT_ID}">${json}</script>\n`;
+  return `${shell.slice(0, headEnd)}${block}${shell.slice(headEnd)}`;
 }
 
 /** What the shell was built from, which the answer's own header reports so a miss is visible in production. */
@@ -141,7 +176,11 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
     ...(bio === undefined ? {} : { description: bio }),
     ...(look === undefined ? {} : { look }),
   };
-  return { body: withMeta(deps.shell, source), status: 200, outcome: 'profile' };
+  return {
+    body: withBoot(withMeta(deps.shell, source), { kind: 'profile', profile }),
+    status: 200,
+    outcome: 'profile',
+  };
 }
 
 /**
@@ -189,5 +228,12 @@ async function pageShell(handle: string, slug: string, deps: ShellDeps): Promise
     indexable: false,
     ...(text(page.description) === undefined ? {} : { description: text(page.description) }),
   };
-  return { body: withMeta(deps.shell, source), status: 200, outcome: 'page' };
+  const body = withMeta(deps.shell, source);
+  const publicKey = text(page.publicKey);
+  const found = { handle: text(page.handle) ?? handle, slug: text(page.slug) ?? slug };
+  return {
+    body: publicKey === undefined ? body : withBoot(body, { kind: 'page', publicKey, ...found }),
+    status: 200,
+    outcome: 'page',
+  };
 }
