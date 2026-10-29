@@ -8,7 +8,7 @@ import type { Template } from './template.ts';
 import { bookingCalendarRemoved, calendarDisconnected, signInAlert } from './templates/account.ts';
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
-import { importFinished } from './templates/team.ts';
+import { importFinished, jobFailed } from './templates/team.ts';
 import { workspaceWelcome } from './templates/welcome.ts';
 
 /** One queued kind of email. */
@@ -119,6 +119,15 @@ export const CATALOG: Catalog = {
       skipped: 12,
       failed: 0,
       resultPath: '/w/acme/objects/people',
+    },
+  },
+  job_failed: {
+    template: jobFailed,
+    medium: 'email_job',
+    sample: {
+      jobLabel: 'Bulk edit',
+      reason: 'This job stopped after repeated errors. What it finished is kept.',
+      jobsPath: '/w/acme/settings/jobs',
     },
   },
   workspace_welcome: {

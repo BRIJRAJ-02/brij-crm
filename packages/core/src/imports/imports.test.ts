@@ -144,6 +144,28 @@ describe('imports (AC-1117 to AC-1127)', () => {
     });
     expect(view.canUndo).toBe(true);
     expect(view.undoUntil).toBeDefined();
+    // The starter is emailed how it ended (late trap #74), and no second, generic email comes with it.
+    const sent = await testQuery<{ kind: string; to_member_id: string; params: unknown }>(
+      ownerUrl,
+      `select kind, to_member_id::text, params from emails where workspace_id = $1 and kind in ('import_finished', 'job_failed')`,
+      [w.workspaceId],
+    );
+    expect(sent).toEqual([
+      {
+        kind: 'import_finished',
+        to_member_id: w.ownerId,
+        params: {
+          objectName: 'People',
+          fileName: 'people.csv',
+          outcome: 'done',
+          created: 2,
+          updated: 1,
+          skipped: 1,
+          failed: 0,
+          resultPath: expect.stringMatching(new RegExp(`^/w/[^/]+/objects/people/imports/${view.id}$`)) as unknown,
+        },
+      },
+    ]);
   });
 
   it('fills only empty fields, overwrites with Overwrite, and changes nothing with Skip', async () => {
@@ -376,6 +398,35 @@ describe('imports (AC-1117 to AC-1127)', () => {
         }),
       ),
     ).toMatchObject({ code: 'LIMIT_REACHED' });
+  });
+
+  it('emails its starter that it failed when the object is archived while it runs', async () => {
+    const w = await world();
+    const id = newId();
+    await createImport(w.owner, {
+      id,
+      objectId: w.people,
+      fileName: 'people.csv',
+      rowCount: 2,
+      errorRows: 1,
+      settings: w.settings(),
+    });
+    await stageImportRows(w.owner, { importId: id, rows: [w.row(2, 'Ada', 'ada@example.com')] }, [outboxHook()]);
+    const started = await startImport(w.owner, registry, id, [outboxHook()]);
+    await testQuery(ownerUrl, `update objects set archived_at = now() where id = $1`, [w.people]);
+    const outcomes = await drive(runnerFor(registry), w.workspaceId, started.jobId ?? '');
+    expect(outcomes.at(-1)).toBe('failed');
+    const sent = await testQuery<{ kind: string; params: unknown }>(
+      ownerUrl,
+      `select kind, params from emails where workspace_id = $1 and kind in ('import_finished', 'job_failed')`,
+      [w.workspaceId],
+    );
+    expect(sent).toEqual([
+      {
+        kind: 'import_finished',
+        params: expect.objectContaining({ outcome: 'failed', created: 0, failed: 1 }) as unknown,
+      },
+    ]);
   });
 
   it('answers a second start with the import as it is, and takes no rows after it', async () => {

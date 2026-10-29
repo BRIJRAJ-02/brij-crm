@@ -528,6 +528,7 @@ export {
   type KindDefinition,
   type StepInput,
   type StepOutcome,
+  type SucceededJob,
 } from './jobs/registry.ts';
 export { jobKinds, type JobKindsOptions } from './jobs/kinds/index.ts';
 export { MAINTENANCE_DAILY, type QueueRows } from './jobs/kinds/maintenance-daily.ts';

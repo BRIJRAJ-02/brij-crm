@@ -1,7 +1,7 @@
-// Emails for the lanes still to come, ready for them to queue: an import's
-// result (#30). A mention has no email of its own: it goes in the
+// Emails about a member's own background work: an import's result (#30), and
+// any other job of theirs that failed (late trap #20). A mention has no email of its own: it goes in the
 // notifications email (spec 0038), the one email a mention sends.
-import type { ImportFinishedEmail } from '@crm/contracts/emails';
+import type { ImportFinishedEmail, JobFailedEmail } from '@crm/contracts/emails';
 import { plural } from '../format.ts';
 import { workspaceOf, type Template } from '../template.ts';
 
@@ -44,3 +44,16 @@ export const importFinished: Template<ImportFinishedEmail> = (params, context) =
     why: `You got this email because you started this import in ${workspaceOf(context)}.`,
   };
 };
+
+/** A background job a member started ended `failed`: which, why, and where their jobs are. */
+export const jobFailed: Template<JobFailedEmail> = (params, context) => ({
+  subject: `${params.jobLabel} failed`,
+  preheader: params.reason,
+  eyebrow: workspaceOf(context),
+  heading: `${params.jobLabel} failed`,
+  blocks: [
+    { type: 'paragraph', text: params.reason },
+    { type: 'button', label: 'See your jobs', url: context.link(params.jobsPath) },
+  ],
+  why: `You got this email because you started this job in ${workspaceOf(context)}.`,
+});

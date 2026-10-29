@@ -65,6 +65,7 @@ export const POWERED_BY_EMAILS = [
   'email_booking',
   'email_reminder',
   'email_import',
+  'email_job',
   'email_mention',
 ] as const;
 /** The family of email a Timefix link sits in (`utm_medium`). */
