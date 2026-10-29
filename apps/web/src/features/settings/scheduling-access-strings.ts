@@ -83,8 +83,8 @@ export const strings = {
   roleOwn: 'Their role reaches only their own scheduling. These reach further.',
   cellFailed: 'Couldn’t load',
   cellFailedFor: (name: string) => `Scheduling access for ${name} didn’t load. Try again`,
-  addFor: 'Give access to',
-  target: 'Whose scheduling',
+  /** The popover's Give access row: whose access it gives, so it never reads as the other way round. */
+  letFor: (name: string) => `Let ${name} see or manage`,
   targetPlaceholder: 'Choose',
   everyoneOption: 'Everyone',
   everyoneOptionText: 'Every member but owners and admins',

@@ -11,17 +11,15 @@ import {
   Avatar,
   Button,
   focusLater,
-  Form,
   Icon,
   Popover,
   Select,
-  Separator,
   SettingsRow,
   Skeleton,
   type TableColumn,
   type Toasts,
 } from '@crm/ui';
-import { memo, useEffect, useId, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useMyAccess } from '../workspace/WorkspacePage.tsx';
 import {
   LevelControl,
@@ -146,7 +144,7 @@ function Reach({ data, toasts, slug, me, member }: SchedulingAccessCellProps) {
         triggerRef={triggerRef}
         isOpen={isOpen}
         onOpenChange={setOpen}
-        width="list"
+        width="panel"
       >
         {/* Mounted only while open: the pickers over every member are built for the one person being edited. */}
         {isOpen && (
@@ -195,7 +193,6 @@ function Editor({
   const [target, setTarget] = useState<string | null>(null);
   const [level, setLevel] = useState<SchedulingLevel>('view');
   const targetRef = useRef<HTMLButtonElement>(null);
-  const formId = useId();
   // Whom they may be given (AC-1255): never an owner, an admin only when the reader is an owner, never themself or
   // someone they already have. The server holds the same rules, so nothing offered here is refused.
   const offerable = (role: Role) => role !== 'owner' && (role !== 'admin' || reader === 'owner');
@@ -280,13 +277,13 @@ function Editor({
         );
       })}
       {targets.length > 0 && (
-        // Give access as one short form under the rows: the picker, See or Manage, then the button, each whole at
-        // the popover's width.
+        // Give access: whose scheduling, then See or Manage and the button, as two more rows of the panel, so the
+        // hairline and the rows' own padding set it apart from the delegations above.
         <>
-          {theirs.length > 0 && <Separator />}
-          <Form id={formId} label={strings.addFor} onSubmit={give}>
+          <SettingsRow title={strings.letFor(member.name)} control="field">
             <Select
-              label={strings.addFor}
+              label={strings.letFor(member.name)}
+              isLabelHidden
               placeholder={strings.targetPlaceholder}
               items={targets}
               value={target}
@@ -294,11 +291,18 @@ function Editor({
               isSearchable
               triggerRef={targetRef}
             />
-            <LevelControl value={level} onChange={setLevel} />
-            <Button variant="primary" type="submit" form={formId} isDisabled={target === null}>
+          </SettingsRow>
+          <SettingsRow title={strings.level}>
+            <LevelControl
+              value={level}
+              onChange={setLevel}
+              label={strings.levelFor(member.name)}
+              isLabelVisible={false}
+            />
+            <Button variant="primary" isDisabled={target === null} onPress={give}>
               {strings.give}
             </Button>
-          </Form>
+          </SettingsRow>
         </>
       )}
     </>

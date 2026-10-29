@@ -63,6 +63,25 @@ export const Keyboard: Story = {
   },
 };
 
+/** A panel of rows with their controls at the end: the dialog's width. */
+export const Panel: Story = {
+  args: { width: 'panel', label: 'Scheduling access' },
+  render: (args) => (
+    <Stage>
+      <DialogTrigger defaultOpen>
+        <Button>Sam and Bea</Button>
+        <Popover {...args} />
+      </DialogTrigger>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    const popover = dialog.closest('[data-width]');
+    await expect(popover).toHaveAttribute('data-width', 'panel');
+    await expect((popover as HTMLElement).getBoundingClientRect().width).toBeGreaterThan(400);
+  },
+};
+
 /** Wide enough for a builder: content sized by a container query gets the wide dialog's width. */
 export const Builder: Story = {
   args: { width: 'builder', label: 'Filters' },
