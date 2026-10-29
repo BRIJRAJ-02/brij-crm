@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Avatar, AvatarStack } from './Avatar.tsx';
 
@@ -11,6 +11,10 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/** A picture on our origin: a small blue square, as a `data:` image. */
+const PICTURE =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"%3E%3Crect width="2" height="2" fill="%23266df0"/%3E%3C/svg%3E';
 
 const PEOPLE = [
   { id: 'p1', name: 'Maya Patel', hue: 'purple' },
@@ -63,8 +67,30 @@ export const RefusedPicture: Story = {
 
 /** A picture on our origin. */
 export const Picture: Story = {
-  args: {
-    src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"%3E%3Crect width="2" height="2" fill="%23266df0"/%3E%3C/svg%3E',
+  args: { src: PICTURE },
+};
+
+/**
+ * The big sizes with a picture: it fades in over the initials once loaded, or shows at once when the browser
+ * already holds it. Either way the initials go once it has loaded.
+ */
+export const PictureLarge: Story = {
+  render: () => (
+    <Stage>
+      <Avatar name="Ada Lovelace" size="title" src={PICTURE} />
+      <Avatar name="Alex Turner" size="xl" src={PICTURE} />
+      <Avatar name="Grace Hopper" size="hero" src={PICTURE} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const pictures = [...canvasElement.querySelectorAll('img')];
+    await expect(pictures).toHaveLength(3);
+    await waitFor(() => {
+      if (pictures.some((picture) => picture.dataset.fade === 'waiting'))
+        throw new Error('A picture is still loading.');
+    });
+    const avatars = [...canvasElement.querySelectorAll('[role="img"]')];
+    await expect(avatars.map((avatar) => avatar.textContent)).toEqual(['', '', '']);
   },
 };
 

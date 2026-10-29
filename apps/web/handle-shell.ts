@@ -74,11 +74,12 @@ export const BOOT_ID = 'crm-boot';
 /**
  * What the shell already read, handed to the page so it never asks again before drawing (29 Oct 2026): a profile
  * draws from it at once, and a booking page starts from its key rather than looking the address up first, which
- * was a whole round trip to the api before anything else could start. The page still reads afresh behind it, so a
- * shell the edge kept for a few minutes never decides what is shown for long.
+ * was a whole round trip to the api before anything else could start. The page still reads afresh behind it, and a
+ * profile carries when it was read: the edge may serve a shell up to a day old while it fetches a new one, and the
+ * page draws only a recent copy (boot.ts), never an old one that the fresh read would then repaint.
  */
 export type ShellBoot =
-  | { readonly kind: 'profile'; readonly profile: ShellProfile }
+  | { readonly kind: 'profile'; readonly profile: ShellProfile; readonly readAt: number }
   | { readonly kind: 'page'; readonly publicKey: string; readonly handle: string; readonly slug: string };
 
 /**
@@ -128,6 +129,8 @@ export interface ShellDeps {
    * shows a broken preview, which is worse than the small one.
    */
   readonly cardOrigin?: string;
+  /** The time now, in milliseconds: when a profile was read, so the page can tell an old shell's copy. */
+  readonly now?: () => number;
   /** Where a miss is reported. */
   readonly onMiss?: (handle: string, reason: string) => void;
 }
@@ -177,7 +180,7 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
     ...(look === undefined ? {} : { look }),
   };
   return {
-    body: withBoot(withMeta(deps.shell, source), { kind: 'profile', profile }),
+    body: withBoot(withMeta(deps.shell, source), { kind: 'profile', profile, readAt: (deps.now ?? Date.now)() }),
     status: 200,
     outcome: 'profile',
   };

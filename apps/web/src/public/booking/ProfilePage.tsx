@@ -181,7 +181,12 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
           if (ticket !== latest.current) return;
           // Only the first read takes the page: a search that fails says so under the search.
           if (loadedRef.current === 'ready') {
-            // The view read behind the shell's copy failing changes nothing the visitor sees: the copy stays.
+            // The view read behind the shell's copy: the page gone or moved away since takes over from the copy;
+            // any other failure leaves the copy, since it was read moments ago.
+            if (isFirst && isDataError(error) && error.code === 'NOT_FOUND') {
+              setLoaded({ state: 'checking' });
+              return;
+            }
             if (!isFirst) setSearchFailed(true);
             return;
           }

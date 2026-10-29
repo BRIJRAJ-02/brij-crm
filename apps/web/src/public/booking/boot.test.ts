@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bootOf, readBoot } from './boot.ts';
+import { BOOT_PROFILE_FRESH_MS, bootOf, freshProfile, readBoot } from './boot.ts';
 
 const profile = {
   handle: 'anish',
@@ -21,7 +21,11 @@ describe('bootOf', () => {
   });
 
   it('reads a profile with what the page draws first', () => {
-    expect(bootOf(JSON.stringify({ kind: 'profile', profile }))).toEqual({ kind: 'profile', profile });
+    expect(bootOf(JSON.stringify({ kind: 'profile', profile, readAt: 5 }))).toEqual({
+      kind: 'profile',
+      profile,
+      readAt: 5,
+    });
   });
 
   it('is nothing for no block, bad JSON or a partial answer, so the page loads as it always did', () => {
@@ -29,7 +33,10 @@ describe('bootOf', () => {
     expect(bootOf(null)).toBeUndefined();
     expect(bootOf('{')).toBeUndefined();
     expect(bootOf('{"kind":"page","publicKey":"k1"}')).toBeUndefined();
-    expect(bootOf(JSON.stringify({ kind: 'profile', profile: { ...profile, items: undefined } }))).toBeUndefined();
+    expect(
+      bootOf(JSON.stringify({ kind: 'profile', profile: { ...profile, items: undefined }, readAt: 5 })),
+    ).toBeUndefined();
+    expect(bootOf(JSON.stringify({ kind: 'profile', profile }))).toBeUndefined();
     expect(bootOf('{"kind":"other"}')).toBeUndefined();
   });
 });
@@ -41,5 +48,19 @@ describe('readBoot', () => {
       getElementById: (id: string) => (id === 'crm-boot' ? ({ textContent: json } as HTMLElement) : null),
     };
     expect(readBoot(document)?.kind).toBe('page');
+  });
+});
+
+describe('freshProfile', () => {
+  const boot = { kind: 'profile', profile, readAt: 1_000_000 } as const;
+
+  it('draws a copy read in the last few minutes', () => {
+    expect(freshProfile(boot, 1_000_000 + 60_000)).toBe(profile);
+  });
+
+  it('never draws an old shell’s copy, which the page’s own read would repaint', () => {
+    expect(freshProfile(boot, 1_000_000 + BOOT_PROFILE_FRESH_MS + 1)).toBeUndefined();
+    expect(freshProfile(undefined, 0)).toBeUndefined();
+    expect(freshProfile({ kind: 'page', publicKey: 'k', handle: 'a', slug: 'b' }, 0)).toBeUndefined();
   });
 });

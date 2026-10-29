@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { Hue } from '../../hue.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { initialsOf, stableHue } from '../../lib/stable-hue.ts';
@@ -41,13 +41,23 @@ const ONE_INITIAL: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['xs', 'sm']);
 /** A person's or company's picture, or their initials on a hue tile: people are circles, companies squares. */
 export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDecorative = false }: AvatarProps) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
-  const [loaded, setLoaded] = useState<string | undefined>(undefined);
+  // The picture that has loaded, and whether it was already in the browser's cache: one there shows at once.
+  const [loaded, setLoaded] = useState<{ readonly src: string; readonly isCached: boolean } | undefined>(undefined);
+  const picture = useRef<HTMLImageElement>(null);
   const image = safeImageSrc(src);
   const showImage = image !== undefined && failed !== image;
   const fades = showImage && FADES_IN.has(size);
   // While a fading picture loads, its initials hold the tile; once it has, they go, so a picture with clear parts
   // (a company's logo) never shows letters through it.
-  const isWaiting = fades && loaded !== image;
+  const isWaiting = fades && loaded?.src !== image;
+  // A picture the browser already holds (a preloaded or a cached one) is complete before the first paint: it shows
+  // straight away, with no initials and no fade.
+  useLayoutEffect(() => {
+    const element = picture.current;
+    if (fades && image !== undefined && element !== null && element.complete && element.naturalWidth > 0) {
+      setLoaded({ src: image, isCached: true });
+    }
+  }, [fades, image]);
   // One initial is the first word's: initialsOf on that word alone, so a letter built of several code points stays whole.
   const initials = initialsOf(ONE_INITIAL.has(size) ? (name.trim().split(/\s+/u)[0] ?? '') : name);
   return (
@@ -65,9 +75,10 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
             className={styles.image}
             src={image}
             alt={strings.pictureAlt}
-            {...(fades ? { 'data-fade': isWaiting ? 'waiting' : 'in' } : {})}
+            ref={picture}
+            {...(fades ? { 'data-fade': isWaiting ? 'waiting' : loaded?.isCached === true ? 'shown' : 'in' } : {})}
             onLoad={() => {
-              setLoaded(image);
+              setLoaded((now) => (now?.src === image ? now : { src: image, isCached: false }));
             }}
             onError={() => {
               setFailed(image);

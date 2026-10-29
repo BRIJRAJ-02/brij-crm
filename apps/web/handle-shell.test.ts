@@ -236,10 +236,17 @@ describe('the boot block (29 Oct 2026)', () => {
 
   it('hands a profile to the page, in the head, and preloads its picture', async () => {
     const image = '/api/public/profiles/anish/picture?v=a1b2c3';
-    const { body } = await shellFor('/anish', deps({ readProfile: () => Promise.resolve({ ...profile, image }) }));
+    const { body } = await shellFor(
+      '/anish',
+      deps({ readProfile: () => Promise.resolve({ ...profile, image }), now: () => 1_000 }),
+    );
     const head = body.slice(0, body.indexOf('</head>'));
     expect(head).toContain(`<link rel="preload" as="image" href="${image}">`);
-    expect(JSON.parse(bootIn(head) ?? '')).toMatchObject({ kind: 'profile', profile: { handle: 'anish', image } });
+    expect(JSON.parse(bootIn(head) ?? '')).toMatchObject({
+      kind: 'profile',
+      profile: { handle: 'anish', image },
+      readAt: 1_000,
+    });
   });
 
   it('hands a booking page its key and current address, so it never looks the address up', async () => {
@@ -259,7 +266,7 @@ describe('the boot block (29 Oct 2026)', () => {
 
   it('cannot be closed early by anything a person wrote', () => {
     const bio = '</script><script>alert(1)</script><!--';
-    const html = withBoot(shell, { kind: 'profile', profile: { ...profile, bio } });
+    const html = withBoot(shell, { kind: 'profile', profile: { ...profile, bio }, readAt: 0 });
     const json = bootIn(html) ?? '';
     expect(json).not.toContain('<');
     expect((JSON.parse(json) as { profile: { bio: string } }).profile.bio).toBe(bio);
@@ -267,8 +274,16 @@ describe('the boot block (29 Oct 2026)', () => {
   });
 
   it('preloads only a picture on our own api, and never one that could leave its attribute', () => {
-    const outside = withBoot(shell, { kind: 'profile', profile: { ...profile, image: 'https://evil.test/x.png' } });
-    const quoted = withBoot(shell, { kind: 'profile', profile: { ...profile, image: '/api/public/x"><b>' } });
+    const outside = withBoot(shell, {
+      kind: 'profile',
+      profile: { ...profile, image: 'https://evil.test/x.png' },
+      readAt: 0,
+    });
+    const quoted = withBoot(shell, {
+      kind: 'profile',
+      profile: { ...profile, image: '/api/public/x"><b>' },
+      readAt: 0,
+    });
     expect(outside).not.toContain('rel="preload" as="image"');
     expect(quoted).not.toContain('rel="preload" as="image"');
   });

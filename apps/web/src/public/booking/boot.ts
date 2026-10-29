@@ -10,7 +10,7 @@ export const BOOT_ID = 'crm-boot';
 
 /** What the shell handed over: a profile, or a booking page's key and its current address. */
 export type Boot =
-  | { readonly kind: 'profile'; readonly profile: PublicProfile }
+  | { readonly kind: 'profile'; readonly profile: PublicProfile; readonly readAt: number }
   | { readonly kind: 'page'; readonly publicKey: string; readonly handle: string; readonly slug: string };
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -33,7 +33,7 @@ export function bootOf(json: string | null | undefined): Boot | undefined {
       ? { kind: 'page', publicKey: value.publicKey, handle: value.handle, slug: value.slug }
       : undefined;
   }
-  if (value.kind === 'profile' && isRecord(value.profile)) {
+  if (value.kind === 'profile' && isRecord(value.profile) && typeof value.readAt === 'number') {
     const profile = value.profile;
     // The fields the page draws before its own read lands; the rest arrive with that read.
     if (!isText(profile.handle) || typeof profile.name !== 'string' || !Array.isArray(profile.items)) return undefined;
@@ -41,9 +41,23 @@ export function bootOf(json: string | null | undefined): Boot | undefined {
       return undefined;
     }
     // Checked as far as the page relies on it; the api wrote it, through the same edge the page's own read uses.
-    return { kind: 'profile', profile: profile as PublicProfile };
+    return { kind: 'profile', profile: profile as PublicProfile, readAt: value.readAt };
   }
   return undefined;
+}
+
+/**
+ * How old a profile the shell read may be and still draw (10 minutes). The edge keeps a shell for 5 minutes and may
+ * then serve it for up to a day while it fetches a new one; an older copy than this would draw and then repaint
+ * when the page's own read lands, so the page waits for that read instead, as it always did.
+ */
+export const BOOT_PROFILE_FRESH_MS = 10 * 60 * 1000;
+
+/** The shell's profile, when it is recent enough to draw at `now`. */
+export function freshProfile(boot: Boot | undefined, now: number): PublicProfile | undefined {
+  if (boot?.kind !== 'profile') return undefined;
+  const age = now - boot.readAt;
+  return age >= -BOOT_PROFILE_FRESH_MS && age <= BOOT_PROFILE_FRESH_MS ? boot.profile : undefined;
 }
 
 /** This document's boot block, when its shell wrote one. */

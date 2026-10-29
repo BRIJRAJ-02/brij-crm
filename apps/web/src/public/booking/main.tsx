@@ -18,7 +18,7 @@ import { createHandleClient, isDataError } from '@crm/data/booking';
 import { BookingMessage, BookingProfile, BookingProvider } from '@crm/ui/public-booking';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { readBoot } from './boot.ts';
+import { freshProfile, readBoot } from './boot.ts';
 import { BookingPage, LoadingBooking } from './BookingPage.tsx';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
 import { forgetHandoff, takeHandoff, type HandoffStorage } from './prefill.ts';
@@ -53,6 +53,8 @@ const storage = ((): HandoffStorage | undefined => {
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 // What the handle address's shell already read (boot.ts): only a handle address's shell carries one.
 const boot = path === null ? readBoot(document) : undefined;
+// The profile the shell read, when it is recent enough to draw before the page's own read lands.
+const initialProfile = freshProfile(boot, Date.now());
 
 const embed = embedOf({
   search: address.search,
@@ -169,7 +171,7 @@ if (path !== null) {
         <Suspense fallback={<BookingProfile />}>
           <ProfilePage
             handle={handled.handle}
-            {...(boot?.kind === 'profile' ? { initial: boot.profile } : {})}
+            {...(initialProfile === undefined ? {} : { initial: initialProfile })}
             onMoved={(current) => showAddress(`/${current}`)}
           />
         </Suspense>

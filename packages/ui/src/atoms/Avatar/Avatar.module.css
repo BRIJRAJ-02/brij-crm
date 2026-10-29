@@ -132,6 +132,7 @@
 
   /* The big sizes' picture fades in over its initials once loaded (Avatar.tsx's FADES_IN). A fade, never a move,
      so reduced motion keeps it as it is. */
+  /* Waiting, the initials show; a picture already in the browser's cache skips straight to shown, no fade. */
   .image[data-fade='waiting'] {
     opacity: 0;
   }
