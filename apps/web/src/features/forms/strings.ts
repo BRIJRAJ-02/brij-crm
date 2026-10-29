@@ -80,6 +80,10 @@ export const strings = {
   tabInstall: 'Install',
   tabSubmissions: 'Submissions',
   published: (version: number) => `Published version ${String(version)}.`,
+  madeUnique: (field: string, objectName: string) => `${field} is now unique on ${objectName}: one record per email.`,
+  viewField: 'View field',
+  willMakeUnique: (field: string, objectName: string) =>
+    `Publishing makes ${field} unique on ${objectName}: one record per email. Submissions, imports and other forms then update that record instead of adding another.`,
   changedBy: (name: string) => `${name} changed this form.`,
   someoneChanged: 'Someone else changed this form.',
   loadTheirs: 'Load their version',

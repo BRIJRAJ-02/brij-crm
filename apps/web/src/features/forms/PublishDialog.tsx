@@ -16,7 +16,7 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { changeQuestion, fileByLabel, fittingAttributes, publishAttributesOf, publishStart } from './draft.ts';
 import { createPlannedAttributes } from '../questions/attributes.ts';
-import { readyMatch, type ReadyMatch } from './match.ts';
+import { emailToMakeUnique, readyMatch, type ReadyMatch } from './match.ts';
 import { planNewAttributes } from '../questions/questions.ts';
 import { firstRefusal } from './refusals.ts';
 import { embedSnippet } from './snippets.ts';
@@ -153,6 +153,9 @@ export function PublishDialog(props: PublishDialogProps) {
       plan.title,
     ]),
   );
+
+  const makesUnique = canBuild ? emailToMakeUnique(draft, target) : undefined;
+  const uniqueTitle = target.items.find((item) => item.attributeId === makesUnique)?.title;
 
   // Build one out of this form: an object named after it, one attribute per unfiled question (the email unique).
   const build = async () => {
@@ -439,6 +442,11 @@ export function PublishDialog(props: PublishDialogProps) {
                     draft.questions.filter((question) => question.answerType !== 'file').length,
                   )}
             </Button>
+          )}
+          {/* An email field the object already has becomes unique on Publish (late trap #36): said before it happens,
+              last before the Publish it is about. */}
+          {uniqueTitle !== undefined && target.objectName !== undefined && (
+            <Callout tone="info">{strings.willMakeUnique(uniqueTitle, target.objectName)}</Callout>
           )}
         </>
       )}

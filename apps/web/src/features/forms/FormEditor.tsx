@@ -55,7 +55,8 @@ import { PublishDialog } from './PublishDialog.tsx';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
 import { archiveMadeAttributes, createPlannedAttributes } from '../questions/attributes.ts';
 import { afterPageProblem } from './after-page.ts';
-import { readyMatch } from './match.ts';
+import { emailToMakeUnique, readyMatch } from './match.ts';
+import { objectSettingsHref } from '../settings/nav.ts';
 import { firstRefusal, saveFailureMessage } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
 import { useJobFollower } from './followJobs.ts';
@@ -284,20 +285,34 @@ export function FormEditor(props: FormEditorProps) {
     }
     // Questions with no attribute to file onto get one first, with no prompt; then the email the form matches on is
     // made ready (`readyMatch`); the check and publish then read both.
+    // An email field the object already had becomes unique on the way (late trap #36): it changes how imports and
+    // every other form match there too, so it is never done unsaid. A first publish leaves it to its dialog, which
+    // says so before Publish; a later one says so as soon as it is done, whatever the publish then does. One made
+    // just now for this form needs no word.
+    const mayMakeUnique = canBuild && canManage && isPublished;
+    const making = mayMakeUnique ? emailToMakeUnique(draft, target) : undefined;
+    const uniqueTitle = target.items.find((item) => item.attributeId === making)?.title;
     setPublishing(true);
     createMissingAttributes()
       .then(({ document, choices }) =>
-        readyMatch(
-          { data, slug, formId: form.id, canChangeAttributes: canBuild && canManage, flush },
-          document,
-          choices,
-        ),
+        readyMatch({ data, slug, formId: form.id, canChangeAttributes: mayMakeUnique, flush }, document, choices),
       )
       .then((ready) => {
         setPublishing(false);
         if ('refused' in ready) {
           toasts.toast({ tone: 'danger', message: ready.refused });
           return;
+        }
+        const object = objects.find((each) => each.id === ready.choices.objectId);
+        if (uniqueTitle !== undefined && ready.choices.objectName !== undefined && object !== undefined) {
+          toasts.toast({
+            tone: 'info',
+            message: strings.madeUnique(uniqueTitle, ready.choices.objectName),
+            action: {
+              label: strings.viewField,
+              onAction: () => void navigate({ href: objectSettingsHref(slug, object) }),
+            },
+          });
         }
         if (ready.view !== undefined) {
           apply(ready.view);
@@ -320,7 +335,12 @@ export function FormEditor(props: FormEditorProps) {
       ...(target.objectName === undefined ? {} : { objectName: target.objectName }),
       canChangeAttributes: canBuild && canManage,
     });
-    if (found !== undefined && (isPublished || (found.code !== 'NAME_MISSING' && found.code !== 'ADDRESS_INVALID'))) {
+    // A first publish's dialog names the form and its address, and makes the email unique once it has said so.
+    const dialogFixes = (problem: PublishProblem) =>
+      problem.code === 'NAME_MISSING' ||
+      problem.code === 'ADDRESS_INVALID' ||
+      (problem.code === 'EMAIL_MISSING' && canBuild && emailToMakeUnique(draft, target) !== undefined);
+    if (found !== undefined && (isPublished || !dialogFixes(found))) {
       setProblem(found);
       if (tab !== 'form') void navigate({ href: formHref(slug, form.id) });
       return;
