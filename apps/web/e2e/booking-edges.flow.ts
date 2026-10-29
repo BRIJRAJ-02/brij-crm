@@ -261,4 +261,19 @@ test.describe('the booking journey’s edges', () => {
     await expect(create.getByText('Make a round robin group first, in Settings.')).toBeVisible();
     await expect(create.getByRole('link', { name: 'Manage round robin' })).toBeVisible();
   });
+
+  test('an object a booking can’t file answers onto is shown off in the picker, with the reason', async ({ page }) => {
+    test.setTimeout(120_000);
+    const { slug, pageId } = await withPage(page, 'answers');
+    await page.goto(`/w/${slug}/captures/links/${pageId}`);
+    await page.getByRole('tab', { name: /Questions/ }).click();
+    await page.getByRole('button', { name: /Where the answers go/ }).click();
+    // A booking knows its guest by email alone: Deals has no unique email field, so it is offered but can't be picked.
+    const deals = page.getByRole('option', { name: /^Deals/ });
+    await expect(deals).toHaveAttribute('aria-disabled', 'true');
+    await expect(deals).toContainText('Needs a unique email field');
+    await expect(page.getByRole('option', { name: /^People/ })).not.toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByText('Only objects with a unique email field can take booking answers.')).toBeVisible();
+  });
 });

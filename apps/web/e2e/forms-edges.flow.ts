@@ -145,17 +145,8 @@ test.describe('the form journey’s edges', () => {
 
     await accepting.press('Space');
     await expect(accepting).toBeChecked();
-    // The hosted form is cached for up to a minute (`max-age=60`), so the visitor who saw it closed gets it back
-    // within that, not at once (flow walks F1, sent to the bug fix chat).
-    await expect
-      .poll(
-        async () => {
-          await visitor.reload();
-          return visitor.getByRole('button', { name: 'Send' }).count();
-        },
-        { timeout: 75_000, intervals: [3_000] },
-      )
-      .toBe(1);
+    // The hosted form's read is never cached, so the visitor who saw it closed gets it back on one reload (F1).
+    await visitor.reload();
     await expect(visitor.getByRole('button', { name: 'Send' })).toBeVisible();
     await visitor.context().close();
   });
