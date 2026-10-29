@@ -346,6 +346,7 @@ export function SettingsTab({
     targets: document.targets,
     filed: document.questions.map((question) => [question.id, question.filedOn?.attributeId ?? null]),
   });
+  const isPublished = form.liveVersionNumber !== undefined;
   const savingChanged = live !== undefined && !sameValue(savingOf(live), savingOf(draft));
   const liveMain = live?.targets.main;
   const liveObjectName =
@@ -647,58 +648,70 @@ export function SettingsTab({
           }}
         />
       </Card>
-      <Card title={strings.detailsTitle}>
-        <Field
-          label={strings.name}
-          hint={strings.nameHint}
-          value={settings.values.name}
-          maxLength={80}
-          isRequired
-          isReadOnly={isReadOnly}
-          onChange={(name) => {
-            settings.set({ name });
-          }}
-          {...(settings.values.name.trim() === ''
-            ? { error: strings.nameRequired }
-            : settings.fieldError('name') === undefined
-              ? {}
-              : { error: settings.fieldError('name') ?? '' })}
-        />
-        <Field
-          label={strings.address}
-          prefix={data.forms.hostedUrl('').replace(/^https?:\/\//, '')}
-          hint={strings.addressChangeWarning}
-          value={settings.values.address}
-          maxLength={40}
-          isRequired
-          isReadOnly={isReadOnly}
-          onChange={(text) => {
-            settings.set({ address: text.toLowerCase() });
-          }}
-          {...(settings.fieldError('slug') === undefined ? {} : { error: settings.fieldError('slug') ?? '' })}
-        />
-        {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
-        {isFiling && (
-          <Select
-            label={strings.owner}
-            hint={ownerHint}
-            items={ownerItems}
-            value={settings.values.owner}
-            isReadOnly={isReadOnly}
-            {...(settings.fieldError('owner') === undefined ? {} : { error: settings.fieldError('owner') ?? '' })}
-            onChange={(id) => {
-              settings.set({ owner: id ?? NOBODY });
-            }}
-          />
-        )}
-      </Card>
+      {/* Before the first publish, the name and address belong to the Form tab and the publish dialog (late trap #47):
+          one place each, and no talk of old links for a form that has none. */}
+      {(isPublished || isFiling) && (
+        <Card title={strings.detailsTitle}>
+          {isPublished && (
+            <>
+              <Field
+                label={strings.name}
+                hint={strings.nameHint}
+                value={settings.values.name}
+                maxLength={80}
+                isRequired
+                isReadOnly={isReadOnly}
+                onChange={(name) => {
+                  settings.set({ name });
+                }}
+                {...(settings.values.name.trim() === ''
+                  ? { error: strings.nameRequired }
+                  : settings.fieldError('name') === undefined
+                    ? {}
+                    : { error: settings.fieldError('name') ?? '' })}
+              />
+              <Field
+                label={strings.address}
+                prefix={data.forms.hostedUrl('').replace(/^https?:\/\//, '')}
+                hint={strings.addressChangeWarning}
+                value={settings.values.address}
+                maxLength={40}
+                isRequired
+                isReadOnly={isReadOnly}
+                onChange={(text) => {
+                  settings.set({ address: text.toLowerCase() });
+                }}
+                {...(settings.fieldError('slug') === undefined ? {} : { error: settings.fieldError('slug') ?? '' })}
+              />
+            </>
+          )}
+          {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
+          {isFiling && (
+            <Select
+              label={strings.owner}
+              hint={ownerHint}
+              items={ownerItems}
+              value={settings.values.owner}
+              isReadOnly={isReadOnly}
+              {...(settings.fieldError('owner') === undefined ? {} : { error: settings.fieldError('owner') ?? '' })}
+              onChange={(id) => {
+                settings.set({ owner: id ?? NOBODY });
+              }}
+            />
+          )}
+        </Card>
+      )}
       <Card
         title={strings.spamTitle}
-        actions={
-          <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">
-            {strings.spamReview}
-          </ButtonLink>
-        }
+        {...(isPublished
+          ? {
+              actions: (
+                <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">
+                  {strings.spamReview}
+                </ButtonLink>
+              ),
+            }
+          : {})}
       >
         {strings.spamSummary}
       </Card>

@@ -1,5 +1,5 @@
 // Brief
-// Purpose: one form's editor (spec 0023, 0023-experience.md, Builder): its questions beside a live preview, then Settings, Install and Submissions once published.
+// Purpose: one form's editor (spec 0023, 0023-experience.md, Builder): its questions beside a live preview, and Settings (what happens after sending, routing, the owner) from the start; Install and Submissions once published.
 // Main task: shape the draft (saved quietly as you go), publish it, and share it.
 // Leaves out: steps and routing, round robin (#58), booking (#59), file questions (#32), analytics.
 import {
@@ -529,7 +529,9 @@ export function FormEditor(props: FormEditorProps) {
     </TopBar>
   );
 
-  const current: FormTab = isPublished ? tab : 'form';
+  // Before the first publish, Form and Settings: what happens after sending, routing and the owner are set before
+  // anyone fills it in (late trap #47); Install and Submissions wait for a live form.
+  const current: FormTab = isPublished || tab === 'settings' ? tab : 'form';
   const notices = (
     <>
       {form.status === 'paused' && (
@@ -617,7 +619,7 @@ export function FormEditor(props: FormEditorProps) {
       default:
         return (
           <>
-            {/* Before the first publish there is no Settings tab: the name is changed here, as a field. */}
+            {/* Before the first publish the name is changed here too, as a field, beside the questions. */}
             {!isPublished && canManage && (
               <DraftName
                 name={form.name}
@@ -789,7 +791,7 @@ export function FormEditor(props: FormEditorProps) {
         topBar,
         body: (
           <FormToolbarSlot.Provider value={toolbarSlot}>
-            {isPublished ? (
+            {
               // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
               <Tabs
                 variant="bar"
@@ -802,19 +804,25 @@ export function FormEditor(props: FormEditorProps) {
                 tabs={[
                   { id: 'form', label: strings.tabForm, href: formHref(slug, form.id) },
                   { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
-                  { id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') },
-                  { id: 'submissions', label: strings.tabSubmissions, href: formHref(slug, form.id, 'submissions') },
+                  ...(isPublished
+                    ? [
+                        { id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') },
+                        {
+                          id: 'submissions',
+                          label: strings.tabSubmissions,
+                          href: formHref(slug, form.id, 'submissions'),
+                        },
+                      ]
+                    : []),
                 ]}
               >
-                {FORM_TABS.map((id) => (
+                {(isPublished ? FORM_TABS : (['form', 'settings'] as const)).map((id) => (
                   <TabPanel key={id} id={id} variant="fill">
                     {id === current && layout}
                   </TabPanel>
                 ))}
               </Tabs>
-            ) : (
-              layout
-            )}
+            }
             {dialogs}
           </FormToolbarSlot.Provider>
         ),
@@ -823,7 +831,6 @@ export function FormEditor(props: FormEditorProps) {
   );
 }
 
-/** A draft's name, as a field: blur saves it, an empty one says so. */
 /**
  * The live form's After page can't take visitors (late trap #53): paused, or deleted. Its own component, so the
  * booking pages are read only for a form that sends visitors to one.
@@ -856,6 +863,7 @@ function AfterPageNotice({
   );
 }
 
+/** A draft's name, as a field: blur saves it, an empty one says so. */
 function DraftName({ name, onRename }: { readonly name: string; readonly onRename: (name: string) => void }) {
   const [value, setValue] = useState(name);
   const [error, setError] = useState<string | undefined>(undefined);

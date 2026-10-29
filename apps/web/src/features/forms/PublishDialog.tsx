@@ -1,7 +1,7 @@
 // Brief
 // Purpose: a form's first publish (spec 0023, 0023-experience.md, Publishing): its name and address, then where the answers go, then the link.
 // Main task: name the form, take an address, file the questions on an object (or build one), and go live.
-// Leaves out: later publishes (straight from the header), and the settings a form keeps after (Settings tab).
+// Leaves out: later publishes (straight from the header), and the rest of the form's settings (the Settings tab, open before the first publish too).
 import {
   isDataError,
   type AnswerType,
