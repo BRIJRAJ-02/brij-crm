@@ -33,8 +33,8 @@ sendVisit(hits, {
 if (import.meta.env.PROD) {
   startTags(
     {
-      ga: import.meta.env.VITE_GA_MEASUREMENT_ID,
-      clarity: import.meta.env.VITE_CLARITY_PROJECT_ID,
+      ga: import.meta.env.VITE_GA_MEASUREMENT_ID ?? import.meta.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
+      clarity: import.meta.env.VITE_CLARITY_PROJECT_ID ?? import.meta.env.NEXT_PUBLIC_CLARITY_PROJECT_ID,
       vercel: import.meta.env.VITE_VERCEL_ANALYTICS === '1',
     },
     {

@@ -1,4 +1,9 @@
 {
   "extends": ["//"],
-  "tags": ["client"]
+  "tags": ["client"],
+  "tasks": {
+    "build": {
+      "env": ["VITE_*", "NEXT_PUBLIC_GA_MEASUREMENT_ID", "NEXT_PUBLIC_CLARITY_PROJECT_ID"]
+    }
+  }
 }

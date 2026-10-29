@@ -9,6 +9,9 @@ interface ImportMetaEnv {
   readonly VITE_GA_MEASUREMENT_ID?: string;
   /** Microsoft Clarity's project id, the old site's NEXT_PUBLIC_CLARITY_PROJECT_ID; unset keeps it off. */
   readonly VITE_CLARITY_PROJECT_ID?: string;
+  /** The old site's names for the same two ids, which the Vercel project still holds (vite.config.ts `envPrefix`). */
+  readonly NEXT_PUBLIC_GA_MEASUREMENT_ID?: string;
+  readonly NEXT_PUBLIC_CLARITY_PROJECT_ID?: string;
   /** `1` loads Vercel's Web Analytics and Speed Insights, once the Vercel project has them switched on. */
   readonly VITE_VERCEL_ANALYTICS?: string;
 }
