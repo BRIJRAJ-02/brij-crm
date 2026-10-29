@@ -235,6 +235,18 @@ export function FormEditor(props: FormEditorProps) {
     const plans = planNewAttributes(draft, target.items, canBuild && canManage && objectId !== undefined);
     if (objectId === undefined || plans.length === 0) return { document: draft, choices: target };
     const made = await createPlannedAttributes(data, slug, objectId, plans);
+    // A field that couldn't be made leaves its question unfiled: said, never published quietly (late trap #37).
+    const missed = plans.filter((plan) => !made.some((each) => each.questionId === plan.questionId));
+    if (missed.length > 0) {
+      toasts.toast({
+        tone: 'danger',
+        message: questionStrings.notCreated(
+          missed.map((plan) => plan.title),
+          target.objectName ?? '',
+          'submission',
+        ),
+      });
+    }
     if (made.length === 0) return { document: draft, choices: target };
     const next = made.reduce(
       (document, each) => changeQuestion(document, each.questionId, { filedOn: each.attributeId }),
