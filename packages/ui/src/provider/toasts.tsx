@@ -11,6 +11,7 @@ import {
 } from 'react-aria-components';
 import { Button } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
+import { Spinner } from '../atoms/Spinner/Spinner.tsx';
 import '../lib/custom-properties.ts';
 import { strings } from './strings.ts';
 import styles from './Toast.module.css';
@@ -45,6 +46,11 @@ export interface ToastContent {
   readonly tone: ToastTone;
   readonly message: string;
   readonly action?: ToastAction;
+  /**
+   * Work under way (an export being written): a spinner in the icon's place, and it stays until the screen
+   * dismisses it, usually for the toast that says how the work ended.
+   */
+  readonly isBusy?: boolean;
 }
 
 /** How long one toast stays, when its kind's rule isn't the one wanted. */
@@ -72,7 +78,7 @@ export interface Toasts {
  * dismissed, so its action can't vanish before it is reached.
  */
 export function toastTimeout(content: ToastContent): number | undefined {
-  if (content.action !== undefined) return undefined;
+  if (content.action !== undefined || content.isBusy === true) return undefined;
   return content.tone === 'danger' ? ERROR_TOAST_TIMEOUT_MS : TOAST_TIMEOUT_MS;
 }
 
@@ -131,7 +137,11 @@ export function ToastRegion({ toasts }: { readonly toasts: Toasts }) {
           style={{ '--toast-name': `toast-${toast.key.replaceAll(/[^\w-]/g, '')}` }}
         >
           <span className={styles.icon} data-tone={toast.content.tone}>
-            <Icon name={TONE_ICONS[toast.content.tone]} size="sm" />
+            {toast.content.isBusy === true ? (
+              <Spinner label={toast.content.message} />
+            ) : (
+              <Icon name={TONE_ICONS[toast.content.tone]} size="sm" />
+            )}
           </span>
           <AriaToastContent className={styles.content}>
             <Text slot="title">{toast.content.message}</Text>

@@ -124,9 +124,11 @@ const data = createDataLayer({
       );
       return;
     }
-    // A records export (spec 0040, AC-1131): its end offers the file.
+    // A records export (spec 0040, AC-1131): its end offers the file. One this tab started has its own toast,
+    // which turns from busy to Download or Try again (`features/imports/export-run.ts`), so it says nothing here.
     const exportId = typeof job.result?.exportId === 'string' ? job.result.exportId : undefined;
     const exported = data.exports.forJob(job.id);
+    if (job.kind === 'records.export' && exported !== undefined) return;
     if (job.kind === 'records.export' && job.status === 'succeeded' && exportId !== undefined) {
       const changed = job.result?.changedWhileWritten === true;
       toasts.toast({

@@ -56,6 +56,30 @@ function InfoButton() {
   );
 }
 
+/** Work under way, then how it ended: the busy toast gives way to the result with its action. */
+function BusyButton() {
+  const toasts = useToasts();
+  return (
+    <Stage>
+      <Button
+        onPress={() => {
+          const key = toasts.toast({ tone: 'info', message: 'Exporting People…', isBusy: true });
+          globalThis.setTimeout(() => {
+            toasts.dismiss(key);
+            toasts.toast({
+              tone: 'success',
+              message: 'People.csv is ready',
+              action: { label: 'Download', onAction: () => undefined },
+            });
+          }, 300);
+        }}
+      >
+        Export
+      </Button>
+    </Stage>
+  );
+}
+
 const meta = {
   title: 'Provider/Toasts',
   component: ToastButtons,
@@ -110,6 +134,23 @@ export const Info: Story = {
       return found;
     });
     await expect(within(region).getByText('Bea Ruiz changed the filters on this view.')).toBeInTheDocument();
+    await userEvent.click(within(region).getByRole('button', { name: 'Dismiss' }));
+  },
+};
+
+/** Busy: a spinner while the work runs, then the result's toast with its action in its place. */
+export const Busy: Story = {
+  render: () => <BusyButton />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Export' }));
+    const region = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[role="region"][aria-label="Notifications"]');
+      if (found === null) throw new Error('no toast region');
+      return found;
+    });
+    await expect(within(region).getByRole('progressbar', { name: 'Exporting People…' })).toBeInTheDocument();
+    await waitFor(() => expect(within(region).getByRole('button', { name: 'Download' })).toBeInTheDocument());
+    await expect(within(region).queryByText('Exporting People…')).not.toBeInTheDocument();
     await userEvent.click(within(region).getByRole('button', { name: 'Dismiss' }));
   },
 };

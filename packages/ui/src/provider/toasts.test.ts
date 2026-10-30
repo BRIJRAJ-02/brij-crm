@@ -14,6 +14,10 @@ describe('toastTimeout', () => {
     expect(ERROR_TOAST_TIMEOUT_MS).toBe(8_000);
   });
 
+  it('keeps a busy toast until it is dismissed', () => {
+    expect(toastTimeout({ tone: 'info', message: 'Exporting People', isBusy: true })).toBeUndefined();
+  });
+
   it('keeps a toast with an action until it is dismissed', () => {
     const action = { label: 'Undo', onAction: () => undefined };
     expect(toastTimeout({ tone: 'success', message: 'Record deleted', action })).toBeUndefined();

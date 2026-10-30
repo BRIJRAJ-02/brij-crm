@@ -11,7 +11,15 @@ export const strings = {
   /** The view's More menu items (AC-1111, AC-1130), and the export's first toast. */
   menuItem: 'Import CSV',
   exportItem: 'Export CSV',
-  exportStarted: 'Exporting this view. You can download it when it’s ready.',
+  /** The view bar's Import / Export menu (it was only under "This view"), and its two items. */
+  transferMenu: 'Import / Export',
+  importPlural: (pluralName: string) => `Import ${pluralName.toLowerCase()}`,
+  exportView: 'Export this view (CSV)',
+  /** The export's one toast: working, then Download, or Try again. */
+  exporting: (name: string) => `Exporting ${name}…`,
+  exportFailed: (name: string, why: string | undefined) =>
+    why === undefined ? `Couldn’t export ${name}.` : `Couldn’t export ${name}. ${why}`,
+  tryAgain: 'Try again',
   title: (pluralName: string) => `Import ${pluralName.toLowerCase()}`,
   stepsLabel: 'Import steps',
   steps: {
