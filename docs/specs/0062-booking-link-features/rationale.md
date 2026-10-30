@@ -63,7 +63,7 @@ Spec 0037 (team scheduling and access, on `wip/specs-teamsched`, built by the cr
 
 0062 builds on 0037 in two places: Confirm and Decline follow 0037's reach, and seats and repeats apply to personal pages and to collective pages as J13 defines them (never round robin in this release). If crm-6a's map of what is left moves any of these, this section follows it.
 
-**Landing order (agreed with crm-6a, 31 Oct):** `wip/team-day`, `fix/roster-editor`, 0037 J13, J14, J15, then 0062 L1 to L5. Every 0062 lane rebases onto the tip after J15, because the booking engine, slots, public, pages and PageEditor are shared. 0058 Lane A also waits for `wip/team-day`, which edits `TimeOffDialog.tsx`.
+**Landing order (agreed with crm-6a, 31 Oct, updated after its map):** `wip/team-day`, `fix/roster-editor`, crm-6a's L1 (reach on colleagues' pages) and L2 (J14 editors and Sharing), then 0062 L1 to L5. J13 is mostly built by spec 0029. J15 managed pages lands after the routing lanes. If 0062 is ready first it goes after crm-6a's L2 and J15 rebases onto it. Every 0062 lane rebases onto the tip it follows, because the booking engine, slots, public, pages and PageEditor are shared. 0058 Lane A also waits for `wip/team-day`, which edits `TimeOffDialog.tsx`.
 
 ### Choices made without asking (industry standard)
 
