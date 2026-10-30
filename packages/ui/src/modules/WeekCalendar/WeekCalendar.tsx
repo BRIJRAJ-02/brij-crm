@@ -989,7 +989,14 @@ export function WeekCalendar({
                         {shownTime}
                       </span>
                       {block.detail !== undefined && <span className={styles.blockDetail}>{block.detail}</span>}
-                      {wire?.edge}
+                      {wire !== undefined && (
+                        <span
+                          ref={wire.bindEdge}
+                          className={styles.edge}
+                          aria-hidden="true"
+                          onPointerDown={wire.onEdgePointerDown}
+                        />
+                      )}
                     </button>
                   );
                   return move?.isMovable(block.id) === true ? (
