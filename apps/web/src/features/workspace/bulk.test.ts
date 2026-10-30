@@ -5,6 +5,7 @@ import type { JobView, RecordsView } from '@crm/data';
 import {
   bulkEditToast,
   bulkJobToast,
+  combineEditResults,
   deleteOffer,
   deleteToast,
   jobProgress,
@@ -239,5 +240,32 @@ describe('ticked rows across a new question', () => {
     expect(carrySelection(held, after, 'view-2', 'f1').dropped).toBe(0);
     const none = { ...held, selection: { kind: 'some' as const, ids: new Set<string>() } };
     expect(carrySelection(none, after, 'view-1', 'f2').dropped).toBe(0);
+  });
+});
+
+describe('combineEditResults', () => {
+  const done = (updated: number, undoId?: string, refused = 0) => ({
+    kind: 'done' as const,
+    updated,
+    unchanged: 0,
+    refused,
+    ...(undoId === undefined ? {} : { undoId }),
+  });
+
+  it('says one outcome for several fields: the most records touched, every undo id oldest first', () => {
+    const { result, undoIds } = combineEditResults([done(3, 'u1'), done(5, 'u2', 1)]);
+    expect(result).toEqual({ kind: 'done', updated: 5, unchanged: 0, refused: 1, undoId: 'u2' });
+    expect(undoIds).toEqual(['u1', 'u2']);
+  });
+
+  it('lets a failure stand for the whole, keeping the undo of what landed before it', () => {
+    const failed = { kind: 'failed' as const, error: dataError('FORBIDDEN', 'No.') };
+    const { result, undoIds } = combineEditResults([done(2, 'u1'), failed]);
+    expect(result).toBe(failed);
+    expect(undoIds).toEqual(['u1']);
+  });
+
+  it('has nothing to undo when nothing changed', () => {
+    expect(combineEditResults([done(0), done(0)]).undoIds).toEqual([]);
   });
 });

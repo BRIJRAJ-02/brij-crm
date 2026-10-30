@@ -56,6 +56,11 @@ export const bulkStrings = {
   editTitle: (records: string) => `Edit ${records}`,
   field: 'Field',
   fieldPlaceholder: 'Choose a field',
+  /** Another field to change in the same Apply (the CRM flow pass, 31 October 2026). */
+  addField: 'Add field',
+  removeField: (title: string) => `Remove ${title}`,
+  /** The second and later rows' field Select, named by its place: "Field 2". */
+  fieldAt: (place: number) => `Field ${String(place)}`,
   change: 'Change',
   /** Change's InfoTip, for a field that holds several values. */
   changeHelp:
@@ -266,6 +271,37 @@ export function bulkEditToast(
             },
           },
         }),
+  };
+}
+
+/**
+ * Several fields changed in one Apply, sent one bulk edit each (the server's edit takes one field): one outcome for
+ * the one toast. A failure or a too-many answer stands for the whole (the fields before it landed and can be undone);
+ * otherwise the records touched are the most any field touched, and every landed edit's undo id is kept, oldest
+ * first, so Undo can take them back newest first.
+ */
+export function combineEditResults(results: readonly BulkEditResult[]): {
+  readonly result: BulkEditResult;
+  readonly undoIds: readonly string[];
+} {
+  const undoIds = results.flatMap((result) =>
+    result.kind === 'done' && result.undoId !== undefined ? [result.undoId] : [],
+  );
+  const stop = results.find((result) => result.kind !== 'done');
+  if (stop !== undefined) return { result: stop, undoIds };
+  const done = results.flatMap((result) => (result.kind === 'done' ? [result] : []));
+  const reason = done.find((result) => result.reason !== undefined)?.reason;
+  const last = undoIds.at(-1);
+  return {
+    result: {
+      kind: 'done',
+      updated: Math.max(0, ...done.map((result) => result.updated)),
+      unchanged: done.length === 0 ? 0 : Math.min(...done.map((result) => result.unchanged)),
+      refused: Math.max(0, ...done.map((result) => result.refused)),
+      ...(reason === undefined ? {} : { reason }),
+      ...(last === undefined ? {} : { undoId: last }),
+    },
+    undoIds,
   };
 }
 

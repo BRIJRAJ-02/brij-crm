@@ -29,6 +29,7 @@ import {
   bulkStrings,
   deleteToast,
   bulkEditToast,
+  combineEditResults,
   recordsWord,
 } from './bulk.ts';
 import { runExport } from '../imports/export-run.ts';
@@ -311,27 +312,66 @@ export function useBulkActions({
   if (editing !== undefined && editing !== lastEdited) setLastEdited(editing);
   const definitionOf = (attributeId: string) => attributes.find((each) => each.id === attributeId);
 
-  const edit = async (recordIds: readonly string[], choice: BulkEditChoice, fromToast = false) => {
+  /** One field's bulk edit; a field archived or hidden while the dialog was open sends nothing. */
+  const sendOne = (recordIds: readonly string[], choice: BulkEditChoice): Promise<BulkEditResult> => {
     const definition = definitionOf(choice.attributeId);
-    // The field was archived or hidden while the dialog was open: nothing is sent.
     if (definition === undefined) {
-      return { kind: 'done', updated: 0, unchanged: 0, refused: 0 } satisfies BulkEditResult;
+      return Promise.resolve({ kind: 'done', updated: 0, unchanged: 0, refused: 0 });
     }
-    const result = await data.records.bulkEdit(slug, object.id, recordIds, {
+    return data.records.bulkEdit(slug, object.id, recordIds, {
       attributeId: definition.id,
       type: definition.type,
       isMulti: definition.isMulti,
       op: choice.op,
       ...(Object.hasOwn(choice, 'value') ? { value: choice.value } : {}),
     });
+  };
+
+  /**
+   * The fields in order, one bulk edit each (the server's edit takes one field), stopping at the first refused
+   * whole: the edits before it landed, and the toast's Undo takes them back.
+   */
+  const sendInOrder = async (
+    recordIds: readonly string[],
+    choices: readonly BulkEditChoice[],
+    sent: readonly BulkEditResult[] = [],
+  ): Promise<readonly BulkEditResult[]> => {
+    const [first, ...rest] = choices;
+    if (first === undefined) return sent;
+    const result = await sendOne(recordIds, first);
+    const all = [...sent, result];
+    return result.kind === 'done' ? sendInOrder(recordIds, rest, all) : all;
+  };
+
+  /** Undoes several fields' edits, newest first (each only while it is the newest); the oldest's toast says so. */
+  const undoAll = (undoIds: readonly string[]) => {
+    const [oldest] = undoIds;
+    if (oldest === undefined) return;
+    undoIds
+      .slice(1)
+      .toReversed()
+      .reduce<Promise<unknown>>((chain, undoId) => chain.then(() => data.undo.run(slug, undoId)), Promise.resolve())
+      .then(
+        () => {
+          runUndo(data, toasts, slug, oldest);
+        },
+        () => {
+          toasts.toast({ tone: 'danger', message: bulkStrings.somethingWrong });
+        },
+      );
+  };
+
+  const edit = async (recordIds: readonly string[], choices: readonly BulkEditChoice[], fromToast = false) => {
+    const { result, undoIds } = combineEditResults(await sendInOrder(recordIds, choices));
+    // One toast for every field changed, its Undo taking them all back.
     const toast = bulkEditToast(
       result,
       object,
-      (undoId) => {
-        runUndo(data, toasts, slug, undoId);
+      () => {
+        undoAll(undoIds);
       },
       () => {
-        void edit(recordIds, choice, true);
+        void edit(recordIds, choices, true);
       },
       { fromToast },
     );
@@ -344,7 +384,10 @@ export function useBulkActions({
   const [jobChange, setJobChange] = useState<BulkEditChoice | undefined>(undefined);
 
   /** An edit too big for one request starts a job; a refusal to start shows in the dialog that asked. */
-  const editAsJob = async (choice: BulkEditChoice): Promise<BulkEditResult> => {
+  const editAsJob = async (choices: readonly BulkEditChoice[]): Promise<BulkEditResult> => {
+    // A job takes one field: the dialog offers one there (isSingle).
+    const [choice] = choices;
+    if (choice === undefined) return { kind: 'done', updated: 0, unchanged: 0, refused: 0 };
     setJobChange(choice);
     const failure = await start('edit', {
       attributeId: choice.attributeId,
@@ -479,6 +522,7 @@ export function useBulkActions({
   const isEditJob = bulkJob.action === 'edit';
   const changed = jobChange === undefined ? undefined : definitionOf(jobChange.attributeId);
   const editShown = editing ?? lastEdited;
+  const isInlineEdit = editShown.ids.length > 0 && editShown.ids.length === editShown.count && path === 'inline';
   const dialog = (
     <>
       <BulkEditDialog
@@ -495,11 +539,9 @@ export function useBulkActions({
             ? bulkStrings.allMatchingRecords(editShown.count, object)
             : recordsWord(editShown.count, object)
         }
-        onApply={(choice) =>
-          editShown.ids.length > 0 && editShown.ids.length === editShown.count && path === 'inline'
-            ? edit(editShown.ids, choice)
-            : editAsJob(choice)
-        }
+        // Up to 500 ticked go at once, several fields in one Apply; past that a background job takes one field.
+        isSingle={!isInlineEdit}
+        onApply={(choices) => (isInlineEdit ? edit(editShown.ids, choices) : editAsJob(choices))}
       />
       {/*
         A counted background change, opened by Review (AC-528, AC-531): the exact number, and for an edit the value
