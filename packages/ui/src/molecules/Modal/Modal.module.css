@@ -146,6 +146,14 @@
     text-align: start;
   }
 
+  /* A control at the footer's start (New record's "Create more"): it takes the room left of the buttons. */
+  .footerStart {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
   /* On a phone the footer's buttons stack, each the dialog's width, the primary (listed last, after Cancel) on
      top. */
   @container modal-scrim (width < 480px) {
@@ -156,7 +164,8 @@
 
     /* The column is reversed, so a higher order draws first: the quiet line stays over the buttons, where it is
        read before the press rather than after it. */
-    .hint {
+    .hint,
+    .footerStart {
       order: 1;
       text-align: center;
     }

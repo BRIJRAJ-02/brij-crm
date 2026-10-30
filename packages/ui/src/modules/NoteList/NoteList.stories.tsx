@@ -63,6 +63,7 @@ interface SampleProps {
   readonly isLong?: boolean;
   readonly emptyTitle?: string;
   readonly withToolbar?: boolean;
+  readonly withEmptyAction?: boolean;
 }
 
 /** The list in a fixed height slot, as the Notes tab holds it. */
@@ -75,6 +76,7 @@ function SampleNotes({
   isLong = false,
   emptyTitle,
   withToolbar = false,
+  withEmptyAction = false,
 }: SampleProps) {
   const notes = isLong
     ? longSource(onRangeChange ?? (() => undefined))
@@ -89,6 +91,7 @@ function SampleNotes({
         {...(onRetry === undefined ? {} : { onRetry })}
         {...(emptyTitle === undefined ? {} : { emptyTitle })}
         {...(withToolbar ? { toolbar: <Button variant="primary">New note</Button> } : {})}
+        {...(withEmptyAction ? { emptyActions: <Button variant="primary">New note</Button> } : {})}
       />
     </Stage>
   );
@@ -161,6 +164,16 @@ export const Empty: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No notes yet. Write the first one.')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'New note' })).toBeInTheDocument();
+  },
+};
+
+/** Empty, with the way to start inside the empty state (a record's Notes tab): one New note, under the words. */
+export const EmptyWithAction: Story = {
+  args: { isEmpty: true, emptyTitle: 'No notes yet', withEmptyAction: true },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No notes yet')).toBeInTheDocument();
+    await expect(canvas.getAllByRole('button', { name: 'New note' })).toHaveLength(1);
   },
 };
 

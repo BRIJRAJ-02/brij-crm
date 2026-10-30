@@ -298,6 +298,29 @@ export const EmptyOwnWords: Story = {
   },
 };
 
+/** Empty, with the way to start inside the empty row (a record's Tasks tab): New task, under the words. */
+export const EmptyWithAction: Story = {
+  render: function Render() {
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="Tasks"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          emptyTitle="No open tasks"
+          emptyActions={<Button>New task</Button>}
+          onToggle={() => undefined}
+          toolbar={<Field label="Add a task" isLabelHidden placeholder="Add a task and press Enter" maxLength={2000} />}
+        />
+      </Stage>
+    );
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No open tasks')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'New task' })).toBeInTheDocument();
+  },
+};
+
 /**
  * A record's Tasks tab: the quick add above the open tasks (it stays when the
  * list is empty), and the Completed part under them, drawn in place.

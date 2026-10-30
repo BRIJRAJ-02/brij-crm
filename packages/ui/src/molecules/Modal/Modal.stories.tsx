@@ -4,6 +4,7 @@ import { expect, fn, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
+import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
@@ -242,6 +243,42 @@ export const FormDialog: Story = {
     await userEvent.click(create);
     await waitFor(() => expect(dialog.querySelector('[aria-invalid="true"]')).not.toBeNull());
     await centred();
+  },
+};
+
+/**
+ * A control at the footer's start (`footerStart`): New record's "Create more", left of Cancel and Create. Out of the
+ * screenshots until its baseline is taken in the pinned image (`pnpm test:visual --update`).
+ */
+export const FooterStart: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Modal
+        title="New person"
+        isOpen
+        footerStart={<Switch label="Create more" />}
+        actions={
+          <>
+            <Button slot="close" kbd="ESC">
+              Cancel
+            </Button>
+            <Button variant="primary" kbd="⌘↵">
+              Create person
+            </Button>
+          </>
+        }
+      >
+        <Field label="Name" />
+      </Modal>
+    </Stage>
+  ),
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    const toggle = within(dialog as HTMLElement).getByRole('switch', { name: 'Create more' });
+    await expect(toggle).not.toBeChecked();
+    await userEvent.click(toggle);
+    await expect(toggle).toBeChecked();
   },
 };
 
