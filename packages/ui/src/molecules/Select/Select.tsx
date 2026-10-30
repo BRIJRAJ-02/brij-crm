@@ -1,13 +1,4 @@
-import {
-  use,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type KeyboardEventHandler,
-  type ReactNode,
-  type Ref,
-} from 'react';
+import { use, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react';
 import {
   Autocomplete,
   Button as AriaButton,
@@ -195,41 +186,22 @@ function reachableWhileDisabled(item: SelectItem): Partial<ListBoxItemProps<Sele
     // With the search on, focus stays in the search and React Aria hands the option Enter and Space itself, and its
     // press then empties the choice for a key it can't select (and closes a single choice). The option swallows
     // them, so the list stays open on it with the choice as it was.
-    render: (props) =>
-      'href' in props ? (
-        <a
-          {...props}
-          role="option"
-          aria-selected={props['aria-selected']}
-          aria-disabled="true"
-          data-disabled=""
-          onKeyDown={refusingChoiceKeys(props.onKeyDown)}
-        >
-          {props.children}
-        </a>
-      ) : (
+    // A Select's options never link, so the option is always a div.
+    render: (props) => {
+      const div = props as ComponentProps<'div'>;
+      return (
+        // eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- React Aria's props bring role="option"
         <div
-          {...props}
-          role="option"
-          aria-selected={props['aria-selected']}
+          {...div}
           aria-disabled="true"
           data-disabled=""
-          onKeyDown={refusingChoiceKeys(props.onKeyDown)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') event.preventDefault();
+            else div.onKeyDown?.(event);
+          }}
         />
-      ),
-  };
-}
-
-/** A disabled option's key handler: Enter and Space do nothing (not even their default), every other key goes on. */
-function refusingChoiceKeys<E extends HTMLElement>(
-  onKeyDown: KeyboardEventHandler<E> | undefined,
-): KeyboardEventHandler<E> {
-  return (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      return;
-    }
-    onKeyDown?.(event);
+      );
+    },
   };
 }
 
@@ -328,28 +300,9 @@ export function Select({
   // Without a `value`, the Select keeps its own, so a refused choice (a disabled option) never changes it: React
   // Aria's own uncontrolled value would take any key its trigger's arrows or typeahead land on.
   const [own, setOwn] = useState<string | null>(defaultValue ?? null);
-  // The last key pressed in the field and whether the list is open, so a closed trigger's arrow that lands on a
-  // disabled option steps past it (as React Aria did when it skipped one) where its typeahead is only refused.
-  const rootRef = useRef<HTMLDivElement>(null);
+  // The last key pressed in the field, so a closed trigger's arrow that lands on a disabled option steps past it (as
+  // React Aria did when it skipped one) where its typeahead is only refused.
   const lastKey = useRef('');
-  const isOpenNow = useRef(defaultOpen ?? false);
-  useEffect(() => {
-    const root = rootRef.current;
-    if (root === null) return;
-    // Captured on the field itself, so it is known before React Aria's own handler on the trigger sets the value.
-    // Forgotten once the key's own handling is done, so a later change that no key made never steps. A task, not a
-    // microtask: microtasks run between this listener and React's own, before the key has done anything.
-    const remember = (event: globalThis.KeyboardEvent) => {
-      lastKey.current = event.key;
-      setTimeout(() => {
-        lastKey.current = '';
-      }, 0);
-    };
-    root.addEventListener('keydown', remember, true);
-    return () => {
-      root.removeEventListener('keydown', remember, true);
-    };
-  }, [isReadOnly]);
   const current = isMultiple ? null : value === undefined ? own : value;
   const chosen = items.find((item) => item.id === current);
   // Every chosen id: the one in a single choice, all of them in a multiple one.
@@ -472,7 +425,7 @@ export function Select({
   // The next option after `refused` that can be chosen, the way an arrow went, if any.
   const stepPast = (refused: string, step: 1 | -1) => {
     const at = listed.findIndex((item) => item.id === refused);
-    const ahead = step === 1 ? listed.slice(at + 1) : listed.slice(0, Math.max(at, 0)).reverse();
+    const ahead = step === 1 ? listed.slice(at + 1) : listed.slice(0, at).reverse();
     return ahead.find((item) => item.id !== CLEAR && item.id !== CREATE && !disabledKeys.includes(item.id))?.id;
   };
   const grouped =
@@ -530,7 +483,6 @@ export function Select({
 
   return (
     <AriaSelect
-      ref={rootRef}
       className={styles.root}
       data-size={size}
       data-variant={variant}
@@ -550,7 +502,6 @@ export function Select({
       {...(autoFocus ? { autoFocus: true } : {})}
       // Each opening searches afresh (from the key that opened a cell's list, when one did).
       onOpenChange={(isOpen) => {
-        isOpenNow.current = isOpen;
         if (!isOpen) setQuery(defaultSearch ?? '');
         onOpenChange?.(isOpen);
       }}
@@ -564,11 +515,12 @@ export function Select({
           onValuesChange?.(items.filter((item) => picked.has(item.id)).map((item) => item.id));
           return;
         }
-        // The closed trigger's arrows walk every option, Clear and Create too, without the list ever opening.
-        const isArrow = lastKey.current === 'ArrowRight' || lastKey.current === 'ArrowLeft';
-        const isClosedArrow = isArrow && !isOpenNow.current;
-        // An arrow on the closed trigger never clears the value or creates an option: those need the open list.
-        if (isClosedArrow && (next === CLEAR || next === CREATE)) return;
+        // Only the closed trigger's arrows choose by ArrowLeft or ArrowRight (the open list's run up and down, and
+        // the search's move its caret). They walk every option, Clear and Create too, without the list ever opening,
+        // so an arrow never clears the value or creates an option: those need the open list.
+        const key = lastKey.current;
+        const isArrow = key === 'ArrowRight' || key === 'ArrowLeft';
+        if (isArrow && (next === CLEAR || next === CREATE)) return;
         if (next === CREATE) {
           if (canCreate) onCreate(typed);
           return;
@@ -583,17 +535,32 @@ export function Select({
         }
         // A closed trigger's arrow steps past a disabled option to the next one it can choose; anything else that
         // lands on one (its typeahead) is refused, and the value stays. With nothing chosen, React Aria starts both
-        // arrows from the first option, so both step forward. The open list never sends a disabled option here (it
-        // refuses it itself), so `isOpenNow` is only a backstop.
-        const step = current === null || lastKey.current === 'ArrowRight' ? 1 : -1;
-        const stepped = isClosedArrow ? stepPast(id, step) : undefined;
+        // arrows from the first option, so both step forward.
+        const stepped = isArrow ? stepPast(id, current === null || key === 'ArrowRight' ? 1 : -1) : undefined;
         if (stepped === undefined) return;
         setOwn(stepped);
         onChange?.(stepped);
       }}
     >
       {!isLabelHidden && <FieldLabel label={label} aside={labelAside} info={info} isDisabled={isDisabled} />}
-      <AriaButton className={styles.trigger} {...(triggerRef === undefined ? {} : { ref: triggerRef })}>
+      <AriaButton
+        className={styles.trigger}
+        {...(triggerRef === undefined ? {} : { ref: triggerRef })}
+        // The trigger's key, captured before React Aria's own handler on it sets the value, and forgotten once its
+        // handling is done, so a later change that no key made never steps. A task, not a microtask: microtasks run
+        // between this capture and React Aria's handler, before the key has done anything.
+        render={(props) => (
+          <button
+            {...props}
+            onKeyDownCapture={(event) => {
+              lastKey.current = event.key;
+              setTimeout(() => {
+                lastKey.current = '';
+              }, 0);
+            }}
+          />
+        )}
+      >
         <SelectValue<SelectItem> className={styles.value}>
           {({ selectedItems, isPlaceholder, defaultChildren }) => {
             // Several chosen: each by the field's own values, in the list's order.
