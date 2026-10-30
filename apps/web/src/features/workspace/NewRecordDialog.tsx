@@ -37,6 +37,11 @@ export interface NewRecordDialogProps {
   readonly onCreate: (id: string, values: Readonly<Record<string, unknown>>) => Promise<RecordView>;
   /** The server made it: close, and focus its row. */
   readonly onCreated: (record: RecordView) => void;
+  /**
+   * Values set before anything is typed, by attribute id, sent as if typed (a board column's "+" sets its option;
+   * `null` clears a default, for its "No <field>" column).
+   */
+  readonly preset?: Readonly<Record<string, unknown>>;
 }
 
 /** The types whose editor is a list of chips: one value here (more are added in the table). */
@@ -138,6 +143,7 @@ export function NewRecordDialog({
   newId,
   onCreate,
   onCreated,
+  preset,
 }: NewRecordDialogProps) {
   const formId = useId();
   const [isBusy, setBusy] = useState(false);
@@ -180,6 +186,7 @@ export function NewRecordDialog({
         onBusyChange={setBusy}
         onCreate={onCreate}
         onCreated={onCreated}
+        {...(preset === undefined ? {} : { preset })}
       />
     </Modal>
   );
@@ -188,7 +195,7 @@ export function NewRecordDialog({
 /** Props for the dialog's form. */
 interface NewRecordFormProps extends Pick<
   NewRecordDialogProps,
-  'first' | 'more' | 'onCreate' | 'onCreated' | 'singularName' | 'newId' | 'objectKey' | 'memberPicker'
+  'first' | 'more' | 'onCreate' | 'onCreated' | 'singularName' | 'newId' | 'objectKey' | 'memberPicker' | 'preset'
 > {
   readonly formId: string;
   readonly label: string;
@@ -210,6 +217,7 @@ function NewRecordForm({
   onBusyChange,
   onCreate,
   onCreated,
+  preset,
 }: NewRecordFormProps) {
   const editors = [...first, ...more];
   // One id per opening (the Modal mounts this afresh), sent again on every press.
@@ -217,11 +225,16 @@ function NewRecordForm({
   // What each editor shows: its default until the person commits a value (AC-240).
   const meId = memberPicker.extras.me?.id ?? undefined;
   const [values, setValues] = useState<Readonly<Record<string, unknown>>>(() =>
-    Object.fromEntries(editors.map((editor) => [editor.id, prefillOf(editor, meId)])),
+    Object.fromEntries(
+      editors.map((editor) => [
+        editor.id,
+        preset !== undefined && editor.id in preset ? preset[editor.id] : prefillOf(editor, meId),
+      ]),
+    ),
   );
   // What the person committed, in the shape the attribute takes: a ref as well, so a submit that a blur's commit
   // runs just before sees it. Untouched fields are left out, so the server applies their defaults itself.
-  const sending = useRef<Record<string, unknown>>({});
+  const sending = useRef<Record<string, unknown>>({ ...preset });
   const [fieldErrors, setFieldErrors] = useState<ReadonlyMap<string, string>>(new Map());
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   // A refusal or a typed value in a hidden field opens "Add more fields", so nothing is out of sight.

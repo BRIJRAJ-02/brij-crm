@@ -33,6 +33,11 @@ export interface BoardProps {
   readonly onShowEmptyColumnsChange?: (show: boolean) => void;
   /** Enter or a click on a card: open its record. */
   readonly onOpen?: (card: BoardCard) => void;
+  /**
+   * The "+" on each column's head: add a record with that column's value. Leave it out where the viewer may not
+   * create; a collapsed strip and a column that refuses cards show no "+".
+   */
+  readonly onAddCard?: (columnId: string) => void;
   /** A card was picked up (true) or dropped or put back (false): the screen holds its columns still meanwhile. */
   readonly onMovingChange?: (isMoving: boolean) => void;
   /** `loading` (skeleton columns after the loading delay), `error`, or `no-access`. */
@@ -84,6 +89,7 @@ export function Board({
   showEmptyColumns,
   onShowEmptyColumnsChange,
   onOpen,
+  onAddCard,
   onMovingChange,
   status = 'ready',
   onRetry,
@@ -221,6 +227,7 @@ export function Board({
             // A strip stays a strip while a card moves (it takes the drop as it is, so no column shifts under the
             // pointer), and one that has held cards on this board stays wide when its last card leaves.
             isCollapsed={column.isCollapsedWhenEmpty === true && column.count === 0 && !hasHeld.has(column.id)}
+            {...(onAddCard === undefined || isMoving ? {} : { onAddCard: () => onAddCard(column.id) })}
             {...(onOpen === undefined
               ? {}
               : {

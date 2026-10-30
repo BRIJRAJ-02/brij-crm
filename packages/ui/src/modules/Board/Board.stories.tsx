@@ -49,6 +49,7 @@ interface SampleProps {
   readonly startShowingEmpty?: boolean;
   /** A "No Stage" column first, empty, which stays a slim strip. */
   readonly withNoValue?: boolean;
+  readonly onAddCard?: (columnId: string) => void;
 }
 
 /** The board holding its own cards, as the data layer would: a move rewrites the card's stage. */
@@ -60,6 +61,7 @@ function SampleBoard({
   onRetry,
   startShowingEmpty = false,
   withNoValue = false,
+  onAddCard,
 }: SampleProps) {
   const [cards, setCards] = useState(CARDS);
   const [showEmpty, setShowEmpty] = useState(startShowingEmpty);
@@ -83,6 +85,7 @@ function SampleBoard({
         {...(isReadOnly === undefined ? {} : { isReadOnly })}
         {...(status === undefined ? {} : { status })}
         {...(onRetry === undefined ? {} : { onRetry })}
+        {...(onAddCard === undefined ? {} : { onAddCard })}
         onMove={(move) => {
           setCards((previous) =>
             previous.map((card) => (card.id === move.cardId ? { ...card, stage: move.toColumnId } : card)),
@@ -144,6 +147,16 @@ export const MoveByKeyboard: Story = {
     );
     // Focus follows the card to its new column.
     await waitFor(() => expect(document.activeElement).toHaveAttribute('data-key', 'company-0'));
+  },
+};
+
+/** Each column's head has a "+" naming its column; the archived column has none. */
+export const AddCard: Story = {
+  args: { onAddCard: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add to Qualified' }));
+    await expect(args.onAddCard).toHaveBeenCalledWith(STAGE_IDS.qualified);
+    await expect(canvas.queryByRole('button', { name: 'Add to Legacy' })).not.toBeInTheDocument();
   },
 };
 

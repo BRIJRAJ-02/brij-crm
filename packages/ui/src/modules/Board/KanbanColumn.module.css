@@ -1,5 +1,5 @@
 /* KanbanColumn: a size-board-column column on surface-column with radius-lg:
-   its option's dot, title and count, then its cards space-8 apart. A card is
+   its option's dot, title and count (and an optional "+"), then its cards space-8 apart. A card is
    surface-raised with a hairline border and shadow-xs; it fades where it was
    while it moves (its lifted copy rides above, shadow-lg) and takes the inset
    ring on focus. The column takes the inset ring on accent-soft while a card
@@ -28,6 +28,18 @@
     color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* The title and count; the head's "+" sits at the far end. */
+  .heading {
+    display: flex;
+    flex: 1;
+    gap: var(--space-8);
+    align-items: center;
+    min-inline-size: 0;
+    margin: 0;
+    font: inherit;
+    letter-spacing: inherit;
   }
 
   .title {
@@ -68,7 +80,8 @@
     inline-size: calc(2 * var(--size-control));
   }
 
-  .root[data-collapsed] .head {
+  .root[data-collapsed] .head,
+  .root[data-collapsed] .heading {
     flex-direction: row;
     padding-block: var(--space-4);
     padding-inline: 0;

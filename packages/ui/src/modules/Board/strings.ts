@@ -6,6 +6,8 @@ export const strings = {
   cardsAtLeast: (count: string) => `${count} or more cards`,
   atLeast: (count: string) => `${count}+`,
   noCards: 'No cards',
+  /** The column head's "+": names the column it adds to. */
+  addCard: (column: string) => `Add to ${column}`,
   /** Shown on an archived column while a card is moving. */
   archivedRefuses: 'Archived. Cards can’t move here.',
   hiddenColumns: (count: string, plural: Intl.LDMLPluralRule) =>

@@ -32,6 +32,7 @@ New (spec 0003, the board). The board view (#21) and pipelines (#51) group recor
 - `isReadOnly` (the grouping attribute is read only) takes every handle away. A card with a `readOnlyReason` shows a `LockReason` instead of its handle (its reason on hover and keyboard focus); it can't be picked up, and no column takes it.
 - An archived option's column shows only while it still has cards, never takes a drop, and says so while a card is moving. `refusesDrop: { reason }` makes any column refuse drops the same way with its own reason (a required field's "No <field>" column, spec 0021). Why a variant: the archived column already refuses drops; a second refusal with another reason needs no second column style.
 - `isCollapsedWhenEmpty` (the "No <field>" column) draws an empty column as a slim strip, its title and count running down it, with no cards. It stays a strip while a card moves and takes the drop as it is (the accent ring says so), so no column shifts under the pointer; once it has held cards on this board it stays wide, so it never snaps shut after its last card leaves. Why: an empty no value column took a full column's width first on every pipeline (the owner, 22 October 2026); Linear and Attio keep it out of the way. It follows the Show empty columns setting like any other column when that hides empty ones.
+- `onAddCard(columnId)` puts a ghost "+" ("Add to <column>") at the end of each column's head, for a screen to open its create dialog with that column's value set (the "No <field>" column's sets none). Leave it out where the viewer may not create. A collapsed strip, an archived column and one that refuses drops show no "+", and none shows while a card moves. Why: Attio and Twenty add a card from its column; the top bar's New alone left the value to pick again.
 - `onMovingChange` hears a card picked up (true) and dropped or put back (false), so the screen can hold its columns still while a card moves (spec 0021).
 - Empty columns hide while `showEmptyColumns` is false, behind an "N hidden columns" button; "Hide empty columns" puts them away again. While a card is moving, hidden empty columns come back, so there is always somewhere to drop it.
 - `status`: `loading` (skeleton columns after the loading delay), `error` (with Try again from `onRetry`), or `no-access`. No columns at all (an attribute with no options yet) shows an empty state.
@@ -40,7 +41,7 @@ New (spec 0003, the board). The board view (#21) and pipelines (#51) group recor
 
 ## States
 
-Default, loading (skeleton columns after the loading delay), failed, no access, no columns, empty column ("No cards"), hidden columns, read only, a locked card, an archived column. Hover on a card (pointer only; its handle shows), focus (the inset ring), a card being dragged (faded), a column taking a drop (the inset ring on accent soft), the spot between cards (an accent line).
+Default, add to a column (`onAddCard`), loading (skeleton columns after the loading delay), failed, no access, no columns, empty column ("No cards"), hidden columns, read only, a locked card, an archived column. Hover on a card (pointer only; its handle shows), focus (the inset ring), a card being dragged (faded), a column taking a drop (the inset ring on accent soft), the spot between cards (an accent line).
 
 ## Keyboard
 

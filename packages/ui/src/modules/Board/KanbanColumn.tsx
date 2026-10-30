@@ -4,6 +4,7 @@
 // pointer from anywhere on the card, or by keyboard from its grip.
 import { useId, useMemo } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer, type Key } from 'react-aria-components';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { FieldAttribute } from '../../fields/types.ts';
@@ -37,6 +38,8 @@ export interface KanbanColumnProps {
   /** A slim strip: the title down its length and the count, no cards (an empty "No <field>" column). */
   readonly isCollapsed?: boolean;
   readonly onOpen?: (card: BoardCard) => void;
+  /** The head's "+": add a card with this column's value. Absent, there is no button. */
+  readonly onAddCard?: () => void;
 }
 
 /** A card's row content: binds its row as a sortable item, and drags from anywhere on it. */
@@ -84,6 +87,7 @@ export function KanbanColumn({
   isOver,
   isCollapsed = false,
   onOpen,
+  onAddCard,
 }: KanbanColumnProps) {
   const { locale } = useFormatSettings();
   const onShown = useRangeReporter(column.cards);
@@ -111,21 +115,27 @@ export function KanbanColumn({
       data-over={(isOver && refusal === undefined) || undefined}
       data-collapsed={isCollapsed || undefined}
     >
-      <h3 id={titleId} className={styles.head}>
-        {column.hue === undefined ? (
-          <span className={styles.title}>{column.title}</span>
-        ) : (
-          <StatusDot hue={column.hue} isArchived={isArchived}>
-            {column.title}
-          </StatusDot>
+      <div className={styles.head}>
+        <h3 id={titleId} className={styles.heading}>
+          {column.hue === undefined ? (
+            <span className={styles.title}>{column.title}</span>
+          ) : (
+            <StatusDot hue={column.hue} isArchived={isArchived}>
+              {column.title}
+            </StatusDot>
+          )}
+          <span
+            className={styles.count}
+            aria-label={column.isCountAtLeast === true ? strings.cardsAtLeast(number) : strings.cards(number, plural)}
+          >
+            {column.isCountAtLeast === true ? strings.atLeast(number) : number}
+          </span>
+        </h3>
+        {/* A strip is too narrow for it, and a column that refuses cards (archived, required) takes no new one. */}
+        {onAddCard !== undefined && !isCollapsed && refusal === undefined && (
+          <Button variant="ghost" icon="plus" label={strings.addCard(column.title)} onPress={onAddCard} />
         )}
-        <span
-          className={styles.count}
-          aria-label={column.isCountAtLeast === true ? strings.cardsAtLeast(number) : strings.cards(number, plural)}
-        >
-          {column.isCountAtLeast === true ? strings.atLeast(number) : number}
-        </span>
-      </h3>
+      </div>
       {/* A strip is too narrow for the sentence: dimmed, it says enough, and a drop there is put back with words. */}
       {refusal !== undefined && draggingFrom !== undefined && !isCollapsed && (
         <p className={styles.refusal}>{refusal}</p>

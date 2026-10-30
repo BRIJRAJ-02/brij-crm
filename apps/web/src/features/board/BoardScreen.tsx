@@ -1,7 +1,7 @@
 // Brief
 // Purpose: see one object's records as a pipeline, a column per option of a status or select field (spec 0021).
 // Main task: see where every record stands and drag a card to its next column, live for everyone.
-// Leaves out: the stuck badge (milestone 3), and creating records from the board.
+// Leaves out: the stuck badge (milestone 3).
 import {
   isDataError,
   toActorDisplays,
@@ -155,11 +155,27 @@ export function BoardScreen(props: BoardScreenProps) {
   // New <record> in the top bar, as on the table: the same dialog, so switching to the board never hides the
   // page's one primary action. The record lands in its column through the board's own live updates.
   const [isCreating, setCreating] = useState(false);
+  // A column's "+": the grouping field set to that column's option (or cleared, for "No <field>").
+  const [preset, setPreset] = useState<Readonly<Record<string, unknown>> | undefined>(undefined);
   const newRecord = workspaceStrings.newRecord(object.singularName);
-  const { first: firstEditors, more: moreEditors } = useMemo(
-    () => createEditors(object, attributes),
-    [object, attributes],
-  );
+  const groupBy = outcome.kind === 'board' ? outcome.groupBy : undefined;
+  const { first: firstEditors, more: moreEditors } = useMemo(() => {
+    const editors = createEditors(object, attributes);
+    // Opened from a column, its field shows with the first ones, so the value it set is in sight.
+    if (preset === undefined || groupBy === undefined || !editors.more.some((each) => each.id === groupBy.id)) {
+      return editors;
+    }
+    return {
+      first: [...editors.first, ...editors.more.filter((each) => each.id === groupBy.id)],
+      more: editors.more.filter((each) => each.id !== groupBy.id),
+    };
+  }, [object, attributes, preset, groupBy]);
+  const addToColumn = (columnId: string) => {
+    if (groupBy === undefined) return;
+    const option = columnId === NO_VALUE_COLUMN ? null : columnId;
+    setPreset({ [groupBy.id]: option !== null && groupBy.isMulti ? [option] : option });
+    setCreating(true);
+  };
   // The dialog's Owner: a Menu of the workspace's members, "Me" first.
   const memberPicker = useMemberPicker(members);
   // Asked for from the command menu: the dialog opens once (a member who may only read gets the board), and
@@ -167,7 +183,10 @@ export function BoardScreen(props: BoardScreenProps) {
   const [requestSeen, setRequestSeen] = useState(false);
   if (isCreateRequested !== requestSeen) {
     setRequestSeen(isCreateRequested);
-    if (isCreateRequested && object.access === 'write') setCreating(true);
+    if (isCreateRequested && object.access === 'write') {
+      setPreset(undefined);
+      setCreating(true);
+    }
   }
   const takeRequest = useRef(onCreateRequestTaken);
   useEffect(() => {
@@ -187,6 +206,7 @@ export function BoardScreen(props: BoardScreenProps) {
                 variant="primary"
                 icon="plus"
                 onPress={() => {
+                  setPreset(undefined);
                   setCreating(true);
                 }}
               >
@@ -220,7 +240,12 @@ export function BoardScreen(props: BoardScreenProps) {
         body: (
           <>
             {outcome.kind === 'board' ? (
-              <BoardBody {...props} plan={outcome} onAnnounce={setAnnounced} />
+              <BoardBody
+                {...props}
+                plan={outcome}
+                onAnnounce={setAnnounced}
+                {...(object.access === 'write' ? { onAddCard: addToColumn } : {})}
+              />
             ) : outcome.kind === 'nothing-to-group' ? (
               <EmptyState
                 icon="kanban"
@@ -304,6 +329,7 @@ export function BoardScreen(props: BoardScreenProps) {
               singularName={object.singularName}
               objectKey={object.standardKey ?? object.apiSlug}
               memberPicker={memberPicker}
+              {...(preset === undefined ? {} : { preset })}
               onCreated={(record) => {
                 setCreating(false);
                 // Its column may be scrolled off or hidden while empty: say it was made, with a way to it.
@@ -399,7 +425,12 @@ function BoardBody({
   query,
   onShowEmptyColumnsChange,
   onAnnounce,
-}: BoardScreenProps & { readonly plan: BoardPlan; readonly onAnnounce: (text: string) => void }) {
+  onAddCard,
+}: BoardScreenProps & {
+  readonly plan: BoardPlan;
+  readonly onAnnounce: (text: string) => void;
+  readonly onAddCard?: (columnId: string) => void;
+}) {
   const navigate = useNavigate();
   const attributeIds = useMemo(
     () => [...plan.cardFields.map((field) => field.id), plan.groupBy.id],
@@ -441,6 +472,7 @@ function BoardBody({
       showEmpty={showEmpty}
       onShowEmptyChange={onShowEmptyColumnsChange}
       onAnnounce={onAnnounce}
+      {...(onAddCard === undefined ? {} : { onAddCard })}
       onOpen={(card) => {
         void navigate({
           to: '/w/$slug/objects/$object/$recordId/$tab',
@@ -463,6 +495,7 @@ interface LoadedBoardProps {
   readonly onShowEmptyChange: (show: boolean) => void;
   readonly onAnnounce: (text: string) => void;
   readonly onOpen: (card: BoardCard) => void;
+  readonly onAddCard?: (columnId: string) => void;
 }
 
 function LoadedBoard({
@@ -477,6 +510,7 @@ function LoadedBoard({
   onShowEmptyChange,
   onAnnounce,
   onOpen,
+  onAddCard,
 }: LoadedBoardProps) {
   const board: BoardView = useBoard(store, attributeIds);
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
@@ -571,6 +605,8 @@ function LoadedBoard({
       showEmptyColumns={showEmpty}
       onShowEmptyColumnsChange={onShowEmptyChange}
       onOpen={onOpen}
+      // Where the grouping field is read only, a "+" would set a value the member can't write.
+      {...(onAddCard === undefined || plan.groupBy.readOnly !== undefined ? {} : { onAddCard })}
       status={board.status}
       onRetry={store.retry}
     />
