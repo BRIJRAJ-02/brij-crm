@@ -233,12 +233,17 @@ async function pagesOfMember(
   tx: WorkspaceTx,
   memberId: string,
 ): Promise<readonly { readonly id: string; readonly title: string; readonly scheduleId: string | null }[]> {
-  return tx
-    .select({ id: bookingPages.id, title: bookingPages.title, scheduleId: bookingPages.scheduleId })
-    .from(bookingPages)
-    .where(and(eq(bookingPages.ownerMemberId, memberId), isNull(bookingPages.deletedAt)))
-    .orderBy(asc(bookingPages.title), asc(bookingPages.id))
-    .limit(500);
+  return (
+    tx
+      .select({ id: bookingPages.id, title: bookingPages.title, scheduleId: bookingPages.scheduleId })
+      .from(bookingPages)
+      // A workspace link is nobody's page, whoever made it (it books by each host's own default anyway).
+      .where(
+        and(eq(bookingPages.ownerMemberId, memberId), eq(bookingPages.scope, 'member'), isNull(bookingPages.deletedAt)),
+      )
+      .orderBy(asc(bookingPages.title), asc(bookingPages.id))
+      .limit(500)
+  );
 }
 
 /** The pages booking by one schedule: those naming it, and for the default those following the default. */
@@ -546,7 +551,9 @@ async function newestPageZone(tx: WorkspaceTx, memberId: string): Promise<string
   const [page] = await tx
     .select({ availability: bookingPages.availability })
     .from(bookingPages)
-    .where(and(eq(bookingPages.ownerMemberId, memberId), isNull(bookingPages.deletedAt)))
+    .where(
+      and(eq(bookingPages.ownerMemberId, memberId), eq(bookingPages.scope, 'member'), isNull(bookingPages.deletedAt)),
+    )
     .orderBy(sql`${bookingPages.createdAt} desc`, sql`${bookingPages.id} desc`)
     .limit(1);
   return page === undefined ? undefined : fallbackZoneOf(page);

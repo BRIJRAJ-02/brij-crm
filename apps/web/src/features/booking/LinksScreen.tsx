@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as cards (an admin sees everyone's), the same cards as Forms.
+// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as cards (an admin sees everyone's), the same cards as Forms; the workspace's own links (30 Oct 2026) in a Workspace group first.
 // Main task: open a page, copy its link, or make a new one in the dialog and land in its editor.
 // Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
@@ -15,6 +15,10 @@ import { DeletePageDialog } from './DeletePageDialog.tsx';
 import { pageEditorHref, publicBookingPath, publicBookingUrl, type PageTab } from './links.ts';
 import { strings } from './strings.ts';
 
+/** The groups' ids: the workspace's own links, and members' pages. */
+const WORKSPACE_GROUP = 'workspace';
+const MEMBERS_GROUP = 'members';
+
 /** Props for the list: the data layer, whose held list of pages the route loaded. */
 export interface LinksScreenProps {
   readonly data: DataLayer;
@@ -28,7 +32,7 @@ export interface LinksScreenProps {
 function factsOf(page: BookingPageView): readonly string[] {
   return [
     ...(page.durations.length === 0 ? [] : [strings.minutesChoice(page.durations)]),
-    strings.kindLabel[page.kind],
+    page.scope === 'workspace' ? strings.workspaceLink : strings.kindLabel[page.kind],
     ...(page.scheduleId === null ? [] : [page.scheduleName]),
     ...(page.location.type === 'video' ? [] : [strings.locationChip[page.location.type]]),
   ];
@@ -86,6 +90,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
     const isOff = page.status === 'paused';
     return {
       id: page.id,
+      groupId: page.scope === 'workspace' ? WORKSPACE_GROUP : MEMBERS_GROUP,
       title: page.title,
       href: pageEditorHref(slug, page.id),
       // Pages have no colour of their own yet: the card takes a stable one from the page's id.
@@ -165,12 +170,22 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       ),
     };
   });
+  // Grouped only once the workspace has a link of its own: the workspace's first, then everyone else's.
+  const hasWorkspaceLinks = pages.some((page) => page.scope === 'workspace');
   return (
     <CapturesList
       label={strings.listLabel}
       searchLabel={strings.searchPages}
       status={list.status}
       cards={cards}
+      {...(hasWorkspaceLinks
+        ? {
+            groups: [
+              { id: WORKSPACE_GROUP, label: strings.workspaceGroup, description: strings.workspaceGroupLine },
+              { id: MEMBERS_GROUP, label: strings.membersGroup },
+            ],
+          }
+        : {})}
       // An empty list offers New in its middle too: the same as the TopBar's.
       {...(create?.create === undefined
         ? {}

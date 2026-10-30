@@ -14,6 +14,7 @@
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
+import { uuidArray } from '../engine/ids.ts';
 import { actorRow } from '../engine/scope.ts';
 
 const { rotationAssignments, rotationMembers, rotationRoster, rotations } = schema;
@@ -92,22 +93,35 @@ export async function everyoneRotation(tx: WorkspaceTx, scope: EngineScope): Pro
 }
 
 /**
- * Before a ledger row for `memberId` in an everyone rotation, stores their row when they have none, with the
- * calibration the pick used (`rosterCalibration` over the window as it stands). The caller holds the rotation's
- * lock. Nothing for a rotation of chosen people, or someone already stored.
+ * Before ledger rows or settings for `memberIds` in an everyone rotation, stores the rows of those who have none,
+ * each with the calibration a pick would use for them now (`rosterCalibration` over the window as it stands), in
+ * one insert. The caller holds the rotation's lock. One lookup and nothing more for a rotation of chosen people or
+ * people already stored; someone no longer on the roster is skipped.
  */
-export async function keepRosterRow(
+export async function keepRosterRows(
   tx: WorkspaceTx,
   scope: EngineScope,
   rotationId: string,
-  memberId: string,
+  memberIds: readonly string[],
   now: Date = new Date(),
 ): Promise<void> {
+  if (memberIds.length === 0) return;
   const [rotation] = await tx
-    .select({ follows: rotations.follows, windowDays: rotations.windowDays })
-    .from(rotations)
-    .where(eq(rotations.id, rotationId));
+    .execute<{ follows: string | null; window_days: number; stored: string[] }>(
+      sql`
+    select r.follows, r.window_days,
+      array(
+        select m.member_id::text from rotation_members m
+        where m.workspace_id = r.workspace_id and m.rotation_id = r.id and m.member_id = any(${uuidArray(memberIds)})
+      ) as stored
+    from rotations r where r.id = ${rotationId}::uuid
+  `,
+    )
+    .then((found) => found.rows);
   if (rotation?.follows !== 'everyone') return;
+  const stored = new Set(rotation.stored);
+  const wanted = new Set(memberIds.filter((id) => !stored.has(id)));
+  if (wanted.size === 0) return;
   const roster = await tx
     .select({
       memberId: rotationRoster.memberId,
@@ -119,10 +133,8 @@ export async function keepRosterRow(
     })
     .from(rotationRoster)
     .where(and(eq(rotationRoster.rotationId, rotationId), eq(rotationRoster.isOn, true)));
-  const me = roster.find((member) => member.memberId === memberId);
-  if (me === undefined || me.stored) return;
   // The window's live units per member, as `windowCounts` counts them (ledger.ts, which calls this).
-  const since = new Date(now.getTime() - rotation.windowDays * 86_400_000);
+  const since = new Date(now.getTime() - rotation.window_days * 86_400_000);
   const counted = await tx
     .select({
       memberId: rotationAssignments.memberId,
@@ -138,25 +150,40 @@ export async function keepRosterRow(
     )
     .groupBy(rotationAssignments.memberId);
   const counts = new Map(counted.map((row) => [row.memberId, row.count]));
-  const standing = [...roster.filter((member) => member.memberId !== memberId), { ...me, isOn: true }].map(
-    (member) => ({ ...member, count: counts.get(member.memberId) ?? 0 }),
+  // A late joiner's calibration leaves the other late joiners out of the average, so one pass gives each theirs.
+  const calibrations = rosterCalibration(
+    roster.map((member) => ({ ...member, count: counts.get(member.memberId) ?? 0 })),
   );
-  const calibration = rosterCalibration(standing).at(-1) ?? 0;
   const by = actorRow(scope.actor);
-  await tx
-    .insert(rotationMembers)
-    .values({
-      workspaceId: scope.workspaceId,
-      rotationId,
-      memberId,
-      calibration,
-      position: 0,
-      createdByType: by.type,
-      createdById: by.id,
-      createdByMemberId: by.memberId,
-      updatedByType: by.type,
-      updatedById: by.id,
-      updatedByMemberId: by.memberId,
-    })
-    .onConflictDoNothing();
+  const rows = roster.flatMap((member, index) =>
+    wanted.has(member.memberId) && !member.stored
+      ? [
+          {
+            workspaceId: scope.workspaceId,
+            rotationId,
+            memberId: member.memberId,
+            calibration: calibrations[index] ?? 0,
+            position: 0,
+            createdByType: by.type,
+            createdById: by.id,
+            createdByMemberId: by.memberId,
+            updatedByType: by.type,
+            updatedById: by.id,
+            updatedByMemberId: by.memberId,
+          },
+        ]
+      : [],
+  );
+  if (rows.length > 0) await tx.insert(rotationMembers).values(rows).onConflictDoNothing();
+}
+
+/** `keepRosterRows` for one member: before their ledger row. */
+export function keepRosterRow(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  rotationId: string,
+  memberId: string,
+  now: Date = new Date(),
+): Promise<void> {
+  return keepRosterRows(tx, scope, rotationId, [memberId], now);
 }

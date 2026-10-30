@@ -50,7 +50,8 @@ export interface PageDestination {
 }
 
 interface PageRow extends Record<string, unknown> {
-  readonly owner_member_id: string;
+  /** Null on a workspace link: its maker owns nothing of it, and it has no owner's calendars to name. */
+  readonly owner_member_id: string | null;
   readonly destination_calendar_id: string | null;
   readonly usable: boolean | null;
   readonly removed_name: string | null;
@@ -68,7 +69,8 @@ function pageFor(scope: EngineScope, pageIdAsGiven: string, lock: boolean) {
       tx
         .execute<PageRow>(
           sql`
-          select p.owner_member_id::text as owner_member_id, p.destination_calendar_id::text as destination_calendar_id,
+          select case when p.scope = 'member' then p.owner_member_id::text end as owner_member_id,
+            p.destination_calendar_id::text as destination_calendar_id,
             (k.access_role in ('owner', 'writer') and c.status in ('syncing', 'connected', 'failed')
               and k.member_id = p.owner_member_id) as usable,
             p.destination_removed_name as removed_name
@@ -90,7 +92,7 @@ function pageFor(scope: EngineScope, pageIdAsGiven: string, lock: boolean) {
 }
 
 const viewOf = (row: PageRow, member: string | undefined): PageDestination => {
-  const isOwner = row.owner_member_id === member;
+  const isOwner = row.owner_member_id !== null && row.owner_member_id === member;
   if (row.destination_calendar_id === null) {
     // A colleague learns the page fell back, never the gone calendar's name (spec 0037, AC-1307's rule).
     if (row.removed_name === null) return { status: 'default', isOwner };

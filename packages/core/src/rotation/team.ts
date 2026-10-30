@@ -252,7 +252,13 @@ export async function memberClosed(
   return found;
 }
 
-/** Each member's calendars, read once each and in parallel, outside any transaction. */
+/**
+ * How many members' calendars one read asks at once: a team page's 20 in three rounds, and "Everyone on the
+ * roster" on a big workspace never a burst of a hundred calls at the providers.
+ */
+const BUSY_READS_AT_ONCE = 8;
+
+/** Each member's calendars, read once each, `BUSY_READS_AT_ONCE` at a time, outside any transaction. */
 export async function memberBusy(
   read: BusyReader,
   workspaceId: string,
@@ -260,20 +266,22 @@ export async function memberBusy(
   from: Date,
   to: Date,
 ): Promise<ReadonlyMap<string, MembersBusy>> {
-  const answers = await Promise.all(
-    memberIds.map(async (memberId) => {
-      const answer = await read({ workspaceId, memberId, from: from.toISOString(), to: to.toISOString() });
-      const busy: MembersBusy = {
-        busy:
-          answer.status === 'read'
-            ? answer.busy.map((each) => ({ start: new Date(each.start), end: new Date(each.end) }))
-            : [],
-        blocked: answer.status === 'blocked',
-        noCalendar: answer.status === 'none',
-      };
-      return [memberId, busy] as const;
-    }),
-  );
+  const readOne = async (memberId: string) => {
+    const answer = await read({ workspaceId, memberId, from: from.toISOString(), to: to.toISOString() });
+    const busy: MembersBusy = {
+      busy:
+        answer.status === 'read'
+          ? answer.busy.map((each) => ({ start: new Date(each.start), end: new Date(each.end) }))
+          : [],
+      blocked: answer.status === 'blocked',
+      noCalendar: answer.status === 'none',
+    };
+    return [memberId, busy] as const;
+  };
+  const answers: (readonly [string, MembersBusy])[] = [];
+  for (let start = 0; start < memberIds.length; start += BUSY_READS_AT_ONCE) {
+    answers.push(...(await Promise.all(memberIds.slice(start, start + BUSY_READS_AT_ONCE).map(readOne))));
+  }
   return new Map(answers);
 }
 

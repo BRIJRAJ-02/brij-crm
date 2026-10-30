@@ -25,6 +25,12 @@ export const strings = {
   openLink: 'Open',
   /** A page's kind, among its facts on its card. */
   kindLabel: { personal: 'One on one', collective: 'Collective', round_robin: 'Round robin' },
+  /** A workspace link's kind on its card, in place of Round robin. */
+  workspaceLink: 'Workspace link',
+  /** Captures › Links' groups, when the workspace has a link of its own. */
+  workspaceGroup: 'Workspace',
+  workspaceGroupLine: 'Links that book whoever in the workspace is free, in turn',
+  membersGroup: 'Members’ pages',
   searchPages: 'Search booking pages',
   copying: 'Copying',
   duplicated: (title: string) => `Made “${title}”.`,
@@ -90,6 +96,8 @@ export const strings = {
   /** The Page tab's sections (22 Oct 2026): Details, Sharing, and Profile for a Public page. */
   details: 'Details',
   sharing: 'Sharing',
+  workspaceLinkSharing:
+    'This link belongs to the workspace. It books whoever is free, in turn, and stays when the person who made it leaves.',
   profile: 'Profile',
   /** The page's one address row: its full link, the part after the owner's handle editable (22 Oct 2026). */
   address: 'Web address',

@@ -14,7 +14,14 @@ import { testQuery } from '@crm/db/testing';
 import { enterBookingPage } from '../access/door.ts';
 import { saveDefaultHours } from '../availability/schedules.ts';
 import type { BookingCalendar } from '../booking/calendar.ts';
-import { createBookingPage, deleteBookingPage, listBookingPages, updateBookingPage } from '../booking/pages.ts';
+import {
+  createBookingPage,
+  deleteBookingPage,
+  listBookingPages,
+  listBookings,
+  updateBookingPage,
+} from '../booking/pages.ts';
+import { readPageDestination, setPageDestination } from '../calendar/page-destination.ts';
 import { bookPublicSlot, getPublicBookingPage, readPublicSlots } from '../booking/public.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -172,7 +179,17 @@ describe('the workspace link: making and managing it', () => {
       ).toMatchObject({ code: 'NOT_FOUND' });
       expect(await refusalOf(deleteBookingPage(scope, { pageId: page.id }))).toMatchObject({ code: 'NOT_FOUND' });
       expect((await listBookingPages(scope, NOW)).map((each) => each.id)).not.toContain(page.id);
+      expect(await refusalOf(listBookings(scope, { pageId: page.id, when: 'upcoming' }, NOW))).toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      // Its "Add events to" is no one's to read or set but an admin's, its maker's least of all.
+      expect(await refusalOf(readPageDestination(scope, { pageId: page.id }))).toMatchObject({ code: 'NOT_FOUND' });
+      expect(await refusalOf(setPageDestination(scope, { pageId: page.id, calendarId: null }))).toMatchObject({
+        code: 'NOT_FOUND',
+      });
     }
+    // An admin reads it, as nobody's own: no owner's calendar to name.
+    expect(await readPageDestination(w.owner, { pageId: page.id })).toMatchObject({ isOwner: false });
     // Any admin manages it, its maker or not, and it is listed for them.
     const renamed = await updateBookingPage(w.owner, {
       pageId: page.id,
@@ -291,16 +308,13 @@ describe('the workspace link: who it books', () => {
     const after = (await listRotations(w.owner, NOW))[0];
     expect(after?.members.map((member) => member.memberId)).not.toContain(sam.id);
     expect(after?.members.find((member) => member.memberId === kim.id)?.isOn).toBe(false);
-    // Someone who has left can't be put back on it by name.
-    expect(
-      await refusalOf(
-        updateRotation(w.owner, {
-          rotationId: rotation?.id ?? '',
-          settings: {},
-          members: [{ memberId: sam.id, weight: 100, priority: 2, dailyCap: null, weeklyCap: null, isOn: true }],
-        }),
-      ),
-    ).toMatchObject({ code: 'CONFIG_INVALID', field: 'members.0' });
+    // Someone who has left isn't put back by a save naming them (a list read before they left): they are skipped.
+    const saved = await updateRotation(w.owner, {
+      rotationId: rotation?.id ?? '',
+      settings: {},
+      members: [{ memberId: sam.id, weight: 100, priority: 2, dailyCap: null, weeklyCap: null, isOn: true }],
+    });
+    expect(saved.members.map((member) => member.memberId)).not.toContain(sam.id);
   });
 
   it('stays live when the admin who made it leaves', async () => {

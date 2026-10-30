@@ -22,7 +22,7 @@ import { refuse, refuseOn } from '../engine/refusals.ts';
 import { uuidArray } from '../engine/ids.ts';
 import { actorRow } from '../engine/scope.ts';
 import { lockRotation, windowCounts, windowStart } from './ledger.ts';
-import { keepRosterRow, rosterCalibration } from './roster.ts';
+import { keepRosterRows, rosterCalibration } from './roster.ts';
 import { eligibleMembers, ROTATION_ROLES, rulesOf } from './team.ts';
 
 const {
@@ -408,9 +408,9 @@ function checkMemberCount(list: readonly RotationMemberInput[]): void {
 
 /**
  * Sets the own settings of the people named in "Everyone on the roster" (on or off, weight, priority, caps), each
- * stored as their row; nobody joins or leaves by it, since its members are the workspace's. Someone named who isn't
- * an active member, or is a guest, is refused. A newly stored row takes the pool's average now (AC-730), as their
- * first assignment would have.
+ * stored as their row; nobody joins or leaves by it, since its members are the workspace's. Someone named who has
+ * left the roster since the list was read (removed, or made a guest) is skipped. Rows not stored yet take the pool's
+ * average now (AC-730), as their first assignment would have; then one update sets everyone named.
  */
 async function setRosterSettings(
   tx: WorkspaceTx,
@@ -418,7 +418,6 @@ async function setRosterSettings(
   rotation: RotationRow,
   list: readonly RotationMemberInput[],
 ): Promise<void> {
-  const by = actorRow(scope.actor);
   const listed = await tx
     .select({ memberId: rotationRoster.memberId })
     .from(rotationRoster)
@@ -432,31 +431,30 @@ async function setRosterSettings(
       ),
     );
   const onRoster = new Set(listed.map((member) => member.memberId));
-  const missing = list.findIndex((member) => !onRoster.has(member.memberId));
-  if (missing !== -1) {
-    throw refuseOn(
-      'CONFIG_INVALID',
-      'Only active members of this workspace are on the roster.',
-      `members.${String(missing)}`,
-    );
-  }
-  for (const member of list) {
-    await keepRosterRow(tx, scope, rotation.id, member.memberId);
-    await tx
-      .update(rotationMembers)
-      .set({
-        weight: member.weight,
-        priority: member.priority,
-        dailyCap: member.dailyCap,
-        weeklyCap: member.weeklyCap,
-        isOn: member.isOn,
-        updatedAt: sql`now()`,
-        updatedByType: by.type,
-        updatedById: by.id,
-        updatedByMemberId: by.memberId,
-      })
-      .where(and(eq(rotationMembers.rotationId, rotation.id), eq(rotationMembers.memberId, member.memberId)));
-  }
+  const kept = list.filter((member) => onRoster.has(member.memberId));
+  if (kept.length === 0) return;
+  await keepRosterRows(
+    tx,
+    scope,
+    rotation.id,
+    kept.map((member) => member.memberId),
+  );
+  const by = actorRow(scope.actor);
+  const values = sql.join(
+    kept.map(
+      (member) =>
+        sql`(${member.memberId}::uuid, ${member.weight}::smallint, ${member.priority}::smallint, ${member.dailyCap}::smallint, ${member.weeklyCap}::smallint, ${member.isOn}::boolean)`,
+    ),
+    sql`, `,
+  );
+  await tx.execute(sql`
+    update rotation_members m
+    set weight = v.weight, priority = v.priority, daily_cap = v.daily_cap, weekly_cap = v.weekly_cap, is_on = v.is_on,
+      updated_at = now(), updated_by_type = ${by.type}, updated_by_id = ${by.id}::uuid,
+      updated_by_member_id = ${by.memberId}::uuid
+    from (values ${values}) as v (member_id, weight, priority, daily_cap, weekly_cap, is_on)
+    where m.workspace_id = ${scope.workspaceId}::uuid and m.rotation_id = ${rotation.id}::uuid and m.member_id = v.member_id
+  `);
 }
 
 /** Replaces a rotation's members, keeping the stayers' counts and calibrating the joiners (AC-730). */

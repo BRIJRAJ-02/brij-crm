@@ -438,7 +438,13 @@ function checkTeamSchedule(kind: PageRecord['kind'], scheduleId: string | null |
  * is the workspace's slug.
  */
 function checkWorkspaceSettings(settings: NonNullable<CreateBookingPageInput['settings']>): void {
-  const placement = (['profileSection', 'profilePosition'] as const).find((key) => settings[key] !== undefined);
+  // No section and the first place are what every page starts with, so a copy sending them back is let through.
+  const placement =
+    settings.profileSection !== undefined && settings.profileSection !== null
+      ? 'profileSection'
+      : settings.profilePosition !== undefined && settings.profilePosition !== 0
+        ? 'profilePosition'
+        : undefined;
   if (placement !== undefined) {
     throw refuseOn('CONFIG_INVALID', 'A workspace link isn’t on anyone’s profile.', placement);
   }
@@ -474,6 +480,7 @@ async function freeSlug(tx: WorkspaceTx, workspaceId: string, ownerMemberId: str
       and(
         isNull(bookingPages.deletedAt),
         eq(bookingPages.ownerMemberId, ownerMemberId),
+        eq(bookingPages.scope, 'member'),
         like(bookingPages.slug, `${base}%`),
       ),
     );
@@ -509,7 +516,13 @@ async function nextProfilePosition(tx: WorkspaceTx, ownerMemberId: string): Prom
   const [row] = await tx
     .select({ last: sql<number | null>`max(${bookingPages.profilePosition})::int` })
     .from(bookingPages)
-    .where(and(eq(bookingPages.ownerMemberId, ownerMemberId), isNull(bookingPages.deletedAt)));
+    .where(
+      and(
+        eq(bookingPages.ownerMemberId, ownerMemberId),
+        eq(bookingPages.scope, 'member'),
+        isNull(bookingPages.deletedAt),
+      ),
+    );
   const last = row?.last ?? null;
   return last === null ? 0 : Math.min(last + 1, PROFILE_POSITION_MAX);
 }
@@ -845,7 +858,9 @@ export async function updateBookingPage(
       const [changed] = row === undefined ? [] : await pagesOf(tx, [row]);
       if (changed === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
       // Link only made Public: the page joins the end of its owner's link page, once (spec 0051).
-      if (row !== undefined && page.isPrivate && !row.isPrivate) await placeNewPage(tx, scope, row);
+      if (row !== undefined && page.isPrivate && !row.isPrivate && page.scope === 'member') {
+        await placeNewPage(tx, scope, row);
+      }
       return await viewWithCounts(tx, scope, changed, now);
     } catch (error) {
       throw slugRefusal(error) ?? error;
@@ -1083,7 +1098,9 @@ export const bookingPagesRemoval: RemovalEffect = {
     // Their rotations' locks first, as `rotationsRemoval` takes them: a rotation change switching off the one other
     // member waits, and then sees them gone, so no page is left live on a rotation with nobody (late trap #22).
     const theirs = await tx.execute<{ id: string }>(
-      sql`select rotation_id::text as id from rotation_members where member_id = ${memberId}::uuid`,
+      // "Everyone on the roster" too: someone in it may have no row of their own to find it by.
+      sql`select rotation_id::text as id from rotation_members where member_id = ${memberId}::uuid
+        union select id::text from rotations where follows = 'everyone' and deleted_at is null`,
     );
     await lockRotations(
       tx,

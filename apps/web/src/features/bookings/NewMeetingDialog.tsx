@@ -207,7 +207,9 @@ export function NewMeetingDialog({
   const [forId, setForId] = useState(ME);
   const forName = forId === ME ? undefined : forPeople.find((person) => person.id === forId)?.name;
   // For a colleague, only their pages (the server books on one of theirs alone); for the member, theirs as before.
-  const choices = forId === ME ? pages : pages.filter((page) => page.ownerMemberId === forId);
+  // A workspace link is nobody's page, whoever made it.
+  const choices =
+    forId === ME ? pages : pages.filter((page) => page.ownerMemberId === forId && page.scope === 'member');
   const [picked, setPageId] = useState(pages[0]?.id ?? '');
   const pageId = choices.some((page) => page.id === picked) ? picked : (choices[0]?.id ?? '');
   const [guests, setGuests] = useState<readonly string[]>([]);

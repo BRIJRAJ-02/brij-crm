@@ -633,7 +633,11 @@ export async function isPageHost(entry: BookingEntry, userId: string): Promise<b
     if (page === undefined) return false;
     const team = await loadTeam(tx, page);
     const hosts = [
-      ...new Set([page.ownerMemberId, ...(team === undefined ? await membersOf(tx, page) : teamMemberIds(team))]),
+      ...new Set([
+        // A workspace link's maker hosts it only when it seats them.
+        ...(page.scope === 'member' ? [page.ownerMemberId] : []),
+        ...(team === undefined ? await membersOf(tx, page) : teamMemberIds(team)),
+      ]),
     ];
     const found = await tx
       .select({ id: members.id })

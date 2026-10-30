@@ -63,6 +63,12 @@ export const strings = {
   nameRequired: 'Give the group a name.',
   strategy: 'How it picks',
   fair: 'Fair: fewest meetings for their weight',
+  fairCard: 'Fair',
+  fairLine: 'The free person with the fewest meetings for their weight.',
+  priorityCard: 'Priority',
+  priorityLine: 'The free person with the highest priority first.',
+  evenCard: 'Even',
+  evenLine: 'Anyone ahead waits until the others catch up.',
   priority: 'Priority: highest priority free person first',
   even: 'Even: anyone ahead waits until the others catch up',
   evenGap: 'Waits when ahead by',
@@ -174,6 +180,19 @@ export const strings = {
   whoBooks: 'Who it books',
   bookMe: 'Me',
   bookRotation: 'A round robin group',
+  bookEveryone: 'Workspace link',
+  bookEveryoneLine: 'Everyone in the workspace takes turns; guests book whoever is free. It’s on nobody’s profile.',
+  bookMeLine: 'One on one: guests book you, by your hours.',
+  bookRotationLine: 'One host from a group you pick, in turn.',
+  rosterNote: (on: number, all: number) =>
+    `${String(on)} of ${String(all)} on. Everyone in the workspace except guests is in this group, and new members join by themselves. Switch someone off to keep them out.`,
+  everyoneSwitch: 'Everyone in the workspace, including people who join later',
+  everyoneSwitchOn: (on: number) =>
+    `${String(on)} ${on === 1 ? 'person takes' : 'people take'} turns. Switch people off in Everyone on the roster.`,
+  everyoneSwitchOff: 'Pick the group and fixed hosts this link books instead.',
+  switchOffRefused: (name: string) => `Switch ${name} off`,
+  rosterSummary: (on: number, pages: number) =>
+    `Everyone in the workspace, ${String(on)} on · used by ${String(pages)} ${pages === 1 ? 'link' : 'links'}`,
   noRotations: 'Make a round robin group first. Round robin opens in a new tab, and what you typed here stays.',
   rotationRequired: 'Pick a group.',
   /** The rotation card's two views (spec 0037, AC-1330). */
