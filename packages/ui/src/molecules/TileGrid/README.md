@@ -34,6 +34,8 @@ New, and the one grid of cards: SettingsLayout's `SettingsGrid` drew the same gr
 - Equal size tiles to pick from by sight (spec 0058): a picture slot (a Lucide mark through `icon`, or a `thumbnail` of the real thing) over a short `name`, both on one left edge. Every track is at least `size-column-narrow` and the tracks share the width, so every tile has one width and the rows share one height.
 - `mode="select"` (the default) is a radio group: Tab lands on the chosen tile (or the first), arrows move and pick, and the chosen tile has the accent line as its border, a soft fill and a tick in its corner that eases in on opacity and scale. `mode="action"` makes each tile a button that calls `onAction(id)` (Add block).
 - `description` is a tooltip on hover and focus, and the tile's accessible description, so the words stay out of the way. The `name` is the accessible name; the picture is hidden from screen readers.
+- A disabled tile takes no focus, so its tooltip is out of a keyboard's reach: give it a `disabledReason` ("At the limit"), a few words shown on the tile under its name and read as its description.
+- A tile with a description is wrapped by its tooltip's trigger; the wrapper fills the grid cell, so every tile is one size with or without one (`ChoiceDisabled` checks it with the alignment probe).
 - Why a variant, not a new component: it is the same grid of equal cells, with tiles that are pickable rather than Cards. The block kind grid, preset thumbnails and embed tiles all use it; the radio group (`Radio variant="cards"`) is a list of sentences, which is what this replaces.
 - Motion: hover colour, selection ring and tick only; nothing moves on first paint; reduced motion keeps the colour change and the tick fades without scaling.
 
