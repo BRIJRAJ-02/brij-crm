@@ -31,6 +31,7 @@ import {
 } from '@crm/data/react';
 import {
   ActivityFeed,
+  AttributeDisplay,
   Badge,
   Button,
   Callout,
@@ -39,14 +40,14 @@ import {
   EmptyState,
   Link,
   LockReason,
-  RecordHeader,
   NoteList,
+  RecordHeader,
   RecordLayout,
-  TaskList,
-  TopBar,
-  AttributeDisplay,
   type RecordStat,
   type RelatedRecordsHandle,
+  sharedStrings,
+  TaskList,
+  TopBar,
 } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -868,7 +869,7 @@ function RecordScreen({
                     value={pageLink}
                     label={strings.copyLink}
                     announcement={strings.linkCopied}
-                    failureMessage={strings.copyFailed}
+                    failureMessage={sharedStrings.couldntCopy}
                   />
                   <RecordActions
                     slug={slug}

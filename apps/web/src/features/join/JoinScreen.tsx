@@ -3,7 +3,7 @@
 // Main task: Ask to join one; it then says the request was sent, and an email follows once an admin approves.
 // Leaves out: joining at once (an admin approves each request), other domains, and invitations (their own page).
 import { isDataError, type DataLayer, type Joinable } from '@crm/data';
-import { AuthLayout, Badge, Button, ButtonLink, Callout, Card, SettingsRow } from '@crm/ui';
+import { AuthLayout, Badge, Button, ButtonLink, Callout, Card, SettingsRow, sharedStrings } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { PRODUCT_LOGO } from '../../brand.ts';
 import { signInFrame } from '../auth/AuthStates.tsx';
@@ -53,7 +53,7 @@ export function JoinScreen({ data, email, joinable, hasHome }: JoinScreenProps) 
       },
       (error: unknown) => {
         setBusy(undefined);
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+        setFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
       },
     );
   };

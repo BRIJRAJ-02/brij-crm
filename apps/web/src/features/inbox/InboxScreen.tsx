@@ -240,7 +240,6 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
                 void data.inbox.mark(slug, [id], mark);
               }}
               {...(emptyTitle === undefined ? {} : { emptyTitle })}
-              {...(isFiltered || status === 'done' ? {} : { emptyBody: strings.emptyBody })}
               {...(isFiltered
                 ? { emptyIcon: 'list-filter' as const }
                 : status === 'done'

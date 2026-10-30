@@ -21,10 +21,11 @@ import {
   EmptyState,
   Modal,
   Select,
+  sharedStrings,
   Skeleton,
   Toolbar,
-  VisuallyHidden,
   useFormatSettings,
+  VisuallyHidden,
 } from '@crm/ui';
 import {
   allMatching,
@@ -251,7 +252,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         if (toast !== undefined) toasts.toast(toast);
       },
       () => {
-        toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+        toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
       },
     );
   };
@@ -269,7 +270,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         if (toast !== undefined) toasts.toast(toast);
       },
       () => {
-        toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+        toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
       },
     );
   };
@@ -344,7 +345,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         {/* Said when it appears: the ticked rows are all of objects the person may only read. */}
         {!isAllowed && (
           <Callout placement="bar" isAnnounced>
-            {canPurge ? strings.cannotChange : strings.cannotRestore}
+            {strings.viewOnly}
           </Callout>
         )}
       </>
@@ -401,7 +402,8 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const jobText = isEmptying
     ? strings.confirmEmptyText(jobWords)
     : isRestoreJob
-      ? strings.confirmRestoreText
+      ? // Restoring says it all in its title; the buttons name the count.
+        undefined
       : strings.confirmPurgeText;
   const purgeWords = recordsWord(lastAsked.length, names);
   return (

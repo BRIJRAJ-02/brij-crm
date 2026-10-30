@@ -2,8 +2,8 @@
 export const strings = {
   product: 'Timefix',
   title: 'Join your team',
-  atDomain: (domain: string) => `Workspaces people at @${domain} can ask to join.`,
-  none: (domain: string) => `No workspace lets people at @${domain} ask to join. Ask a teammate to invite you.`,
+  atDomain: (domain: string) => `Workspaces for @${domain}`,
+  none: (domain: string) => `None for @${domain}. Ask for an invite.`,
   ask: (name: string) => `Ask to join ${name}`,
   askShort: 'Ask to join',
   pending: 'Request sent',
@@ -11,5 +11,4 @@ export const strings = {
   asked: (name: string) => `Asked to join ${name}.`,
   goHome: 'Go to your workspaces',
   createOne: 'Create a workspace',
-  somethingWrong: 'Something went wrong. Try again in a moment.',
 } as const;

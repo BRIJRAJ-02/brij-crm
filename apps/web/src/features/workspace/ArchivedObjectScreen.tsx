@@ -3,7 +3,7 @@
 // Main task: owners and admins restore it in place; everyone can go back to the first live object.
 // Leaves out: its records (they stay, and show again once it is restored).
 import { isDataError, type ObjectSummary } from '@crm/data';
-import { Button, EmptyState, Link, TopBar } from '@crm/ui';
+import { Button, EmptyState, Link, sharedStrings, TopBar } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
@@ -37,7 +37,7 @@ export function ArchivedObjectScreen({ slug, object, firstLive }: ArchivedObject
       },
       (error: unknown) => {
         setRestoring(false);
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
       },
     );
   };
@@ -66,7 +66,7 @@ export function ArchivedObjectScreen({ slug, object, firstLive }: ArchivedObject
               </>
             }
           >
-            {canManage ? strings.objectArchivedText : strings.objectArchivedMemberText}
+            {canManage ? undefined : strings.objectArchivedMemberText}
           </EmptyState>
         ),
       }}
