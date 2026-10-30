@@ -122,6 +122,13 @@ export interface OutboxReader {
   advance(workspaceId: string, upto: number, max: number): Promise<Marked & { readonly rows: readonly OutboxRow[] }>;
   /** `pruneOutbox` on this connection, in its turn: one batch of at most `max` rows; returns how many went. */
   prune(max: number): Promise<number>;
+  /**
+   * Queues one Graphile task on this connection, in its turn (Graphile's own
+   * `add_job`, which only a login in `crm_worker` may run): a repeat of its
+   * `jobKey` replaces the waiting row, so queueing again is harmless. Throws
+   * when the database refuses it.
+   */
+  queueTask(task: QueuedTask): Promise<void>;
   /** LISTENs on `crm_outbox`, calling `onNotify` with the workspace id each committed write names. */
   listen(onNotify: (workspaceId: string) => void): Promise<void>;
   /**
@@ -131,6 +138,15 @@ export interface OutboxReader {
   readonly lost: Promise<Error>;
   /** Closes the connection (and so lets go of the lock). Never throws. */
   close(): Promise<void>;
+}
+
+/** One Graphile task the relay queues: its identifier, its payload (ids only), its key, tries and first run. */
+export interface QueuedTask {
+  readonly identifier: string;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly jobKey: string;
+  readonly maxAttempts: number;
+  readonly runAt: Date;
 }
 
 /**
@@ -192,6 +208,14 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
 
     prune: (max) => pruneOutbox(direct, max),
 
+    async queueTask(task) {
+      await direct.query(
+        `select graphile_worker.add_job($1::text, $2::json, run_at => $3::timestamptz, max_attempts => $4::integer,
+           job_key => $5::text, job_key_mode => 'replace')`,
+        [task.identifier, JSON.stringify(task.payload), task.runAt.toISOString(), task.maxAttempts, task.jobKey],
+      );
+    },
+
     async listen(onNotify) {
       direct.on('notification', (message) => {
         if (message.channel !== OUTBOX_CHANNEL || message.payload === undefined) return;
@@ -217,6 +241,7 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
     mark: (workspaceId, upto) => serial(() => calls.mark(workspaceId, upto)),
     advance: (workspaceId, upto, max) => serial(() => calls.advance(workspaceId, upto, max)),
     prune: (max) => serial(() => calls.prune(max)),
+    queueTask: (task) => serial(() => calls.queueTask(task)),
     listen: (onNotify) => serial(() => calls.listen(onNotify)),
     lost,
     // Closing doesn't wait its turn: a call stuck on a dead connection must not hold it open.

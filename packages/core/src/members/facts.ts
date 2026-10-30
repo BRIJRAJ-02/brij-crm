@@ -1,7 +1,7 @@
 // What the relay needs to cut a removed person off (spec 0031, AC-817): the
 // user ids behind members an `access` row names who are no longer active, so
 // their live subscription to the workspace's channel ends. System only.
-import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { schema } from '@crm/db';
 import { inWorkspace } from '../access/run.ts';
 import { isUuid } from '../engine/ids.ts';
@@ -15,7 +15,9 @@ const MAX_IDS = 500;
 /**
  * The user ids of the members in `memberIds` who are not active in the
  * scope's workspace any more (removed, or left): the people whose live
- * connection to it the relay cuts. Only the system reads it.
+ * connection to it the relay cuts. A user who joined again since (a new,
+ * active member row) is left out, so a late cut off never cuts a member.
+ * Only the system reads it.
  */
 export async function removedUserIds(scope: EngineScope, memberIds: readonly string[]): Promise<readonly string[]> {
   if (scope.access.principal.kind !== 'system') {
@@ -33,6 +35,9 @@ export async function removedUserIds(scope: EngineScope, memberIds: readonly str
           inArray(members.id, ids),
           ne(members.status, 'active'),
           isNotNull(members.userId),
+          // Joining again makes a new member row: that user is a member now (the `members_user` index finds it).
+          sql`not exists (select 1 from ${members} as active where active.workspace_id = ${members.workspaceId}
+            and active.user_id = ${members.userId} and active.status = 'active')`,
         ),
       ),
   );

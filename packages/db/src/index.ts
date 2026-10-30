@@ -21,6 +21,7 @@ export {
   type Marked,
   type OutboxKind,
   type OutboxReader,
+  type QueuedTask,
   type OutboxReplaced,
   type OutboxRow,
   type RawOutboxRow,
