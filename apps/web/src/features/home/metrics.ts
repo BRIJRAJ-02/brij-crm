@@ -1,7 +1,9 @@
 // Home's metrics row (spec 0041): the reader's week and the figures as words.
 // Pure: the day, the locale and the server's figures come in.
-import type { HomeMetricsView, WeekCount, WeekMoney } from '@crm/data';
+import type { HomeMetricsView, ObjectSummary, WeekCount, WeekMoney } from '@crm/data';
 import { dayStart, weekOf } from '../bookings/week.ts';
+import { formsHref } from '../forms/paths.ts';
+import { bookingsHref, objectHref } from '../workspace/objects.ts';
 
 /** The reader's week's start, their Monday's midnight, as the UTC instant the metrics read takes. */
 export function weekStartOf(today: string): string {
@@ -58,6 +60,22 @@ export function metricFigures(metrics: HomeMetricsView, locale: string): readonl
     ...money(metrics.won),
     ...count('submissions', metrics.submissions),
   ];
+}
+
+/**
+ * Where a figure's records are: People's or Deals' table (Deals won too), Bookings for meetings and Forms for
+ * submissions. Undefined when the object isn't one the reader has (archived, or not seen).
+ */
+export function metricHref(
+  id: MetricFigure['id'],
+  slug: string,
+  objects: readonly Pick<ObjectSummary, 'apiSlug' | 'standardKey' | 'isArchived'>[],
+): string | undefined {
+  if (id === 'meetings') return bookingsHref(slug);
+  if (id === 'submissions') return formsHref(slug);
+  const key = id === 'people' ? 'people' : 'deals';
+  const object = objects.find((each) => each.standardKey === key && !each.isArchived);
+  return object === undefined ? undefined : objectHref(slug, object);
 }
 
 /** Whole amounts in `currency`, or the amount and its code when the browser doesn't know the code. */

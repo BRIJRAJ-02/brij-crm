@@ -19,6 +19,7 @@ export const strings = {
     calendar: { title: 'Connect your calendar', action: 'Connect' },
     bookingPage: { title: 'Create a booking page', action: 'Create' },
     form: { title: 'Create a form', action: 'Create' },
+    contacts: { title: 'Import your contacts', action: 'Import' },
     invite: { title: 'Invite your team', action: 'Invite' },
   },
   notConnected: 'Not connected',
@@ -26,6 +27,7 @@ export const strings = {
   pages: (count: number) => (count === 1 ? '1 page' : `${count.toLocaleString('en')} pages`),
   forms: (count: number) => (count === 1 ? '1 form' : `${count.toLocaleString('en')} forms`),
   justYou: 'Just you',
+  contacts: (count: number) => (count === 1 ? '1 person' : `${count.toLocaleString('en')} people`),
   people: (count: number) => `${count.toLocaleString('en')} people`,
   invited: (count: number) => `${count.toLocaleString('en')} invited`,
 

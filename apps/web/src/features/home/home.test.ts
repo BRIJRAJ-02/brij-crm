@@ -2,6 +2,7 @@
 import type { BookingListItem, CalendarEventItem } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import { agendaOf, dayRange, minutesOf, splitAgenda } from './agenda.ts';
+import { metricHref } from './metrics.ts';
 import { nextStep, setupSteps } from './setup.ts';
 
 const ME = '00000000-0000-4000-8000-000000000001';
@@ -110,9 +111,29 @@ describe('the setup steps', () => {
     expect(setupSteps({ team: { members: 3, invited: 0 } })).toEqual([{ id: 'invite', done: true }]);
   });
 
+  it('ticks Import your contacts once People holds a record', () => {
+    expect(setupSteps({ contacts: 0 })).toEqual([{ id: 'contacts', done: false }]);
+    expect(setupSteps({ contacts: 12, team: { members: 1, invited: 0 } })).toEqual([
+      { id: 'contacts', done: true },
+      { id: 'invite', done: false },
+    ]);
+  });
+
   it('gives the button to the first step not done, and none once all are', () => {
     expect(nextStep(setupSteps({ calendars: ['me@example.com'], bookingPages: 0, forms: 0 }))).toBe('bookingPage');
     expect(nextStep(setupSteps({ calendars: ['me@example.com'] }))).toBeUndefined();
     expect(nextStep(setupSteps({}))).toBeUndefined();
+  });
+});
+
+describe('the metrics’ links', () => {
+  const objects = [
+    { apiSlug: 'people', standardKey: 'people', isArchived: false },
+    { apiSlug: 'deals', standardKey: 'deals', isArchived: true },
+  ];
+  it('opens the records behind a figure, or nothing where the reader has no such object', () => {
+    expect(metricHref('people', 'acme', objects)).toBe('/w/acme/objects/people');
+    expect(metricHref('won', 'acme', objects)).toBeUndefined();
+    expect(metricHref('meetings', 'acme', objects)).toBe('/w/acme/bookings/calendar');
   });
 });

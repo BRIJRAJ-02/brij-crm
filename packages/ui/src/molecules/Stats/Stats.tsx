@@ -1,4 +1,5 @@
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { Link } from '../../atoms/Link/Link.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Stats.module.css';
@@ -15,6 +16,8 @@ export interface StatItem {
   readonly comparison?: string;
   /** Which way it moved against `comparison`: an arrow, in no colour, since up isn't always good. */
   readonly trend?: 'up' | 'down' | 'same';
+  /** Where the records behind the figure are (Home's New people opens People): its label becomes a link there. */
+  readonly href?: string;
 }
 
 /** How many figures loading draws when none are known yet: Home's row holds five. */
@@ -49,7 +52,9 @@ export function Stats({ label, items, isLoading = false }: StatsProps) {
         <dl className={styles.root}>
           {items.map((item) => (
             <div key={item.id} className={styles.stat}>
-              <dt className={styles.label}>{item.label}</dt>
+              <dt className={styles.label}>
+                {item.href === undefined ? item.label : <Link href={item.href}>{item.label}</Link>}
+              </dt>
               <dd className={styles.value}>{item.value}</dd>
               {item.comparison !== undefined && (
                 <dd className={styles.comparison}>

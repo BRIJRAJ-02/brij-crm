@@ -6,14 +6,16 @@ import { Card, EmptyState, Stats, useFormatSettings } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { useToday } from '../../tasks/day.ts';
-import { metricFigures, weekStartOf } from '../metrics.ts';
+import { metricFigures, metricHref, weekStartOf } from '../metrics.ts';
 import type { HomeSectionProps } from '../registry.ts';
 import { strings } from '../strings.ts';
 import { Failed, locale } from './shared.tsx';
 
+const withHref = (href: string | undefined) => (href === undefined ? {} : { href });
+
 /** This week: the metrics row. */
 export function MetricsSection({ context }: HomeSectionProps) {
-  const { slug } = context;
+  const { slug, objects } = context;
   const { data } = useRouteContext({ from: '__root__' });
   const { timeZone } = useFormatSettings();
   const today = useToday(timeZone);
@@ -60,6 +62,8 @@ export function MetricsSection({ context }: HomeSectionProps) {
           value: figure.value,
           comparison: strings.lastWeek(figure.lastWeek),
           trend: figure.trend,
+          // The records behind it: the object's table (no link format filters it to this week yet).
+          ...withHref(metricHref(figure.id, slug, objects)),
         }))}
       />
     </Card>

@@ -37,6 +37,25 @@ export const Default: Story = {
   },
 };
 
+/** A figure with `href`: its label links to the records behind it. */
+export const Linked: Story = {
+  args: {
+    items: [
+      { id: 'people', label: 'New people', value: '34', comparison: '41 last week', trend: 'down', href: '/people' },
+      { id: 'deals', label: 'New deals', value: '5', comparison: '5 last week', trend: 'same' },
+    ],
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <Stats {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('link', { name: 'New people' })).toHaveAttribute('href', '/people');
+    await expect(canvas.queryByRole('link', { name: 'New deals' })).not.toBeInTheDocument();
+  },
+};
+
 /** On a phone: the figures wrap. */
 export const Narrow: Story = {
   render: (args) => (

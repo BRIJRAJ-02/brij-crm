@@ -21,6 +21,7 @@ New. Home's metrics row needs figures read at a glance: a label, a large value a
 - A group named by `label`, holding a real `<dl>`: each label is a term, the value and the comparison its descriptions. With no items (and not loading) it draws nothing, so the screen leaves its card out.
 - As many columns as fit, each at least `size-column-narrow` (120px), sharing the width; a phone wraps them.
 - `trend` draws an arrow before the comparison in the tertiary colour, never green or red: more open deals or more meetings is not always good news. Screen readers hear "Up from 8 last week". `same` draws no arrow.
+- `href` makes a figure's label a link to the records behind it (Home's New people opens People). Why: a figure that moved begged "which ones?", and the label is the one piece of text that says what the figure counts, so it is the link's name.
 - Values use tabular figures, so they line up as they change.
 
 ## States
