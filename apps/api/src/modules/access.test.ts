@@ -54,6 +54,7 @@ describe('access.mine', () => {
       role: 'member',
       roleLabel: 'Member',
       permissions: ['records.export', 'booking.manage', 'availability.own'],
+      teamIds: [],
       // Spec 0037, AC-1261: a member reaches nobody's scheduling but their own.
       scheduling: { seesOthers: false, managesOthers: false, seesEveryone: false, managesEveryone: false },
     });

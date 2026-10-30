@@ -50,17 +50,17 @@ import {
 /**
  * Where the door reads a workspace's object, field and record rules, inside
  * its one tenant transaction (spec 0009, milestone 2): given the member it is
- * letting in. #24 stores rules and reads them here; until then production
- * passes `NO_RULE_SOURCE` (the api's `APP_RULES`, to its requests and its
- * worker alike), so every member gets `NO_RULES`, and only tests (and the
- * api's local test server) inject rules.
+ * letting in. Production passes `storedRules` (the api's `APP_RULES`, to its
+ * requests and its worker alike), which also answers the member's teams
+ * (spec 0031, AC-825); `NO_RULE_SOURCE` is for tests that need none, and tests
+ * (and the api's local test server) inject rules by hand.
  */
 export type RuleSource = (
   tx: WorkspaceTx,
   member: { readonly memberId: string; readonly role: string },
 ) => Promise<AccessRules>;
 
-/** No rules at all, with no query: production's source until #24. */
+/** No rules and no teams, with no query: for tests; production reads `storedRules`. */
 export const NO_RULE_SOURCE: RuleSource = () => Promise.resolve(NO_RULES);
 
 const { members, objects, workspaces, workspaceSecurity } = schema;
@@ -218,7 +218,8 @@ function memberScope(
       memberId: member.id,
       ...(member.userId === null ? {} : { userId: member.userId }),
       role: member.role,
-      teamIds: [],
+      teamIds: rules.teamIds ?? [],
+      ...(rules.teamMemberIds === undefined ? {} : { teamMemberIds: rules.teamMemberIds }),
     },
     rules,
   );
@@ -394,15 +395,17 @@ export async function memberScopeIn(
     )
     .limit(1);
   if (row === undefined || !isRole(row.role)) return undefined;
+  const found = await rules(tx, { memberId: row.id, role: row.role });
   const access = roleAccess(
     {
       kind: 'member',
       memberId: row.id,
       ...(row.userId === null ? {} : { userId: row.userId }),
       role: row.role,
-      teamIds: [],
+      teamIds: found.teamIds ?? [],
+      ...(found.teamMemberIds === undefined ? {} : { teamMemberIds: found.teamMemberIds }),
     },
-    await rules(tx, { memberId: row.id, role: row.role }),
+    found,
   );
   return rescope(beside, { type: 'member', id: row.id }, access);
 }
