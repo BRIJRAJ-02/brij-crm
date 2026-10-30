@@ -29,7 +29,7 @@ Ported from the artifact's Avatar card. Record chips, the record header, presenc
 
 ## States
 
-Picture, initials, a picture that failed (initials). A stack: names read out, or its `label` with "+N" counting `total` (a team page).
+Picture, initials, a picture still loading (initials), a picture that failed (initials). A stack: names read out, or its `label` with "+N" counting `total` (a team page).
 
 ## Keyboard
 
