@@ -1,0 +1,121 @@
+/* The link page's font packs (spec 0060, AC-12): six faces beside Inter and JetBrains Mono, all open licence and
+   served from our own origin. A face is fetched only when text on the page is drawn in it, so a page downloads its
+   own pack and nothing else. Each face has a fallback built from a local system font with its metrics overridden to
+   the real face's (size, ascent, descent), so the swap moves nothing (AC-21: layout shift under 0.05). Hand written,
+   not generated: these faces are the link page's, not the design system's, so `tokens.json` never names them.
+   `src/packs.ts` lists the same files for the shells' preload, and its test holds the two together. */
+
+@font-face {
+  font-family: 'Host Grotesk';
+  src: url('./fonts/HostGrotesk-Variable-latin.woff2') format('woff2');
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Host Grotesk Fallback';
+  src: local('Arial');
+  size-adjust: 104.98%;
+  ascent-override: 96.69%;
+  descent-override: 30.01%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('./fonts/Fraunces-Variable-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fraunces Fallback';
+  src: local('Times New Roman');
+  size-adjust: 115.45%;
+  ascent-override: 84.71%;
+  descent-override: 22.09%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Newsreader';
+  src: url('./fonts/Newsreader-Variable-latin.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Newsreader Fallback';
+  src: local('Times New Roman');
+  size-adjust: 105.48%;
+  ascent-override: 69.68%;
+  descent-override: 25.12%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('./fonts/BricolageGrotesque-Variable-latin.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bricolage Grotesque Fallback';
+  src: local('Arial');
+  size-adjust: 105.43%;
+  ascent-override: 88.21%;
+  descent-override: 25.61%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Outfit';
+  src: url('./fonts/Outfit-Variable-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Outfit Fallback';
+  src: local('Arial');
+  size-adjust: 99.82%;
+  ascent-override: 100.18%;
+  descent-override: 26.05%;
+  line-gap-override: 0%;
+}
+
+/* One weight only: the pack draws its headings at regular weight, never a synthesised bold. */
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('./fonts/InstrumentSerif-Regular-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Instrument Serif Fallback';
+  src: local('Times New Roman');
+  size-adjust: 83.94%;
+  ascent-override: 117.94%;
+  descent-override: 36.93%;
+  line-gap-override: 0%;
+}
+
+/* The families the link page's stylesheet reads, each the face, its metric matched fallback, then the system's. */
+@layer tokens {
+  :root {
+    --font-pack-grotesk: 'Host Grotesk', 'Host Grotesk Fallback', ui-sans-serif, system-ui, sans-serif;
+    --font-pack-editorial: 'Fraunces', 'Fraunces Fallback', ui-serif, Georgia, serif;
+    --font-pack-classic: 'Newsreader', 'Newsreader Fallback', ui-serif, Georgia, serif;
+    --font-pack-friendly: 'Bricolage Grotesque', 'Bricolage Grotesque Fallback', ui-sans-serif, system-ui, sans-serif;
+    --font-pack-geometric: 'Outfit', 'Outfit Fallback', ui-sans-serif, system-ui, sans-serif;
+    --font-pack-display: 'Instrument Serif', 'Instrument Serif Fallback', ui-serif, Georgia, serif;
+  }
+}
