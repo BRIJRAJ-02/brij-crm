@@ -62,11 +62,24 @@ export function memberSearch(search: Record<string, unknown>): { readonly member
   return typeof search.member === 'string' && UUID.test(search.member) ? { member: search.member.toLowerCase() } : {};
 }
 
-/** The Availability tab's search: `?member=` as `memberSearch`, and `?schedule=`, the schedule open (else the default). */
+/**
+ * The Availability tab's search: `?member=` as `memberSearch`, and `?schedule=`, the schedule open (else the default);
+ * or `?view=team`, the Team week (the Roster, spec 0037), with `?week=` (a Monday) and `?q=` (a name).
+ */
 export function availabilitySearch(search: Record<string, unknown>): {
   readonly member?: string;
   readonly schedule?: string;
+  readonly view?: 'team';
+  readonly week?: string;
+  readonly q?: string;
 } {
+  if (search.view === 'team') {
+    return {
+      view: 'team',
+      ...(typeof search.week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(search.week) ? { week: search.week } : {}),
+      ...(typeof search.q === 'string' && search.q.trim() !== '' ? { q: search.q.slice(0, 100) } : {}),
+    };
+  }
   return {
     ...memberSearch(search),
     ...(typeof search.schedule === 'string' && UUID.test(search.schedule)
@@ -74,6 +87,14 @@ export function availabilitySearch(search: Record<string, unknown>): {
       : {}),
   };
 }
+
+/** Availability's Team week (the Roster): a week by its Monday (else this week) and a name search. */
+export const teamWeekHref = (slug: string, week?: string, q?: string) => {
+  const query = new URLSearchParams({ view: 'team' });
+  if (week !== undefined) query.set('week', week);
+  if (q !== undefined && q.trim() !== '') query.set('q', q.trim());
+  return `/w/${slug}/bookings/availability?${query.toString()}`;
+};
 
 /**
  * Where the public booking addresses are served: `VITE_BOOKING_PUBLIC_ORIGIN` (Timefix's own domain, beside the

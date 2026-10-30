@@ -353,6 +353,15 @@ export {
 } from './modules/RolePowers/RolePowers.tsx';
 export { TeamList, type TeamListProps, type TeamPresence, type TeamRow } from './modules/TeamList/TeamList.tsx';
 export {
+  TeamWeek,
+  type TeamWeekCell,
+  type TeamWeekDay,
+  type TeamWeekPerson,
+  type TeamWeekProps,
+  type TeamWeekTone,
+  type TeamWeekTotal,
+} from './modules/TeamWeek/TeamWeek.tsx';
+export {
   SetupChecklist,
   type SetupChecklistProps,
   type SetupChecklistStep,

@@ -49,6 +49,11 @@ export interface HoursEditorProps {
    * its times go, so the editor arrives without the page under it moving. Pass the days as `rows` (no ranges).
    */
   readonly isLoading?: boolean;
+  /**
+   * One date's hours, not a week (the Team week's cell, spec 0037): no Copy times to and no Set all days, since
+   * there is no other day to copy to or set. Give it the one row.
+   */
+  readonly isSingleDay?: boolean;
 }
 
 /** `HH:MM` for minutes from midnight. */
@@ -276,6 +281,7 @@ export function HoursEditor({
   isDisabled = false,
   isReadOnly = false,
   isLoading = false,
+  isSingleDay = false,
 }: HoursEditorProps) {
   const { locale } = useFormatSettings();
   const showSkeleton = useDelayedLoading(isLoading);
@@ -439,7 +445,7 @@ export function HoursEditor({
                   </p>
                 )}
               </div>
-              {isOn && (
+              {isOn && !isSingleDay && (
                 <div className={styles.copy}>
                   <CopyTo
                     from={row}
@@ -455,18 +461,20 @@ export function HoursEditor({
           );
         })}
       </ul>
-      <div className={styles.setAll}>
-        <SetAll
-          start={allStart ?? '09:00'}
-          end={allEnd ?? '17:00'}
-          isDisabled={isDisabled || on.length === 0}
-          time={time}
-          starts={starts}
-          ends={ends}
-          to={to}
-          onApply={setAll}
-        />
-      </div>
+      {!isSingleDay && (
+        <div className={styles.setAll}>
+          <SetAll
+            start={allStart ?? '09:00'}
+            end={allEnd ?? '17:00'}
+            isDisabled={isDisabled || on.length === 0}
+            time={time}
+            starts={starts}
+            ends={ends}
+            to={to}
+            onApply={setAll}
+          />
+        </div>
+      )}
     </div>
   );
 }
