@@ -76,6 +76,11 @@ export interface SelectProps {
    * hands its label over in either (the new option is the caller's to add to the values).
    */
   readonly selectionMode?: 'single' | 'multiple';
+  /**
+   * With `selectionMode="multiple"`: how many chosen options the closed field shows before "+N", so several never
+   * squash or push its chevron out (the field set passes 3, as a select's display shows). All when left out.
+   */
+  readonly maxVisible?: number;
   /** With `selectionMode="multiple"`: the chosen ids. */
   readonly values?: readonly string[];
   /** With `selectionMode="multiple"`: every chosen id after each change, in the list's order. */
@@ -196,18 +201,28 @@ function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optio
 function Faces({
   items,
   optionStyle,
+  maxVisible,
 }: {
   readonly items: readonly SelectItem[];
   readonly optionStyle: SelectOptionStyle;
+  readonly maxVisible: number | undefined;
 }) {
   if (optionStyle === 'plain') {
     return <span className={styles.plain}>{items.map((item) => item.label).join(strings.listJoin)}</span>;
   }
+  const shown = maxVisible === undefined ? items : items.slice(0, maxVisible);
+  const rest = items.length - shown.length;
   return (
     <>
-      {items.map((item) => (
+      {shown.map((item) => (
         <Face key={item.id} item={item} optionStyle={optionStyle} />
       ))}
+      {/* Text, not a button: the whole field opens the list, where every choice shows. */}
+      {rest > 0 && (
+        <span className={styles.more} aria-label={strings.more(rest)}>
+          {strings.moreShort(rest)}
+        </span>
+      )}
     </>
   );
 }
@@ -229,6 +244,7 @@ export function Select({
   defaultValue,
   onChange,
   selectionMode = 'single',
+  maxVisible,
   values,
   onValuesChange,
   placeholder,
@@ -296,7 +312,7 @@ export function Select({
         <span className={styles.trigger} role="group" aria-label={label}>
           <span className={styles.value}>
             {isMultiple && chosenItems.length > 0 ? (
-              <Faces items={chosenItems} optionStyle={optionStyle} />
+              <Faces items={chosenItems} optionStyle={optionStyle} maxVisible={maxVisible} />
             ) : !isMultiple && chosen !== undefined ? (
               <Face item={chosen} optionStyle={optionStyle} />
             ) : (
@@ -470,7 +486,7 @@ export function Select({
               return chosenItems.length === 0 ? (
                 <span className={styles.placeholder}>{defaultChildren}</span>
               ) : (
-                <Faces items={chosenItems} optionStyle={optionStyle} />
+                <Faces items={chosenItems} optionStyle={optionStyle} maxVisible={maxVisible} />
               );
             }
             // A static (grouped) option without its value still names the chosen item by the field's own value:

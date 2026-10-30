@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
+import { AttributeDisplay } from '../AttributeDisplay.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { expect, fn } from 'storybook/test';
 
@@ -60,5 +61,17 @@ export const Invalid: Story = {
     await userEvent.tab();
     await expect(canvas.getByText('Name is required.')).toBeInTheDocument();
     await expect(args.onCommit).not.toHaveBeenCalled();
+  },
+};
+
+/** On the record panel a text value has Copy after it, on hover or focus (always under a finger). */
+export const CopyOnPanel: Story = {
+  render: () => (
+    <Stage>
+      <AttributeDisplay attribute={sample.attribute} value={sample.value as never} surface="panel" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Copy Northwind Traders' })).toBeInTheDocument();
   },
 };

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
+import { AttributeDisplay } from '../AttributeDisplay.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { loadPhoneLibrary } from './phone-library.ts';
 import { expect, fn, waitFor, within } from 'storybook/test';
@@ -140,5 +141,18 @@ export const SeveralWithCode: Story = {
     await waitFor(() => expect(canvas.getByRole('button', { name: /Country code/ })).toHaveTextContent('+1'));
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(args.onCommit).toHaveBeenCalledWith([{ number: '+12015550123', country: 'US' }]));
+  },
+};
+
+/** On the record panel the number leads with its country's flag and has Copy after it, which copies the E.164 number. */
+export const FlagAndCopy: Story = {
+  render: () => (
+    <Stage>
+      <AttributeDisplay attribute={sample.attribute} value={sample.value as never} surface="panel" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('🇬🇧')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Copy +442071234567' })).toBeInTheDocument();
   },
 };

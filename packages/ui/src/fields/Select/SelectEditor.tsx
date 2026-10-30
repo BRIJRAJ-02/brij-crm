@@ -16,6 +16,9 @@ export const SELECT_MENU_THRESHOLD = 15;
 /** From this many options, a list searches as it opens: typing filters it rather than jumping (Attio's 2d5eaf6b). */
 export const SELECT_SEARCH_THRESHOLD = 8;
 
+/** How many chosen options a multiple select's closed field shows before "+N", as its display shows. */
+export const SELECT_MAX_VISIBLE = 3;
+
 /**
  * Select: outside a grid cell, a Select whose closed field shows the chosen
  * options as their tags (one, or several when the attribute holds several, as
@@ -78,7 +81,12 @@ export function SelectEditor({
         {...opening}
         items={items}
         {...(attribute.allowMultiple
-          ? { selectionMode: 'multiple' as const, values: chosen, onValuesChange: commit }
+          ? {
+              selectionMode: 'multiple' as const,
+              values: chosen,
+              onValuesChange: commit,
+              maxVisible: SELECT_MAX_VISIBLE,
+            }
           : { value: chosen[0] ?? null, onChange: commit })}
         {...(isSearchable
           ? {

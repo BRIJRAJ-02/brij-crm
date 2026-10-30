@@ -68,3 +68,43 @@ export const CreateOption: Story = {
     await expect(args.onCommit).not.toHaveBeenCalled();
   },
 };
+
+/** From 8 stages a status list searches as it opens: typing filters it rather than jumping. */
+export const SearchesLongList: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    attribute: {
+      ...sample.attribute,
+      options: Array.from({ length: 8 }, (_, index) => ({
+        id: `stage-${String(index)}`,
+        label: ['New', 'Called', 'Met', 'Demo', 'Trial', 'Offer', 'Signed', 'Lost'][index] ?? '',
+        hue: 'blue' as const,
+        archived: false,
+      })),
+    },
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ args, userEvent }) => {
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowDown}');
+    const search = await screen.findByRole('textbox', { name: /Search/ });
+    await waitFor(() => expect(search).toHaveFocus());
+    await userEvent.keyboard('tri{Enter}');
+    await expect(args.onCommit).toHaveBeenCalledWith('stage-4');
+  },
+};
+
+/** While the form around it sends, the status takes no change. */
+export const Disabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: sample.attribute, value: sample.value as never, isDisabled: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+};

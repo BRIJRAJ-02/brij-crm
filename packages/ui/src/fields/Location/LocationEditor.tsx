@@ -8,7 +8,7 @@ import { useFormatSettings, useRegionDefaults } from '../../provider/context.ts'
 import type { EditorProps } from '../types.ts';
 import { toCommittable } from '../values.ts';
 import styles from './LocationEditor.module.css';
-import { locationFromText } from './parse.ts';
+import { locationFromText, withPastedAddress } from './parse.ts';
 import { strings } from './strings.ts';
 
 type Part = 'line1' | 'line2' | 'locality' | 'region' | 'postcode' | 'countryCode';
@@ -76,14 +76,8 @@ export function LocationEditor({
               const read = locationFromText(pasted, locale);
               if (read === undefined) return;
               event.preventDefault();
-              setDraft((previous) => {
-                const next = { ...previous };
-                for (const each of PARTS) {
-                  const found = read[each];
-                  if (found !== undefined) next[each] = found;
-                }
-                return next;
-              });
+              // A whole address (it names a city or a country) clears what it didn't name; else it fills what it found.
+              setDraft((previous) => withPastedAddress(previous, read, PARTS));
               if (MORE_PARTS.some((each) => read[each] !== undefined)) setMoreOpen(true);
             },
           }

@@ -123,3 +123,14 @@ export const Paste: Story = {
     await waitFor(() => expect(args.onCommit).toHaveBeenCalledWith('2026-11-08'));
   },
 };
+
+/** While the form around it sends, the date takes no change. */
+export const Disabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: sample.attribute, value: sample.value as never, isDisabled: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+};

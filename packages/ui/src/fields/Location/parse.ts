@@ -114,3 +114,25 @@ export function locationFromText(text: string, locale: string): LocationValue | 
   const parsed = LocationValue.safeParse(value);
   return parsed.success ? parsed.data : undefined;
 }
+
+/**
+ * The editor's parts after a pasted address: when the paste names a city or a
+ * country it is a whole address, so every part it didn't name is cleared (an
+ * old postcode never stays under a new city); a paste that names neither only
+ * fills what it found. Pure.
+ */
+export function withPastedAddress<K extends string>(
+  previous: Readonly<Partial<Record<K, string>>>,
+  read: Readonly<Partial<Record<K, string>>>,
+  parts: readonly K[],
+): Partial<Record<K, string>> {
+  const isWhole =
+    (read as Partial<Record<string, string>>).locality !== undefined ||
+    (read as Partial<Record<string, string>>).countryCode !== undefined;
+  const next: Partial<Record<K, string>> = isWhole ? {} : { ...previous };
+  for (const part of parts) {
+    const found = read[part];
+    if (found !== undefined) next[part] = found;
+  }
+  return next;
+}

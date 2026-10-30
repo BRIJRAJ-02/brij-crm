@@ -66,3 +66,32 @@ export const Editor: Story = {
     await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
   },
 };
+
+/** A screenshot or file pasted while focus is in the field uploads, as a drop would. */
+export const PasteUpload: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: sample.attribute, value: null, onUpload: fn() },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const drop = canvas.getByRole('button');
+    const clipboardData = new DataTransfer();
+    clipboardData.items.add(new File(['shot'], 'Screenshot.png', { type: 'image/png' }));
+    drop.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+    await expect(args.onUpload).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** While the form around it sends, the file takes no upload or remove. */
+export const Disabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: sample.attribute, value: sample.value as never, isDisabled: true, onUpload: fn() },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+};

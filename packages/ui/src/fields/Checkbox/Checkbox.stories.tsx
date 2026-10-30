@@ -49,3 +49,14 @@ export const Editor: Story = {
     await Promise.all(document.getAnimations().map((animation) => animation.finished));
   },
 };
+
+/** While the form around it sends, the checkbox takes no change. */
+export const Disabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: sample.attribute, value: sample.value as never, isDisabled: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+};

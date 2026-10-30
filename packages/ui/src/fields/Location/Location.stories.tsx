@@ -76,3 +76,14 @@ export const PasteAddress: Story = {
     );
   },
 };
+
+/** While the form around it sends, every part of the address takes no change. */
+export const Disabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: sample.attribute, value: sample.value as never, isDisabled: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+};

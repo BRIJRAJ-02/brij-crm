@@ -13,7 +13,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Display**: clipped to one line in cells and on cards; the whole text with its line breaks in the panel, forms and previews.
 - **Editor**: a Field `multiline` that grows with its content, with a counter up to 10,000 characters. The grid edits it in a popover.
 - **Text out / in** (copy, paste, CSV, the import preview): as it is / as it is.
-- **Polish (30 October 2026)**: On the record panel the text clamps to six lines with Show more, so a long note never pushes the fields under it out of sight.
+- **Polish (30 October 2026)**: On the record panel the text clamps to six lines with Show more, so a long note never pushes the fields under it out of sight. Show more says whether the text is open (`aria-expanded`) and appears again or goes as the panel's width changes.
 - **Filter operators**: contains, does not contain, is empty, is not empty.
 
 ## States

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countryFromText, locationFromText } from './parse.ts';
+import { countryFromText, locationFromText, withPastedAddress } from './parse.ts';
 
 describe('countryFromText', () => {
   it('reads names, codes and common aliases', () => {
@@ -39,5 +39,27 @@ describe('locationFromText', () => {
   it('keeps a lone city, and reads nothing from nothing', () => {
     expect(locationFromText('Paris', 'en-GB')).toEqual({ locality: 'Paris' });
     expect(locationFromText('  ', 'en-GB')).toBeUndefined();
+  });
+});
+
+describe('withPastedAddress', () => {
+  const parts = ['line1', 'locality', 'postcode', 'countryCode'] as const;
+
+  it('clears the parts a whole address did not name', () => {
+    expect(
+      withPastedAddress(
+        { line1: '1 Main St', postcode: '78701', countryCode: 'US' },
+        { locality: 'London', countryCode: 'GB' },
+        parts,
+      ),
+    ).toEqual({ locality: 'London', countryCode: 'GB' });
+  });
+
+  it('only fills what a partial paste found', () => {
+    expect(withPastedAddress({ locality: 'Austin', countryCode: 'US' }, { line1: '1 Main St' }, parts)).toEqual({
+      line1: '1 Main St',
+      locality: 'Austin',
+      countryCode: 'US',
+    });
   });
 });

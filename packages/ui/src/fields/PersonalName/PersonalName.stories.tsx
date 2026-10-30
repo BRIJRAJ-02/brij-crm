@@ -66,3 +66,14 @@ export const PasteFullName: Story = {
     await expect(canvas.getByRole('textbox', { name: 'Last name' })).toHaveValue('Brewster Hopper');
   },
 };
+
+/** While the form around it sends, both name fields take no change. */
+export const Disabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: sample.attribute, value: sample.value as never, isDisabled: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+};

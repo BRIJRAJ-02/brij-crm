@@ -58,7 +58,8 @@ export const ClampedOnPanel: Story = {
   ),
   play: async ({ canvas, userEvent }) => {
     const more = await canvas.findByRole('button', { name: 'Show more' });
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(more);
-    await expect(canvas.getByRole('button', { name: 'Show less' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
   },
 };

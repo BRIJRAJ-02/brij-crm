@@ -254,3 +254,12 @@ export const SeveralEditInPlace: Story = {
     await expect(list().querySelectorAll('li')[0]).toHaveTextContent('ada@work.example.com');
   },
 };
+
+/** While the form around it sends, each chip's menu is off too, as its Remove is. */
+export const SeveralChipWhileSending: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <SeveralForm onSubmit={submitted} isSending />,
+  play: async ({ canvas }) => {
+    for (const chip of canvas.getAllByRole('button', { name: / options$/ })) await expect(chip).toBeDisabled();
+  },
+};

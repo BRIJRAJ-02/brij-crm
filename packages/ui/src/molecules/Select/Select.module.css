@@ -164,6 +164,21 @@
     gap: var(--space-4);
   }
 
+  /* "+N" past maxVisible chosen options: the field set's more chip, as text inside the field's button. */
+  .more {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    block-size: var(--size-chip);
+    padding-inline: var(--space-6);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
   .placeholder {
     color: var(--text-tertiary);
   }

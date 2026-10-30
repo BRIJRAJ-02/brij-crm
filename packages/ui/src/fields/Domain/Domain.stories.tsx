@@ -2,6 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
+import { SiteIconsContext } from '../../provider/context.ts';
+import { AttributeDisplay } from '../AttributeDisplay.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { expect, fn } from 'storybook/test';
 
@@ -85,5 +87,24 @@ export const Guidance: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('textbox', { name: 'Domain' })).toHaveAttribute('placeholder', 'example.com');
     await expect(canvas.getByText('Just the domain. A pasted link is cut down to it.')).toBeInTheDocument();
+  },
+};
+
+/**
+ * On the record panel a domain has Copy after it. Where the app says where site icons come from
+ * (`SiteIconsContext`, off in the web app until the api serves them), its first letter stands in while the icon
+ * loads or when there is none.
+ */
+export const SiteIconAndCopy: Story = {
+  render: () => (
+    <SiteIconsContext value={() => '/missing-icon.png'}>
+      <Stage>
+        <AttributeDisplay attribute={sample.attribute} value={sample.value as never} surface="panel" />
+      </Stage>
+    </SiteIconsContext>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Copy northwind.com' })).toBeInTheDocument();
+    await expect(await canvas.findByText('N')).toBeInTheDocument();
   },
 };

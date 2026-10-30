@@ -167,3 +167,28 @@ export const SearchesLongList: Story = {
     await expect(args.onCommit).toHaveBeenCalledWith('industry-7');
   },
 };
+
+/** Several past three in the closed field: three tags, then "+N", so the chevron never moves out. */
+export const SeveralPastThree: Story = {
+  args: { attribute: sample.several?.attribute ?? sample.attribute, value: sample.several?.value as never },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const field = canvas.getByRole('button');
+    await expect(within(field).getByText('+2')).toBeInTheDocument();
+  },
+};
+
+/** While the form around it sends, the select takes no change. */
+export const Disabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: sample.attribute, value: sample.value as never, isDisabled: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+};

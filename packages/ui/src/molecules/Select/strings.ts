@@ -12,4 +12,8 @@ export const strings = {
   create: (label: string) => `Create "${label}"`,
   /** Between the names of several chosen options in the closed field (`selectionMode="multiple"`). */
   listJoin: ', ',
+  /** Past `maxVisible` chosen options, in the closed field. */
+  moreShort: (count: number) => `+${String(count)}`,
+  /** The same, for screen readers. */
+  more: (count: number) => `${String(count)} more`,
 } as const;

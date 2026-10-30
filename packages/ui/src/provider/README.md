@@ -39,7 +39,7 @@ const toasts = createToasts(); // once, in main.tsx; also handed to the data lay
 - Toasts never carry the only copy of important information.
 - React Aria's toast is still `UNSTABLE_` in 1.21, so only `toasts.tsx` imports it.
 - Enter and exit animations arrive with the overlay layer in milestone 2.
-- `FormatSettings` holds the workspace's `currency` and `country` when a `FormatScope` gives them; `useRegionDefaults()` answers both, else the language's region's (en-IN is IN and INR), else the US's, so a new amount, phone number or Currency attribute never starts in USD by itself. The server keeps no workspace currency or country yet, so today it is always the language's. `useTodayReader()` reads today in the time zone when called, without a re-render per tick (a grid paste's "tomorrow"). `SiteIconsContext` says where a host's icon comes from; the web app supplies it once the api serves workspace icons.
+- `FormatSettings` holds the workspace's `currency` and `country` when a `FormatScope` gives them; `useRegionDefaults()` answers both, else the language's region's (en-IN is IN and INR), else the US's, so a new amount, phone number or Currency attribute never starts in USD by itself. No `FormatScope` passes `currency` or `country` yet (the server keeps no workspace setting for them), so today both are always the language's region's. `useTodayReader()` reads today in the time zone when called, without a re-render per tick (a grid paste's "tomorrow"), and `useToday()` is today as a value that re-renders only when the day changes (a Date display). `SiteIconsContext` says where a host's icon comes from; no app provides it yet, so favicons stay off until the api serves workspace icons.
 
 ## States
 

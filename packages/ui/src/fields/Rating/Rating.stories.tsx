@@ -42,3 +42,14 @@ export const Editor: Story = {
     await expect(args.onCommit).toHaveBeenCalled();
   },
 };
+
+/** While the form around it sends, the rating takes no change. */
+export const Disabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: sample.attribute, value: sample.value as never, isDisabled: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+};
