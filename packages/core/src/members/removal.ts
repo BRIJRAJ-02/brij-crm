@@ -7,6 +7,7 @@
 // forgotten.
 import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
+import { automationsRemoval } from '../automations/members.ts';
 import { bookingPagesRemoval } from '../booking/pages.ts';
 import { calendarsRemoval } from '../calendar/connections.ts';
 import { defaultsRemoval } from '../engine/default-removal.ts';
@@ -120,6 +121,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   limitsRemoval,
   // Spec 0031, AC-814: their team memberships, and the teammates who read again.
   teamsRemoval,
+  // Parity #53: the automations they run as switch off (CREATOR_GONE).
+  automationsRemoval,
 ];
 
 /**
@@ -170,6 +173,8 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   booking_hosts_member:
     'their bookings stay for admins to hand on; round robin ones are reseated by the worker (AC-749)',
   bookings_no_show_by: 'history: who marked a booking a no show',
+  automations_deleted_by: 'history: who deleted an automation',
+  reports_creator: 'a report is shared: it stays for everyone who can read it, and views.manage holders change it',
   member_onboarding_member: 'their first run answers (spec 0036): nobody reads them, in the app or after',
 };
 

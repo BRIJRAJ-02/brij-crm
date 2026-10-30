@@ -15,6 +15,7 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import { createTask, listTasks } from '../tasks/tasks.ts';
 import { listNotifications } from '../notifications/inbox.ts';
+import { removeMember } from '../members/members.ts';
 import { automationHook } from './hook.ts';
 import { derivedTaskId, queueDueAutomations, runAutomationQueue, type AutomationRunDeps } from './run.ts';
 import {
@@ -335,6 +336,27 @@ describe('when it goes wrong', () => {
     const back = await setAutomationEnabled(w.owner, { automationId: made.id, enabled: true });
     expect(back).toMatchObject({ enabled: true, runAsMemberId: w.memberId });
     expect(back.disabledReason).toBeUndefined();
+  });
+
+  it('switches off with the member it runs as when they are removed, before any run finds it', async () => {
+    const w = await world();
+    const bea = newId();
+    await w.q(
+      sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${w.workspaceId}, ${bea}, 'Bea', 'bea@example.com', 'admin', 'system', 'system')`,
+    );
+    const theirs = await w.make(createdDeal(w.deals));
+    const mine = await w.make(createdDeal(w.deals));
+    await w.q(sql`update automations set run_as_member_id = ${bea}::uuid where id = ${theirs.id}::uuid`);
+    await removeMember(w.owner, { memberId: bea }, [outboxHook()]);
+    const byId = new Map((await listAutomations(w.owner)).automations.map((row) => [row.id, row]));
+    expect(byId.get(theirs.id)).toMatchObject({ enabled: false, disabledReason: 'CREATOR_GONE' });
+    expect(byId.get(mine.id)).toMatchObject({ enabled: true });
+    // Nothing queues for it any more.
+    await w.deal('Acme');
+    const runs = await w.q<{ n: number }>(
+      sql`select count(*)::int as n from automation_runs where automation_id = ${theirs.id}::uuid`,
+    );
+    expect(runs[0]?.n).toBe(0);
   });
 
   it('never breaks the write when the hook cannot queue: the record is made and the fault is told', async () => {
