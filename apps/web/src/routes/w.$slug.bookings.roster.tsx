@@ -1,9 +1,8 @@
 import { isDataError } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
-import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { TeamWeekPending, TeamWeekScreen } from '../features/booking/TeamWeekScreen.tsx';
-import { memberZone } from '../features/booking/zone.ts';
-import { rosterIsShown, rosterSearch } from '../features/booking/links.ts';
+import { rosterSearch } from '../features/booking/links.ts';
 import { strings } from '../features/booking/strings.ts';
 import { teamWeekStrings } from '../features/booking/team-week-strings.ts';
 
@@ -19,17 +18,15 @@ export const Route = createFileRoute('/w/$slug/bookings/roster')({
   // place), so typing never swaps the page for its pending state and loses the field's focus. The first read takes
   // the address's `?q=`, so a shared link opens searched.
   loaderDeps: ({ search }) => ({ week: search.week }),
-  loader: async ({ context, params, deps, location }) => {
-    // Only someone who sees a colleague's scheduling has a roster (spec 0037, AC-1447); anyone else opens their own
-    // hours, Availability, where a roster of one would have shown them.
-    if (!rosterIsShown(await context.data.access.mine(params.slug))) {
-      throw redirect({ to: '/w/$slug/bookings/availability', params: { slug: params.slug }, replace: true });
-    }
-    const zone = memberZone(context.data, params.slug);
-    const q = rosterSearch(location.search).q ?? '';
-    const team = await (await context.data.scheduling.open()).openTeamWeek(params.slug, deps.week, q, zone);
-    return { zone, ...team };
-  },
+  // Only someone who sees a colleague's scheduling has a roster (spec 0037, AC-1447); anyone else opens their own
+  // hours, Availability. The work is in its own module, loaded with `import()`, out of the first load.
+  loader: async ({ context, params, deps, location }) =>
+    (await import('../features/booking/roster-load.ts')).loadRoster(
+      context.data,
+      params.slug,
+      deps.week,
+      rosterSearch(location.search).q ?? '',
+    ),
   // Shown only once the loading delay passed: its skeletons show at once.
   pendingComponent: RosterRoutePending,
   errorComponent: RosterError,

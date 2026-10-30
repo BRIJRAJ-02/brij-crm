@@ -32,7 +32,6 @@ export const strings = {
   /** The sidebar's way to the bookings, first under Scheduling (spec 0034, AC-928). */
   bookings: 'Bookings',
   /** The Team week (spec 0037, job J6), a sidebar page of its own under Scheduling. */
-  roster: 'Roster',
   /** The sidebar's way to the booking pages and forms, after Bookings (spec 0022; one row, the owner, 22 October 2026). */
   captures: 'Captures',
   /** The member's own public page (spec 0051), out of Settings and into the sidebar (owner, 25 October 2026). */

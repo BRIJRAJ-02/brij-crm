@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { BookingsTabs } from '../features/bookings/BookingsTabs.tsx';
 import { BookingsTopBar } from '../features/bookings/BookingsTopBar.tsx';
-import { rosterIsShown } from '../features/booking/links.ts';
+import { rosterIsShown } from '../features/booking/roster-load.ts';
 import { BOOKINGS_TABS, bookingsTabOf } from '../features/bookings/tabs.ts';
 import { useHostsChoice } from '../features/bookings/HostsSwitch.tsx';
 import { BookingsActionSlot, BookingsHosts } from '../features/bookings/toolbarSlot.ts';
