@@ -14,7 +14,8 @@ import { uuidList } from '../engine/ids.ts';
 import type { WriteContext } from '../engine/write.ts';
 
 /** The settings column that says whether a kind is emailed. */
-const EMAIL_COLUMN: Readonly<Record<NotificationKind, string>> = {
+// A join request has its own email (`requestToJoin`'s notice), so it never queues this one.
+const EMAIL_COLUMN: Readonly<Record<Exclude<NotificationKind, 'join_request'>, string>> = {
   mention: 'email_mentions',
   reply: 'email_replies',
   task_assigned: 'email_assignments',
@@ -42,7 +43,11 @@ function actingMember(context: WriteContext): string | undefined {
  * A mention queues nothing for a member who turned the `mentions` topic off
  * from an email's preferences link: the email would hold nothing for them.
  */
-async function queueEmail(context: WriteContext, memberIds: readonly string[], kind: NotificationKind): Promise<void> {
+async function queueEmail(
+  context: WriteContext,
+  memberIds: readonly string[],
+  kind: Exclude<NotificationKind, 'join_request'>,
+): Promise<void> {
   if (memberIds.length === 0) return;
   const column = sql.raw(`s.${EMAIL_COLUMN[kind]}`);
   const fallback = kind === 'reply' ? sql`false` : sql`true`;

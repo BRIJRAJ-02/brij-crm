@@ -26,10 +26,11 @@ import { comments } from './comments.ts';
 import { notes } from './notes.ts';
 import { records } from './records.ts';
 import { tasks } from './tasks.ts';
+import { joinRequests } from './team.ts';
 import { actorConstraints, members } from './workspaces.ts';
 
 /** Why a member was notified (spec 0038, decision 8). */
-export const notificationKind = pgEnum('notification_kind', ['mention', 'reply', 'task_assigned']);
+export const notificationKind = pgEnum('notification_kind', ['mention', 'reply', 'task_assigned', 'join_request']);
 
 const actor = actorColumns('actor');
 
@@ -54,6 +55,8 @@ export const notifications = pgTable(
     taskId: uuid('task_id'),
     /** A mention in a note (spec 0038 with spec 0019): the note, and its record in `recordId`. */
     noteId: uuid('note_id'),
+    /** A request to join (migration 0127): told to each holder of `members.invite`. */
+    joinRequestId: uuid('join_request_id'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     readAt: timestamptz('read_at'),
     doneAt: timestamptz('done_at'),
@@ -89,14 +92,18 @@ export const notifications = pgTable(
       foreignColumns: [notes.workspaceId, notes.id],
     }).onDelete('cascade'),
     // A comment notification names its comment, thread and record; a task one its task; a note mention its note
-    // and record.
+    // and record; a join request its request alone. `kind::text`: migration 0127 added the value in its own
+    // transaction.
     check(
       'notifications_subject',
-      sql`(${t.kind} = 'task_assigned' and ${t.taskId} is not null and ${t.commentId} is null and ${t.noteId} is null)
-        or (${t.kind} <> 'task_assigned' and ${t.commentId} is not null and ${t.threadId} is not null
-          and ${t.recordId} is not null and ${t.taskId} is null and ${t.noteId} is null)
-        or (${t.kind} = 'mention' and ${t.noteId} is not null and ${t.recordId} is not null
-          and ${t.commentId} is null and ${t.threadId} is null and ${t.taskId} is null)`,
+      sql`(${t.kind}::text = 'task_assigned' and ${t.taskId} is not null and ${t.commentId} is null
+          and ${t.noteId} is null and ${t.joinRequestId} is null)
+        or (${t.kind}::text in ('mention', 'reply') and ${t.commentId} is not null and ${t.threadId} is not null
+          and ${t.recordId} is not null and ${t.taskId} is null and ${t.noteId} is null and ${t.joinRequestId} is null)
+        or (${t.kind}::text = 'mention' and ${t.noteId} is not null and ${t.recordId} is not null
+          and ${t.commentId} is null and ${t.threadId} is null and ${t.taskId} is null and ${t.joinRequestId} is null)
+        or (${t.kind}::text = 'join_request' and ${t.joinRequestId} is not null and ${t.recordId} is null
+          and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null)`,
     ),
     // One per recipient per comment, and per task assignment.
     uniqueIndex('notifications_one_per_comment')
@@ -105,6 +112,14 @@ export const notifications = pgTable(
     uniqueIndex('notifications_one_per_task')
       .on(t.workspaceId, t.memberId, t.taskId)
       .where(sql`${t.taskId} is not null`),
+    foreignKey({
+      name: 'notifications_join_request',
+      columns: [t.workspaceId, t.joinRequestId],
+      foreignColumns: [joinRequests.workspaceId, joinRequests.id],
+    }).onDelete('cascade'),
+    uniqueIndex('notifications_one_per_join_request')
+      .on(t.workspaceId, t.memberId, t.joinRequestId)
+      .where(sql`${t.joinRequestId} is not null`),
     uniqueIndex('notifications_one_per_note')
       .on(t.workspaceId, t.memberId, t.noteId)
       .where(sql`${t.noteId} is not null`),

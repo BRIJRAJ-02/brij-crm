@@ -11,6 +11,7 @@ import { createTestUser, testQuery } from '@crm/db/testing';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
+import { listNotifications } from '../notifications/inbox.ts';
 import { testScope } from '../testing.ts';
 import {
   decideJoinRequest,
@@ -172,6 +173,22 @@ describe('asking to join and answering (AC-819, AC-820)', () => {
     expect(await refusalOf(decideJoinRequest(w.owner, { requestId: open[0]?.id ?? '', approve: false }))).toMatchObject(
       { code: 'NOT_FOUND' },
     );
+  });
+
+  it('tells holders of members.invite in their inbox while the request is open (flow pass, 30 Oct 2026)', async () => {
+    const domain = `acme-${tag()}.test`;
+    const w = await workspace(domain);
+    await setWorkspaceDomains(w.owner, { domains: [domain] }, w.ownerPerson);
+    const bea = await person(domain);
+    await requestToJoin({ db }, bea, w.workspaceId);
+    const inbox = await listNotifications(w.owner, { status: 'inbox' });
+    expect(inbox.items).toEqual([expect.objectContaining({ kind: 'join_request', excerpt: 'Bea' })]);
+    // A plain member can't approve: nothing was written for them, and nothing would show.
+    expect((await listNotifications(w.other, { status: 'inbox' })).items).toEqual([]);
+    // Answered, it leaves the inbox: the request it names is no longer open.
+    const [open] = await listJoinRequests(w.owner);
+    await decideJoinRequest(w.owner, { requestId: open?.id ?? '', approve: false });
+    expect((await listNotifications(w.owner, { status: 'inbox' })).items).toEqual([]);
   });
 
   it('keeps a decline quiet for 30 days, then lets them ask again', async () => {

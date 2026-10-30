@@ -282,7 +282,8 @@ export async function requestToJoin(
   if (scope === undefined) throw refuse('NOT_FOUND', WORKSPACE_NOT_FOUND);
   const { result } = await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       // One asker at a time per person and workspace, so two tabs make one request.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`join:${id}:${person.id}`}, 0))`);
       const standing = await standingIn(tx, id, person, domain);
@@ -310,7 +311,7 @@ export async function requestToJoin(
         options.source,
       );
       const admins = await tx
-        .select({ name: members.name, email: members.email })
+        .select({ id: members.id, name: members.name, email: members.email })
         .from(members)
         .where(
           and(
@@ -326,6 +327,23 @@ export async function requestToJoin(
         )
         .orderBy(asc(members.name))
         .limit(20);
+      // In the app too (flow pass, 30 October 2026): each of them finds it in their inbox, which opens Members ›
+      // Joining. The row names the request by id; who asked is read from the request while it is open.
+      if (admins.length > 0) {
+        await tx
+          .insert(schema.notifications)
+          .values(
+            admins.map((admin) => ({
+              workspaceId: id,
+              memberId: admin.id,
+              kind: 'join_request' as const,
+              actorType: 'system' as const,
+              joinRequestId: requestId,
+            })),
+          )
+          .onConflictDoNothing();
+        context.record({ notifications: admins.map((admin) => admin.id) });
+      }
       return {
         joinable,
         notice: {

@@ -6,6 +6,7 @@ import type { NotificationItem } from '@crm/ui';
 import { isTaskParam } from '../tasks/entries.ts';
 import { actorDisplay } from '../notes/entries.ts';
 import { recordHref } from '../records/details.ts';
+import { membersSettingsHref } from '../settings/nav.ts';
 
 /** The kind filter as the address spells it. */
 export type InboxKind = 'mentions' | 'replies' | 'assignments';
@@ -44,6 +45,18 @@ export const notificationKind = (kind: InboxKind | undefined): NotificationKind 
 
 /** One notification as NotificationList's row. */
 export function toNotificationItem(view: NotificationView, members: readonly MemberSummary[]): NotificationItem {
+  // Someone asks to join: the row is about them, so they are its face and its sentence ("Cy Young asks to join").
+  if (view.joinRequestId !== undefined) {
+    return {
+      id: view.id,
+      kind: view.kind,
+      actor: { type: 'system', id: null, name: view.excerpt },
+      createdAt: view.createdAt,
+      isRead: view.readAt !== undefined,
+      isDone: view.doneAt !== undefined,
+      excerpt: '',
+    };
+  }
   return {
     id: view.id,
     kind: view.kind,
@@ -68,6 +81,8 @@ export function targetOf(
   objectSlugs: ReadonlyMap<string, string>,
 ): NotificationTarget {
   if (view.taskId !== undefined) return { kind: 'task', taskId: view.taskId };
+  // Members opens on Joining while someone waits, where Approve and Decline are.
+  if (view.joinRequestId !== undefined) return { kind: 'href', href: membersSettingsHref(slug) };
   if (view.record === undefined) return undefined;
   const objectSlug = objectSlugs.get(view.record.objectId);
   if (objectSlug === undefined) return undefined;

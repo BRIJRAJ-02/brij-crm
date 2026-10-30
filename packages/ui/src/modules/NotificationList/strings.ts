@@ -9,6 +9,8 @@ export const strings = {
     mention: (actor: string) => `${actor} mentioned you`,
     reply: (actor: string) => `${actor} replied in a thread`,
     task_assigned: (actor: string) => `${actor} assigned you a task`,
+    /** The actor is the person asking (the screen names them), not whoever acted. */
+    join_request: (actor: string) => `${actor} asks to join`,
   },
   /** A mention in a note: "Ada Lovelace mentioned you in a note". */
   mentionInNote: (actor: string) => `${actor} mentioned you in a note`,

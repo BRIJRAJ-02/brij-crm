@@ -25,6 +25,7 @@ import {
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import type { WorkspaceTx } from '@crm/db';
 import { checkScope } from '../access/mint.ts';
+import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { canonicalId, isUuid, uuidList } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
@@ -88,6 +89,9 @@ interface NotificationRow extends Record<string, unknown> {
   readonly comment_id: string | null;
   readonly task_id: string | null;
   readonly note_id: string | null;
+  readonly join_request_id: string | null;
+  /** An open join request's name (null once it was decided). */
+  readonly join_name: string | null;
   readonly body: string | null;
   /** A note mention's note title, while the note is live (null when it is in the trash or gone). */
   readonly note_title: string | null;
@@ -98,12 +102,15 @@ interface NotificationRow extends Record<string, unknown> {
 const NOTIFICATION_COLUMNS = sql`n.id::text as id, n.kind, n.actor_type, n.actor_id::text as actor_id,
   ${millis('n.created_at')} as created_at, ${millis('n.read_at')} as read_at, ${millis('n.done_at')} as done_at,
   n.record_id::text as record_id, n.thread_id::text as thread_id, n.comment_id::text as comment_id,
-  n.task_id::text as task_id, n.note_id::text as note_id, c.body, nt.title as note_title`;
+  n.task_id::text as task_id, n.note_id::text as note_id, n.join_request_id::text as join_request_id,
+  jr.name as join_name, c.body, nt.title as note_title`;
 
 /** The comment a notification is about, joined when it is live (a deleted one's notifications are gone already). */
 const COMMENT_JOIN = sql`left join comments c on c.workspace_id = n.workspace_id and c.id = n.comment_id
   and c.deleted_at is null
-  left join notes nt on nt.workspace_id = n.workspace_id and nt.id = n.note_id and nt.deleted_at is null`;
+  left join notes nt on nt.workspace_id = n.workspace_id and nt.id = n.note_id and nt.deleted_at is null
+  left join join_requests jr on jr.workspace_id = n.workspace_id and jr.id = n.join_request_id
+    and jr.status = 'open'`;
 
 /**
  * The rows among `rows` the reader may see, as views, in order (AC-1166): a
@@ -132,6 +139,11 @@ async function visibleViews(
       ...(row.read_at === null ? {} : { readAt: row.read_at }),
       ...(row.done_at === null ? {} : { doneAt: row.done_at }),
     };
+    if (row.join_request_id !== null) {
+      // Someone asks to join: shown while the request is open and the reader may still approve it.
+      if (row.join_name === null || !can(scope.access, 'members.invite')) return [];
+      return [{ ...base, joinRequestId: row.join_request_id, excerpt: excerptOf(row.join_name, NOTIFICATION_EXCERPT) }];
+    }
     if (row.task_id !== null) {
       const task = tasks.get(row.task_id);
       if (task === undefined) return [];
