@@ -51,7 +51,11 @@ export type ModalVariant = 'dialog' | 'form' | 'confirm' | 'window' | 'palette' 
 export interface ModalProps {
   /** The heading, which also names the dialog: a question or the task ("Delete 3 records?"). */
   readonly title: string;
-  readonly children: ReactNode;
+  /**
+   * The body. A `confirm` whose question says it all (Discard your unsaved changes?) leaves it out: no line is
+   * drawn and no description is set, so the title and the two buttons are the whole dialog.
+   */
+  readonly children?: ReactNode;
   /** The footer's buttons, Cancel first and the primary last. A Button with `slot="close"` closes the modal. */
   readonly actions?: ReactNode;
   /**
@@ -149,6 +153,8 @@ export function Modal({
   // A confirm asks in its body: no title bar, the question over its one line of consequence.
   const isConfirm = variant === 'confirm';
   const bodyId = useId();
+  // A confirm may be the question alone; any other dialog always has a body.
+  const hasBody = children !== undefined && children !== null && children !== false;
   // The footer's submit shows ↵, or ⌘↵ while the dialog holds a long text or an editor, where Enter writes a line
   // (a field turned editable later counts too), and always for a library Form's submit (`submitForm`).
   const [holdsLongText, setHoldsLongText] = useState(false);
@@ -193,7 +199,7 @@ export function Modal({
         <Dialog
           className={styles.dialog}
           role={isAlert ? 'alertdialog' : 'dialog'}
-          {...(isAlert ? { 'aria-describedby': bodyId } : {})}
+          {...(isAlert && hasBody ? { 'aria-describedby': bodyId } : {})}
         >
           {/* Plain boxes, not header and footer: inside a dialog those read as a second banner and
               contentinfo landmark beside the page's own. */}
@@ -245,9 +251,11 @@ export function Modal({
               )}
               {/* Opened from a settings page, its content keeps to the dialog, never the page's edges. */}
               {isConfirm ? (
-                <div className={styles.consequence} id={bodyId}>
-                  <PageEdge value={false}>{children}</PageEdge>
-                </div>
+                hasBody && (
+                  <div className={styles.consequence} id={bodyId}>
+                    <PageEdge value={false}>{children}</PageEdge>
+                  </div>
+                )
               ) : (
                 <PageEdge value={false}>{children}</PageEdge>
               )}

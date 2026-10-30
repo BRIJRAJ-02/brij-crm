@@ -1871,11 +1871,7 @@ export function DataGrid<Row>({
           {footerRow}
         </div>
         {/* With no rows the header stays, so the columns and their menus do too. */}
-        {isEmpty && (
-          <div className={styles.state}>
-            {emptyState ?? <EmptyState title={strings.empty}>{strings.emptyText}</EmptyState>}
-          </div>
-        )}
+        {isEmpty && <div className={styles.state}>{emptyState ?? <EmptyState title={strings.empty} />}</div>}
         {tip !== undefined && (isWithin || tip.via === 'hover') && (
           <AnchoredTooltip
             key={tip.key}

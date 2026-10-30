@@ -20,6 +20,8 @@ test.describe('the People table', () => {
     await expect(grid).toBeVisible();
     await expect(grid.getByRole('columnheader', { name: /Email addresses/ })).toBeVisible();
     await expect(page.getByText('No people yet')).toBeVisible();
+    // The title and the buttons say it all: no line under the title (31 October 2026).
+    await expect(page.getByText('People you add show here.')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'New person' })).toHaveCount(2);
     await checkScreen(page, '1-people-empty');
 

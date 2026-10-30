@@ -29,11 +29,12 @@ import {
   focusLater,
   Popover,
   Select,
+  sharedStrings,
   ToolbarSearch,
-  ViewSettings,
   type ViewChoice,
   type ViewField,
   type ViewLayoutSwitch,
+  ViewSettings,
   type ViewSettingsTrigger,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
@@ -409,7 +410,6 @@ export function ViewScreen(props: ViewScreenProps) {
           draft.settle();
           setShowDropped(false);
           setFocusRequest({});
-          toasts.toast({ tone: 'success', message: strings.saved(next.name) });
         },
         (error: unknown) => {
           setSaving(false);
@@ -582,7 +582,7 @@ export function ViewScreen(props: ViewScreenProps) {
         },
         (error: unknown) => {
           setDuplicating(false);
-          toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
+          toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
         },
       );
   };
@@ -648,7 +648,7 @@ export function ViewScreen(props: ViewScreenProps) {
         if (isCurrent) setLateTable({ records: opened, query: asked });
       },
       () => {
-        if (isCurrent) toasts.toast({ tone: 'danger', message: strings.actionFailed });
+        if (isCurrent) toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
       },
     );
     return () => {
@@ -755,7 +755,7 @@ export function ViewScreen(props: ViewScreenProps) {
                   (error: unknown) => {
                     toasts.toast({
                       tone: 'danger',
-                      message: isDataError(error) ? error.message : strings.actionFailed,
+                      message: isDataError(error) ? error.message : sharedStrings.couldntDoThat,
                     });
                   },
                 );
@@ -1169,9 +1169,7 @@ export function ViewScreen(props: ViewScreenProps) {
                         {strings.editFilters}
                       </Button>
                     }
-                  >
-                    {strings.noMatchesText}
-                  </EmptyState>
+                  />
                 ),
               }
             : {})}

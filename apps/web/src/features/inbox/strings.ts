@@ -19,8 +19,6 @@ export const strings = {
   markAllDone: 'Mark all done',
   /** The list's name: "Inbox", or "Inbox, Mentions" under a kind. */
   listLabel: (tab: string, kind: string | undefined) => (kind === undefined ? tab : `${tab}, ${kind}`),
-  /** Under "You’re all caught up.": what lands in the inbox, so an empty one says what it is for. */
-  emptyBody: 'Mentions, replies to your threads, tasks assigned to you and new form submissions show here.',
   emptyDone: 'Nothing done yet.',
   emptyFiltered: 'No notifications match.',
   clearFilters: 'Clear filters',

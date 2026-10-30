@@ -93,6 +93,7 @@ export { focusLater } from './lib/focus-later.ts';
 /** One Intl formatter per key (kind, language, zone, options), built once and reused: for screens that format many values each render. */
 export { memoIntl } from './lib/intl-memo.ts';
 export { safeHref } from './lib/safe-href.ts';
+export { strings as sharedStrings } from './lib/strings.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
 export { Callout, type CalloutPlacement, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
@@ -343,6 +344,7 @@ export {
   type VisitorBarPerson,
   type VisitorBarProps,
 } from './modules/VisitorBar/VisitorBar.tsx';
+export { SampleTable, type SampleTableProps } from './molecules/SampleTable/SampleTable.tsx';
 export { SectionBar, type SectionBarProps, type SectionBarVariant } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export { TileGrid, type TileGridProps } from './molecules/TileGrid/TileGrid.tsx';

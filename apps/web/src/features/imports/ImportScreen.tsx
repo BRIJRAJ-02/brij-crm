@@ -24,28 +24,29 @@ import {
   createPhoneParser,
   Disclosure,
   EmptyState,
-  Icon,
+  type FieldAttribute,
   FileDrop,
-  InfoTip,
+  Icon,
   loadPhoneLibrary,
   Modal,
   PageColumn,
   Pagination,
+  type PhoneParser,
   ProgressBar,
   Radio,
   RadioGroup,
+  SampleTable,
   SectionBar,
   SegmentedControl,
   Select,
+  type SelectItem,
+  sharedStrings,
   Steps,
   Table,
-  Tooltip,
-  TopBar,
-  type FieldAttribute,
-  type PhoneParser,
-  type SelectItem,
   type TableColumn,
   type TextContext,
+  Tooltip,
+  TopBar,
 } from '@crm/ui';
 import { useBlocker, useNavigate } from '@tanstack/react-router';
 import { useMemo, useRef, useState } from 'react';
@@ -613,7 +614,7 @@ export function ImportScreen({
         }
         current = await reread();
       } catch (error) {
-        setReviewError(isDataError(error) ? error.message : strings.somethingWrong);
+        setReviewError(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
         await reread().catch(() => undefined);
         return;
       } finally {
@@ -674,7 +675,7 @@ export function ImportScreen({
         setNotice({ tone: 'info', message: strings.stopped });
         return;
       }
-      setNotice({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+      setNotice({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
     }
   };
 
@@ -718,7 +719,7 @@ export function ImportScreen({
       />
       {step === 'upload' && (
         <>
-          <Card description={strings.uploadText}>
+          <Card>
             <FileDrop
               label={strings.dropLabel}
               acceptedTypes={FILE_TYPES}
@@ -728,6 +729,8 @@ export function ImportScreen({
               wrongTypeText={excelRefusal}
             />
             {isReading && <ProgressBar label={strings.reading} isIndeterminate />}
+            {/* The file's shape as a picture: row 1 is the column names. */}
+            <SampleTable label={strings.sampleLabel} rows={strings.sampleRows} caption={strings.sampleCaption} />
             {/* A file's first row, as this object takes it: written here, nothing asked of the server. */}
             <Button
               variant="link"
@@ -830,7 +833,6 @@ export function ImportScreen({
         <Card
           title={strings.fileSummary(loaded.name, loaded.table.rows.length)}
           description={strings.totals(readyCount, errors)}
-          actions={<InfoTip label={strings.rowColumn}>{strings.rowInfo}</InfoTip>}
           footerNote={
             readyCount === 0
               ? undefined
@@ -883,7 +885,6 @@ export function ImportScreen({
               // The lookup follows the key: a new one asks again, always add drops it.
               lookUpMatches(result, candidates.some((attribute) => attribute.id === next) ? next : undefined);
             }}
-            {...(candidates.length === 0 ? { hint: strings.noKeyHint } : {})}
           />
           {matchAttributeId === undefined && hasRecords === true && (
             <Callout tone="warning">{strings.duplicates}</Callout>
@@ -1003,7 +1004,7 @@ export function ImportScreen({
             () => {
               if (column !== undefined) setTarget(column, { attributeId: made.id });
             },
-            () => setColumnsError(strings.somethingWrong),
+            () => setColumnsError(sharedStrings.couldntDoThat),
           );
         }}
       />
@@ -1031,7 +1032,7 @@ export function ImportScreen({
           </>
         }
       >
-        {strings.stopText}
+        {strings.nothingImported}
       </Modal>
       <Modal
         title={strings.leaveTitle}
@@ -1057,7 +1058,7 @@ export function ImportScreen({
           </>
         }
       >
-        {sending === undefined ? strings.leaveText : strings.leaveSendingText}
+        {strings.nothingImported}
       </Modal>
     </PageColumn>
   );
@@ -1184,7 +1185,6 @@ function ColumnsStep({
         </>
       }
     >
-      {matched === 0 && <Callout tone="info">{strings.needOneColumn}</Callout>}
       {error !== undefined && (
         <Callout tone="danger" isAnnounced>
           {error}
@@ -1197,7 +1197,6 @@ function ColumnsStep({
             key={`required-${attribute.id}`}
             tone="danger"
             isPolite
-            title={strings.requiredMissing(attribute.title)}
             {...(choices.some((choice) => choice.attribute.id === attribute.id) && freeColumns.length > 0
               ? {
                   actions: (
@@ -1216,17 +1215,10 @@ function ColumnsStep({
                 }
               : {})}
           >
-            {strings.requiredMissingText}
+            {strings.requiredMissing(attribute.title)}
           </Callout>
         ))}
-      {required.length > 0 && (
-        <Checkbox
-          label={strings.updateOnly}
-          description={strings.updateOnlyHint}
-          isSelected={!isCreating}
-          onChange={onUpdateOnly}
-        />
-      )}
+      {required.length > 0 && <Checkbox label={strings.updateOnly} isSelected={!isCreating} onChange={onUpdateOnly} />}
       {checked !== undefined && (
         <ProgressBar label={strings.checking} value={checked} maxValue={Math.max(loaded.table.rows.length, 1)} />
       )}
@@ -1326,12 +1318,17 @@ function ColumnsStep({
             }
             {...(canMake && check.missing.length > 0
               ? {
+                  // One choice per column, made already: Leave empty, or make them (31 October 2026).
                   actions: (
-                    <Checkbox
-                      label={strings.createMissing(check.missing.length, far.pluralName)}
-                      description={strings.createMissingHint}
-                      isSelected={making}
-                      onChange={(isSelected) => onCreateMissing(note.column, isSelected)}
+                    <SegmentedControl
+                      label={strings.linksChoice(header)}
+                      size="compact"
+                      segments={[
+                        { value: 'create', label: strings.createThem },
+                        { value: 'leave', label: strings.leaveEmpty },
+                      ]}
+                      value={making ? 'create' : 'leave'}
+                      onChange={(value) => onCreateMissing(note.column, value === 'create')}
                     />
                   ),
                 }
@@ -1342,7 +1339,6 @@ function ColumnsStep({
               check.ambiguous.length === 0 || check.missing.length === 0
                 ? ''
                 : strings.linksAmbiguous(check.ambiguous.length),
-              making ? '' : strings.linksLeftOut,
               canMake || check.missing.length === 0 || far === undefined ? '' : strings.linksCantMake(far.pluralName),
             ]
               .filter((part) => part !== '')
@@ -1419,7 +1415,7 @@ function PreviewTable({
       columns={columns}
       rows={shown}
       getRowId={(row) => `row-${String(row.rowNumber)}`}
-      emptyState={<EmptyState title={strings.noRows}>{strings.noRowsText}</EmptyState>}
+      emptyState={<EmptyState title={strings.noRows} />}
       renderCell={(row, columnId) => {
         if (columnId === 'row') return n(row.rowNumber);
         // A ready row says so, so the column never reads as missing values beside the errors.

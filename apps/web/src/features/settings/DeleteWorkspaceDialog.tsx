@@ -3,7 +3,7 @@
 // Main task: type the workspace's name, then Delete workspace; the server checks the name again.
 // Leaves out: restoring (the workspace's own address does that for 30 days) and exporting (a quiet line suggests it; its link comes with export).
 import { isDataError, namesMatch, type DataLayer, type DeletedWorkspace } from '@crm/data';
-import { Button, Field, Modal } from '@crm/ui';
+import { Button, Field, Modal, sharedStrings } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './workspace-strings.ts';
 
@@ -43,13 +43,14 @@ export function DeleteWorkspaceDialog({ data, slug, name, isOpen, onClose, onDel
       },
       (error: unknown) => {
         setBusy(false);
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+        setFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
       },
     );
   };
   return (
     <Modal
       title={strings.deleteTitle(name)}
+      variant="confirm"
       tone="danger"
       isDismissable={false}
       isOpen={isOpen}
@@ -72,7 +73,7 @@ export function DeleteWorkspaceDialog({ data, slug, name, isOpen, onClose, onDel
         </>
       }
     >
-      <span>{strings.deleteText}</span>
+      {strings.deleteText}
       <Field
         label={strings.typeName(name)}
         // Typing the name is the dialog's one task, so its field takes focus as it opens (Q102).

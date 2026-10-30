@@ -1,5 +1,5 @@
 import { isDataError } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
+import { LoadingNow, sharedStrings } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
 import { strings } from '../features/trash/strings.ts';
@@ -73,7 +73,7 @@ function TrashError({ error }: ErrorComponentProps) {
     <SettingsFailed
       title={strings.title}
       heading={strings.failedTitle}
-      text={isDataError(error) ? error.message : strings.somethingWrong}
+      text={isDataError(error) ? error.message : sharedStrings.couldntDoThat}
       onRetry={() => void router.invalidate()}
     />
   );

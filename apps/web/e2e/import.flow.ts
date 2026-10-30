@@ -40,6 +40,9 @@ test('a People CSV imports through its steps, and its summary says what it did',
   await page.getByRole('menuitem', { name: 'Import people' }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people/import$`));
   await expect(page.getByRole('heading', { level: 1, name: 'Import people' })).toBeVisible();
+  // The file's shape is a picture, not a sentence (31 October 2026): row 1 is the column names.
+  await expect(page.getByRole('img', { name: 'The first row holds the column names' })).toBeVisible();
+  await expect(page.getByText('Nothing changes until you start the import.')).toHaveCount(0);
   await checkScreen(page, 'import-upload');
 
   await page
@@ -65,7 +68,7 @@ test('a People CSV imports through its steps, and its summary says what it did',
   const readyRows = rows.toLocaleString('en-US');
   await expect(page.getByText(`${readyRows} ready, 1 with errors`)).toBeVisible();
   await expect(page.getByRole('button', { name: /Email addresses/u })).toBeVisible();
-  await expect(page.getByText(`${readyRows} new. You can undo it for 7 days.`)).toBeVisible();
+  await expect(page.getByText(`${readyRows} new. Undo for 7 days.`)).toBeVisible();
   await page.getByRole('radiogroup', { name: 'Show rows' }).getByText('With errors').click();
   await expect(page.getByRole('gridcell', { name: /^E-mail: /u })).toBeVisible();
   await checkScreen(page, 'import-preview');
@@ -101,7 +104,7 @@ test('a People CSV imports through its steps, and its summary says what it did',
   // Undo: asked first, then the created people go to the trash.
   await page.getByRole('button', { name: 'Undo import' }).click();
   const undo = page.getByRole('alertdialog', { name: 'Undo this import?' });
-  await expect(undo).toContainText(`${readyRows} created people move to the trash.`);
+  await expect(undo).toContainText(`${readyRows} to the trash.`);
   await undo.getByRole('button', { name: 'Undo import' }).click();
   await expect(page.getByRole('heading', { name: 'Import undone' })).toBeVisible({ timeout: IMPORT_MS });
   await expect(page.getByRole('button', { name: 'Undo import' })).toHaveCount(0);

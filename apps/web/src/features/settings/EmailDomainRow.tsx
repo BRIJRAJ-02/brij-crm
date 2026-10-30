@@ -3,7 +3,7 @@
 // Main task: switch it on or off; each request then waits under Asking to join, on the Joining tab.
 // Leaves out: other domains (only the admin's own verified one may go on), and answering requests (the tab's).
 import { isDataError, type DataLayer, type WorkspaceDomainsView } from '@crm/data';
-import { InfoTip, SettingsRow, Switch } from '@crm/ui';
+import { SettingsRow, sharedStrings, Switch } from '@crm/ui';
 import { useState } from 'react';
 import type { MemberQuestion } from './MemberConfirm.tsx';
 import { strings } from './members-strings.ts';
@@ -26,8 +26,8 @@ export interface EmailDomainRowProps {
 
 /**
  * One SettingsRow, Company email, in its own Card after the invite link's: the reader's own domain and a
- * switch, an InfoTip saying which domain can be used (the server's rule). Its one quiet line says what it does, or
- * why it can't be turned on (a public or unverified address). Waits for the server: meanwhile the switch stands
+ * switch, titled with the domain it is for. A line shows only to say why it can't be turned on (a public or unverified
+ * address). Waits for the server: meanwhile the switch stands
  * where it is going, disabled, and the line says so. Turning it off asks first (the confirm shows its own wait),
  * since it closes the open requests from that domain.
  */
@@ -44,12 +44,15 @@ export function EmailDomainRow({ data, slug, domains, ask, onChanged, onTurnedOn
         onTurnedOn(strings.domainTurnedOn(domain));
       })
       .catch((error: unknown) => {
-        onFailed(isDataError(error) ? error.message : strings.somethingWrong);
+        onFailed(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
       })
       .finally(() => {
         setBusy(false);
       });
   };
+  // The title says which domain it is for, so a working switch needs no line under it (31 October 2026); only the
+  // wait, or why it can't be turned on (a public or unverified address), is said.
+  const title = mine === undefined ? strings.domainTitle : strings.domainRowTitle(mine);
   const description =
     isBusy && mine !== undefined
       ? strings.domainSaving(mine)
@@ -57,17 +60,11 @@ export function EmailDomainRow({ data, slug, domains, ask, onChanged, onTurnedOn
         ? domains.isPublic
           ? strings.domainPublic
           : strings.domainUnverified
-        : isOn
-          ? strings.domainOn(mine)
-          : strings.domainOff(mine);
+        : undefined;
   return (
-    <SettingsRow
-      title={strings.domainTitle}
-      description={description}
-      meta={<InfoTip label={strings.domainTitle}>{strings.domainInfo}</InfoTip>}
-    >
+    <SettingsRow title={title} {...(description === undefined ? {} : { description })}>
       <Switch
-        label={strings.domainTitle}
+        label={title}
         isLabelHidden
         isSelected={isOn || isBusy}
         isDisabled={isBusy || mine === undefined}

@@ -1,3 +1,5 @@
+import { sharedStrings } from '@crm/ui';
+
 /** The record page's copy (spec 0017). The side panel (milestone 4) shares `recordUnavailable`. */
 export const strings = {
   /** A search result held on a far side that holds one (spec 0014): picking it moves it here. */
@@ -14,7 +16,7 @@ export const strings = {
   /** Deleted, or access lost, while the page was open (AC-376). */
   noLongerAvailable: (singularName: string) => `This ${singularName.toLowerCase()} is no longer available.`,
   loadFailed: 'Couldn’t load this record',
-  loadFailedText: 'Something went wrong. Try again in a moment.',
+  loadFailedText: sharedStrings.couldntDoThat,
   loading: 'Loading',
   /** What the tabs switch between, for screen readers. */
   tabs: 'Record',
@@ -56,7 +58,6 @@ export const strings = {
   viewOnlyReason: (pluralName: string) => `You can view ${pluralName} but not edit them. Ask an admin.`,
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
-  copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
   unnamed: (singularName: string) => `Unnamed ${singularName.toLowerCase()}`,
   /** A meeting's attendee added as a person (spec 0024, AC-609). */
   addedPerson: (name: string) => `${name} added as a person`,

@@ -27,11 +27,12 @@ import {
   ButtonLink,
   Callout,
   EmptyState,
+  sharedStrings,
   Spinner,
   TopBar,
   useDelayedLoading,
-  ViewBar,
   type ViewAction,
+  ViewBar,
   type ViewChoice,
   type ViewLayoutSwitch,
   type ViewSettingsTrigger,
@@ -297,7 +298,7 @@ export function RecordsScreen({
         // The records layer itself didn't load (offline): the rows on screen stay; Retry asks again.
         toasts.toast({
           tone: 'danger',
-          message: strings.somethingWrong,
+          message: sharedStrings.couldntDoThat,
           action: {
             label: strings.retry,
             onAction: () => {
@@ -701,7 +702,7 @@ export function RecordsScreen({
                   },
                   // The records layer failed to load; the edit never showed.
                   () => {
-                    toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+                    toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
                   },
                 );
               }}
@@ -744,9 +745,7 @@ export function RecordsScreen({
                           ),
                         }
                       : {})}
-                  >
-                    {strings.emptyText(object.pluralName)}
-                  </EmptyState>
+                  />
                 )
               }
               {...(focusRow === undefined ? {} : { focusRow })}

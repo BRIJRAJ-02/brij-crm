@@ -12,8 +12,6 @@ export const strings = {
   discarded: 'Changes discarded.',
   save: 'Save',
   saving: 'Saving',
-  /** After Save: the view now runs this for everyone who sees it. */
-  saved: (name: string) => `Filters saved on ${name}.`,
   /** Someone else saved the view's filters while this tab had no draft (AC-468). */
   changedBy: (name: string) => `${name} changed the filters on this view.`,
   /** The same, while rows were ticked: the selection goes with the old filters (spec 0022, AC-522, owner decision 5). */
@@ -33,7 +31,6 @@ export const strings = {
   dismiss: 'Dismiss',
   /** A filter that matches nothing (AC-486). */
   noMatchesTitle: (plural: string) => `No ${plural.toLowerCase()} match these filters`,
-  noMatchesText: 'Change the filters to see more.',
   editFilters: 'Edit filters',
   /** The view's search (CRM flow pass): narrows by name, never saved. */
   searchView: (plural: string) => `Search ${plural.toLowerCase()}`,
@@ -46,16 +43,13 @@ export const strings = {
   matching: (count: string, plural: string) => `${count} ${plural.toLowerCase()} match`,
   /** The clash dialog (AC-469). */
   changedTitle: 'This view changed',
-  changedText: (sentence: string) =>
-    `${sentence} Replace them with yours, or save yours as a new view? Cancel keeps your changes here, unsaved.`,
-  replace: 'Replace',
-  keepMine: 'Cancel',
+  replace: 'Replace theirs',
+  keepMine: 'Keep editing',
   /** A view this person can't open (AC-463). */
   notFoundText: 'This view doesn’t exist or isn’t shared with you.',
   goTo: (name: string) => `Go to ${name}`,
   /** An object with no view this person may open (AC-462). */
-  noViewsTitle: 'No views are available to you',
-  noViewsText: 'Create one for yourself, or ask a workspace owner or admin about the shared views here.',
+  noViewsTitle: 'No views yet',
   saveFailed: 'Couldn’t save this view. Try again in a moment.',
   /** Milestone 2: making and managing views. */
   saveAsNew: 'Save as new view',
@@ -85,13 +79,12 @@ export const strings = {
   noGrouping: 'None',
   /** A board's View settings: what its cards show. */
   cardFields: 'Card fields',
-  cardFieldsFull: (max: number) => `A card shows up to ${String(max)} fields. Hide one to show another.`,
+  cardFieldsFull: (max: number) => `Max ${String(max)} fields.`,
   rename: 'Rename',
   renameTitle: 'Rename view',
   duplicate: 'Duplicate',
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
-  copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
   linkTooLong: 'This filter is too long for a link. Save it as a view to share it.',
   makePrivate: 'Make private',
   /** Who can see it (30 October 2026): one choice in place of Share, Make private and Lock. */
@@ -99,17 +92,12 @@ export const strings = {
   onlyMe: 'Only me',
   everyone: 'Everyone',
   everyoneAdminsEdit: 'Everyone, only admins edit',
-  shared: (name: string) => `${name} is shared with everyone.`,
   madePrivate: (name: string) => `${name} is only yours now.`,
   /** Make private asks first: everyone else loses the view (the owner's rule for ending actions, 21 October 2026). */
   makePrivateTitle: (name: string) => `Make ${name} private?`,
-  makePrivateText: 'Only you will see this view, and everyone else loses it from their list.',
+  makePrivateText: 'Everyone else loses it.',
   makingPrivate: 'Making private',
-  locked: (name: string) => `${name} is locked.`,
-  unlocked: (name: string) => `${name} is unlocked.`,
   setDefault: 'Set as default',
-  // Late trap #27: a member's last opened view still wins for them (AC-462), so the toast says who lands on it.
-  isDefaultNow: (name: string) => `${name} is the default view.`,
   deleteView: 'Delete view',
   deleted: (name: string) => `Deleted ${name}.`,
   /** Undo on a deleted view brought it back. */
@@ -120,7 +108,6 @@ export const strings = {
   movedUp: (name: string) => `Moved ${name} up.`,
   movedDown: (name: string) => `Moved ${name} down.`,
   renaming: 'Renaming',
-  actionFailed: 'That didn’t work. Try again in a moment.',
   /** The view menu's disabled reasons (spec 0020, the view menu table). */
   viewLocked: 'This view is locked.',
   /** Delete or Make private on the default view: what the person can do about it, short. */
@@ -132,6 +119,6 @@ export const strings = {
   theWorkspace: 'the workspace',
   /** The lock line in the view bar (AC-475, AC-476). */
   lockedBy: (name: string) => `Locked by ${name}.`,
-  lockedUnsaved: (name: string) => `Locked by ${name}. Your changes here aren’t saved.`,
+  lockedUnsaved: (name: string) => `Locked by ${name}. Changes aren’t saved.`,
   thisView: 'This view',
 } as const;

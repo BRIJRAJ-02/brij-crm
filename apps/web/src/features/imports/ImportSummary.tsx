@@ -22,9 +22,10 @@ import {
   PageColumn,
   ProgressBar,
   RelativeTime,
+  sharedStrings,
   Table,
-  TopBar,
   type TableColumn,
+  TopBar,
 } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
@@ -101,7 +102,7 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
   const isUndoRunning =
     view.undoJobId !== undefined && view.status === 'undone' && undoJob !== undefined && !isOver(undoJob);
   const fail = () => {
-    setFailure(strings.somethingWrong);
+    setFailure(sharedStrings.couldntDoThat);
   };
 
   // A job ending reads the import again: its counts by outcome, its rows not imported, and whether undo is open.
@@ -180,7 +181,7 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
       },
       (error: unknown) => {
         setUndoing(false);
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+        setFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
       },
     );
   };
@@ -349,7 +350,7 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
           </>
         }
       >
-        {strings.undoText(counts.created, counts.updated, object.pluralName, object.singularName)}
+        {strings.undoText(counts.created, counts.updated)}
       </Modal>
       <Modal
         title={strings.cancelTitle}

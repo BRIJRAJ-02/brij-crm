@@ -10,14 +10,15 @@ import {
   ButtonLink,
   Callout,
   Card,
-  Skeleton,
-  Spinner,
-  TabPanel,
-  Tabs,
-  Table,
-  type TableColumn,
   SettingsSection,
   SettingsStack,
+  sharedStrings,
+  Skeleton,
+  Spinner,
+  Table,
+  type TableColumn,
+  TabPanel,
+  Tabs,
 } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -98,7 +99,7 @@ export function ObjectSettingsScreen({
           tone: 'danger',
           message: strings.restoreFailed(
             object.pluralName,
-            isDataError(error) ? error.message : strings.somethingWrong,
+            isDataError(error) ? error.message : sharedStrings.couldntDoThat,
           ),
         });
       },

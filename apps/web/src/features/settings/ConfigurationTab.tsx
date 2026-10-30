@@ -20,14 +20,15 @@ import {
   Disclosure,
   Field,
   Form,
-  iconOf,
   type FormRefusal,
+  iconOf,
   SaveBar,
   type SaveBarStatus,
   Select,
   SettingsRow,
   SettingsSection,
   SettingsStack,
+  sharedStrings,
   typeLabelOf,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
@@ -253,7 +254,7 @@ function RecordNameRow({ slug, object, attributes }: RecordNameRowProps) {
   const isReadOnly = readOnlyReason !== undefined || !canManage || attributes === 'unavailable';
 
   const fail = (error: unknown) => {
-    const why = isDataError(error) ? error.message : strings.somethingWrong;
+    const why = isDataError(error) ? error.message : sharedStrings.couldntDoThat;
     toasts.toast({ tone: 'danger', message: strings.recordNameFailed(why) });
   };
 
@@ -354,7 +355,7 @@ export function ConfigurationTab({ slug, object, configuration, attributes }: Co
       },
       (error: unknown) => {
         setRestoring(false);
-        const why = isDataError(error) ? error.message : strings.somethingWrong;
+        const why = isDataError(error) ? error.message : sharedStrings.couldntDoThat;
         toasts.toast({ tone: 'danger', message: strings.restoreFailed(object.pluralName, why) });
       },
     );
@@ -362,7 +363,7 @@ export function ConfigurationTab({ slug, object, configuration, attributes }: Co
 
   return (
     <SettingsStack>
-      {!canManage && <Callout>{strings.readOnlyNote}</Callout>}
+      {!canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
       <SettingsSection title={strings.lookSection}>
         <Card>
           <Form

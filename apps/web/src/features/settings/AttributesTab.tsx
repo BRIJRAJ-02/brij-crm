@@ -11,19 +11,20 @@ import {
   Disclosure,
   EmptyState,
   Field,
+  Icon,
   iconOf,
   InfoTip,
-  Icon,
   Menu,
   MenuItem,
   MenuSeparator,
   MenuTrigger,
   Meter,
   SettingsStack,
+  sharedStrings,
   Skeleton,
   Table,
-  typeLabelOf,
   type TableColumn,
+  typeLabelOf,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -70,7 +71,7 @@ const SYSTEM_COLUMNS: readonly TableColumn[] = [
 ];
 
 /** The server's words for a failure, or the plain fallback. */
-const why = (error: unknown) => (isDataError(error) ? error.message : strings.somethingWrong);
+const why = (error: unknown) => (isDataError(error) ? error.message : sharedStrings.couldntDoThat);
 
 /** Names one or two ends for a toast: "Company" or "Company and Team". */
 const titlesOf = (ends: readonly AttributeDefinition[]) => {
@@ -379,9 +380,7 @@ export function AttributesTab({
     },
     emptyState:
       needle === '' ? (
-        <EmptyState title={strings.noAttributes}>
-          {canManage ? strings.noAttributesText : strings.noAttributesMemberText}
-        </EmptyState>
+        <EmptyState title={strings.noAttributes}>{canManage ? undefined : strings.noAttributesMemberText}</EmptyState>
       ) : (
         <EmptyState title={strings.noMatches(query.trim())} />
       ),
@@ -395,7 +394,7 @@ export function AttributesTab({
         ) : (
           <Meter label={strings.attributeLimit} value={meter.used} maxValue={meter.limit} />
         ))}
-      {!canManage && <Callout>{strings.readOnlyNote}</Callout>}
+      {!canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
       {hasSearch && (
         <Field
           label={strings.searchAttributes}

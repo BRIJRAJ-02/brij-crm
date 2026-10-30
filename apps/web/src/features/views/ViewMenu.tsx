@@ -14,7 +14,16 @@ import {
   type ViewRuleReason,
   type ViewsListSnapshot,
 } from '@crm/data';
-import { Button, Callout, Field, Form, Modal, type FormRefusal, type ViewAction as ViewMenuAction } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  Field,
+  Form,
+  Modal,
+  sharedStrings,
+  type FormRefusal,
+  type ViewAction as ViewMenuAction,
+} from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { trashHref } from '../workspace/objects.ts';
 import { useId, useState, type ReactNode } from 'react';
@@ -180,7 +189,7 @@ export function useViewMenu({
         if (done !== undefined) toasts.toast({ tone: 'success', message: done });
       },
       (error: unknown) => {
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
       },
     );
   };
@@ -247,7 +256,6 @@ export function useViewMenu({
       (share ?? Promise.resolve()).then(() =>
         lockTo || shown === 'locked' ? data.views.setLocked(slug, view.id, lockTo) : undefined,
       ),
-      lockTo ? strings.locked(view.name) : shown === 'locked' ? strings.unlocked(view.name) : strings.shared(view.name),
     );
   };
   const entries: readonly Entry[] = [
@@ -263,7 +271,7 @@ export function useViewMenu({
             toasts.toast({ tone: 'success', message: strings.linkCopied });
           },
           () => {
-            toasts.toast({ tone: 'danger', message: strings.copyFailed });
+            toasts.toast({ tone: 'danger', message: sharedStrings.couldntCopy });
           },
         );
       },
@@ -282,7 +290,7 @@ export function useViewMenu({
                 icon: 'star',
                 ...(sharing.length === 0 ? { startsGroup: true } : {}),
                 run: () => {
-                  run(data.views.setDefault(slug, object.id, view.id), strings.isDefaultNow(view.name));
+                  run(data.views.setDefault(slug, object.id, view.id));
                 },
               })),
         ]
@@ -323,7 +331,7 @@ export function useViewMenu({
       (error: unknown) => {
         setBusy(false);
         onDeleting(false);
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
       },
     );
   }
@@ -344,7 +352,7 @@ export function useViewMenu({
         (error: unknown) => {
           // The confirm stays open with what went wrong, so the person can try again or cancel.
           setPrivateBusy(false);
-          setPrivateFailure(isDataError(error) ? error.message : strings.actionFailed);
+          setPrivateFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
         },
       );
   };
@@ -483,7 +491,7 @@ function RenameForm({
           (error: unknown) => {
             onBusyChange(false);
             if (!isDataError(error)) {
-              setRefusals([{ code: 'INTERNAL', message: strings.actionFailed }]);
+              setRefusals([{ code: 'INTERNAL', message: sharedStrings.couldntDoThat }]);
               return;
             }
             const [first] = error.data?.refusals ?? [];

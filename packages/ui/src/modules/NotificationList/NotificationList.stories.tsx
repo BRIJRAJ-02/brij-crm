@@ -106,9 +106,7 @@ function SampleInbox({
               emptyIcon: 'list-filter' as const,
               emptyActions: <Button>Clear filters</Button>,
             }
-          : {
-              emptyBody: 'Mentions, replies to your threads, tasks assigned to you and new form submissions show here.',
-            })}
+          : {})}
       />
     </Stage>
   );
@@ -174,7 +172,6 @@ export const Empty: Story = {
   args: { isEmpty: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('You’re all caught up.')).toBeInTheDocument();
-    await expect(canvas.getByText(/new form submissions show here/)).toBeInTheDocument();
   },
 };
 

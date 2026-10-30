@@ -59,8 +59,9 @@ async function render() {
 describe('Preferences', () => {
   it('reads in plain words', async () => {
     await render();
-    await expect.element(page.getByText('Where this workspace opens.')).toBeVisible();
-    await expect.element(page.getByText('Show, hide or reorder what’s in your sidebar.')).toBeVisible();
+    // A row's title says what it is for; no line repeats it (31 October 2026).
+    await expect.element(page.getByText('Where this workspace opens.')).not.toBeInTheDocument();
+    await expect.element(page.getByText('Items in your sidebar')).toBeVisible();
     await expect.element(page.getByText('Kept for you on every device.')).not.toBeInTheDocument();
     // The theme's default and the start page's first choice, as their selects show them.
     await expect.element(page.getByText('Automatic', { exact: true }).first()).toBeVisible();
