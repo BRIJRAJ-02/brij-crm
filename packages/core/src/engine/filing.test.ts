@@ -140,6 +140,10 @@ describe('the domain an email files by (AC-5912 to AC-5914)', () => {
     expect(filingDomains('lea@hotmail.se')).toBeUndefined();
     expect(filingDomains('ana@yahoo.com.mx')).toBeUndefined();
     expect(filingDomains('not an email')).toBeUndefined();
+    // Names reserved for examples and tests never make a company.
+    expect(filingDomains('ada@example.com')).toBeUndefined();
+    expect(filingDomains('ada@mail.example.org')).toBeUndefined();
+    expect(filingDomains('row@import.test')).toBeUndefined();
     expect(filingDomains('bob@eu.acme.com')).toEqual({ host: 'eu.acme.com', registrable: 'acme.com' });
   });
 });

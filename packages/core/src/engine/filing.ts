@@ -106,12 +106,20 @@ export function companyNameOf(domain: string): string {
     .join(' ');
 }
 
-/** The host and registrable domain an address files by, or undefined for a free mail domain or no domain. */
+/** Names set aside for examples and tests (RFC 2606, RFC 6761): no company can hold one. */
+const RESERVED_TOP_LEVELS: ReadonlySet<string> = new Set(['test', 'example', 'invalid', 'localhost']);
+const RESERVED_DOMAINS: ReadonlySet<string> = new Set(['example.com', 'example.net', 'example.org']);
+
+/**
+ * The host and registrable domain an address files by, or undefined for a free mail domain, a name reserved for
+ * examples and tests (`example.com`, `*.test`), or no domain.
+ */
 export function filingDomains(email: string): { readonly host: string; readonly registrable: string } | undefined {
   const host = domainOf(email);
   if (host === '' || !host.includes('.')) return undefined;
   const registrable = registrableDomain(host);
   if (isPublicEmailDomain(host) || isPublicEmailDomain(registrable)) return undefined;
+  if (RESERVED_DOMAINS.has(registrable) || RESERVED_TOP_LEVELS.has(host.split('.').at(-1) ?? '')) return undefined;
   return { host, registrable };
 }
 

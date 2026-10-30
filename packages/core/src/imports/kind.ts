@@ -368,12 +368,16 @@ async function importRow(
     );
     const filed = madeByFiling(created.filedCompany);
     // The versions the create wrote, kept as an update's are: the undo reads them to tell a record nobody has
-    // touched since from one that has been worked on, and never trashes the second.
-    const wrote = Object.fromEntries(
-      Object.entries(created.versions).flatMap(([id, result]) =>
-        result.versionId === undefined ? [] : [[id, result.versionId]],
+    // touched since from one that has been worked on, and never trashes the second. Its company link is the row's
+    // own write too (spec 0059).
+    const wrote = {
+      ...Object.fromEntries(
+        Object.entries(created.versions).flatMap(([id, result]) =>
+          result.versionId === undefined ? [] : [[id, result.versionId]],
+        ),
       ),
-    );
+      ...linkWritten(created.filedCompany),
+    };
     return {
       result: { outcome: 'created', ...(note === undefined ? {} : { note }) },
       stored: {
@@ -413,9 +417,14 @@ async function importRow(
     batch.room - made.size,
   );
   const filed = madeByFiling(filedCompany);
-  const written = Object.fromEntries(
-    Object.entries(results).flatMap(([id, result]) => (result.versionId === undefined ? [] : [[id, result.versionId]])),
-  );
+  const written = {
+    ...Object.fromEntries(
+      Object.entries(results).flatMap(([id, result]) =>
+        result.versionId === undefined ? [] : [[id, result.versionId]],
+      ),
+    ),
+    ...linkWritten(filedCompany),
+  };
   if (Object.keys(written).length === 0) return skipped;
   const kept = Object.fromEntries(Object.entries(before).filter(([id]) => Object.hasOwn(written, id)));
   return {
@@ -429,6 +438,11 @@ async function importRow(
 /** The company a row's filing made, when it made one (spec 0059); one it only linked is no row's to take back. */
 function madeByFiling(filed: FiledCompany | undefined): Made | undefined {
   return filed?.made === true ? { objectId: filed.objectId, recordId: filed.recordId } : undefined;
+}
+
+/** The Company link a row's filing wrote, by attribute, as the row's own written versions (spec 0059). */
+function linkWritten(filed: FiledCompany | undefined): Record<string, string> {
+  return filed === undefined ? {} : { [filed.attributeId]: filed.linkVersionId };
 }
 
 /** A row's stored far records with the company its filing made added, so the import's undo takes it back too. */
