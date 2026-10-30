@@ -2017,6 +2017,7 @@ const GridHeader = memo(function GridHeader({
   addColumn,
   hideColumnLocks,
 }: GridHeaderProps) {
+  const lockId = useId();
   const runOf = (id: string) => layout.columns.findIndex((each) => each.id === id) < layout.pinnedCount;
   const canMove = (id: string, direction: -1 | 1) => moveColumn(layout, id, direction) !== layout;
   // Where a dragged column would land: the header it is over, and which side (nothing lands before the row header).
@@ -2103,7 +2104,14 @@ const GridHeader = memo(function GridHeader({
             data-cell={keyOf(-1, addColumn.col)}
             data-focused={addColumn.isFocused || undefined}
             tabIndex={addColumn.isFocused ? 0 : -1}
+            // At the limit, the header itself says why when the grid's keys reach it, as a read only cell does.
+            {...(addColumn.lock === undefined ? {} : { 'aria-describedby': lockId })}
           >
+            {addColumn.lock !== undefined && (
+              <span id={lockId} hidden data-tip="">
+                {addColumn.lock}
+              </span>
+            )}
             {addColumn.items.length === 0 && addColumn.lock !== undefined ? (
               <LockReason reason={addColumn.lock} />
             ) : addColumn.items.length === 0 ? (

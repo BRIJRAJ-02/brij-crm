@@ -142,5 +142,6 @@ describe('changing a type in place', () => {
     );
     const member = rescope(scope, { actor: { type: 'member', id: memberId }, role: 'member' });
     expect(await refusalOf(changeAttributeType(member, { attributeId: notes.id, to: 'long_text' }))).toBe('FORBIDDEN');
+    expect(await refusalOf(checkTypeChange(member, { attributeId: notes.id, to: 'long_text' }))).toBe('FORBIDDEN');
   });
 });

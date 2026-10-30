@@ -915,10 +915,13 @@ export const ChangeType: Story = {
     const dialog = await openDialog();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change type…' }));
     await waitFor(() => expect(dialog).toHaveAccessibleName('Change type'));
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
     await expect(within(dialog).getByText('All 1,204 values convert. Unique turns off.')).toBeInTheDocument();
     await expect(within(dialog).getByRole('button', { name: 'Change type' })).toBeEnabled();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(dialog).toHaveAccessibleName('Edit attribute'));
+    // Back returns focus to what opened the step, and the settings as they were.
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Change type…' })).toHaveFocus());
   },
 };
 
@@ -955,6 +958,20 @@ export const ChangeTypeChecking: Story = {
     const dialog = await openDialog();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change type…' }));
     await expect(within(dialog).getByText('Checking every value…')).toBeInTheDocument();
+    await expect(within(dialog).getByRole('button', { name: 'Change type' })).toBeDisabled();
+  },
+};
+
+/** The check failed (offline, a timeout): it says so with Try again, and Change type waits. */
+export const ChangeTypeCheckFailed: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: CONTACT },
+  render: (args) => <ChangingType {...args} check="error" />,
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Change type…' }));
+    await expect(within(dialog).getByText('Couldn’t check the values.')).toBeInTheDocument();
+    await expect(within(dialog).getByRole('button', { name: 'Try again' })).toBeEnabled();
     await expect(within(dialog).getByRole('button', { name: 'Change type' })).toBeDisabled();
   },
 };

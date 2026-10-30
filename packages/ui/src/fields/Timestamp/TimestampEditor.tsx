@@ -103,14 +103,16 @@ export function TimestampEditor({
         }}
       />
       <Select
-        label={strings.time}
+        label={strings.time(attribute.name)}
         isLabelHidden={isCompact}
         size={isCompact ? 'sm' : 'md'}
         variant="time"
         isSearchable
-        searchLabel={strings.time}
+        searchLabel={strings.time(attribute.name)}
         items={times}
-        value={time}
+        // No day, no time: the list shows its placeholder rather than a time that reads as set.
+        value={date === null ? null : time}
+        placeholder={strings.noTime}
         isDisabled={isDisabled || date === null}
         onChange={(next) => {
           if (next === null) return;

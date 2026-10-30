@@ -156,7 +156,7 @@ function TypeChangeBody({
         </Callout>
       )}
       {/* One line for a change that can go ahead: every value converting, then what else changes with it. */}
-      {typeof check === 'object' && check.blockers.length === 0 && (
+      {typeof check === 'object' && canApplyTypeChange(check) && (
         <Callout tone="success" isAnnounced>
           {[
             check.total === 0 ? strings.noValues : strings.allConvert(count(check.total), check.total),

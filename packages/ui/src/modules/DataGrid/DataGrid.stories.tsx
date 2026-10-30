@@ -756,6 +756,33 @@ export const AddColumnAtLimit: Story = {
   },
 };
 
+/** At the limit with hidden columns: the menu still shows them, and New attribute… is off with the reason under it. */
+export const AddColumnMenuAtLimit: Story = {
+  args: {
+    onAddColumn: fn(),
+    addColumnItems: [{ id: 'domain', label: 'Domain' }],
+    onAddColumnItem: fn(),
+    addColumnLock: '120 of 120 used. Archive one first.',
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add attribute' }));
+    const menu = await waitFor(() => {
+      const found = document.querySelector('[role="menu"]');
+      if (found === null) throw new globalThis.Error('No menu yet.');
+      return found;
+    });
+    await expect(menu).toHaveTextContent('Domain');
+    await expect(menu).toHaveTextContent('120 of 120 used. Archive one first.');
+    const item = [...menu.querySelectorAll('[role="menuitem"]')].find((each) =>
+      each.textContent.includes('New attribute…'),
+    );
+    await expect(item).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};
+
 /** Twenty columns: the unpinned ones virtualise too, and the name stays pinned while the rest scroll. */
 export const ManyColumns: Story = {
   args: { columnCount: 20 },

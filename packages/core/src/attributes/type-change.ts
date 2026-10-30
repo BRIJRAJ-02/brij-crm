@@ -48,9 +48,9 @@ import { inWorkspace } from '../access/run.ts';
 import { attributeVisible, visibleRecords } from '../access/visibility.ts';
 import { decodeValue, encodeValue, sameItems, type ItemColumns, type StoredItem } from '../engine/columns.ts';
 import { checkNotAMatch, recordDefinition, touched } from '../engine/definitions.ts';
-import { checkId, uuidArray } from '../engine/ids.ts';
+import { checkId, newId, uuidArray } from '../engine/ids.ts';
 import { baseLevel, compileFilter, type CompileContext } from '../engine/query/compile.ts';
-import { isRefusal, refuse, refuseOn } from '../engine/refusals.ts';
+import { isRefusal, refuse, refuseOn, writeConflict } from '../engine/refusals.ts';
 import { actorRow, type EngineScope } from '../engine/scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES, uniqueKeyOf } from '../engine/unique.ts';
 import { isArchivedNow, ITEM_COLUMNS, loadAttribute, loadAttributes, type AttributeDef } from '../engine/values.ts';
@@ -87,6 +87,7 @@ const WORDS = {
   notFound: 'That attribute does not exist.',
   notHere: (title: string, to: string) => `${title} can't change to ${to}.`,
   onList: 'A list’s own fields can’t change type yet.',
+  readOnlyObject: 'You can only read these records, so their values can’t change type.',
   tooMany: (title: string) =>
     `${title} holds more than ${TYPE_CHANGE_MAX_VALUES.toLocaleString('en-GB')} values, too many to change at once. Archive it and make a new one instead.`,
   fails: (count: number, to: string, reason: string) =>
@@ -96,6 +97,8 @@ const WORDS = {
     `${count === 1 ? '1 value' : `${count.toLocaleString('en-GB')} values`} would be shared by more than one record, and ${title} is unique. Merge or change them first.`,
   rulesRemoved: (count: number) =>
     `${count === 1 ? 'A rule that doesn’t' : `${String(count)} rules that don’t`} fit the new type ${count === 1 ? 'is' : 'are'} removed.`,
+  hiddenRule: (title: string) =>
+    `A rule on a field you can’t see looks at ${title} in a way the new type can’t. Ask an owner who sees every field.`,
   requiredWhen: (title: string) =>
     `A “Required when” rule looks at ${title} in a way the new type can’t. Change that rule first.`,
   defaultCleared: 'Its default is cleared.',
@@ -226,8 +229,10 @@ async function viewBlockers(
 ) {
   const { attribute, next, to } = plan;
   const me = scope.actor.type === 'member' ? scope.actor.id : null;
-  const rows = await tx.execute<{ name: string; config: unknown; seen: boolean }>(sql`
-    select v.name, v.config, (v.visibility::text <> 'private' or v.creator_member_id = ${me}::uuid) as seen
+  const rows = await tx.execute<{ name: string; config: unknown; seen: boolean; object_id: string | null }>(sql`
+    select v.name, v.config, (v.visibility::text <> 'private' or v.creator_member_id = ${me}::uuid) as seen,
+      coalesce(v.object_id, (select l.object_id from lists l where l.workspace_id = v.workspace_id and l.id = v.list_id))::text
+        as object_id
     from views v
     where strpos(v.config::text, ${attribute.id}) > 0
     order by v.position, v.id
@@ -237,7 +242,10 @@ async function viewBlockers(
     const parsed = ViewConfig.safeParse(row.config);
     if (!parsed.success) return [];
     const config = parsed.data;
-    const name = row.seen ? `The view “${row.name}”` : WORDS.aView;
+    // Named only when the caller sees it and its object (a view on another object can reach this field through a
+    // relationship); otherwise counted as a view, never named (spec 0009, hidden means absent).
+    const isNamed = row.seen && row.object_id !== null && objectLevel(scope.access, row.object_id) !== 'none';
+    const name = isNamed ? `The view “${row.name}”` : WORDS.aView;
     const found: string[] = [];
     if (!groupable && (config.groupBy === attribute.id || config.board?.groupByAttributeId === attribute.id)) {
       found.push(WORDS.grouped(name, attribute.title));
@@ -329,16 +337,24 @@ const inputOf = (rule: ValidationRule): ValidationRuleInput => ({
  * read. Answers the rules each affected attribute keeps, how many go, and whether a Required when breaks (the
  * `rules` input can't carry one, so it can't be removed here: a blocker).
  */
-async function rulePlan(tx: WorkspaceTx, attribute: AttributeDef, next: AttributeDef) {
+async function rulePlan(scope: EngineScope, tx: WorkspaceTx, attribute: AttributeDef, next: AttributeDef) {
   const kept = new Map<string, ValidationRuleInput[]>();
-  if (attribute.objectId === null) return { kept, removed: 0, requiredWhenBreaks: false };
+  if (attribute.objectId === null) return { kept, removed: 0, requiredWhenBreaks: false, hiddenBreaks: false };
   const own = await loadAttributes(tx, attribute.objectId);
+  // What a condition may name for this caller, as `writeRules` reads it: the object's attributes they may see.
+  const visible = (id: string) => {
+    const each = own.get(id);
+    return each !== undefined && attributeVisible(scope.access, each);
+  };
   const named = new Map<string, ConditionAttribute>(
-    [...own.values()].map((each) => [
-      each.id,
-      { type: each.id === next.id ? next.type : each.type, isSystem: each.isSystem },
-    ]),
+    [...own.values()]
+      .filter((each) => attributeVisible(scope.access, each))
+      .map((each) => [each.id, { type: each.id === next.id ? next.type : each.type, isSystem: each.isSystem }]),
   );
+  /** A rule the caller can't see: on a hidden field, or naming one. `writeRules` keeps those as they are. */
+  const isHidden = (rule: ValidationRule) =>
+    !visible(rule.attributeId) ||
+    (rule.condition !== undefined && conditionAttributeIds(rule.condition).some((id) => !visible(id)));
   const { rules } = await loadRules(tx, attribute.objectId);
   const touched = rules.filter(
     (rule) =>
@@ -347,10 +363,33 @@ async function rulePlan(tx: WorkspaceTx, attribute: AttributeDef, next: Attribut
   );
   let removed = 0;
   let requiredWhenBreaks = false;
+  let hiddenBreaks = false;
   const failing = new Set<string>();
   for (const rule of touched) {
     const holder = rule.attributeId === attribute.id ? next : own.get(rule.attributeId);
     if (holder === undefined) continue;
+    if (isHidden(rule)) {
+      // Checked against every field, as the engine will run it; the caller can't remove it, so a break stops them.
+      const all = new Map<string, ConditionAttribute>(
+        [...own.values()].map((each) => [
+          each.id,
+          { type: each.id === next.id ? next.type : each.type, isSystem: each.isSystem },
+        ]),
+      );
+      const settings = {
+        kind: rule.kind,
+        params: rule.params,
+        ...(rule.condition === undefined ? {} : { condition: rule.condition }),
+        ...(rule.message === undefined ? {} : { message: rule.message }),
+      };
+      const fits = checkRuleSettings(settings, {
+        attribute: { type: holder.type, isMulti: holder.isMulti },
+        attributes: all,
+        compile: measurePattern,
+      });
+      if (!fits.ok) hiddenBreaks = true;
+      continue;
+    }
     const checked = checkRuleSettings(
       {
         kind: rule.kind,
@@ -371,11 +410,14 @@ async function rulePlan(tx: WorkspaceTx, attribute: AttributeDef, next: Attribut
     kept.set(
       holderId,
       rules
-        .filter((rule) => rule.attributeId === holderId && rule.kind !== 'required_when' && !failing.has(rule.id))
+        .filter(
+          (rule) =>
+            rule.attributeId === holderId && rule.kind !== 'required_when' && !failing.has(rule.id) && !isHidden(rule),
+        )
         .map(inputOf),
     );
   }
-  return { kept, removed, requiredWhenBreaks };
+  return { kept, removed, requiredWhenBreaks, hiddenBreaks };
 }
 
 /** The new default: a static one converted (or cleared when it can't be), any other kind kept. */
@@ -409,6 +451,10 @@ async function planChange(
     throw refuse('NOT_FOUND', WORDS.notFound, attribute.id);
   }
   if (attribute.objectId === null) throw refuse('TYPE_CHANGE_REFUSED', WORDS.onList, attribute.id);
+  // It rewrites values in the caller's name: someone who may only read the object's records can't make it.
+  if (lock && objectLevel(scope.access, attribute.objectId) === 'read') {
+    throw refuse('FORBIDDEN', WORDS.readOnlyObject, attribute.id);
+  }
   const to = request.to;
   const toName = TYPE_NAMES[to];
   const isPrimary = await isPrimaryOf(tx, attribute);
@@ -488,6 +534,16 @@ async function planChange(
     }
     if (!inPlace && !sameItems(value.items.map(columnsOf), items)) rewrites.push({ ownerId: value.ownerId, items });
   }
+  if (lock) {
+    const cleared = rewrites.filter((rewrite) => rewrite.items.length === 0).map((rewrite) => rewrite.ownerId);
+    if (cleared.length > 0) {
+      const still = await tx.execute<{ id: string; trashed: boolean }>(sql`
+        select id::text as id, deleted_at is not null as trashed from records
+        where id = any(${uuidArray(cleared)}) order by id for no key update
+      `);
+      if (still.rows.some((row) => !row.trashed)) throw writeConflict('A record came back from the trash meanwhile.');
+    }
+  }
   const reason = [...reasons].sort(([, a], [, b]) => b - a)[0]?.[0];
   if (failed.length > 0 && reason !== undefined) blockers.push(WORDS.fails(failed.length, toName, reason));
   const shared = [...keys.values()].filter((count) => count > 1).length;
@@ -504,9 +560,10 @@ async function planChange(
       blockers.push(error.refusal.message);
     }
   }
-  const ruled = await rulePlan(tx, attribute, next);
+  const ruled = await rulePlan(scope, tx, attribute, next);
   if (ruled.removed > 0) consequences.push(WORDS.rulesRemoved(ruled.removed));
   if (ruled.requiredWhenBreaks) blockers.push(WORDS.requiredWhen(attribute.title));
+  if (ruled.hiddenBreaks) blockers.push(WORDS.hiddenRule(attribute.title));
   const fallback = convertDefault(attribute, from, to, context);
   if (fallback.cleared) consequences.push(WORDS.defaultCleared);
   blockers.push(...(await viewBlockers(scope, tx, { attribute, next, to: toName })));
@@ -603,7 +660,7 @@ async function writeVersions(context: WriteContext, next: AttributeDef, rewrites
   const rows = rewrites.flatMap((rewrite): PgInsertValue<typeof values>[] => {
     const base = {
       workspaceId: scope.workspaceId,
-      versionId: sql`uuidv7()`,
+      versionId: newId(),
       attributeId: next.id,
       ownerId: rewrite.ownerId,
       recordId: rewrite.ownerId,
