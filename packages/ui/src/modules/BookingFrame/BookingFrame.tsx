@@ -54,7 +54,7 @@ export interface BookingFrameProps {
   readonly banner?: ReactNode;
   /** The card's heading: "Choose a time". */
   readonly heading?: string;
-  /** At the heading's end: Month or List. */
+  /** At the heading's end, as one compact group: the clock (12h or 24h) and the view (Month, List or Chat). */
   readonly toolbar?: ReactNode;
   /** The card's first pane: the month, the days, or the details form. */
   readonly children?: ReactNode;
@@ -293,19 +293,36 @@ export interface BookingFootProps {
    * phone in dark mode drew the white mark on white and showed nothing (the owner, 26 October 2026).
    */
   readonly scheme?: 'light' | 'dark';
+  /**
+   * Where the wordmark goes when the page tags it itself (the guest's page names the workspace:
+   * `poweredByHref(page, slug)`). Left out, `poweredByHref(page)`.
+   */
+  readonly href?: string;
+  /** Opens the wordmark's link in a new tab, under this name ("Powered by Timefix (opens in a new tab)"). */
+  readonly newTabLabel?: string;
 }
 
-/** "Powered by Timefix", tagged with the page it sits on, and "Claim your free page" for a visitor we don't know. */
+/**
+ * "Powered by Timefix", tagged with the page it sits on, and "Claim your free page" for a visitor we don't know.
+ * Every public page ends with it (spec 0058, AC-26), and nothing can take it off.
+ */
 export function BookingFoot({
   placement = 'always',
   page = 'booking_page',
   claimHref,
   logo = TIMEFIX_LOGO,
   scheme,
+  href,
+  newTabLabel,
 }: BookingFootProps) {
   return (
     <footer className={styles.foot} data-placement={placement}>
-      <a className={styles.brand} href={poweredByHref(page)} rel="noopener noreferrer">
+      <a
+        className={styles.brand}
+        href={href ?? poweredByHref(page)}
+        rel="noopener noreferrer"
+        {...(newTabLabel === undefined ? {} : { target: '_blank', 'aria-label': newTabLabel })}
+      >
         <span className={styles.powered}>{strings.poweredBy}</span>
         {scheme === undefined ? (
           <>

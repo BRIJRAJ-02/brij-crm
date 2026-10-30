@@ -13,9 +13,11 @@ import { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { poweredByHref } from '../lib/powered-by.ts';
 import { Callout } from '../molecules/Callout/Callout.tsx';
+import { DescriptionList, type DescriptionItem } from '../molecules/DescriptionList/DescriptionList.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import styles from './FormParts.module.css';
-import { labelOf } from './Question.tsx';
+import { isUploadedFile } from './files.ts';
+import { answerOf, labelOf } from './Question.tsx';
 import type { HostedFormMode, HostedFormState } from './use-hosted-form.ts';
 
 /** How a layout sits on its page: `card` (Classic and Steps) or `open` (one question at a time, no card). */
@@ -132,7 +134,42 @@ export function FormHeader({
   );
 }
 
-/** The thank you, in the booking confirmation's shape: the green check, the heading, a muted line, then Send another. */
+/**
+ * What the visitor sent, as they would read it back (spec 0058, AC-19): each shown question that has an answer, its
+ * label beside the answer, from the answers the page already holds. A tick box or a yes or no is left out, since its
+ * label is the whole answer and "true" is nobody's word; a file shows its name, a phone its number.
+ */
+function sentAnswers(form: PublicForm, state: Pick<HostedFormState, 'answers' | 'shown' | 'words'>) {
+  return form.questions.flatMap((question): DescriptionItem[] => {
+    if (!state.shown.has(question.key)) return [];
+    const value = state.answers[question.key];
+    const text =
+      question.answerType === 'checkbox' || question.answerType === 'yes_no'
+        ? ''
+        : question.answerType === 'file'
+          ? isUploadedFile(value)
+            ? value.name
+            : ''
+          : question.answerType === 'phone'
+            ? phoneOf(answerOf(question, value))
+            : typeof value === 'string'
+              ? value.trim()
+              : '';
+    return text === '' ? [] : [{ id: question.key, term: labelOf(question, state.words), description: text }];
+  });
+}
+
+/** A phone answer's number, as it was sent (E.164). */
+function phoneOf(answer: unknown): string {
+  return typeof answer === 'object' && answer !== null && 'number' in answer && typeof answer.number === 'string'
+    ? answer.number
+    : '';
+}
+
+/**
+ * The thank you, in the booking confirmation's shape: the green check, the heading, a muted line, what was sent,
+ * then one next step, Send another.
+ */
 export function FormThanks({
   form,
   state,
@@ -145,12 +182,22 @@ export function FormThanks({
   readonly heading: Ref<HTMLHeadingElement>;
 }) {
   const text = state.view.kind === 'thanks' ? state.view.text : '';
+  const sent = sentAnswers(form, state);
   return (
     <FormConfirmation
       mode={mode}
       heading={heading}
       title={state.words.thanksTitle}
       text={text !== '' ? text : asksForAddress(form) ? state.words.thanks : state.words.thanksNeutral}
+      {...(sent.length === 0
+        ? {}
+        : {
+            summary: (
+              <div className={styles.sent}>
+                <DescriptionList items={sent} />
+              </div>
+            ),
+          })}
     >
       <Button variant="ghost" onPress={state.sendAnother}>
         {state.words.sendAnother}
@@ -169,12 +216,15 @@ export function FormConfirmation({
   heading,
   title,
   text,
+  summary,
   children,
 }: {
   readonly mode: HostedFormMode;
   readonly heading: Ref<HTMLHeadingElement>;
   readonly title: string;
   readonly text?: string;
+  /** What was sent, between the line and what follows (the thank you's summary). */
+  readonly summary?: ReactNode;
   readonly children?: ReactNode;
 }) {
   const Heading = mode === 'page' ? 'h1' : 'h2';
@@ -187,6 +237,7 @@ export function FormConfirmation({
         {title}
       </Heading>
       {text !== undefined && text !== '' && <p className={styles.subheading}>{text}</p>}
+      {summary}
       {children !== undefined && <div className={styles.again}>{children}</div>}
     </div>
   );

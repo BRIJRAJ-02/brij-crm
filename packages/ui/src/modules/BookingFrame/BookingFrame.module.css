@@ -148,9 +148,10 @@
      whether or not the toolbar has arrived. */
   .head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-12);
+    gap: var(--space-8) var(--space-12);
     min-block-size: calc(var(--size-control) + 2 * var(--space-2));
     padding: var(--space-20) var(--space-20) 0;
   }
@@ -162,8 +163,13 @@
     letter-spacing: var(--tracking-title);
   }
 
+  /* The picker's corner (spec 0058, AC-24): the page's few controls (the clock, the view) as one compact group,
+     side by side on one gap, as Cal.com keeps them. On a narrow phone the group wraps under the heading. */
   .toolbar {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
     margin-inline-start: auto;
   }
 
@@ -398,12 +404,18 @@
     outline: none;
   }
 
-  /* The foot: "Powered by" over the wordmark, then the claim link. */
+  /* The foot (spec 0058, AC-26): one quiet line, "Powered by" and the wordmark, then the claim link, in the label
+     size. It never draws a box of its own: it sits at the foot, centred under a page's card, or at the rail's end on
+     the rail's own left edge, level with the card's foot. */
   .foot {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-8);
+    justify-content: center;
+    gap: var(--space-4) var(--space-16);
+    padding-block: var(--space-8);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .foot[data-placement='rail'] {
@@ -411,25 +423,22 @@
   }
 
   .brand {
-    display: flex;
-    flex-direction: column;
+    display: inline-flex;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-6);
     border-radius: var(--radius-xs);
-    color: inherit;
+    color: var(--text-secondary);
     text-decoration: none;
+    transition: color var(--duration-hover) var(--ease-hover);
   }
 
   .powered {
-    color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-kbd);
-    text-transform: uppercase;
+    font: inherit;
   }
 
   .wordmark {
     display: block;
-    block-size: var(--space-20);
+    block-size: var(--size-icon-sm);
     inline-size: auto;
   }
 
@@ -463,7 +472,7 @@
     gap: var(--space-4);
     border-radius: var(--radius-xs);
     color: var(--text-secondary);
-    font: var(--text-body);
+    font: inherit;
     text-decoration: none;
     transition: color var(--duration-hover) var(--ease-hover);
   }
@@ -501,21 +510,8 @@
 
     .root:not([data-compact]) .foot[data-placement='rail'] {
       display: flex;
-      align-items: stretch;
-      padding: var(--space-12) var(--space-16);
-      border: var(--border-width-hairline) solid var(--border);
-      border-radius: var(--radius-lg);
-      background: var(--surface-raised);
-    }
-
-    .foot[data-placement='rail'] .brand {
-      align-items: flex-start;
-    }
-
-    .foot[data-placement='rail'] .claim {
-      justify-content: space-between;
-      padding-block-start: var(--space-8);
-      border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+      justify-content: flex-start;
+      padding-block-end: 0;
     }
 
     .root:not([data-compact]) .foot[data-placement='page'] {
@@ -579,6 +575,7 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
+    .brand:hover,
     .claim:hover {
       color: var(--text);
     }

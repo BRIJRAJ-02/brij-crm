@@ -15,8 +15,8 @@ const meta = {
     range: '9:30 – 10:00 AM',
     when: 'Friday, October 9, 2026 · London time (GMT+1)',
     relative: 'Tomorrow morning',
+    summary: { what: 'Intro call', who: 'with Ada Lovelace' },
     facts: [
-      { term: 'What', description: 'Intro call' },
       { term: 'Who', description: 'Ada Lovelace (host), Grace Hopper' },
       { term: 'Where', description: 'Video call' },
     ],
@@ -32,7 +32,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Right after booking: "You're booked", Join the call and Add to calendar. */
+/** Right after booking: "You're booked" and one warm line, then the summary with Join the call and Add to calendar. */
 export const Welcome: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => (
@@ -42,6 +42,10 @@ export const Welcome: Story = {
   ),
   play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByRole('heading', { name: 'You’re booked' })).toHaveFocus();
+    await expect(canvas.getByText('Ada Lovelace will see you then.')).toBeVisible();
+    // The summary leads (spec 0058, AC-19): what and who over the time, and the one action right with it.
+    const card = canvas.getByRole('article', { name: 'Confirmed' });
+    await expect(card).toHaveTextContent(/^Fri9OctIntro callwith Ada Lovelace9:30 – 10:00 AM/);
     await expect(canvas.getByRole('link', { name: 'Join the call' })).toHaveAttribute('target', '_blank');
     // With no brand of its own, the foot's Timefix link is tagged as the page just after booking.
     await expect(timefixLinkTags(canvasElement)).toEqual([timefixTags('booking_confirmation', 'footer_logo')]);
@@ -77,7 +81,7 @@ export const Past: Story = {
   ),
 };
 
-/** The guest's own pages end as the hosted form does: the Timefix wordmark alone, opening in a new tab. */
+/** The guest's own pages tag the wordmark themselves and open it in a new tab, in the same foot as every public page. */
 export const WithBrand: Story = {
   parameters: { crm: { screenshot: false } },
   args: {

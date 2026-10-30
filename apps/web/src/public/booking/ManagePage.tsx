@@ -212,8 +212,9 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
       range={rangeLabel(booking.start, booking.end, zone, locale)}
       when={`${longDate(booking.start, zone, locale)} · ${zoneDisplay(zone, now())}`}
       relative={relativeLabel(booking.start, now(), zone, locale)}
+      // The summary leads (spec 0058, AC-19): what, when and who, from the booking already loaded.
+      summary={{ what: booking.title, who: strings.withHost(booking.hostName) }}
       facts={[
-        { term: strings.what, description: booking.title },
         { term: strings.who, description: who },
         ...(booking.guests.length === 0
           ? []

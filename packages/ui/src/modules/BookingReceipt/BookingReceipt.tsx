@@ -27,7 +27,12 @@ export interface BookingReceiptProps {
   readonly when: string;
   /** "Tomorrow morning", for a booking still ahead. */
   readonly relative?: string;
-  /** What, Who, Where and the note. */
+  /**
+   * The summary at the card's head (spec 0058, AC-19): what the meeting is ("Intro call") and who it is with
+   * ("with Ada Lovelace"), over the time. Left out, the card opens on the time alone.
+   */
+  readonly summary?: { readonly what: string; readonly who: string };
+  /** The details under the summary: Who in full, guests, Where and the note. */
   readonly facts: readonly DescriptionItem[];
   /** The call's address, once it has one: Join the call. */
   readonly joinUrl?: string;
@@ -47,12 +52,6 @@ export interface BookingReceiptProps {
   readonly brand?: { readonly href: string; readonly label: string; readonly logo?: ProductLogo };
 }
 
-/** The web app's own wordmark files (apps/web/public/brand). */
-const TIMEFIX_LOGO: ProductLogo = {
-  light: '/brand/timefix-wordmark-light.png',
-  dark: '/brand/timefix-wordmark-dark.png',
-};
-
 /**
  * A guest's booking page (spec 0025, AC-674): the host with the state's mark,
  * a heading by state that takes focus as the page arrives, then one card:
@@ -68,6 +67,7 @@ export function BookingReceipt({
   range,
   when,
   relative,
+  summary,
   facts,
   joinUrl,
   calendars,
@@ -101,9 +101,12 @@ export function BookingReceipt({
           <h1 ref={heading} tabIndex={-1} className={styles.title}>
             {title}
           </h1>
+          {/* One warm line, right after booking only: the page is a confirmation, not a form (AC-21). */}
+          {isLive && isWelcome && <p className={styles.lead}>{strings.welcomeLine(hostName)}</p>}
         </header>
         {notice}
         <article className={styles.card} aria-label={strings.marks[state]}>
+          {/* The summary leads (AC-19): what, when and who in one band, then the one thing to do with it. */}
           <div className={styles.band} data-state={state}>
             <div className={styles.chip} data-live={isLive ? '' : undefined} aria-hidden="true">
               <span className={styles.chipWeekday}>{date.weekday}</span>
@@ -111,13 +114,16 @@ export function BookingReceipt({
               <span className={styles.chipMonth}>{date.month}</span>
             </div>
             <div className={styles.when}>
+              {summary !== undefined && (
+                <p className={styles.what}>
+                  <span>{summary.what}</span>
+                  <span className={styles.who}>{summary.who}</span>
+                </p>
+              )}
               <p className={styles.range}>{range}</p>
               <p className={styles.muted}>{when}</p>
               {isLive && relative !== undefined && <p className={styles.relative}>{relative}</p>}
             </div>
-          </div>
-          <div className={styles.facts}>
-            <DescriptionList items={facts} />
           </div>
           {isLive && (joinUrl !== undefined || calendars !== undefined) && (
             <section className={styles.actions} aria-label={strings.addToCalendar}>
@@ -144,6 +150,11 @@ export function BookingReceipt({
               )}
             </section>
           )}
+          {facts.length > 0 && (
+            <div className={styles.facts}>
+              <DescriptionList items={facts} />
+            </div>
+          )}
           {isLive && changes}
           {!isLive && again !== undefined && (
             <p className={styles.again}>
@@ -152,32 +163,17 @@ export function BookingReceipt({
             </p>
           )}
         </article>
-        {brand === undefined ? (
-          <BookingFoot page={isWelcome ? 'booking_confirmation' : 'booking_manage'} />
-        ) : (
-          <footer className={styles.foot}>
-            <a
-              className={styles.brand}
-              href={brand.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={brand.label}
-            >
-              <img
-                className={styles.wordmark}
-                data-scheme="light"
-                src={(brand.logo ?? TIMEFIX_LOGO).light}
-                alt={strings.product}
-              />
-              <img
-                className={styles.wordmark}
-                data-scheme="dark"
-                src={(brand.logo ?? TIMEFIX_LOGO).dark}
-                alt={strings.product}
-              />
-            </a>
-          </footer>
-        )}
+        {/* Every public page ends the same way (spec 0058, AC-26): "Powered by Timefix", quiet and centred. */}
+        <BookingFoot
+          page={isWelcome ? 'booking_confirmation' : 'booking_manage'}
+          {...(brand === undefined
+            ? {}
+            : {
+                href: brand.href,
+                newTabLabel: brand.label,
+                ...(brand.logo === undefined ? {} : { logo: brand.logo }),
+              })}
+        />
       </div>
     </main>
   );
