@@ -42,6 +42,7 @@ import { BoardScreen } from '../board/BoardScreen.tsx';
 import { planBoard } from '../board/plan.ts';
 import { strings as boardStrings } from '../board/strings.ts';
 import type { ViewRequest } from '../command/commands.ts';
+import type { PeekControl } from '../records/params.ts';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
 import { strings as tableStrings } from '../workspace/strings.ts';
 import { objectPendingPage } from '../workspace/ObjectScreen.tsx';
@@ -109,6 +110,8 @@ export interface ViewScreenProps {
   readonly request?: ViewRequest;
   /** That request was run: drop it from the address. */
   readonly onRequestTaken?: () => void;
+  /** The record panel over the table or board (`?record=`, spec 0017 AC-384). */
+  readonly peek?: PeekControl;
 }
 
 /** The attributes of the objects a through filter leads to, read through the data layer as they are asked for. */
@@ -1041,6 +1044,7 @@ export function ViewScreen(props: ViewScreenProps) {
           object={object}
           attributes={attributes}
           members={members}
+          {...(props.peek === undefined ? {} : { peek: props.peek })}
           outcome={boardOutcome}
           query={query}
           views={choices}
@@ -1079,6 +1083,7 @@ export function ViewScreen(props: ViewScreenProps) {
         object={object}
         attributes={attributes}
         members={members}
+        {...(props.peek === undefined ? {} : { peek: props.peek })}
         view={table.records}
         viewQuery={table.query}
         {...(view?.config.groupBy === undefined ? {} : { groupBy: view.config.groupBy })}

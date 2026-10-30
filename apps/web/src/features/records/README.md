@@ -10,6 +10,14 @@ Spec 0017, milestones 1 to 3: a record's own page, its timeline, and its related
 
 - **Stat strip** (13 Oct reference batch 4; owner's call 22 Oct: the tabs keep their counts, so the strip says only what they don't): the record's value (an attribute `value` of type currency, through its field display), `Entered <stage>` with how long ago (the first live status attribute; `records.stageSince`, read afresh when the stage changes), the next meeting (`calendar.meetings.forRecord`, the first one not yet over), and the last activity (`useLatestActivityAt`, opening Activity). `data.records.facts` holds the meeting and the stage age; `useRecordFacts` reads them.
 
+## The record panel (`?record=<id>&panelTab=` on a view, RecordPeek, spec 0017 milestone 4)
+
+- **Purpose**: glance at a record beside its table or board, and change it, without leaving the list (Twenty's side panel; the CRM flow pass, 31 October 2026).
+- **Main task**: read and edit its details, then step to the row or card above or below with ↑ and ↓ (or Previous and Next) and keep going.
+- **Leaves out**: Overview, the stat strip and the record's menu (delete, copy link), all on its full page one press away (Open full page, on the tab the panel shows). A trashed record shows the unavailable state rather than the page's read only copy with Restore.
+
+- A row's name in the table, a card on the board, and a created toast's Open show the record here; the address keeps `?record=` (and `?panelTab=` past Details), each change replacing it, so a reload or a shared link reopens it and Back leaves the view. `peek.ts` opens the same subscriptions the page's loader does; the panel's body is the page's own (`RecordDetails`, `RelatedSections`, `ActivityTab`, `NotesTab`, `TasksTab`, `CommentsTab`), so an edit there is the table's edit. A task and a note open over it as on the page, held by the panel rather than the address. Steps come from the table's rows in its order (none while grouped), or from the card's own column on a board (`stepsAround` in `params.ts`).
+
 ## Details (RecordDetails)
 
 - **Purpose**: a record's details, in the page's sidebar (and, from milestone 4, the side panel's Details tab).

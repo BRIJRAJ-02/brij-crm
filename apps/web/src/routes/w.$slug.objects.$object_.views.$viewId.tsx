@@ -10,6 +10,7 @@ import {
   toViewQuery,
 } from '../features/views/query.ts';
 import { ViewScreen } from '../features/views/ViewScreen.tsx';
+import { isPeekTab, isRecordParam, type PeekTab } from '../features/records/params.ts';
 import { ArchivedObjectScreen } from '../features/workspace/ArchivedObjectScreen.tsx';
 import { viewColumns, viewReadIds } from '../features/views/layout.ts';
 import { failedPage, missingPage, ObjectPendingPage, viewNotFoundPage } from '../features/workspace/ObjectScreen.tsx';
@@ -27,7 +28,9 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 // layer; the screen reads them itself. A view the person can't see shows the
 // not found state, never saying why (AC-463). Only the view's id reloads it:
 // a draft changes on the screen, which keeps the rows it has until the next
-// ones are in.
+// ones are in. `?record=` (and `?panelTab=`) opens a record in the panel over
+// the table or board (spec 0017, AC-384), so a reload or a shared link opens
+// it again; changing it never reloads the view.
 /** How long the route waits for the first rows before showing the table loading in place. */
 const OPEN_GRACE_MS = 300;
 
@@ -40,7 +43,17 @@ interface ViewSearch {
   readonly name?: string;
   /** Export this view, open Create view (the command menu's actions), or Rename (a duplicate just made), once it shows. */
   readonly do?: ViewRequest;
+  /** The record the panel shows (spec 0017, AC-384). */
+  readonly record?: string;
+  /** The panel's tab, `details` when left out. */
+  readonly panelTab?: PeekTab;
 }
+
+/** The panel's part of the address, kept when the draft or a request changes it. */
+const peekOf = (search: ViewSearch) => ({
+  ...(search.record === undefined ? {} : { record: search.record }),
+  ...(search.panelTab === undefined ? {} : { panelTab: search.panelTab }),
+});
 
 export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')({
   validateSearch: (search: Record<string, unknown>): ViewSearch => ({
@@ -48,6 +61,10 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
     ...(search.new === true || search.new === 1 || search.new === '1' || search.new === 'true' ? { new: true } : {}),
     ...(typeof search.name === 'string' && search.name.trim() !== '' ? { name: search.name.slice(0, 200) } : {}),
     ...(search.do === 'export' || search.do === 'new-view' || search.do === 'rename' ? { do: search.do } : {}),
+    ...(isRecordParam(search.record) ? { record: search.record } : {}),
+    ...(isRecordParam(search.record) && isPeekTab(search.panelTab) && search.panelTab !== 'details'
+      ? { panelTab: search.panelTab }
+      : {}),
   }),
   loaderDeps: () => ({}),
   // Entering the view (again) reads it afresh: the records a cached match held are let go 30 seconds after
@@ -191,8 +208,35 @@ function ViewRoute() {
       />
     );
   }
+  // The record panel (spec 0017, AC-384): each change replaces the address, so Back leaves the view, not each step.
+  const toPeek = (next: ViewSearch) => {
+    void navigate({
+      to: '/w/$slug/objects/$object/views/$viewId',
+      params: { slug: params.slug, object: params.object, viewId: params.viewId },
+      search: next,
+      replace: true,
+    });
+  };
+  const { record: _record, panelTab: _tab, ...withoutPeek } = search;
   return (
     <ViewScreen
+      peek={{
+        recordId: search.record,
+        tab: search.panelTab ?? 'details',
+        open: (recordId) => {
+          toPeek({ ...search, record: recordId });
+        },
+        setTab: (tab) => {
+          toPeek({
+            ...withoutPeek,
+            ...(search.record === undefined ? {} : { record: search.record }),
+            ...(tab === 'details' ? {} : { panelTab: tab }),
+          });
+        },
+        close: () => {
+          toPeek(withoutPeek);
+        },
+      }}
       // Another view is another screen: its draft, Popovers and dialogs start afresh.
       key={params.viewId}
       slug={params.slug}
@@ -203,7 +247,7 @@ function ViewRoute() {
         void navigate({
           to: '/w/$slug/objects/$object/views/$viewId',
           params: { slug: params.slug, object: params.object, viewId: params.viewId },
-          search: search.draft === undefined ? {} : { draft: search.draft },
+          search: { ...peekOf(search), ...(search.draft === undefined ? {} : { draft: search.draft }) },
           replace: true,
         });
       }}
@@ -213,7 +257,7 @@ function ViewRoute() {
         void navigate({
           to: '/w/$slug/objects/$object/views/$viewId',
           params: { slug: params.slug, object: params.object, viewId: params.viewId },
-          search: search.draft === undefined ? {} : { draft: search.draft },
+          search: { ...peekOf(search), ...(search.draft === undefined ? {} : { draft: search.draft }) },
           replace: true,
         });
       }}
@@ -221,7 +265,7 @@ function ViewRoute() {
         void navigate({
           to: '/w/$slug/objects/$object/views/$viewId',
           params: { slug: params.slug, object: params.object, viewId: params.viewId },
-          search: draft === undefined ? {} : { draft },
+          search: { ...peekOf(search), ...(draft === undefined ? {} : { draft }) },
           replace,
         });
       }}

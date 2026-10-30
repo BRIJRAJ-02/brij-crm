@@ -42,6 +42,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { useLinkEditing } from '../records/links.ts';
+import { stepsAround, type PeekControl } from '../records/params.ts';
+import { RecordPeek } from '../records/RecordPeek.tsx';
 import { useRecordForm } from '../records/RecordForm.tsx';
 import { useMemberPicker } from '../records/members.ts';
 import { importHref } from '../imports/paths.ts';
@@ -138,6 +140,8 @@ export interface RecordsScreenProps {
    * attribute's id, and the rows run under a header per option.
    */
   readonly groupBy?: string;
+  /** The record panel (spec 0017, AC-384): a row's name opens its record beside the table, ↑ and ↓ step the rows. */
+  readonly peek?: PeekControl;
 }
 
 /** What a column's editor gets when it needs nothing beyond its value (not a relation cell). */
@@ -226,6 +230,7 @@ export function RecordsScreen({
   createName,
   onCreateRequestTaken,
   groupBy,
+  peek,
 }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -494,6 +499,12 @@ export function RecordsScreen({
     );
   }, [attributes, shownColumns, calcValues, rowHeader, layout, onLayoutChange]);
 
+  // The panel's Previous and Next: the rows either side of its record in the table's order, while it holds them.
+  const peekSteps =
+    peek?.recordId === undefined || grouped !== undefined
+      ? undefined
+      : stepsAround(view.indexOf(peek.recordId), state.source.count, (index) => state.source.getItem(index)?.id);
+
   // The name the menu's Create <object> named … typed, for the dialog it opened; New starts empty.
   const [createPreset, setCreatePreset] = useState<Readonly<Record<string, unknown>> | undefined>(undefined);
   const openCreate = () => {
@@ -645,8 +656,12 @@ export function RecordsScreen({
                 return refs.map((ref, index) => displayOf(ref, names[index] ?? 'loading'));
               }}
               rowHeader={rowHeader}
-              // A record's name opens its page (spec 0017); milestone 4 opens the side panel here instead.
+              // A record's name opens it in the panel beside the table (spec 0017, AC-384), its page one press on.
               onRowOpen={(recordId) => {
+                if (peek !== undefined) {
+                  peek.open(recordId);
+                  return;
+                }
                 void navigate({
                   to: '/w/$slug/objects/$object/$recordId/$tab',
                   params: { slug, object: object.apiSlug, recordId, tab: 'overview' },
@@ -807,6 +822,21 @@ export function RecordsScreen({
                   }
                 : {})}
             />
+            {peek?.recordId !== undefined && (
+              <RecordPeek
+                slug={slug}
+                object={object}
+                attributes={attributes}
+                members={members}
+                recordId={peek.recordId}
+                tab={peek.tab}
+                onTabChange={peek.setTab}
+                onOpen={peek.open}
+                onClose={peek.close}
+                // The rows either side in the table's order; a grouped table's rows run under headers, so it has none.
+                {...(peekSteps === undefined ? {} : { steps: peekSteps })}
+              />
+            )}
             {bulk.dialog}
             {recordForm.dialog}
             <NewRecordDialog
@@ -825,6 +855,11 @@ export function RecordsScreen({
               onCreated={(record, keepOpen) => {
                 toasts.toast(
                   createdToast(record, object.singularName, () => {
+                    // Beside the table, as a row's name opens it; the full page is one press on from there.
+                    if (peek !== undefined) {
+                      peek.open(record.id);
+                      return;
+                    }
                     void navigate({
                       to: '/w/$slug/objects/$object/$recordId/$tab',
                       params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
