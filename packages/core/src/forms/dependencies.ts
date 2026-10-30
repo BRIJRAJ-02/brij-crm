@@ -10,7 +10,7 @@
 // is counted, never named (`canSeeForm`, spec 0009's hidden-means-absent),
 // so the refusal degrades to "a live form" rather than leaking its name.
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
-import { BookingQuestions, FormDocument } from '@crm/contracts';
+import { AttributeType, BookingQuestions, FormDocument, fitsAttribute } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { Access } from '../access/policy.ts';
 import { canSeeForm, liveObjectOf } from './shared.ts';
@@ -137,16 +137,27 @@ async function bookingWrites(tx: WorkspaceTx, field: PageField, standardKey: str
 
 /**
  * The attributes a booking page's required questions fill on every booking: each one filed on a field and asked of
- * every guest (required, with no Show when that could hide it). A guest skips an optional question, and a hidden one
- * is never asked, so neither counts. A stored set that no longer parses fills nothing, so a guard reading it stays
- * shut rather than guessing.
+ * every guest (required, with no Show when that could hide it) whose answer the field still takes (`typeOf` names
+ * each field's type now, so a field whose type changed since stops counting). A guest skips an optional question,
+ * and a hidden one is never asked, so neither counts. A stored set that no longer parses fills nothing, so a guard
+ * reading it stays shut rather than guessing.
  */
-export function requiredFilings(questions: unknown): ReadonlySet<string> {
+export function requiredFilings(
+  questions: unknown,
+  typeOf: (attributeId: string) => string | undefined,
+): ReadonlySet<string> {
   const parsed = BookingQuestions.safeParse(questions);
   if (!parsed.success) return new Set();
+  const fits = (question: BookingQuestions[number], attributeId: string) => {
+    const type = AttributeType.safeParse(typeOf(attributeId));
+    return type.success && fitsAttribute(question.answerType, type.data);
+  };
   return new Set(
     parsed.data.flatMap((question) =>
-      question.required && (question.showWhen?.rules ?? []).length === 0 && question.filedOn !== undefined
+      question.required &&
+      (question.showWhen?.rules ?? []).length === 0 &&
+      question.filedOn !== undefined &&
+      fits(question, question.filedOn.attributeId)
         ? [question.filedOn.attributeId]
         : [],
     ),
@@ -199,7 +210,13 @@ export async function livePagesWalledBy(tx: WorkspaceTx, field: PageField): Prom
     object.standardKey === 'people' ? answersObjectId === null || answersObjectId === field.objectId : !isStandard;
   return rows
     .filter((row) => isStandard || asksAnything(row.questions))
-    .filter((row) => !(filesHere(row.answersObjectId) && requiredFilings(row.questions).has(field.id)))
+    .filter(
+      (row) =>
+        !(
+          filesHere(row.answersObjectId) &&
+          requiredFilings(row.questions, (id) => (id === field.id ? field.type : undefined)).has(field.id)
+        ),
+    )
     .map((row) => ({ id: row.id, title: row.title, canAsk: filesHere(row.answersObjectId) }));
 }
 

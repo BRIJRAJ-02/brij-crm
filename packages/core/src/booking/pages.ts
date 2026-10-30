@@ -785,7 +785,10 @@ export async function updateBookingPage(
       await checkPageQuestions(tx, scope, questions, moved ? [] : page.questions, target);
     }
     // Only on the way to live: a page already live onto such an object keeps working, and its other settings save.
-    if (settings.status === 'live' && page.status !== 'live') {
+    // Filing to the CRM turned back on is going live for the records it makes: a required field may have turned
+    // Required meanwhile, since a page kept out of the CRM walls nothing (`livePagesWalledBy`).
+    const startsFiling = settings.fileToCrm === true && !page.fileToCrm && settings.status !== 'paused';
+    if ((settings.status === 'live' && page.status !== 'live') || (startsFiling && page.status === 'live')) {
       await checkPageCanGoLive(tx, scope, questions ?? page.questions, target);
     } else if (
       page.status === 'live' &&

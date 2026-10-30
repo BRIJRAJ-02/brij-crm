@@ -111,7 +111,7 @@ async function wallsOn(
   // name, where it takes one (`answersRecord`). Required on them is no wall.
   const written = await bookingFills(tx, objectId, attributes);
   // The record is made with these answers (`requiredAnswerValues`), so they are no wall either.
-  const asked = requiredFilings(questions);
+  const asked = requiredFilings(questions, (id) => attributes.get(id)?.type);
   // A guest is nobody: a Current user default fills nothing for them, as `ANONYMOUS` says.
   return fileable(attributes).filter(
     (attribute) => !written.has(attribute.id) && !asked.has(attribute.id) && isUnfillableRequired(attribute, ANONYMOUS),

@@ -266,6 +266,37 @@ describe('a required People field a page asks for (late trap #11)', () => {
       expect.objectContaining({ key: 'handle', saved: false }),
     ]);
   });
+
+  it('refuses turning filing back on for a live page the field turned Required behind', async () => {
+    const w = await workspace();
+    const phone = await createAttribute(w.owner, {
+      objectId: w.people,
+      id: newId(),
+      title: 'Desk phone',
+      type: 'text',
+    });
+    const page = await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'Kept out',
+        timeZone: 'UTC',
+        settings: { fileToCrm: false, questions: [ask('phone', phone.id, false)] },
+      },
+      NOW,
+    );
+    // Kept out of the CRM, it makes no record, so it walls nothing.
+    expect((await editAttribute(w.owner, { attributeId: phone.id, isRequired: true })).isRequired).toBe(true);
+    const [refusal] = await refusalOf(updateBookingPage(w.owner, { pageId: page.id, settings: { fileToCrm: true } }));
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID' });
+    expect(refusal?.message).toContain('Desk phone is required there');
+    // Asking for it of every guest, it files again.
+    const filing = await updateBookingPage(w.owner, {
+      pageId: page.id,
+      settings: { fileToCrm: true, questions: [ask('phone', phone.id)] },
+    });
+    expect(filing.fileToCrm).toBe(true);
+  });
 });
 
 describe('a required field of another answers object a page asks for', () => {
