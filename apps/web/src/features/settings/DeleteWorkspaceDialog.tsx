@@ -63,7 +63,7 @@ export function DeleteWorkspaceDialog({ data, slug, name, isOpen, onClose, onDel
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" isDisabled={!matches} isPending={isBusy} onPress={commit}>

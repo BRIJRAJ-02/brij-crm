@@ -660,6 +660,7 @@ export function SubmissionsTab({
         title={strings.deleteSubmissionTitle(
           open === undefined ? undefined : (open.mainRecord?.name ?? nameOf(open) ?? open.email),
         )}
+        variant="confirm"
         tone="danger"
         isOpen={isConfirmingDelete}
         isBusy={busy === 'delete'}
@@ -670,7 +671,7 @@ export function SubmissionsTab({
         }}
         actions={
           <>
-            <Button slot="close" isDisabled={busy === 'delete'} kbd="ESC">
+            <Button slot="close" isDisabled={busy === 'delete'}>
               {strings.cancel}
             </Button>
             <Button
@@ -700,7 +701,7 @@ export function SubmissionsTab({
         }}
         actions={
           <>
-            <Button slot="close" isDisabled={busy === 'add'} kbd="ESC">
+            <Button slot="close" isDisabled={busy === 'add'}>
               {strings.cancel}
             </Button>
             <Button

@@ -73,6 +73,7 @@ function ArchiveConfirm({
   return (
     <Modal
       title={strings.confirmTitle(object.pluralName)}
+      variant="confirm"
       tone="danger"
       isOpen={isOpen}
       onOpenChange={(open) => {
@@ -80,7 +81,7 @@ function ArchiveConfirm({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" icon="archive" isPending={isBusy} onPress={archive}>

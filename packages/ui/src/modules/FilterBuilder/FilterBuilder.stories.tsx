@@ -240,6 +240,16 @@ export const RemoveKeepsFocus: Story = {
   },
 };
 
+/** Clear all, at the end of Add filter's row, removes every filter at once and leaves focus on the empty state's Add filter. */
+export const ClearAll: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Clear all' }));
+    await waitFor(() => expect(canvas.getByText('No filters yet')).toBeInTheDocument());
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Add filter' })).toHaveFocus());
+  },
+};
+
 /** "Within the last" takes a typed amount, checked when you leave it. */
 export const RetypeAmount: Story = {
   args: { onChange: fn() },

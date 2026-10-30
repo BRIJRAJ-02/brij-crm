@@ -10,8 +10,8 @@ Ported from the design system artifact's Button card. Every pressable control in
 
 ```tsx
 <Button icon="settings" onPress={openSettings}>View settings</Button>
-<Button kbd="ESC" onPress={close}>Cancel</Button>
 <Button variant="primary" kbd="⌘↵" onPress={save}>Add to list</Button>
+<Button slot="close">Cancel</Button> {/* in a Modal's footer: ESC by default */}
 <Button variant="primary" isPending>Saving</Button>
 <Button icon="ellipsis" label="More actions" onPress={openMenu} />
 <Button variant="primary" icon="plus" label="New form" onPress={create}>New</Button>
@@ -21,8 +21,8 @@ Ported from the design system artifact's Button card. Every pressable control in
 ```
 
 - `CopyButton` takes `isRound` (a pill: a link page's address under the person's name) and `name`, a fuller accessible name while it hasn't copied, starting with its visible label, for a label that is the value itself ("timefix.com/ada, copy link").
-- **One primary per surface.** `primary` goes on the action that commits: Save, Add to list, Select record. Pair it with its shortcut (`kbd="⌘↵"`).
-- `secondary` (the default) for view controls (View settings, Import / Export) and Cancel (`kbd="ESC"`).
+- **One primary per surface.** `primary` goes on the action that commits: Save, Add to list, Select record. Pair it with its shortcut (`kbd="⌘↵"`); in a Modal's footer a submit gets it by default.
+- `secondary` (the default) for view controls (View settings, Import / Export) and Cancel (in a Modal's footer it shows `ESC` by itself).
 - `danger` for a control that starts a destructive action, such as Delete in the bulk bar or Archive in settings: red label and edge on the raised surface, so it holds 4.5:1 in both themes.
 - `danger-solid` for the final commit that destroys, such as Delete or Archive in a confirm dialog: a `danger-fill` with an `on-danger` label (5.3:1 light, 5.4:1 dark). One per dialog, in place of the primary.
 - `ghost` for undo style actions that shouldn't compete, such as Discard changes, and for icon buttons inside dense rows.
@@ -54,7 +54,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only), or `
 - **Disabled**: at `opacity-disabled`, skipped by Tab, never pressed. When a line beside it says why or until when, `aria-describedby` ties that line to it.
 - **Pending** (`isPending`): a spinner in place of the icon, presses ignored, still focusable, at `opacity-busy`. Screen readers hear the change. Change the label to the ongoing verb ("Saving"), unless the button must hold its width (Captures' New): then keep the label and give the button a `label`, and React Aria adds the spinner's "In progress" to its name ("New form In progress"). Without a `label`, whether "In progress" joins the name depends on the browser, so a kept label alone wouldn't reliably say anything changed.
 - **Selected** (`ToggleButton`): `accent-soft` with an `accent` edge, which holds 3:1 against the surface (the artifact marks a pressed day with the accent too). It keeps that look while hovered. `aria-pressed` tells screen readers.
-- **Shortcut** (`kbd`): the keycaps are for sight. The button states the shortcut through `aria-keyshortcuts` (`⌘↵` is `Meta+Enter`), so screen readers hear "Add to list", not "Add to list command return". On a touch only device (no hover, a coarse pointer) the keycaps are hidden: there are no keys to press. In a dialog at phone width (under 480px, where the footer stacks its buttons) they are hidden too, through Modal's public `modal-scrim` container (22 October 2026).
+- **Shortcut** (`kbd`): the keycaps are for sight. The button states the shortcut through `aria-keyshortcuts` (`⌘↵` is `Meta+Enter`), so screen readers hear "Add to list", not "Add to list command return". On a touch only device (no hover, a coarse pointer) the keycaps are hidden: there are no keys to press. In a dialog at phone width (under 480px, where the footer stacks its buttons) they are hidden too, through Modal's public `modal-scrim` container (22 October 2026). Inside a Modal's footer the keys come by default (30 October 2026): a `slot="close"` button shows `ESC` and a `type="submit"` button shows `↵` (`⌘↵` when the dialog holds a long text or an editor), so callers stop typing them; a `kbd` of its own wins, and `kbd={[]}` shows none. Why a default: 70 hand typed `kbd="ESC"` drifted, and only a few primaries showed their key, which Attio shows on every one.
 
 ## Keyboard
 

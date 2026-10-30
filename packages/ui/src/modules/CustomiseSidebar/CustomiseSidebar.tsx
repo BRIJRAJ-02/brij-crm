@@ -143,6 +143,7 @@ function ResetConfirm({
   return (
     <Modal
       title={strings.resetQuestion}
+      variant="confirm"
       tone="danger"
       isOpen={isOpen}
       isBusy={isBusy}
@@ -154,7 +155,7 @@ function ResetConfirm({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" icon="undo-2" isPending={isBusy} onPress={reset}>

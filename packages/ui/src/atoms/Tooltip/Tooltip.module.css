@@ -36,6 +36,13 @@
     pointer-events: none;
   }
 
+  /* With a keycap: the line, then the key after it ("Search ⌘K"). */
+  .root[data-kbd] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
   .root[data-placement='top'] {
     margin-block-end: var(--space-4);
   }

@@ -29,7 +29,7 @@ export function ViewChangedDialog({ sentence, isReplacing, onReplace, onSaveAsNe
         <>
           {/* The dialog opens on its safe choice (spec 0020): Replace overwrites someone else's filters. */}
           {/* eslint-disable-next-line jsx-a11y-x/no-autofocus */}
-          <Button slot="close" isDisabled={isReplacing} kbd="ESC" autoFocus>
+          <Button slot="close" isDisabled={isReplacing} autoFocus>
             {strings.keepMine}
           </Button>
           {onSaveAsNew !== undefined && (

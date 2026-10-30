@@ -82,7 +82,7 @@ function Opened({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="primary" isPending={isBusy} onPress={rename}>

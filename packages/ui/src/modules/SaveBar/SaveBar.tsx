@@ -172,12 +172,11 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
               </Button>
               <Modal
                 title={strings.discardTitle}
+                variant="confirm"
                 tone="danger"
                 actions={
                   <>
-                    <Button slot="close" kbd="ESC">
-                      {strings.keepEditing}
-                    </Button>
+                    <Button slot="close">{strings.keepEditing}</Button>
                     <Button variant="danger-solid" onPress={discard}>
                       {strings.discardChanges}
                     </Button>

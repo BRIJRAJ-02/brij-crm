@@ -135,7 +135,7 @@ function Asked({
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" isPending={isBusy} isDisabled={read.status === 'loading'} onPress={commit}>

@@ -465,7 +465,7 @@ function JobConfirm({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {ask.kind === 'run' ? strings.notNow : strings.keepJob}
           </Button>
           <Button

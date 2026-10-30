@@ -660,6 +660,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
       )}
       <Modal
         title={strings.disconnectTitle(lastDisconnecting?.accountEmail ?? '')}
+        variant="confirm"
         tone="danger"
         isOpen={disconnecting !== undefined}
         isBusy={isDisconnectBusy}
@@ -668,7 +669,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
         }}
         actions={
           <>
-            <Button slot="close" isDisabled={isDisconnectBusy} kbd="ESC">
+            <Button slot="close" isDisabled={isDisconnectBusy}>
               {strings.cancel}
             </Button>
             <Button variant="danger-solid" isPending={isDisconnectBusy} onPress={disconnect}>

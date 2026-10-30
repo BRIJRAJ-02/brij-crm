@@ -76,6 +76,7 @@ function Asked({
   return (
     <Modal
       title={question.title}
+      variant="confirm"
       tone="danger"
       isOpen={isOpen}
       isBusy={isBusy}
@@ -87,7 +88,7 @@ function Asked({
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+          <Button slot="close" isDisabled={isBusy}>
             {question.dismiss ?? strings.cancel}
           </Button>
           <Button variant="danger-solid" isPending={isBusy} onPress={commit}>

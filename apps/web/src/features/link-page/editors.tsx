@@ -75,9 +75,7 @@ export function BlockEditorFrame({
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC">
-            {strings.cancel}
-          </Button>
+          <Button slot="close">{strings.cancel}</Button>
           <div ref={setAction} />
         </>
       }
@@ -111,7 +109,7 @@ function EditorModal({
 }) {
   const frame = useContext(EditorFrameContext);
   const submit = canSubmit ? (
-    <Button variant="primary" type="submit" form={formId} kbd="⌘↵">
+    <Button variant="primary" type="submit" form={formId}>
       {chrome?.submitLabel ?? submitLabel}
     </Button>
   ) : undefined;
@@ -136,9 +134,7 @@ function EditorModal({
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC">
-            {strings.cancel}
-          </Button>
+          <Button slot="close">{strings.cancel}</Button>
           {submit}
         </>
       }

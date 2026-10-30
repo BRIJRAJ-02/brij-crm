@@ -480,7 +480,7 @@ function MoveDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={busy} kbd="ESC">
+          <Button slot="close" isDisabled={busy}>
             {strings.keepTime}
           </Button>
           <Button variant="primary" isDisabled={time === undefined} isPending={busy} onPress={move}>
@@ -601,7 +601,7 @@ function CancelDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={busy} kbd="ESC">
+          <Button slot="close" isDisabled={busy}>
             {strings.keepBooking}
           </Button>
           <Button variant="danger-solid" icon="circle-x" isPending={busy} onPress={cancel}>
@@ -713,7 +713,7 @@ function LinkRecordDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={busy} kbd="ESC">
+          <Button slot="close" isDisabled={busy}>
             {strings.cancel}
           </Button>
           <Button

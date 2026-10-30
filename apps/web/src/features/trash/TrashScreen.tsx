@@ -518,6 +518,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
       {/* Delete forever of up to 500 picked records asks first (AC-535). */}
       <Modal
         title={strings.confirmPurgeTitle(purgeWords)}
+        variant="confirm"
         tone="danger"
         isOpen={asking !== undefined}
         onOpenChange={(isOpen) => {
@@ -525,9 +526,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC">
-              {strings.cancel}
-            </Button>
+            <Button slot="close">{strings.cancel}</Button>
             <Button
               variant="danger-solid"
               icon="trash"
@@ -559,9 +558,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC">
-              {strings.cancel}
-            </Button>
+            <Button slot="close">{strings.cancel}</Button>
             <Button
               variant={isRestoreJob ? 'primary' : 'danger-solid'}
               icon={isRestoreJob ? 'archive-restore' : 'trash'}

@@ -386,3 +386,60 @@ export const Context: Story = {
     await waitFor(() => expect(target).toHaveFocus());
   },
 };
+
+/** A pinned foot: "Create attribute" stays under a hairline at the menu's foot while the list scrolls behind it. */
+export const PinnedCreate: Story = {
+  render: () => (
+    <Stage>
+      <MenuTrigger defaultOpen>
+        <Button icon="plus">Add column</Button>
+        <Menu label="Company attributes" search={{ label: 'Search attributes' }}>
+          <MenuSection label="Company attributes">
+            {ATTRIBUTES.map((attribute) => (
+              <MenuItem key={attribute.id} id={attribute.id} icon={attribute.icon}>
+                {attribute.name}
+              </MenuItem>
+            ))}
+          </MenuSection>
+          <MenuSection label="Create" isPinned>
+            <MenuItem id="create" icon="plus">
+              Create attribute
+            </MenuItem>
+          </MenuSection>
+        </Menu>
+      </MenuTrigger>
+    </Stage>
+  ),
+  play: async () => {
+    const menu = await openMenu();
+    // Still a menu item, so the arrow keys reach it; it only sits pinned at the foot.
+    const pinned = menu.querySelector('[data-pinned]');
+    await expect(pinned).not.toBeNull();
+    await expect(pinned).toHaveTextContent('Create attribute');
+  },
+};
+
+/** The command palette's search (`size: 'lg'`): a bar's height and the title's size, with roomier rows. */
+export const SearchLarge: Story = {
+  render: () => (
+    <Stage>
+      <Menu label="Quick actions" isInline search={{ label: 'Search', size: 'lg' }}>
+        {ATTRIBUTES.map((attribute) => (
+          <MenuItem key={attribute.id} id={attribute.id} icon={attribute.icon}>
+            {attribute.name}
+          </MenuItem>
+        ))}
+      </Menu>
+    </Stage>
+  ),
+  play: async () => {
+    const field = await waitFor(() => {
+      const input = document.querySelector('input[type="search"]');
+      if (!(input instanceof HTMLInputElement)) throw new Error('no search field');
+      return input;
+    });
+    const bar = getComputedStyle(document.documentElement).getPropertyValue('--size-bar').trim();
+    const height = field.parentElement?.getBoundingClientRect().height ?? 0;
+    await expect(`${String(Math.round(height))}px`).toBe(bar);
+  },
+};

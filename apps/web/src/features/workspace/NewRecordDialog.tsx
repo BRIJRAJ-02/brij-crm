@@ -167,6 +167,7 @@ export function NewRecordDialog({
   return (
     <Modal
       title={title}
+      variant="form"
       isOpen={isOpen}
       // While Create waits, the dialog stays: a refusal has to land on its field.
       onOpenChange={(open) => {
@@ -178,10 +179,10 @@ export function NewRecordDialog({
       }
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
-          <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
+          <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
             {isBusy ? strings.creating : strings.createRecord(singularName)}
           </Button>
         </>

@@ -196,6 +196,7 @@ function SignInAgain({ data, workspaceName }: SignInRulesProps) {
       )}
       <Modal
         title={strings.signOutTitle}
+        variant="confirm"
         tone="danger"
         isOpen={isConfirmingSignOut}
         isBusy={isSigningOut}
@@ -204,7 +205,7 @@ function SignInAgain({ data, workspaceName }: SignInRulesProps) {
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC" isDisabled={isSigningOut}>
+            <Button slot="close" isDisabled={isSigningOut}>
               {strings.cancel}
             </Button>
             <Button variant="danger-solid" isPending={isSigningOut} onPress={signOut}>

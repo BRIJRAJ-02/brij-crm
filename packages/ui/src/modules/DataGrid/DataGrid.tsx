@@ -30,7 +30,7 @@ import { CheckboxMark } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { AnchoredTooltip, Tooltip, TOOLTIP_DELAY_MS } from '../../atoms/Tooltip/Tooltip.tsx';
-import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
+import { Menu, MenuItem, MenuSection, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { clearedValueOf, fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
@@ -2103,10 +2103,12 @@ const GridHeader = memo(function GridHeader({
                       {item.label}
                     </MenuItem>
                   ))}
-                  <MenuSeparator />
-                  <MenuItem id={NEW_COLUMN} icon="plus">
-                    {strings.newColumnItem}
-                  </MenuItem>
+                  {/* Pinned at the foot, so a long list of hidden attributes never scrolls it away. */}
+                  <MenuSection label={strings.newColumnItem} isPinned>
+                    <MenuItem id={NEW_COLUMN} icon="plus">
+                      {strings.newColumnItem}
+                    </MenuItem>
+                  </MenuSection>
                 </Menu>
               </MenuTrigger>
             )}

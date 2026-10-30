@@ -46,6 +46,7 @@ export function LeaveDialog({ data, slug, workspaceName, isOpen, onClose }: Leav
   return (
     <Modal
       title={strings.leaveTitle(workspaceName)}
+      variant="confirm"
       tone="danger"
       isOpen={isOpen}
       isBusy={isBusy}
@@ -57,7 +58,7 @@ export function LeaveDialog({ data, slug, workspaceName, isOpen, onClose }: Leav
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" isPending={isBusy} onPress={leave}>

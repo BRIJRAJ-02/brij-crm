@@ -377,7 +377,7 @@ export function useViewMenu({
           }}
           actions={
             <>
-              <Button slot="close" isDisabled={isPrivateBusy} kbd="ESC">
+              <Button slot="close" isDisabled={isPrivateBusy}>
                 {strings.cancel}
               </Button>
               <Button variant="primary" isPending={isPrivateBusy} onPress={makePrivate}>
@@ -415,10 +415,10 @@ function RenameViewDialog({ isOpen, name, onClose, onRename }: RenameViewDialogP
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
-          <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
+          <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
             {isBusy ? strings.renaming : strings.rename}
           </Button>
         </>

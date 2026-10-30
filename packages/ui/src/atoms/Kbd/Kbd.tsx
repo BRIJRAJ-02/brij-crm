@@ -2,8 +2,11 @@ import { useKeyboardPlatform } from '../../provider/context.ts';
 import styles from './Kbd.module.css';
 import { keycapText } from './shortcuts.ts';
 
-/** How a keycap sits: `raised` on its own, `soft` inside buttons and menu items, `onAccent` inside a primary button. */
-export type KbdTone = 'raised' | 'soft' | 'onAccent';
+/**
+ * How a keycap sits: `raised` on its own, `soft` inside buttons and menu items, `onAccent` inside a primary button,
+ * `onInverse` inside a tooltip.
+ */
+export type KbdTone = 'raised' | 'soft' | 'onAccent' | 'onInverse';
 
 /** Props for Kbd: one keycap's text, written with the Mac symbols ⌘ ⇧ ⌥ ↵; other keyboards see Ctrl, Shift and Alt. */
 export interface KbdProps {

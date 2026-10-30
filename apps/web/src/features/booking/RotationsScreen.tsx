@@ -400,7 +400,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
         }}
         actions={
           <>
-            <Button slot="close" isDisabled={isHandingBusy} kbd="ESC">
+            <Button slot="close" isDisabled={isHandingBusy}>
               {strings.keepThem}
             </Button>
             <Button variant="primary" isPending={isHandingBusy} onPress={handOn}>
@@ -413,6 +413,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
       </Modal>
       <Modal
         title={strings.deleteTitle(deleting?.name ?? '')}
+        variant="confirm"
         tone="danger"
         isOpen={deleting !== undefined}
         isBusy={isDeleteBusy}
@@ -421,7 +422,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
         }}
         actions={
           <>
-            <Button slot="close" isDisabled={isDeleteBusy} kbd="ESC">
+            <Button slot="close" isDisabled={isDeleteBusy}>
               {strings.cancel}
             </Button>
             <Button variant="danger-solid" isPending={isDeleteBusy} onPress={remove}>

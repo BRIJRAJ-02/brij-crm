@@ -120,9 +120,7 @@ export function AddDelegateDialog({ isOpen, people, hoursSetByOthers, onClose, o
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC">
-            {strings.cancel}
-          </Button>
+          <Button slot="close">{strings.cancel}</Button>
           <Button variant="primary" isDisabled={person === null} onPress={add}>
             {strings.add}
           </Button>
@@ -176,6 +174,7 @@ export function RemoveAccessDialog({
   return (
     <Modal
       title={shown.title}
+      variant="confirm"
       tone="danger"
       isOpen={question !== undefined}
       onOpenChange={(open) => {
@@ -183,9 +182,7 @@ export function RemoveAccessDialog({
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC">
-            {strings.keep}
-          </Button>
+          <Button slot="close">{strings.keep}</Button>
           <Button
             variant="danger-solid"
             onPress={() => {

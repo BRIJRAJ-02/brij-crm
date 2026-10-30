@@ -32,6 +32,7 @@ export function LeaveGuard({ isDirty, searchStays = false }: LeaveGuardProps) {
   return (
     <Modal
       title={strings.leaveTitle}
+      variant="confirm"
       tone="danger"
       isOpen={blocker.status === 'blocked'}
       onOpenChange={(isOpen) => {
@@ -39,9 +40,7 @@ export function LeaveGuard({ isDirty, searchStays = false }: LeaveGuardProps) {
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC">
-            {strings.leaveStay}
-          </Button>
+          <Button slot="close">{strings.leaveStay}</Button>
           <Button
             variant="danger-solid"
             onPress={() => {

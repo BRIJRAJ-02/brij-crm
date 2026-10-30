@@ -34,6 +34,15 @@
     color: var(--on-accent);
   }
 
+  /* Inside a tooltip, on surface-inverse: edged with the inverse divider, the label in on-inverse (17:1 light,
+     15:1 dark). */
+  .root[data-tone='onInverse'] {
+    border-color: var(--inverse-hover);
+    background: transparent;
+    box-shadow: none;
+    color: var(--on-inverse);
+  }
+
   @media (forced-colors: active) {
     .root {
       border-color: CanvasText;

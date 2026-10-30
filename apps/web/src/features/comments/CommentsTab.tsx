@@ -247,6 +247,7 @@ export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnl
       )}
       <Modal
         title={strings.deleteTitle}
+        variant="confirm"
         tone="danger"
         isOpen={deleting !== undefined}
         onOpenChange={(isOpen) => {

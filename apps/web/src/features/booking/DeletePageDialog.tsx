@@ -57,6 +57,7 @@ function DeletePageConfirm({
   return (
     <Modal
       title={strings.deleteTitle(page.title)}
+      variant="confirm"
       tone="danger"
       isOpen={isOpen}
       isBusy={isBusy}
@@ -65,7 +66,7 @@ function DeletePageConfirm({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" icon="trash" isPending={isBusy} onPress={remove}>

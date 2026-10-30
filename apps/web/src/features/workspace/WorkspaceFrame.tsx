@@ -256,6 +256,7 @@ export function WorkspaceFrame({
           onQuickActions={() => {
             commandMenu.open();
           }}
+          {...(RAIL_KEYS[0] === undefined ? {} : { collapseKbd: RAIL_KEYS[0] })}
           isWorkspaceBusy={isSigningOut}
           workspaceBusyLabel={strings.signingOut}
           workspaceMenu={

@@ -26,7 +26,7 @@ import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
-import { keycapText, keyShortcuts } from '../../atoms/Kbd/shortcuts.ts';
+import { keyShortcuts } from '../../atoms/Kbd/shortcuts.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Spinner } from '../../atoms/Spinner/Spinner.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
@@ -117,6 +117,8 @@ export type SidebarProps = (WorkspaceHead | HeadingHead) & {
   readonly isCollapsed?: boolean;
   /** Shows the collapse and expand buttons, and says when they are pressed. */
   readonly onCollapsedChange?: (isCollapsed: boolean) => void;
+  /** The key that folds and unfolds it (the app's `[`), shown in the collapse and expand buttons' tooltips. */
+  readonly collapseKbd?: string;
   /** The navigation landmark's name. Defaults to "Main navigation". */
   readonly label?: string;
   /**
@@ -141,6 +143,7 @@ export function Sidebar(props: SidebarProps) {
     footer,
     isCollapsed: isCollapsedProp = false,
     onCollapsedChange: onCollapsedChangeProp,
+    collapseKbd,
     label = strings.navigation,
     keyboard = 'tab',
   } = props;
@@ -153,14 +156,20 @@ export function Sidebar(props: SidebarProps) {
   useArrowKeys(bodyRef, keyboard === 'arrows');
   const collapse =
     onCollapsedChange !== undefined && !isCollapsed ? (
-      <Button
-        variant="ghost"
-        icon="panel-left-close"
-        label={strings.collapse}
-        onPress={() => {
-          onCollapsedChange(true);
-        }}
-      />
+      <Tooltip
+        content={strings.collapse}
+        placement="bottom"
+        {...(collapseKbd === undefined ? {} : { kbd: collapseKbd })}
+      >
+        <Button
+          variant="ghost"
+          icon="panel-left-close"
+          label={strings.collapse}
+          onPress={() => {
+            onCollapsedChange(true);
+          }}
+        />
+      </Tooltip>
     ) : null;
   return (
     <SidebarContext value={{ isCollapsed }}>
@@ -186,6 +195,7 @@ export function Sidebar(props: SidebarProps) {
             {onCollapsedChange !== undefined && (
               <NavItem
                 icon="panel-left-open"
+                {...(collapseKbd === undefined ? {} : { kbd: collapseKbd })}
                 onPress={() => {
                   onCollapsedChange(false);
                 }}
@@ -394,10 +404,9 @@ export function NavItem(props: NavItemProps) {
   const { children, icon, hue, leading, meta, badge, kbd } = props;
   const { isCollapsed } = useContext(SidebarContext);
   // On the rail the meta has no room, so it joins the name and the tooltip ("Booking pages · In Captures"); the
-  // tooltip names the shortcut too ("Settings ⌘,", "Settings Ctrl ," off a Mac), as the keycap has no room either.
+  // tooltip shows the shortcut as its keycap too ("Settings ⌘,"), as the row's keycap has no room either.
   const railName = meta === undefined ? children : `${children} · ${meta}`;
   const platform = useKeyboardPlatform();
-  const railTip = kbd === undefined ? railName : `${railName} ${keycapText(kbd, platform)}`;
   // The keycap is hidden from the name, so the shortcut is stated as aria-keyshortcuts ("Meta+,", "Control+," off a
   // Mac). React Aria's Link and Button don't pass the attribute through, so it goes on the element through `render`.
   const shortcut = kbd === undefined ? undefined : keyShortcuts([kbd], platform);
@@ -457,7 +466,7 @@ export function NavItem(props: NavItemProps) {
     );
   if (isCollapsed) {
     return (
-      <Tooltip content={railTip} placement="end">
+      <Tooltip content={railName} placement="end" {...(kbd === undefined ? {} : { kbd })}>
         {item}
       </Tooltip>
     );

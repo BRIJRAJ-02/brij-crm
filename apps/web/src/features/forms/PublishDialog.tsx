@@ -320,9 +320,7 @@ export function PublishDialog(props: PublishDialogProps) {
       actions={
         step === 1 ? (
           <>
-            <Button slot="close" kbd="ESC">
-              {strings.cancel}
-            </Button>
+            <Button slot="close">{strings.cancel}</Button>
             <Button
               key="next"
               variant="primary"

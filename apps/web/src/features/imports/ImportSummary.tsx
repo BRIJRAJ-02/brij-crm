@@ -336,6 +336,7 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
       )}
       <Modal
         title={strings.undoTitle}
+        variant="confirm"
         tone="danger"
         isOpen={isConfirmingUndo}
         onOpenChange={setConfirmingUndo}
@@ -352,6 +353,7 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
       </Modal>
       <Modal
         title={strings.cancelTitle}
+        variant="confirm"
         tone="danger"
         isOpen={isConfirmingCancel}
         onOpenChange={setConfirmingCancel}

@@ -1009,6 +1009,7 @@ export function ImportScreen({
       />
       <Modal
         title={strings.stopTitle}
+        variant="confirm"
         tone="danger"
         isOpen={isStopping && sending !== undefined}
         onOpenChange={(isOpen) => {
@@ -1034,6 +1035,7 @@ export function ImportScreen({
       </Modal>
       <Modal
         title={strings.leaveTitle}
+        variant="confirm"
         tone="danger"
         isOpen={blocker.status === 'blocked'}
         onOpenChange={(isOpen) => {

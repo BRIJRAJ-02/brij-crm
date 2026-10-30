@@ -334,10 +334,10 @@ export function NewMeetingDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={busy} kbd="ESC">
+          <Button slot="close" isDisabled={busy}>
             {strings.cancel}
           </Button>
-          <Button variant="primary" type="submit" form={formId} isPending={busy} isDisabled={pageId === ''} kbd="⌘↵">
+          <Button variant="primary" type="submit" form={formId} isPending={busy} isDisabled={pageId === ''}>
             {busy ? strings.booking : strings.bookIt}
           </Button>
         </>

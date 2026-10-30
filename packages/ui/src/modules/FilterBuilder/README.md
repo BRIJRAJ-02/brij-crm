@@ -29,6 +29,7 @@ Ported from the artifact's FilterBuilder card. Every view (#20, #21) filters thr
 - `isReadOnly` shows each condition as a sentence through the field set's displays, with nothing to press.
 - `ConditionChip` is one top level item of a view's filter as a FilterChip, in the builder's own words (spec 0020, the view's Toolbar): its attribute through relations with its type's icon, its operator and its operand through the field set; a condition with no operand has no value part, a group reads "3 conditions", and an attribute the view can't show reads "Unavailable field". Every part calls `onPress` (the screen opens the builder); remove calls `onRemove`. It lives here because only the builder knows how an operator and an operand read, so a chip and its row can't word a condition differently.
 - `conditionOn(attribute, operator?)` is a new condition on an attribute with its type's first operator and no operand yet: the column menu's Filter starts one.
+- In a popover (the view's filter) a condition's attribute and operator pickers are `ghost`, borderless until hovered, as Attio's are, and the top group's foot ends with "Clear all" on Add filter's row, one click (30 October 2026). On a page (a rule's conditions) the pickers keep the secondary edge.
 
 ## States
 

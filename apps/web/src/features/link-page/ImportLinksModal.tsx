@@ -82,7 +82,7 @@ export function ImportLinksModal({ isOpen, newId, onClose, onImport }: ImportLin
       actions={
         made === undefined ? (
           <>
-            <Button slot="close" kbd="ESC" isDisabled={isReading}>
+            <Button slot="close" isDisabled={isReading}>
               {strings.cancel}
             </Button>
             <Button variant="primary" icon="download" isPending={isReading} onPress={bring}>

@@ -54,6 +54,23 @@ export const Default: Story = {
   },
 };
 
+/** `kbd`: the button's shortcut as a keycap after the line, "Search ⌘K". */
+export const WithKbd: Story = {
+  render: () => (
+    <Stage>
+      <Tooltip content="Search" kbd="⌘K">
+        <Button icon="search" label="Search" />
+      </Tooltip>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Search' })).toHaveFocus();
+    const tip = await tooltip();
+    await expect(tip.querySelector('kbd')).not.toBeNull();
+  },
+};
+
 /** Plain text that was cut short shows its full text on hover. */
 export const OnText: Story = {
   parameters: { crm: { screenshot: false } },

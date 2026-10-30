@@ -273,6 +273,7 @@ function RulesCardBody({
       />
       <Modal
         title={removing?.title ?? ''}
+        variant="confirm"
         tone="danger"
         isOpen={removing !== undefined}
         isBusy={busy}
@@ -281,7 +282,7 @@ function RulesCardBody({
         }}
         actions={
           <>
-            <Button slot="close" isDisabled={busy} kbd="ESC">
+            <Button slot="close" isDisabled={busy}>
               {strings.cancel}
             </Button>
             <Button

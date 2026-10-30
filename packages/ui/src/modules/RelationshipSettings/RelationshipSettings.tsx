@@ -150,9 +150,7 @@ export function relationshipStep({
   return {
     title,
     actions: isReadOnly ? (
-      <Button slot="close" kbd="ESC">
-        {strings.close}
-      </Button>
+      <Button slot="close">{strings.close}</Button>
     ) : (
       <>
         {onBack !== undefined && mode === 'create' && (
@@ -160,10 +158,10 @@ export function relationshipStep({
             {strings.back}
           </Button>
         )}
-        <Button slot="close" isDisabled={isBusy} kbd="ESC">
+        <Button slot="close" isDisabled={isBusy}>
           {strings.cancel}
         </Button>
-        <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
+        <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
           {mode === 'create' ? (isBusy ? strings.creating : strings.create) : isBusy ? strings.saving : strings.save}
         </Button>
       </>
@@ -193,6 +191,7 @@ export function RelationshipSettings({ isOpen, onOpenChange, ...props }: Relatio
   return (
     <Modal
       title={title}
+      variant="form"
       isOpen={isOpen}
       // While the server answers, the dialog stays: a refusal has to land on its side.
       onOpenChange={(open) => {

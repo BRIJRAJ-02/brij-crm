@@ -281,7 +281,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
         }}
         actions={
           <>
-            <Button slot="close" isDisabled={isBusy} kbd="ESC">
+            <Button slot="close" isDisabled={isBusy}>
               {strings.cancel}
             </Button>
             <Button variant="primary" ref={saveRef} isPending={isBusy} onPress={submit}>
@@ -415,6 +415,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           removed.map((member) => member.name),
           rotation?.name ?? '',
         )}
+        variant="confirm"
         tone="danger"
         isOpen={isOpen && isConfirming}
         isBusy={isBusy}
@@ -423,7 +424,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
         }}
         actions={
           <>
-            <Button slot="close" isDisabled={isBusy} kbd="ESC">
+            <Button slot="close" isDisabled={isBusy}>
               {strings.cancel}
             </Button>
             <Button variant="danger-solid" isPending={isBusy} onPress={submit}>

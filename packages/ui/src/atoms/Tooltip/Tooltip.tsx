@@ -6,6 +6,7 @@ import {
   TooltipTriggerStateContext,
   type TooltipTriggerState,
 } from 'react-aria-components';
+import { Kbd } from '../Kbd/Kbd.tsx';
 import styles from './Tooltip.module.css';
 
 /**
@@ -23,6 +24,11 @@ export type TooltipPlacement = 'top' | 'bottom' | 'start' | 'end';
 export interface TooltipProps {
   /** One short line: the full text of something cut short, an exact time, why a control is disabled. */
   readonly content: string;
+  /**
+   * The control's shortcut, as a keycap after the line ("Search ⌘K"), written with Mac symbols: icon buttons teach
+   * their keys this way. Sight only; give the control its `aria-keyshortcuts` too.
+   */
+  readonly kbd?: string;
   /**
    * What it describes. A library control (Button) works as it is; plain text
    * passes `isTextTrigger` so hovering it shows the tooltip.
@@ -62,6 +68,7 @@ function TextTrigger({ children, isShared }: { readonly children: ReactElement; 
  */
 export function Tooltip({
   content,
+  kbd,
   children,
   placement = 'top',
   isTextTrigger = false,
@@ -84,8 +91,14 @@ export function Tooltip({
         placement={placement}
         offset={0}
         data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
+        data-kbd={kbd === undefined ? undefined : ''}
       >
         {content}
+        {kbd !== undefined && (
+          <span aria-hidden="true">
+            <Kbd tone="onInverse">{kbd}</Kbd>
+          </span>
+        )}
       </AriaTooltip>
     </TooltipTrigger>
   );

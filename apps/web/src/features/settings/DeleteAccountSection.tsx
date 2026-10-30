@@ -213,6 +213,7 @@ function useDeleteAccount(data: DataLayer, security: AccountSecurityState, lostW
     dialog: (
       <Modal
         title={blocked ? copy.blockedTitleOne : copy.title}
+        variant="confirm"
         tone="danger"
         isOpen={isOpen}
         isBusy={isBusy}
@@ -221,7 +222,7 @@ function useDeleteAccount(data: DataLayer, security: AccountSecurityState, lostW
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+            <Button slot="close" isDisabled={isBusy}>
               {blocked ? copy.close : copy.cancel}
             </Button>
             {ready !== undefined && !blocked && (

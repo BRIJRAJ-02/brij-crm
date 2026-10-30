@@ -870,6 +870,7 @@ function Blocks({
               ? strings.removePageTitle(rowWords(deleting).title)
               : strings.deleteTitle(rowWords(deleting).title)
           }
+          variant="confirm"
           tone="danger"
           isOpen
           isBusy={isDeleting}
@@ -878,7 +879,7 @@ function Blocks({
           }}
           actions={
             <>
-              <Button slot="close" kbd="ESC" isDisabled={isDeleting}>
+              <Button slot="close" isDisabled={isDeleting}>
                 {strings.cancel}
               </Button>
               <Button

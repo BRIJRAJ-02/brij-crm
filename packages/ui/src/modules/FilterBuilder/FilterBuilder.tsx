@@ -18,6 +18,7 @@ import type { EditorProps, FieldAttribute } from '../../fields/types.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
+import { InPopover } from '../../molecules/Popover/Popover.tsx';
 import { Menu, MenuItem, MenuTrigger, SubmenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
@@ -354,6 +355,19 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
               {strings.removeGroup}
             </Button>
           )}
+          {/* The top group's foot ends with Clear all, on the same row as Add filter, as Attio's does. */}
+          {path.length === 0 && (
+            <span className={styles.clearAll}>
+              <Button
+                variant="ghost"
+                onPress={() => {
+                  structure.change({ ...value, conditions: [] }, { adder: [] });
+                }}
+              >
+                {strings.clearAll}
+              </Button>
+            </span>
+          )}
         </div>
       )}
     </>
@@ -371,6 +385,7 @@ interface ConditionRowProps {
 function ConditionRow({ builder, item, path, index }: ConditionRowProps) {
   const { value, onChange, isReadOnly = false } = builder;
   const structure = useStructure();
+  const pickVariant = usePickVariant();
   if (isGroup(item)) return null;
   const { path: relations, leaf } = leafOf(item);
   const resolved = resolve(builder, relations, leaf.attributeId);
@@ -404,7 +419,7 @@ function ConditionRow({ builder, item, path, index }: ConditionRowProps) {
       {resolved !== undefined && (
         <span className={styles.operatorPick}>
           <MenuTrigger>
-            <Button variant="secondary" iconRight="chevron-down" isFullWidth>
+            <Button variant={pickVariant} iconRight="chevron-down" isFullWidth>
               {operatorLabel}
             </Button>
             <Menu
@@ -719,7 +734,16 @@ interface AttributeTriggerProps {
 }
 
 /** The attribute picker: the object's attributes, with relations opening their own as a submenu. */
+/**
+ * A condition's pickers in a popover (the view's filter) are quiet, borderless until hovered, as Attio's are: the
+ * popover's edge already frames them. On a page (a rule's conditions) they keep the secondary edge.
+ */
+function usePickVariant(): 'ghost' | 'secondary' {
+  return useContext(InPopover) ? 'ghost' : 'secondary';
+}
+
 function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerProps) {
+  const pickVariant = usePickVariant();
   const pick = (key: MenuKey) => {
     const [relationId, attributeId] = String(key).split(SEPARATOR);
     if (attributeId === undefined) {
@@ -740,7 +764,7 @@ function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerP
         {label ?? strings.addFilter}
       </Button>
     ) : (
-      <Button variant="secondary" icon={current.icon} iconRight="chevron-down" isFullWidth tooltipWhenCut>
+      <Button variant={pickVariant} icon={current.icon} iconRight="chevron-down" isFullWidth tooltipWhenCut>
         {current.names.join(strings.pathJoin)}
       </Button>
     );

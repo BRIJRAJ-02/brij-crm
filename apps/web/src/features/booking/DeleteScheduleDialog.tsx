@@ -65,6 +65,7 @@ function DeleteConfirm({
   return (
     <Modal
       title={scheduleStrings.deleteTitle(schedule.name)}
+      variant="confirm"
       tone="danger"
       isOpen={isOpen}
       isBusy={isBusy}
@@ -73,7 +74,7 @@ function DeleteConfirm({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" icon="trash" isPending={isBusy} onPress={commit}>

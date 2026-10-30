@@ -316,6 +316,7 @@ function RemoveDialog({
   return (
     <Modal
       title={strings.removeTitle(guest)}
+      variant="confirm"
       tone="danger"
       isOpen
       isBusy={isBusy}
@@ -324,7 +325,7 @@ function RemoveDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.dismiss}
           </Button>
           <Button variant="danger-solid" icon="x" isPending={isBusy} onPress={remove}>
@@ -386,7 +387,7 @@ function CancelDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.keep}
           </Button>
           <Button variant="danger-solid" icon="circle-x" isPending={isBusy} onPress={cancel}>

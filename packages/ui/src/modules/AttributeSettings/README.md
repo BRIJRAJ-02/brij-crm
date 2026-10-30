@@ -39,6 +39,7 @@ New (from the inventory, `0003-inventory.md`, pulled forward from spec 0003's mi
 - **An archived attribute's API name** (flow pass, 30 October 2026): `apiNames` (`{ live, archived, onRestore }`) gives the API names the object's attributes hold. A name an archived attribute's API name matches quietly sends the next free one (`freeApiSlug`, `price_2`), so Create works, and a ghost "Restore the archived Price" under the name calls `onRestore('price')` (the screen restores it and closes the dialog). A name a live attribute's API name matches is refused on the name before anything is sent; a server `apiSlug` refusal on create lands on the name too.
 - **Unique refused for duplicates**: a refusal coded `UNIQUE_HAS_DUPLICATES` on `isUnique` lands on Unique, and `duplicatesLink` (`{ label, href }`, the object's table) shows as a Link under it, so the person can go and fix the shared values.
 - **`rulesNote`**: one read only line (a Callout) under the rules for a rule this dialog doesn't edit, a Required When set through the API. The screen keeps that rule; the line only says it is there.
+- It opens as a Modal `form` (560px, 30 October 2026), wide enough for a setting's label and its value, as Attio's Create attribute is.
 
 ## States
 

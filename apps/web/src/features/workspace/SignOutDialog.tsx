@@ -24,6 +24,7 @@ export function SignOutDialog({ isOpen, isBusy, failure, onSignOut, onClose }: S
   return (
     <Modal
       title={strings.signOutTitle}
+      variant="confirm"
       isOpen={isOpen}
       isBusy={isBusy}
       onOpenChange={(open) => {
@@ -31,7 +32,7 @@ export function SignOutDialog({ isOpen, isBusy, failure, onSignOut, onClose }: S
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="primary" isPending={isBusy} onPress={onSignOut}>

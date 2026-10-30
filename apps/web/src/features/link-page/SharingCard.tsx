@@ -80,6 +80,7 @@ export function SharingCard({ indexable, onChange, shareImage, onShareImage, ref
         isOpen={isAsking}
         onOpenChange={setAsking}
         title={strings.shareImageRemoving}
+        variant="confirm"
         tone="danger"
         actions={
           <>

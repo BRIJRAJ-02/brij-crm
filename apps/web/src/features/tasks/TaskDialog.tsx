@@ -497,10 +497,10 @@ function NewTask({
       onClose={onClose}
       actions={
         <>
-          <Button slot="close" onPress={onClose} kbd="ESC">
+          <Button slot="close" onPress={onClose}>
             {strings.cancel}
           </Button>
-          <Button variant="primary" type="submit" form={formId} kbd="⌘↵">
+          <Button variant="primary" type="submit" form={formId}>
             {strings.createTask}
           </Button>
         </>

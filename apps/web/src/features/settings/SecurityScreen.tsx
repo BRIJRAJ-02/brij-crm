@@ -291,6 +291,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
       {activity !== undefined && <RecentActivitySection data={data} first={activity} onRetry={onActivityRetry} />}
       <Modal
         title={one === undefined ? strings.signOutOthersTitle : strings.signOutTitle(deviceName(one))}
+        variant="confirm"
         tone="danger"
         isOpen={isOpen}
         isBusy={isBusy}
@@ -299,7 +300,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+            <Button slot="close" isDisabled={isBusy}>
               {strings.cancel}
             </Button>
             {/* The press that only emails a code says so; once the code's field shows, it signs out. */}

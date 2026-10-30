@@ -350,7 +350,7 @@ function AdjustDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={busy} kbd="ESC">
+          <Button slot="close" isDisabled={busy}>
             {strings.cancel}
           </Button>
           <Button variant="primary" isPending={busy} onPress={save}>

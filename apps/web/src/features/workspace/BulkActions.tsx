@@ -516,9 +516,7 @@ export function useBulkActions({
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC">
-              {bulkStrings.cancel}
-            </Button>
+            <Button slot="close">{bulkStrings.cancel}</Button>
             <Button
               variant="danger-solid"
               icon={isEditJob ? 'pencil' : 'trash'}

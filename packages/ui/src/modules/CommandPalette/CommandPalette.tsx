@@ -109,7 +109,12 @@ export function CommandPalette(props: CommandPaletteProps) {
     setQuery(next);
     onSearch(next);
   };
-  const searchProps = { label: searchLabel, onSearch: search, ...(placeholder === undefined ? {} : { placeholder }) };
+  const searchProps = {
+    label: searchLabel,
+    onSearch: search,
+    size: 'lg' as const,
+    ...(placeholder === undefined ? {} : { placeholder }),
+  };
   // Enter pressed before any row came in, while a section's search was still out: it chooses the first row once
   // that search is in, for the same text (AC-1097, the top row when none is highlighted). New text, or any other
   // key, drops it, and so does an answer with no rows.

@@ -73,6 +73,7 @@ export function DeleteFormDialog({ data, slug, form, onClose, onDone }: FormConf
   return (
     <Modal
       title={strings.deleteTitle(shown.name)}
+      variant="confirm"
       tone="danger"
       isOpen={form !== undefined}
       isBusy={isBusy}
@@ -81,7 +82,7 @@ export function DeleteFormDialog({ data, slug, form, onClose, onDone }: FormConf
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" icon="trash" isPending={isBusy} onPress={commit}>
@@ -106,6 +107,7 @@ export function RotateSecretDialog({ data, slug, form, onClose, onDone }: FormCo
   return (
     <Modal
       title={strings.secretRotateTitle}
+      variant="confirm"
       tone="danger"
       isOpen={form !== undefined}
       isBusy={isBusy}
@@ -114,7 +116,7 @@ export function RotateSecretDialog({ data, slug, form, onClose, onDone }: FormCo
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" icon="refresh-cw" isPending={isBusy} onPress={commit}>
@@ -168,6 +170,7 @@ export function RemoveSiteDialog({ site, onRemove, onClose }: RemoveSiteDialogPr
   return (
     <Modal
       title={strings.siteRemoveTitle(shown)}
+      variant="confirm"
       tone="danger"
       isOpen={site !== undefined}
       isBusy={isBusy}
@@ -176,7 +179,7 @@ export function RemoveSiteDialog({ site, onRemove, onClose }: RemoveSiteDialogPr
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" icon="x" isPending={isBusy} onPress={commit}>
@@ -230,6 +233,7 @@ export function RetargetFormDialog({ ask, onClose, onConfirm }: RetargetDialogPr
   return (
     <Modal
       title={shown.objectId === null ? strings.retargetOffTitle : strings.retargetTitle}
+      variant="confirm"
       tone="danger"
       isOpen={ask !== undefined}
       onOpenChange={(isOpen) => {
@@ -237,9 +241,7 @@ export function RetargetFormDialog({ ask, onClose, onConfirm }: RetargetDialogPr
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC">
-            {strings.cancel}
-          </Button>
+          <Button slot="close">{strings.cancel}</Button>
           <Button
             variant="danger-solid"
             icon={shown.objectId === null ? 'x' : 'refresh-cw'}

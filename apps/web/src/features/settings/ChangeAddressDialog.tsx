@@ -116,7 +116,7 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC" ref={closeRef} isDisabled={isBusy}>
+          <Button slot="close" ref={closeRef} isDisabled={isBusy}>
             {movedTo === undefined ? strings.cancel : strings.close}
           </Button>
           <Button variant="primary" isDisabled={!canChange} isPending={isBusy} onPress={commit}>

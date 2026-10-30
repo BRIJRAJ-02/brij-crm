@@ -15,7 +15,7 @@ Ported from the design system artifact's Kbd card. Buttons, menu items and the c
 
 - Put it inside the control it triggers (Quick actions ⌘K, Cancel ESC, primary ⌘↵), after the label. Button does this for you through its `kbd` prop.
 - Use the symbols ⌘ ⇧ ⌥ ↵. Don't spell out "Cmd+Enter".
-- `tone`: `raised` (the default) has a hairline edge and the flat control shadow (`shadow-control`), for a shortcut on its own; `soft` is grey and flat, inside buttons and menu items; `onAccent` is edged in `on-accent-kbd` on a primary button, with its text on the accent itself.
+- `tone`: `raised` (the default) has a hairline edge and the flat control shadow (`shadow-control`), for a shortcut on its own; `soft` is grey and flat, inside buttons and menu items; `onAccent` is edged in `on-accent-kbd` on a primary button, with its text on the accent itself; `onInverse` is edged in `inverse-hover` inside a Tooltip, its text `on-inverse` (17:1 light, 15:1 dark), for "Search ⌘K" (30 October 2026).
 - Inside a control, hide the caps from screen readers and give the control `aria-keyshortcuts` instead (`keyShortcuts()` in `shortcuts.ts` turns `⌘↵` into `Meta+Enter`). Button does both for you.
 - Its height and minimum width are `size-kbd` (16px).
 

@@ -789,6 +789,7 @@ function RemoveBlockDialog({
   return (
     <Modal
       title={words.title}
+      variant="confirm"
       tone="danger"
       isOpen={isOpen}
       isBusy={isBusy}
@@ -797,7 +798,7 @@ function RemoveBlockDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
           <Button variant="danger-solid" icon="trash" isPending={isBusy} onPress={remove}>

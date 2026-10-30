@@ -266,6 +266,7 @@ export function HostsCard({
             ? strings.stopRotationTitle(rotationName(confirming.id))
             : strings.removeFixedTitle(nameOf(confirming?.id ?? ''))
         }
+        variant="confirm"
         tone="danger"
         isOpen={confirming !== undefined}
         isBusy={isSaving}
@@ -274,7 +275,7 @@ export function HostsCard({
         }}
         actions={
           <>
-            <Button slot="close" isDisabled={isSaving} kbd="ESC">
+            <Button slot="close" isDisabled={isSaving}>
               {strings.cancel}
             </Button>
             <Button variant="danger-solid" isPending={isSaving} onPress={confirmRemove}>

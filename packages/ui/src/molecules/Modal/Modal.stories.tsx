@@ -32,12 +32,11 @@ function DeleteConfirm({ onDelete }: { readonly onDelete?: () => void }) {
   return (
     <Modal
       title="Delete 3 records?"
+      variant="confirm"
       tone="danger"
       actions={
         <>
-          <Button slot="close" kbd="ESC">
-            Cancel
-          </Button>
+          <Button slot="close">Cancel</Button>
           <Button
             variant="danger-solid"
             icon="trash"
@@ -127,9 +126,7 @@ export const WindowWide: Story = {
           context="65 features"
           actions={
             <>
-              <Button slot="close" kbd="ESC">
-                Close
-              </Button>
+              <Button slot="close">Close</Button>
               <Button variant="primary">Get started</Button>
             </>
           }
@@ -187,7 +184,7 @@ export const Window: Story = {
   },
 };
 
-/** A short form: a title bar with the close button, Cancel with its Esc keycap, Create with ⌘↵. */
+/** A short form: a title bar with the close button, Cancel with its Esc keycap and Create with ↵, both by default. */
 function NewPersonDialog() {
   const [error, setError] = useState<string | undefined>(undefined);
   return (
@@ -195,10 +192,8 @@ function NewPersonDialog() {
       title="New person"
       actions={
         <>
-          <Button slot="close" kbd="ESC">
-            Cancel
-          </Button>
-          <Button variant="primary" type="submit" form="new-person" kbd="⌘↵">
+          <Button slot="close">Cancel</Button>
+          <Button variant="primary" type="submit" form="new-person">
             Create
           </Button>
         </>
@@ -260,9 +255,7 @@ export const FooterStart: Story = {
         footerStart={<Switch label="Create more" />}
         actions={
           <>
-            <Button slot="close" kbd="ESC">
-              Cancel
-            </Button>
+            <Button slot="close">Cancel</Button>
             <Button variant="primary" kbd="⌘↵">
               Create person
             </Button>
@@ -500,5 +493,121 @@ export const Sheet: Story = {
     await expect(Math.round(panel.width)).toBe(globalThis.innerWidth);
     await expect(Math.round(panel.bottom)).toBe(globalThis.innerHeight);
     await expect(within(dialog as HTMLElement).getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  },
+};
+
+/** The confirm's shape: no title bar, the question opening a 400px body, Cancel and the danger commit on one row. */
+export const ConfirmShape: Story = {
+  render: () => (
+    <Stage>
+      <ModalTrigger defaultOpen>
+        <Button variant="danger" icon="trash">
+          Delete
+        </Button>
+        <DeleteConfirm />
+      </ModalTrigger>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    // No close button: a confirm asks with its buttons only.
+    await expect(dialog.querySelector('button[aria-label="Close"]')).toBeNull();
+    await expect(within(dialog as HTMLElement).getByRole('heading', { name: 'Delete 3 records?' })).toBeInTheDocument();
+    const width = getComputedStyle(document.documentElement).getPropertyValue('--size-dialog-sm').trim();
+    await waitFor(() => expect(`${String(Math.round(dialog.getBoundingClientRect().width))}px`).toBe(width));
+  },
+};
+
+/** A confirm for an end that destroys nothing (Sign out): a plain dialog, so a click outside still dismisses it. */
+export const ConfirmPlain: Story = {
+  render: () => (
+    <Stage>
+      <ModalTrigger defaultOpen>
+        <Button>Sign out</Button>
+        <Modal
+          title="Sign out of Acme?"
+          variant="confirm"
+          actions={
+            <>
+              <Button slot="close">Cancel</Button>
+              <Button variant="primary" slot="close">
+                Sign out
+              </Button>
+            </>
+          }
+        >
+          You can sign back in at any time.
+        </Modal>
+      </ModalTrigger>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveAttribute('role', 'dialog');
+  },
+};
+
+/** `form`: a 560px dialog for several fields, as New record's. */
+export const FormWide: Story = {
+  render: () => (
+    <Stage>
+      <Modal
+        title="New company"
+        variant="form"
+        icon="building"
+        isOpen
+        footerStart={<Switch label="Create more" />}
+        actions={
+          <>
+            <Button slot="close">Cancel</Button>
+            <Button variant="primary" type="submit" form="new-company">
+              Create company
+            </Button>
+          </>
+        }
+      >
+        <Form id="new-company" label="New company" onSubmit={() => undefined}>
+          <Field label="Name" />
+          <Field label="Domain" />
+        </Form>
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    const width = getComputedStyle(document.documentElement).getPropertyValue('--size-dialog-form').trim();
+    await waitFor(() => expect(`${String(Math.round(dialog.getBoundingClientRect().width))}px`).toBe(width));
+  },
+};
+
+/** The footer's keys come by default: Cancel shows ESC, the submit ↵, and ⌘↵ once the dialog holds a long text. */
+export const FooterKeys: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Modal
+        title="New note"
+        isOpen
+        actions={
+          <>
+            <Button slot="close">Cancel</Button>
+            <Button variant="primary" type="submit" form="new-note">
+              Add note
+            </Button>
+          </>
+        }
+      >
+        <Form id="new-note" label="New note" onSubmit={() => undefined}>
+          <Field label="Note" isMultiline />
+        </Form>
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    const cancel = within(dialog as HTMLElement).getByRole('button', { name: 'Cancel' });
+    await expect(cancel).toHaveAttribute('aria-keyshortcuts', 'Escape');
+    const add = within(dialog as HTMLElement).getByRole('button', { name: 'Add note' });
+    await waitFor(() => expect(add.getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+Enter$/u));
   },
 };

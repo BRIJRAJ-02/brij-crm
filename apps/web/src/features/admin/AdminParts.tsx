@@ -250,7 +250,7 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC" isDisabled={isChecking}>
+            <Button slot="close" isDisabled={isChecking}>
               {strings.cancel}
             </Button>
             <Button variant="primary" isPending={isChecking} onPress={() => commit.current()}>

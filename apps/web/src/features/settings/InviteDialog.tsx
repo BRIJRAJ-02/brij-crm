@@ -174,9 +174,7 @@ export function InviteDialog({
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC">
-              {strings.cancel}
-            </Button>
+            <Button slot="close">{strings.cancel}</Button>
             {read.status === 'failed' && (
               <Button variant="primary" onPress={read.onRetry}>
                 {strings.inviteTryAgain}
@@ -214,7 +212,7 @@ export function InviteDialog({
       }
       actions={
         <>
-          <Button slot="close" kbd="ESC" isDisabled={isBusy} onPress={close}>
+          <Button slot="close" isDisabled={isBusy} onPress={close}>
             {strings.cancel}
           </Button>
           <Button variant="primary" isPending={isBusy} onPress={invite.send}>

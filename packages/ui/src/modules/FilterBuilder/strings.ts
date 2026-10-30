@@ -10,6 +10,8 @@ export const strings = {
   addGroup: 'Add filter group',
   removeFilter: 'Remove filter',
   removeGroup: 'Remove filter group',
+  /** The top group's foot, at its end: every filter goes at once. */
+  clearAll: 'Clear all',
   attributes: 'Attributes',
   searchAttributes: 'Search attributes',
   chooseAttribute: 'Choose an attribute',

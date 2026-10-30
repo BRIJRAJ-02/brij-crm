@@ -119,6 +119,11 @@ export interface MenuSearch {
   readonly defaultQuery?: string;
   /** Leaves the first item unfocused while typing (a lone "Create" item, which one Enter shouldn't choose). */
   readonly isFirstUnfocused?: boolean;
+  /**
+   * `sm` (the default) is a picker's 28px field; `lg` is the command palette's: a bar's height, the title's 15px
+   * text, and roomier rows under it.
+   */
+  readonly size?: 'sm' | 'lg';
 }
 
 interface MenuLook {
@@ -303,7 +308,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
     search === undefined ? (
       menu
     ) : (
-      <div className={styles.searchable}>
+      <div className={styles.searchable} data-size={search.size ?? 'sm'}>
         <Autocomplete
           {...(search.onSearch === undefined ? { filter: contains } : { onInputChange: search.onSearch })}
           {...(search.defaultQuery === undefined ? {} : { defaultInputValue: search.defaultQuery })}
@@ -312,7 +317,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
           {/* A search menu opens with its field focused, the pattern React Aria expects. */}
           {/* eslint-disable-next-line jsx-a11y-x/no-autofocus */}
           <SearchField className={styles.search} aria-label={search.label} autoFocus>
-            <Icon name="search" size="sm" tone="muted" />
+            <Icon name="search" size={search.size === 'lg' ? 'md' : 'sm'} tone="muted" />
             <Input
               className={styles.input}
               placeholder={search.placeholder ?? strings.searchPlaceholder(search.label)}
@@ -454,7 +459,9 @@ function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; r
       {!isCheckAtEnd && (state.selectionMode !== 'none' || hasChecks) && (
         <span className={styles.check}>{state.isSelected && <Icon name="check" size="sm" />}</span>
       )}
-      {leading ?? (icon !== undefined && <Icon name={icon} size="sm" />)}
+      {/* The icon is quiet, as Attio's and Linear's are: the label carries the row. A destructive item keeps its red. */}
+      {leading ??
+        (icon !== undefined && <Icon name={icon} size="sm" {...(look.isDanger === true ? {} : { tone: 'muted' })} />)}
       <span className={styles.text}>
         <Text slot="label" className={styles.label}>
           {isLabelInLeading && leading !== undefined ? <VisuallyHidden>{children}</VisuallyHidden> : children}
@@ -516,6 +523,12 @@ export interface MenuSectionProps {
    * command palette's themes under Actions). `label` names it for screen readers only.
    */
   readonly isJoined?: boolean;
+  /**
+   * Pins the section to the foot of the menu, under a hairline, where a long list scrolls behind it: a picker's
+   * "Create" or "Clear" (Attio's "Create new attribute"), always in reach, still reached by the arrow keys. Put it
+   * last, with no separator before it; never in a virtualised menu, whose rows are placed by the list.
+   */
+  readonly isPinned?: boolean;
 }
 
 /** A labelled group of items in a Menu. */
@@ -527,17 +540,21 @@ export function MenuSection({
   selectedKeys,
   onSelectionChange,
   isJoined = false,
+  isPinned = false,
 }: MenuSectionProps) {
+  // A pinned section's heading would only add height at the foot: its label names it for screen readers.
+  const isHeadingDrawn = !isLabelHidden && !isJoined && !isPinned;
   return (
     <AriaMenuSection
       className={styles.section}
       {...(isJoined ? { 'data-joined': '' } : {})}
-      {...(isLabelHidden || isJoined ? { 'aria-label': label } : {})}
+      {...(isPinned ? { 'data-pinned': '' } : {})}
+      {...(isHeadingDrawn ? {} : { 'aria-label': label })}
       {...(selectionMode === undefined ? {} : { selectionMode })}
       {...(selectedKeys === undefined ? {} : { selectedKeys })}
       {...selectionHandler(onSelectionChange)}
     >
-      {!isLabelHidden && !isJoined && <Header className={styles.heading}>{label}</Header>}
+      {isHeadingDrawn && <Header className={styles.heading}>{label}</Header>}
       {children}
     </AriaMenuSection>
   );

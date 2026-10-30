@@ -79,7 +79,7 @@ export function ReassignDialog({ booking, seats, actions, onClose, onReassigned 
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={busy} kbd="ESC">
+          <Button slot="close" isDisabled={busy}>
             {strings.keepHost}
           </Button>
           <Button variant="primary" isPending={busy} onPress={reassign}>

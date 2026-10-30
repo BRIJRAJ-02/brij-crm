@@ -260,7 +260,7 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+            <Button slot="close" isDisabled={isBusy}>
               {strings.cancel}
             </Button>
             <Button

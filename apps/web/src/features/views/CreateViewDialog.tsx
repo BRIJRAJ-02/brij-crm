@@ -50,10 +50,10 @@ export function CreateViewDialog({ mode, onClose, ...rest }: CreateViewDialogPro
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
-          <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
+          <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
             {isBusy ? strings.creatingView : mode === 'save-as' ? strings.saveAsNew : strings.createView}
           </Button>
         </>

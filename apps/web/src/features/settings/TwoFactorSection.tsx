@@ -294,7 +294,7 @@ export function TwoFactorSection({
             done
           ) : (
             <>
-              <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+              <Button slot="close" isDisabled={isBusy}>
                 {copy.cancel}
               </Button>
               <Button
@@ -356,6 +356,7 @@ export function TwoFactorSection({
     modal = (
       <Modal
         title={copy.turnOffTitle}
+        variant="confirm"
         tone="danger"
         isOpen={isOpen}
         isBusy={isBusy}
@@ -364,7 +365,7 @@ export function TwoFactorSection({
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+            <Button slot="close" isDisabled={isBusy}>
               {copy.cancel}
             </Button>
             <Button variant="danger-solid" isPending={isBusy} onPress={() => void turnOff()}>
@@ -396,7 +397,7 @@ export function TwoFactorSection({
             done
           ) : (
             <>
-              <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+              <Button slot="close" isDisabled={isBusy}>
                 {copy.cancel}
               </Button>
               <Button variant="primary" isPending={isBusy} onPress={() => void makeCodes()}>

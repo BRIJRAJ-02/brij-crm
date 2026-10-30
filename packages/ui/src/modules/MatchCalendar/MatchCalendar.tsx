@@ -174,9 +174,7 @@ export function MatchCalendar({
   const actions =
     step === 'why' ? (
       <>
-        <Button slot="close" kbd="ESC">
-          {strings.notNow}
-        </Button>
+        <Button slot="close">{strings.notNow}</Button>
         {connectHref !== undefined && (
           <ButtonLink href={connectHref} provider="google" variant="primary">
             {strings.continue}
@@ -184,14 +182,10 @@ export function MatchCalendar({
         )}
       </>
     ) : step === 'waiting' ? (
-      <Button slot="close" kbd="ESC">
-        {strings.close}
-      </Button>
+      <Button slot="close">{strings.close}</Button>
     ) : step === 'matched' ? (
       <>
-        <Button slot="close" kbd="ESC">
-          {strings.notNow}
-        </Button>
+        <Button slot="close">{strings.notNow}</Button>
         {hasOthers && !showsOthers && (
           <Button
             onPress={() => {
@@ -211,9 +205,7 @@ export function MatchCalendar({
       </>
     ) : step === 'unmatched' ? (
       <>
-        <Button slot="close" kbd="ESC">
-          {strings.close}
-        </Button>
+        <Button slot="close">{strings.close}</Button>
         {onShowAll !== undefined && (
           <Button
             variant="primary"
@@ -228,9 +220,7 @@ export function MatchCalendar({
       </>
     ) : (
       <>
-        <Button slot="close" kbd="ESC">
-          {strings.close}
-        </Button>
+        <Button slot="close">{strings.close}</Button>
         {connectHref !== undefined && (
           <ButtonLink href={connectHref} provider="google" variant="primary">
             {strings.retry}

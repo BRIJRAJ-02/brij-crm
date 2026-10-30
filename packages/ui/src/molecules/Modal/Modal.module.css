@@ -1,11 +1,15 @@
-/* Modal: a 480px dialog (a 780px window, an 832px peek nearly the window's
-   height) on surface-raised with radius-xl and shadow-lg, centred in the
-   viewport both ways (the owner's call on 19 October 2026); the palette alone
-   sits near the top, as command palettes do. A title bar over a hairline
-   holds the title and the close button. It grows from the centre over
-   duration-modal and leaves in duration-exit; opened from the keyboard it
-   appears at once. The footer sits on surface-subtle under a hairline. Header, body and footer share one side
-   inset, overlay-inset (styles/base.css); callers never pad inside the body. */
+/* Modal: a 480px dialog (a 400px confirm, a 560px form, a 780px window, an
+   832px peek nearly the window's height) on surface-raised with radius-xl and
+   shadow-lg, centred in the viewport both ways (the owner's call on 19
+   October 2026); the palette alone sits near the top, as command palettes do.
+   A compact title bar over a hairline holds the 13px title and the close
+   button; a confirm has none, its question opens the body. It grows from the
+   centre over duration-modal and leaves in duration-exit; opened from the
+   keyboard it appears at once. The footer is the body's own white under a
+   hairline. Header, body and footer share one side inset, overlay-inset
+   (styles/base.css); callers never pad inside the body. A dialog, form and
+   window dim the page lightly (scrim-soft), letting the shadow lift them, as
+   Attio's do; a peek, a sheet, the palette and an alert keep the full scrim. */
 @layer components {
   /* The viewport's width, less its padding, for the footer's phone layout (a media query takes only the page
      breakpoint). */
@@ -17,6 +21,13 @@
     display: grid;
     place-items: center;
     padding: var(--space-16);
+    background: var(--scrim-soft);
+  }
+
+  .scrim[data-alert],
+  .scrim[data-variant='peek'],
+  .scrim[data-variant='sheet'],
+  .scrim[data-variant='palette'] {
     background: var(--scrim);
   }
 
@@ -41,6 +52,15 @@
     inline-size: min(100%, var(--size-dialog-wide));
   }
 
+  /* A form of several fields (New record, an attribute's settings): room for a label and its value side by side. */
+  .root[data-variant='form'] {
+    inline-size: min(100%, var(--size-dialog-form));
+  }
+
+  .root[data-variant='confirm'] {
+    inline-size: min(100%, var(--size-dialog-sm));
+  }
+
   /* A wide window: a reference laid out as a settings page, a rail beside its sections. */
   .root[data-variant='window'][data-wide] {
     inline-size: min(100%, calc(var(--size-dialog-wide) + var(--size-column)));
@@ -53,14 +73,15 @@
     outline: none;
   }
 
-  /* The title bar: the title, then the close button at the end, over a hairline. */
+  /* The title bar: the title, then the close button at the end, over a hairline. Compact, as Attio's: the close
+     button's height and space-8 above and below it. */
   .head {
     display: flex;
     flex: none;
     align-items: center;
     gap: var(--space-8);
-    min-block-size: var(--size-bar);
-    padding-block: 0;
+    min-block-size: calc(var(--size-control) + 2 * var(--space-8));
+    padding-block: var(--space-8);
     /* The close button's glyph, not its box, ends at the inset: the box is size-control wide around a size-icon. */
     padding-inline: var(--overlay-inset) calc(var(--overlay-inset) - (var(--size-control) - var(--size-icon)) / 2);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
@@ -69,8 +90,24 @@
   .title {
     margin: 0;
     color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* A confirm's question, opening its body: the one thing to read. */
+  .question {
+    margin: 0;
+    color: var(--text);
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
+  }
+
+  /* The one line under the question: what happens, and whether it can be undone. */
+  .consequence {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    color: var(--text-secondary);
   }
 
   .context {
@@ -132,7 +169,16 @@
     padding-block: var(--space-8);
     padding-inline: var(--overlay-inset);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
-    background: var(--surface-subtle);
+    background: var(--surface-raised);
+  }
+
+  .root[data-variant='confirm'] .body {
+    gap: var(--space-6);
+    padding-block-end: var(--space-4);
+  }
+
+  .root[data-variant='confirm'] .foot {
+    border-block-start-color: transparent;
   }
 
   /* The footer's quiet line: it takes the room left of the buttons, and wraps rather than pushing them. */
@@ -242,6 +288,7 @@
   }
 
   .root[data-variant='peek'] .head {
+    min-block-size: var(--size-bar);
     padding-inline: var(--space-12) var(--space-8);
     border-block-end-color: transparent;
   }

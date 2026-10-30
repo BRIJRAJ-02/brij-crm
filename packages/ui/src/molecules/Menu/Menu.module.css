@@ -1,6 +1,7 @@
-/* Menu: 28px items (size-nav-item) with a 14px icon, inside the popover's
-   4px inset. The focused item (keyboard or pointer) takes surface-hover; a
-   destructive item is in the danger colour. A searchable menu puts its field
+/* Menu: 28px items (size-nav-item) with a regular weight label and a quiet
+   14px icon, inside the popover's 4px inset. The focused item (keyboard or
+   pointer) takes surface-hover; a destructive item, its icon too, is in the
+   danger colour. Section headings are quiet labels. A searchable menu puts its field
    above the list, under a hairline, and a header row (a record search's
    object) above that. */
 @layer components {
@@ -31,8 +32,8 @@
     padding-inline: var(--popover-item-inline);
     border-radius: var(--radius-sm);
     color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
     text-decoration: none;
     outline: none;
   }
@@ -104,13 +105,25 @@
   .heading {
     padding-block: var(--space-4) var(--space-2);
     padding-inline: var(--popover-item-inline);
-    color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .section + .section {
     margin-block-start: var(--space-4);
+  }
+
+  /* Pinned to the menu's foot (a picker's Create), the list scrolling behind it: flush with the menu's edges, over a
+     hairline, on the menu's own surface. */
+  .section[data-pinned] {
+    position: sticky;
+    inset-block-end: calc(-1 * var(--popover-inset));
+    margin-block: var(--space-4) calc(-1 * var(--popover-inset));
+    margin-inline: calc(-1 * var(--popover-inset));
+    padding: var(--popover-inset);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
   }
 
   /* More of the group above (a choice inside it), so no gap between them. */
@@ -183,6 +196,23 @@
 
   .input::-webkit-search-cancel-button {
     display: none;
+  }
+
+  /* The command palette's search: a bar's height, the title's size, and roomier rows under it. */
+  .searchable[data-size='lg'] .search {
+    gap: var(--space-12);
+    block-size: var(--size-bar);
+    padding-inline: var(--space-16);
+  }
+
+  .searchable[data-size='lg'] .input {
+    font: var(--text-title);
+    font-weight: normal;
+    letter-spacing: var(--tracking-title);
+  }
+
+  .searchable[data-size='lg'] .item {
+    min-block-size: var(--size-input);
   }
 
   @media (forced-colors: active) {

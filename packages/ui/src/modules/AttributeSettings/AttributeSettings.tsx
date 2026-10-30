@@ -341,6 +341,7 @@ export function AttributeSettings({
   return (
     <Modal
       title={step?.title ?? title}
+      variant="form"
       isOpen={isOpen}
       {...(archive === undefined
         ? {}
@@ -360,15 +361,13 @@ export function AttributeSettings({
         step !== undefined ? (
           step.actions
         ) : isReadOnly ? (
-          <Button slot="close" kbd="ESC">
-            {strings.close}
-          </Button>
+          <Button slot="close">{strings.close}</Button>
         ) : (
           <>
-            <Button slot="close" isDisabled={isBusy} kbd="ESC">
+            <Button slot="close" isDisabled={isBusy}>
               {strings.cancel}
             </Button>
-            <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
+            <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
               {attribute === undefined
                 ? isBusy
                   ? strings.creating

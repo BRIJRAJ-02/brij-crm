@@ -1,7 +1,8 @@
-import { useId, type ReactNode } from 'react';
+import { useCallback, useId, useState, type ReactNode } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { Dialog, DialogTrigger, Heading, Modal as AriaModal, ModalOverlay } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { FooterKeysContext, type FooterKeys } from '../../atoms/Button/footer-keys.ts';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -33,7 +34,10 @@ export function ModalTrigger({ children, isOpen, defaultOpen, onOpenChange }: Mo
 }
 
 /**
- * `dialog` (the default) for a question or a short form; `window` for a larger
+ * `dialog` (the default) for a short ask; `form` for a form of several fields
+ * (New record, an attribute's settings), wider; `confirm` for one question
+ * before an ending action: small, no title bar, the question in the body;
+ * `window` for a larger
  * task with a header (import, merge, settings); `palette` for the command
  * palette: near the top, its title for screen readers only, its body flush,
  * and it never animates; `peek` for a page read and written in place (a
@@ -41,7 +45,7 @@ export function ModalTrigger({ children, isOpen, defaultOpen, onOpenChange }: Mo
  * context first as a crumb and no title drawn (the page shows its own), and
  * the body a centred writing column.
  */
-export type ModalVariant = 'dialog' | 'window' | 'palette' | 'peek' | 'sheet';
+export type ModalVariant = 'dialog' | 'form' | 'confirm' | 'window' | 'palette' | 'peek' | 'sheet';
 
 /** Props for Modal. */
 export interface ModalProps {
@@ -142,11 +146,32 @@ export function Modal({
   // The palette and a peek name themselves for screen readers only: the palette's field and the peek's page
   // (a note's own title) say what they are on screen.
   const isTitleHidden = variant === 'palette' || variant === 'peek' || variant === 'sheet';
+  // A confirm asks in its body: no title bar, the question over its one line of consequence.
+  const isConfirm = variant === 'confirm';
   const bodyId = useId();
+  // The footer's submit shows ↵, or ⌘↵ while the dialog holds a long text or an editor, where Enter writes a line.
+  const [holdsLongText, setHoldsLongText] = useState(false);
+  const watchBody = useCallback((body: HTMLDivElement | null) => {
+    if (body === null) return;
+    const check = () => {
+      setHoldsLongText(body.querySelector('textarea, [contenteditable="true"]') !== null);
+    };
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  const footerKeys: FooterKeys = {
+    close: strings.closeKey,
+    submit: holdsLongText ? strings.submitLongKey : strings.submitKey,
+  };
   return (
     <ModalOverlay
       className={styles.scrim}
       data-variant={variant}
+      data-alert={isAlert || undefined}
       isDismissable={!isAlert && isDismissable && !isBusy && isClosable}
       isKeyboardDismissDisabled={isBusy || !isClosable}
       data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
@@ -166,47 +191,60 @@ export function Modal({
         >
           {/* Plain boxes, not header and footer: inside a dialog those read as a second banner and
               contentinfo landmark beside the page's own. */}
-          <div className={styles.head}>
-            {isAlert ? (
-              <span className={styles.alert}>
-                <Icon name="triangle-alert" size="md" />
-              </span>
-            ) : (
-              icon !== undefined && variant !== 'peek' && <Icon name={icon} size="sm" tone="muted" />
-            )}
-            {isTitleHidden ? (
-              <VisuallyHidden>
-                <Heading slot="title">{title}</Heading>
-              </VisuallyHidden>
-            ) : (
-              <Heading slot="title" className={styles.title}>
-                {title}
-              </Heading>
-            )}
-            {context !== undefined && <span className={styles.context}>{context}</span>}
-            {/* Every dialog but the palette and an alert has the close button in its title bar, unless it keeps the
-                person until they answer (isClosable false). */}
-            {variant !== 'palette' &&
-              !isAlert &&
-              (isClosable || status !== undefined || headerActions !== undefined) && (
-                <span className={styles.close}>
-                  {status !== undefined && (
-                    <span className={styles.status} role="status" aria-live="polite">
-                      {status}
-                    </span>
-                  )}
-                  {headerActions}
-                  {isClosable && (
-                    <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
-                  )}
+          {!isConfirm && (
+            <div className={styles.head}>
+              {isAlert ? (
+                <span className={styles.alert}>
+                  <Icon name="triangle-alert" size="md" />
                 </span>
+              ) : (
+                icon !== undefined && variant !== 'peek' && <Icon name={icon} size="sm" tone="muted" />
               )}
-          </div>
+              {isTitleHidden ? (
+                <VisuallyHidden>
+                  <Heading slot="title">{title}</Heading>
+                </VisuallyHidden>
+              ) : (
+                <Heading slot="title" className={styles.title}>
+                  {title}
+                </Heading>
+              )}
+              {context !== undefined && <span className={styles.context}>{context}</span>}
+              {/* Every dialog but the palette and an alert has the close button in its title bar, unless it keeps the
+                person until they answer (isClosable false). */}
+              {variant !== 'palette' &&
+                !isAlert &&
+                (isClosable || status !== undefined || headerActions !== undefined) && (
+                  <span className={styles.close}>
+                    {status !== undefined && (
+                      <span className={styles.status} role="status" aria-live="polite">
+                        {status}
+                      </span>
+                    )}
+                    {headerActions}
+                    {isClosable && (
+                      <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
+                    )}
+                  </span>
+                )}
+            </div>
+          )}
           {/* A dialog opened from inside a popover is a page of its own: its fields keep their halo. */}
           <InPopover value={false}>
-            <div className={styles.body} id={bodyId}>
+            <div className={styles.body} ref={watchBody} {...(isConfirm ? {} : { id: bodyId })}>
+              {isConfirm && (
+                <Heading slot="title" className={styles.question}>
+                  {title}
+                </Heading>
+              )}
               {/* Opened from a settings page, its content keeps to the dialog, never the page's edges. */}
-              <PageEdge value={false}>{children}</PageEdge>
+              {isConfirm ? (
+                <div className={styles.consequence} id={bodyId}>
+                  <PageEdge value={false}>{children}</PageEdge>
+                </div>
+              ) : (
+                <PageEdge value={false}>{children}</PageEdge>
+              )}
             </div>
           </InPopover>
           {actions !== undefined && (
@@ -216,7 +254,7 @@ export function Modal({
               ) : (
                 hint !== undefined && <p className={styles.hint}>{hint}</p>
               )}
-              {actions}
+              <FooterKeysContext value={footerKeys}>{actions}</FooterKeysContext>
             </div>
           )}
         </Dialog>

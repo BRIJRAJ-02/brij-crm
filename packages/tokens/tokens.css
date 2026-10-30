@@ -75,6 +75,7 @@
     --on-inverse: #fdfdff;
     --inverse-hover: #ffffff26;
     --scrim: #1c1d1f33;
+    --scrim-soft: #1c1d1f14;
     --on-accent-kbd: #ffffff33;
     --shadow-xs: 0 1px 2px #1c1d1f0d;
     --shadow-control: 0 1px 1px #1c1d1f0a;
@@ -159,6 +160,7 @@
     --on-inverse: #18191c;
     --inverse-hover: #1c1d1f1f;
     --scrim: #0000008c;
+    --scrim-soft: #00000066;
     --on-accent-kbd: #ffffff33;
     --shadow-xs: 0 1px 2px #00000040;
     --shadow-control: 0 0 #0000;
@@ -244,6 +246,7 @@
       --on-inverse: #18191c;
       --inverse-hover: #1c1d1f1f;
       --scrim: #0000008c;
+      --scrim-soft: #00000066;
       --on-accent-kbd: #ffffff33;
       --shadow-xs: 0 1px 2px #00000040;
       --shadow-control: 0 0 #0000;
@@ -290,6 +293,8 @@
     --size-menu: 240px;
     --size-measure: 280px;
     --size-dialog: 480px;
+    --size-dialog-sm: 400px;
+    --size-dialog-form: 560px;
     --size-dialog-wide: 780px;
     --size-palette: 640px;
     --size-panel: 400px;

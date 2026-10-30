@@ -131,7 +131,7 @@ export function BulkEditDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" isDisabled={isBusy}>
             {hasFields ? bulkStrings.cancel : bulkStrings.close}
           </Button>
           {hasFields && (

@@ -104,7 +104,7 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isStarting} kbd="ESC">
+          <Button slot="close" isDisabled={isStarting}>
             {reason === 'menu' ? strings.cancel : strings.notNow}
           </Button>
           {preview?.total !== 0 && (

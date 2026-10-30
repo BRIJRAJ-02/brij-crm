@@ -41,6 +41,7 @@ New (spec 0014 names it). The table's "Add attribute" (through AttributeSettings
 - `newObject` (`{ label, onChoose }`, create mode) puts "New object…" last in the related object's list (flow pass, 30 October 2026: a relationship to an object that didn't exist yet was a dead end); the screen makes it and hands it back as `chosenTo` (`{ objectId }`, a new object each time), which picks it. `onBack` puts Back before Cancel in the step's footer, so AttributeSettings' form comes back with its name.
 - Refusals land on the setting they name by `attributeId` (`from.title`, `to.title`, `from.objectId`, `to.objectId`, `cardinality`); anything else (`LIMIT_REACHED`, `NOT_FOUND`) shows above the settings.
 - Related object and the first side's question carry an ⓘ (InfoTip, owner 22 October 2026: "make the … relations … much more easy to understand … with some info icons"): the other object, with a worked example, and what one and many mean. The names keep their hint instead, which already says what they are.
+- It opens as a Modal `form` (560px, 30 October 2026), as the attribute dialog does.
 
 ## States
 

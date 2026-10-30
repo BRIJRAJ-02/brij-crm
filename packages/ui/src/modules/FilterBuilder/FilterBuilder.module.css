@@ -44,6 +44,11 @@
     min-inline-size: 0;
   }
 
+  /* Clear all ends the top group's foot, on Add filter's row. */
+  .clearAll {
+    margin-inline-start: auto;
+  }
+
   .group {
     display: flex;
     flex-direction: column;

@@ -185,7 +185,7 @@ export const Collapsed: Story = {
     await expect(style('Records').borderTopStyle).toBe('solid');
     const search = canvas.getByRole('button', { name: 'Quick actions' });
     await hoverFresh(userEvent, search);
-    await expect(await shownTooltip()).toHaveTextContent(/^Quick actions (⌘K|Ctrl\+K)$/);
+    await expect(await shownTooltip()).toHaveTextContent(/^Quick actions ?(⌘K|Ctrl\+K)$/);
     await userEvent.unhover(search);
     await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
     const people = canvas.getByRole('link', { name: 'People' });

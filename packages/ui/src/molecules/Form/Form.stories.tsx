@@ -175,9 +175,7 @@ function ShortcutPerson({ onSubmit }: { readonly onSubmit: (values: FormValues) 
           title="New person"
           actions={
             <>
-              <Button slot="close" kbd="ESC">
-                Cancel
-              </Button>
+              <Button slot="close">Cancel</Button>
               <Button variant="primary" type="submit" form="shortcut-person" kbd="⌘↵">
                 Add person
               </Button>
