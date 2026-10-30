@@ -275,9 +275,9 @@ export const CreatesRecord: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /Choose Company/ }));
     const page = within(document.body);
     await page.findByRole('menu');
-    await userEvent.keyboard('Initech');
-    await userEvent.click(await page.findByRole('menuitem', { name: 'Create "Initech"' }));
-    await expect(args.onCreateRecord).toHaveBeenCalledWith('Initech');
+    await userEvent.keyboard('Hooli');
+    await userEvent.click(await page.findByRole('menuitem', { name: 'Create "Hooli"' }));
+    await expect(args.onCreateRecord).toHaveBeenCalledWith('Hooli');
     await waitFor(() => expect(canvas.getByRole('button', { name: /Change Company/ })).toHaveFocus(), { timeout: 100 });
     await expect(args.onCommit).toHaveBeenCalledWith({ objectId: SAMPLE_IDS.companies, recordId: 'new-company' });
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
