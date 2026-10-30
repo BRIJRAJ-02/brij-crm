@@ -30,7 +30,8 @@ export type AccessEntry =
   | { readonly publicForm: true }
   /**
    * Booking pages (spec 0025): `booking.manage` first (403 `FORBIDDEN`), then the reader's own pages, or anyone's
-   * with `booking.admin`; another's page answers as absent. A booking: its host, a co-host, its page's owner, or
+   * with `booking.admin`; another's page answers as absent (a workspace link is `booking.admin`'s alone, and its maker
+   * owns nothing of it). A booking: its host, a co-host, its page's owner (never a workspace link's maker), or
    * `booking.admin` (`booking/seen.ts`, the one rule); the Bookings reads take `hosts: 'mine'` unless asked for all.
    */
   | { readonly bookingPages: true }
@@ -420,6 +421,12 @@ export const ACCESS_TABLE = {
   deleteSchedule: { schedules: true },
   createTimeBlock: { scheduling: 'manage' },
   removeTimeBlock: { scheduling: 'manage' },
+  // Time off (spec 0037, AC-1282, AC-1286): read with See (reason and note with Manage), changed with Manage; the
+  // caller's own `booking.manage` first.
+  listTimeOff: { scheduling: 'view' },
+  createTimeOff: { scheduling: 'manage' },
+  updateTimeOff: { scheduling: 'manage' },
+  deleteTimeOff: { scheduling: 'manage' },
   bookAsHost: { scheduling: 'manage' },
   // Changing a booking from Bookings (spec 0025, milestone 2): booking.manage first, then the booking's row.
   hostTarget: { bookingPages: true },

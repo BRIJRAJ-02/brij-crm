@@ -28,7 +28,6 @@ import type { JobView, RoutingRule } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { PreferencesHeld, PreferencesState } from './preferences/store.ts';
-import type { DelegationsHeld, DelegationsState } from './scheduling/access.ts';
 import type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import type { LinkPageHeld, LinkPageState } from './link-page/store.ts';
 import type { SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
@@ -417,8 +416,11 @@ export function usePreferences(held: PreferencesHeld): PreferencesState {
   return useRetained(held);
 }
 
-/** A held list of scheduling delegations (spec 0037: the member's own, or the workspace's), read when first held. */
-export function useDelegations(held: DelegationsHeld): DelegationsState {
+/**
+ * A held scheduling read from the lazy scheduling chunk (spec 0037: delegations, `DelegationsHeld`, and time off,
+ * `TimeOffHeld`), read when first held. One generic hook, so each new read costs the first load nothing.
+ */
+export function useScheduling<State>(held: Retained<State>): State {
   return useRetained(held);
 }
 

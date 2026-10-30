@@ -30,7 +30,15 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
       deps.member !== undefined && deps.member !== access.memberId && members.some((each) => each.id === deps.member)
         ? deps.member
         : undefined;
-    await context.data.schedules.view(params.slug, member, memberZone(context.data, params.slug)).ready();
+    await Promise.all([
+      context.data.schedules.view(params.slug, member, memberZone(context.data, params.slug)).ready(),
+      // Time off (spec 0037, AC-1286), from the store `scheduling.open()` loaded above; a failure shows in its card.
+      context.data.scheduling
+        .loaded()
+        ?.timeOff.held(params.slug, member)
+        .ready()
+        .catch(() => undefined),
+    ]);
     return {
       member,
       members,
@@ -64,6 +72,7 @@ function AvailabilityRoute() {
       me={me}
       ownHours={ownHours}
       nameOf={(id) => people.find((person) => person.id === id)?.name}
+      people={people}
     />
   );
 }

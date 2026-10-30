@@ -686,6 +686,35 @@ describe('the walk: a principal without the access is refused', () => {
           forMemberId: ownerId,
         },
       ),
+    listTimeOff: (scope, ownerId) => core.listTimeOff(scope, { now: () => new Date() }, { memberId: ownerId }),
+    createTimeOff: (scope, ownerId) =>
+      core.createTimeOff(
+        scope,
+        { now: () => new Date() },
+        { id: core.newId(), memberId: ownerId, fromDate: '2030-01-07', toDate: '2030-01-08', reason: 'vacation' },
+      ),
+    updateTimeOff: async (scope, _ownerId, owner) => {
+      const made = await core.createTimeOff(
+        owner,
+        { now: () => new Date() },
+        { id: core.newId(), fromDate: '2030-01-07', toDate: '2030-01-08', reason: 'vacation' },
+      );
+      return core.updateTimeOff(scope, {
+        id: made.entry.id,
+        fromDate: '2030-01-07',
+        toDate: '2030-01-09',
+        reason: 'sick',
+        updatedAt: made.entry.updatedAt,
+      });
+    },
+    deleteTimeOff: async (scope, _ownerId, owner) => {
+      const made = await core.createTimeOff(
+        owner,
+        { now: () => new Date() },
+        { id: core.newId(), fromDate: '2030-01-07', toDate: '2030-01-08', reason: 'vacation' },
+      );
+      return core.deleteTimeOff(scope, { id: made.entry.id });
+    },
     reassignUpcoming: (scope, ownerId) => core.reassignUpcoming(scope, { rotationId: core.newId(), memberId: ownerId }),
   };
   it('has a case for every scheduling entry', () => {

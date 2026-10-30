@@ -40,11 +40,22 @@ export const TeamHosts = z.object({
 /** A round robin page's hosts. */
 export type TeamHosts = z.infer<typeof TeamHosts>;
 
+/** Whose a page is: a person's (`member`), or the workspace's own link (`workspace`). */
+export const BookingPageScope = z.enum(['member', 'workspace']);
+/** Whose a page is. */
+export type BookingPageScope = z.infer<typeof BookingPageScope>;
+
 /** A page as a member sees it in Settings › Booking pages. */
 export const BookingPageView = BookingPageSettings.extend({
   id: Uuid,
   publicKey: z.string(),
   kind: z.enum(['personal', 'collective', 'round_robin']),
+  /**
+   * Whose page it is (the workspace link, 30 Oct 2026): `member`, a person's; or `workspace`, the workspace's own
+   * round robin link, managed by `booking.admin` alone, on nobody's profile, with only its `/b/<publicKey>` link.
+   */
+  scope: BookingPageScope,
+  /** The page's owner; on a workspace page, only who made it. */
   ownerMemberId: Uuid,
   /** The owner's handle, when they have one: the page's address is then `/<handle>/<slug>`, else `/b/<publicKey>`. */
   handle: z.string().optional(),
@@ -109,6 +120,11 @@ export const CreateBookingPageInput = WorkspaceScoped.extend({
   settings: BookingPageSettingsWrite.optional(),
   /** `personal` (the default) or, with `booking.admin`, `round_robin` (spec 0029), which names its hosts. */
   kind: z.enum(['personal', 'round_robin']).optional(),
+  /**
+   * `workspace` makes the workspace's own link (`booking.admin`, round robin only): with no `hosts`, it books
+   * "Everyone on the roster", the workspace's rotation of every active member who isn't a guest.
+   */
+  scope: BookingPageScope.optional(),
   hosts: TeamHosts.optional(),
   mutationId: Uuid,
 });
@@ -279,6 +295,8 @@ export const BookingListItem = BookingView.extend({
   hostName: z.string(),
   /** Its host left with nobody free to take it (spec 0029, AC-749): "Needs a host" until an admin reassigns it. */
   needsHost: z.boolean(),
+  /** Its host has time off over it (spec 0037, AC-1285): "Host away", for someone to move or reassign it. */
+  hostAway: z.boolean().optional(),
   /** Marked as a no show after it (spec 0043, AC-1613). */
   noShow: z.boolean().optional(),
   /**

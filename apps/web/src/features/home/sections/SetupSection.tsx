@@ -65,7 +65,7 @@ function useSetupFacts(
         ? { calendars: calendar.connections.map((connection) => connection.accountEmail) }
         : {}),
       ...(mayPages && pages.status === 'ready'
-        ? { bookingPages: pages.items.filter((page) => page.ownerMemberId === meId).length }
+        ? { bookingPages: pages.items.filter((page) => page.ownerMemberId === meId && page.scope === 'member').length }
         : {}),
       ...(mayForms && forms.status === 'ready' ? { forms: forms.items.length } : {}),
       ...(permissions.includes('members.invite') && invitations !== undefined

@@ -31,7 +31,14 @@ import { blockOccurrences } from './blocks.ts';
 import { handLinkOf, linkedRecords, linksOf, seenLinks } from './links.ts';
 import { shownAsEvent } from './owned.ts';
 import { shownAnswers } from './questions.ts';
-import { bookingAccess, bookingReaderIn, bookingReaderOf, seesBookingSql, type BookingReader } from './seen.ts';
+import {
+  bookingAccess,
+  bookingReaderIn,
+  bookingReaderOf,
+  pageManagerColumn,
+  seesBookingSql,
+  type BookingReader,
+} from './seen.ts';
 
 const { bookingPages, bookings, members } = schema;
 
@@ -104,7 +111,7 @@ function visibleTo(reader: BookingReader, hosts: BookingHosts = 'mine') {
       pageId: bookings.pageId,
       hostMemberId: bookings.hostMemberId,
       // Every Bookings read joins the page already.
-      pageOwnerMemberId: bookingPages.ownerMemberId,
+      pageOwnerMemberId: pageManagerColumn,
     },
     { everyone: hosts === 'all' || reader.member === undefined },
   );
@@ -118,7 +125,7 @@ function visibleTo(reader: BookingReader, hosts: BookingHosts = 'mine') {
 async function seeOnlyOf(
   tx: WorkspaceTx,
   reader: BookingReader,
-  rows: readonly { readonly booking: typeof bookings.$inferSelect; readonly pageOwner: string }[],
+  rows: readonly { readonly booking: typeof bookings.$inferSelect; readonly pageOwner: string | null }[],
 ): Promise<ReadonlySet<string>> {
   const me = reader.member;
   if (reader.admin || me === undefined || reader.everyone === 'manage') return new Set();
@@ -145,6 +152,26 @@ async function seeOnlyOf(
   );
 }
 
+/**
+ * Whether the booking's host has time off over it (spec 0037, AC-1285): "Host away", flagged for someone to move or
+ * reassign it, never moved by itself. Plain comparisons on the stored ends reach the blocks' btree index.
+ */
+const hostAwayColumn = sql<boolean>`exists (
+  select 1 from booking_time_blocks a
+  where a.workspace_id = ${bookings.workspaceId} and a.member_id = ${bookings.hostMemberId}
+    and a.repeat = 'once' and a.kind = 'away'
+    and a.ends_at > ${bookings.startsAt} and a.starts_at < ${bookings.endsAt}
+)`;
+
+/**
+ * Whom a reader may see as away (spec 0037, AC-1286): themself, and hosts in their scheduling reach. A page's owner or
+ * a co-host without reach over the host sees the booking, never the host's time off.
+ */
+function awayShownTo(reader: BookingReader): (hostId: string) => boolean {
+  return (hostId) =>
+    reader.admin || reader.everyone !== undefined || hostId === reader.member || (reader.sees ?? []).includes(hostId);
+}
+
 /** A booking row and its page as Bookings shows it. */
 function itemOf(
   {
@@ -153,19 +180,23 @@ function itemOf(
     location,
     hostStatus,
     hostName,
+    hostAway,
   }: {
     readonly booking: typeof bookings.$inferSelect;
     readonly pageTitle: string;
     readonly location: unknown;
     readonly hostStatus?: string | null;
     readonly hostName: string | null;
+    readonly hostAway?: boolean;
   },
   seen: ReadonlySet<string>,
   linked: ReadonlyMap<string, RecordRefDisplay>,
   answersOf: (stored: unknown) => BookingListItem['answers'],
   seeOnly: ReadonlySet<string> = new Set(),
+  showsAway: (hostId: string) => boolean = () => false,
 ): BookingListItem {
   const place = BookingLocation.safeParse(location);
+  const away = hostAway === true && row.status === 'confirmed' && showsAway(row.hostMemberId) ? { hostAway: true } : {};
   // See over the host (spec 0037, AC-1262): the guest's name, the page's title, the time and status only.
   if (seeOnly.has(row.id)) {
     return {
@@ -176,6 +207,7 @@ function itemOf(
       hostMemberId: row.hostMemberId,
       hostName: hostName ?? '',
       needsHost: row.needsHostAt !== null,
+      ...away,
       startsAt: row.startsAt.toISOString(),
       endsAt: row.endsAt.toISOString(),
       visitorName: row.visitorName,
@@ -200,6 +232,7 @@ function itemOf(
     hostMemberId: row.hostMemberId,
     hostName: hostName ?? '',
     needsHost: row.needsHostAt !== null,
+    ...away,
     ...(row.noShowAt === null ? {} : { noShow: true }),
     startsAt: row.startsAt.toISOString(),
     endsAt: row.endsAt.toISOString(),
@@ -243,11 +276,12 @@ export async function listWorkspaceBookings(
       .select({
         booking: bookings,
         pageTitle: bookingPages.title,
-        pageOwner: bookingPages.ownerMemberId,
+        pageOwner: pageManagerColumn,
         location: bookingPages.location,
         // Whether the host is still here (spec 0031, AC-815): a removed host's bookings say so.
         hostStatus: members.status,
         hostName: members.name,
+        hostAway: hostAwayColumn,
       })
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
@@ -271,7 +305,7 @@ export async function listWorkspaceBookings(
       rows.map(({ booking }) => booking.answers),
     );
     const seeOnly = await seeOnlyOf(tx, reader, rows);
-    return rows.map((row) => itemOf(row, seen, linked, answers, seeOnly));
+    return rows.map((row) => itemOf(row, seen, linked, answers, seeOnly, awayShownTo(reader)));
   });
 }
 
@@ -318,9 +352,10 @@ export async function readBookingsCalendar(
       .select({
         booking: bookings,
         pageTitle: bookingPages.title,
-        pageOwner: bookingPages.ownerMemberId,
+        pageOwner: pageManagerColumn,
         location: bookingPages.location,
         hostName: members.name,
+        hostAway: hostAwayColumn,
       })
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
@@ -418,7 +453,7 @@ export async function readBookingsCalendar(
     );
     const seeOnly = await seeOnlyOf(tx, reader, rows);
     return {
-      bookings: rows.map((row) => itemOf(row, seen, linked, answers, seeOnly)),
+      bookings: rows.map((row) => itemOf(row, seen, linked, answers, seeOnly, awayShownTo(reader))),
       events,
       busy,
       blocks: [...blocks],
@@ -500,11 +535,12 @@ export async function listMeetings(
             .select({
               booking: bookings,
               pageTitle: bookingPages.title,
-              pageOwner: bookingPages.ownerMemberId,
+              pageOwner: pageManagerColumn,
               location: bookingPages.location,
               // The host, for a colleague's booking and a removed host's (spec 0031, AC-815; spec 0037).
               hostStatus: members.status,
               hostName: members.name,
+              hostAway: hostAwayColumn,
             })
             .from(bookings)
             .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
@@ -537,7 +573,7 @@ export async function listMeetings(
     const bookingItems: Listed[] = rows.map((row) => ({
       at: row.booking.startsAt.toISOString(),
       id: row.booking.id,
-      item: { kind: 'booking', booking: itemOf(row, seen, linked, answers, seeOnly) },
+      item: { kind: 'booking', booking: itemOf(row, seen, linked, answers, seeOnly, awayShownTo(reader)) },
     }));
 
     // The reader's own calendar events, from the calendars on their week (and the panel's pick).

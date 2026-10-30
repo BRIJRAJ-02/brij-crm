@@ -50,6 +50,12 @@ export const bookingPages = pgTable(
      */
     slug: text('slug').notNull(),
     kind: text('kind').notNull().default('personal'),
+    /**
+     * Whose page it is (workspace link, migration 0128): `member`, a person's, or `workspace`, the workspace's own
+     * round robin link. A workspace page's `owner_member_id` is only who made it; it has no `owner_user_id`, so it is
+     * on nobody's profile and has no `/<handle>/<slug>` address, and its slug is unique among the workspace's pages.
+     */
+    scope: text('scope').notNull().default('member'),
     ownerMemberId: uuid('owner_member_id').notNull(),
     /**
      * The owner member's identity (`auth.user.id`), kept by the trigger crm_booking_pages_owner_user (0086) from
@@ -158,7 +164,10 @@ export const bookingPages = pgTable(
     uniqueIndex('booking_pages_public_key').on(t.publicKey),
     uniqueIndex('booking_pages_slug')
       .on(t.workspaceId, t.ownerMemberId, t.slug)
-      .where(sql`${t.deletedAt} is null`),
+      .where(sql`${t.deletedAt} is null and ${t.scope} = 'member'`),
+    uniqueIndex('booking_pages_workspace_slug')
+      .on(t.workspaceId, t.slug)
+      .where(sql`${t.deletedAt} is null and ${t.scope} = 'workspace'`),
     // A profile's listed pages, in the owner's order: read only through crm_booking_profile_pages.
     index('booking_pages_profile')
       .on(t.ownerUserId, t.profilePosition, t.id)
@@ -175,6 +184,8 @@ export const bookingPages = pgTable(
     check('booking_pages_profile_position', sql`${t.profilePosition} between 0 and 999`),
     check('booking_pages_slug_shape', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`),
     check('booking_pages_kind', sql`${t.kind} in ('personal', 'collective', 'round_robin')`),
+    check('booking_pages_scope', sql`${t.scope} in ('member', 'workspace')`),
+    check('booking_pages_scope_kind', sql`${t.scope} = 'member' or ${t.kind} = 'round_robin'`),
     check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),
     check('booking_pages_paused_reason', sql`${t.pausedReason} is null or ${t.pausedReason} = 'host_removed'`),
     check('booking_pages_hours_mode', sql`${t.hoursMode} in ('mine', 'own')`),
@@ -509,6 +520,12 @@ export const bookingTimeBlocks = pgTable(
     /** A hold carved for one private page; null is any private page. */
     pageId: uuid('page_id'),
     label: text('label'),
+    /** Time off (spec 0037, kind `away`): why (`vacation`, `sick`, `travel`, `holiday`, `other`). */
+    reason: text('reason'),
+    /** Time off's note, up to 200 characters, shown only to the member and to Manage over them; never audited. */
+    note: text('note'),
+    /** Time off's stand in: the member who covers for them (AC-1284). */
+    standinMemberId: uuid('standin_member_id'),
     ...auditColumns(),
   },
   (t) => [
@@ -516,6 +533,11 @@ export const bookingTimeBlocks = pgTable(
     foreignKey({
       name: 'booking_time_blocks_member',
       columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    foreignKey({
+      name: 'booking_time_blocks_standin',
+      columns: [t.workspaceId, t.standinMemberId],
       foreignColumns: [members.workspaceId, members.id],
     }),
     // The member's one off blocks ending after a range starts, read with every slots request.
@@ -526,17 +548,27 @@ export const bookingTimeBlocks = pgTable(
     index('booking_time_blocks_weekly')
       .on(t.workspaceId, t.memberId)
       .where(sql`${t.repeat} = 'weekly'`),
-    check('booking_time_blocks_kind', sql`${t.kind} in ('block', 'hold')`),
+    check('booking_time_blocks_kind', sql`${t.kind} in ('block', 'hold', 'away')`),
     check(
       'booking_time_blocks_shape',
       sql`(${t.repeat} = 'once' and ${t.during} is not null and not isempty(${t.during}) and lower_inc(${t.during}) and not upper_inc(${t.during})
-        and ${t.weekday} is null and ${t.startMinute} is null and ${t.endMinute} is null and ${t.timeZone} is null and ${t.fromDate} is null)
+        and ${t.weekday} is null and ${t.startMinute} is null and ${t.endMinute} is null and ${t.fromDate} is null
+        and (${t.timeZone} is null) = (${t.kind} <> 'away'))
       or (${t.repeat} = 'weekly' and ${t.kind} = 'block' and ${t.during} is null and ${t.weekday} between 0 and 6
         and ${t.startMinute} >= 0 and ${t.endMinute} > ${t.startMinute} and ${t.endMinute} <= 1440
         and ${t.timeZone} is not null and ${t.fromDate} is not null)`,
     ),
     check('booking_time_blocks_page', sql`${t.pageId} is null or ${t.kind} = 'hold'`),
     check('booking_time_blocks_label', sql`${t.label} is null or char_length(${t.label}) between 1 and 200`),
+    check(
+      'booking_time_blocks_away',
+      sql`(${t.kind} = 'away' and ${t.repeat} = 'once' and ${t.label} is null
+        and ${t.reason} in ('vacation', 'sick', 'travel', 'holiday', 'other')
+        and (${t.note} is null or char_length(${t.note}) between 1 and 200)
+        and (${t.standinMemberId} is null or ${t.standinMemberId} <> ${t.memberId})
+        and upper(${t.during}) - lower(${t.during}) <= interval '367 days')
+      or (${t.kind} <> 'away' and ${t.reason} is null and ${t.note} is null and ${t.standinMemberId} is null)`,
+    ),
     ...actorConstraints('booking_time_blocks', 'created_by', t.workspaceId, {
       type: t.createdByType,
       id: t.createdById,

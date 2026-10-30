@@ -49,7 +49,7 @@ import {
   type PageRecord,
 } from './slots.ts';
 import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
-import { bookingAccess, bookingReaderIn, bookingReaderOf } from './seen.ts';
+import { bookingAccess, bookingReaderIn, bookingReaderOf, pageManagerOf } from './seen.ts';
 
 const { bookings, bookingHosts } = schema;
 
@@ -122,7 +122,7 @@ async function readTarget(
   // `booking.admin`, or Manage over its host or a co-host act on it; See over them shows it but changes nothing.
   const reader = bookingReaderOf(target.scope.access);
   const me = reader.member;
-  if (reader.admin || (me !== undefined && (row.hostMemberId === me || page.ownerMemberId === me))) {
+  if (reader.admin || (me !== undefined && (row.hostMemberId === me || pageManagerOf(page) === me))) {
     return { row, page };
   }
   const coHostIds = (
@@ -132,7 +132,7 @@ async function readTarget(
       .where(and(eq(bookingHosts.bookingId, row.id), sql`${bookingHosts.memberId} <> ${row.hostMemberId}`))
   ).map((host) => host.memberId);
   const reached = await bookingReaderIn(tx, target.scope);
-  const may = bookingAccess(reached, { hostMemberId: row.hostMemberId, ownerMemberId: page.ownerMemberId, coHostIds });
+  const may = bookingAccess(reached, { hostMemberId: row.hostMemberId, ownerMemberId: pageManagerOf(page), coHostIds });
   if (may === undefined) throw refuse('NOT_FOUND', MISSING);
   if (may === 'see') throw refuse('FORBIDDEN', SEE_ONLY);
   return { row, page };

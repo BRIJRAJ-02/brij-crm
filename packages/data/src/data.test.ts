@@ -527,6 +527,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         revoke: os.scheduling.delegations.revoke.handler(notServed),
       },
     },
+    timeOff: {
+      list: os.timeOff.list.handler(notServed),
+      create: os.timeOff.create.handler(notServed),
+      update: os.timeOff.update.handler(notServed),
+      delete: os.timeOff.delete.handler(notServed),
+    },
     realtime: {
       connectionToken: os.realtime.connectionToken.handler(() => ({ token: 'connection-token' })),
       subscriptionToken: os.realtime.subscriptionToken.handler(({ input }) => ({
@@ -3068,6 +3074,7 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     title: 'Demo',
     description: '',
     slug: 'demo',
+    scope: 'member',
     durations: [30],
     location: { type: 'video' },
     bufferBefore: 0,

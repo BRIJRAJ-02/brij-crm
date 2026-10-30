@@ -320,20 +320,17 @@ export async function reassignUpcoming(
     const reach = await schedulingReach(tx, scope);
     if (!canActFor(reach, input.memberId, 'view')) throw refuse('NOT_FOUND', 'That person isn’t in this workspace.');
     const candidates = await tx
-      .select({ memberId: schema.rotationMembers.memberId })
-      .from(schema.rotationMembers)
-      .where(and(eq(schema.rotationMembers.rotationId, input.rotationId), eq(schema.rotationMembers.isOn, true)));
+      .select({ memberId: schema.rotationRoster.memberId })
+      .from(schema.rotationRoster)
+      .where(and(eq(schema.rotationRoster.rotationId, input.rotationId), eq(schema.rotationRoster.isOn, true)));
     if (![input.memberId, ...candidates.map((each) => each.memberId)].every((id) => canActFor(reach, id, 'manage'))) {
       throw refuse('FORBIDDEN', FORBIDDEN_MESSAGE);
     }
     const [still] = await tx
-      .select({ isOn: schema.rotationMembers.isOn })
-      .from(schema.rotationMembers)
+      .select({ isOn: schema.rotationRoster.isOn })
+      .from(schema.rotationRoster)
       .where(
-        and(
-          eq(schema.rotationMembers.rotationId, input.rotationId),
-          eq(schema.rotationMembers.memberId, input.memberId),
-        ),
+        and(eq(schema.rotationRoster.rotationId, input.rotationId), eq(schema.rotationRoster.memberId, input.memberId)),
       );
     if (still?.isOn === true) {
       throw refuse('CONFIG_INVALID', 'Switch them off or remove them from the rotation first.');

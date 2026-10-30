@@ -85,6 +85,8 @@ export const ERROR_MAP = {
   // Scheduling access (spec 0037, AC-1255, AC-1256).
   DELEGATE_INVALID: UNPROCESSABLE,
   DELEGATION_LIMIT: CONFLICT,
+  // Time off (spec 0037, AC-1288): "Someone can have at most 50 upcoming time off entries."
+  TIME_OFF_LIMIT: CONFLICT,
   // The sidebar (spec 0034, AC-934): "You have 50 favourites. Remove one first."
   NAV_LIMIT: CONFLICT,
   // Domain join (spec 0031, AC-819).

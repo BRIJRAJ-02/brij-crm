@@ -1,7 +1,12 @@
 // Emails about a member's own background work: an import's result (#30), and
 // any other job of theirs that failed (late trap #20). A mention has no email of its own: it goes in the
 // notifications email (spec 0038), the one email a mention sends.
-import type { ImportFinishedEmail, JobFailedEmail, SchedulingChangedEmail } from '@crm/contracts/emails';
+import type {
+  ImportFinishedEmail,
+  JobFailedEmail,
+  SchedulingChangedEmail,
+  StandinCoveringEmail,
+} from '@crm/contracts/emails';
 import { plural } from '../format.ts';
 
 /** A count as the app writes it (1,204). */
@@ -91,5 +96,24 @@ export const schedulingChanged: Template<SchedulingChangedEmail> = (params, cont
       { type: 'button', label: 'See your hours', url: context.link(params.availabilityPath) },
     ],
     why: `You got this email because ${params.actorName} can manage your scheduling in ${workspaceOf(context)}.`,
+  };
+};
+
+/** Covering for someone (spec 0037, AC-1282): to a stand in, "You're covering for Sam from 3 to 7 November." */
+export const standinCovering: Template<StandinCoveringEmail> = (params, context) => {
+  const subject = `You’re covering for ${params.memberName} ${params.dates}`;
+  return {
+    subject,
+    preheader: `${params.memberName} is away ${params.dates}. People who would book them may come to you.`,
+    eyebrow: workspaceOf(context),
+    heading: `You’re covering for ${params.memberName}`,
+    blocks: [
+      {
+        type: 'paragraph',
+        text: `You’re covering for ${params.memberName} ${params.dates}. While they’re away, people who usually meet them may be booked with you.`,
+      },
+      { type: 'button', label: 'See your bookings', url: context.link(params.bookingsPath) },
+    ],
+    why: `You got this email because ${params.memberName} named you as their stand in in ${workspaceOf(context)}.`,
   };
 };

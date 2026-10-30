@@ -13,8 +13,8 @@
 // before and last after, drops what ends as it began, and queues one
 // `scheduling_changed` email through the workspace email queue. Nothing is
 // sent when the changes cancel out. Today the rows are a schedule's
-// (`schedule.changed`); time off, limits, personal pages and rotations add
-// their actions to `NOTICE_ACTIONS` as their jobs land.
+// (`schedule.changed`) and time off's (`time_off.*`); limits, personal pages
+// and rotations add their actions to `NOTICE_ACTIONS` as their jobs land.
 import { sql } from 'drizzle-orm';
 import { clockLabel } from '@crm/contracts/hours';
 import type { SchedulingChangedEmail } from '@crm/contracts/emails';
@@ -43,7 +43,7 @@ export type ScheduleAuditEntry = { readonly id: string; readonly name: string } 
 >;
 
 /** The audit actions a notice tells (AC-1264). */
-export const NOTICE_ACTIONS = ['schedule.changed'] as const;
+export const NOTICE_ACTIONS = ['schedule.changed', 'time_off.created', 'time_off.changed', 'time_off.deleted'] as const;
 
 /** How long a notice gathers changes, from the first (AC-1264); the queue function holds the same. */
 export const NOTICE_WINDOW_MINUTES = 10;
@@ -210,6 +210,59 @@ export function noticeLines(rows: readonly { readonly before: unknown; readonly 
   return lines.map(fitted);
 }
 
+const REASON_WORDS: Readonly<Record<string, string>> = {
+  vacation: 'Vacation',
+  sick: 'Sick leave',
+  travel: 'Travel',
+  holiday: 'Public holiday',
+  other: 'Other',
+};
+
+/** One side of a `time_off.*` row, read defensively: the entry's id, dates and reason, never a note. */
+function awayOf(side: unknown): { id: string; fromDate: string; toDate: string; reason?: string } | undefined {
+  if (typeof side !== 'object' || side === null) return undefined;
+  const { timeOffId, fromDate, toDate, reason } = side as Record<string, unknown>;
+  if (typeof timeOffId !== 'string' || typeof fromDate !== 'string' || typeof toDate !== 'string') return undefined;
+  return { id: timeOffId, fromDate, toDate, ...(typeof reason === 'string' ? { reason } : {}) };
+}
+
+/** "3 Nov" or "3 Nov to 7 Nov", read as calendar dates. */
+function daysLabel(fromDate: string, toDate: string): string {
+  const day = (date: string) => dateLabel(date).replace(/^\w+,?\s/, '');
+  return fromDate === toDate ? day(fromDate) : `${day(fromDate)} to ${day(toDate)}`;
+}
+
+/**
+ * The lines a notice lists for a run of time off rows, oldest first (pure, AC-1264): each entry's first before
+ * against its last after, so an entry added and removed in one window says nothing. "Time off added: Vacation, 3
+ * Nov to 7 Nov"; "Time off changed: Sick leave, 4 Nov to 5 Nov"; "Time off removed: 3 Nov to 7 Nov". Never a note.
+ */
+export function timeOffLines(rows: readonly { readonly before: unknown; readonly after: unknown }[]): string[] {
+  const folded = new Map<string, { first: ReturnType<typeof awayOf>; last: ReturnType<typeof awayOf> }>();
+  for (const row of rows) {
+    const before = awayOf(row.before);
+    const after = awayOf(row.after);
+    const id = before?.id ?? after?.id;
+    if (id === undefined) continue;
+    const item = folded.get(id);
+    if (item === undefined) folded.set(id, { first: before, last: after });
+    else item.last = after;
+  }
+  const lines: string[] = [];
+  const words = (entry: NonNullable<ReturnType<typeof awayOf>>) =>
+    `${REASON_WORDS[entry.reason ?? ''] ?? 'Away'}, ${daysLabel(entry.fromDate, entry.toDate)}`;
+  for (const { first, last } of folded.values()) {
+    if (first === undefined && last === undefined) continue;
+    if (first === undefined && last !== undefined) lines.push(`Time off added: ${words(last)}`);
+    else if (last === undefined && first !== undefined)
+      lines.push(`Time off removed: ${daysLabel(first.fromDate, first.toDate)}`);
+    else if (first !== undefined && last !== undefined && words(first) !== words(last)) {
+      lines.push(`Time off changed: ${words(last)}`);
+    }
+  }
+  return lines.map(fitted);
+}
+
 /** What one notice run did: queued the email, found it queued already, had nothing to tell, or the member left. */
 export type SchedulingNoticeOutcome = 'queued' | 'exists' | 'nothing' | 'gone' | 'refused';
 
@@ -253,8 +306,8 @@ export async function runSchedulingNotice(
             or (a.at, a.id) > (select p.at, p.id from audit_events p where p.id = ${lastTold}::uuid)
           )`
         : sql``;
-    const rows = await tx.execute<{ id: string; before: unknown; after: unknown }>(sql`
-      select a.id::text as id, a.before, a.after
+    const rows = await tx.execute<{ id: string; action: string; before: unknown; after: unknown }>(sql`
+      select a.id::text as id, a.action, a.before, a.after
       from audit_events a
       where a.target_type = 'member' and a.target_id = ${member} and a.actor_member_id = ${actor}::uuid
         and a.action in (${sql.join(
@@ -269,7 +322,10 @@ export async function runSchedulingNotice(
     if (last === undefined) return 'nothing';
     // More than one run holds: the next one, queued now, tells the rest.
     if (rows.rows.length === ROWS_MAX) await queueSchedulingNotice(tx, actor, member);
-    const lines = noticeLines(rows.rows);
+    const lines = [
+      ...noticeLines(rows.rows.filter((row) => row.action === 'schedule.changed')),
+      ...timeOffLines(rows.rows.filter((row) => row.action.startsWith('time_off.'))),
+    ];
     if (lines.length === 0) return 'nothing';
     const params: SchedulingChangedEmail = {
       actorName,

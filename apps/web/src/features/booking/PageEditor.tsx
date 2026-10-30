@@ -269,7 +269,9 @@ export function PageEditor({
   // A page the reader can't change shows as it is, every control read only, with no Save.
   const isLocked = !page.canChange;
   // The link page is the viewer's own: only the page's owner places it there (an admin editing a teammate's page doesn't).
-  const isOwnPage = ownerMember === undefined;
+  // A workspace link is nobody's own (30 Oct 2026): no handle, no profile, no social links, only its /b/ link.
+  const isWorkspace = page.scope === 'workspace';
+  const isOwnPage = ownerMember === undefined && !isWorkspace;
   const saved = settingsOf(page);
   const [draft, setDraft] = useState(saved);
   // The address's shape is said once the person leaves the field, not at every key.
@@ -916,8 +918,11 @@ export function PageEditor({
                           </RadioGroup>
                         </FieldGroup>
                       </Card>
-                      <Card title={strings.sharing}>
-                        {page.handle !== undefined && !draft.isPrivate ? (
+                      <Card
+                        title={strings.sharing}
+                        {...(isWorkspace ? { description: strings.workspaceLinkSharing } : {})}
+                      >
+                        {page.handle !== undefined && !draft.isPrivate && !isWorkspace ? (
                           // The full address, the part after the owner's handle editable (22 Oct 2026); Copy and
                           // Open take the saved link, so they wait while the address has unsaved changes.
                           <Field
@@ -965,47 +970,51 @@ export function PageEditor({
                           />
                         )}
                         {/* The reader's own handle: on a colleague's page their Profile can't change this address. */}
-                        {page.handle === undefined && !draft.isPrivate && ownerMember === undefined && (
+                        {page.handle === undefined && !draft.isPrivate && isOwnPage && (
                           <Link href={profileHref(slug)}>{strings.setHandle}</Link>
                         )}
-                        <FieldGroup
-                          label={strings.whoCanBook}
-                          // Switching a public page to Link only retires the address people already have: said
-                          // before Save, not found out later by a visitor on Page not found (flow walks, B10).
-                          {...(draft.isPrivate
-                            ? { hint: page.isPrivate ? strings.linkOnlyHint : strings.linkOnlyChanging }
-                            : {})}
-                        >
-                          <SegmentedControl
+                        {!isWorkspace && (
+                          <FieldGroup
                             label={strings.whoCanBook}
-                            segments={[
-                              { value: 'public', label: strings.publicPage },
-                              { value: 'link', label: strings.linkOnly },
-                            ]}
-                            value={draft.isPrivate ? 'link' : 'public'}
-                            isReadOnly={isLocked}
-                            onChange={(value) => {
-                              const isPrivate = value === 'link';
-                              // Link only hides the address: one it can't save goes back to the saved one, so nothing
-                              // hidden blocks Save.
-                              change({
-                                isPrivate,
-                                ...(isPrivate && slugProblem(draft.slug) !== undefined ? { slug: page.slug } : {}),
-                              });
-                            }}
-                          />
-                        </FieldGroup>
+                            // Switching a public page to Link only retires the address people already have: said
+                            // before Save, not found out later by a visitor on Page not found (flow walks, B10).
+                            {...(draft.isPrivate
+                              ? { hint: page.isPrivate ? strings.linkOnlyHint : strings.linkOnlyChanging }
+                              : {})}
+                          >
+                            <SegmentedControl
+                              label={strings.whoCanBook}
+                              segments={[
+                                { value: 'public', label: strings.publicPage },
+                                { value: 'link', label: strings.linkOnly },
+                              ]}
+                              value={draft.isPrivate ? 'link' : 'public'}
+                              isReadOnly={isLocked}
+                              onChange={(value) => {
+                                const isPrivate = value === 'link';
+                                // Link only hides the address: one it can't save goes back to the saved one, so nothing
+                                // hidden blocks Save.
+                                change({
+                                  isPrivate,
+                                  ...(isPrivate && slugProblem(draft.slug) !== undefined ? { slug: page.slug } : {}),
+                                });
+                              }}
+                            />
+                          </FieldGroup>
+                        )}
                       </Card>
-                      <SocialsCardSlot
-                        data={data}
-                        slug={slug}
-                        onPreviewLinks={setPreviewLinks}
-                        isTeam={page.kind !== 'personal'}
-                        isOwner={ownerMember === undefined}
-                        isShown={draft.showSocials}
-                        isLocked={isLocked}
-                        onShownChange={(showSocials) => change({ showSocials })}
-                      />
+                      {!isWorkspace && (
+                        <SocialsCardSlot
+                          data={data}
+                          slug={slug}
+                          onPreviewLinks={setPreviewLinks}
+                          isTeam={page.kind !== 'personal'}
+                          isOwner={ownerMember === undefined}
+                          isShown={draft.showSocials}
+                          isLocked={isLocked}
+                          onShownChange={(showSocials) => change({ showSocials })}
+                        />
+                      )}
                       {page.handle !== undefined && !draft.isPrivate && isOwnPage && (
                         // Where it sits on the owner's link page at /<handle> (spec 0051): a Public page joins it by
                         // itself, and its place and heading are set on the link page, with the rest of the page.
