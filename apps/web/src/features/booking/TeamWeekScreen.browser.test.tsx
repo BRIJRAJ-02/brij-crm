@@ -210,7 +210,7 @@ describe('the Team week', () => {
     const { teamWeek } = await render();
     await page.getByRole('button', { name: 'Actions for Sam Lee' }).click();
     await page.getByRole('menuitem', { name: 'Copy to next week' }).click();
-    const confirm = page.getByRole('dialog', { name: 'Copy Sam Lee’s week?' });
+    const confirm = page.getByRole('dialog', { name: 'Copy Sam Lee’s week to next week?' });
     await expect.element(confirm).toBeVisible();
     expect(teamWeek.copyWeek).not.toHaveBeenCalled();
     await page.getByRole('button', { name: 'Copy', exact: true }).click();
