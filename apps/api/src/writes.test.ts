@@ -162,6 +162,8 @@ const READS: ReadonlySet<string> = new Set([
   'schedules.members',
   'schedules.list',
   'timeOff.list',
+  // The Team week (spec 0037): the roster over everyone's default schedules.
+  'availability.teamWeek',
   'schedules.get',
   // Round robin (spec 0029): the rotations a member may see, and why a booking went to its host.
   'rotations.list',
@@ -369,6 +371,25 @@ async function schedule(m: Member) {
   });
   const { schedules } = await m.client.schedules.list({ workspace: m.slug, timeZone: 'UTC' });
   return { made, named: schedules.map((each) => each.id ?? '').sort() };
+}
+
+/** A Monday far enough ahead that the Team week may still change it. */
+const ROSTER_MONDAY = '2030-11-04';
+
+/** The member's own Monday on the Team week, 10 to 2 that week only, as read first so the stale check passes. */
+async function rosterDay(m: Member, mutationId: string) {
+  const week = await m.client.availability.teamWeek({ workspace: m.slug, weekStart: ROSTER_MONDAY });
+  const own = week.rows[0];
+  if (own === undefined) throw new Error('The Team week had no row for its reader.');
+  const set = await m.client.availability.setDay({
+    workspace: m.slug,
+    memberId: own.memberId,
+    date: ROSTER_MONDAY,
+    hours: [['10:00', '14:00']],
+    updatedAt: own.schedule.updatedAt,
+    mutationId,
+  });
+  return { memberId: own.memberId, schedule: set.schedule };
 }
 
 /**
@@ -1667,6 +1688,47 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.timeOff.delete({ workspace: m.slug, id: made.entry.id, mutationId });
     return [];
   },
+  // The Team week (spec 0037): every write goes through the schedules' write path, so each stores a `schedules` row.
+  'availability.setDay': async (m, mutationId) => {
+    const set = await rosterDay(m, mutationId);
+    return [{ kind: 'schedules', item_ids: [set.schedule.id], mutation_id: mutationId }];
+  },
+  'availability.copyWeek': async (m, mutationId) => {
+    const set = await rosterDay(m, newId());
+    await m.client.availability.copyWeek({
+      workspace: m.slug,
+      memberIds: [set.memberId],
+      fromWeekStart: ROSTER_MONDAY,
+      toWeekStart: '2030-11-11',
+      mutationId,
+    });
+    return [
+      { kind: 'schedules', item_ids: [set.schedule.id] },
+      { kind: 'schedules', item_ids: [set.schedule.id], mutation_id: mutationId },
+    ];
+  },
+  'availability.setUsualHours': async (m, mutationId) => {
+    const set = await rosterDay(m, newId());
+    const nine = (): [string, string][] => [['09:00', '17:00']];
+    await m.client.availability.setUsualHours({
+      workspace: m.slug,
+      memberIds: [set.memberId],
+      weekly: {
+        mon: [['10:00', '16:00']],
+        tue: nine(),
+        wed: nine(),
+        thu: nine(),
+        fri: nine(),
+        sat: [],
+        sun: [],
+      },
+      mutationId,
+    });
+    return [
+      { kind: 'schedules', item_ids: [set.schedule.id] },
+      { kind: 'schedules', item_ids: [set.schedule.id], mutation_id: mutationId },
+    ];
+  },
   // Imports (spec 0040): made, staged and started through the one write path; start and undo each start a job.
   'imports.create': async (m, mutationId) => {
     await importOf(m, mutationId);
@@ -2251,6 +2313,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookings.blocks.remove': 2,
   'timeOff.update': 2,
   'timeOff.delete': 2,
+  'availability.copyWeek': 2,
+  'availability.setUsualHours': 2,
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,
   'bookings.markNoShow': 3,
