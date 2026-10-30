@@ -13,6 +13,18 @@ export const strings = {
   archive: 'Archive',
   /** Editing, under the type: archive this one and start a new one with the same name. */
   wrongType: 'Wrong type? Archive and recreate',
+  /** Editing, under the type, for a type with a safe change: opens the Change type step. */
+  changeTypeLink: 'Change type…',
+  /** The Change type step (the field types pass). */
+  changeType: 'Change type',
+  changingType: 'Changing type',
+  newType: 'New type',
+  back: 'Back',
+  checkingValues: 'Checking every value…',
+  checkFailed: 'Couldn’t check the values.',
+  retry: 'Try again',
+  noValues: 'Nothing holds a value yet, so nothing to convert.',
+  allConvert: (count: string, n: number) => (n === 1 ? 'Its 1 value converts.' : `All ${count} values convert.`),
   name: 'Name',
   nameMissing: 'Name the attribute.',
   type: 'Type',

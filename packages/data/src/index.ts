@@ -25,6 +25,8 @@ import type {
   SyncStarted,
   AttributeDefinition,
   AttributeImpact,
+  TypeChangeCheck,
+  TypeChangeTarget,
   BookAsHostInput,
   LimitsAt,
   BookingAssignment,
@@ -389,6 +391,8 @@ export type {
   ValidationRuleView,
   AttributeDefinition,
   AttributeImpact,
+  TypeChangeCheck,
+  TypeChangeTarget,
   AttributeOption,
   AttributeRelationship,
   AttributeType,
@@ -589,6 +593,7 @@ export {
   WORKSPACE_PURGE_DAYS,
   type InviteLinkDays,
 } from '@crm/contracts/team-limits';
+export { typeChangeTargets, type TypeChangeKey } from '@crm/contracts/type-changes';
 export {
   freeHue,
   PICKER_TYPES,
@@ -4508,6 +4513,57 @@ export function createDataLayer({
        */
       impact: (workspace: string, attributeId: string): Promise<AttributeImpact> =>
         beforeRead(workspace).then(() => call((options) => api.attributes.impact({ workspace, attributeId }, options))),
+      /**
+       * What changing an attribute's type to `to` (a picker key) would do (the field types pass): how many values
+       * convert and how many can't, with records to show, what else changes and what stops it. Read each time a
+       * target is picked, never cached: the values move with every edit.
+       */
+      checkTypeChange: (
+        workspace: string,
+        attributeId: string,
+        to: TypeChangeTarget,
+        config?: Readonly<Record<string, unknown>>,
+      ): Promise<TypeChangeCheck> =>
+        beforeRead(workspace).then(() =>
+          call((options) =>
+            api.attributes.checkTypeChange(
+              { workspace, attributeId, to, ...(config === undefined ? {} : { config: { ...config } }) },
+              options,
+            ),
+          ),
+        ),
+      /**
+       * Changes an attribute's type in place and waits for the server, as every attribute write does: its values
+       * change shape with it, so the object's held records are read again once it lands (this tab's own coarse
+       * change never comes back to it). Refusals: `TYPE_CHANGE_REFUSED`, `CONFIG_INVALID` (on `config`),
+       * `FORBIDDEN`, `NOT_FOUND`.
+       */
+      changeType: (
+        workspace: string,
+        attributeId: string,
+        to: TypeChangeTarget,
+        config?: Readonly<Record<string, unknown>>,
+      ): Promise<AttributeDefinition> =>
+        writeAttribute(
+          workspace,
+          (mutationId, options) =>
+            api.attributes.changeType(
+              {
+                workspace,
+                attributeId,
+                to,
+                ...(config === undefined ? {} : { config: { ...config } }),
+                mutationId,
+              },
+              options,
+            ),
+          (changed) => [changed.objectId],
+          (changed) => {
+            void records?.then((layer) => {
+              layer.reload(workspace, changed.objectId);
+            });
+          },
+        ),
       /** A new attribute's id: mint it once per dialog, and send the same one again on a retry. */
       newId: () => mintId(),
       /**

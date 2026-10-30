@@ -248,6 +248,7 @@ describe('@crm/ui', () => {
       'socialLinksDraftOf',
       'socialLinksOfDraft',
       'suggestionOptionId',
+      'typeChangeStep',
       'typeLabelOf',
       'useDelayedLoading',
       'useFileHref',

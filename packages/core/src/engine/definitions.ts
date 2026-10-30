@@ -1070,7 +1070,7 @@ const A_FORM = 'A live form';
  * unsaved. Refused here, which is the moment someone can still choose
  * otherwise. A form the caller may not see is counted, never named.
  */
-async function checkNotAMatch(
+export async function checkNotAMatch(
   tx: WorkspaceTx,
   access: Access,
   ends: readonly AttributeDef[],

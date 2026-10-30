@@ -42,6 +42,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
+import { isAtLimit, type LimitCount } from '../settings/AtLimit.tsx';
 import { useLinkEditing } from '../records/links.ts';
 import { stepsAround, type PeekControl } from '../records/params.ts';
 import { RecordPeek } from '../records/RecordPeek.tsx';
@@ -59,6 +60,7 @@ import { CREATED_TOAST_MS, createdToast } from './created.ts';
 import { createEditors } from './create-editors.ts';
 import { namePreset } from './name-preset.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
+import { objectHref } from './objects.ts';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
 import { runUndo } from './useUndoShortcut.ts';
@@ -415,6 +417,27 @@ export function RecordsScreen({
   const [focusColumn, setFocusColumn] = useState<{ readonly id: string } | undefined>(undefined);
   // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
   const canChangeSchema = useCan('schema.manage');
+  // The object's attributes against its plan limit (the field types pass): the "+" header's New attribute turns off
+  // at the limit with the reason, as Settings' New attribute does. Read for schema managers only, again whenever the
+  // attributes change; an unread count leaves it on (the server still refuses past it).
+  const [attributeCount, setAttributeCount] = useState<LimitCount | undefined>(undefined);
+  useEffect(() => {
+    if (!canChangeSchema) return;
+    let isCurrent = true;
+    data.usage.get(slug).then(
+      (usage) => {
+        if (isCurrent) setAttributeCount(usage.attributes[object.id]);
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug, object.id, canChangeSchema, attributes]);
+  const addColumnLock =
+    attributeCount !== undefined && isAtLimit(attributeCount)
+      ? attributeStrings.atLimit(attributeCount.limit)
+      : undefined;
   const [focusRow, setFocusRow] = useState<{ readonly index: number } | undefined>(undefined);
   // The create dialog (spec 0012, AC-240): the primary attribute, then every required one, then the rest by position.
   const { first: firstEditors, more: moreEditors } = useMemo(
@@ -777,6 +800,7 @@ export function RecordsScreen({
                       setAdding(true);
                     },
                     addColumnLabel: attributeStrings.addAttribute,
+                    ...(addColumnLock === undefined ? {} : { addColumnLock }),
                     // "+" offers the view's hidden columns first (flow pass, 30 October 2026): a blank create was
                     // the only way, so hidden ones came back as duplicates. One press shows one, focused.
                     addColumnItems: columns
@@ -883,6 +907,7 @@ export function RecordsScreen({
               members={members}
               canManage={canChangeSchema}
               objectAttributes={attributes}
+              tableHref={objectHref(slug, object)}
               onClose={() => {
                 setAdding(false);
                 setEditing(undefined);

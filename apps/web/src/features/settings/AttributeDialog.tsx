@@ -1,9 +1,10 @@
 // Brief
 // Purpose: create or edit one attribute of an object, from settings, the table's "+" header or a column's menu.
-// Main task: name it, pick one of the fifteen types, set its settings, options, rules and default, then Create or Save.
-// Leaves out: changing a type in place (Wrong type? archives it and starts a new one with its name); an existing
-// attribute's options save as they change; Relationship hands over to RelationshipSettings' step in the same Modal,
-// and a relationship's side opens RelationshipDialog (spec 0014).
+// Main task: name it, pick one of the seventeen types, set its settings, options, rules and default, then Create or Save.
+// Leaves out: type changes that could lose a value (Change type… offers only the safe ones, checked against every
+// value first; for the rest, Wrong type? archives it and starts a new one with its name); an existing attribute's
+// options save as they change; Relationship hands over to RelationshipSettings' step in the same Modal, and a
+// relationship's side opens RelationshipDialog (spec 0014).
 // Rules (spec 0013) go with Save; their conditions name the object's own attributes, never a relationship.
 import {
   isDataError,
@@ -19,11 +20,15 @@ import {
   type ObjectSummary,
   type OptionChanges,
   type PickerAttributeType,
+  type TypeChangeCheck,
+  type TypeChangeKey,
   PICKER_TYPES,
+  typeChangeTargets,
 } from '@crm/data';
 import {
   AttributeSettings,
   relationshipStep,
+  typeChangeStep,
   type AttributeSettingsApiNames,
   type AttributeSettingsDraft,
   type AttributeSettingsOptionWrites,
@@ -37,7 +42,7 @@ import { useMatch, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { strings } from './attribute-strings.ts';
 import { defaultArchivedNotice } from './default-notice.ts';
-import { emptyRecordsHref } from './impact-lines.ts';
+import { emptyRecordsHref, recordsHref } from './impact-lines.ts';
 import { moveOptionRecords } from './move-option-records.ts';
 import { NewObjectDialog } from './NewObjectDialog.tsx';
 import { formRefusals } from './refusals.ts';
@@ -77,6 +82,8 @@ export interface AttributeDialogProps {
    * Absent where the dialog opens over the table already.
    */
   readonly duplicatesLink?: { readonly label: string; readonly href: string } | undefined;
+  /** The object's table, for Change type's link to the records whose values don't convert; `duplicatesLink`'s when absent. */
+  readonly tableHref?: string | undefined;
   /** On create, the type chosen at the start (a picker key, `select` for a board with nothing to group by). */
   readonly initialTypeKey?: string | undefined;
   /** On create, the name and a select's first options to start from (an import's column). */
@@ -193,6 +200,7 @@ export function AttributeDialog({
   optionsLimit,
   objectAttributes,
   duplicatesLink,
+  tableHref = duplicatesLink?.href,
   initialTypeKey,
   initialDraft,
   initialTitle,
@@ -223,6 +231,15 @@ export function AttributeDialog({
   const [madeObject, setMadeObject] = useState<ObjectSummary | undefined>(undefined);
   // Back from the relationship step: the attribute form comes back with the name that was typed.
   const [backTitle, setBackTitle] = useState<string | undefined>(undefined);
+  // Change type (the field types pass): the target and its settings while the step shows, the server's check of
+  // them (kept with the question it answers, so an older answer never shows for a newer pick), and Change type's
+  // refusal. Each pick or setting reads the check again; Try again and a refusal read it once more.
+  const [changing, setChanging] = useState<
+    { readonly target: TypeChangeKey; readonly config: Readonly<Record<string, unknown>> } | undefined
+  >(undefined);
+  const [checked, setChecked] = useState<{ readonly key: string; readonly check: TypeChangeCheck | 'error' }>();
+  const [checkRun, setCheckRun] = useState(0);
+  const [changeError, setChangeError] = useState<string | undefined>(undefined);
   const workspaceObjects = useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData?.objects;
   const relationship = useRelationshipCreate({
     slug,
@@ -247,6 +264,9 @@ export function AttributeDialog({
       setMakingObject(false);
       setMadeObject(undefined);
       setBackTitle(undefined);
+      setChanging(undefined);
+      setChecked(undefined);
+      setChangeError(undefined);
     }
   }
   // An existing attribute's uses and counts (flow pass, 30 October 2026), read as its settings open: "N records" on
@@ -302,6 +322,62 @@ export function AttributeDialog({
   }, [attribute, objectAttributes, data, slug, onClose, toasts]);
   const readOnlyReason =
     attribute?.isSystem === true ? strings.systemReason(attribute.title) : canManage ? undefined : strings.memberReason;
+  // The safe types it may become (none for the name, a system or archived one, or a type with no safe change).
+  const targets = attribute === undefined || readOnlyReason !== undefined ? [] : typeChangeTargets(attribute);
+  // A currency needs its code before a check means anything; the step fills in the workspace's at once.
+  const checkKey =
+    attribute === undefined ||
+    changing === undefined ||
+    (changing.target === 'currency' && typeof changing.config.defaultCurrency !== 'string')
+      ? undefined
+      : `${attribute.id}|${changing.target}|${JSON.stringify(changing.config)}|${String(checkRun)}`;
+  useEffect(() => {
+    if (checkKey === undefined || attribute === undefined || changing === undefined) return;
+    let isCurrent = true;
+    data.attributes.checkTypeChange(slug, attribute.id, changing.target, changing.config).then(
+      (check) => {
+        if (isCurrent) setChecked({ key: checkKey, check });
+      },
+      () => {
+        if (isCurrent) setChecked({ key: checkKey, check: 'error' });
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug, attribute, changing, checkKey]);
+  const typeCheck = checked !== undefined && checked.key === checkKey ? checked.check : 'loading';
+  // The records whose values don't convert, as the table filtered to them by their Record ID: only those the reader
+  // may open, so none shows no link (the count above still says how many).
+  const recordIdAttribute = objectAttributes?.find((each) => each.isSystem && each.apiSlug === 'record_id');
+  const failedLink =
+    typeof typeCheck !== 'object' ||
+    typeCheck.failedRecordIds.length === 0 ||
+    tableHref === undefined ||
+    recordIdAttribute === undefined
+      ? undefined
+      : {
+          label: strings.showRecords(typeCheck.failedRecordIds.length),
+          href: recordsHref(tableHref, recordIdAttribute.id, typeCheck.failedRecordIds),
+        };
+  const applyTypeChange = () => {
+    if (attribute === undefined || changing === undefined || isBusy) return;
+    setBusy(true);
+    setChangeError(undefined);
+    data.attributes.changeType(slug, attribute.id, changing.target, changing.config).then(
+      (saved) => {
+        setBusy(false);
+        setChanging(undefined);
+        onSaved(saved, false);
+      },
+      (error: unknown) => {
+        setBusy(false);
+        setChangeError(isDataError(error) ? refusalSummary(error) : strings.somethingWrong);
+        // Something changed under the preview: read it again, so it shows what stops it now.
+        setCheckRun((run) => run + 1);
+      },
+    );
+  };
 
   // The options as the live list holds them, then the ones added and not yet listed.
   const listed = useMemo(() => (attribute?.options ?? []).map(editorOption), [attribute?.options]);
@@ -537,6 +613,44 @@ export function AttributeDialog({
         {...(duplicatesLink === undefined || (impact?.duplicateCount ?? 0) === 0
           ? {}
           : { uniqueMeets: { label: strings.sharedValues(impact?.duplicateCount ?? 0), href: duplicatesLink.href } })}
+        // Change type: its step takes the settings' place in the same Modal, opening on the first safe target.
+        {...(attribute !== undefined && targets.length > 0 && readOnlyReason === undefined
+          ? {
+              onChangeType: () => {
+                const [first] = targets;
+                if (first !== undefined) setChanging({ target: first, config: {} });
+              },
+            }
+          : {})}
+        {...(attribute !== undefined && changing !== undefined
+          ? {
+              step: typeChangeStep({
+                targets,
+                target: changing.target,
+                config: changing.config,
+                onTargetChange: (next) => {
+                  const target = targets.find((each) => each === next);
+                  if (target !== undefined) setChanging({ target, config: {} });
+                  setChangeError(undefined);
+                },
+                onConfigChange: (config) => {
+                  setChanging((before) => (before === undefined ? before : { ...before, config }));
+                },
+                check: typeCheck,
+                onRetry: () => {
+                  setCheckRun((run) => run + 1);
+                },
+                failedLink,
+                error: changeError,
+                isBusy,
+                onBack: () => {
+                  setChanging(undefined);
+                  setChangeError(undefined);
+                },
+                onApply: applyTypeChange,
+              }),
+            }
+          : {})}
         // Relationship chosen in the type picker: its step takes this dialog's place, in the same Modal (spec 0014).
         {...(attribute === undefined && relationshipDraft !== undefined
           ? {

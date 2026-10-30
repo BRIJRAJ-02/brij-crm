@@ -208,6 +208,7 @@ export {
   type NewAttributeOption,
 } from './attributes/attributes.ts';
 export { attributeImpact } from './attributes/impact.ts';
+export { changeAttributeType, checkTypeChange, type TypeChangeRequest } from './attributes/type-change.ts';
 export {
   archiveOption,
   createOption,

@@ -33,13 +33,14 @@ describe('toApiSlug (spec 0012, AC-245)', () => {
 });
 
 describe('the type picker and new options (AC-228, AC-230, AC-236)', () => {
-  it('offers exactly sixteen entries in the spec order (File joined them on 27 Oct 2026)', () => {
+  it('offers exactly seventeen entries in the spec order (File joined on 27 Oct, Date and time on 31 Oct 2026)', () => {
     expect(PICKER_TYPES.map((entry) => entry.key)).toEqual([
       'text',
       'long_text',
       'number',
       'currency',
       'date',
+      'timestamp',
       'checkbox',
       'select',
       'multi_select',

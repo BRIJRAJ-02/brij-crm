@@ -13,6 +13,7 @@ New. The timeline, comments, notifications and timestamps (#17, #19, #28) show r
 ```
 
 - It formats in the provider's language with `Intl.RelativeTimeFormat` (`numeric: 'auto'`): "just now" under a minute in English (22 October 2026: a bare "now" read as a cut off word in a panel; other languages keep their own word for now), then minutes, hours and days ("yesterday"), and the date past 7 days.
+- `variant="moment"` (the field types pass, 31 October 2026) is the Date and time field's display: "Today 14:30" (or Yesterday, Tomorrow) near today, else the exact day and time ("8 Oct 2026, 14:30"), in the provider's language, time zone and date format (`formatMoment` in `lib/moment.ts`). Why a variant: a moment someone set means its time, which "3 hours ago" hides; the tooltip, the clock and the screen reader text are the same.
 - It renders again on the provider's shared clock, every 30 seconds, paused while the tab is hidden. Stories freeze it at 8 October 2026, 14:30 UTC.
 - The tooltip gives the exact time in the provider's time zone, with the zone's name. Screen readers read the same exact time after the relative one ("3 hours ago, Oct 8, 2026, 12:30 PM GMT+1"), so it never depends on a hover.
 

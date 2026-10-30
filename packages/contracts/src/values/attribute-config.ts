@@ -62,10 +62,9 @@ export const AttributeDefault = z.discriminatedUnion('kind', [
 export type AttributeDefault = z.infer<typeof AttributeDefault>;
 
 /**
- * Which default kinds each type may have. The system only types
- * (`SYSTEM_ONLY_TYPES`) never take a static default: a fixed value would be
- * a person's value written as the system's, so a timestamp takes only now
- * plus an offset, and an interaction takes none.
+ * Which default kinds each type may have. A timestamp takes only now plus an
+ * offset (a fixed moment for every new record is never what a date and time
+ * field means), and an interaction, which only the system writes, takes none.
  */
 export function defaultKindsFor(type: AttributeType): readonly AttributeDefault['kind'][] {
   if (type === 'actor_reference') return ['static', 'current_user'];
