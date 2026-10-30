@@ -12,10 +12,8 @@ import {
   savableQuery,
   savedQuery,
   toViewQuery,
-  VIEW_SORTS_MAX,
-  withHeaderSort,
-  withSearch,
 } from './query.ts';
+import { VIEW_SORTS_MAX, withHeaderSort, withSearch } from './screen-query.ts';
 
 const attribute = (id: string, extra: Partial<AttributeDefinition> = {}): AttributeDefinition => ({
   id,

@@ -2,19 +2,7 @@
 // imports, so the route's loader (in the first load) can warm the record with
 // the same attributes the page then shows (spec 0017, value sourcing).
 import type { AttributeDefinition, ObjectSummary, RecordRef, RecordView } from '@crm/data';
-
-/** The record page's tabs, by their address (`tasks` joined with #19 milestone 1, `notes` joins with its milestone 3). */
-export const RECORD_TABS = ['overview', 'activity', 'notes', 'tasks', 'comments'] as const;
-/** One of the record page's tabs. */
-export type RecordTab = (typeof RECORD_TABS)[number];
-
-/** Whether an address segment names one of the record page's tabs. */
-export const isRecordTab = (tab: string): tab is RecordTab => (RECORD_TABS as readonly string[]).includes(tab);
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Whether an address segment can be a record's id: anything else names no record. */
-export const isRecordId = (value: string): boolean => UUID.test(value);
+import type { RecordTab } from './params.ts';
 
 /** A record's page on one of its tabs. */
 export const recordHref = (slug: string, objectSlug: string, recordId: string, tab: RecordTab = 'overview') =>
