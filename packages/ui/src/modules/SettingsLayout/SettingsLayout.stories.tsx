@@ -800,9 +800,9 @@ export const RowGroups: Story = {
           </SettingsRow>
         </SettingsRowGroup>
         <SettingsRowGroup title="Pace">
-          <SettingsRow title="Bookings a day">
+          <SettingsRow title="Meetings a day">
             <Select
-              label="Bookings a day"
+              label="Meetings a day"
               isLabelHidden
               items={[{ id: 'none', label: 'No limit' }]}
               defaultValue="none"

@@ -58,8 +58,18 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'share', label: strings.columns.share, align: 'end' },
   { id: 'weight', label: strings.columns.weight, align: 'end' },
   { id: 'priority', label: strings.columns.priority },
-  { id: 'cap', label: strings.columns.cap, align: 'end' },
-  { id: 'weekly', label: strings.columns.weekly, align: 'end' },
+  {
+    id: 'cap',
+    label: strings.columns.cap,
+    align: 'end',
+    info: <InfoTip label={strings.columns.cap}>{strings.capInfo}</InfoTip>,
+  },
+  {
+    id: 'weekly',
+    label: strings.columns.weekly,
+    align: 'end',
+    info: <InfoTip label={strings.columns.weekly}>{strings.weeklyInfo}</InfoTip>,
+  },
   { id: 'on', label: strings.columns.on },
 ];
 

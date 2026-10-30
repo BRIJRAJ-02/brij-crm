@@ -187,7 +187,6 @@ export const strings = {
     before === after ? `${String(before)} min buffers` : `${String(before)} min before, ${String(after)} min after`,
   aheadSummary: (days: number) => `up to ${days === 1 ? '1 day' : `${String(days)} days`} ahead`,
   stepSummary: (minutes: number) => `starts every ${String(minutes)} min`,
-  dailySummary: (count: number) => (count === 1 ? '1 a day' : `${String(count)} a day`),
   /** Who can book (the owner, 22 Oct 2026): Public or Link only, in the same words everywhere. */
   whoCanBook: 'Who can book',
   /** The Hours tab (22 Oct 2026): every label above its content, as the Schedule select's. */
@@ -230,8 +229,8 @@ export const strings = {
       example: 'With 60 days, on 1 March the last day offered is 30 April.',
     },
     daily: {
-      text: 'The most bookings this page takes in one day. Once reached, the day offers no more slots.',
-      example: 'With 3, a day with three bookings is full.',
+      text: 'The most meetings this page books in one day. Once reached, the day offers no more slots.',
+      example: 'With 3, a day with three meetings is full.',
     },
     step: {
       text: 'How often a start time is offered. Meeting length starts one right after another.',
@@ -266,7 +265,7 @@ export const strings = {
       example: 'With 30 days, on 1 March people can book up to about 31 March.',
     },
     dailyLimit: {
-      text: 'The most bookings this page takes in one day. Once a day is full, it shows no times. Meetings from your other pages don’t count toward it.',
+      text: 'The most meetings this page books in one day. Once a day is full, it shows no times. Meetings from your other pages don’t count toward it.',
       example: 'With 3, once three people book Tuesday, Tuesday shows no times.',
     },
     step: {
@@ -278,7 +277,7 @@ export const strings = {
   bufferAfter: 'Buffer after',
   notice: 'Minimum notice',
   window: 'How far ahead',
-  dailyLimit: 'Bookings a day',
+  dailyLimit: 'Meetings a day',
   noLimit: 'No limit',
   step: 'Start times every',
   stepDuration: 'Meeting length',
