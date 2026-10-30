@@ -14,6 +14,7 @@ import {
   Tabs,
   Table,
   type TableColumn,
+  SettingsSection,
   SettingsStack,
 } from '@crm/ui';
 import { useNavigate, useParams } from '@tanstack/react-router';
@@ -200,15 +201,24 @@ export function ObjectSettingsPending() {
           </SettingsStack>
         </TabPanel>
         <TabPanel id="configuration">
+          {/* The tab's sections in their places (its attributes are read for the name attribute's choice), so the
+              cards stand where the loaded ones will. */}
           <SettingsStack>
-            <Table
-              label={strings.loading}
-              columns={COLUMNS}
-              rows={[]}
-              getRowId={() => ''}
-              renderCell={() => null}
-              isLoading
-            />
+            <SettingsSection title={strings.lookSection}>
+              <Card>
+                <Skeleton lines={3} />
+              </Card>
+            </SettingsSection>
+            <SettingsSection title={strings.recordNameSection}>
+              <Card>
+                <Skeleton lines={2} />
+              </Card>
+            </SettingsSection>
+            <SettingsSection title={strings.idsSection}>
+              <Card>
+                <Skeleton lines={2} />
+              </Card>
+            </SettingsSection>
           </SettingsStack>
         </TabPanel>
       </Tabs>

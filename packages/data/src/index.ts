@@ -1375,28 +1375,19 @@ export function createDataLayer({
     const changed = await refreshHeld(objects, workspace, () => allObjects(workspace));
     if (!changed) return false;
     const after = await objects.get(workspace)?.catch(() => undefined);
-    if (archivedIds(before) !== archivedIds(after)) await refreshAttributes(workspace);
-    const renamed = renamedObjects(before, after);
-    if (renamed.length > 0) {
-      // Which attribute is the primary moved: those objects' lists are read again (settings' dropped), then the
-      // records, whose names all changed.
-      for (const objectId of renamed) dropAllAttributes(workspace, objectId);
-      await Promise.all(renamed.map((objectId) => refreshAttributes(workspace, objectId)));
-      renameRecords(workspace);
-    }
+    // A name attribute moved (late trap #15): which attribute is the primary changed too, and every record's name.
+    const renamed = primaries(before) !== primaries(after);
+    if (renamed || archivedIds(before) !== archivedIds(after)) await refreshAttributes(workspace);
+    if (renamed) renameRecords(workspace);
     return true;
   };
 
-  /** The objects whose name attribute differs between two held lists (late trap #15). */
-  const renamedObjects = (
-    before: readonly ObjectSummary[] | undefined,
-    after: readonly ObjectSummary[] | undefined,
-  ): readonly string[] => {
-    const was = new Map((before ?? []).map((object) => [object.id, object.primaryAttributeId]));
-    return (after ?? []).flatMap((object) =>
-      was.has(object.id) && was.get(object.id) !== object.primaryAttributeId ? [object.id] : [],
-    );
-  };
+  /** Each object's name attribute in a held list, to tell when one moved (late trap #15). */
+  const primaries = (list: readonly ObjectSummary[] | undefined): string =>
+    (list ?? [])
+      .map((object) => object.id + (object.primaryAttributeId ?? ''))
+      .sort()
+      .join();
 
   /** An object's records are named by another attribute: every held record and linked name is read again. */
   const renameRecords = (workspace: string): void => {
@@ -2581,10 +2572,10 @@ export function createDataLayer({
       /** The workspace's objects as the answer already holds them (a move answers the whole new order). */
       readonly objectsOf?: (answer: T) => ObjectSummary[];
       /**
-       * A new name attribute for this object (late trap #15): its attributes are read again (which one is the
-       * primary moved) and so is every record this tab holds, since each one's name changed.
+       * A new name attribute (late trap #15): the held attribute lists are read again (which one is the primary
+       * moved), and so is every record this tab holds, since each one's name changed.
        */
-      readonly renames?: string;
+      readonly renames?: boolean;
     } = {},
   ) {
     const mutationId = mintId();
@@ -2596,15 +2587,11 @@ export function createDataLayer({
       if (known === undefined) objects.delete(workspace);
       else objects.set(workspace, Promise.resolve(known));
       usage.delete(workspace);
-      if (effects.archives === true) {
+      if (effects.archives === true || effects.renames === true) {
         dropAllAttributes(workspace);
         await refreshAttributes(workspace);
       }
-      if (effects.renames !== undefined) {
-        dropAllAttributes(workspace, effects.renames);
-        await refreshAttributes(workspace, effects.renames);
-        renameRecords(workspace);
-      }
+      if (effects.renames === true) renameRecords(workspace);
       onDefinitionsChange();
       return answer;
     } catch (error) {
@@ -3902,7 +3889,7 @@ export function createDataLayer({
         writeObject(
           workspace,
           (mutationId, options) => api.objects.update({ workspace, objectId, ...changes, mutationId }, options),
-          changes.primaryAttributeId === undefined ? {} : { renames: objectId },
+          { renames: changes.primaryAttributeId !== undefined },
         ),
       /** Moves an object to `position` in the workspace's order (AC-225), archived objects counted. */
       reorder: (workspace: string, objectId: string, position: number): Promise<ObjectSummary[]> =>
