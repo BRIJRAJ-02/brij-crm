@@ -22,6 +22,7 @@ import { exportToast, isHere } from './features/imports/toast.ts';
 import { jobFinishedToast } from './features/settings/toast.ts';
 import { bulkActionOf } from './features/workspace/bulk-jobs.ts';
 import { jobsHref } from './features/workspace/objects.ts';
+import { FILED_TOAST_MS, filedToast, unfiledToast } from './features/workspace/filed.ts';
 import { replacedToast } from './features/workspace/replaced.ts';
 import { startMonitoring } from './monitoring/index.ts';
 import { routeTree } from './routeTree.gen.ts';
@@ -106,6 +107,18 @@ const data = createDataLayer({
   // Someone else's later save replaced a value this tab saved (spec 0006): say so, with Use mine.
   onReplaced: (replaced) => {
     toasts.toast(replacedToast(replaced));
+  },
+  // A create or an edit linked people to their companies by their emails (spec 0059): say so, with Undo.
+  onFiled: (filed) => {
+    toasts.toast(
+      filedToast(filed, () => {
+        void filed.undo().then((outcome) => {
+          const toast = unfiledToast(outcome);
+          if (toast !== undefined) toasts.toast(toast);
+        });
+      }),
+      { timeout: FILED_TOAST_MS },
+    );
   },
   // A job this browser started ended (spec 0008, AC-119): say how, with a way to the Background jobs page.
   onJobFinished: (workspace, job) => {
