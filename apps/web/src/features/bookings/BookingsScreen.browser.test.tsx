@@ -500,7 +500,7 @@ describe('reassigning from Host away', () => {
   it('offers nothing to someone who may not reassign', async () => {
     await renderWeek([], [{ ...bookingOf(), hostAway: true }]);
     await openCard(/^Quick chat,/);
-    await expect.element(page.getByText('Host away')).toBeVisible();
+    await expect.element(page.getByRole('note').getByText('Host away')).toBeVisible();
     expect(page.getByRole('button', { name: 'Reassign', exact: true }).elements()).toHaveLength(0);
   });
 });
