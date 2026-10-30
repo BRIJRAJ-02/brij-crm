@@ -74,7 +74,7 @@ export const Default: Story = {
     );
     // A press anywhere on the row opens it, but its own actions stay their own.
     await userEvent.click(canvas.getByText('4:00 – 4:30 PM'));
-    await expect(args.onOpen).toHaveBeenLastCalledWith('grace');
+    await expect(args.onOpen).toHaveBeenLastCalledWith('grace', expect.any(HTMLElement));
     const opened = args.onOpen.mock.calls.length;
     await userEvent.click(canvas.getByRole('button', { name: 'Edit' }));
     await expect(args.onOpen).toHaveBeenCalledTimes(opened);
