@@ -1,7 +1,8 @@
 // Brief
 // Purpose: create a relationship from an object's "Add attribute", or rename the two sides of one from its settings.
 // Main task: choose the related object and how records link, name each side, then Create (or Save the names).
-// Leaves out: changing the objects or the cardinality (#14), one way references (engine only), linking records (milestone 2).
+// Leaves out: changing the objects or the cardinality (#14), one way references (engine only), linking records
+// (milestone 2). A related object that doesn't exist yet is made from "New object…" in the related object's list.
 import type { AttributeDefinition, ObjectSummary } from '@crm/data';
 import {
   RelationshipSettings,
@@ -43,6 +44,8 @@ export interface RelationshipCreateOptions {
   readonly draftTitle: string | undefined;
   /** The server agreed: this object's side, new. */
   readonly onSaved: (attribute: AttributeDefinition, isNew: boolean) => void;
+  /** An object made from "New object…" while the step was open: listed and chosen, before the frame reloads it. */
+  readonly made?: ObjectSummary | undefined;
 }
 
 /**
@@ -59,9 +62,17 @@ export function useRelationshipCreate({
   isOpen,
   draftTitle,
   onSaved,
+  made,
 }: RelationshipCreateOptions): Omit<RelationshipStepProps, 'formId'> {
   const { data } = useRouteContext({ from: '__root__' });
-  const objects = useSettingsObjects();
+  const listed = useSettingsObjects();
+  const objects = useMemo(
+    () =>
+      made === undefined || listed.some((object) => object.id === made.id) ? listed : [...listed, settingsObject(made)],
+    [listed, made],
+  );
+  // A new object each time one is made, so the step picks it even when the same id comes back.
+  const chosenTo = useMemo(() => (made === undefined ? undefined : { objectId: made.id }), [made]);
   const [id, setId] = useState(() => data.relationships.newId());
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
@@ -98,6 +109,7 @@ export function useRelationshipCreate({
     isBusy,
     refusals,
     onSubmit: create,
+    ...(chosenTo === undefined ? {} : { chosenTo }),
   };
 }
 

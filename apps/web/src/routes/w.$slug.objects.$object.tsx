@@ -52,7 +52,13 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
       throw redirect({
         to: '/w/$slug/objects/$object/views/$viewId',
         params: { slug: params.slug, object: params.object, viewId },
-        search: table === undefined ? {} : { new: true, ...(name === undefined ? {} : { name }) },
+        // A link that drafts a filter (Settings' "N records are empty") keeps it on the view it lands on.
+        search: {
+          ...(table === undefined ? {} : { new: true, ...(name === undefined ? {} : { name }) }),
+          ...(typeof (location.search as { readonly draft?: unknown }).draft === 'string'
+            ? { draft: (location.search as { readonly draft: string }).draft }
+            : {}),
+        },
         replace: true,
       });
     }

@@ -32,6 +32,12 @@ export const strings = {
   moveUp: 'Move up',
   moveDown: 'Move down',
   archive: 'Archive',
+  /** An option records hold (flow pass, 30 October 2026): where they go as it is archived. */
+  archiveMoveTo: (label: string) => `Archive, move records to ${label}`,
+  archiveLeave: (count: number) =>
+    count === 1 ? 'Archive, leave 1 record on it' : `Archive, leave ${String(count)} records on it`,
+  /** How many live records hold an option, on its row. */
+  recordCount: (count: number) => (count === 1 ? '1 record' : `${String(count)} records`),
   remove: 'Remove',
   restore: 'Restore',
   addOption: 'Add option',

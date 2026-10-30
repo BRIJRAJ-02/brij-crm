@@ -1,6 +1,6 @@
 // Brief
 // Purpose: Settings, Objects: every object, standard and custom, in the workspace's order, and the archived ones.
-// Main task: owners and admins create, reorder (drag, or Move up and down), archive and restore objects, or open one.
+// Main task: owners and admins create, reorder (drag), archive and restore objects, or open one.
 // Leaves out: an object's attributes and names (its own page), the schema map (#56) and usage beyond the meter and
 // the record counts.
 import { isDataError, type ObjectSummary, type Usage } from '@crm/data';
@@ -11,7 +11,6 @@ import {
   Disclosure,
   EmptyState,
   Icon,
-  InfoTip,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -27,6 +26,7 @@ import { useMemo, useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { ArchiveObjectDialog } from './ArchiveObjectDialog.tsx';
+import { useAtLimit } from './AtLimit.tsx';
 import { byPosition, objectSettingsHref } from './nav.ts';
 import { NewObjectDialog } from './NewObjectDialog.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -49,13 +49,6 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'attributes', label: strings.attributesColumn, align: 'end' },
   { id: 'actions', label: strings.actionsColumn, isLabelHidden: true, align: 'end' },
 ];
-
-/** The same columns for someone who may drag the rows: the Object header says what the order is for (SW15). */
-const DRAG_COLUMNS: readonly TableColumn[] = COLUMNS.map((column) =>
-  column.id === 'object'
-    ? { ...column, info: <InfoTip label={strings.objectColumn}>{strings.objectOrderInfo}</InfoTip> }
-    : column,
-);
 
 const number = (value: number) => new Intl.NumberFormat().format(value);
 
@@ -106,12 +99,6 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
     );
   };
 
-  /** Move up or down past the next live object, which is where the row visibly goes. */
-  const step = (object: ObjectSummary, direction: -1 | 1) => {
-    const neighbour = live[live.indexOf(object) + direction];
-    if (neighbour !== undefined) moveTo(object, all.indexOf(neighbour));
-  };
-
   const restore = (object: ObjectSummary) => {
     if (restoring !== undefined) return;
     setRestoring(object.id);
@@ -150,7 +137,6 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
       case 'attributes':
         return attributeCount(object);
       default: {
-        const at = live.indexOf(object);
         return (
           <MenuTrigger>
             <Button variant="ghost" icon="ellipsis" label={strings.rowActions(object.pluralName)} />
@@ -158,8 +144,6 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
               label={strings.rowActions(object.pluralName)}
               onAction={(key) => {
                 if (key === 'open') open(object);
-                if (key === 'up') step(object, -1);
-                if (key === 'down') step(object, 1);
                 if (key === 'archive') setArchiving(object);
               }}
             >
@@ -168,17 +152,6 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
               </MenuItem>
               {canManage && (
                 <>
-                  {/* Only the moves there is room for: the first has no Move up, the last no Move down. */}
-                  {at > 0 && (
-                    <MenuItem id="up" icon="chevron-up" isDisabled={isMoving}>
-                      {strings.moveUp}
-                    </MenuItem>
-                  )}
-                  {at >= 0 && at < live.length - 1 && (
-                    <MenuItem id="down" icon="chevron-down" isDisabled={isMoving}>
-                      {strings.moveDown}
-                    </MenuItem>
-                  )}
                   <MenuSeparator />
                   <MenuItem id="archive" icon="archive" isDanger>
                     {strings.archive}
@@ -221,7 +194,7 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
   // The live objects' table: the same for everyone, with handles only for those who may move them.
   const liveTable = {
     label: strings.objects,
-    columns: canManage ? DRAG_COLUMNS : COLUMNS,
+    columns: COLUMNS,
     rows: live,
     getRowId: (object: ObjectSummary) => object.id,
     renderCell: liveCell,
@@ -238,6 +211,7 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
     ),
   };
   const meter = usage.customObjects;
+  const limit = useAtLimit(meter);
   return (
     <SettingsPage
       title={strings.objects}
@@ -247,7 +221,8 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
               <>
                 {/* A move waits for the server (definition writes are never optimistic): say it is under way. */}
                 {isMoving && <Spinner label={strings.moving} />}
-                <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
+                {limit.reason}
+                <Button variant="primary" icon="plus" {...limit.buttonProps} onPress={() => setCreating(true)}>
                   {strings.newObject}
                 </Button>
               </>
@@ -337,7 +312,7 @@ export function ObjectsPending() {
       {canManage && <Skeleton width="long" />}
       <Table
         label={strings.objects}
-        columns={canManage ? DRAG_COLUMNS : COLUMNS}
+        columns={COLUMNS}
         rows={[]}
         getRowId={() => ''}
         renderCell={() => null}

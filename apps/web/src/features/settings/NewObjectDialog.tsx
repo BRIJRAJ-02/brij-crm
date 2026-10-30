@@ -1,8 +1,17 @@
 // Brief
 // Purpose: create a custom object (Projects, Partners) with its first attributes, from Settings, Objects.
 // Main task: type the name; the plural, API name, icon, colour and starter attributes follow, then Create (⌘↵).
-// Leaves out: select options, relationships and rules (the Attributes tab adds them); every guess stays editable.
-import { toApiSlug, type Hue, type NewObject, type ObjectIcon, type ObjectSummary } from '@crm/data';
+// Leaves out: editing options (a Stage starts with its stages, a Priority with three levels; the Attributes tab edits
+// them), relationships and rules; every guess stays editable.
+import {
+  starterOptionsFor,
+  toApiSlug,
+  typeFor,
+  type Hue,
+  type NewObject,
+  type ObjectIcon,
+  type ObjectSummary,
+} from '@crm/data';
 import {
   Button,
   Disclosure,
@@ -16,7 +25,7 @@ import {
   type FormRefusal,
 } from '@crm/ui';
 import { useEffect, useId, useRef, useState } from 'react';
-import { hueFor, iconFor, INLINE_TYPES, namesFrom, startersFor, typeFor, type InlineType } from './new-object-guess.ts';
+import { hueFor, iconFor, INLINE_TYPES, namesFrom, startersFor, type InlineType } from './new-object-guess.ts';
 import { ObjectHueField, ObjectIconButton } from './ObjectLookFields.tsx';
 import { formRefusals, objectWords } from './refusals.ts';
 import { strings } from './strings.ts';
@@ -222,7 +231,13 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
       hue,
       ...(filled.length === 0
         ? {}
-        : { attributes: filled.map((row) => ({ title: row.title.trim(), type: typeOf(row) })) }),
+        : {
+            attributes: filled.map((row) => {
+              const type = typeOf(row);
+              const options = starterOptionsFor(row.title, type).map((option) => ({ ...option, id: newId() }));
+              return { title: row.title.trim(), type, ...(options.length === 0 ? {} : { options }) };
+            }),
+          }),
     }).then(
       (object) => {
         onBusyChange(false);

@@ -7,7 +7,13 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { ObjectSummary } from '@crm/contracts';
 import { HUES, OBJECT_ICONS, toApiSlug, type AttributeType, type Hue, type ObjectIcon } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { defineObjectWithAttributes, reorderObject, setObjectArchived, updateObject } from '../engine/definitions.ts';
+import {
+  defineObjectWithAttributes,
+  reorderObject,
+  setObjectArchived,
+  updateObject,
+  type InitialOption,
+} from '../engine/definitions.ts';
 import { checkId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -126,7 +132,14 @@ export interface CreateObjectInput {
   readonly icon: string;
   readonly hue: string;
   /** First attributes beside Name, in order, made in the same transaction (the title's API name is derived). */
-  readonly attributes?: readonly { readonly title: string; readonly type: AttributeType }[] | undefined;
+  readonly attributes?:
+    | readonly {
+        readonly title: string;
+        readonly type: AttributeType;
+        /** A select's or status attribute's first options, in order. */
+        readonly options?: readonly InitialOption[] | undefined;
+      }[]
+    | undefined;
 }
 
 /**
@@ -157,7 +170,12 @@ export async function createObject(
     },
     (input.attributes ?? []).map((attribute) => {
       const title = attribute.title.trim();
-      return { title, type: attribute.type, apiSlug: toApiSlug(title, 'attribute') };
+      return {
+        title,
+        type: attribute.type,
+        apiSlug: toApiSlug(title, 'attribute'),
+        ...(attribute.options === undefined || attribute.options.length === 0 ? {} : { options: attribute.options }),
+      };
     }),
     hooks,
   );

@@ -22,7 +22,6 @@ export const strings = {
   /** The objects table. */
   objectColumn: 'Object',
   /** The Object header's InfoTip, for those who may drag the rows (SW15). */
-  objectOrderInfo: 'Drag, or use Move up and Move down, to change the order objects show in the sidebar.',
   kindColumn: 'Type',
   attributesColumn: 'Attributes',
   recordsColumn: 'Records',

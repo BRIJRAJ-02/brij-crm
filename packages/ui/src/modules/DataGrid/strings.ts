@@ -4,6 +4,8 @@ export const strings = {
   selectOnScreen: 'Select the rows on screen',
   /** The "+" header after the last column (spec 0012), when the screen gives none of its own. */
   addColumn: 'Add attribute',
+  /** The "+" menu's last item, under the hidden columns. */
+  newColumnItem: 'New attribute…',
   untitled: 'Untitled',
   columnOptions: (name: string) => `${name} options`,
   moveLeft: 'Move left',

@@ -1,12 +1,14 @@
 // Brief
 // Purpose: make archiving an attribute a deliberate step, standard objects' included, saying its values are kept.
-// Main task: read what happens (both ends go for a relationship), then Archive <title> or Cancel.
+// Main task: read what happens (both ends go for a relationship, and one line naming what uses it), then Archive
+// <title> or Cancel.
 // Leaves out: deleting values; a restore from the Archived section brings it back at its old place.
 import { isDataError, type AttributeDefinition } from '@crm/data';
 import { Button, Callout, Modal } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { strings } from './attribute-strings.ts';
+import { usedByLine } from './impact-lines.ts';
 
 /** Props for the attribute archive confirm. */
 export interface ArchiveAttributeDialogProps {
@@ -43,6 +45,21 @@ function ArchiveConfirm({
   const { data } = useRouteContext({ from: '__root__' });
   const [isBusy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
+  // What uses it, read as the confirm opens (flow pass, 30 October 2026); nothing is said until it answers, and a
+  // failed read says nothing (the confirm still works).
+  const [usedBy, setUsedBy] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    let isCurrent = true;
+    data.attributes.impact(slug, attribute.id).then(
+      (impact) => {
+        if (isCurrent) setUsedBy(usedByLine(impact));
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug, attribute.id]);
   const archive = () => {
     if (isBusy) return;
     setBusy(true);
@@ -79,6 +96,7 @@ function ArchiveConfirm({
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       {attribute.type === 'record_reference' ? strings.confirmBoth : strings.confirmText}
+      {usedBy !== undefined && <Callout>{usedBy}</Callout>}
     </Modal>
   );
 }

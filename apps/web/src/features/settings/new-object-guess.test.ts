@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  hueFor,
-  iconFor,
-  looksPlural,
-  namesFrom,
-  pluralOf,
-  singularOf,
-  startersFor,
-  typeFor,
-} from './new-object-guess.ts';
+import { hueFor, iconFor, looksPlural, namesFrom, pluralOf, singularOf, startersFor } from './new-object-guess.ts';
 
 describe('new object guesses', () => {
   it('pluralises a name', () => {
@@ -24,17 +15,15 @@ describe('new object guesses', () => {
     expect(hueFor('Projects', ['gray', 'red', 'blue'], ['red'])).not.toBe('red');
     expect(hueFor('Projects', ['gray', 'red', 'blue'], [])).not.toBe('gray');
   });
-  it('guesses an attribute type from its name', () => {
-    expect(typeFor('Email')).toBe('email');
-    expect(typeFor('Phone')).toBe('phone');
-    expect(typeFor('Website')).toBe('url');
-    expect(typeFor('Price')).toBe('currency');
-    expect(typeFor('Due date')).toBe('date');
-    expect(typeFor('Nickname')).toBe('text');
-  });
   it('suggests starters by object', () => {
     expect(startersFor('Project').map((starter) => starter.title)).toContain('Due date');
     expect(startersFor('')).toEqual([]);
+  });
+  it('types Stage, Owner and Priority as they will be used, never as text (flow pass, 30 Oct 2026)', () => {
+    const types = Object.fromEntries(
+      [...startersFor('Project'), ...startersFor('Ticket')].map((starter) => [starter.title, starter.type]),
+    );
+    expect(types).toMatchObject({ Stage: 'status', Owner: 'actor_reference', Priority: 'select' });
   });
 });
 

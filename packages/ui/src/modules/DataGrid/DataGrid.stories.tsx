@@ -54,6 +54,9 @@ interface SampleGridProps {
   readonly onRetry?: () => void;
   /** The "+" header after the last column (spec 0012). */
   readonly onAddColumn?: () => void;
+  /** The "+" header's menu: hidden columns to show, then New attribute. */
+  readonly addColumnItems?: readonly { readonly id: string; readonly label: string }[];
+  readonly onAddColumnItem?: (id: string) => void;
   /** The screen's own column menu items (spec 0012). */
   readonly columnActions?: (columnId: string) => readonly GridColumnAction[];
   /** "Create" in a select or status cell's list (spec 0012, AC-238). */
@@ -88,6 +91,8 @@ function SampleGrid({
   unnamed = [],
   onRetry = () => undefined,
   onAddColumn,
+  addColumnItems,
+  onAddColumnItem,
   columnActions,
   onCreateOption,
   floatingBar,
@@ -183,6 +188,8 @@ function SampleGrid({
         {...(sort === undefined ? {} : { sort, onSort: () => undefined })}
         {...(withAvatars ? { rowAvatar: () => undefined, untitled: 'Unnamed company' } : {})}
         {...(onAddColumn === undefined ? {} : { onAddColumn })}
+        {...(addColumnItems === undefined ? {} : { addColumnItems })}
+        {...(onAddColumnItem === undefined ? {} : { onAddColumnItem })}
         {...(columnActions === undefined ? {} : { columnActions })}
         {...(onCreateOption === undefined ? {} : { onCreateOption })}
         {...(floatingBar === undefined ? {} : { floatingBar })}
@@ -694,6 +701,37 @@ export const SchemaActions: Story = {
     // The menu has gone (its exit fade over) before the story ends.
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
     await expect(cell(canvasElement, -1, 2)).toBeInTheDocument();
+  },
+};
+
+/**
+ * "+" with hidden columns (flow pass, 30 October 2026): a Menu listing them first, so one press shows one, then
+ * New attribute… for a new one. Enter on the header opens it.
+ */
+export const AddColumnMenu: Story = {
+  args: {
+    onAddColumn: fn(),
+    addColumnItems: [
+      { id: 'domain', label: 'Domain' },
+      { id: 'owner', label: 'Owner' },
+    ],
+    onAddColumnItem: fn(),
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add attribute' }));
+    const menu = await waitFor(() => {
+      const found = document.querySelector('[role="menu"]');
+      if (found === null) throw new globalThis.Error('No menu yet.');
+      return found;
+    });
+    await expect(menu).toHaveTextContent('Domain');
+    await expect(menu).toHaveTextContent('New attribute…');
+    const domain = menu.querySelector('[data-key="domain"]');
+    if (!(domain instanceof HTMLElement)) throw new globalThis.Error('No Domain item.');
+    await userEvent.click(domain);
+    await waitFor(() => expect(args.onAddColumnItem).toHaveBeenCalledWith('domain'));
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
   },
 };
 

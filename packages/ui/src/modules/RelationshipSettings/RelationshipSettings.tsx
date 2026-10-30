@@ -68,7 +68,19 @@ export interface RelationshipSettingsProps {
   readonly readOnlyReason?: string;
   /** Edit mode: the side whose name takes focus, the one the person opened (`from` when absent). */
   readonly focusSide?: 'from' | 'to';
+  /**
+   * Create mode: "New object…" last in the related object's list (flow pass, 30 October 2026), for a relationship
+   * to an object that doesn't exist yet. The screen makes it, then hands it back as `chosenTo`.
+   */
+  readonly newObject?: { readonly label: string; readonly onChoose: () => void };
+  /** An object the screen chose for the related side (one just made): a new object each time picks it. */
+  readonly chosenTo?: { readonly objectId: string };
+  /** Create mode, as AttributeSettings' step: Back returns to the attribute form, its name kept. */
+  readonly onBack?: () => void;
 }
+
+/** The related object list's last item, "New object…". */
+const NEW_OBJECT = '__new_object';
 
 /** An object's names as the sentences use them, lower case, or the plain words for one the dialog doesn't hold. */
 interface Nouns {
@@ -130,6 +142,7 @@ export function relationshipStep({
   mode,
   isBusy = false,
   readOnlyReason,
+  onBack,
   ...rest
 }: RelationshipStepProps): DialogStep {
   const isReadOnly = readOnlyReason !== undefined;
@@ -142,6 +155,11 @@ export function relationshipStep({
       </Button>
     ) : (
       <>
+        {onBack !== undefined && mode === 'create' && (
+          <Button icon="arrow-left" isDisabled={isBusy} onPress={onBack}>
+            {strings.back}
+          </Button>
+        )}
         <Button slot="close" isDisabled={isBusy} kbd="ESC">
           {strings.cancel}
         </Button>
@@ -208,11 +226,19 @@ function RelationshipForm({
   onSubmit,
   readOnlyReason,
   focusSide = 'from',
+  newObject,
+  chosenTo,
 }: RelationshipFormProps) {
   const isEditing = mode === 'edit';
   const isReadOnly = readOnlyReason !== undefined;
   const [fromId, setFromId] = useState<string | null>(from?.objectId ?? null);
   const [toId, setToId] = useState<string | null>(to?.objectId ?? null);
+  // An object the screen just made for the related side takes it, once per hand over.
+  const [takenChoice, setTakenChoice] = useState(chosenTo);
+  if (chosenTo !== takenChoice) {
+    setTakenChoice(chosenTo);
+    if (chosenTo !== undefined) setToId(chosenTo.objectId);
+  }
   const [cardinality, setCardinality] = useState<CardinalityKey>(initialCardinality);
   // A name follows the objects and the cardinality until the person types it (undefined); emptied, it stays empty.
   const [fromTitle, setFromTitle] = useState<string | undefined>(from?.title);
@@ -312,12 +338,17 @@ function RelationshipForm({
               ),
             }
           : {})}
-        items={itemsWith(id)}
+        items={
+          side === 'to' && newObject !== undefined && !isEditing && !isReadOnly
+            ? [...itemsWith(id), { id: NEW_OBJECT, label: newObject.label, icon: 'plus' }]
+            : itemsWith(id)
+        }
         value={id}
         placeholder={strings.chooseObject}
         isSearchable={items.length > 15}
         onChange={(next) => {
-          if (side === 'from') setFromId(next);
+          if (next === NEW_OBJECT) newObject?.onChoose();
+          else if (side === 'from') setFromId(next);
           else setToId(next);
         }}
         {...(isEditing || isPreset || isReadOnly ? { isReadOnly: true } : {})}

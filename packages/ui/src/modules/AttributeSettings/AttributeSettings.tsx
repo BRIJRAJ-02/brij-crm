@@ -11,6 +11,7 @@ import {
   pickerTypeOf,
   STARTER_STAGES,
   toApiSlug,
+  typeFor,
   type ActorDisplay,
   type AttributeDefault,
   type AttributeType,
@@ -100,10 +101,15 @@ export interface AttributeSettingsOptionWrites {
   readonly onAdd: (option: OptionsEditorOption) => void;
   readonly onChange: (id: string, change: OptionsEditorChange) => void;
   readonly onMove: (id: string, position: number) => void;
-  readonly onArchive: (id: string) => void;
+  /** `moveTo`: the option the records holding it go to, chosen in its menu (see OptionsEditor). */
+  readonly onArchive: (id: string, moveTo?: string) => void;
   readonly onRestore: (id: string) => void;
   readonly pending?: ReadonlySet<string>;
   readonly errors?: Readonly<Partial<Record<string, string>>>;
+  /** Live records holding each option, by id: "N records" per row, and where they go as one archives. */
+  readonly recordCounts?: Readonly<Record<string, number>>;
+  /** The records of an archived option may move to another (a single select or a status). */
+  readonly canMoveRecords?: boolean;
 }
 
 /** What the person chose, and which settings they changed (an edit sends only those). */
@@ -143,6 +149,8 @@ export interface AttributeSettingsProps {
   readonly typeKeys?: readonly string[];
   /** On create, the picker's entry chosen at the start (`select` where a board needs one); the first offered when absent. */
   readonly initialTypeKey?: string;
+  /** On create, the name it starts with (Archive and recreate keeps the old one's); empty when absent. */
+  readonly initialTitle?: string;
   /**
    * On create, what the form starts with (an import's column): its name, and
    * a select's first options in order, each given the next data hue.
@@ -204,6 +212,22 @@ export interface AttributeSettingsProps {
    * the dialog when it closes. `isBusy` then means the step's write.
    */
   readonly step?: DialogStep;
+  /**
+   * Editing: a quiet danger Archive at the footer's start (flow pass, 30 October 2026), which the screen answers
+   * with its own archive confirm. None when absent (a create, a read only dialog, the primary attribute).
+   */
+  readonly onArchive?: () => void;
+  /**
+   * Editing: "Wrong type? Archive and recreate" under the type, since a type never changes in place. The screen
+   * archives this attribute and opens a create with the same name. None when absent.
+   */
+  readonly onRecreate?: () => void;
+  /**
+   * Editing: what ticking Required or Unique would meet (flow pass, 30 October 2026), each `{ label, href }` linking
+   * to the records ("12 records are empty", "3 values are shared"), shown under its box once ticked. None when absent.
+   */
+  readonly requiredMeets?: { readonly label: string; readonly href: string };
+  readonly uniqueMeets?: { readonly label: string; readonly href: string };
 }
 
 /** What the member editor's search answers (its list type is the field set's union of display shapes). */
@@ -287,6 +311,7 @@ export function AttributeSettings({
   typeKeys,
   initialTypeKey,
   initialDraft,
+  initialTitle,
   relationshipEntry,
   members = [],
   isBusy = false,
@@ -303,14 +328,29 @@ export function AttributeSettings({
   apiNames,
   duplicatesLink,
   step,
+  onArchive,
+  onRecreate,
+  requiredMeets,
+  uniqueMeets,
 }: AttributeSettingsProps) {
   const formId = useId();
   const isReadOnly = readOnlyReason !== undefined;
   const title = attribute === undefined ? strings.newTitle : isReadOnly ? strings.viewTitle : strings.editTitle;
+  const archive =
+    step === undefined && attribute !== undefined && !isReadOnly && onArchive !== undefined ? onArchive : undefined;
   return (
     <Modal
       title={step?.title ?? title}
       isOpen={isOpen}
+      {...(archive === undefined
+        ? {}
+        : {
+            footerStart: (
+              <Button variant="ghost-danger" icon="archive" isDisabled={isBusy} onPress={archive}>
+                {strings.archive}
+              </Button>
+            ),
+          })}
       // While the server answers, the dialog stays: a refusal has to land on its setting.
       onOpenChange={(open) => {
         if (!open && isBusy) return;
@@ -345,12 +385,15 @@ export function AttributeSettings({
         step.body
       ) : (
         <AttributeForm
+          // An edit that turns into a create in the same opening (Archive and recreate) starts a fresh form.
+          key={attribute === undefined ? 'create' : 'edit'}
           formId={formId}
           label={title}
           attribute={attribute}
           typeKeys={typeKeys}
           initialTypeKey={initialTypeKey}
           initialDraft={initialDraft}
+          initialTitle={initialTitle}
           relationshipEntry={relationshipEntry}
           members={members}
           isBusy={isBusy}
@@ -366,6 +409,9 @@ export function AttributeSettings({
           rulesNote={rulesNote}
           apiNames={apiNames}
           duplicatesLink={duplicatesLink}
+          onRecreate={isReadOnly ? undefined : onRecreate}
+          requiredMeets={requiredMeets}
+          uniqueMeets={uniqueMeets}
         />
       )}
     </Modal>
@@ -380,6 +426,7 @@ interface AttributeFormProps {
   readonly typeKeys: readonly string[] | undefined;
   readonly initialTypeKey: string | undefined;
   readonly initialDraft: AttributeSettingsDraft | undefined;
+  readonly initialTitle: string | undefined;
   readonly relationshipEntry: AttributeSettingsProps['relationshipEntry'];
   readonly members: readonly ActorDisplay[];
   readonly isBusy: boolean;
@@ -395,6 +442,9 @@ interface AttributeFormProps {
   readonly rulesNote: string | undefined;
   readonly apiNames: AttributeSettingsApiNames | undefined;
   readonly duplicatesLink: AttributeSettingsProps['duplicatesLink'];
+  readonly onRecreate: (() => void) | undefined;
+  readonly requiredMeets: AttributeSettingsProps['requiredMeets'];
+  readonly uniqueMeets: AttributeSettingsProps['uniqueMeets'];
 }
 
 function AttributeForm({
@@ -404,6 +454,7 @@ function AttributeForm({
   typeKeys,
   initialTypeKey,
   initialDraft,
+  initialTitle,
   relationshipEntry,
   members,
   isBusy,
@@ -419,6 +470,9 @@ function AttributeForm({
   rulesNote,
   apiNames,
   duplicatesLink,
+  onRecreate,
+  requiredMeets,
+  uniqueMeets,
 }: AttributeFormProps) {
   const isCreating = attribute === undefined;
   const isReadOnly = readOnlyReason !== undefined;
@@ -430,7 +484,7 @@ function AttributeForm({
   );
   const entry = PICKER_TYPES.find((each) => each.key === typeKey);
   const type: AttributeType = entry?.type ?? attribute?.type ?? 'text';
-  const [name, setName] = useState(attribute?.title ?? initialDraft?.title ?? '');
+  const [name, setName] = useState(attribute?.title ?? initialTitle ?? initialDraft?.title ?? '');
   const [description, setDescription] = useState(attribute?.description ?? '');
   const [isRequired, setRequired] = useState(attribute?.isRequired ?? false);
   const [isUnique, setUnique] = useState(attribute?.isUnique ?? false);
@@ -488,14 +542,10 @@ function AttributeForm({
   const errorOf = (field: AttributeSettingsField) => shown.find((refusal) => refusal.attributeId === field)?.message;
   const hasDuplicates = shown.some((refusal) => refusal.code === 'UNIQUE_HAS_DUPLICATES');
 
-  const chooseType = (key: string | null) => {
-    if (key === null || key === typeKey) return;
-    if (key === RELATIONSHIP) {
-      relationshipEntry?.onChoose({ title: name.trim() });
-      return;
-    }
+  /** Switches to the picker entry `key`, its own settings starting afresh; false when there is no such entry. */
+  const applyType = (key: string): boolean => {
     const next = PICKER_TYPES.find((each) => each.key === key);
-    if (next === undefined) return;
+    if (next === undefined) return false;
     setTypeKey(key);
     // A new type starts its own settings: its default, Unique, Allow multiple, its settings and options.
     setDraft(NO_DEFAULT);
@@ -508,7 +558,27 @@ function AttributeForm({
     );
     // Rules the new type can't take go (a length on what is now a number).
     setRules((before) => before.filter((rule) => ruleKindFits(rule.kind, { type: next.type, isMulti: next.isMulti })));
-    touch('type');
+    return true;
+  };
+
+  const chooseType = (key: string | null) => {
+    if (key === null || key === typeKey) return;
+    if (key === RELATIONSHIP) {
+      relationshipEntry?.onChoose({ title: name.trim() });
+      return;
+    }
+    if (applyType(key)) touch('type');
+  };
+
+  // On create, Type follows the name ("Email" is Email, "Due date" Date) until the person picks one, or the screen
+  // opened the dialog on a type of its own.
+  const followsName = isCreating && initialTypeKey === undefined && !changed.has('type');
+  const changeName = (next: string) => {
+    setName(next);
+    touch('title');
+    if (!followsName) return;
+    const guess = pickerTypeOf(typeFor(next), false)?.key ?? 'text';
+    if (guess !== typeKey && offered.some((each) => each.key === guess)) applyType(guess);
   };
 
   const submit = () => {
@@ -640,10 +710,7 @@ function AttributeForm({
         isRequired
         maxLength={100}
         value={name}
-        onChange={(next) => {
-          setName(next);
-          touch('title');
-        }}
+        onChange={changeName}
         {...(isReadOnly ? { isReadOnly } : {})}
       />
       {archivedHolder !== undefined && apiNames !== undefined && (
@@ -666,6 +733,12 @@ function AttributeForm({
         {...(isCreating && strings.typeHints[type] !== undefined ? { hint: strings.typeHints[type] } : {})}
         {...(errorOf('type') === undefined ? {} : { error: errorOf('type') })}
       />
+      {/* A type never changes in place: the way out of a wrong one, quiet, since most never need it. */}
+      {!isCreating && onRecreate !== undefined && (
+        <Button variant="link" isDisabled={isBusy} onPress={onRecreate}>
+          {strings.wrongType}
+        </Button>
+      )}
       <TypeSettings
         type={type}
         config={config}
@@ -732,6 +805,10 @@ function AttributeForm({
           }}
           {...(errorOf('isRequired') === undefined ? {} : { error: errorOf('isRequired') })}
         />
+        {/* Ticked now on an attribute that wasn't required: the records it would meet, one press away. */}
+        {!isCreating && !attribute.isRequired && isRequired && requiredMeets !== undefined && (
+          <Link href={requiredMeets.href}>{requiredMeets.label}</Link>
+        )}
         {allowsUnique && (
           <Checkbox
             label={strings.unique}
@@ -744,6 +821,12 @@ function AttributeForm({
             {...(errorOf('isUnique') === undefined ? {} : { error: errorOf('isUnique') })}
           />
         )}
+        {allowsUnique &&
+          !isCreating &&
+          !attribute.isUnique &&
+          isUnique &&
+          uniqueMeets !== undefined &&
+          !hasDuplicates && <Link href={uniqueMeets.href}>{uniqueMeets.label}</Link>}
         {/* Refused for values records share: the way to them, so the switch isn't a dead end. */}
         {allowsUnique && duplicatesLink !== undefined && hasDuplicates && (
           <Link href={duplicatesLink.href}>{duplicatesLink.label}</Link>
@@ -1157,6 +1240,8 @@ function OptionsSetting({
         onRestore={writes.onRestore}
         {...(writes.pending === undefined ? {} : { pending: writes.pending })}
         {...(writes.errors === undefined ? {} : { errors: writes.errors })}
+        {...(writes.recordCounts === undefined ? {} : { recordCounts: writes.recordCounts })}
+        {...(writes.canMoveRecords === true ? { canMoveRecords: true } : {})}
       />
     );
   }

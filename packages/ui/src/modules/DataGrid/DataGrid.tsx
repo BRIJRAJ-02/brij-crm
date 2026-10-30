@@ -30,6 +30,7 @@ import { CheckboxMark } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { AnchoredTooltip, Tooltip, TOOLTIP_DELAY_MS } from '../../atoms/Tooltip/Tooltip.tsx';
+import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { clearedValueOf, fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
@@ -207,6 +208,14 @@ export interface DataGridProps<Row> {
   /** The "+" header's name for screen readers and its tooltip ("Add attribute" when absent). */
   readonly addColumnLabel?: string;
   /**
+   * Makes the "+" header a Menu (flow pass, 30 October 2026): these items first (the view's hidden columns, one
+   * press shows one), then "New attribute…", which calls `onAddColumn`. Without items, "+" calls `onAddColumn` at
+   * once, as before.
+   */
+  readonly addColumnItems?: readonly AddColumnItem[];
+  /** One of `addColumnItems` was chosen. */
+  readonly onAddColumnItem?: (id: string) => void;
+  /**
    * Items a column's menu adds after its own (spec 0012: Edit attribute,
    * Archive attribute), per column; none for a column it answers none for.
    * The menu has only its own items when absent.
@@ -360,6 +369,8 @@ export function DataGrid<Row>({
   onEditingChange,
   onAddColumn,
   addColumnLabel = strings.addColumn,
+  addColumnItems,
+  onAddColumnItem,
   columnActions: columnActionsOf,
   focusColumn,
 }: DataGridProps<Row>) {
@@ -409,6 +420,8 @@ export function DataGrid<Row>({
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
   // The footer calculation whose Menu is open, by column id.
   const [calcMenuFor, setCalcMenuFor] = useState<string | undefined>(undefined);
+  // The "+" header's menu, opened by a press or by Enter while the header has focus.
+  const [isAddMenuOpen, setAddMenuOpen] = useState(false);
   const [resizing, setResizing] = useState<string | undefined>(undefined);
   const [localErrors, setLocalErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [anchorRow, setAnchorRow] = useState<number | undefined>(undefined);
@@ -1138,8 +1151,10 @@ export function DataGrid<Row>({
     if (focus.row < 0) {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        if (focus.col >= colCount) onAddColumn?.();
-        else if (column === undefined) toggleScreen();
+        if (focus.col >= colCount) {
+          if (addColumnItems !== undefined && addColumnItems.length > 0) setAddMenuOpen(true);
+          else onAddColumn?.();
+        } else if (column === undefined) toggleScreen();
         else setMenuFor(column.id);
       }
       return;
@@ -1414,9 +1429,9 @@ export function DataGrid<Row>({
   const hasFilter = onFilter !== undefined;
   const hasExtras = columnActionsOf !== undefined;
   // The "+" header (spec 0012): kept stable through a scroll, pressing the latest handler.
-  const latestAdd = useRef(onAddColumn);
+  const latestAdd = useRef({ onAddColumn, onAddColumnItem });
   useLayoutEffect(() => {
-    latestAdd.current = onAddColumn;
+    latestAdd.current = { onAddColumn, onAddColumnItem };
   });
   const hasAdd = onAddColumn !== undefined;
   const isAddFocused = focus.row === -1 && focus.col === colCount;
@@ -1428,11 +1443,17 @@ export function DataGrid<Row>({
             label: addColumnLabel,
             isFocused: isAddFocused,
             onPress: () => {
-              latestAdd.current?.();
+              latestAdd.current.onAddColumn?.();
             },
+            items: addColumnItems ?? [],
+            onItem: (id: string) => {
+              latestAdd.current.onAddColumnItem?.(id);
+            },
+            isMenuOpen: isAddMenuOpen,
+            onMenuOpenChange: setAddMenuOpen,
           }
         : undefined,
-    [hasAdd, colCount, addColumnLabel, isAddFocused],
+    [hasAdd, colCount, addColumnLabel, isAddFocused, addColumnItems, isAddMenuOpen],
   );
   const headerHandlers = useMemo<HeaderHandlers>(
     () => ({
@@ -1933,12 +1954,26 @@ interface GridHeaderProps {
   readonly hideColumnLocks: boolean;
 }
 
+/** The "+" menu's own last item, which creates a column. */
+const NEW_COLUMN = '__new_column';
+
+/** One item the "+" header's menu offers before its own: a hidden column to show. */
+export interface AddColumnItem {
+  readonly id: string;
+  readonly label: string;
+}
+
 /** The "+" header after the last column. */
 interface AddColumnHeader {
   readonly col: number;
   readonly label: string;
   readonly isFocused: boolean;
   readonly onPress: () => void;
+  /** With items, "+" opens a menu: these, then `label`. */
+  readonly items: readonly AddColumnItem[];
+  readonly onItem: (id: string) => void;
+  readonly isMenuOpen: boolean;
+  readonly onMenuOpenChange: (isOpen: boolean) => void;
 }
 
 /** The header row: the checkbox for the rows on screen, then a header per drawn column. Memoised, so a scroll step skips it. */
@@ -2049,9 +2084,32 @@ const GridHeader = memo(function GridHeader({
             data-focused={addColumn.isFocused || undefined}
             tabIndex={addColumn.isFocused ? 0 : -1}
           >
-            <Tooltip content={addColumn.label}>
-              <Button variant="ghost" icon="plus" label={addColumn.label} onPress={addColumn.onPress} />
-            </Tooltip>
+            {addColumn.items.length === 0 ? (
+              <Tooltip content={addColumn.label}>
+                <Button variant="ghost" icon="plus" label={addColumn.label} onPress={addColumn.onPress} />
+              </Tooltip>
+            ) : (
+              <MenuTrigger isOpen={addColumn.isMenuOpen} onOpenChange={addColumn.onMenuOpenChange}>
+                <Button variant="ghost" icon="plus" label={addColumn.label} />
+                <Menu
+                  label={addColumn.label}
+                  onAction={(key) => {
+                    if (key === NEW_COLUMN) addColumn.onPress();
+                    else addColumn.onItem(String(key));
+                  }}
+                >
+                  {addColumn.items.map((item) => (
+                    <MenuItem key={item.id} id={item.id} icon="eye">
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                  <MenuSeparator />
+                  <MenuItem id={NEW_COLUMN} icon="plus">
+                    {strings.newColumnItem}
+                  </MenuItem>
+                </Menu>
+              </MenuTrigger>
+            )}
           </div>
         )}
       </div>

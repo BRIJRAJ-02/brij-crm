@@ -26,6 +26,7 @@ import type {
   SyncScope,
   SyncStarted,
   AttributeDefinition,
+  AttributeImpact,
   BookAsHostInput,
   BookingAssignment,
   ReassignedBooking,
@@ -360,6 +361,7 @@ export type {
   ValidationRuleInput,
   ValidationRuleView,
   AttributeDefinition,
+  AttributeImpact,
   AttributeOption,
   AttributeRelationship,
   AttributeType,
@@ -560,7 +562,15 @@ export {
   WORKSPACE_PURGE_DAYS,
   type InviteLinkDays,
 } from '@crm/contracts/team-limits';
-export { freeHue, PICKER_TYPES, STARTER_STAGES, type PickerType } from '@crm/contracts/picker';
+export {
+  freeHue,
+  PICKER_TYPES,
+  STARTER_STAGES,
+  starterOptionsFor,
+  typeFor,
+  type GuessedType,
+  type PickerType,
+} from '@crm/contracts/picker';
 export {
   MAX_PENDING_OPTIONS,
   withPendingOptions,
@@ -626,7 +636,7 @@ export {
   type BoardSettings,
   type GroupKind,
 } from '@crm/contracts/board';
-export { DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
+export { draftParam, DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
 export type {
   KeptDraft,
   NewView,
@@ -830,7 +840,17 @@ export interface NewObject {
   readonly icon: ObjectSummary['icon'];
   readonly hue: ObjectSummary['hue'];
   /** First attributes beside Name, made in the same transaction as the object. */
-  readonly attributes?: readonly { readonly title: string; readonly type: PickerAttributeType }[];
+  readonly attributes?: readonly {
+    readonly title: string;
+    readonly type: PickerAttributeType;
+    /** A select's or status attribute's first options (a guessed Stage's stages, a Priority's levels). */
+    readonly options?: readonly {
+      readonly id: string;
+      readonly label: string;
+      readonly hue: ObjectSummary['hue'];
+      readonly outcome?: 'open' | 'won' | 'lost';
+    }[];
+  }[];
 }
 
 /** What settings may change on an object (spec 0012, AC-224). Its API name never changes. */
@@ -3871,7 +3891,15 @@ export function createDataLayer({
               ...(input.apiSlug === undefined ? {} : { apiSlug: input.apiSlug }),
               icon: input.icon,
               hue: input.hue,
-              ...(input.attributes === undefined ? {} : { attributes: input.attributes.map((a) => ({ ...a })) }),
+              ...(input.attributes === undefined
+                ? {}
+                : {
+                    attributes: input.attributes.map((a) => ({
+                      title: a.title,
+                      type: a.type,
+                      ...(a.options === undefined ? {} : { options: a.options.map((option) => ({ ...option })) }),
+                    })),
+                  }),
               mutationId,
             },
             options,
@@ -4312,6 +4340,13 @@ export function createDataLayer({
             call((options) => api.attributes.list({ workspace, objectId, includeArchived: true }, options)),
           ),
         ),
+      /**
+       * What changing or archiving an attribute touches (flow pass, 30 October 2026): the views, forms and rules
+       * using it, and for a reader who sees every record the empty, per option and shared value counts. Read each
+       * time its settings or archive confirm open, never cached: the counts move with every edit.
+       */
+      impact: (workspace: string, attributeId: string): Promise<AttributeImpact> =>
+        beforeRead(workspace).then(() => call((options) => api.attributes.impact({ workspace, attributeId }, options))),
       /** A new attribute's id: mint it once per dialog, and send the same one again on a retry. */
       newId: () => mintId(),
       /**
