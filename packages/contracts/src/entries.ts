@@ -144,11 +144,13 @@ export const SetEntryValuesInput = WorkspaceScoped.extend({
 export type SetEntryValuesInput = z.infer<typeof SetEntryValuesInput>;
 
 /**
- * An entry a write answers, fresh: `written` holds the version this write made
+ * An entry a write answers, fresh, with its record: `written` holds the version this write made
  * for each attribute it changed, and `echoes` how many change events carry the
  * write's `mutationId`, so the tab skips exactly its own (spec 0006, AC-60).
  */
 export const WrittenEntry = EntryView.extend({
+  /** The entry's record, so the row that just showed holds its fields too (an add). */
+  record: RecordView.optional(),
   written: z.record(z.uuid(), Uuid),
   echoes: z.number().int().min(0),
 });

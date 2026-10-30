@@ -178,7 +178,8 @@ export function checkDescription(description: string | null | undefined): void {
   }
 }
 
-function checkLook(icon: string | undefined, hue: string | undefined): void {
+/** Refuses an icon outside the object icon set and an unknown hue, each on its field (objects and lists). */
+export function checkLook(icon: string | undefined, hue: string | undefined): void {
   if (icon !== undefined && !(OBJECT_ICONS as readonly string[]).includes(icon)) {
     throw refuseOn('CONFIG_INVALID', 'Pick an icon from the object icon set.', 'icon');
   }

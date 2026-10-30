@@ -264,7 +264,7 @@ async function prepare(
 export async function checkViewQuery(
   tx: WorkspaceTx,
   scope: EngineScope,
-  query: { readonly objectId: string; readonly filter?: FilterGroup; readonly sorts: SortRules },
+  query: ViewSource & { readonly filter?: FilterGroup; readonly sorts: SortRules },
 ): Promise<void> {
   const { context, level } = await prepare(tx, scope, query, false);
   compileFilter(context, level, query.filter);

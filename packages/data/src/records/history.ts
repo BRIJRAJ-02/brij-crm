@@ -138,12 +138,25 @@ export interface LinksEntry {
   readonly inverse: LinkStep;
 }
 
-/** One user action on the undo stack: an edit of cells, a delete, a create, or a link delta. */
-export type UndoEntry = CellsEntry | DeleteEntry | CreateEntry | LinksEntry;
+/**
+ * An action another store of the layer undoes itself (spec 0048: a list
+ * entry's cell, an entry removed or added): undoing it runs `run`, which
+ * answers the toast's sentence. On the same stack as the records' actions, so
+ * Cmd+Z undoes the newest whichever store made it.
+ */
+export interface ExternalEntry {
+  readonly id: string;
+  readonly kind: 'external';
+  readonly objectId: string;
+  readonly run: () => Promise<{ readonly message: string; readonly tone: 'success' | 'danger' }>;
+}
+
+/** One user action on the undo stack: an edit of cells, a delete, a create, a link delta, or another store's. */
+export type UndoEntry = CellsEntry | DeleteEntry | CreateEntry | LinksEntry | ExternalEntry;
 
 /** Whether an entry is an edit of cells (a cell, a paste or a range clear). */
 export function isCellsEntry(entry: UndoEntry): entry is CellsEntry {
-  return entry.kind !== 'delete' && entry.kind !== 'create' && entry.kind !== 'links';
+  return entry.kind !== 'delete' && entry.kind !== 'create' && entry.kind !== 'links' && entry.kind !== 'external';
 }
 
 /** How many cells an entry holds against the stack's budget: a delete, a create or a link delta counts as one. */

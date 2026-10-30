@@ -271,7 +271,8 @@ export async function checkObject(
 /**
  * Refuses unless the principal may `need` a list's entries: `NOT_FOUND` (as an
  * unknown list) when the list or its object is at `none`, and for a change
- * on a list they may only read, 403 `FORBIDDEN`.
+ * on a list they may only read, or whose object they may only read (a list
+ * follows its object, spec 0048 decision 2), 403 `FORBIDDEN`.
  */
 export function checkList(
   access: Access,
@@ -283,7 +284,7 @@ export function checkList(
   if (objectLevel(access, list.objectId) === 'none' || objectLevel(access, list.id) === 'none') {
     throw refuse('NOT_FOUND', message);
   }
-  if (need === 'write' && objectLevel(access, list.id) === 'read') {
+  if (need === 'write' && (objectLevel(access, list.id) === 'read' || objectLevel(access, list.objectId) === 'read')) {
     throw refuse('FORBIDDEN', `You can view the entries of ${list.name} but not change them.`);
   }
 }

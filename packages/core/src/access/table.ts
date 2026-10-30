@@ -69,7 +69,12 @@ export type AccessEntry =
    * owner; over an admin only by an owner); the delegate may remove their own; someone else's answer as absent.
    * `listDelegations` with `everyone: true` is `members.manage` alone (403 FORBIDDEN; the Members page's column).
    */
-  | { readonly delegation: true };
+  | { readonly delegation: true }
+  /**
+   * Lists (spec 0048, decision 1, AC-4834): making one needs `lists.manage` (403 `FORBIDDEN`, "Your role can't make
+   * lists.") and write on its object; changing one is `schema.manage`'s, or its maker's with `lists.manage`.
+   */
+  | { readonly listManager: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -110,7 +115,9 @@ export const ACCESS_TABLE = {
   updateRelationship: { permission: 'schema.manage' },
   createRelationship: { permission: 'schema.manage' },
   renameRelationship: { permission: 'schema.manage' },
-  defineList: { permission: 'schema.manage' },
+  // Lists (spec 0048): lists.manage and write on the object (decision 1).
+  defineList: { listManager: true },
+  createList: { listManager: true },
   // Removing records for good.
   eraseRecord: { permission: 'records.purge' },
   purgeDeleted: { permission: 'records.purge' },
@@ -201,6 +208,14 @@ export const ACCESS_TABLE = {
   getTimeInStages: { data: 'read' },
   getEntries: { data: 'read' },
   getRecordEntries: { data: 'read' },
+  // Lists and their entries (spec 0048): a list follows its object (decision 2); hidden is absent.
+  listLists: { data: 'read' },
+  getList: { data: 'read' },
+  listListAttributes: { data: 'read' },
+  queryEntries: { data: 'read' },
+  countEntries: { data: 'read' },
+  readEntryPage: { data: 'read' },
+  entryMembership: { data: 'read' },
   // The record page (spec 0017): its timeline and a record in the trash.
   getActivity: { data: 'read' },
   // 13 Oct reference batch 4: a record's stage age, read as its timeline is.
@@ -252,6 +267,10 @@ export const ACCESS_TABLE = {
   addEntry: { data: 'write' },
   removeEntry: { data: 'write' },
   restoreEntry: { data: 'write' },
+  addListEntry: { data: 'write' },
+  editEntry: { data: 'write' },
+  removeEntries: { data: 'write' },
+  restoreEntries: { data: 'write' },
   // Background jobs (spec 0008): the starter or jobs.manage; the test job needs jobs.manage.
   getJob: { jobStarter: true },
   listJobs: { jobStarter: true },

@@ -91,7 +91,12 @@ function SampleSidebar({
             Deals
           </NavItem>
         </NavSection>
-        <NavSection title="Lists" isLoading={isLoading} emptyLabel="Lists you make show here.">
+        <NavSection
+          title="Lists"
+          isLoading={isLoading}
+          emptyLabel="Lists you make show here."
+          add={{ label: 'New list', onAdd: () => undefined }}
+        >
           {hasLists && (
             <NavItem icon="pin" hue="purple" href="/lists/sales">
               Sales pipeline
@@ -317,6 +322,8 @@ export const Empty: Story = {
   args: { hasLists: false },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Lists you make show here.')).toBeInTheDocument();
+    // Lists' "+" (spec 0048): a named button after the label, there with no lists too.
+    await expect(canvas.getByRole('button', { name: 'New list' })).toBeInTheDocument();
   },
 };
 

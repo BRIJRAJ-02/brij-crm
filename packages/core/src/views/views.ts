@@ -17,13 +17,19 @@ import {
 import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
 import { checkViewQuery } from '../engine/query/page.ts';
-import { isArchivedNow, loadAttributes, loadAttributesById, type AttributeDef } from '../engine/values.ts';
+import {
+  isArchivedNow,
+  loadAttributes,
+  loadAttributesById,
+  loadListAttributes,
+  type AttributeDef,
+} from '../engine/values.ts';
 import { postgresError, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { can, fieldLevel, isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
-import { checkObject } from '../access/visibility.ts';
+import { checkList, checkObject } from '../access/visibility.ts';
 import {
   filterAttributeIds,
   mergeFilter,
@@ -34,7 +40,7 @@ import {
 } from '@crm/contracts/views';
 import { defaultViewConfig } from './seed.ts';
 
-const { memberViewState, members, objects, views } = schema;
+const { lists, memberViewState, members, objects, views } = schema;
 
 /** What every call naming a view the caller can't see answers, whichever reason it was (AC-463). */
 export const VIEW_NOT_FOUND = "This view doesn't exist or isn't shared with you.";
@@ -45,7 +51,9 @@ export const VIEW_LOCKED = 'This view is locked. Ask an owner or admin to unlock
 /** The columns every view read selects. */
 export const VIEW_COLUMNS = {
   id: views.id,
-  objectId: views.objectId,
+  // A list's view (spec 0048) reads as one on the list's object, naming its list too.
+  objectId: sql<string | null>`coalesce(${views.objectId}, ${lists.objectId})`,
+  listId: views.listId,
   name: views.name,
   kind: views.kind,
   visibility: views.visibility,
@@ -58,13 +66,81 @@ export const VIEW_COLUMNS = {
   querySavedByMemberId: views.querySavedByMemberId,
   isLocked: views.isLocked,
   lockedByMemberId: views.lockedByMemberId,
-  defaultViewId: objects.defaultViewId,
+  defaultViewId: sql<string | null>`coalesce(${objects.defaultViewId}, ${lists.defaultViewId})`,
 } as const;
+
+/** What every view read joins: its object, or its list (spec 0048), for the parent's default view. */
+export const viewParents = {
+  objects: and(eq(objects.workspaceId, views.workspaceId), eq(objects.id, views.objectId)),
+  lists: and(eq(lists.workspaceId, views.workspaceId), eq(lists.id, views.listId)),
+};
+
+/** A view's parent: its object, and its list when it is a list's view (spec 0048). */
+export interface ViewParent {
+  readonly objectId: string;
+  readonly listId: string | null;
+}
+
+/** The id a view's group, positions and last opened bookmark are keyed by: its list's, else its object's. */
+export const parentIdOf = (parent: ViewParent): string => parent.listId ?? parent.objectId;
+
+/** The change a view write records: its list's views, else its object's. */
+export const viewChange = (viewId: string, parent: ViewParent) =>
+  parent.listId === null ? { viewId, objectId: parent.objectId } : { viewId, listId: parent.listId };
+
+/**
+ * The attributes a view may name: its object's, and for a list's view the
+ * list's own too (spec 0048, AC-4807), by id.
+ */
+export async function parentAttributes(
+  tx: WorkspaceTx,
+  parent: ViewParent,
+): Promise<ReadonlyMap<string, AttributeDef>> {
+  const own = await loadAttributes(tx, parent.objectId);
+  if (parent.listId === null) return own;
+  return new Map([...(await loadListAttributes(tx, parent.listId)), ...own]);
+}
+
+/**
+ * Refuses `NOT_FOUND` (with `message`) unless the caller may read the list a
+ * view belongs to: live, and its object readable (decision 2).
+ */
+export async function checkViewList(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  listId: string,
+  message: string,
+): Promise<{
+  readonly id: string;
+  readonly objectId: string;
+  readonly name: string;
+  readonly defaultViewId: string | null;
+}> {
+  const [list] = await tx
+    .select({
+      id: lists.id,
+      objectId: lists.objectId,
+      name: lists.name,
+      defaultViewId: lists.defaultViewId,
+      archivedAt: lists.archivedAt,
+      objectArchivedAt: objects.archivedAt,
+    })
+    .from(lists)
+    .innerJoin(objects, and(eq(objects.workspaceId, lists.workspaceId), eq(objects.id, lists.objectId)))
+    .where(and(eq(lists.workspaceId, scope.workspaceId), eq(lists.id, listId)));
+  if (list === undefined || list.archivedAt !== null || list.objectArchivedAt !== null) {
+    throw refuse('NOT_FOUND', message);
+  }
+  checkList(scope.access, list, 'read', message);
+  return list;
+}
 
 /** One view row as the reads select it, with its object's default view. */
 export interface ViewRow {
   readonly id: string;
   readonly objectId: string | null;
+  /** A list's view (spec 0048): its list; `objectId` is then the list's object. */
+  readonly listId: string | null;
   readonly name: string;
   readonly kind: 'table' | 'board';
   readonly visibility: 'private' | 'workspace';
@@ -165,9 +241,11 @@ async function filterFieldsShown(
   const found = await loadAttributesById(tx, named);
   return new Set(
     [...found.values()].flatMap((attribute) =>
-      attribute.objectId !== null &&
-      objectLevel(access, attribute.objectId) !== 'none' &&
-      fieldLevel(access, { id: attribute.id, objectId: attribute.objectId }) !== 'hidden'
+      // A list's own field shows to whoever reads the list, which the view's read checked (spec 0048).
+      attribute.listId !== null ||
+      (attribute.objectId !== null &&
+        objectLevel(access, attribute.objectId) !== 'none' &&
+        fieldLevel(access, { id: attribute.id, objectId: attribute.objectId }) !== 'hidden')
         ? [attribute.id]
         : [],
     ),
@@ -178,6 +256,7 @@ export function summaryOf(row: ViewRow & { readonly objectId: string }): ViewSum
   return {
     id: row.id,
     objectId: row.objectId,
+    ...(row.listId === null ? {} : { listId: row.listId }),
     name: row.name,
     kind: row.kind,
     visibility: row.visibility,
@@ -222,7 +301,8 @@ export async function readView(
   const query = tx
     .select(VIEW_COLUMNS)
     .from(views)
-    .leftJoin(objects, and(eq(objects.workspaceId, views.workspaceId), eq(objects.id, views.objectId)))
+    .leftJoin(objects, viewParents.objects)
+    .leftJoin(lists, viewParents.lists)
     .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, viewId)));
   // No key update: it serialises view writers, and never blocks a member_view_state row's key check on it.
   const [row] = lock ? await query.for('no key update', { of: views }) : await query;
@@ -230,6 +310,7 @@ export async function readView(
     throw refuse('NOT_FOUND', VIEW_NOT_FOUND);
   }
   await checkObject(tx, scope.access, row.objectId, 'read', VIEW_NOT_FOUND);
+  if (row.listId !== null) await checkViewList(tx, scope, row.listId, VIEW_NOT_FOUND);
   return row;
 }
 
@@ -239,22 +320,29 @@ export async function readView(
  * caller's own private views by position (then id), with the default's id.
  * An object the caller can't see answers `NOT_FOUND` (AC-462, AC-473).
  */
-export async function listViews(scope: EngineScope, objectId: string): Promise<ViewsList> {
+export async function listViews(scope: EngineScope, objectId: string, listId?: string): Promise<ViewsList> {
   const caller = memberOf(scope);
   return inWorkspace(scope, async (tx) => {
     await checkObject(tx, scope.access, objectId, 'read');
+    // A list's views (spec 0048): the list must be the object's, live, and readable.
+    if (listId !== undefined) {
+      const list = await checkViewList(tx, scope, listId, 'That list does not exist.');
+      if (list.objectId !== objectId) throw refuse('NOT_FOUND', 'That list does not exist.');
+    }
+    const parentId = listId ?? objectId;
     // The summaries only: no config (up to 64 kB a view), which the switcher never shows.
     const { config: _config, ...summaryColumns } = VIEW_COLUMNS;
     const rows = await tx
       .select({ ...summaryColumns, config: sql<unknown>`null` })
       .from(views)
-      .innerJoin(objects, and(eq(objects.workspaceId, views.workspaceId), eq(objects.id, views.objectId)))
+      .leftJoin(objects, viewParents.objects)
+      .leftJoin(lists, viewParents.lists)
       .where(
         and(
           eq(views.workspaceId, scope.workspaceId),
           // By its parent, so the switcher's index (workspace, parent, visibility, position) answers it.
-          eq(views.parentId, objectId),
-          isNotNull(views.objectId),
+          eq(views.parentId, parentId),
+          isNotNull(listId === undefined ? views.objectId : views.listId),
           caller === undefined
             ? eq(views.visibility, 'workspace')
             : or(eq(views.visibility, 'workspace'), eq(views.creatorMemberId, caller)),
@@ -262,7 +350,7 @@ export async function listViews(scope: EngineScope, objectId: string): Promise<V
       )
       .orderBy(
         // The default view, then shared, then private; each by position, then id.
-        sql`${views.id} = ${objects.defaultViewId} desc nulls last`,
+        sql`${views.id} = coalesce(${objects.defaultViewId}, ${lists.defaultViewId}) desc nulls last`,
         sql`${views.visibility} = 'private'`,
         asc(views.position),
         asc(views.id),
@@ -280,7 +368,7 @@ export async function listViews(scope: EngineScope, objectId: string): Promise<V
               and(
                 eq(memberViewState.workspaceId, scope.workspaceId),
                 eq(memberViewState.memberId, caller),
-                eq(memberViewState.parentId, objectId),
+                eq(memberViewState.parentId, parentId),
               ),
             );
     const lastOpenedViewId = listed.some((row) => row.id === state?.viewId) ? state?.viewId : undefined;
@@ -333,19 +421,21 @@ async function saverName(tx: WorkspaceTx, memberId: string | null): Promise<stri
 async function filterIds(
   tx: WorkspaceTx,
   scope: EngineScope,
-  objectId: string,
+  parent: ViewParent,
   stored: ViewConfig['filter'],
 ): Promise<{ readonly seeable: ReadonlySet<string>; readonly live: ReadonlySet<string> }> {
-  const own = await loadAttributes(tx, objectId);
+  const own = await parentAttributes(tx, parent);
   // The far fields a `through` condition reaches live on other objects: each is judged on its own object, so one
   // hidden from the saver, or on an object they can't read, is unseen however visible the relation leading to it.
   const farIds = filterAttributeIds(stored).filter((id) => !own.has(id));
   const far = farIds.length === 0 ? new Map<string, AttributeDef>() : await loadAttributesById(tx, farIds);
   const attributes = [...own.values(), ...far.values()].filter(
     (attribute) =>
-      attribute.objectId !== null &&
-      objectLevel(scope.access, attribute.objectId) !== 'none' &&
-      fieldLevel(scope.access, { id: attribute.id, objectId: attribute.objectId }) !== 'hidden',
+      // The view's own list's fields: whoever reads the list sees them (spec 0048).
+      (attribute.listId !== null && attribute.listId === parent.listId) ||
+      (attribute.objectId !== null &&
+        objectLevel(scope.access, attribute.objectId) !== 'none' &&
+        fieldLevel(scope.access, { id: attribute.id, objectId: attribute.objectId }) !== 'hidden'),
   );
   // A field gone for good (its object's deleted, the attribute purged) is no one's to protect: it may go like an
   // archived one, rather than refuse every later edit of the filter.
@@ -375,7 +465,7 @@ export async function saveViewQuery(
       const sent = input.filter === undefined || input.filter.conditions.length === 0 ? undefined : input.filter;
       // A condition on a field the saver can't see never reached their screen, so what they send back leaves it
       // out. Writing that would delete it for everyone, for good (27 October 2026): one flipped sort was enough.
-      const ids = await filterIds(tx, scope, row.objectId, configOf(row.config).filter);
+      const ids = await filterIds(tx, scope, row, configOf(row.config).filter);
       const merged = mergeFilter(configOf(row.config).filter, sent, ids);
       if (merged.kind === 'blocked') {
         throw refuse(
@@ -386,7 +476,7 @@ export async function saveViewQuery(
       // Only what they sent is checked: a condition put back was checked when it was stored, and compiling it
       // under this saver's access would refuse the very field they can't see.
       await checkViewQuery(tx, scope, {
-        objectId: row.objectId,
+        ...(row.listId === null ? { objectId: row.objectId } : { listId: row.listId }),
         ...(sent === undefined ? {} : { filter: sent }),
         sorts: input.sorts,
       });
@@ -420,7 +510,7 @@ export async function saveViewQuery(
         }
         throw error;
       }
-      context.record({ views: [{ viewId: row.id, objectId: row.objectId }] });
+      context.record({ views: [viewChange(row.id, row)] });
       return viewOf(tx, scope.access, await readView(tx, scope, row.id, false));
     },
     hooks,

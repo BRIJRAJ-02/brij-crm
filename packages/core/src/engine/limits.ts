@@ -155,7 +155,12 @@ export async function takeList(tx: WorkspaceTx, scope: EngineScope): Promise<voi
     .for('update');
   if (row === undefined) throw new Error('The workspace has no counters row.');
   const limit = limitsOf(scope).lists;
-  if (row.lists + 1 > limit) throw refuse('LIMIT_REACHED', `This workspace holds at most ${String(limit)} lists.`);
+  if (row.lists + 1 > limit) {
+    throw refuse(
+      'LIMIT_REACHED',
+      `This workspace has ${String(limit)} lists, archived ones included, the most it can have.`,
+    );
+  }
   await tx
     .update(workspaceCounters)
     .set({ lists: sql`${workspaceCounters.lists} + 1` })

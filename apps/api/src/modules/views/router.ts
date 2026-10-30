@@ -19,7 +19,8 @@ import { member } from '../../orpc.ts';
 // `commitWrite`, so its `views` event is stored with it and the worker is woken once it commits. `markOpened`
 // is the member's own bookmark and stores no event.
 export const viewsRouter = member.views.router({
-  list: member.views.list.handler(({ context, input }) => listViews(context.scope, input.objectId)),
+  // A list's views (spec 0048) with `listId`, else the object's.
+  list: member.views.list.handler(({ context, input }) => listViews(context.scope, input.objectId, input.listId)),
   get: member.views.get.handler(({ context, input }) => getView(context.scope, input.viewId)),
   saveQuery: member.views.saveQuery.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
@@ -43,6 +44,7 @@ export const viewsRouter = member.views.router({
         {
           id: input.id,
           objectId: input.objectId,
+          listId: input.listId,
           name: input.name,
           kind: input.kind,
           visibility: input.visibility,
@@ -74,7 +76,7 @@ export const viewsRouter = member.views.router({
   ),
   setDefault: member.views.setDefault.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      setDefaultView(context.scope, { objectId: input.objectId, viewId: input.viewId }, hooks),
+      setDefaultView(context.scope, { objectId: input.objectId, listId: input.listId, viewId: input.viewId }, hooks),
     ),
   ),
   delete: member.views.delete.handler(({ context, input }) =>
