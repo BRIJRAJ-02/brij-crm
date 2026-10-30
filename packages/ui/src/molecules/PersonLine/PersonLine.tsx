@@ -4,8 +4,11 @@ import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import styles from './PersonLine.module.css';
 import { strings } from './strings.ts';
 
-/** How a person's quiet line reads: `quiet` (secondary text) or `away` (time off, in the Away colour, strong). */
-export type PersonLineTone = 'quiet' | 'away';
+/**
+ * How the line's first part reads: `quiet` (secondary text), `away` (time off, in the Away colour, strong), or a day's
+ * state on a calendar's head: `booked` (the link colour), `free` (the success colour) and `off` (tertiary).
+ */
+export type PersonLineTone = 'quiet' | 'away' | 'booked' | 'free' | 'off';
 
 /** Props for PersonLine. */
 export interface PersonLineProps {
@@ -25,6 +28,8 @@ export interface PersonLineProps {
   readonly end?: ReactNode;
   /** Hidden from screen readers when the thing it heads already names the person in full (a calendar column). */
   readonly isDecorative?: boolean;
+  /** The pointer's tooltip: what a short line leaves out (a job title, an offset). Screen readers get it elsewhere. */
+  readonly hint?: string;
 }
 
 /**
@@ -40,10 +45,16 @@ export function PersonLine({
   size = 'md',
   end,
   isDecorative = false,
+  hint,
 }: PersonLineProps) {
   const [first, ...rest] = meta;
   return (
-    <span className={styles.root} data-size={size} {...(isDecorative ? { 'aria-hidden': true } : {})}>
+    <span
+      className={styles.root}
+      data-size={size}
+      {...(hint === undefined ? {} : { title: hint })}
+      {...(isDecorative ? { 'aria-hidden': true } : {})}
+    >
       <span className={styles.picture}>
         <Avatar name={name} id={id} size={size} isDecorative />
       </span>

@@ -222,6 +222,14 @@
     color: var(--text);
   }
 
+  /* Trouble that asks for a look (a Team day's issues): the orange tag's fill and words, AA on each other. */
+  .root[data-variant='warning'] {
+    border-color: var(--tag-orange-border);
+    background: var(--tag-orange-bg);
+    box-shadow: none;
+    color: var(--tag-orange-text);
+  }
+
   .root[data-variant='dashed'] {
     border-style: dashed;
     border-color: var(--control-border);
@@ -262,6 +270,11 @@
 
     .root[data-variant='ghost-danger'][data-hovered] {
       color: var(--danger);
+    }
+
+    .root[data-variant='warning']:not([data-selected], [data-expanded])[data-hovered] {
+      border-color: var(--tag-orange-text);
+      background: var(--tag-orange-bg);
     }
 
     .root[data-variant='ghost'][data-hovered],

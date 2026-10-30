@@ -19,7 +19,7 @@ import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Popover, type PopoverPlacement } from '../../molecules/Popover/Popover.tsx';
 import type { Hue } from '../../hue.ts';
-import { liftClosed, placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
+import { liftClosed, NEST_AFTER, placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
 import styles from './WeekCalendar.module.css';
 import { strings } from './strings.ts';
 
@@ -490,11 +490,13 @@ export function WeekCalendar({
    * Each day's blocks as laid out (`layoutOfDay`), worked out once per change of the blocks or the days: a drag re-draws
    * the grid on every pointer move, and fifty columns of a Team day would lay out again each time.
    */
+  // A person's column is narrow: what overlaps there sits side by side rather than cascading over what it covers.
+  const nestAfter = isTeam ? Number.POSITIVE_INFINITY : NEST_AFTER;
   const layouts = useMemo(
-    () => new Map(days.map((day) => [day.key, layoutOfDay(blocks, day.key)] as const)),
-    [blocks, days],
+    () => new Map(days.map((day) => [day.key, layoutOfDay(blocks, day.key, nestAfter)] as const)),
+    [blocks, days, nestAfter],
   );
-  const layoutOf = (dayKey: string) => layouts.get(dayKey) ?? layoutOfDay(blocks, dayKey);
+  const layoutOf = (dayKey: string) => layouts.get(dayKey) ?? layoutOfDay(blocks, dayKey, nestAfter);
   /** What Up and Down walk on a day: its blocks and "+N" chips by start, as they read down the screen. */
   const orderOf = (dayKey: string): readonly string[] => layoutOf(dayKey).stops.map((stop) => stop.id);
 
@@ -764,6 +766,7 @@ export function WeekCalendar({
                         block.detail,
                         block.isCancelled,
                         block.status,
+                        block.provider === 'timefix',
                       )}
                       style={{
                         '--start': String(block.startMinute),
@@ -953,7 +956,7 @@ export function WeekCalendar({
 }
 
 /** A day's timed blocks as laid out: closed time full width under the rest, then bookings and events in lanes. */
-function layoutOfDay(blocks: readonly WeekCalendarBlock[], dayKey: string) {
+function layoutOfDay(blocks: readonly WeekCalendarBlock[], dayKey: string, nestAfter: number) {
   const ofDay = blocks.filter((block) => block.dayKey === dayKey);
   // Laid out as tall as they are drawn: a short block is never under one line (`size-chip`), so two back to back
   // quarter hours overlap on screen and must share the width or cascade, not paint over each other.
@@ -974,7 +977,7 @@ function layoutOfDay(blocks: readonly WeekCalendarBlock[], dayKey: string) {
     .map((block) => ({ ...block, ...WHOLE }));
   const timed = ofDay.filter((block) => !isClosed(block) || lifted.has(block.id));
   const ends = new Map(timed.map((block) => [block.id, block.endMinute]));
-  const layout = placeBlocks(timed.map(drawn));
+  const layout = placeBlocks(timed.map(drawn), nestAfter);
   const placed = layout.blocks.map((block) => ({ ...block, endMinute: ends.get(block.id) ?? block.endMinute }));
   const dayBlocks = [...closed, ...placed];
   // Up and Down walk what shows, "+N" chips among the blocks, by start.

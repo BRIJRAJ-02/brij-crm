@@ -83,6 +83,18 @@ function blocks(): WeekCalendarBlock[] {
       kind: 'busy',
     },
     {
+      id: 'g3',
+      dayKey: GRACE,
+      startMinute: 9 * 60 + 45,
+      endMinute: 10 * 60 + 30,
+      title: 'Catch up',
+      time: '9:45 – 10:30 AM',
+      detail: 'Lea Roth',
+      kind: 'booking',
+      hue: 'sky',
+      provider: 'timefix',
+    },
+    {
       id: 'g2',
       dayKey: GRACE,
       startMinute: 14 * 60 + 30,
@@ -152,7 +164,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A day of five people: bookings, closed time and Busy in their columns, one away, one off, and the lane. */
+/** A day of five people: bookings, closed time and Busy in their columns, one away, one off, and the strip. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   // No state here: the artifact's preview calls this as a plain function (LaneOpen opens the lane's card).
@@ -173,14 +185,18 @@ export const Default: Story = {
     // Each person's column is a group named for them: status, then offset, title and trouble, as the head shows.
     await expect(canvas.getByRole('group', { name: 'Alan Turing, Away, Solutions engineer, 1 item' })).toBeVisible();
     await expect(
-      canvas.getByRole('group', { name: 'Grace Hopper, 1 booked, Account executive, Reconnect, 2 items' }),
+      canvas.getByRole('group', { name: 'Grace Hopper, 1 booked, Account executive, Reconnect, 3 items' }),
     ).toBeVisible();
     await expect(canvas.getByRole('group', { name: 'Katherine Johnson, Free, UTC+1, nothing on' })).toBeVisible();
     await expect(canvas.getByRole('region', { name: 'Needs a host, 2 bookings' })).toBeVisible();
+    // Busy and the booking it overlaps sit side by side: neither covers the other.
+    const busy = canvas.getByRole('button', { name: /^Busy, 10:00/ }).getBoundingClientRect();
+    const call = canvas.getByRole('button', { name: /^Catch up, / }).getBoundingClientRect();
+    await expect(busy.right <= call.left + 1 || call.right <= busy.left + 1).toBe(true);
   },
 };
 
-/** The lane's row opens its booking's card beside it; Escape closes it and focus goes back to the row. */
+/** A strip chip opens its booking's card under it; Escape closes it and focus goes back to the chip. */
 export const LaneOpen: Story = {
   render: function Render(args) {
     const [openId, setOpenId] = useState<string | undefined>(undefined);
@@ -204,7 +220,7 @@ export const LaneOpen: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const row = canvas.getByRole('button', { name: 'Discovery' });
+    const row = canvas.getByRole('button', { name: /^Discovery, 4:30 PM/ });
     await userEvent.click(row);
     await settleAnimations();
     await expect(within(document.body).getByRole('dialog')).toBeVisible();
@@ -254,7 +270,7 @@ export const Keyboard: Story = {
   },
 };
 
-/** A phone: one person at a time, Previous and Next in the corner, the lane over the grid. */
+/** A phone: one person at a time, Previous and Next in the corner, the strip one chip that lists its bookings. */
 export const Phone: Story = {
   render: (args) => (
     <Stage width="phone" height="page">
@@ -269,6 +285,7 @@ export const Phone: Story = {
   ),
   play: async ({ canvas, args }) => {
     await expect(canvas.getByRole('button', { name: 'Previous person' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: '2 need a host' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Next person' }));
     await expect(args.onSelectPerson).toHaveBeenCalledWith(GRACE);
   },
