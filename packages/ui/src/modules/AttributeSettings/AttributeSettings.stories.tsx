@@ -566,9 +566,13 @@ export const TypeSettings: Story = {
     const dialog = await openDialog();
     await userEvent.keyboard('Margin');
     await chooseType(dialog, 'Number', userEvent);
-    await userEvent.click(within(dialog).getByRole('button', { name: /^Display/ }));
+    // A Select's button is named by its value, then its label ("Plain 1,234.5 Display").
+    const display = within(dialog).getByRole('button', { name: /Display$/ });
+    await userEvent.click(display);
     await userEvent.click(await screen.findByRole('option', { name: /^Percent/ }));
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+    // Focus is back on the picker, so ⌘↵ submits from there.
+    await waitFor(() => expect(display).toHaveFocus());
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>
       expect(args.onSubmit).toHaveBeenCalledWith(
@@ -588,8 +592,8 @@ export const PhoneSettings: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
     await userEvent.keyboard('Mobile');
-    await chooseType(dialog, 'Phone number', userEvent);
-    await expect(within(dialog).getByRole('button', { name: /^Default country/ })).toBeInTheDocument();
+    await chooseType(dialog, 'Phone', userEvent);
+    await expect(within(dialog).getByRole('button', { name: /Default country$/ })).toBeInTheDocument();
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>
       expect(args.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ type: 'phone', config: {} })),

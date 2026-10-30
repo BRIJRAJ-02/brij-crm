@@ -154,7 +154,9 @@ function MonthHeader({
   return (
     // A plain block, not a header: inline (MonthCalendar) a header would be a page banner landmark.
     <div className={styles.nav}>
+      {/* Every button here but the arrows takes slot={null}: a calendar's only button slots are previous and next. */}
       <AriaButton
+        slot={null}
         className={styles.month}
         aria-expanded={isPickingMonth}
         aria-label={strings.chooseMonth(title)}
@@ -167,6 +169,7 @@ function MonthHeader({
       </AriaButton>
       {!isTodaysMonth && !hasTodayPick && (
         <Button
+          slot={null}
           variant="ghost"
           onPress={() => {
             onPickingMonthChange(false);
@@ -180,6 +183,7 @@ function MonthHeader({
         {isPickingMonth ? (
           <>
             <Button
+              slot={null}
               variant="ghost"
               icon="chevron-left"
               label={strings.previousYear}
@@ -188,6 +192,7 @@ function MonthHeader({
               }}
             />
             <Button
+              slot={null}
               variant="ghost"
               icon="chevron-right"
               label={strings.nextYear}
@@ -233,6 +238,7 @@ function MonthPicker({ today, onPicked }: { readonly today: CalendarDate; readon
         return (
           <AriaButton
             key={index}
+            slot={null}
             className={styles.monthCell}
             data-today={(month.year === today.year && month.month === today.month) || undefined}
             aria-current={isShown ? 'true' : undefined}

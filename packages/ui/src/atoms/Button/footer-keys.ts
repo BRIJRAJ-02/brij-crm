@@ -29,7 +29,7 @@ export interface FooterRole {
  */
 export function useFooterRole(button: {
   readonly kbd: string | readonly string[] | undefined;
-  readonly slot: string | undefined;
+  readonly slot: string | null | undefined;
   readonly type: string;
   readonly form: string | undefined;
   readonly variant: string | undefined;

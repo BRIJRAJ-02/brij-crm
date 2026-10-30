@@ -55,8 +55,11 @@ interface ButtonLook {
    * beside it (CopyButton's "Copied").
    */
   readonly labelReserve?: string;
-  /** A slot a parent fills, such as `close` inside a toast or a dialog. */
-  readonly slot?: string;
+  /**
+   * A slot a parent fills, such as `close` inside a toast or a dialog. `null` opts out of the parent's slots: a
+   * button of its own inside a calendar, whose only slots are its `previous` and `next` arrows.
+   */
+  readonly slot?: string | null;
   readonly ref?: Ref<HTMLButtonElement>;
 }
 

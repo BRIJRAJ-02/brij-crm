@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
-import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
+import { SAMPLE_IDS, sampleId } from '../../workbench/sample-ids.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { expect, fn, screen, waitFor } from 'storybook/test';
 
@@ -76,7 +76,8 @@ export const SearchesLongList: Story = {
     attribute: {
       ...sample.attribute,
       options: Array.from({ length: 8 }, (_, index) => ({
-        id: `stage-${String(index)}`,
+        // Uuids, as every option id is: a value that isn't one is refused before it commits.
+        id: sampleId('status', 100 + index),
         label: ['New', 'Called', 'Met', 'Demo', 'Trial', 'Offer', 'Signed', 'Lost'][index] ?? '',
         hue: 'blue' as const,
         archived: false,
@@ -94,7 +95,7 @@ export const SearchesLongList: Story = {
     const search = await screen.findByRole('textbox', { name: /Search/ });
     await waitFor(() => expect(search).toHaveFocus());
     await userEvent.keyboard('tri{Enter}');
-    await expect(args.onCommit).toHaveBeenCalledWith('stage-4');
+    await expect(args.onCommit).toHaveBeenCalledWith(sampleId('status', 104));
   },
 };
 

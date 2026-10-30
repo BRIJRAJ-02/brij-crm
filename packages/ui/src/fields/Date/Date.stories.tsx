@@ -118,8 +118,8 @@ export const Paste: Story = {
   play: async ({ canvas, args, userEvent }) => {
     await userEvent.click(canvas.getAllByRole('spinbutton')[0] ?? canvas.getByRole('group'));
     await userEvent.paste('8 Nov 2026');
-    await userEvent.tab();
-    await userEvent.tab();
+    // Leaving the field commits it: each filled segment is a tab stop, so a click outside rather than counted tabs.
+    await userEvent.click(document.body);
     await waitFor(() => expect(args.onCommit).toHaveBeenCalledWith('2026-11-08'));
   },
 };

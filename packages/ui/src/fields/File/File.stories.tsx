@@ -77,7 +77,8 @@ export const PasteUpload: Story = {
     </Stage>
   ),
   play: async ({ canvas, args }) => {
-    const drop = canvas.getByRole('button');
+    // The drop area holds two buttons (its own, for the keyboard, and "browse"); the paste reaches the field from either.
+    const drop = canvas.getByRole('button', { name: 'browse' });
     const clipboardData = new DataTransfer();
     clipboardData.items.add(new File(['shot'], 'Screenshot.png', { type: 'image/png' }));
     drop.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));

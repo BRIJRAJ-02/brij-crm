@@ -848,7 +848,8 @@ export const EmptyWeekNext: Story = {
 /** The day view says the day is empty while it is, even with meetings on other days of the week. */
 export const EmptyDay: Story = {
   parameters: { crm: { screenshot: false } },
-  args: { selectedDay: '2026-10-09' },
+  // Saturday: Friday the 9th holds the reserved time and Alan's cancelled visit.
+  args: { selectedDay: '2026-10-10' },
   render: (args) => (
     <Stage width="fill">
       <WeekCalendar {...args} view="day" days={days()} blocks={blocks()} emptyHint="No meetings this day" />

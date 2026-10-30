@@ -235,10 +235,13 @@ export const InModal: Story = {
       return found;
     });
     const inDialog = within(dialog);
-    // The title bar's close button, then the footer: Cancel first, the submit last.
-    await expect(
-      inDialog.getAllByRole('button').map((button) => button.getAttribute('aria-label') ?? button.textContent),
-    ).toEqual(['Close', 'Cancel', 'Add person']);
+    // The title bar's close button, then the footer: Cancel first, the submit last. Found by name, since the
+    // footer's buttons show their keys too (Cancel's ESC, the submit's ⌘↵).
+    await expect(inDialog.getAllByRole('button')).toEqual([
+      inDialog.getByRole('button', { name: 'Close' }),
+      inDialog.getByRole('button', { name: 'Cancel' }),
+      inDialog.getByRole('button', { name: 'Add person' }),
+    ]);
     await userEvent.click(inDialog.getByRole('button', { name: 'Add person' }));
     await expect(args.onSubmit).toHaveBeenCalledWith({ name: 'Maya Patel', email: 'maya@halcyonlabs.io' });
   },
