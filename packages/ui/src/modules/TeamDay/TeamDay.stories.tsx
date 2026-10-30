@@ -155,27 +155,19 @@ type Story = StoryObj<typeof meta>;
 /** A day of five people: bookings, closed time and Busy in their columns, one away, one off, and the lane. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
-  render: function Render(args) {
-    const [openId, setOpenId] = useState<string | undefined>(undefined);
-    return (
-      <Stage width="fill" height="page">
-        <TeamDay
-          {...args}
-          people={people()}
-          blocks={blocks()}
-          openHours={hours}
-          now={{ dayKey: '2026-10-08', minute: 14 * 60 + 30 }}
-          lane={{
-            rows: lane(),
-            ...(openId === undefined ? {} : { openId }),
-            detail: <p>Reassign</p>,
-            onOpen: setOpenId,
-            onClose: () => setOpenId(undefined),
-          }}
-        />
-      </Stage>
-    );
-  },
+  // No state here: the artifact's preview calls this as a plain function (LaneOpen opens the lane's card).
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <TeamDay
+        {...args}
+        people={people()}
+        blocks={blocks()}
+        openHours={hours}
+        now={{ dayKey: '2026-10-08', minute: 14 * 60 + 30 }}
+        lane={{ rows: lane(), onOpen: fn(), onClose: fn() }}
+      />
+    </Stage>
+  ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // Each person's column is a group named for them: status, then offset, title and trouble, as the head shows.
