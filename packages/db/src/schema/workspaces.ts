@@ -98,6 +98,8 @@ export const members = pgTable(
     avatarUrl: text('avatar_url'),
     /** Their time zone in this workspace, an IANA name (spec 0031, slice 7); none means the browser's. */
     timeZone: text('time_zone'),
+    /** Their job title (spec 0037, AC-1441): a label on the Team day, 1 to 60 characters, never read by access. */
+    jobTitle: text('job_title'),
     /** When they left or were removed (spec 0031, AC-814); never set while `status` is `active`. */
     leftAt: timestamptz('left_at'),
     /** Who removed them (themself when they left). */
@@ -138,6 +140,7 @@ export const members = pgTable(
     // An active member never carries a leaving time; a removal sets one (rows removed before it take their last update's).
     check('members_left', sql`${t.status} = 'removed' or ${t.leftAt} is null`),
     check('members_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
+    check('members_job_title', sql`char_length(${t.jobTitle}) between 1 and 60`),
   ],
 );
 
