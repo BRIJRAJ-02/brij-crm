@@ -192,6 +192,12 @@ export async function insertOptionOf(
       })
       .returning({ id: attributeOptions.id });
     if (row === undefined) throw new Error('The option was not created.');
+    // A new open stage sits before the end stages (Won, Lost), so a stage added from a board or a cell never lands
+    // after them; every other option lands last.
+    if (isStatus && (input.outcome ?? 'open') === 'open') {
+      const before = await endStageIndex(tx, attribute.id, row.id);
+      if (before !== undefined) await renumber(tx, attribute.id, row.id, before);
+    }
     // The attribute's options changed: its object's (or list's) screens read its definition again.
     recordDefinition(context, attribute);
     return { optionId: row.id, replayed: false };
@@ -238,6 +244,21 @@ export async function liveOptionLabelled(
       ),
     );
   return row?.id;
+}
+
+/**
+ * Where a new open stage goes in a status: the place of its first end stage (Won or Lost, archived ones too, since
+ * they keep their place), counted without the new stage itself; undefined when it has none, so the stage stays last.
+ */
+async function endStageIndex(tx: WorkspaceTx, attributeId: string, newId: string): Promise<number | undefined> {
+  const order = await tx
+    .select({ id: attributeOptions.id, outcome: attributeOptions.outcome })
+    .from(attributeOptions)
+    .where(eq(attributeOptions.attributeId, attributeId))
+    .orderBy(asc(attributeOptions.position), asc(attributeOptions.id));
+  const others = order.filter((row) => row.id !== newId);
+  const at = others.findIndex((row) => row.outcome !== null && row.outcome !== 'open');
+  return at === -1 ? undefined : at;
 }
 
 async function renumber(tx: WorkspaceTx, attributeId: string, optionId: string, position: number): Promise<void> {
