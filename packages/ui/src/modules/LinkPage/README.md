@@ -53,6 +53,8 @@ Everything the page draws reads those properties rather than token variables dir
 
 Two rules worth knowing. `data-theme` is set to the owner's mode on this root, so the token layer's system preference, which only applies where no `data-theme` is set, never decides somebody else's page. And a filled, tinted or outlined row moves its second line and its chevron onto the card's own colour: the quiet greys have no checked pair against the accent (`text-secondary` on `accent` measures 1.19:1). Ink means a dark page, so its override applies in light mode only; a page already in dark is ink.
 
+`LinkPageThumbnail` draws one look in miniature for a preset or gallery tile (spec 0058, AC-10): the same root, look attributes and stylesheet blocks, grown to its slot, with a face, an "Aa" in the look's typeface and three rows in its shape and fill. It is hidden from screen readers and inert; the tile's name says which look it is.
+
 `layout="blocks"` ignores the look: an editor's "How it looks" shows the one block being typed, in the app's own colours, not a page in miniature.
 
 ## Use

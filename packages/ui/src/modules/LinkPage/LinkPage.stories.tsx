@@ -2,10 +2,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
+import { TileGrid } from '../../molecules/TileGrid/TileGrid.tsx';
 import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { LinkPage, LinkPageTile, type LinkPageBlock } from './LinkPage.tsx';
+import { LinkPage, LinkPageThumbnail, LinkPageTile, type LinkPageBlock } from './LinkPage.tsx';
 
 const meta = {
   title: 'Modules/LinkPage',
@@ -291,6 +292,52 @@ export const Tiles: Story = {
       ))}
     </Stage>
   ),
+};
+
+/**
+ * Five looks in miniature, as Appearance's presets and the theme gallery draw them (spec 0058, AC-10): each the real
+ * ground, typeface, shape and fill, at a tile's size.
+ */
+export const Thumbnails: Story = {
+  render: () => (
+    <Stage>
+      <TileGrid
+        variant="choice"
+        label="Look"
+        defaultValue="plain"
+        tiles={(
+          [
+            [
+              'plain',
+              'Plain',
+              { ground: 'plain', hue: 'gray', mode: 'light', shape: 'soft', fill: 'plain', font: 'sans' },
+            ],
+            [
+              'quiet',
+              'Quiet',
+              { ground: 'paper', hue: 'gray', mode: 'light', shape: 'square', fill: 'plain', font: 'mono' },
+            ],
+            [
+              'bold',
+              'Bold',
+              { ground: 'tint', hue: 'purple', mode: 'light', shape: 'pill', fill: 'solid', font: 'sans' },
+            ],
+            ['ink', 'Ink', { ground: 'ink', hue: 'blue', mode: 'dark', shape: 'soft', fill: 'outline', font: 'sans' }],
+            [
+              'fresh',
+              'Fresh',
+              { ground: 'tint', hue: 'green', mode: 'light', shape: 'pill', fill: 'soft', font: 'sans' },
+            ],
+          ] as const
+        ).map(([id, name, theme]) => ({ id, name, thumbnail: <LinkPageThumbnail theme={theme} /> }))}
+      />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const thumbs = canvasElement.querySelectorAll('[data-thumbnail]');
+    await expect(thumbs).toHaveLength(5);
+    await expect(thumbs[0]).toHaveAttribute('aria-hidden', 'true');
+  },
 };
 
 /** A one pixel PNG, as our own origin's icon route would answer one. `data:` is in the pages' `img-src`. */
