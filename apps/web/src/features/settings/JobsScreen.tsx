@@ -453,6 +453,7 @@ function JobConfirm({
   return (
     <Modal
       title={words.title}
+      variant="confirm"
       tone={words.isDanger ? 'danger' : 'default'}
       isOpen={isOpen}
       isBusy={isBusy}

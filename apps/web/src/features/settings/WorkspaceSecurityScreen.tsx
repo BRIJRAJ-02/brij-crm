@@ -252,6 +252,7 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
               ? strings.confirmLengthTitle(pendingLength)
               : strings.confirmRequireTitle
         }
+        variant="confirm"
         {...(confirm === 'require' ? {} : { tone: 'danger' as const })}
         isOpen={isOpen}
         isBusy={isBusy}
