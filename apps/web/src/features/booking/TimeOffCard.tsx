@@ -112,12 +112,12 @@ function Loaded({
     return [
       strings.reasons[entry.reason],
       ...(standin === undefined ? [] : [strings.covers(firstName(standin))]),
-      ...(entry.note === undefined ? [] : [entry.note]),
-      ...(by === undefined ? [] : [strings.changedBy(by)]),
+      // Someone else's change only: "Changed by you" on one's own rows is noise. The note is in Edit.
+      ...(by === undefined || by === strings.you ? [] : [strings.changedBy(by)]),
     ].join(' · ');
   };
   const columns = list.canManage ? COLUMNS : COLUMNS.filter((column) => column.id !== 'actions');
-  const table = (entries: readonly TimeOffEntry[], label: string) => (
+  const table = (entries: readonly TimeOffEntry[], label: string, isPast = false) => (
     <Table
       label={label}
       columns={columns}
@@ -139,9 +139,11 @@ function Loaded({
                 else if (key === 'delete') setDeleting(entry);
               }}
             >
-              <MenuItem id="edit" icon="pencil">
-                {strings.editAction}
-              </MenuItem>
+              {isPast ? null : (
+                <MenuItem id="edit" icon="pencil">
+                  {strings.editAction}
+                </MenuItem>
+              )}
               <MenuItem id="delete" icon="trash" isDanger>
                 {strings.deleteAction}
               </MenuItem>
@@ -161,7 +163,7 @@ function Loaded({
       )}
       {list.past.length > 0 && (
         <Disclosure title={strings.past} count={list.past.length} variant="quiet">
-          {table(list.past, strings.past)}
+          {table(list.past, strings.past, true)}
         </Disclosure>
       )}
       {list.canManage && (
@@ -179,7 +181,6 @@ function Loaded({
         onClose={() => {
           setAdding(false);
           setEditing(undefined);
-          focusLater(() => addRef.current);
         }}
         onSaved={(_saved: TimeOffSaved, isNew) =>
           onNotice({ tone: 'success', message: isNew ? strings.added : strings.changed })
@@ -190,18 +191,18 @@ function Loaded({
         entry={deleting}
         days={deleting === undefined ? '' : days(deleting)}
         member={who}
-        onClose={() => {
-          setDeleting(undefined);
-          focusLater(() => addRef.current);
-        }}
-        onDelete={(entry) => {
-          setDeleting(undefined);
-          focusLater(() => addRef.current);
-          // Gone at once; put back with a toast by the store if refused.
-          void store.remove(slug, entry).then((landed) => {
-            if (landed) onNotice({ tone: 'success', message: strings.deleted });
-          });
-        }}
+        onClose={() => setDeleting(undefined)}
+        // Waits in its confirm; the row goes at once, and comes back with the store's toast if refused.
+        onDelete={(entry) =>
+          store.remove(slug, entry).then((landed) => {
+            setDeleting(undefined);
+            // The row is gone: focus lands on Add time off, which always stays.
+            if (landed) {
+              focusLater(() => addRef.current);
+              onNotice({ tone: 'success', message: strings.deleted });
+            }
+          })
+        }
       />
     </Card>
   );
@@ -219,8 +220,9 @@ function DeleteTimeOff({
   readonly days: string;
   readonly member: { readonly name: string } | undefined;
   readonly onClose: () => void;
-  readonly onDelete: (entry: TimeOffEntry) => void;
+  readonly onDelete: (entry: TimeOffEntry) => Promise<void>;
 }) {
+  const [isBusy, setBusy] = useState(false);
   // The last entry stays while the Modal plays its exit.
   const [last, setLast] = useState(entry);
   const [lastDays, setLastDays] = useState(days);
@@ -235,16 +237,26 @@ function DeleteTimeOff({
       title={strings.deleteTitle(lastDays)}
       tone="danger"
       isOpen={entry !== undefined}
+      isBusy={isBusy}
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open && !isBusy) onClose();
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC">
+          <Button slot="close" kbd="ESC" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
-          <Button variant="danger-solid" icon="trash" onPress={() => onDelete(shown)}>
-            {strings.deleteCommit}
+          <Button
+            variant="danger-solid"
+            icon="trash"
+            isPending={isBusy}
+            onPress={() => {
+              if (isBusy) return;
+              setBusy(true);
+              void onDelete(shown).finally(() => setBusy(false));
+            }}
+          >
+            {isBusy ? strings.deleting : strings.deleteCommit}
           </Button>
         </>
       }

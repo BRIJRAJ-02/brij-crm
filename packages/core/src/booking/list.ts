@@ -156,6 +156,15 @@ const hostAwayColumn = sql<boolean>`exists (
     and a.ends_at > ${bookings.startsAt} and a.starts_at < ${bookings.endsAt}
 )`;
 
+/**
+ * Whom a reader may see as away (spec 0037, AC-1286): themself, and hosts in their scheduling reach. A page's owner or
+ * a co-host without reach over the host sees the booking, never the host's time off.
+ */
+function awayShownTo(reader: BookingReader): (hostId: string) => boolean {
+  return (hostId) =>
+    reader.admin || reader.everyone !== undefined || hostId === reader.member || (reader.sees ?? []).includes(hostId);
+}
+
 /** A booking row and its page as Bookings shows it. */
 function itemOf(
   {
@@ -177,9 +186,10 @@ function itemOf(
   linked: ReadonlyMap<string, RecordRefDisplay>,
   answersOf: (stored: unknown) => BookingListItem['answers'],
   seeOnly: ReadonlySet<string> = new Set(),
+  showsAway: (hostId: string) => boolean = () => false,
 ): BookingListItem {
   const place = BookingLocation.safeParse(location);
-  const away = hostAway === true && row.status === 'confirmed' ? { hostAway: true } : {};
+  const away = hostAway === true && row.status === 'confirmed' && showsAway(row.hostMemberId) ? { hostAway: true } : {};
   // See over the host (spec 0037, AC-1262): the guest's name, the page's title, the time and status only.
   if (seeOnly.has(row.id)) {
     return {
@@ -288,7 +298,7 @@ export async function listWorkspaceBookings(
       rows.map(({ booking }) => booking.answers),
     );
     const seeOnly = await seeOnlyOf(tx, reader, rows);
-    return rows.map((row) => itemOf(row, seen, linked, answers, seeOnly));
+    return rows.map((row) => itemOf(row, seen, linked, answers, seeOnly, awayShownTo(reader)));
   });
 }
 
@@ -436,7 +446,7 @@ export async function readBookingsCalendar(
     );
     const seeOnly = await seeOnlyOf(tx, reader, rows);
     return {
-      bookings: rows.map((row) => itemOf(row, seen, linked, answers, seeOnly)),
+      bookings: rows.map((row) => itemOf(row, seen, linked, answers, seeOnly, awayShownTo(reader))),
       events,
       busy,
       blocks: [...blocks],
@@ -556,7 +566,7 @@ export async function listMeetings(
     const bookingItems: Listed[] = rows.map((row) => ({
       at: row.booking.startsAt.toISOString(),
       id: row.booking.id,
-      item: { kind: 'booking', booking: itemOf(row, seen, linked, answers, seeOnly) },
+      item: { kind: 'booking', booking: itemOf(row, seen, linked, answers, seeOnly, awayShownTo(reader)) },
     }));
 
     // The reader's own calendar events, from the calendars on their week (and the panel's pick).

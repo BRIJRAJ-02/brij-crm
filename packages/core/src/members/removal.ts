@@ -124,6 +124,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
  */
 export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   records_deleted_by: 'history: who moved a record to the trash',
+  booking_time_blocks_standin:
+    'time off still names who was to cover; a stand in who left covers nothing (awayAt reads active members only)',
   values_set_by: 'history: who set a value',
   list_entries_deleted_by: 'history: who removed an entry',
   record_links_set_by: 'history: who linked two records',

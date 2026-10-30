@@ -7,7 +7,6 @@ export const timeOffStrings = {
   loading: 'Loading time off',
   failed: 'Couldn’t load time off.',
   none: 'No time off planned',
-  noneHint: 'Every page offers times as your hours say.',
   past: 'Past',
   add: 'Add time off',
   addFor: (first: string) => `Add time off for ${first}`,
@@ -31,8 +30,16 @@ export const timeOffStrings = {
   someone: 'someone',
   // The dialog.
   days: 'Days',
-  daysHint: 'Whole days, in your time zone. Every page stops offering times with you.',
-  daysHintFor: (first: string) => `Whole days, in ${first}’s time zone. Every page stops offering times with them.`,
+  // Fresha's line: what time off does, said where the days are picked.
+  daysHint: 'Whole days, in your time zone. Online bookings can’t be placed during time off.',
+  daysHintFor: (first: string) =>
+    `Whole days, in ${first}’s time zone. Online bookings can’t be placed with them during time off.`,
+  // Workable's plain count, once the days are picked.
+  dayCount: (count: number) => (count === 1 ? '1 day off.' : `${String(count)} days off.`),
+  // Remote's banner when someone with Manage acts for a colleague.
+  onBehalf: (first: string) => `You’re adding time off on ${first}’s behalf. ${first} gets an email about it.`,
+  onBehalfEdit: (first: string) =>
+    `You’re changing ${first}’s time off on their behalf. ${first} gets an email about it.`,
   pickDays: 'Pick the days.',
   reason: 'Reason',
   standin: 'Who covers',
@@ -41,33 +48,34 @@ export const timeOffStrings = {
   nobody: 'Nobody',
   note: 'Note',
   noteHint: 'Optional. Only you and people who manage your scheduling see it.',
+  noteHintFor: (first: string) => `Optional. Only ${first} and people who manage their scheduling see it.`,
   save: 'Save',
   saving: 'Saving…',
   cancel: 'Cancel',
   added: 'Time off added',
   changed: 'Time off saved',
   // After a save over meetings (AC-1285).
-  insideTitle: 'Meetings in this time',
+  // The second step says the time off is saved; the meetings inside are what is left to do.
+  savedTitle: 'Time off saved',
+  savedTitleFor: (first: string) => `Time off for ${first} saved`,
+  // Deputy's warning: the meetings already booked in the period, listed (AC-1285).
   inside: (count: number) =>
-    count === 1 ? 'You have 1 meeting in this time.' : `You have ${String(count)} meetings in this time.`,
+    count === 1 ? 'You have 1 meeting during this period.' : `You have ${String(count)} meetings during this period.`,
   insideFor: (first: string, count: number) =>
-    count === 1 ? `${first} has 1 meeting in this time.` : `${first} has ${String(count)} meetings in this time.`,
+    count === 1
+      ? `${first} has 1 meeting during this period.`
+      : `${first} has ${String(count)} meetings during this period.`,
   insideKept: 'They stay booked and show Host away on Bookings, so you can move or reassign them.',
   insideMore: (count: number) => (count === 1 ? 'And 1 more.' : `And ${String(count)} more.`),
   done: 'Done',
   openBookings: 'Open Bookings',
   // Delete (AC-1445).
   deleteTitle: (days: string) => `Delete time off, ${days}?`,
-  deleteBody: 'Pages will offer times on these days again.',
-  deleteBodyFor: (first: string) => `Pages will offer times with ${first} on these days again.`,
+  deleteBody: 'Online bookings can be placed on these days again.',
+  deleteBodyFor: (first: string) => `Online bookings can be placed with ${first} on these days again.`,
   deleteCommit: 'Delete time off',
   deleting: 'Deleting…',
   deleted: 'Time off deleted',
   // Elsewhere.
-  hostAway: 'Host away',
-  hostAwayText: 'Its host is away then. It stays booked: move it, or reassign it on a round robin page.',
-  allDay: 'All day',
-  awayNote: 'No page offers times with you while you’re away.',
-  openTimeOff: 'Open time off',
   somethingWrong: 'Something went wrong. Try again.',
 } as const;

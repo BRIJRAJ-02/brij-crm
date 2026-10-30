@@ -10,12 +10,13 @@ import {
   DateRangePicker,
   DescriptionList,
   Field,
+  Form,
   Modal,
   Select,
   useFormatSettings,
 } from '@crm/ui';
-import { useState } from 'react';
-import { firstName } from './time-off.ts';
+import { useId, useState } from 'react';
+import { firstName, timeOffDays } from './time-off.ts';
 import { timeOffStrings as strings } from './time-off-strings.ts';
 
 const REASONS: readonly TimeOffReason[] = ['vacation', 'sick', 'travel', 'holiday', 'other'];
@@ -52,11 +53,16 @@ export function TimeOffDialog(props: TimeOffDialogProps) {
   // Each opening starts afresh: a new id for a new entry, the entry's own fields for an edit.
   const [opening, setOpening] = useState(0);
   const [wasOpen, setWasOpen] = useState(props.isOpen);
+  // The entry stays while the Modal plays its exit, so an edit's title never flips to Add as it closes.
+  const [entry, setEntry] = useState(props.entry);
   if (props.isOpen !== wasOpen) {
     setWasOpen(props.isOpen);
-    if (props.isOpen) setOpening((count) => count + 1);
+    if (props.isOpen) {
+      setOpening((count) => count + 1);
+      setEntry(props.entry);
+    }
   }
-  return <TimeOffForm key={opening} {...props} />;
+  return <TimeOffForm key={opening} {...props} entry={props.isOpen ? props.entry : entry} />;
 }
 
 function TimeOffForm({
@@ -84,6 +90,7 @@ function TimeOffForm({
     {},
   );
   const [saved, setSaved] = useState<TimeOffSaved | undefined>(undefined);
+  const formId = useId();
   const first = member === undefined ? undefined : firstName(member.name);
   const title =
     entry === undefined
@@ -140,22 +147,27 @@ function TimeOffForm({
     const count = saved.bookingsInside.length + saved.moreInside;
     return (
       <Modal
-        title={strings.insideTitle}
+        title={first === undefined ? strings.savedTitle : strings.savedTitleFor(first)}
         icon="calendar"
+        // Announced politely as the dialog turns: the time off is saved, and what is left to do.
+        status={first === undefined ? strings.inside(count) : strings.insideFor(first, count)}
         isOpen={isOpen}
         onOpenChange={(open) => {
           if (!open) close();
         }}
         actions={
           <>
-            <Button
-              onPress={() => {
-                close();
-                onOpenBookings();
-              }}
-            >
-              {strings.openBookings}
-            </Button>
+            {/* Bookings opens the reader's own: for a colleague's time off it wouldn't show these meetings. */}
+            {first === undefined && (
+              <Button
+                onPress={() => {
+                  close();
+                  onOpenBookings();
+                }}
+              >
+                {strings.openBookings}
+              </Button>
+            )}
             <Button variant="primary" onPress={close}>
               {strings.done}
             </Button>
@@ -182,6 +194,8 @@ function TimeOffForm({
       title={title}
       isOpen={isOpen}
       isBusy={isBusy}
+      // A form: only Cancel or Esc throws away what was typed.
+      isDismissable={false}
       onOpenChange={(open) => {
         if (!open) close();
       }}
@@ -190,69 +204,77 @@ function TimeOffForm({
           <Button slot="close" isDisabled={isBusy} kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button variant="primary" isPending={isBusy} onPress={save}>
+          <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
             {isBusy ? strings.saving : strings.save}
           </Button>
         </>
       }
     >
       {errors.form !== undefined && <Callout tone="danger">{errors.form}</Callout>}
-      <DateRangePicker
-        label={strings.days}
-        hint={first === undefined ? strings.daysHint : strings.daysHintFor(first)}
-        value={range}
-        isRequired
-        onChange={(next) => {
-          setRange(next);
-          setErrors((was) => ({ ...was, days: undefined }));
-        }}
-        {...(errors.days === undefined ? {} : { error: errors.days })}
-      />
-      <Select
-        label={strings.reason}
-        items={REASONS.map((each) => ({ id: each, label: strings.reasons[each] }))}
-        value={reason}
-        onChange={(next) => {
-          const found = REASONS.find((each) => each === next);
-          if (found !== undefined) setReason(found);
-        }}
-      />
-      <Select
-        label={strings.standin}
-        hint={first === undefined ? strings.standinHint : strings.standinHintFor(first)}
-        isSearchable
-        items={[
-          { id: NOBODY, label: strings.nobody },
-          ...people.map((person) => ({
-            id: person.id,
-            label: person.name,
-            leading: (
-              <Avatar
-                name={person.name}
-                id={person.id}
-                size="xs"
-                {...(person.avatarUrl === undefined ? {} : { src: person.avatarUrl })}
-                isDecorative
-              />
-            ),
-          })),
-        ]}
-        value={standin}
-        onChange={(next) => {
-          setStandin(next ?? NOBODY);
-          setErrors((was) => ({ ...was, standin: undefined }));
-        }}
-        {...(errors.standin === undefined ? {} : { error: errors.standin })}
-      />
-      <Field
-        label={strings.note}
-        hint={strings.noteHint}
-        isMultiline
-        maxLength={NOTE_MAX}
-        showCounter
-        value={note}
-        onChange={setNote}
-      />
+      <Form id={formId} label={title} onSubmit={save}>
+        {first !== undefined && (
+          <Callout tone="info">{entry === undefined ? strings.onBehalf(first) : strings.onBehalfEdit(first)}</Callout>
+        )}
+        <DateRangePicker
+          label={strings.days}
+          hint={[
+            ...(range === null ? [] : [strings.dayCount(timeOffDays(range.start, range.end))]),
+            first === undefined ? strings.daysHint : strings.daysHintFor(first),
+          ].join(' ')}
+          value={range}
+          isRequired
+          onChange={(next) => {
+            setRange(next);
+            setErrors((was) => ({ ...was, days: undefined }));
+          }}
+          {...(errors.days === undefined ? {} : { error: errors.days })}
+        />
+        <Select
+          label={strings.reason}
+          items={REASONS.map((each) => ({ id: each, label: strings.reasons[each] }))}
+          value={reason}
+          onChange={(next) => {
+            const found = REASONS.find((each) => each === next);
+            if (found !== undefined) setReason(found);
+          }}
+        />
+        <Select
+          label={strings.standin}
+          hint={first === undefined ? strings.standinHint : strings.standinHintFor(first)}
+          isSearchable
+          items={[
+            { id: NOBODY, label: strings.nobody },
+            ...people.map((person) => ({
+              id: person.id,
+              label: person.name,
+              leading: (
+                <Avatar
+                  name={person.name}
+                  id={person.id}
+                  size="xs"
+                  {...(person.avatarUrl === undefined ? {} : { src: person.avatarUrl })}
+                  isDecorative
+                />
+              ),
+            })),
+          ]}
+          value={standin}
+          onChange={(next) => {
+            setStandin(next ?? NOBODY);
+            setErrors((was) => ({ ...was, standin: undefined }));
+          }}
+          {...(errors.standin === undefined ? {} : { error: errors.standin })}
+        />
+        <Field
+          label={strings.note}
+          hint={first === undefined ? strings.noteHint : strings.noteHintFor(first)}
+          isMultiline
+          maxLength={NOTE_MAX}
+          showCounter
+          value={note}
+          onChange={setNote}
+        />
+      </Form>
     </Modal>
   );
 }

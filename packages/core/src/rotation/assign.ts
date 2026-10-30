@@ -9,7 +9,9 @@
 // last host when free. Nobody left for a seat: SLOT_TAKEN. The caller writes
 // the booking, its `booking_hosts` rows and one ledger row per rotation in
 // the same transaction, so the next writer under the locks sees them all.
+import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
+import { uuidArray } from '../engine/ids.ts';
 import { hostLockKey, lockKey } from '../booking/locks.ts';
 import { BUSY_MARGIN_MS, type MembersBusy, type PageRecord } from '../booking/slots.ts';
 import { refuse } from '../engine/refusals.ts';
@@ -110,6 +112,19 @@ export async function chooseHosts(
   await lockHosts(tx, choice.workspaceId, [...locked]);
   // Read again under the locks: a stand in counts only when still named, and locked.
   const away = standins.length === 0 ? awayBefore : await awayAt(tx, known, choice.start);
+  // A stand in outside the team has no calendar read in `choice.busy`: one with a calendar connected is never seated
+  // (fail closed), so their own meetings are never booked over.
+  const unread = standins.filter((id) => !choice.busy.has(id));
+  const withCalendar =
+    unread.length === 0
+      ? new Set<string>()
+      : new Set(
+          (
+            await tx.execute<{ member_id: string }>(sql`
+              select distinct member_id::text from calendar_connections where member_id = any(${uuidArray(unread)})
+            `)
+          ).rows.map((row) => row.member_id),
+        );
   const reads = await readTeam(tx, page, team, choice.busy, {
     from: choice.from,
     to: choice.to,
@@ -129,7 +144,9 @@ export async function chooseHosts(
   const standinFor = (memberId: string | undefined): string | undefined => {
     if (memberId === undefined) return undefined;
     const standin = away.get(memberId);
-    return standin !== undefined && !team.fixed.includes(standin) && freeAt(standin) ? standin : undefined;
+    return standin !== undefined && !team.fixed.includes(standin) && !withCalendar.has(standin) && freeAt(standin)
+      ? standin
+      : undefined;
   };
   // A kept seat stays when its host is still a candidate there; its member is then nobody else's to pick.
   const kept = new Map<string, string>();

@@ -146,8 +146,10 @@ function whereRowOf(
 function statusOf(booking: BookingListItem): { readonly label: string; readonly hue: Hue } {
   if (booking.status === 'cancelled') return { label: strings.status.cancelled, hue: 'gray' };
   if (booking.needsHost) return { label: strings.needsHost, hue: 'orange' };
-  if (booking.hostAway === true) return { label: strings.hostAway, hue: 'orange' };
   if (booking.noShow === true) return { label: strings.noShow, hue: 'red' };
+  if (booking.hostAway === true && Date.parse(booking.endsAt) > Date.now()) {
+    return { label: strings.hostAway, hue: 'orange' };
+  }
   return { label: strings.status.confirmed, hue: 'green' };
 }
 
@@ -694,14 +696,6 @@ function removeWords(
 }
 
 /**
- * A block's or hold's card: when, why, whether it repeats, what it does, and
- * Remove (Release for a hold; for a weekly block, every week). Remove asks
- * first, since nothing brings a removed block back (the house rule in Modal's
- * README): the screen closes this card and draws the confirm (a dialog can't
- * sit over the card's popover), and opens the card again, focus on Remove,
- * when the confirm is dismissed.
- */
-/**
  * Time off on the week (spec 0037, AC-1287): the days, and that no page offers times then. It is changed in
  * Availability's Time off section, never removed here as a block.
  */
@@ -742,6 +736,14 @@ function nextDay(date: string): string {
   return new Date(Date.UTC(year, month - 1, day + 1)).toISOString();
 }
 
+/**
+ * A block's or hold's card: when, why, whether it repeats, what it does, and
+ * Remove (Release for a hold; for a weekly block, every week). Remove asks
+ * first, since nothing brings a removed block back (the house rule in Modal's
+ * README): the screen closes this card and draws the confirm (a dialog can't
+ * sit over the card's popover), and opens the card again, focus on Remove,
+ * when the confirm is dismissed.
+ */
 function BlockCard({
   turn,
   locale,
@@ -1269,7 +1271,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
               ? { status: strings.noShow }
               : booking.needsHost
                 ? { status: strings.needsHost }
-                : booking.hostAway === true
+                : booking.hostAway === true && Date.parse(booking.endsAt) > now.getTime()
                   ? { status: strings.hostAway }
                   : {}),
         },

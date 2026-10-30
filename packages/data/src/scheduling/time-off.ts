@@ -155,8 +155,11 @@ export function createTimeOffStore(deps: TimeOffDeps) {
   /** Every held list of the workspace showing `memberId`'s time off (theirs as "mine", or as a colleague's). */
   const heldFor = (workspace: string, memberId: string) =>
     [...lists].filter(([key, list]) => key.startsWith(`${workspace}\u0000`) && list.memberOf() === memberId);
+  /** The workspace's lists still on their first read: a write marks them stale, so that read is asked again. */
+  const unread = (workspace: string) =>
+    [...lists].filter(([key, list]) => key.startsWith(`${workspace}\u0000`) && list.memberOf() === undefined);
   const land = (workspace: string, entry: TimeOffEntry) => {
-    for (const [, list] of heldFor(workspace, entry.memberId)) {
+    for (const [, list] of [...heldFor(workspace, entry.memberId), ...unread(workspace)]) {
       list.change((shown) => withEntry(shown, entry, entry.id, now()));
     }
   };
@@ -204,7 +207,7 @@ export function createTimeOffStore(deps: TimeOffDeps) {
     },
     /** Removes an entry: gone at once, put back where it was with a toast if refused. Answers whether it landed. */
     async remove(workspace: string, entry: TimeOffEntry): Promise<boolean> {
-      const touched = heldFor(workspace, entry.memberId).map(([, list]) => list);
+      const touched = [...heldFor(workspace, entry.memberId), ...unread(workspace)].map(([, list]) => list);
       for (const list of touched) list.change((shown) => withEntry(shown, undefined, entry.id, now()));
       try {
         await deps.api.remove({ workspace, id: entry.id });

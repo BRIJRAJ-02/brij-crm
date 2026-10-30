@@ -53,7 +53,8 @@ function teamRowOf(day: TeamMemberDay, meId: string | undefined, now: Date, time
             ? strings.busy
             : strings.inMeeting
           : strings.freeNow,
-    detail,
+    // Away: no calendar line beside it.
+    ...(day.away === true ? {} : { detail }),
   };
 }
 

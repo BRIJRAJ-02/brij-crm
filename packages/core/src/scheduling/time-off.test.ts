@@ -351,8 +351,17 @@ describe('time off for someone else (AC-1282, AC-1285, AC-1286, AC-1287)', () =>
       ),
     ).toEqual({ code: 'FORBIDDEN', message: 'You can see Bea’s scheduling but not change it.' });
     expect(await refusalOf(deleteTimeOff(w.as(priya), { id: saved.entry.id }))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusalOf(updateTimeOff(w.as(priya), { ...saved.entry, reason: 'other' }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    // See learns nothing of who changed it either.
+    expect(seen.upcoming[0]).not.toHaveProperty('changedBy');
     // Bo reaches nobody: Bea's time off is absent to him, read or changed.
     expect(await refusalOf(listTimeOff(w.as(bo), { now }, { memberId: bea }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(updateTimeOff(w.as(bo), { ...saved.entry, reason: 'other' }))).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'That time off could not be found.',
+    });
     expect(await refusalOf(deleteTimeOff(w.as(bo), { id: saved.entry.id }))).toMatchObject({
       code: 'NOT_FOUND',
       message: 'That time off could not be found.',

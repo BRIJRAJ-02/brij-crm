@@ -159,7 +159,13 @@ async function existing(tx: WorkspaceTx, member: string, id: string): Promise<Ti
   const [row] = await tx
     .select(blockColumns())
     .from(bookingTimeBlocks)
-    .where(and(eq(bookingTimeBlocks.id, id), eq(bookingTimeBlocks.memberId, member)));
+    .where(
+      and(
+        eq(bookingTimeBlocks.id, id),
+        eq(bookingTimeBlocks.memberId, member),
+        sql`${bookingTimeBlocks.kind} <> 'away'`,
+      ),
+    );
   return row === undefined ? undefined : viewOf(row);
 }
 

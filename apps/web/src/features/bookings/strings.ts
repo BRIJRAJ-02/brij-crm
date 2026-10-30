@@ -314,7 +314,7 @@ export const strings = {
   hostAway: 'Host away',
   hostAwayText: 'Its host is away then. It stays booked: move it, or reassign it on a round robin page.',
   away: 'Away',
-  awayNote: 'No page offers times with you while you’re away.',
+  awayNote: 'Online bookings can’t be placed during time off.',
   openTimeOff: 'Open time off',
   // A no show (spec 0043, AC-1613).
   noShow: 'No show',

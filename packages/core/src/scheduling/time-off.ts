@@ -91,7 +91,7 @@ export function entryOf(row: AwayRow, full: boolean): TimeOffEntry {
   // The span ends at the midnight after the last day.
   const toDate = DateTime.fromJSDate(ends, { zone }).minus({ days: 1 }).toISODate() ?? '';
   const changedBy =
-    row.updatedByMemberId !== null && row.updatedByMemberId !== row.memberId
+    full && row.updatedByMemberId !== null && row.updatedByMemberId !== row.memberId
       ? { changedBy: { memberId: row.updatedByMemberId, at: row.updatedAt.toISOString() } }
       : {};
   return {
@@ -239,6 +239,8 @@ async function bookingsInside(
     from bookings b join booking_pages p on p.workspace_id = b.workspace_id and p.id = b.page_id
     where b.host_member_id = ${member}::uuid and b.status = 'confirmed'
       and b.starts_at < ${end.toISOString()}::timestamptz and b.ends_at > ${start.toISOString()}::timestamptz
+      -- A lower bound on the index's start too (a booking is at most a day), so the host's history isn't walked.
+      and b.starts_at > ${start.toISOString()}::timestamptz - interval '1 day'
     order by b.starts_at, b.id
     limit ${INSIDE_MAX}
   `);
@@ -313,7 +315,12 @@ export async function listTimeOff(
       canManage = canManage && full;
     }
     const now = deps.now().toISOString();
-    const away = and(eq(bookingTimeBlocks.memberId, member), eq(bookingTimeBlocks.kind, 'away'));
+    // `repeat = 'once'` too, so both reads reach `booking_time_blocks_once` (a partial index on it).
+    const away = and(
+      eq(bookingTimeBlocks.memberId, member),
+      eq(bookingTimeBlocks.repeat, 'once'),
+      eq(bookingTimeBlocks.kind, 'away'),
+    );
     const upcoming = await tx
       .select(awayColumns)
       .from(bookingTimeBlocks)
@@ -358,6 +365,9 @@ export async function createTimeOff(
       const inside = await bookingsInside(tx, member, new Date(entry.startsAt), new Date(entry.endsAt));
       return { entry, bookingsInside: inside.bookings, moreInside: inside.more };
     }
+    // An id another block (or someone else's time off) holds is refused, never a failed insert.
+    const taken = await tx.execute(sql`select 1 from booking_time_blocks where id = ${input.id}::uuid`);
+    if (taken.rows.length > 0) throw refuseOn('CONFIG_INVALID', 'Close this and add the time off again.', 'id');
     await checkStandin(tx, member, input.standinMemberId);
     const zone = await zoneOf(tx, member);
     const { start, end } = spanOf(input, zone);

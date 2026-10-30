@@ -24,3 +24,8 @@ export function daysLabel(fromDate: string, toDate: string, locale: string, this
 
 /** A member's first name, for "Add time off for Sam". */
 export const firstName = (name: string): string => name.trim().split(/\s+/)[0] ?? name;
+
+/** The days from `from` to `to`, both counted, read as calendar dates ("4 days off"). */
+export function timeOffDays(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+}
