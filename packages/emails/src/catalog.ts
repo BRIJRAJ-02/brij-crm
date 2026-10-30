@@ -129,6 +129,9 @@ export const CATALOG: Catalog = {
       jobLabel: 'Bulk edit',
       reason: 'This job stopped after repeated errors. What it finished is kept.',
       jobsPath: '/w/acme/settings/jobs',
+      startedAt: '2026-11-02T09:00:00.000Z',
+      timeZone: 'Europe/London',
+      progress: { done: 1200, total: 5000 },
     },
   },
   scheduling_changed: {

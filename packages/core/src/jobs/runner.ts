@@ -16,6 +16,7 @@ import { hostname } from 'node:os';
 import { and, eq, sql } from 'drizzle-orm';
 import { isFinishedJob, jobLabel, REFUSAL_GROUP_IDS, type QueuePayload } from '@crm/contracts';
 import { ERROR_CODES } from '@crm/contracts/codes';
+import { EmailTimeZone } from '@crm/contracts/emails';
 import { schema, type Database, type WorkspaceTx } from '@crm/db';
 import { inWorkspace } from '../access/run.ts';
 import { queueJobFailed } from '../emails/queue.ts';
@@ -146,18 +147,38 @@ async function tellStarterFailed(
 ): Promise<void> {
   if (row.createdByType !== 'member' || row.createdByMemberId === null) return;
   if (kind?.tellsStarter === true || error.code === 'ACTOR_REMOVED') return;
-  const [workspace] = await tx
-    .select({ slug: workspaces.slug })
-    .from(workspaces)
-    .where(eq(workspaces.id, row.workspaceId));
-  if (workspace === undefined) return;
+  // Read again in this transaction: the counts a batch just added aren't on `row`.
+  const { rows } = await tx.execute<{
+    slug: string;
+    created_at: string;
+    started_at: string | null;
+    done: number;
+    total: number | null;
+    time_zone: string;
+  }>(
+    sql`select w.slug, to_json(j.created_at)#>>'{}' as created_at, j.started_at, j.done, j.total,
+          coalesce(m.time_zone, w.time_zone) as time_zone
+        from jobs j
+        join workspaces w on w.id = j.workspace_id
+        left join members m on m.workspace_id = j.workspace_id and m.id = ${row.createdByMemberId}
+        where j.workspace_id = ${row.workspaceId} and j.id = ${row.id}`,
+  );
+  const job = rows[0];
+  if (job === undefined) return;
+  const timeZone = EmailTimeZone.safeParse(job.time_zone);
   await queueJobFailed(tx, {
     jobId: row.id,
     memberId: row.createdByMemberId,
     params: {
       jobLabel: jobLabel(row.kind),
       reason: error.message,
-      jobsPath: `/w/${encodeURIComponent(workspace.slug)}/settings/jobs`,
+      jobsPath: `/w/${encodeURIComponent(job.slug)}/settings/jobs`,
+      startedAt: new Date(job.created_at).toISOString(),
+      ...(timeZone.success ? { timeZone: timeZone.data } : {}),
+      // A job that never ran a batch has no progress to tell.
+      ...(job.started_at === null
+        ? {}
+        : { progress: { done: job.done, ...(job.total === null ? {} : { total: job.total }) } }),
     },
   });
 }

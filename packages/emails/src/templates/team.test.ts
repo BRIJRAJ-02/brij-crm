@@ -15,6 +15,23 @@ describe('the job that didn’t finish', () => {
     expect(email.html).toContain(`href="${ORIGIN}/w/acme/settings/jobs`);
     expect(email.text).toContain('Open Background jobs');
   });
+
+  it('says when it was started and how far it got', async () => {
+    const email = await renderEmail('job_failed', CATALOG.job_failed.sample, context);
+    expect(email.text).toContain('It got through 1,200 of 5,000 before it stopped.');
+    expect(email.text).toContain('Monday 2 November 2026, 9:00 AM (Europe/London)');
+    const none = await renderEmail('job_failed', { ...CATALOG.job_failed.sample, progress: { done: 0 } }, context);
+    expect(none.text).toContain('It stopped before it changed anything.');
+    const unknown = await renderEmail('job_failed', { ...CATALOG.job_failed.sample, progress: { done: 40 } }, context);
+    expect(unknown.text).toContain('It got through 40 before it stopped.');
+  });
+
+  it('still draws one queued before it carried a start time or progress', async () => {
+    const { jobLabel, reason, jobsPath } = CATALOG.job_failed.sample;
+    const email = await renderEmail('job_failed', { jobLabel, reason, jobsPath }, context);
+    expect(email.text).not.toContain('Started');
+    expect(email.text).not.toContain('It got through');
+  });
 });
 
 describe('an import’s result', () => {

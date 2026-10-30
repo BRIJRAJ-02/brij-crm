@@ -287,6 +287,11 @@ export const JobFailedEmail = z.strictObject({
   /** Why it stopped, as the job's page says it. */
   reason: Paragraph,
   jobsPath: AppPath,
+  /** When they started it, stated in `timeZone`; absent on an email queued before 30 October 2026. */
+  startedAt: Instant.optional(),
+  timeZone: EmailTimeZone.optional(),
+  /** How far it got before it stopped: items done, of how many when the kind knows. */
+  progress: z.strictObject({ done: Count, total: Count.optional() }).optional(),
 });
 /** A member's background job failed. */
 export type JobFailedEmail = z.infer<typeof JobFailedEmail>;
