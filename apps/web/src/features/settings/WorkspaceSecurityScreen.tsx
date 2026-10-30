@@ -187,18 +187,18 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
           <SettingsRow
             title={strings.require}
             meta={<InfoTip label={strings.require}>{strings.requireInfo}</InfoTip>}
-            description={
-              rules.requireTwoFactor ? (
-                strings.requireOn(rules.membersWithout)
-              ) : mayRequire ? (
-                strings.requireOff
-              ) : (
-                // Off limits until the owner has it: the row says why, with the way to set it up, and no box above.
-                <>
-                  {strings.youFirst} <Link href={securitySettingsHref(slug)}>{strings.setUpYours}</Link>
-                </>
-              )
-            }
+            {...(rules.requireTwoFactor
+              ? { description: strings.requireOn(rules.membersWithout) }
+              : mayRequire
+                ? {}
+                : {
+                    // Off limits until the owner has it: the row says why, with the way to set it up, and no box above.
+                    description: (
+                      <>
+                        {strings.youFirst} <Link href={securitySettingsHref(slug)}>{strings.setUpYours}</Link>
+                      </>
+                    ),
+                  })}
           >
             <Switch
               label={strings.require}
@@ -215,7 +215,6 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
           <SettingsRow
             title={strings.sessionLength}
             meta={<InfoTip label={strings.sessionLength}>{strings.sessionLengthInfo}</InfoTip>}
-            description={strings.sessionLengthDescription}
           >
             <Select
               savesOnPick
