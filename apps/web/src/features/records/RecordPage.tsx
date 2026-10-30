@@ -660,6 +660,8 @@ function RecordScreen({
         record={pageRecord}
         {...(pageHref === undefined ? {} : { recordHref: pageHref })}
         members={members}
+        objects={objects}
+        hrefOf={chipHref}
         canChange={canAddTasks}
         onStored={noteStored}
         onClose={closeNote}

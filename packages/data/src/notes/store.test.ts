@@ -3,8 +3,9 @@
 // 300 ms save and its 2 second most wait, one save in flight with the latest
 // next, the offline retries then Retry, the size check before sending, the
 // two notices, a save finishing after its window closed, the list's live
-// reread, and delete with Undo.
+// reread, delete with Undo, and a note's linked records (migration 0136).
 import type { Note, NoteSummary } from '@crm/contracts';
+import type { RecordRefDisplay } from '@crm/contracts/values';
 import { describe, expect, it } from 'vitest';
 import { dataError } from '../errors.ts';
 import { createMutationLog } from '../live/mutations.ts';
@@ -39,6 +40,10 @@ function setup() {
   let open: () => void = () => undefined;
   let failNext: Error[] = [];
   let failDelete: Error | undefined;
+  let failLink: Error | undefined;
+  const links = new Map<string, RecordRefDisplay[]>();
+  const linkCalls: { add?: readonly string[]; remove?: readonly string[] }[] = [];
+  const savedOn: string[] = [];
   const summary = (id: string, held: Stored): NoteSummary => ({
     id,
     recordId: ACME,
@@ -59,10 +64,15 @@ function setup() {
     get: ({ noteId }) => {
       const held = server.get(noteId);
       if (held === undefined) return Promise.reject(dataError('NOT_FOUND', 'That note does not exist.'));
-      return Promise.resolve({ ...summary(noteId, held), content: held.content } as Note);
+      return Promise.resolve({
+        ...summary(noteId, held),
+        content: held.content,
+        links: links.get(noteId) ?? [],
+      } as Note);
     },
     save: async (input) => {
       saves.push({ title: input.title, content: input.content, baseVersion: input.baseVersion });
+      savedOn.push(input.recordId);
       await gate;
       const failure = failNext.shift();
       if (failure !== undefined) throw failure;
@@ -90,6 +100,26 @@ function setup() {
       const held: Stored = { title: 'Back', content: doc('x'), version: 1, updatedBy: ME };
       server.set(noteId, held);
       return Promise.resolve(summary(noteId, held));
+    },
+    link: async ({ noteId, addRecordIds, removeRecordIds }) => {
+      linkCalls.push({
+        ...(addRecordIds ? { add: addRecordIds } : {}),
+        ...(removeRecordIds ? { remove: removeRecordIds } : {}),
+      });
+      await gate;
+      const refused = failLink;
+      failLink = undefined;
+      if (refused !== undefined) throw refused;
+      const removed = new Set(removeRecordIds ?? []);
+      const kept = (links.get(noteId) ?? []).filter((link) => !removed.has(link.recordId));
+      const added = (addRecordIds ?? []).map((recordId): RecordRefDisplay => ({
+        objectId: 'o2',
+        recordId,
+        name: `Server ${recordId.slice(-2)}`,
+        kind: 'other',
+      }));
+      links.set(noteId, [...kept, ...added]);
+      return { noteId, links: links.get(noteId) ?? [] };
     },
   };
   let minted = 0;
@@ -141,6 +171,11 @@ function setup() {
     failDeleteWith: (refused: Error) => {
       failDelete = refused;
     },
+    failLinkWith: (refused: Error) => {
+      failLink = refused;
+    },
+    linkCalls,
+    savedOn,
     hold: () => {
       gate = new Promise((resolve) => {
         open = resolve;
@@ -483,5 +518,61 @@ describe('a record’s notes list (spec 0019, AC-442, AC-445)', () => {
     coarse(6, 'companies');
     await t.advance(500);
     expect(list.getSnapshot().total?.count).toBe(2);
+  });
+});
+
+describe('a note’s linked records (migration 0136)', () => {
+  const GLOBEX: RecordRefDisplay = {
+    objectId: 'o2',
+    recordId: '0199a6f2-0000-7000-8000-0000000000b2',
+    name: 'Globex',
+    kind: 'other',
+  };
+
+  it('links a record at once, takes the server’s answer, and puts it back on a refusal', async () => {
+    const t = setup();
+    const id = '0199a6f2-0000-7000-8000-0000000000c1';
+    t.server.set(id, { title: 'Call', content: doc('x'), version: 1, updatedBy: ME });
+    const session = t.store.open(WS, { noteId: id, recordId: ACME, objectId: 'o1', isNew: false, canChange: true });
+    session.retain();
+    await t.advance(0);
+    expect(session.getSnapshot()).toMatchObject({ status: 'ready', recordId: ACME, links: [] });
+    t.hold();
+    const landed = session.setLinks({ add: [GLOBEX] });
+    // Shown before the answer.
+    expect(session.getSnapshot().links).toEqual([GLOBEX]);
+    t.release();
+    expect(await landed).toBeUndefined();
+    expect(t.linkCalls).toEqual([{ add: [GLOBEX.recordId] }]);
+    expect(session.getSnapshot().links.map((link) => link.name)).toEqual(['Server b2']);
+    // Its own record is never sent as a link.
+    expect(await session.setLinks({ add: [{ ...GLOBEX, recordId: ACME }] })).toBeUndefined();
+    expect(t.linkCalls).toHaveLength(1);
+    // A refused unlink puts the chip back and answers why.
+    t.failLinkWith(dataError('FORBIDDEN', 'You can view this note but not change it.'));
+    const refused = await session.setLinks({ remove: [GLOBEX.recordId] });
+    expect(refused).toMatchObject({ code: 'FORBIDDEN' });
+    expect(session.getSnapshot().links.map((link) => link.recordId)).toEqual([GLOBEX.recordId]);
+  });
+
+  it('saves a note opened from a record it links under its own record', async () => {
+    const t = setup();
+    const id = '0199a6f2-0000-7000-8000-0000000000c2';
+    t.server.set(id, { title: 'Call', content: doc('x'), version: 1, updatedBy: ME });
+    // Opened from Globex's page: the read says the note's own record is Acme.
+    const session = t.store.open(WS, {
+      noteId: id,
+      recordId: GLOBEX.recordId,
+      objectId: 'o2',
+      isNew: false,
+      canChange: true,
+    });
+    session.retain();
+    await t.advance(0);
+    expect(session.getSnapshot().recordId).toBe(ACME);
+    session.setDoc(doc('More'));
+    await t.advance(0);
+    expect(t.saves.at(-1)).toMatchObject({ content: doc('More'), baseVersion: 1 });
+    expect(t.savedOn.at(-1)).toBe(ACME);
   });
 });

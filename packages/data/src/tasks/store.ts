@@ -75,6 +75,7 @@ export interface TasksApi {
     readonly workspace: string;
     readonly id: string;
     readonly title: string;
+    readonly description?: string;
     readonly dueOn?: string;
     readonly assigneeMemberId?: string;
     readonly recordIds?: readonly string[];
@@ -94,6 +95,7 @@ export interface TasksApi {
     readonly workspace: string;
     readonly taskId: string;
     readonly title?: string;
+    readonly description?: string;
     readonly dueOn?: string | null;
     readonly assigneeMemberId?: string | null;
     readonly isDone?: boolean;
@@ -193,6 +195,8 @@ export interface TaskSubscription {
 export interface NewTask {
   readonly id: string;
   readonly title: string;
+  /** Plain text; absent for none. */
+  readonly description?: string;
   readonly dueOn?: string;
   readonly assigneeMemberId?: string;
   /** The records it links, in order, as they show (the page's record first). */
@@ -204,6 +208,8 @@ export interface NewTask {
 /** A change to one task: only the fields given; `null` clears. Links by adding and removing. */
 export interface TaskChange {
   readonly title?: string;
+  /** '' clears it. */
+  readonly description?: string;
   readonly dueOn?: string | null;
   readonly assigneeMemberId?: string | null;
   readonly isDone?: boolean;
@@ -237,6 +243,7 @@ function applied(task: TaskView, change: TaskChange, now: string, me: string | u
   return {
     ...rest,
     title: change.title ?? task.title,
+    description: change.description ?? task.description,
     isDone,
     ...done,
     ...(dueOn === undefined ? {} : { dueOn }),
@@ -942,6 +949,7 @@ export function createTasksStore(deps: TasksDeps) {
           taskId,
           mutationId,
           ...(patch.title === undefined ? {} : { title: patch.title }),
+          ...(patch.description === undefined ? {} : { description: patch.description }),
           ...(patch.dueOn === undefined ? {} : { dueOn: patch.dueOn }),
           ...(patch.assigneeMemberId === undefined ? {} : { assigneeMemberId: patch.assigneeMemberId }),
           ...(patch.isDone === undefined ? {} : { isDone: patch.isDone }),
@@ -975,6 +983,7 @@ export function createTasksStore(deps: TasksDeps) {
     const body: TaskView = {
       id: task.id,
       title: task.title.trim(),
+      description: task.description?.trim() ?? '',
       isDone: false,
       ...(task.dueOn === undefined ? {} : { dueOn: task.dueOn }),
       ...(task.assigneeMemberId === undefined ? {} : { assigneeMemberId: task.assigneeMemberId }),
@@ -1001,6 +1010,9 @@ export function createTasksStore(deps: TasksDeps) {
           id: task.id,
           title: task.title,
           mutationId,
+          ...(task.description === undefined || task.description.trim() === ''
+            ? {}
+            : { description: task.description }),
           ...(task.dueOn === undefined ? {} : { dueOn: task.dueOn }),
           ...(task.assigneeMemberId === undefined ? {} : { assigneeMemberId: task.assigneeMemberId }),
           ...(recordIds.length === 0 ? {} : { recordIds }),

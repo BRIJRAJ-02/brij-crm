@@ -16,7 +16,9 @@
 //   with nothing unsaved here, the session reads theirs and says so; with
 //   unsaved text, the next save goes over theirs and says that (last write
 //   wins, AC-443). Closing with a save pending lets it finish; if it then
-//   fails, a toast offers to open the note again with the text.
+//   fails, a toast offers to open the note again with the text. A note links
+//   other records besides its own (migration 0136): the session holds them,
+//   and `setLinks` changes them at once, put back on a refusal.
 import {
   NOTE_CONTENT_MAX_BYTES,
   NOTE_PAGE,
@@ -25,8 +27,8 @@ import {
   noteBytes,
   richTextToPlain,
 } from '@crm/contracts/note-limits';
-import type { ChangeEvent, Note, NotePage, NoteSummary, SaveNoteResult, TaskTotal } from '@crm/contracts';
-import type { ActorReferenceValue as Actor } from '@crm/contracts/values';
+import type { ChangeEvent, Note, NoteLinks, NotePage, NoteSummary, SaveNoteResult, TaskTotal } from '@crm/contracts';
+import type { ActorReferenceValue as Actor, RecordRefDisplay } from '@crm/contracts/values';
 import { dataError, toDataError, type DataError } from '../errors.ts';
 import type { MutationLog } from '../live/mutations.ts';
 import type { Notice } from '../notice.ts';
@@ -85,6 +87,13 @@ export interface NotesApi {
     readonly noteId: string;
     readonly mutationId: string;
   }) => Promise<NoteSummary>;
+  readonly link: (input: {
+    readonly workspace: string;
+    readonly noteId: string;
+    readonly addRecordIds?: readonly string[];
+    readonly removeRecordIds?: readonly string[];
+    readonly mutationId: string;
+  }) => Promise<NoteLinks>;
 }
 
 /** What the notes store needs from the layer. */
@@ -147,7 +156,12 @@ export interface NoteSessionState {
   /** `missing`: it doesn't exist, was deleted, or the reader can't see it. */
   readonly status: 'loading' | 'ready' | 'missing' | 'error';
   readonly noteId: string;
+  /** The note's own record (the page's, for a new note), which decides who may see it. */
   readonly recordId: string;
+  /** Its own record as a chip shows it, once read. */
+  readonly record?: RecordRefDisplay;
+  /** The other records it links that the reader may see, in link order (migration 0136). */
+  readonly links: readonly RecordRefDisplay[];
   /** Not stored yet (a new note with nothing in it). */
   readonly isNew: boolean;
   readonly title: string;
@@ -190,6 +204,14 @@ export interface NoteSession {
   /** Tries a failed save again, or reads a failed note again. */
   readonly retry: () => void;
   readonly dismissNotice: () => void;
+  /**
+   * Links records to the note and unlinks others, shown at once; a refusal
+   * puts them back and is answered, for the field to show (migration 0136).
+   */
+  readonly setLinks: (change: {
+    readonly add?: readonly RecordRefDisplay[];
+    readonly remove?: readonly string[];
+  }) => Promise<DataError | undefined>;
 }
 
 const defaultLater = (work: () => void, ms: number) => {
@@ -461,6 +483,10 @@ export function createNotesStore(deps: NotesDeps) {
     canChange: boolean,
   ) {
     let status: NoteSessionState['status'] = isNewNote ? 'ready' : 'loading';
+    // The note's own record: the page's until a read says otherwise (a note opened from a record it links).
+    let homeId = recordId;
+    let home: RecordRefDisplay | undefined;
+    let links: readonly RecordRefDisplay[] = [];
     let isNew = isNewNote;
     let title = '';
     let doc: unknown;
@@ -494,7 +520,9 @@ export function createNotesStore(deps: NotesDeps) {
     const current = (): NoteSessionState => ({
       status,
       noteId,
-      recordId,
+      recordId: homeId,
+      ...(home === undefined ? {} : { record: home }),
+      links,
       isNew,
       title,
       ...(doc === undefined ? {} : { doc }),
@@ -561,6 +589,9 @@ export function createNotesStore(deps: NotesDeps) {
           title = note.title;
           doc = note.content;
           may = note.canChange;
+          homeId = note.recordId;
+          home = note.record;
+          links = note.links;
           updatedAt = note.updatedAt;
           isNew = false;
           status = 'ready';
@@ -620,7 +651,7 @@ export function createNotesStore(deps: NotesDeps) {
         .save({
           workspace,
           id: noteId,
-          recordId,
+          recordId: homeId,
           mutationId,
           baseVersion: version,
           ...(sent.title === undefined ? {} : { title: sent.title }),
@@ -641,8 +672,10 @@ export function createNotesStore(deps: NotesDeps) {
             if (pending.doc === sent.doc) delete pending.doc;
             if (answer.overwrote !== undefined) notice = { kind: 'overwrote', by: answer.overwrote.by };
             saveState = hasPending() ? 'saving' : 'saved';
-            putNote(workspace, recordId, answer.note);
-            deps.timelines(workspace, [recordId]);
+            // Its own record's lists and each linked record's take the new summary.
+            const shownOn = [homeId, ...links.map((link) => link.recordId)];
+            for (const each of shownOn) putNote(workspace, each, answer.note);
+            deps.timelines(workspace, shownOn);
             announce();
             // Anything typed meanwhile waits its own turn (300 ms, at most 2 s), never straight after this save.
             if (hasPending()) schedule();
@@ -681,7 +714,7 @@ export function createNotesStore(deps: NotesDeps) {
                 action: {
                   label: NOTE_WORDS.openNote,
                   onAction: () => {
-                    opener?.(workspace, objectId, recordId, noteId);
+                    opener?.(workspace, objectId, homeId, noteId);
                   },
                 },
               });
@@ -721,7 +754,8 @@ export function createNotesStore(deps: NotesDeps) {
     const session = {
       workspace,
       noteId,
-      recordId,
+      /** Every record it shows on: its own and the ones it links (a trash of any of them reads it again). */
+      shownOn: () => new Set([homeId, ...links.map((link) => link.recordId)]),
       hasUnsaved: () => (hasPending() && !(isNew && !hasText(title, doc))) || inFlight,
       /** A live event named this note: someone else saved it, or it went away. */
       changedElsewhere() {
@@ -812,6 +846,41 @@ export function createNotesStore(deps: NotesDeps) {
           notice = undefined;
           announce();
         },
+        async setLinks(change) {
+          const removed = new Set(change.remove ?? []);
+          const held = new Set(links.map((link) => link.recordId));
+          const added = (change.add ?? []).filter((link) => !held.has(link.recordId) && link.recordId !== homeId);
+          const before = links;
+          const touched = [
+            ...added.map((link) => link.recordId),
+            ...before.flatMap((link) => (removed.has(link.recordId) ? [link.recordId] : [])),
+          ];
+          if (touched.length === 0) return undefined;
+          links = [...before.filter((link) => !removed.has(link.recordId)), ...added];
+          announce();
+          const mutationId = deps.mintId();
+          deps.mutations.sent(mutationId);
+          try {
+            const answer = await deps.api.link({
+              workspace,
+              noteId,
+              mutationId,
+              ...(added.length === 0 ? {} : { addRecordIds: added.map((link) => link.recordId) }),
+              ...(removed.size === 0 ? {} : { removeRecordIds: [...removed] }),
+            });
+            deps.mutations.answered(mutationId, 1);
+            links = answer.links;
+            announce();
+            for (const each of touched) dirtyRecord(workspace, each);
+            deps.timelines(workspace, touched);
+            return undefined;
+          } catch (failed) {
+            deps.mutations.forget(mutationId);
+            links = before;
+            announce();
+            return toDataError(failed);
+          }
+        },
       } satisfies NoteSession,
     };
     if (!isNewNote) read(false);
@@ -883,20 +952,20 @@ export function createNotesStore(deps: NotesDeps) {
      * its open window shows it again, with anything unsaved sent after all).
      */
     async remove(workspace: string, recordId: string, noteId: string): Promise<DataError | undefined> {
-      for (const list of listsOf(workspace)) {
-        if (list.recordId === recordId || list.recordId === EVERY_RECORD) list.forget(noteId);
-      }
+      // Out of every list that shows it: its own record's, each linked record's, and the Notes page's.
+      for (const list of listsOf(workspace)) list.forget(noteId);
+      const shownOn = sessions.get(keyOf(workspace, noteId))?.shownOn() ?? new Set([recordId]);
       sessions.get(keyOf(workspace, noteId))?.gone();
       const mutationId = deps.mintId();
       deps.mutations.sent(mutationId);
       try {
         await deps.api.delete({ workspace, noteId, mutationId });
         deps.mutations.answered(mutationId, 1);
-        deps.timelines(workspace, [recordId]);
+        deps.timelines(workspace, [...shownOn]);
         return undefined;
       } catch (failed) {
         deps.mutations.forget(mutationId);
-        dirtyRecord(workspace, recordId);
+        for (const each of shownOn) dirtyRecord(workspace, each);
         sessions.get(keyOf(workspace, noteId))?.kept();
         return toDataError(failed);
       }
@@ -910,8 +979,9 @@ export function createNotesStore(deps: NotesDeps) {
         deps.mutations.answered(mutationId, 1);
         sessions.delete(keyOf(workspace, noteId));
         putNote(workspace, recordId, note);
-        dirtyRecord(workspace, recordId);
-        deps.timelines(workspace, [recordId]);
+        // Every loaded list reads again: the lists of the records it links take it back too.
+        for (const list of listsOf(workspace)) list.dirty();
+        deps.timelines(workspace, 'all');
         return undefined;
       } catch (failed) {
         deps.mutations.forget(mutationId);
@@ -947,7 +1017,7 @@ export function createNotesStore(deps: NotesDeps) {
       const touches = (recordId: string) =>
         coarse ? mayBeOf(workspace, recordId, event.objectId) : lifecycle.has(recordId);
       for (const list of listsOf(workspace)) if (list.recordId === EVERY_RECORD || touches(list.recordId)) list.dirty();
-      for (const each of sessionsOf(workspace)) if (touches(each.recordId)) each.recordChanged();
+      for (const each of sessionsOf(workspace)) if ([...each.shownOn()].some(touches)) each.recordChanged();
     },
     /** Everything held of the workspace is read again (a resync after a gap the outbox no longer covers). */
     resync(workspace: string) {

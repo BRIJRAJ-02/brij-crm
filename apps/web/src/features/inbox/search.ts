@@ -4,7 +4,7 @@ import type { NotificationKind } from '@crm/data';
 import { isTaskParam } from '../records/params.ts';
 
 /** The kind filter as the address spells it. */
-export type InboxKind = 'mentions' | 'replies' | 'assignments' | 'submissions';
+export type InboxKind = 'mentions' | 'replies' | 'assignments' | 'due' | 'submissions';
 
 /** The inbox's address: the tab, the kind, unread only, and the task dialog. Defaults stay out. */
 export interface InboxSearch {
@@ -18,12 +18,13 @@ const KINDS: Readonly<Record<InboxKind, NotificationKind>> = {
   mentions: 'mention',
   replies: 'reply',
   assignments: 'task_assigned',
+  due: 'task_due',
   submissions: 'form_submission',
 };
 
 /** Whether the address's kind is one the filter knows. */
 const isInboxKind = (value: unknown): value is InboxKind =>
-  value === 'mentions' || value === 'replies' || value === 'assignments' || value === 'submissions';
+  value === 'mentions' || value === 'replies' || value === 'assignments' || value === 'due' || value === 'submissions';
 
 /** Reads the address: only the values it knows. */
 export function inboxSearch(search: Record<string, unknown>): InboxSearch {
