@@ -120,6 +120,8 @@ import { BOOKING_LIMITS, botReason, looksLikeBot, type LimitRule, type PublicLim
 import { pictureResponse, PRIVATE_PICTURE_CACHE_CONTROL, type PictureLoad } from './picture.ts';
 import { iconResponse, type FaviconFetch } from './favicon.ts';
 import { shareImageResponse } from './share-image.ts';
+import { bookingBrandAnswer } from './brand-css.ts';
+import { handleLookAnswer } from './look.ts';
 import {
   findVisitor,
   GUEST_CALLBACK_PATH,
@@ -578,13 +580,17 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
         max: search === undefined ? PROFILE_PAGE_SIZE + 1 : PROFILE_LIMITS.items + 1,
         ...(services.publicOrigins === undefined ? {} : { publicOrigins: services.publicOrigins }),
       });
-      const page = await readLinkPage(found, search === undefined ? {} : { search });
+      // The page's blocks and its own accent and photos (spec 0060, AC-14) side by side; a look that won't read is none.
+      const [page, look] = await Promise.all([
+        readLinkPage(found, search === undefined ? {} : { search }),
+        handleLookAnswer({ db }, found.owner),
+      ]);
       // One view per page load (its first page, with no `q` at all: a cleared search sends an empty one), never a
       // machine's or the owner's own (AC-5124),
       // counted after the answer is made and never holding it up.
       if (c.req.query('q') === undefined && position === undefined)
         countView(c, found.owner.userId, found.owner.workspaceId);
-      return ok(page);
+      return ok(look === undefined ? page : { ...page, look });
     } catch (error) {
       return refusalAnswer(error);
     }
@@ -877,7 +883,12 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (refused !== undefined) return refused;
     try {
       const entry = await enterBookingPage({ db }, key);
-      return ok(await getPublicBookingPage(entry, services.pictures));
+      // The facts and the brand they wear (spec 0060, AC-4) side by side; a brand that won't read is none.
+      const [facts, brand] = await Promise.all([
+        getPublicBookingPage(entry, services.pictures),
+        bookingBrandAnswer(entry),
+      ]);
+      return ok(brand === undefined ? facts : { ...facts, brand });
     } catch (error) {
       return refusalAnswer(error);
     }

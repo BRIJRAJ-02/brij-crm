@@ -59,6 +59,10 @@ const READS: ReadonlySet<string> = new Set([
   // Slice 7: Workspace › General, Account › Profile, and a deleted workspace as its owner sees it.
   'workspace.get',
   'profile.get',
+  // The link page's own accent and photos (spec 0060): a read of schema auth through a definer.
+  'profile.look',
+  // A workspace's brand kit (spec 0060): reading it.
+  'brand.get',
   // The link page (spec 0051): the caller's own blocks, and the booking pages they may place.
   'profile.items',
   'profile.counts',
@@ -662,6 +666,17 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       mutationId,
     });
     return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  // The link page's own accent pair (spec 0060, AC-14): columns in schema auth, no outbox row of its own.
+  'profile.saveAccent': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.saveAccent({ workspace: m.slug, accent: '#1f5fd6', accentDark: null, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  // A workspace's brand kit (spec 0060): no record changes, so no change event; the pages read it on their next load.
+  'brand.save': async (m, mutationId) => {
+    await m.client.brand.save({ workspace: m.slug, accent: '#1f5fd6', accentDark: null, mutationId });
+    return [];
   },
   'profile.setIndexable': async (m, mutationId) => {
     const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
@@ -2352,6 +2367,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
   'profile.saveTheme': 2,
+  'profile.saveAccent': 2,
   'profile.setIndexable': 2,
   'profile.show': 2,
   'profile.setShareImage': 2,

@@ -27,6 +27,7 @@ import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { commitWrite } from '../hooks.ts';
+import { formBrandAnswer } from '../public/brand-css.ts';
 import { errorFields, log } from '../log.ts';
 import { captureFault } from '../monitoring/sentry.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
@@ -184,12 +185,19 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
     }
     try {
       const { scope, formId } = await enterPublicForm({ db: deps.db }, c.req.param('publicKey'));
-      const form = await getPublicForm(scope, {
-        formId,
-        ...(deps.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: deps.recaptchaSiteKey }),
-      });
+      // The form and the brand it wears (spec 0060, AC-4) side by side; a brand that won't read is none.
+      const [form, brand] = await Promise.all([
+        getPublicForm(scope, {
+          formId,
+          ...(deps.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: deps.recaptchaSiteKey }),
+        }),
+        formBrandAnswer({ scope }),
+      ]);
       // Never kept: a pause, a resume or a new version shows on the visitor's next load, not a minute later.
-      return c.json(form, 200, { 'cache-control': PUBLIC_FORM_CACHE_CONTROL, 'x-robots-tag': 'noindex' });
+      return c.json(brand === undefined ? form : { ...form, brand }, 200, {
+        'cache-control': PUBLIC_FORM_CACHE_CONTROL,
+        'x-robots-tag': 'noindex',
+      });
     } catch (error) {
       return refusalAnswer(error, { 'cache-control': PUBLIC_FORM_CACHE_CONTROL });
     }
