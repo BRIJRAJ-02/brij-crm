@@ -2,7 +2,7 @@
 // the first load) can check a tab without pulling in the settings navigation and every settings page's words.
 
 /** An object's settings tabs, in order. */
-export const OBJECT_TABS = ['attributes', 'configuration'] as const;
+export const OBJECT_TABS = ['attributes', 'configuration', 'access'] as const;
 /** One of an object's settings tabs. */
 export type ObjectTab = (typeof OBJECT_TABS)[number];
 

@@ -58,7 +58,7 @@ Each row says where it came from ("You added", "Priya added", "Through their rol
 
 ## An object's settings (`/w/$slug/settings/objects/$object/$tab`, ObjectSettingsScreen)
 
-- **Purpose**: one object, standard or custom alike, under its tile, name and Standard or Custom badge, in two tabs.
+- **Purpose**: one object, standard or custom alike, under its tile, name and Standard or Custom badge, in three tabs (Access for `access.manage` alone).
 - **Main task**: add, edit, move, archive and restore its attributes (Attributes), and rename, restyle, archive or restore it (Configuration).
 - **Leaves out**: changing a type (#14), and changing the API name (never).
 - **Layout**: the Configuration tab follows the settings page pattern (SettingsLayout's README): a Names and look section whose Form sits two fields to a row, saved from the library SaveBar at the view's foot (the object's page holds the edits, `useObjectConfiguration`, so the bar shows on either tab and a tab change keeps them; Discard puts back what the server holds), a Danger zone section (Restore once archived) with the archive Card, then a quiet closed Developer fold with the read only API name and object ID (30 October 2026). The Attributes tab's tables run the full width.
@@ -188,6 +188,24 @@ Anything on the page that ends something asks first (the owner, 21 October 2026)
 - **Leaves out**: the removal's rules (the server's), the hand over's progress (Background jobs) and the toast (the page's).
 
 The same danger Modal as the confirm ("Remove Grace Hopper from Acme?", Cancel (ESC) first, "Remove member" last, busy while it runs, a refusal in a danger Callout inside). As it opens it reads `members.removalPreview` and the member list through the data layer, with Skeleton lines while that loads (Remove member waits for it), then one sentence per effect that applies: open tasks assigned to them, records naming them as owner, booking pages that pause with nobody left to host, and calendar connections disconnected. When tasks or records name them, a searchable Select (each person with their Avatar and email, clearable, empty by default) picks who takes them over; the removal then starts a `members.reassign` job and the toast says where their work is going. A failed read says so in a warning Callout and still lets the removal go ahead.
+
+## Settings › Workspace › Teams (`/w/$slug/settings/teams`, TeamsScreen.tsx, TeamDialog.tsx)
+
+- **Purpose**: Settings › Workspace › Teams (spec 0031, slice 8, AC-824, AC-827): the groups of people that access rules name, each with who is in it.
+- **Main task**: owners and admins (`teams.manage`) make a team, change its name and people from one dialog, or delete it from the row's menu; everyone reads who is in which team.
+- **Leaves out**: what a team may see (an object's Access tab), team pages and calendars, and guests.
+
+One list, a row a team: its name (a link to the dialog for those who may change it) and its people as a row of faces (`AvatarStack`, six at most then "+N", named for screen readers as "3 people in Sales"), with a quiet red trash button at the row's end. Someone who may not change teams reads the people's names in place of faces (initials alone say nothing) and a Callout saying who can. No teams yet is an EmptyState, with New team only in the bar (one button, not two). The dialog is a Name Field and a searchable multiple Select of people; Save waits for the server, a taken name lands on the Name field, and Save with nothing changed just closes. A delete is one click with an Undo toast (a team no rule names holds no access, so nothing is lost; Undo makes the same team again, same id and people) and focus goes to the page's title; a team an access rule names refuses with where, in the server's words ("Sales is used by Deals. Change that access first."), and stays. The list is held by the data layer and follows a live `members` event, so another admin's change shows without a reload; a rename that lands before a refused people change still shows.
+
+Built from library parts only: SettingsLayout (through `SettingsPage`), Table, AvatarStack, Button, Menu, Modal, Form, Field, Select, EmptyState and Callout; no new component or CSS.
+
+## An object's Access tab (AccessTab.tsx)
+
+- **Purpose**: who can see and edit one object's records (spec 0032, AC-846, AC-851, AC-856), for `access.manage`.
+- **Main task**: untick Can see or Can edit for Members, give a team its own row (Add team), pick which records a row sees (all, their own, their team's), and read the result in one line above the grid.
+- **Leaves out**: field rules, "Preview as", the Guest role (not built yet) and per list access.
+
+The result comes first, in plain words and from the same rows as the grid ("Everyone can edit Deals.", "Sales can edit Deals. Other members can’t see them."; `summarizeAccess`, tested; the Callout is announced as it changes). The grid is a Table of checkboxes: Owners and admins (a locked row), Members, then a row for each team with a rule. Can edit implies Can see. A team always sees what it is granted, so its Can see is ticked and fixed; its X is the one way to take its access away. Every change shows at once, stays where it is on the grid (a row never jumps, `access-grid.ts`), and is sent without disabling anything, so a keyboard user's focus never moves; the latest answer wins, a refusal reads the object again and says why, and one quiet toast offers Undo (each change replaces the toast before it). Records is offered only when the object has a Member field to read (its Owner): without one the cell says All records, and the column's header explains it once with a link to the Attributes tab. With no teams, Add team becomes a link to Teams. Someone without `access.manage` who opens the tab's address sees a no access EmptyState, a failed read an error EmptyState with Try again, never a refusal page. It loads in a skeleton the shape of the loaded tab.
 
 ## Settings › Account › Notifications (`/w/$slug/settings/account/notifications`, NotificationSettingsScreen)
 
