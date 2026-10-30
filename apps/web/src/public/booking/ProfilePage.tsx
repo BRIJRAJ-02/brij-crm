@@ -112,8 +112,13 @@ function folderInAddress(): string | undefined {
  * the look its owner picked, not the visitor's own (26 October 2026): a light page read on a phone in dark mode
  * drew the white mark on white, so the foot showed "POWERED BY" over nothing.
  */
-const footOf = (mode: 'light' | 'dark') => (
-  <BookingFoot page="booking_profile" claimHref={claimPageHref('booking_profile')} scheme={mode} />
+const footOf = (mode: 'light' | 'dark' | 'system') => (
+  <BookingFoot
+    page="booking_profile"
+    claimHref={claimPageHref('booking_profile')}
+    // Follow the visitor (spec 0060, AC-15) pins nothing, so the mark follows the visitor too.
+    {...(mode === 'system' ? {} : { scheme: mode })}
+  />
 );
 
 /** The link page: the person, then their blocks a page at a time, with a search once there are many. */
@@ -334,6 +339,8 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
       blocks={blocks}
       // The look its owner picked (spec 0054), which lands with the content, in one step.
       theme={profile.theme}
+      // Which photos its own stylesheet carries (spec 0060): a photo look without one draws plain and centred.
+      photos={{ cover: profile.look?.cover !== undefined, ground: profile.look?.ground !== undefined }}
       // The open section, and the address it is kept in. `pushState` so the back button closes it (AC-5417).
       {...(openFolder === undefined ? {} : { openFolder })}
       onOpenFolder={(id) => {

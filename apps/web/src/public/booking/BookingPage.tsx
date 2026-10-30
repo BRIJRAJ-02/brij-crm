@@ -40,7 +40,7 @@ import {
   type SelectItem,
 } from '@crm/ui/public-booking';
 import { createElement, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { railHost, railTitle } from './host.ts';
+import { railBrand, railHost, railTitle } from './host.ts';
 import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
 import {
@@ -1005,6 +1005,7 @@ function Booking({
     description: page.description,
     facts,
     claimHref: CLAIM_URL,
+    ...railBrand(page),
     ...(banner === undefined ? {} : { banner }),
   };
 

@@ -15,6 +15,15 @@ const PRESET_NAMES: Record<(typeof PAGE_THEME_PRESETS)[number]['id'], string> = 
   bold: strings.presetBold,
   ink: strings.presetInk,
   quiet: strings.presetQuiet,
+  dawn: strings.presetDawn,
+  ocean: strings.presetOcean,
+  mint: strings.presetMint,
+  studio: strings.presetStudio,
+  editorial: strings.presetEditorial,
+  night: strings.presetNight,
+  peach: strings.presetPeach,
+  graphite: strings.presetGraphite,
+  gallery: strings.presetGallery,
 };
 
 /** What the card shows for each key: the word stored, and what a person reads. */
