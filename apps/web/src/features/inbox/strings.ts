@@ -21,6 +21,8 @@ export const strings = {
   emptyDone: 'Nothing done yet.',
   emptyFiltered: 'No notifications match.',
   clearFilters: 'Clear filters',
+  /** The empty inbox's way to Settings › Account › Notifications. */
+  notificationSettings: 'Notification settings',
   formerMember: 'Former member',
   failedTitle: 'The inbox didn’t load',
 } as const;

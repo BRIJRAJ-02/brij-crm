@@ -673,7 +673,6 @@ function AttributeForm({
         isMultiline
         maxLength={500}
         showCounter={!isReadOnly}
-        hint={strings.descriptionHint}
         value={description}
         onChange={(next) => {
           setDescription(next);
@@ -712,7 +711,8 @@ function AttributeForm({
       {allowsMultiple && (
         <Checkbox
           label={strings.allowMultiple}
-          description={isCreating ? strings.allowMultipleHint : strings.allowMultipleLocked}
+          // Its label says what it does; only once made does it need a word (it can't change).
+          {...(isCreating ? {} : { description: strings.allowMultipleLocked })}
           isSelected={isMulti}
           isReadOnly={isReadOnly || !isCreating}
           onChange={(next) => {

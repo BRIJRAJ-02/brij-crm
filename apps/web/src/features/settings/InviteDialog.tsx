@@ -2,9 +2,12 @@
 // Purpose: invite people to the workspace by email, each with a role (spec 0031, AC-803).
 // Main task: type an address per row (+ Add another, or Enter, makes the next; a pasted list splits into rows), pick
 // each row's role where it differs, then Invite; the dialog then says who was invited.
-// Leaves out: the invite link (the Joining tab's Other ways to join), email domains, and a seat line (until #38 sets limits).
-import type { DataLayer, RoleOption } from '@crm/data';
+// Leaves out: the invite link's settings (the Joining tab's Other ways to join; the foot only copies it, turning it on
+// as a Member link when off, with Undo), email domains, and a seat line (until #38 sets limits).
+import { isDataError, type DataLayer, type InviteLinkView, type RoleOption } from '@crm/data';
 import { Button, Callout, Disclosure, InviteRows, Modal, Skeleton, useDelayedLoading } from '@crm/ui';
+import { useRouteContext } from '@tanstack/react-router';
+import { useState } from 'react';
 import { strings } from './members-strings.ts';
 import { hasGuide, RoleGuide } from './RoleGuide.tsx';
 import { useInvite } from './useInvite.tsx';
@@ -62,8 +65,60 @@ export function InviteDialog({
   onInvited,
   read,
 }: InviteDialogProps) {
+  const { toasts } = useRouteContext({ from: '__root__' });
   const invite = useInvite({ data, slug, roles, defaultRole, memberEmails, invitedEmails, onInvited });
   const { sent, isBusy, failure, notice, valid } = invite;
+  // Copy invite link (the foot): one press copies the workspace's link, turning it on as a Member link when it is
+  // off (Undo turns it off again), rather than asking first (the owner, 30 October 2026: act, don't ask).
+  const [isCopying, setCopying] = useState(false);
+  const failed = (error: unknown) => {
+    toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+  };
+  const copy = (link: InviteLinkView, turnedOn: boolean) => {
+    if (link.token === undefined) return;
+    const url = new URL(`/invite/${link.token}`, globalThis.location.origin).href;
+    navigator.clipboard.writeText(url).then(
+      () => {
+        toasts.toast(
+          turnedOn
+            ? {
+                tone: 'success',
+                message: strings.inviteLinkOnCopied,
+                action: {
+                  label: strings.undo,
+                  onAction: () => {
+                    data.invitations.setLink(slug, { enabled: false }).catch(failed);
+                  },
+                },
+              }
+            : { tone: 'success', message: strings.inviteLinkCopied },
+        );
+      },
+      () => {
+        toasts.toast({ tone: 'danger', message: strings.inviteLinkCopyFailed });
+      },
+    );
+  };
+  /** Reads the link fresh (another admin may have changed it), turns it on when off, then copies it. */
+  const copyLink = () => {
+    if (isCopying) return;
+    setCopying(true);
+    data.invitations
+      .link(slug)
+      .then(async (link) => {
+        if (link.enabled && link.isSpent) {
+          toasts.toast({ tone: 'info', message: strings.inviteLinkSpent });
+          return;
+        }
+        if (link.enabled) copy(link, false);
+        // Off: a Member link with no expiry or cap, the server's default.
+        else copy(await data.invitations.setLink(slug, { enabled: true }), true);
+      })
+      .catch(failed)
+      .finally(() => {
+        setCopying(false);
+      });
+  };
   // The team is usually read already, so the skeleton shows only for a slow read.
   const isSlow = useDelayedLoading(isOpen && read?.status === 'loading');
 
@@ -151,6 +206,12 @@ export function InviteDialog({
       // Typed addresses aren't thrown away by a stray click outside.
       isDismissable={invite.isEmpty}
       isBusy={isBusy}
+      // A quiet second way in: the workspace's link, for people whose address isn't known (Attio has it here too).
+      hint={
+        <Button variant="ghost" icon="link" isPending={isCopying} onPress={copyLink}>
+          {strings.copyInviteLink}
+        </Button>
+      }
       actions={
         <>
           <Button slot="close" kbd="ESC" isDisabled={isBusy} onPress={close}>

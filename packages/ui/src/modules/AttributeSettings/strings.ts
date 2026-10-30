@@ -32,13 +32,11 @@ export const strings = {
   archivedHolds: (apiSlug: string) => `An archived attribute uses ${apiSlug}.`,
   restoreIt: 'Restore it',
   description: 'Description',
-  descriptionHint: 'Tells your team what this attribute holds.',
   required: 'Required',
   requiredHint: 'New records need a value. Records already empty stay as they are.',
   unique: 'Unique',
   uniqueHint: 'No two records can share a value.',
   allowMultiple: 'Allow multiple',
-  allowMultipleHint: 'Each record can hold several.',
   allowMultipleLocked: 'Set when the attribute was made.',
   defaultValue: 'Default value',
   /** The default's kinds for a date and a member (AC-234). */

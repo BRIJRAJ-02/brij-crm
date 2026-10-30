@@ -123,6 +123,12 @@ export const strings = {
   somethingWrong: 'Something went wrong. Try again in a moment.',
   // The invite link card (spec 0031, AC-818).
   linkTitle: 'Invite link',
+  /** The Invite dialog's foot: the workspace's link, turned on as a Member link when it is off (with Undo). */
+  copyInviteLink: 'Copy invite link',
+  inviteLinkCopied: 'Invite link copied.',
+  inviteLinkOnCopied: 'Invite link turned on and copied. Anyone with it joins as a member.',
+  inviteLinkCopyFailed: 'Couldn’t copy the link. Copy it from Members › Joining instead.',
+  inviteLinkSpent: 'The invite link has run out. Reset it or raise its limit in Members › Joining.',
   linkDescription: 'Anyone with the link can join as a member.',
   linkField: 'Link',
   linkCopy: 'Copy link',

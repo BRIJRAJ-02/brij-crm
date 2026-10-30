@@ -6,6 +6,7 @@ import type { InboxList, MemberSummary, NotificationView, ObjectSummary } from '
 import { useInboxList, useInboxUnread } from '@crm/data/react';
 import {
   Button,
+  ButtonLink,
   NotificationList,
   SectionBar,
   SegmentedControl,
@@ -19,6 +20,7 @@ import {
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useMemo, useRef } from 'react';
+import { notificationSettingsHref } from '../settings/nav.ts';
 import { TaskDialog } from '../tasks/TaskDialog.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { notificationKind, targetOf, toNotificationItem, type InboxKind, type InboxSearch } from './entries.ts';
@@ -248,7 +250,16 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
                       </Button>
                     ),
                   }
-                : {})}
+                : status === 'done'
+                  ? {}
+                  : {
+                      // An empty inbox's quiet way to what lands in it and what is emailed.
+                      emptyActions: (
+                        <ButtonLink variant="ghost" icon="bell" href={notificationSettingsHref(slug)}>
+                          {strings.notificationSettings}
+                        </ButtonLink>
+                      ),
+                    })}
             />
             {search.task !== undefined && (
               <TaskDialog
