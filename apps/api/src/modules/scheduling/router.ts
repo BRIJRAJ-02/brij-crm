@@ -1,5 +1,9 @@
 import {
+  copyWeek,
   createTimeOff,
+  readTeamWeek,
+  setDayHours,
+  setUsualHours,
   deleteTimeOff,
   grantDelegation,
   listDelegations,
@@ -81,5 +85,39 @@ export const timeOffRouter = member.timeOff.router({
   ),
   delete: member.timeOff.delete.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () => deleteTimeOff(context.scope, { id: input.id })),
+  ),
+});
+
+// The Team week (spec 0037, AC-1289 to AC-1296): the roster over everyone's default schedules. Whose rows show and who
+// may change which cell is packages/core's (`availability/team-week.ts`); every write goes through the schedules' one
+// write path, so its audit row, its `schedules` outbox row and the member's notice come from there.
+export const availabilityRouter = member.availability.router({
+  teamWeek: member.availability.teamWeek.handler(({ context, input }) =>
+    readTeamWeek(context.scope, { now }, { weekStart: input.weekStart, search: input.search, cursor: input.cursor }),
+  ),
+  setDay: member.availability.setDay.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      setDayHours(
+        context.scope,
+        { now },
+        { memberId: input.memberId, date: input.date, hours: input.hours, updatedAt: input.updatedAt },
+        hooks,
+      ),
+    ),
+  ),
+  copyWeek: member.availability.copyWeek.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      copyWeek(
+        context.scope,
+        { now },
+        { memberIds: input.memberIds, fromWeekStart: input.fromWeekStart, toWeekStart: input.toWeekStart },
+        hooks,
+      ),
+    ),
+  ),
+  setUsualHours: member.availability.setUsualHours.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      setUsualHours(context.scope, { memberIds: input.memberIds, weekly: input.weekly }, hooks),
+    ),
   ),
 });
