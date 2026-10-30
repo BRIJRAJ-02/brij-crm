@@ -43,8 +43,16 @@ function teamRowOf(day: TeamMemberDay, meId: string | undefined, now: Date, time
     name: day.member.id === meId ? strings.you(day.member.name) : day.member.name,
     ...(day.member.avatarUrl === undefined ? {} : { avatarSrc: day.member.avatarUrl }),
     // A clear day is free too: the dot never makes the most available person look the least.
-    presence: busy ? 'busy' : 'free',
-    status: busy ? (title === undefined ? strings.busy : strings.inMeeting) : strings.freeNow,
+    // Away today (spec 0037, AC-1287): never Free now, whatever the calendar says.
+    presence: day.away === true ? 'clear' : busy ? 'busy' : 'free',
+    status:
+      day.away === true
+        ? strings.away
+        : busy
+          ? title === undefined
+            ? strings.busy
+            : strings.inMeeting
+          : strings.freeNow,
     detail,
   };
 }

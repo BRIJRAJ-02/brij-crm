@@ -23,10 +23,12 @@ import { useBookingsActionSlot, useBookingsToolbarSlot } from '../bookings/toolb
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
 import { memberZone } from './zone.ts';
-import { availabilityHref, scheduleHref } from './links.ts';
+import { availabilityHref, bookingsHref, scheduleHref } from './links.ts';
 import { NewScheduleDialog } from './NewScheduleDialog.tsx';
 import { RenameScheduleDialog } from './RenameScheduleDialog.tsx';
 import { ScheduleEditor, ScheduleEditorPending } from './ScheduleEditor.tsx';
+import { TimeOffCard, TimeOffCardPending } from './TimeOffCard.tsx';
+import type { StandinChoice } from './TimeOffDialog.tsx';
 import { ScheduleSwitcher } from './ScheduleSwitcher.tsx';
 import { SCHEDULES_MAX, showsViewing } from './schedules.ts';
 import { scheduleStrings } from './schedule-strings.ts';
@@ -51,6 +53,8 @@ export interface AvailabilityScreenProps {
   readonly ownHours: boolean;
   /** A member's name by id, for "Changed by" (the workspace's members, AC-1265). */
   readonly nameOf: (memberId: string) => string | undefined;
+  /** The workspace's active members: who may cover time off (spec 0037, AC-1281). */
+  readonly people: readonly StandinChoice[];
 }
 
 /** The tab: the open schedule's editor, its switcher, the admin's Viewing Select and New schedule. */
@@ -63,6 +67,7 @@ export function AvailabilityScreen({
   me,
   ownHours,
   nameOf,
+  people,
 }: AvailabilityScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -145,6 +150,19 @@ export function AvailabilityScreen({
       failed(scheduleStrings.duplicateFailed(schedule.name)),
     );
   };
+  // Time off (spec 0037, AC-1286): the person's, beside whichever schedule is open.
+  const timeOff = (
+    <TimeOffCard
+      data={data}
+      slug={slug}
+      member={member === undefined || owner === undefined ? undefined : { id: member, name: owner }}
+      me={me}
+      nameOf={nameOf}
+      people={people}
+      onNotice={toast}
+      onOpenBookings={() => void navigate({ href: bookingsHref(slug) })}
+    />
+  );
   const switcher =
     current === undefined ? (
       <SwitcherPending />
@@ -211,7 +229,7 @@ export function AvailabilityScreen({
                 </EmptyState>
               </PageColumn>
             ) : current === undefined ? (
-              <ScheduleEditorPending />
+              <ScheduleEditorPending timeOff={timeOff} />
             ) : (
               <ScheduleEditor
                 // One editor per schedule, so unsaved hours never cross from one to another; the virtual default
@@ -225,6 +243,7 @@ export function AvailabilityScreen({
                 onAdopt={setAdopted}
                 onNotice={toast}
                 isReadOnly={!canChange}
+                timeOff={timeOff}
                 notice={
                   <AccessNotice
                     owner={owner}
@@ -415,7 +434,7 @@ export function AvailabilityPending() {
             {slot !== null && createPortal(tools, slot)}
             {actionSlot !== null && createPortal(waiting, actionSlot)}
             {slot === null && tools}
-            <ScheduleEditorPending />
+            <ScheduleEditorPending timeOff={<TimeOffCardPending />} />
           </>
         ),
       }}

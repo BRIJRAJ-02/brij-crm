@@ -310,6 +310,12 @@ export const strings = {
   assignedTerm: 'Assigned',
   /** Reassigning a round robin seat (spec 0029, AC-748). */
   needsHost: 'Needs a host',
+  // Time off (spec 0037, AC-1285, AC-1287).
+  hostAway: 'Host away',
+  hostAwayText: 'Its host is away then. It stays booked: move it, or reassign it on a round robin page.',
+  away: 'Away',
+  awayNote: 'No page offers times with you while you’re away.',
+  openTimeOff: 'Open time off',
   // A no show (spec 0043, AC-1613).
   noShow: 'No show',
   markNoShow: 'Mark as no show',

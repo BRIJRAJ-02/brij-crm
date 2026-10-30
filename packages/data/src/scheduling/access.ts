@@ -19,6 +19,8 @@ import type {
 import { toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { refusalSummary } from '../refusals.ts';
+import { createTimeOffStore, type TimeOffApi, type TimeOffDraft } from './time-off.ts';
+import type { TimeOffList, TimeOffSaved } from '@crm/contracts';
 
 export type { DelegationTarget, DelegationView, SchedulingLevel, VisibleMember } from '@crm/contracts';
 
@@ -55,6 +57,8 @@ export interface SchedulingAccessApi {
   readonly grant: (input: { readonly workspace: string } & DelegationGrant) => Promise<DelegationView>;
   readonly revoke: (input: { readonly workspace: string; readonly id: string }) => Promise<void>;
   readonly visible: (input: { readonly workspace: string }) => Promise<VisibleMembers>;
+  /** Time off's calls (spec 0037): its store loads in this same chunk. Absent in tests that don't need it. */
+  readonly timeOff?: TimeOffApi;
 }
 
 /**
@@ -77,6 +81,31 @@ export interface SchedulingAccessWire<O> {
       };
     };
     readonly members: { visible(input: { readonly workspace: string }, options: O): Promise<VisibleMembers> };
+    readonly timeOff: {
+      list(input: { readonly workspace: string; readonly memberId?: string }, options: O): Promise<TimeOffList>;
+      create(
+        input: {
+          readonly workspace: string;
+          readonly id: string;
+          readonly memberId?: string;
+          readonly mutationId: string;
+        } & TimeOffDraft,
+        options: O,
+      ): Promise<TimeOffSaved>;
+      update(
+        input: {
+          readonly workspace: string;
+          readonly id: string;
+          readonly updatedAt: string;
+          readonly mutationId: string;
+        } & TimeOffDraft,
+        options: O,
+      ): Promise<TimeOffSaved>;
+      delete(
+        input: { readonly workspace: string; readonly id: string; readonly mutationId: string },
+        options: O,
+      ): Promise<unknown>;
+    };
   };
   readonly call: <T>(run: (options: O) => Promise<T>) => Promise<T>;
   readonly beforeRead: (workspace: string) => Promise<void>;
@@ -92,6 +121,13 @@ export function wireApi<O>({ client, call, beforeRead, mintId }: SchedulingAcces
     revoke: (input) => call((options) => delegations.revoke({ ...input, mutationId: mintId() }, options)),
     visible: (input) =>
       beforeRead(input.workspace).then(() => call((options) => client.members.visible(input, options))),
+    timeOff: {
+      list: (input) => beforeRead(input.workspace).then(() => call((options) => client.timeOff.list(input, options))),
+      create: (input) => call((options) => client.timeOff.create({ ...input, mutationId: mintId() }, options)),
+      update: (input) => call((options) => client.timeOff.update({ ...input, mutationId: mintId() }, options)),
+      remove: (input) =>
+        call((options) => client.timeOff.delete({ ...input, mutationId: mintId() }, options)).then(() => undefined),
+    },
   };
 }
 
@@ -160,6 +196,19 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
   const lists = new Map<string, ReturnType<typeof make>>();
   const visibles = new Map<string, Promise<readonly VisibleMember[]>>();
   const keyOf = (workspace: string, scope: DelegationsScope) => `${workspace}\u0000${scope}`;
+  // Time off (spec 0037), in this same chunk: Availability opens this store anyway for whose schedules show.
+  const { timeOff: timeOffApi } = deps.api;
+  const timeOff = createTimeOffStore({
+    api: timeOffApi ?? {
+      list: () => Promise.reject(new Error('time off is not wired')),
+      create: () => Promise.reject(new Error('time off is not wired')),
+      update: () => Promise.reject(new Error('time off is not wired')),
+      remove: () => Promise.reject(new Error('time off is not wired')),
+    },
+    mintId: deps.mintId,
+    notify: deps.notify,
+    ...(deps.now === undefined ? {} : { now: deps.now }),
+  });
 
   function make(workspace: string, scope: DelegationsScope) {
     let state: DelegationsState = { status: 'loading' };
@@ -264,6 +313,8 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
   };
 
   return {
+    /** A member's time off (spec 0037, AC-1286): held per workspace and member, Availability's Time off section. */
+    timeOff,
     /** A held list of delegations: the member's own both ways, or the workspace's (`members.manage`). */
     delegations: (workspace: string, scope: DelegationsScope): DelegationsHeld => of(workspace, scope).held,
     /**
@@ -379,6 +430,7 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     clear(): void {
       lists.clear();
       visibles.clear();
+      timeOff.clear();
     },
   };
 }

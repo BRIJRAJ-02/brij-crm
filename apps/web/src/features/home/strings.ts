@@ -72,6 +72,8 @@ export const strings = {
   inMeeting: 'In a meeting',
   busy: 'Busy',
   freeNow: 'Free now',
+  // On time off today (spec 0037, AC-1287).
+  away: 'Away',
   teamDescription: 'Times in your time zone',
   aTeammate: 'A teammate',
   until: (time: string) => `Until ${time}`,

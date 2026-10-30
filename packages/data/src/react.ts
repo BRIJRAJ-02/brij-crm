@@ -29,6 +29,7 @@ import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { PreferencesHeld, PreferencesState } from './preferences/store.ts';
 import type { DelegationsHeld, DelegationsState } from './scheduling/access.ts';
+import type { TimeOffHeld, TimeOffState } from './scheduling/time-off.ts';
 import type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import type { LinkPageHeld, LinkPageState } from './link-page/store.ts';
 import type { SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
@@ -419,6 +420,11 @@ export function usePreferences(held: PreferencesHeld): PreferencesState {
 
 /** A held list of scheduling delegations (spec 0037: the member's own, or the workspace's), read when first held. */
 export function useDelegations(held: DelegationsHeld): DelegationsState {
+  return useRetained(held);
+}
+
+/** One member's time off (spec 0037, Availability's Time off section), read when first held. */
+export function useTimeOff(held: TimeOffHeld): TimeOffState {
   return useRetained(held);
 }
 

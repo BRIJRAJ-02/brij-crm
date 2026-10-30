@@ -64,7 +64,7 @@ import { offsetLabel, zoneDisplay } from '../../public/booking/time.ts';
 import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { createPortal } from 'react-dom';
-import { calendarsHref, newLinkOnlyPageHref } from '../booking/links.ts';
+import { availabilityHref, calendarsHref, newLinkOnlyPageHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
@@ -146,6 +146,7 @@ function whereRowOf(
 function statusOf(booking: BookingListItem): { readonly label: string; readonly hue: Hue } {
   if (booking.status === 'cancelled') return { label: strings.status.cancelled, hue: 'gray' };
   if (booking.needsHost) return { label: strings.needsHost, hue: 'orange' };
+  if (booking.hostAway === true) return { label: strings.hostAway, hue: 'orange' };
   if (booking.noShow === true) return { label: strings.noShow, hue: 'red' };
   return { label: strings.status.confirmed, hue: 'green' };
 }
@@ -366,7 +367,9 @@ function BookingCard({
               }),
         };
   const hasNotice =
-    isSeeOnly || booking.hostRemoved === true || (isConfirmed && (booking.eventFailed || booking.needsHost));
+    isSeeOnly ||
+    booking.hostRemoved === true ||
+    (isConfirmed && (booking.eventFailed || booking.needsHost || booking.hostAway === true));
   const notices = hasNotice ? (
     <>
       {isSeeOnly && <Callout tone="info">{strings.seeOnly(booking.hostName)}</Callout>}
@@ -375,6 +378,11 @@ function BookingCard({
       {booking.needsHost && isConfirmed && (
         <Callout tone="warning" title={strings.needsHost}>
           {strings.needsHostText}
+        </Callout>
+      )}
+      {booking.hostAway === true && isConfirmed && !booking.needsHost && (
+        <Callout tone="warning" title={strings.hostAway}>
+          {strings.hostAwayText}
         </Callout>
       )}
     </>
@@ -693,6 +701,47 @@ function removeWords(
  * sit over the card's popover), and opens the card again, focus on Remove,
  * when the confirm is dismissed.
  */
+/**
+ * Time off on the week (spec 0037, AC-1287): the days, and that no page offers times then. It is changed in
+ * Availability's Time off section, never removed here as a block.
+ */
+function AwayCard({
+  turn,
+  locale,
+  href,
+  headingLevel = 4,
+}: {
+  readonly turn: TimeBlockOccurrence;
+  readonly locale: string;
+  readonly href: string;
+  readonly headingLevel?: 3 | 4;
+}) {
+  const { timeZone } = useFormatSettings();
+  return (
+    <MeetingCard
+      headingLevel={headingLevel}
+      title={strings.away}
+      when={
+        turn.fromDate !== undefined && turn.toDate !== undefined
+          ? allDayWhenOf(`${turn.fromDate}T00:00:00.000Z`, nextDay(turn.toDate), locale)
+          : whenOf(turn.startsAt, turn.endsAt, locale, timeZone)
+      }
+      rows={[{ id: 'pages', icon: 'link' as const, label: strings.bookingPages, value: strings.awayNote }]}
+      endAction={
+        <ButtonLink size="lg" variant="ghost" icon="calendar" href={href}>
+          {strings.openTimeOff}
+        </ButtonLink>
+      }
+    />
+  );
+}
+
+/** The midnight (UTC) after a calendar date: an all day span's end, as calendar events keep it. */
+function nextDay(date: string): string {
+  const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString();
+}
+
 function BlockCard({
   turn,
   locale,
@@ -1220,7 +1269,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
               ? { status: strings.noShow }
               : booking.needsHost
                 ? { status: strings.needsHost }
-                : {}),
+                : booking.hostAway === true
+                  ? { status: strings.hostAway }
+                  : {}),
         },
       ];
     }
@@ -1250,8 +1301,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
           dayKey: piece.dayKey,
           startMinute: piece.startMinute,
           endMinute: piece.endMinute,
-          title: turn.kind === 'hold' ? strings.held : strings.blocked,
-          time: timeRange(turn.startsAt, turn.endsAt, locale, timeZone),
+          title: turn.kind === 'hold' ? strings.held : turn.kind === 'away' ? strings.away : strings.blocked,
+          // Time off is whole days: a day it covers reads All day (spec 0037, AC-1287).
+          time:
+            turn.kind === 'away' && piece.startMinute === 0 && piece.endMinute === 1440
+              ? strings.allDay
+              : timeRange(turn.startsAt, turn.endsAt, locale, timeZone),
           ...(turn.label === undefined ? {} : { detail: turn.label }),
           kind: turn.kind === 'hold' ? 'held' : 'blocked',
         },
@@ -1349,6 +1404,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
                   connection={connections.find((connection) => connection.id === openBusy.connectionId)}
                   locale={locale}
                 />
+              ) : openTurn?.kind === 'away' ? (
+                <AwayCard turn={openTurn} locale={locale} href={availabilityHref(slug)} />
               ) : openTurn !== undefined && open !== undefined ? (
                 <BlockCard
                   key={openTurn.key}
@@ -1683,11 +1740,13 @@ function groupsOf(
                 ? {}
                 : item.booking.needsHost
                   ? { badge: strings.needsHost, badgeTone: 'accent' as const }
-                  : item.booking.noShow === true
-                    ? { badge: strings.noShow }
-                    : Date.parse(item.booking.endsAt) > now.getTime()
-                      ? { badge: strings.status.confirmed }
-                      : {}),
+                  : item.booking.hostAway === true && Date.parse(item.booking.endsAt) > now.getTime()
+                    ? { badge: strings.hostAway, badgeTone: 'accent' as const }
+                    : item.booking.noShow === true
+                      ? { badge: strings.noShow }
+                      : Date.parse(item.booking.endsAt) > now.getTime()
+                        ? { badge: strings.status.confirmed }
+                        : {}),
               ...(item.booking.note === undefined ? {} : { note: item.booking.note }),
               ...(item.booking.guests.length === 0 ? {} : { attendees: item.booking.guests }),
             };
