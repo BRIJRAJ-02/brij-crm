@@ -29,7 +29,8 @@
   .scrim[data-holds-input],
   .scrim[data-variant='peek'],
   .scrim[data-variant='sheet'],
-  .scrim[data-variant='palette'] {
+  .scrim[data-variant='palette'],
+  .scrim[data-variant='drawer'] {
     background: var(--scrim);
   }
 
@@ -285,6 +286,27 @@
     padding-block-start: 0;
   }
 
+  /* The drawer (a long list or detail beside the page, as Attio's side panels): the window's full height at the
+     end edge, size-dialog wide (the window's width on a phone), square on the edge it sits against. It keeps the
+     standard title bar and footer, so a drawer's padding and buttons line up with a dialog's. It slides in from the
+     end edge over the drawer curve and out faster. */
+  .scrim:has(> .root[data-variant='drawer']) {
+    place-items: stretch end;
+    padding: 0;
+  }
+
+  .root[data-variant='drawer'] {
+    inline-size: min(100%, var(--size-dialog));
+    block-size: 100dvh;
+    max-block-size: none;
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .root[data-variant='drawer'] .dialog {
+    block-size: 100%;
+  }
+
   .root[data-variant='peek'] .dialog {
     block-size: 100%;
   }
@@ -326,6 +348,14 @@
     animation: sink var(--duration-exit) var(--ease-out) forwards;
   }
 
+  .root[data-variant='drawer'][data-entering] {
+    animation: slide-in var(--duration-modal) var(--ease-drawer);
+  }
+
+  .root[data-variant='drawer'][data-exiting] {
+    animation: slide-out var(--duration-exit) var(--ease-out) forwards;
+  }
+
   /* Opened from the keyboard (the palette's ⌘K), it appears at once. */
   .scrim[data-opened-by='keyboard'][data-entering],
   .root[data-opened-by='keyboard'][data-entering] {
@@ -358,6 +388,38 @@
     }
   }
 
+  @keyframes slide-in {
+    from {
+      translate: 100% 0;
+    }
+  }
+
+  @keyframes slide-out {
+    to {
+      translate: 100% 0;
+    }
+  }
+
+  :dir(rtl) .root[data-variant='drawer'][data-entering] {
+    animation-name: slide-in-rtl;
+  }
+
+  :dir(rtl) .root[data-variant='drawer'][data-exiting] {
+    animation-name: slide-out-rtl;
+  }
+
+  @keyframes slide-in-rtl {
+    from {
+      translate: -100% 0;
+    }
+  }
+
+  @keyframes slide-out-rtl {
+    to {
+      translate: -100% 0;
+    }
+  }
+
   @keyframes fade-in {
     from {
       opacity: 0;
@@ -372,12 +434,16 @@
 
   @media (prefers-reduced-motion: reduce) {
     .root[data-entering],
-    .root[data-variant='sheet'][data-entering] {
+    .root[data-variant='sheet'][data-entering],
+    .root[data-variant='drawer'][data-entering],
+    :dir(rtl) .root[data-variant='drawer'][data-entering] {
       animation-name: fade-in;
     }
 
     .root[data-exiting],
-    .root[data-variant='sheet'][data-exiting] {
+    .root[data-variant='sheet'][data-exiting],
+    .root[data-variant='drawer'][data-exiting],
+    :dir(rtl) .root[data-variant='drawer'][data-exiting] {
       animation-name: fade-out;
     }
   }
