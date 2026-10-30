@@ -36,6 +36,7 @@ import type { JobView, RoutingRule } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { PreferencesHeld, PreferencesState } from './preferences/store.ts';
+import type { RegionHeld, WorkspaceRegion } from './workspace-region.ts';
 import type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import type { LinkPageHeld, LinkPageState } from './link-page/store.ts';
 import type { SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
@@ -458,6 +459,11 @@ export function useAccountSecurity(view: AccountSecurityView): AccountSecuritySt
 
 /** The workspace's calendar settings (spec 0024, AC-609), read when the screen first holds them. */
 export function useCalendarSettings(held: CalendarSettingsHeld): CalendarSettingsState {
+  return useRetained(held);
+}
+
+/** The workspace's default currency and country, read when first held; undefined until it arrives. */
+export function useWorkspaceRegion(held: RegionHeld): WorkspaceRegion | undefined {
   return useRetained(held);
 }
 

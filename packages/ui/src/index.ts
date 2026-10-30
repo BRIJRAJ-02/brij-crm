@@ -140,6 +140,7 @@ export {
   type DisclosureProps,
 } from './molecules/Disclosure/Disclosure.tsx';
 export { CountryPicker, type CountryPickerProps } from './molecules/CountryPicker/CountryPicker.tsx';
+export { CurrencyPicker, type CurrencyPickerProps } from './molecules/CurrencyPicker/CurrencyPicker.tsx';
 export { EmptyState, type EmptyStateProps, type EmptyStateTone } from './molecules/EmptyState/EmptyState.tsx';
 export { Field, type FieldProps, type FieldSize, type FieldSuggestions } from './molecules/Field/Field.tsx';
 export { FieldGroup, type FieldGroupProps } from './molecules/FieldGroup/FieldGroup.tsx';

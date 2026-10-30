@@ -1016,6 +1016,13 @@
       "when": 1795501000000,
       "tag": "0144_team_delegations",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1795501100000,
+      "tag": "0145_workspace_region",
+      "breakpoints": true
     }
   ]
 }

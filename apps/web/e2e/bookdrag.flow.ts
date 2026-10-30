@@ -1,6 +1,7 @@
 // Moving a booking by hand on the week (the flow pass, crm-bookdrag, 31 October 2026): a booking dragged to another
 // time and back with Undo, its foot dragged to change its length, the keyboard doing the same with Alt and the
-// arrows, and a place the host can't take drawn red and never sent. Each from a page and a booking made through the API and the visitor's own page, as the booking flows do.
+// arrows, a place the host can't take drawn red and never sent, and the workspace's currency and country saved from
+// General. Each from a page and a booking made through the API and the visitor's own page, as the booking flows do.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { newWorkspace } from './people.ts';
@@ -166,5 +167,29 @@ test.describe('moving a booking on the week', () => {
     await expect(block).toHaveAttribute('aria-label', was);
     expect(sent).toBe(0);
     await expect(page.getByText(/is emailed the new time/)).toBeHidden();
+  });
+
+  test('the workspace’s currency and country are saved from General, with Undo, and a new money field starts in it', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `region-${tag}`;
+    await newWorkspace(page, `region-${tag}@example.com`, slug);
+    await page.goto(`/w/${slug}/settings/general`);
+    await page.getByRole('button', { name: /^Currency/ }).click();
+    await page.getByRole('searchbox', { name: 'Search currencies' }).fill('rupee');
+    await page.getByRole('option', { name: /Indian Rupee/ }).click();
+    await expect(page.getByText('Currency is now INR.')).toBeVisible();
+    await page.getByRole('button', { name: /^Country/ }).click();
+    await page.getByRole('searchbox', { name: /^Search country/ }).fill('india');
+    await page.getByRole('option', { name: /^India/ }).click();
+    await expect(page.getByText('Country is now IN.')).toBeVisible();
+    // Undo takes the country back to Automatic.
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByRole('button', { name: /^Country/ })).toContainText('Automatic');
+    // It stays after a reload.
+    await page.reload();
+    await expect(page.getByRole('button', { name: /^Currency/ })).toContainText('Indian Rupee');
   });
 });
