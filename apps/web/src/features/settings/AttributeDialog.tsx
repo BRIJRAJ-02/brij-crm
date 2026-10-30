@@ -15,6 +15,7 @@ import {
   type AttributeDefinition,
   type AttributeImpact,
   type MemberSummary,
+  type NewAttribute,
   type NewOption,
   type ObjectSummary,
   type OptionChanges,
@@ -90,6 +91,11 @@ export interface AttributeDialogProps {
   readonly onClose: () => void;
   /** The server agreed: the attribute as it is now, and whether it is new. */
   readonly onSaved: (attribute: AttributeDefinition, isNew: boolean) => void;
+  /**
+   * Makes the attribute somewhere other than the object (a list's own field, spec 0048, AC-4811); the object's
+   * `attributes.create` when absent.
+   */
+  readonly onCreate?: ((input: NewAttribute) => Promise<AttributeDefinition>) | undefined;
 }
 
 /** The picker's types, which a create takes. */
@@ -200,6 +206,7 @@ export function AttributeDialog({
   onRecreate,
   onClose,
   onSaved,
+  onCreate,
 }: AttributeDialogProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const [id, setId] = useState(() => data.attributes.newId());
@@ -320,7 +327,7 @@ export function AttributeDialog({
     setRefusals([]);
     const write =
       attribute === undefined
-        ? data.attributes.create(slug, {
+        ? (onCreate ?? ((input: NewAttribute) => data.attributes.create(slug, input)))({
             id,
             objectId,
             title: values.title,
@@ -552,7 +559,8 @@ export function AttributeDialog({
               isBusy: relationship.isBusy === true,
             }
           : {})}
-        {...(attribute === undefined && canManage
+        // A list's field (`onCreate`) is any type but a relationship (spec 0048, AC-4811).
+        {...(attribute === undefined && canManage && onCreate === undefined
           ? { relationshipEntry: { label: strings.relationship, onChoose: setRelationshipDraft } }
           : {})}
         {...(optionsLimit === undefined ? {} : { optionsLimit })}

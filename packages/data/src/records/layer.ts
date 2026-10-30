@@ -1064,6 +1064,8 @@ export function createRecordsLayer({
   };
   const store = createPlainStore<RecordView>({ now, later });
   // The names of linked records, read by id with the primary attribute only; arriving names redraw that workspace's views.
+  // Other stores' screens showing linked names (spec 0048: a list's rows), told when names arrive.
+  const nameListeners = new Set<(workspace: string) => void>();
   const names = createReferenceNames({
     read: async (workspace, ids) => {
       const rows = await whenFree(() => api.get({ workspace, ids, attributeIds: [] }));
@@ -1073,6 +1075,7 @@ export function createRecordsLayer({
     onNames: (workspace) => {
       for (const entry of viewsOf(workspace)) entry.invalidate();
       subscriptions.renamed(workspace);
+      for (const listener of nameListeners) listener(workspace);
     },
     held: (recordId) => store.get(recordId)?.display,
     later: (run, ms) => {
@@ -4004,6 +4007,15 @@ export function createRecordsLayer({
       release: store.release,
       get: store.get,
       subscribe: store.subscribe,
+      /** The names of records a list cell links to, as a records view's `referenceDisplays` reads them. */
+      displaysOf: (workspace: string, refs: readonly RecordRef[]) => names.displaysOf(workspace, refs),
+      /** Hears names arriving in a workspace, so a list's rows draw them; the answer stops listening. */
+      onNames: (listener: (workspace: string) => void) => {
+        nameListeners.add(listener);
+        return () => {
+          nameListeners.delete(listener);
+        };
+      },
     },
   };
 }

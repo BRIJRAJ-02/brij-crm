@@ -628,6 +628,13 @@ export function NavSection({
         <VisuallyHidden>{strings.loading}</VisuallyHidden>
       </div>
     ) : null;
+  } else if (!hasItems && add !== undefined) {
+    // Empty, the make action shows in the body too: the label row's "+" appears only on hover or focus.
+    body = (
+      <Button variant="ghost" size="sm" icon="plus" onPress={add.onAdd}>
+        {add.label}
+      </Button>
+    );
   } else if (!hasItems && emptyLabel !== undefined) {
     body = <p className={styles.empty}>{emptyLabel}</p>;
   }

@@ -317,13 +317,13 @@ export const CollapsedLoading: Story = {
   },
 };
 
-/** No lists yet: the section says what goes there. */
+/** No lists yet: the section offers New list where it shows (its empty label gives way to the action). */
 export const Empty: Story = {
   args: { hasLists: false },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Lists you make show here.')).toBeInTheDocument();
-    // Lists' "+" (spec 0048): a named button after the label, there with no lists too.
-    await expect(canvas.getByRole('button', { name: 'New list' })).toBeInTheDocument();
+    await expect(canvas.queryByText('Lists you make show here.')).toBeNull();
+    // Lists' "+" (spec 0048): after the label, and, with no lists, in the section's body where it shows.
+    await expect(canvas.getAllByRole('button', { name: 'New list' })).toHaveLength(2);
   },
 };
 

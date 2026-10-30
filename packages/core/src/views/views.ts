@@ -29,7 +29,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { can, fieldLevel, isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
-import { checkList, checkObject } from '../access/visibility.ts';
+import { attributeVisible, checkList, checkObject } from '../access/visibility.ts';
 import {
   filterAttributeIds,
   mergeFilter,
@@ -86,7 +86,9 @@ export const parentIdOf = (parent: ViewParent): string => parent.listId ?? paren
 
 /** The change a view write records: its list's views, else its object's. */
 export const viewChange = (viewId: string, parent: ViewParent) =>
-  parent.listId === null ? { viewId, objectId: parent.objectId } : { viewId, listId: parent.listId };
+  parent.listId === null
+    ? { viewId, objectId: parent.objectId }
+    : { viewId, objectId: parent.objectId, listId: parent.listId };
 
 /**
  * The attributes a view may name: its object's, and for a list's view the
@@ -241,8 +243,8 @@ async function filterFieldsShown(
   const found = await loadAttributesById(tx, named);
   return new Set(
     [...found.values()].flatMap((attribute) =>
-      // A list's own field shows to whoever reads the list, which the view's read checked (spec 0048).
-      attribute.listId !== null ||
+      // A list's own field follows its list's field rules (spec 0048); the view's read checked the list itself.
+      (attribute.listId !== null && attributeVisible(access, attribute)) ||
       (attribute.objectId !== null &&
         objectLevel(access, attribute.objectId) !== 'none' &&
         fieldLevel(access, { id: attribute.id, objectId: attribute.objectId }) !== 'hidden')
@@ -431,8 +433,8 @@ async function filterIds(
   const far = farIds.length === 0 ? new Map<string, AttributeDef>() : await loadAttributesById(tx, farIds);
   const attributes = [...own.values(), ...far.values()].filter(
     (attribute) =>
-      // The view's own list's fields: whoever reads the list sees them (spec 0048).
-      (attribute.listId !== null && attribute.listId === parent.listId) ||
+      // The view's own list's fields, as its field rules show them (spec 0048).
+      (attribute.listId !== null && attribute.listId === parent.listId && attributeVisible(scope.access, attribute)) ||
       (attribute.objectId !== null &&
         objectLevel(scope.access, attribute.objectId) !== 'none' &&
         fieldLevel(scope.access, { id: attribute.id, objectId: attribute.objectId }) !== 'hidden'),

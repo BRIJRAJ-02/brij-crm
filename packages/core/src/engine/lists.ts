@@ -376,29 +376,44 @@ export async function addEntry(
           name: lists.name,
           allowsDuplicates: lists.allowsDuplicates,
           archivedAt: lists.archivedAt,
+          objectArchivedAt: sql<Date | null>`(select o.archived_at from objects o where o.workspace_id = ${lists.workspaceId} and o.id = ${lists.objectId})`,
         })
         .from(lists)
         .where(eq(lists.id, listId))
-        .for('update');
+        .for('update', { of: lists });
       if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
       // A hidden list answers as an unknown one, before anything says it is archived; a read only one is 403.
       checkList(scope.access, { id: listId, objectId: list.objectId, name: list.name }, 'write');
-      if (list.archivedAt !== null) throw refuse('NOT_FOUND', 'That list is archived. Restore it first.');
-      if (id !== undefined) {
-        // Under the list's lock, so a concurrent try with the same id has committed or not started.
-        const [earlier] = await tx
-          .select({ listId: listEntries.listId, recordId: listEntries.recordId, deletedAt: listEntries.deletedAt })
-          .from(listEntries)
-          .where(eq(listEntries.id, id));
-        if (earlier !== undefined) {
-          if (earlier.listId === listId && earlier.recordId === recordId && earlier.deletedAt === null) {
-            return { entryId: id, versions: {} };
-          }
-          throw refuse('CONFIG_INVALID', ENTRY_ID_USED);
-        }
+      // A list whose object is archived reads as archived too (AC-4832).
+      if (list.archivedAt !== null || list.objectArchivedAt !== null) {
+        throw refuse('NOT_FOUND', 'That list is archived. Restore it first.');
       }
       // The record must be one the principal sees (spec 0009, AC-143); adding it changes the list, not the record.
       const record = await lockRecord(tx, recordId, scope.access);
+      if (id !== undefined) {
+        // Under the list's lock, so a concurrent try with the same id has committed or not started. Only the add's
+        // own maker gets the entry back, so an id never tells anyone else what a list holds.
+        const [earlier] = await tx
+          .select({
+            listId: listEntries.listId,
+            recordId: listEntries.recordId,
+            deletedAt: listEntries.deletedAt,
+            createdByType: listEntries.createdByType,
+            createdById: listEntries.createdById,
+          })
+          .from(listEntries)
+          .where(eq(listEntries.id, id));
+        if (earlier !== undefined) {
+          const isOwnTry =
+            earlier.listId === listId &&
+            earlier.recordId === recordId &&
+            earlier.deletedAt === null &&
+            earlier.createdByType === scope.actor.type &&
+            earlier.createdById === scope.actor.id;
+          if (isOwnTry) return { entryId: id, versions: {} };
+          throw refuse('CONFIG_INVALID', ENTRY_ID_USED);
+        }
+      }
       if (record.objectId !== list.objectId) {
         throw refuse('CONFIG_INVALID', "That record can't go in this list; it holds another object's records.");
       }
@@ -461,12 +476,20 @@ async function lockAnyEntry(tx: WorkspaceTx, entryId: string) {
 /** Locks a list's row for the rest of the transaction, returning whether it lets each record in once. */
 async function lockList(tx: WorkspaceTx, listId: string): Promise<{ allowsDuplicates: boolean; archived: boolean }> {
   const [list] = await tx
-    .select({ allowsDuplicates: lists.allowsDuplicates, archivedAt: lists.archivedAt })
+    .select({
+      allowsDuplicates: lists.allowsDuplicates,
+      archivedAt: lists.archivedAt,
+      objectArchivedAt: sql<Date | null>`(select o.archived_at from objects o where o.workspace_id = ${lists.workspaceId} and o.id = ${lists.objectId})`,
+    })
     .from(lists)
     .where(eq(lists.id, listId))
-    .for('update');
+    .for('update', { of: lists });
   if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
-  return { allowsDuplicates: list.allowsDuplicates, archived: list.archivedAt !== null };
+  // A list whose object is archived reads as archived too (AC-4832).
+  return {
+    allowsDuplicates: list.allowsDuplicates,
+    archived: list.archivedAt !== null || list.objectArchivedAt !== null,
+  };
 }
 
 /** Takes one entry out of its list inside a write; one already out changes nothing. */
@@ -588,13 +611,13 @@ export async function changeEntries(
       );
       const outcomes = new Map<string, EntryOutcome>();
       for (const entry of ordered) {
-        try {
-          await (input.action === 'remove' ? removeIn(context, entry.id) : restoreIn(context, entry.id));
-          outcomes.set(entry.id, { entryId: entry.id });
-        } catch (error) {
-          if (!isRefusal(error)) throw error;
-          outcomes.set(entry.id, { entryId: entry.id, refusal: error.refusal });
-        }
+        // Its own savepoint: a refusal after a change (a unique value taken meanwhile, past the count's move) rolls
+        // that entry back whole, and the others go on.
+        const done = await context.perRecord((part) =>
+          input.action === 'remove' ? removeIn(part, entry.id) : restoreIn(part, entry.id),
+        );
+        const [refusal] = done.ok ? [] : done.refusals;
+        outcomes.set(entry.id, refusal === undefined ? { entryId: entry.id } : { entryId: entry.id, refusal });
       }
       const missing = { code: 'NOT_FOUND' as const, message: 'That entry does not exist.' };
       return input.entryIds.map(

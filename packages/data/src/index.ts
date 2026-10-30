@@ -184,6 +184,7 @@ export type {
   AddOutcome,
   EntriesState,
   EntriesStatus,
+  EntriesLayer,
   EntriesView,
   ListBoard,
   ListBoardColumn,
@@ -3336,7 +3337,13 @@ export function createDataLayer({
               call((options) => api.entries.restore({ ...input, entryIds: [...input.entryIds] }, options)),
           },
           records: {
-            ...layer.shared,
+            receive: layer.shared.receive,
+            hold: layer.shared.hold,
+            release: layer.shared.release,
+            get: layer.shared.get,
+            subscribe: layer.shared.subscribe,
+            displaysOf: layer.shared.displaysOf,
+            onNames: layer.shared.onNames,
             pushUndo: (workspace, entry) => {
               layer.undo.push(workspace, entry);
             },
@@ -6259,7 +6266,9 @@ export function createDataLayer({
        * source for every screen, live while a screen retains it
        * (`useViewsList`).
        */
-      list: (workspace: string, objectId: string): ViewsListSource => views.list(workspace, objectId),
+      // With `listId`, one of the object's lists' views (spec 0048).
+      list: (workspace: string, objectId: string, listId?: string): ViewsListSource =>
+        views.list(workspace, objectId, listId),
       /** One view whole, the same source for every screen, live while retained (`useSavedView`). */
       get: (workspace: string, viewId: string): SavedViewSource => views.get(workspace, viewId),
       /**

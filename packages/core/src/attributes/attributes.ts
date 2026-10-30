@@ -33,7 +33,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isOpen, objectLevel, readOnlyReason, visibleAttributes } from '../access/policy.ts';
-import { UNKNOWN_LIST } from '../access/visibility.ts';
+import { attributeVisible, UNKNOWN_LIST } from '../access/visibility.ts';
 import { canManageList } from '../lists/manager.ts';
 import { relationshipBlocks } from '../relationships/blocks.ts';
 
@@ -380,8 +380,10 @@ export async function listListAttributes(
             ),
       )
       .orderBy(asc(attributes.position), asc(attributes.createdAt), asc(attributes.id));
-    // A list's fields follow its object's access (decision 2): judged on the object, as its own fields are.
-    const listed = rows.map(({ attribute, archivedBy }) => ({ ...attribute, archivedBy, objectId: list.objectId }));
+    // A list's fields follow its object's access (decision 2); a field rule hiding one leaves it out (hidden is absent).
+    const listed = rows
+      .filter(({ attribute }) => attributeVisible(scope.access, attribute))
+      .map(({ attribute, archivedBy }) => ({ ...attribute, archivedBy, objectId: list.objectId }));
     const context: DefinitionContext = {
       primaryAttributeId: null,
       options: await optionsOf(
@@ -532,16 +534,16 @@ async function createListAttribute(
   hooks: readonly AfterWrite[],
 ): Promise<AttributeDefinition> {
   const listId = checkId(input.listId, UNKNOWN_LIST);
-  const list = await inWorkspace(scope, (tx) => readFieldsList(tx, scope, listId, false));
-  if (list.objectId !== input.objectId.toLowerCase()) throw refuse('NOT_FOUND', UNKNOWN_LIST);
-  if (!list.canManage) throw refuse('FORBIDDEN', await listManagersSentence(scope, listId));
   const title = input.title.trim();
   const apiSlug =
     input.apiSlug === undefined || input.apiSlug.trim() === '' ? toApiSlug(title, 'attribute') : input.apiSlug.trim();
   const { result } = await runWrite(
     scope,
-    (context) =>
-      insertAttribute(context, {
+    async (context) => {
+      const list = await readFieldsList(context.tx, scope, listId, false);
+      if (list.objectId !== input.objectId.toLowerCase()) throw refuse('NOT_FOUND', UNKNOWN_LIST);
+      if (!list.canManage) throw refuse('FORBIDDEN', await listManagersSentence(context.tx, scope, listId));
+      return insertAttribute(context, {
         id: input.id,
         listId,
         apiSlug,
@@ -566,7 +568,8 @@ async function createListAttribute(
                 ...(option.targetTimeInStage === undefined ? {} : { targetTimeInStage: option.targetTimeInStage }),
               })),
             }),
-      }),
+      });
+    },
     hooks,
   );
   const made = (await listListAttributes(scope, listId)).find((each) => each.id === result.attributeId);
@@ -579,14 +582,12 @@ async function createListAttribute(
  * this list.", or, when its maker has gone or the system made it, "Only owners
  * and admins can change this list."
  */
-async function listManagersSentence(scope: EngineScope, listId: string): Promise<string> {
-  const [maker] = await inWorkspace(scope, (tx) =>
-    tx
-      .select({ name: members.name, status: members.status })
-      .from(lists)
-      .innerJoin(members, and(eq(members.workspaceId, lists.workspaceId), eq(members.id, lists.createdByMemberId)))
-      .where(and(eq(lists.workspaceId, scope.workspaceId), eq(lists.id, listId))),
-  );
+async function listManagersSentence(tx: WorkspaceTx, scope: EngineScope, listId: string): Promise<string> {
+  const [maker] = await tx
+    .select({ name: members.name, status: members.status })
+    .from(lists)
+    .innerJoin(members, and(eq(members.workspaceId, lists.workspaceId), eq(members.id, lists.createdByMemberId)))
+    .where(and(eq(lists.workspaceId, scope.workspaceId), eq(lists.id, listId)));
   return maker === undefined || maker.status !== 'active'
     ? 'Only owners and admins can change this list.'
     : `Only ${maker.name}, owners and admins can change this list.`;

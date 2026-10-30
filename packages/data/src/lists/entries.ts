@@ -25,6 +25,7 @@ import type { MutationLog } from '../live/mutations.ts';
 import type { LiveEventOf } from '../live/router.ts';
 import type { Notice } from '../notice.ts';
 import type { ExternalEntry } from '../records/history.ts';
+import type { NameState, RecordRef } from '../records/names.ts';
 import { createPlainStore } from '../records/plain-store.ts';
 import type { RecordBody, RecordStore, StoreListener } from '../records/store.ts';
 import { createRecordView, nextFrame, type RecordSource, type RowNote, type Scheduler } from '../records/view.ts';
@@ -104,6 +105,10 @@ export interface SharedRecords {
   readonly get: (id: string) => RecordView | undefined;
   readonly subscribe: (listener: StoreListener) => () => void;
   readonly pushUndo: (workspace: string, entry: ExternalEntry) => void;
+  /** The names of records a cell links to (read in the next frame when not known). */
+  readonly displaysOf: (workspace: string, refs: readonly RecordRef[]) => readonly NameState[];
+  /** Names arrived in a workspace; the answer stops listening. */
+  readonly onNames: (listener: (workspace: string) => void) => () => void;
 }
 
 /** A list, as its entries' calls need it. */
@@ -143,6 +148,8 @@ export interface EntriesState {
   readonly cellErrors: ReadonlyMap<string, string>;
   /** The member's own new rows (AC-4813): pinned first, marked new. */
   readonly rowNotes: ReadonlyMap<string, RowNote>;
+  /** How the records a cell links to show: each one's display, `loading`, or `unknown` (one field design). */
+  readonly referenceDisplays: (refs: readonly RecordRef[]) => readonly NameState[];
 }
 
 /** A list's entries as one screen shows them, for useSyncExternalStore. */
@@ -173,6 +180,8 @@ export interface ListBoardState {
   readonly columns: readonly ListBoardColumn[];
   /** The rows the board's cards show, by entry id. */
   readonly rowOf: (entryId: string) => ListRow | undefined;
+  /** How the records a card's field links to show. */
+  readonly referenceDisplays: (refs: readonly RecordRef[]) => readonly NameState[];
 }
 
 /** A list board, for useSyncExternalStore. */
@@ -263,6 +272,7 @@ interface OpenBoard {
   readonly listId: string;
   readonly board: ListBoard;
   readonly settle: () => void;
+  readonly invalidate: () => void;
 }
 
 /** The lists layer: entries' views, boards and writes. */
@@ -364,9 +374,10 @@ export function createEntriesLayer({
     hold: boolean,
   ) => {
     for (const entry of page.entries) remember(entry);
+    // Held first, each record once per entry showing it, so the store keeps what it receives.
+    if (hold) records.hold(page.entries.map((entry) => entry.recordId));
     records.receive(page.records);
     entries.receive(page.entries, { hold });
-    if (hold) records.hold(page.entries.map((entry) => entry.recordId));
   };
 
   const keyOf = (workspace: string, listId: string, query: unknown, attributeIds: readonly string[]) =>
@@ -449,6 +460,7 @@ export function createEntriesLayer({
       gone: () => leaving,
     });
     let snapshot: EntriesState | undefined;
+    const referenceDisplays = (refs: readonly RecordRef[]) => records.displaysOf(workspace, refs);
     const stateOf = (): EntriesState => ({
       source: store.getSnapshot(),
       status,
@@ -456,6 +468,7 @@ export function createEntriesLayer({
       count,
       cellErrors,
       rowNotes,
+      referenceDisplays,
     });
     store.subscribe(() => {
       snapshot = undefined;
@@ -601,7 +614,8 @@ export function createEntriesLayer({
     const open = boards.get(key);
     if (open !== undefined) return open.board;
     const listeners = new Set<() => void>();
-    let state: ListBoardState = { status: 'loading', columns: [], rowOf };
+    const referenceDisplays = (refs: readonly RecordRef[]) => records.displaysOf(workspace, refs);
+    let state: ListBoardState = { status: 'loading', columns: [], rowOf, referenceDisplays };
     let heldIds: readonly string[] = [];
     let control: AbortController | undefined;
     let held = 0;
@@ -612,8 +626,8 @@ export function createEntriesLayer({
     const announce = () => {
       for (const listener of listeners) listener();
     };
-    const set = (next: Omit<ListBoardState, 'rowOf'>) => {
-      state = { ...next, rowOf };
+    const set = (next: Omit<ListBoardState, 'rowOf' | 'referenceDisplays'>) => {
+      state = { ...next, rowOf, referenceDisplays };
       announce();
     };
     const read = async () => {
@@ -706,10 +720,24 @@ export function createEntriesLayer({
         };
       },
     };
-    boards.set(key, { workspace, listId: list.id, board: made, settle });
+    boards.set(key, {
+      workspace,
+      listId: list.id,
+      board: made,
+      settle,
+      invalidate: () => {
+        set({ ...state });
+      },
+    });
     void read();
     return made;
   }
+
+  // Names arrived: the rows and cards showing links in that workspace draw them.
+  records.onNames((workspace) => {
+    for (const open of views.values()) if (open.workspace === workspace) open.invalidate();
+    for (const open of boards.values()) if (open.workspace === workspace) open.invalidate();
+  });
 
   /** Every open view and board of a list settles: its count and rows read again. */
   const settleList = (workspace: string, listId: string) => {
@@ -762,12 +790,12 @@ export function createEntriesLayer({
         api.add({ workspace, id, listId: list.id, recordId, values, timeZone: timeZone(workspace), mutationId }),
       );
       const entry = entryOf(written);
-      remember(entry);
-      if (written.record !== undefined) records.receive([written.record]);
-      entries.receive([entry]);
+      // Held while the views pin it (each pin holds it too), then this hold lets go.
+      take({ entries: [entry], records: written.record === undefined ? [] : [written.record] }, true);
       for (const open of views.values()) {
         if (open.workspace === workspace && open.listId === list.id) open.pin(entry.id);
       }
+      joined.release([entry.id]);
       for (const open of boards.values()) if (open.workspace === workspace && open.listId === list.id) open.settle();
       const name = written.record?.display.name ?? '';
       records.pushUndo(workspace, {

@@ -308,6 +308,34 @@ describe('entries (AC-4809, AC-4813 to AC-4818)', () => {
     expect(await countEntries(world.owner, { listId: list.id })).toEqual({ count: 2, atLeast: false });
   });
 
+  it('keeps a restore refused for a unique value out whole: the count stays true (savepoint per entry)', async () => {
+    const world = await workspace();
+    const list = await createList(world.owner, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Crew',
+      template: 'blank',
+    });
+    const code = await createAttribute(world.owner, {
+      objectId: world.people,
+      listId: list.id,
+      id: newId(),
+      title: 'Code',
+      type: 'text',
+      isUnique: true,
+    });
+    const ada = await world.person('Ada');
+    const bo = await world.person('Bo');
+    const first = (
+      await addListEntry(world.owner, { id: newId(), listId: list.id, recordId: ada, values: { [code.id]: 'T1' } })
+    ).entry.id;
+    await removeEntries(world.owner, { entryIds: [first] });
+    await addListEntry(world.owner, { id: newId(), listId: list.id, recordId: bo, values: { [code.id]: 'T1' } });
+    const restored = await restoreEntries(world.owner, { entryIds: [first] });
+    expect(restored[0]?.refusal?.code).toBe('UNIQUE_CONFLICT');
+    expect(await countEntries(world.owner, { listId: list.id })).toEqual({ count: 1, atLeast: false });
+  });
+
   it('answers a list over an object the member can’t see as unknown, and refuses writes on a read only one', async () => {
     const world = await workspace();
     const list = await createList(world.owner, {

@@ -274,6 +274,7 @@ function FrameWithData({
         ? {}
         : { roleLabel: workspace.access.roleLabel, isOwner: workspace.access.role === 'owner' })}
       {...(workspace?.objects === undefined ? {} : { objects: workspace.objects })}
+      {...(workspace?.lists === undefined ? {} : { lists: workspace.lists })}
       // Loaded without objects (the door refused this workspace), or failed to load: no Records section.
       isMissing={workspace === undefined ? isFailed : workspace.objects === undefined}
       {...(currentObject === undefined ? {} : { currentObject })}
