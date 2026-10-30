@@ -10,7 +10,7 @@
 // is counted, never named (`canSeeForm`, spec 0009's hidden-means-absent),
 // so the refusal degrades to "a live form" rather than leaking its name.
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
-import { FormDocument } from '@crm/contracts';
+import { BookingQuestions, FormDocument } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { Access } from '../access/policy.ts';
 import { canSeeForm, liveObjectOf } from './shared.ts';
@@ -136,13 +136,42 @@ async function bookingWrites(tx: WorkspaceTx, field: PageField, standardKey: str
 }
 
 /**
+ * The attributes a booking page's required questions fill on every booking: each one filed on a field and asked of
+ * every guest (required, with no Show when that could hide it). A guest skips an optional question, and a hidden one
+ * is never asked, so neither counts. A stored set that no longer parses fills nothing, so a guard reading it stays
+ * shut rather than guessing.
+ */
+export function requiredFilings(questions: unknown): ReadonlySet<string> {
+  const parsed = BookingQuestions.safeParse(questions);
+  if (!parsed.success) return new Set();
+  return new Set(
+    parsed.data.flatMap((question) =>
+      question.required && (question.showWhen?.rules ?? []).length === 0 && question.filedOn !== undefined
+        ? [question.filedOn.attributeId]
+        : [],
+    ),
+  );
+}
+
+/** A live page a required field would wall, and whether a required question of its own filed on it would lift that. */
+export interface WalledPage extends LivePage {
+  /** True when the page files its answers onto the field's object, so a required question for it is a fix. */
+  readonly canAsk: boolean;
+}
+
+/**
  * The live booking pages that make a record on `field`'s object at each booking and would leave `field` empty
  * (late trap #11): every page that files to the CRM makes or finds the guest's Person and, by their email's
  * domain, a Company (in the same savepoint, so a refused Company loses the Person too); a page filing its answers
- * onto another object makes the guest's record there too, when it asks a question. A required field nothing fills makes that record impossible, and the booking still stands, so
- * the guest silently never reaches the CRM. Empty when the booking writes the field itself.
+ * onto another object makes the guest's record there too, when it asks a question. A required field nothing fills
+ * makes that record impossible, and the booking still stands, so the guest silently never reaches the CRM. Empty
+ * when the booking writes the field itself.
+ *
+ * A page whose answers go onto the field's object and that asks every guest a required question filed on it is no
+ * wall (`requiredFilings`): the record is made with that answer (`matchVisitor`, `answersRecord`). A Company is made
+ * from the email's domain alone, so nothing a page asks fills one, and every page still counts for Companies.
  */
-export async function livePagesWalledBy(tx: WorkspaceTx, field: PageField): Promise<readonly LivePage[]> {
+export async function livePagesWalledBy(tx: WorkspaceTx, field: PageField): Promise<readonly WalledPage[]> {
   if (field.objectId === null) return [];
   const [object] = await tx
     .select({ standardKey: objects.standardKey })
@@ -152,7 +181,12 @@ export async function livePagesWalledBy(tx: WorkspaceTx, field: PageField): Prom
   if (await bookingWrites(tx, field, object.standardKey)) return [];
   const isStandard = object.standardKey === 'people' || object.standardKey === 'companies';
   const rows = await tx
-    .select({ id: bookingPages.id, title: bookingPages.title, questions: bookingPages.questions })
+    .select({
+      id: bookingPages.id,
+      title: bookingPages.title,
+      questions: bookingPages.questions,
+      answersObjectId: bookingPages.answersObjectId,
+    })
     .from(bookingPages)
     .where(
       sql`${bookingPages.status} = 'live' and ${bookingPages.deletedAt} is null and ${bookingPages.fileToCrm}${isStandard ? sql`` : sql` and ${bookingPages.answersObjectId} = ${field.objectId}::uuid`}`,
@@ -160,9 +194,13 @@ export async function livePagesWalledBy(tx: WorkspaceTx, field: PageField): Prom
   // A page onto another object makes the guest's record there whenever they answer any of its questions, filed or
   // not (`answersRecord` runs on every answer kept), so a page with questions at all counts.
   const asksAnything = (questions: unknown) => Array.isArray(questions) && questions.length > 0;
+  // Where a page's answers land: a null answers object is People, which is what every page did before.
+  const filesHere = (answersObjectId: string | null) =>
+    object.standardKey === 'people' ? answersObjectId === null || answersObjectId === field.objectId : !isStandard;
   return rows
     .filter((row) => isStandard || asksAnything(row.questions))
-    .map((row) => ({ id: row.id, title: row.title }));
+    .filter((row) => !(filesHere(row.answersObjectId) && requiredFilings(row.questions).has(field.id)))
+    .map((row) => ({ id: row.id, title: row.title, canAsk: filesHere(row.answersObjectId) }));
 }
 
 /** Every live booking page that files to the CRM: each one finds or makes the guest's Person at every booking. */

@@ -1,7 +1,9 @@
 // The visitor on the CRM's records (spec 0025, AC-634), inside the booking's
 // write: the person matched by email or made (name and email, as the
 // `booking` actor), and their company matched or made by the email's domain
-// (never for a free email domain) and linked when the person has none. An
+// (never for a free email domain) and linked when the person has none. A
+// person made now takes the page's answers for its required fields, so a
+// required field the page asks for never keeps the guest out of the CRM. An
 // existing person's values are never overwritten. The forms matching module
 // (spec 0023) takes this over at landing; the free domain list here is its
 // seam until the `free-email-domains` package arrives.
@@ -83,6 +85,32 @@ async function hasCompany(tx: WorkspaceTx, personId: string, attribute: Attribut
   return found.rows.length > 0;
 }
 
+/**
+ * Makes a record with the booking's own `values` and the visitor's `answers` to its required fields
+ * (`requiredAnswerValues`), the booking's values winning on a field both name. Tried first in its own savepoint
+ * when there are answers: a write refused with them (a value a rule turns down) is made again without them, so an
+ * answer never costs the record a field's default would have given it, and the filing after it marks that answer
+ * not saved. Without answers it is `insertRecord` exactly, refusing as it does.
+ */
+export async function insertWithAnswers(
+  context: WriteContext,
+  input: {
+    readonly objectId: string;
+    readonly answers: Readonly<Record<string, unknown>>;
+    readonly values: Readonly<Record<string, unknown>>;
+    readonly timeZone: string;
+  },
+): Promise<Awaited<ReturnType<typeof insertRecord>>> {
+  const { objectId, timeZone, values } = input;
+  if (Object.keys(input.answers).length > 0) {
+    const tried = await context.perRecord((inner) =>
+      insertRecord(inner, { objectId, values: { ...input.answers, ...values }, timeZone }),
+    );
+    if (tried.ok) return tried.value;
+  }
+  return insertRecord(context, { objectId, values, timeZone });
+}
+
 /** What matching did: the person and company ids, and whether each was made now. */
 export interface MatchedVisitor {
   readonly personId?: string;
@@ -104,6 +132,8 @@ export async function matchVisitor(
     readonly timeZone: string;
     /** The owner a person or company made now gets (a round robin booking's host, spec 0029 AC-744); none when absent. */
     readonly ownerMemberId?: string;
+    /** The page's answers for People's required fields, which a person made now takes (`requiredAnswerValues`). */
+    readonly answers?: Readonly<Record<string, unknown>>;
   },
 ): Promise<MatchedVisitor> {
   const { tx } = context;
@@ -144,8 +174,9 @@ export async function matchVisitor(
     return { personId, ...(companyId === undefined ? {} : { companyId }) };
   }
   const name = bySlug(people, 'name');
-  const made = await insertRecord(context, {
+  const made = await insertWithAnswers(context, {
     objectId: objects.people,
+    answers: visitor.answers ?? {},
     values: {
       [email.id]: email.isMulti ? [visitor.email] : visitor.email,
       ...(name?.type === 'personal_name' ? { [name.id]: splitName(visitor.name) } : {}),
