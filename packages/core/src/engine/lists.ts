@@ -539,7 +539,7 @@ async function lockWritableList(context: WriteContext, listId: string): Promise<
     })
     .from(lists)
     .where(eq(lists.id, listId))
-    .for('update', { of: lists });
+    .for('no key update', { of: lists });
   if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
   // A hidden list answers as an unknown one, before anything says it is archived; a read only one is 403.
   checkList(scope.access, { id: listId, objectId: list.objectId, name: list.name }, 'write');
@@ -909,6 +909,7 @@ async function addMany(
     return outcomes;
   }
   // A unique or linking default can't be copied from one entry to the next: such a list takes one record at a time.
+  // `writeDefaults` relies on this: its copy carries no unique keys and writes no links.
   if (defaults.some(({ attribute }) => attribute.isUnique || attribute.type === 'record_reference')) {
     for (const recordId of toAdd) {
       const done = await context.perRecord((part) =>
@@ -1064,7 +1065,7 @@ async function lockList(tx: WorkspaceTx, listId: string): Promise<{ allowsDuplic
     })
     .from(lists)
     .where(eq(lists.id, listId))
-    .for('update', { of: lists });
+    .for('no key update', { of: lists });
   if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
   // A list whose object is archived reads as archived too (AC-4832).
   return {

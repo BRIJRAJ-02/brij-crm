@@ -104,12 +104,14 @@ async function filledEntries(
   read: (keyset: SQL, limit: number) => SQL,
   after: string | undefined,
   limit: number,
+  /** The column the page is in order of, the id it answers: an entry's, or a job item's. */
+  key: SQL = sql`e.id`,
 ): Promise<readonly string[]> {
   const { tx, scope } = context;
   const kept: string[] = [];
   let from = after;
   for (;;) {
-    const keyset = from === undefined ? sql`true` : sql`e.id > ${from}::uuid`;
+    const keyset = from === undefined ? sql`true` : sql`${key} > ${from}::uuid`;
     const rows = (await tx.execute<{ id: string; list_id: string; record_id: string }>(read(keyset, limit))).rows.map(
       (row): EntryRow => ({ id: row.id, listId: row.list_id, recordId: row.record_id }),
     );
@@ -120,7 +122,12 @@ async function filledEntries(
   }
 }
 
-/** The entries a job of the starter's finished on, as a keyset page: what its undo works through. */
+/**
+ * What a job of the starter's finished on, as a keyset page on its own items
+ * (`job_items_item`), what its undo works through: a removal's entries (its
+ * items) that are still out; an add's records (its items) that went in, whose
+ * entries the undo's step finds (`entriesAddedBy`).
+ */
 async function entriesOfJob(
   context: WriteContext,
   params: EntryParams,
@@ -129,7 +136,6 @@ async function entriesOfJob(
   limit: number,
 ): Promise<readonly string[]> {
   if (target.kind === 'removed') {
-    // A removal's items are its entries: those it took out, still out.
     return filledEntries(
       context,
       (keyset, size) => sql`
@@ -137,27 +143,47 @@ async function entriesOfJob(
         join list_entries e on e.workspace_id = i.workspace_id and e.id = i.item_id
         where i.job_id = ${target.jobId}::uuid and i.state = 'done' and e.list_id = ${params.listId}::uuid
           and e.deleted_at is not null and ${keyset}
-        order by e.id limit ${size}
+        order by i.item_id limit ${size}
       `,
       after,
       limit,
+      sql`i.item_id`,
     );
   }
-  // An add's items are records: the live entries the starter made for them in this list once it started.
   return filledEntries(
     context,
     (keyset, size) => sql`
-      select e.id::text as id, e.list_id::text as list_id, e.record_id::text as record_id from list_entries e
-      join jobs j on j.workspace_id = e.workspace_id and j.id = ${target.jobId}::uuid
-      join job_items i on i.workspace_id = e.workspace_id and i.job_id = j.id and i.item_id = e.record_id
-        and i.state = 'done'
-      where e.list_id = ${params.listId}::uuid and e.deleted_at is null and e.created_at >= j.created_at
-        and e.created_by_member_id is not distinct from j.created_by_member_id and ${keyset}
-      order by e.id limit ${size}
+      select i.item_id::text as id, ${params.listId}::text as list_id, i.item_id::text as record_id from job_items i
+      where i.job_id = ${target.jobId}::uuid and i.state = 'done' and ${keyset}
+      order by i.item_id limit ${size}
     `,
     after,
     limit,
+    sql`i.item_id`,
   );
+}
+
+/**
+ * The live entries a bulk add made for these records (an undo's batch): per
+ * record, the first entry its starter made in the list while the job ran, so
+ * an entry added by hand before or after it is never taken. By record id.
+ */
+async function entriesAddedBy(
+  context: WriteContext,
+  listId: string,
+  jobId: string,
+  recordIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  if (recordIds.length === 0) return new Map();
+  const rows = await context.tx.execute<{ id: string; record_id: string }>(sql`
+    select distinct on (e.record_id) e.id::text as id, e.record_id::text as record_id
+    from list_entries e join jobs j on j.workspace_id = e.workspace_id and j.id = ${jobId}::uuid
+    where e.list_id = ${listId}::uuid and e.record_id = any(${uuidArray(recordIds)}) and e.deleted_at is null
+      and e.created_by_member_id is not distinct from j.created_by_member_id
+      and e.created_at >= coalesce(j.started_at, j.created_at) and e.created_at <= coalesce(j.finished_at, now())
+    order by e.record_id, e.created_at, e.id
+  `);
+  return new Map(rows.rows.map((row) => [row.record_id, row.id]));
 }
 
 /** A sample for the shared kind contract test. */
@@ -263,18 +289,26 @@ function entryChangeKind(action: 'remove' | 'restore'): KindDefinition<EntryPara
     snapshot: (context, params, after, limit) => entrySnapshot(context, params, action, after, limit),
     step: (context, { job, items = [] }) =>
       orFailed(async () => {
-        const outcomes = await changeEntriesIn(context, {
-          entryIds: items.map((item) => item.itemId),
-          action,
-          listId: job.params.listId,
-        });
+        const { target, listId } = job.params;
+        // An add's undo works through its records: each one's entry the add made, found now.
+        const entryOf =
+          target.kind === 'added'
+            ? await entriesAddedBy(
+                context,
+                listId,
+                target.jobId,
+                items.map((item) => item.itemId),
+              )
+            : new Map(items.map((item) => [item.itemId, item.itemId]));
+        const outcomes = await changeEntriesIn(context, { entryIds: [...entryOf.values()], action, listId });
         const byId = new Map(outcomes.map((outcome) => [outcome.entryId, outcome]));
         return {
           finished: false,
           items: statesOf(
             items,
             (id) => {
-              const outcome = byId.get(id);
+              const entryId = entryOf.get(id);
+              const outcome = entryId === undefined ? undefined : byId.get(entryId);
               if (outcome === undefined) return undefined;
               return outcome.refusal ?? 'done';
             },
@@ -300,10 +334,14 @@ export function entryJobKinds(): readonly (KindDefinition<AddParams> | KindDefin
   return [entriesAddKind(), entriesRemoveKind(), entriesRestoreKind()];
 }
 
+/** The statuses a job never leaves: only those can be undone. */
+const FINISHED: ReadonlySet<string> = new Set(['succeeded', 'failed', 'cancelled']);
+
 /** The words of a refused start. */
 export const ENTRY_JOB_WORDS = {
   otherObject: "Those records can't go in this list; it holds another object's records.",
   notUndoable: 'Nothing from that change can be undone.',
+  stillRunning: 'That change is still running. Undo it once it ends.',
 } as const;
 
 /**
@@ -431,8 +469,14 @@ export async function undoEntriesJob(
     scope,
     async (context) => {
       const memberId = scope.actor.type === 'member' ? scope.actor.id : undefined;
-      const rows = await context.tx.execute<{ kind: string; params: unknown; member: string | null }>(sql`
-        select kind, params, created_by_member_id::text as member from jobs where id = ${jobId}::uuid
+      const rows = await context.tx.execute<{
+        kind: string;
+        params: unknown;
+        member: string | null;
+        status: string;
+      }>(sql`
+        select kind, params, created_by_member_id::text as member, status::text as status
+        from jobs where id = ${jobId}::uuid
       `);
       const [row] = rows.rows;
       const isOwn = row !== undefined && memberId !== undefined && row.member === memberId;
@@ -440,6 +484,8 @@ export async function undoEntriesJob(
         row?.kind === ENTRY_JOB_KINDS.add ? 'remove' : row?.kind === ENTRY_JOB_KINDS.remove ? 'restore' : undefined;
       const listId = z.object({ listId: z.uuid() }).safeParse(row?.params);
       if (!isOwn || reverse === undefined || !listId.success) throw refuse('NOT_FOUND', ENTRY_JOB_WORDS.notUndoable);
+      // A change still under way is undone once it ends, so the undo never races what it takes back.
+      if (!FINISHED.has(row.status)) throw refuse('CONFIG_INVALID', ENTRY_JOB_WORDS.stillRunning);
       const { objectId } = await checkWritableList(context, listId.data.listId);
       const { jobId: made } = await startJob(context, registry, {
         id: input.id,

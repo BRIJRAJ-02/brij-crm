@@ -315,6 +315,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace restored the list a deleted list',
   ],
   [
+    { ...base, action: 'list.archived', target: { type: 'list', id: ID, isGone: false }, params: {} },
+    'Ada Lovelace archived the list a list',
+  ],
+  [
     { ...base, action: 'booking.no_show', target: booking, params: {} },
     'Ada Lovelace marked Intro call on dayTime(2026-10-24T09:30) as a no show',
   ],

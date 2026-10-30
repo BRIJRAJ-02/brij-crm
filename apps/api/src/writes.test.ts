@@ -954,6 +954,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       target: { kind: 'ids', entryIds: [made.entryId] },
       mutationId: newId(),
     });
+    // Only a finished change is undone: this one is ended by hand, as its run would.
+    await testQuery(ownerUrl, `update jobs set status = 'succeeded', finished_at = now() where id = $1`, [started.id]);
     const job = await m.client.entries.undoJob({ workspace: m.slug, id: newId(), jobId: started.id, mutationId });
     return [
       ...listRows(m, made),

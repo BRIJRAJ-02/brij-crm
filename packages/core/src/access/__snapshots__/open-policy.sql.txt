@@ -969,8 +969,8 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
 ) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."list_id" = $1
   ["<id 2>"]
 
-select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null and "values"."is_cleared" = $2)
-  ["<id 10>",false]
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null)
+  ["<id 10>"]
 
 commit
   []

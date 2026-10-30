@@ -8,6 +8,9 @@ import { sql } from 'drizzle-orm';
 import { createDatabase } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, describe, expect, inject, it } from 'vitest';
+import type { RuleSource } from '../access/door.ts';
+import { NO_RULES, type AccessRules } from '../access/policy.ts';
+import { rescope } from '../testing.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { createRecord } from '../engine/records.ts';
@@ -23,7 +26,13 @@ afterAll(async () => {
   await db.close();
 });
 
-const { team, runnerFor, drive } = jobTestKit(db, ownerUrl);
+/** Each test workspace's rules, by workspace id: the kit's runner enters jobs with them. */
+const rulesByWorkspace = new Map<string, AccessRules>();
+const rules: RuleSource = async (tx) => {
+  const { rows } = await tx.execute<{ id: string | null }>(sql`select current_setting('app.workspace_id', true) as id`);
+  return rulesByWorkspace.get(rows[0]?.id ?? '') ?? NO_RULES;
+};
+const { team, runnerFor, drive } = jobTestKit(db, ownerUrl, { rules });
 const registry = jobKinds({ environment: 'local' });
 
 /** Now by the database's clock, so an `asOf` compares with what it stamps. */
@@ -45,10 +54,19 @@ async function world() {
   const objectOf = (slug: string) => rows.rows.find((row) => row.object === slug)?.object_id ?? '';
   const people = objectOf('people');
   const name = rows.rows.find((row) => row.object === 'people' && row.api_slug === 'name')?.id ?? '';
-  const person = async (firstName: string) =>
-    (await createRecord(t.owner, { objectId: people, values: { [name]: { firstName } } })).recordId;
+  const ownerField = rows.rows.find((row) => row.object === 'people' && row.api_slug === 'owner')?.id ?? '';
+  const person = async (firstName: string, ownedBy?: string) =>
+    (
+      await createRecord(t.owner, {
+        objectId: people,
+        values: {
+          [name]: { firstName },
+          ...(ownedBy === undefined ? {} : { [ownerField]: { type: 'member', id: ownedBy } }),
+        },
+      })
+    ).recordId;
   const list = await createList(t.owner, { id: newId(), objectId: people, name: 'Pipe', template: 'pipeline' });
-  return { ...t, people, companies: objectOf('companies'), person, list };
+  return { ...t, people, companies: objectOf('companies'), person, ownerField, list };
 }
 
 describe('a list’s bulk jobs (AC-4817, AC-4818, AC-4825)', () => {
@@ -107,6 +125,46 @@ describe('a list’s bulk jobs (AC-4817, AC-4818, AC-4825)', () => {
     expect(undo.kind).toBe('entries.bulk_restore');
     expect((await drive(run, w.workspaceId, undo.id)).at(-1)).toBe('succeeded');
     expect((await countEntries(w.owner, { listId: w.list.id })).count).toBe(3);
+  });
+
+  it('never counts, adds or removes a record the starter’s record rule hides (AC-4836)', async () => {
+    const w = await world();
+    const mine = await w.person('Ada', w.memberId);
+    const theirs = await w.person('Bo');
+    const own: AccessRules = {
+      levels: [],
+      records: [
+        { subject: { type: 'role', role: 'member' }, objectId: w.people, kind: 'own', attributeId: w.ownerField },
+      ],
+    };
+    rulesByWorkspace.set(w.workspaceId, own);
+    const member = rescope(w.member, { rules: own });
+    const run = runnerFor(registry);
+    const id = newId();
+    await startAddMatching(member, registry, {
+      id,
+      listId: w.list.id,
+      target: { kind: 'matching', objectId: w.people, except: [], asOf: await databaseNow() },
+    });
+    await drive(run, w.workspaceId, id);
+    expect((await getJob(member, registry, id)).total).toBe(1);
+    await confirmJob(member, registry, id);
+    expect((await drive(run, w.workspaceId, id)).at(-1)).toBe('succeeded');
+    expect((await queryEntries(w.owner, { listId: w.list.id })).entries.map((entry) => entry.recordId)).toEqual([mine]);
+    // The owner adds the hidden one; the member's removal of all matching never counts it.
+    await addListEntry(w.owner, { id: newId(), listId: w.list.id, recordId: theirs });
+    const removal = newId();
+    await startRemoveMatching(member, registry, {
+      id: removal,
+      listId: w.list.id,
+      target: { kind: 'matching', except: [], asOf: await databaseNow() },
+    });
+    await drive(run, w.workspaceId, removal);
+    expect((await getJob(member, registry, removal)).total).toBe(1);
+    // Undo waits for the change to end, so it never races what it takes back.
+    expect(await refusalOf(undoEntriesJob(member, registry, { id: newId(), jobId: removal }))).toMatchObject({
+      code: 'CONFIG_INVALID',
+    });
   });
 
   it('refuses another object’s records, an archived list, and undoing someone else’s job', async () => {

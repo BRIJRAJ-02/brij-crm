@@ -23,7 +23,7 @@ import { objectLevel } from '../access/policy.ts';
 import { queueImportFinished } from '../emails/queue.ts';
 import { limitsOf, takeRecordSlots } from '../engine/limits.ts';
 import { insertRecord, readRecords, updateRecord } from '../engine/records.ts';
-import { addEntryIn } from '../engine/lists.ts';
+import { addEntryIn, checkWritableList } from '../engine/lists.ts';
 import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { loadAttributes, loadListAttributes, type AttributeDef } from '../engine/values.ts';
@@ -652,6 +652,9 @@ export function recordsImport(rules?: RuleSource): KindDefinition<ImportJobParam
         await liveImportObject(tx, plan.objectId);
         // The columns again, as the member stands now: a field gone hidden or read only ends the import.
         checkSettings(scope, plan.settings, new Map([...plan.attributes, ...plan.listAttributes]));
+        // Into a list: its row locked once a batch, first, in the one lock order (the list, then records), and a list
+        // archived or gone read only since ends the import with its words rather than refusing every row.
+        if (plan.listId !== undefined) await checkWritableList(context, plan.listId);
       } catch (error) {
         if (!isRefusal(error) || error.refusal.code === 'QUERY_CANCELLED') throw error;
         return { finished: false, failed: { code: error.refusal.code, message: error.refusal.message } };

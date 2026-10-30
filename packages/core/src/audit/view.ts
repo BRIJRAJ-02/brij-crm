@@ -40,6 +40,8 @@ export interface AuditMemberName {
 export interface AuditThingName {
   readonly name: string;
   readonly isGone: boolean;
+  /** A list the reader can't read (spec 0048): named by no name, and its changes left out. */
+  readonly isHidden?: boolean;
 }
 
 /** Every name a page mentions, by id, from the one names statement. A missing id was purged or never existed. */
@@ -634,15 +636,26 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'list.created':
     case 'list.archived':
     case 'list.restored':
-      return { ...base, action, target: thing('list', names.lists), params: {}, changes: [] };
-    case 'list.updated':
+    case 'list.updated': {
+      const found = targetId === undefined ? undefined : names.lists.get(targetId);
+      // A list the reader can't read is "a list": no name, and no names in its changes.
+      if (found?.isHidden === true) {
+        return {
+          ...base,
+          action,
+          target: { type: 'list', id: targetId ?? row.id, isGone: false },
+          params: {},
+          changes: [],
+        };
+      }
       return {
         ...base,
         action,
         target: thing('list', names.lists),
         params: {},
-        changes: change('name', plain(before.name), plain(after.name)),
+        changes: action === 'list.updated' ? change('name', plain(before.name), plain(after.name)) : [],
       };
+    }
     default:
       return undefined;
   }

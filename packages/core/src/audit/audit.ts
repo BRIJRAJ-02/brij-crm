@@ -13,6 +13,7 @@ import { AUDIT_KINDS, AUDIT_PAGE, AUDIT_PAGE_MAX, type AuditListInput, type Audi
 import type { WorkspaceTx } from '@crm/db';
 import { sql, type SQL } from 'drizzle-orm';
 import { requirePermission } from '../access/check.ts';
+import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isUuid, uuidList } from '../engine/ids.ts';
 import { inputInvalid } from '../engine/refusals.ts';
@@ -134,7 +135,13 @@ interface NameRow extends Record<string, unknown> {
  * the address account deletion leaves), `former` once removed. Never a member's or an asker's address, and never an
  * invitation's once the member it made deleted their account.
  */
-async function readNames(tx: WorkspaceTx, workspaceId: string, ids: AuditNameIds): Promise<AuditNames | undefined> {
+async function readNames(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  ids: AuditNameIds,
+  /** The reader's access: a list over an object they can't read is never named (hidden is absent, spec 0048). */
+  access: Access,
+): Promise<AuditNames | undefined> {
   const ws = sql`${workspaceId}::uuid`;
   const branches: SQL[] = [];
   if (ids.members.length > 0) {
@@ -183,7 +190,7 @@ async function readNames(tx: WorkspaceTx, workspaceId: string, ids: AuditNameIds
   if (ids.lists.length > 0) {
     // An archived list is still the list: its name, never gone (lists are archived, not deleted).
     branches.push(sql`
-      select 'list', l.id::text, l.name, 'live', null::text
+      select 'list', l.id::text, l.name, 'live', l.object_id::text
       from lists l where l.workspace_id = ${ws} and l.id = any(${uuidList(ids.lists)})`);
   }
   if (ids.bookings.length > 0) {
@@ -231,9 +238,13 @@ async function readNames(tx: WorkspaceTx, workspaceId: string, ids: AuditNameIds
       case 'booking':
         if (row.extra !== null) bookings.set(row.id, { pageTitle: name, startsAt: row.extra });
         break;
-      case 'list':
-        lists.set(row.id, thing);
+      case 'list': {
+        const objectId = row.extra ?? '';
+        const readable =
+          isOpen(access) || (objectLevel(access, objectId) !== 'none' && objectLevel(access, row.id) !== 'none');
+        lists.set(row.id, readable ? thing : { name: '', isGone: false, isHidden: true });
         break;
+      }
       default:
         break;
     }
@@ -272,7 +283,8 @@ export async function listAuditEvents(
     await tx.execute(sql`select set_config('statement_timeout', ${AUDIT_STATEMENT_TIMEOUT}, true)`);
     const rows = await readPage(tx, scope.workspaceId, after, limit);
     const page = rows.slice(0, limit);
-    const names = page.length === 0 ? undefined : await readNames(tx, scope.workspaceId, auditNameIds(page));
+    const names =
+      page.length === 0 ? undefined : await readNames(tx, scope.workspaceId, auditNameIds(page), scope.access);
     const last = page.at(-1);
     return {
       entries: page.flatMap((row) => {

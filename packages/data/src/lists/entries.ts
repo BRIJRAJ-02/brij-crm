@@ -894,6 +894,11 @@ export function createEntriesLayer({
       return written.record === undefined ? { kind: 'added', entry } : { kind: 'added', entry, record: written.record };
     } catch (failed) {
       shown?.refuse();
+      if (shown !== undefined) {
+        // The draft's reverse index goes with it.
+        recordOf.delete(id);
+        rowsOfRecord.get(recordId)?.delete(id);
+      }
       for (const open of sections) open.hide(id);
       const refusal = toDataError(failed);
       return { kind: 'refused', code: refusal.code, message: refusalSummary(refusal) };
@@ -1151,6 +1156,9 @@ export function createEntriesLayer({
     const read = async () => {
       version += 1;
       const mine = version;
+      // The adds the server had answered before this read began: it answers for them, in or not (a section past 100,
+      // or removed since). A draft still on its way (no base yet) waits for a later read.
+      const answeredFor = adding.filter((id) => entries.base(id) !== undefined);
       try {
         const answer = await api.forRecord({ workspace, recordId });
         if (mine !== version) return;
@@ -1163,7 +1171,7 @@ export function createEntriesLayer({
           entries.release(previous);
         }
         ids = next;
-        adding = adding.filter((id) => !next.includes(id));
+        adding = adding.filter((id) => !next.includes(id) && !answeredFor.includes(id));
         status = 'ready';
       } catch {
         if (mine !== version) return;

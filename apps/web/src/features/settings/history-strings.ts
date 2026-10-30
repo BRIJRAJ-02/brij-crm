@@ -280,6 +280,8 @@ export const strings = {
     /** A deleted account, inside a sentence ("removed a deleted user from the workspace"). */
     deletedTarget: 'a deleted user',
   },
+  /** A list the reader can't read (spec 0048): it is there, but never named. */
+  someList: 'a list',
   /** What the log can't name any more (AC-4607). */
   gone: {
     /** An invitation whose address is gone: purged, or the member it made deleted their account. */
