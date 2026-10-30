@@ -3,12 +3,15 @@
 // export (forms/export.ts). A member who can read the object (and the view)
 // starts one: its filter and sorts (the saved ones, or the unsaved ones on
 // screen), its visible columns, the record's name first. A `records.export`
-// job (theirs, heavy lane, cancellable) pages the view by its keyset cursor
-// through the engine's page read as that member, so record rules apply and
-// hidden fields are absent, and writes each value as `exportCell` does (the
-// text the importer reads back), formula guarded where the type can hold
-// text. More than 100,000 matching rows is refused before anything starts.
-import { eq, inArray, sql } from 'drizzle-orm';
+// job (theirs, heavy lane, cancellable) first snapshots the ids the view
+// matches, in its order, as that member (late trap #40: paging a live view by
+// keyset could skip a record whose sorted value moved), keeps them as the
+// job's items, then writes 200 a batch, read through the door as they are
+// then, so record rules apply and hidden fields are absent. Each value is
+// written as `exportCell` does (the text the importer reads back), formula
+// guarded where the type can hold text. More than 100,000 matching rows is
+// refused before anything starts.
+import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import {
   CSV_BOM,
@@ -24,7 +27,7 @@ import {
 import { schema, type WorkspaceTx } from '@crm/db';
 import { fieldLevel } from '../access/policy.ts';
 import { checkId } from '../engine/ids.ts';
-import { countIn, readPage } from '../engine/query/page.ts';
+import { countIn, orderedIdsIn } from '../engine/query/page.ts';
 import { readRecords } from '../engine/records.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -41,11 +44,11 @@ import {
 } from '../forms/export.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
-import { startJob } from '../jobs/service.ts';
+import { insertItems, startJob } from '../jobs/service.ts';
 import { readView } from '../views/views.ts';
 import { appendChunk, checkRecordsSource, UNKNOWN_RECORDS_EXPORT, writeHeader } from './chunks.ts';
 
-const { attributeOptions, exports, members, objects } = schema;
+const { attributeOptions, exportChunks, exports, members, objects } = schema;
 
 /** The kind a records export runs as. */
 export const RECORDS_EXPORT = 'records.export';
@@ -271,16 +274,94 @@ export const RecordsExportParams = z.strictObject({ exportId: z.uuid() });
 /** The export job's params. */
 export type RecordsExportParams = z.infer<typeof RecordsExportParams>;
 
-/** Where an export got to: its columns, the view's cursor, the next chunk, the totals. */
+/**
+ * Where an export got to: its columns, how many ids its snapshot holds, the
+ * last snapshot position written, the next chunk, the totals.
+ */
 const Checkpoint = z.object({
   columns: z.array(z.uuid()),
-  cursor: z.string().optional(),
+  total: z.number().int().min(0),
+  position: z.number().int().min(0),
   part: z.number().int().min(0),
   tail: z.number().int().min(0),
   rows: z.number().int().min(0),
   bytes: z.number().int().min(0),
 });
 type Checkpoint = z.infer<typeof Checkpoint>;
+
+/** What a step answers when the view grew past the limits as it was written. */
+const GREW = {
+  finished: true,
+  failed: {
+    code: 'EXPORT_TOO_LARGE',
+    message: 'This view grew past 100,000 rows or 100 MB while it was written; narrow the filter and export again.',
+  },
+} as const;
+
+/** What a step answers when the view's sort ran out of time: it would again, so no retry. */
+const SLOW = {
+  finished: true,
+  failed: {
+    code: 'QUERY_CANCELLED',
+    message: 'This view took too long to sort for an export; narrow the filter or remove a sort and export again.',
+  },
+} as const;
+
+/**
+ * Takes the export's snapshot (late trap #40): every id the view matches, in
+ * its order, read in one statement as the member, stored as the job's items
+ * at positions 1 to n. Answers how many, or the step's failure past the row
+ * limit or when the sort ran out of time.
+ */
+async function takeSnapshot(
+  context: WriteContext,
+  jobId: string,
+  objectId: string,
+  selection: RecordsSelection,
+): Promise<number | typeof GREW | typeof SLOW> {
+  const { tx, scope } = context;
+  const ids = await orderedIdsIn(
+    tx,
+    scope,
+    {
+      objectId,
+      now: selection.now,
+      timeZone: selection.timeZone,
+      ...(selection.filter === undefined ? {} : { filter: selection.filter }),
+      ...(selection.sorts === undefined ? {} : { sorts: selection.sorts }),
+    },
+    TRANSFER_LIMITS.exportRows + 1,
+  );
+  if (ids === undefined) return SLOW;
+  if (ids.length > TRANSFER_LIMITS.exportRows) return GREW;
+  // A retried first batch rolled its items back with it, so they go in afresh.
+  await insertItems(tx, scope.workspaceId, jobId, ids, 0);
+  return ids.length;
+}
+
+/**
+ * The snapshot's next `PAGE` ids after `position`, taken off the job's items
+ * as they are read (one statement), so the snapshot clears itself as the file
+ * is written. A retried batch rolls the delete back with it.
+ */
+async function nextIds(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  jobId: string,
+  position: number,
+): Promise<readonly { readonly position: number; readonly id: string }[]> {
+  const taken = await tx.execute<{ position: number; item_id: string }>(sql`
+    with next as (
+      select position from job_items
+      where workspace_id = ${workspaceId}::uuid and job_id = ${jobId}::uuid and position > ${position}
+      order by position limit ${PAGE}
+    )
+    delete from job_items i using next
+    where i.workspace_id = ${workspaceId}::uuid and i.job_id = ${jobId}::uuid and i.position = next.position
+    returning i.position, i.item_id::text
+  `);
+  return taken.rows.map((row) => ({ position: row.position, id: row.item_id })).sort((a, b) => a.position - b.position);
+}
 
 /** Option labels, member names and linked records' names for one page's cells. */
 async function namesFor(
@@ -336,8 +417,19 @@ async function namesFor(
   };
 }
 
-/** One batch of an export: the header first, then a page of the view's rows, appended as chunks. */
-async function exportStep(context: WriteContext, exportId: string, checkpoint: unknown): Promise<StepOutcome> {
+/**
+ * One batch of an export. The first takes the snapshot and writes the header;
+ * every later one writes the snapshot's next 200 records, read as they are
+ * now through the door, as one chunk. A record changed since the snapshot is
+ * written with its values now, in its snapshot place; one added since is not
+ * in the file; one deleted since (or now out of the member's sight) is left out.
+ */
+async function exportStep(
+  context: WriteContext,
+  jobId: string,
+  exportId: string,
+  checkpoint: unknown,
+): Promise<StepOutcome> {
   const { tx, scope } = context;
   const gone = { finished: true, failed: { code: 'NOT_FOUND', message: 'The export was deleted before it finished.' } };
   const [held] = await tx
@@ -350,6 +442,7 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
     .from(exports)
     .where(eq(exports.id, exportId));
   if (held?.objectId === null || held === undefined) return gone;
+  const objectId = held.objectId;
   const { principal } = scope.access;
   if (principal.kind !== 'member' || principal.memberId !== held.createdByMemberId) return gone;
   if (held.policyKey !== exportAccessKey(scope.access)) {
@@ -358,49 +451,59 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
       failed: { code: 'FORBIDDEN', message: 'Your access changed while this export was being written. Export again.' },
     };
   }
-  await checkRecordsSource(tx, scope, held.objectId);
+  await checkRecordsSource(tx, scope, objectId);
   const selection = RecordsSelection.parse(held.selection);
-  const attributes = await loadAttributes(tx, held.objectId);
+  const attributes = await loadAttributes(tx, objectId);
   const stored = Checkpoint.safeParse(checkpoint);
   let at: Checkpoint;
   if (stored.success) at = stored.data;
   else {
+    const total = await takeSnapshot(context, jobId, objectId, selection);
+    if (typeof total !== 'number') return total;
     const [object] = await tx
       .select({ primaryAttributeId: objects.primaryAttributeId })
       .from(objects)
-      .where(eq(objects.id, held.objectId));
+      .where(eq(objects.id, objectId));
     const columns = exportColumns(scope, attributes, object?.primaryAttributeId ?? null, selection.attributeIds);
     const header = CSV_BOM + csvJoin(columns.map((column) => csvCell(column.title)));
+    // A file begun under the old cursor checkpoint (a deploy mid export) starts again whole: none of its chunks stay.
+    await tx.delete(exportChunks).where(and(eq(exportChunks.exportId, exportId), gt(exportChunks.part, 0)));
     const cursor = await writeHeader(tx, scope.workspaceId, exportId, header);
-    at = { columns: columns.map((column) => column.id), ...cursor, rows: 0, bytes: Buffer.byteLength(header) };
+    at = {
+      columns: columns.map((column) => column.id),
+      total,
+      position: 0,
+      ...cursor,
+      rows: 0,
+      bytes: Buffer.byteLength(header),
+    };
+    // The snapshot's batch does nothing more, so it stays inside one batch's time; the rows follow from the next.
+    if (total > 0) return { finished: false, checkpoint: at, counts: { done: 0 } };
   }
   const columns = at.columns.flatMap((id) => {
     const attribute = attributes.get(id);
     return attribute === undefined ? [] : [attribute];
   });
-  const page = await readPage(
+  const taken = await nextIds(tx, scope.workspaceId, jobId, at.position);
+  const read = await readRecords(
     tx,
-    scope,
-    {
-      objectId: held.objectId,
-      now: selection.now,
-      timeZone: selection.timeZone,
-      limit: PAGE,
-      attributeIds: at.columns,
-      ...(selection.filter === undefined ? {} : { filter: selection.filter }),
-      ...(selection.sorts === undefined ? {} : { sorts: selection.sorts }),
-      ...(at.cursor === undefined ? {} : { cursor: at.cursor }),
-    },
-    {},
-    () => undefined,
+    scope.access,
+    taken.map((item) => item.id),
+    { attributes: new Map([[objectId, attributes]]), attributeIds: at.columns },
   );
+  const byId = new Map(read.map((record) => [record.id, record]));
+  // In the snapshot's order; a record deleted or out of sight since is absent.
+  const records = taken.flatMap((item) => {
+    const record = byId.get(item.id);
+    return record === undefined || record.objectId !== objectId ? [] : [record];
+  });
   const names = await namesFor(
     tx,
     scope,
     columns,
-    page.records.map((record) => record.values),
+    records.map((record) => record.values),
   );
-  const text = page.records
+  const text = records
     .map((record) =>
       csvJoin(
         at.columns.map((id) => {
@@ -411,51 +514,19 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
       ),
     )
     .join('');
-  const rows = at.rows + page.records.length;
-  if (rows > TRANSFER_LIMITS.exportRows || at.bytes + Buffer.byteLength(text) > EXPORT_BYTES_MAX) {
-    return {
-      finished: true,
-      failed: {
-        code: 'EXPORT_TOO_LARGE',
-        message: 'This view grew past 100,000 rows or 100 MB while it was written; narrow the filter and export again.',
-      },
-    };
-  }
+  const rows = at.rows + records.length;
+  if (rows > TRANSFER_LIMITS.exportRows || at.bytes + Buffer.byteLength(text) > EXPORT_BYTES_MAX) return GREW;
   const { part, tail } = await appendChunk(tx, scope.workspaceId, exportId, at, text);
-  const next: Checkpoint = {
-    ...at,
-    part,
-    tail,
-    rows,
-    bytes: at.bytes + Buffer.byteLength(text),
-    ...(page.nextCursor === undefined ? {} : { cursor: page.nextCursor }),
-  };
-  const finished = page.nextCursor === undefined;
-  // Pages follow the view's own order by keyset, so a record whose sorted value changed while the file was written
-  // can be skipped or written twice (late trap #40). Not silently: a sorted export that saw records change says so,
-  // and its end toast suggests exporting again. An export in creation order (no sorts) is stable and never warns.
-  let changed = false;
+  const position = taken.at(-1)?.position ?? at.total;
+  const next: Checkpoint = { ...at, position, part, tail, rows, bytes: at.bytes + Buffer.byteLength(text) };
+  const finished = taken.length < PAGE || position >= at.total;
   if (finished) {
     await tx
       .update(exports)
       .set({ rowCount: next.rows, byteCount: next.bytes, updatedAt: sql`now()` })
       .where(eq(exports.id, exportId));
-    if ((selection.sorts?.length ?? 0) > 0) {
-      const moved = await tx.execute(sql`
-        select 1 from records
-        where workspace_id = ${scope.workspaceId}::uuid and object_id = ${held.objectId}::uuid
-          and updated_at > (select created_at from exports where id = ${exportId}::uuid)
-        limit 1
-      `);
-      changed = moved.rows.length > 0;
-    }
   }
-  return {
-    finished,
-    checkpoint: next,
-    counts: { done: page.records.length },
-    result: { rows: next.rows, exportId, ...(changed ? { changedWhileWritten: true } : {}) },
-  };
+  return { finished, checkpoint: next, counts: { done: records.length }, result: { rows: next.rows, exportId } };
 }
 
 /** `records.export`: the member's, heavy lane, cancellable, 200 records a batch, read as the member. */
@@ -470,6 +541,6 @@ export function recordsExport(): KindDefinition<RecordsExportParams> {
     maxAttempts: MAX_ATTEMPTS.heavy,
     batchSize: PAGE,
     sample: { exportId: '0199f0a0-0000-7000-8000-000000000002' },
-    step: (context, { job }) => exportStep(context, job.params.exportId, job.checkpoint),
+    step: (context, { job }) => exportStep(context, job.id, job.params.exportId, job.checkpoint),
   });
 }

@@ -128,10 +128,9 @@ const data = createDataLayer({
     const exportId = typeof job.result?.exportId === 'string' ? job.result.exportId : undefined;
     const exported = data.exports.forJob(job.id);
     if (job.kind === 'records.export' && job.status === 'succeeded' && exportId !== undefined) {
-      const changed = job.result?.changedWhileWritten === true;
       toasts.toast({
-        tone: changed ? 'info' : 'success',
-        message: (changed ? exportToast.readyChanged : exportToast.ready)(exported?.fileName ?? job.label),
+        tone: 'success',
+        message: exportToast.ready(exported?.fileName ?? job.label),
         action: {
           label: exportToast.download,
           onAction: () => {
