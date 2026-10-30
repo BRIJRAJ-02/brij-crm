@@ -45,7 +45,12 @@ import {
 import { useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { offsetLabel } from '../../public/booking/time.ts';
-import { CalendarHealthChip, useCalendarHealth, useSchedulingStore } from '../booking/CalendarHealth.tsx';
+import {
+  CalendarHealthChip,
+  needsReconnect,
+  useCalendarHealth,
+  useSchedulingStore,
+} from '../booking/CalendarHealth.tsx';
 import { TimeOffDialog } from '../booking/TimeOffDialog.tsx';
 import { membersSettingsHref } from '../settings/nav.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
@@ -57,7 +62,8 @@ import { NewMeetingDialog, type NewMeeting, type NewMeetingDialogProps } from '.
 import { ReassignDialog } from './ReassignDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { strings } from './strings.ts';
-import { minuteOfDay, scrollMinute, timeRange } from './week.ts';
+import { openingMinute } from './team-grid.ts';
+import { minuteOfDay, timeRange } from './week.ts';
 import { newLinkOnlyPageHref } from '../booking/links.ts';
 import type { BlockDraft, BlockPreview } from './BookingsScreen.tsx';
 
@@ -299,7 +305,7 @@ export function TeamDayView(props: TeamDayViewProps) {
           ) : undefined
         }
       >
-        {canInvite ? strings.teamNeedsTeamText : strings.teamNeedsTeamSolo}
+        {canInvite ? strings.teamNeedsTeamText : undefined}
       </EmptyState>
     );
   }
@@ -314,9 +320,12 @@ export function TeamDayView(props: TeamDayViewProps) {
   const people: TeamDayPerson[] = columns.map((column) => {
     const { status, tone } = statusOf(column);
     const reason = column.away?.reason === undefined ? undefined : strings.awayReasons[column.away.reason];
-    const differs = column.timeZone !== timeZone;
+    // Their offset only when it differs from the reader's that day (an alias such as Asia/Calcutta is the same zone).
     const at = Date.parse(answer?.from ?? props.now.toISOString());
-    const chip = health.get(column.memberId);
+    const differs = offsetLabel(column.timeZone, at) !== offsetLabel(timeZone, at);
+    // Only trouble earns room on a head (Reconnect, Some calendars skipped): no calendar, or a working one, says nothing.
+    const held = health.get(column.memberId);
+    const chip = held?.status === 'ready' && needsReconnect(held.health) ? held : undefined;
     return {
       id: column.memberId,
       name: column.name,
@@ -425,7 +434,7 @@ export function TeamDayView(props: TeamDayViewProps) {
       : createPortal(
           <MenuTrigger>
             <Button variant="ghost" icon="triangle-alert">
-              {strings.issuesSummary(outside.length, clashes.length)}
+              {strings.issuesCount(issues.length)}
             </Button>
             <Menu
               label={strings.issuesMenu}
@@ -469,12 +478,17 @@ export function TeamDayView(props: TeamDayViewProps) {
         {...(props.isToday
           ? { now: { dayKey: day, minute: minuteOfDay(props.now, timeZone), label: props.nowLabel } }
           : {})}
-        scrollToMinute={scrollMinute(
-          [day],
-          props.now,
-          timeZone,
-          blocks.map((block) => ({ startMinute: block.startMinute, endMinute: block.endMinute })),
-          9 * 60,
+        // The team's working day, or now within it on today: never midnight or an empty evening.
+        scrollToMinute={openingMinute(
+          answer === undefined
+            ? []
+            : columns.flatMap((column) =>
+                column.open.map((span) => ({
+                  startMinute: minuteIn(span.startsAt, answer, timeZone),
+                  endMinute: minuteIn(span.endsAt, answer, timeZone),
+                })),
+              ),
+          props.isToday ? minuteOfDay(props.now, timeZone) : undefined,
         )}
         openHours={(memberId) => {
           const column = columnOf(memberId);
@@ -564,10 +578,11 @@ export function TeamDayView(props: TeamDayViewProps) {
                         forMemberId === undefined ? [preview] : [],
                         { memberId: whose, preview: [preview] },
                       )
-                      .then(() => {
+                      .then((made) => {
                         setDraft(undefined);
                         const name = forPeople.find((person) => person.id === forMemberId)?.name;
-                        toasts.toast({
+                        // Saved: the card closes, and the toast offers Undo, as the week's does.
+                        const toast = toasts.toast({
                           tone: 'success',
                           message:
                             kind === 'hold'
@@ -575,6 +590,16 @@ export function TeamDayView(props: TeamDayViewProps) {
                               : name === undefined
                                 ? strings.timeBlocked
                                 : strings.timeBlockedFor(name),
+                          action: {
+                            label: strings.undo,
+                            onAction: () => {
+                              toasts.dismiss(toast);
+                              props.onRemoveBlock(made.id).then(
+                                () => toasts.toast({ tone: 'success', message: strings.reopened }),
+                                () => toasts.toast({ tone: 'danger', message: strings.removeFailed }),
+                              );
+                            },
+                          },
                         });
                       });
                   }}
@@ -687,6 +712,7 @@ export function TeamDayView(props: TeamDayViewProps) {
         slug={slug}
         member={timeOffFor === undefined || timeOffFor.id === me ? undefined : timeOffFor}
         entry={undefined}
+        initialDay={day}
         isOpen={timeOffFor !== undefined}
         people={others
           .filter((column) => column.memberId !== timeOffFor?.id)

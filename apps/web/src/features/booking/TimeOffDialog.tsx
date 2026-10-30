@@ -38,6 +38,8 @@ export interface TimeOffDialogProps {
   readonly member: { readonly id: string; readonly name: string } | undefined;
   /** The entry to change; undefined adds one. */
   readonly entry: TimeOffEntry | undefined;
+  /** A new entry's first and last day to start on (the Team day's drawn day); absent, Days starts empty. */
+  readonly initialDay?: string | undefined;
   readonly isOpen: boolean;
   /** Who may cover: active members other than the one away. */
   readonly people: readonly StandinChoice[];
@@ -75,12 +77,17 @@ function TimeOffForm({
   onClose,
   onSaved,
   onOpenBookings,
+  initialDay,
 }: TimeOffDialogProps) {
   const { locale, timeZone } = useFormatSettings();
   const store = data.scheduling.loaded()?.timeOff;
   const [id] = useState(() => store?.newId() ?? '');
   const [range, setRange] = useState<{ readonly start: string; readonly end: string } | null>(
-    entry === undefined ? null : { start: entry.fromDate, end: entry.toDate },
+    entry === undefined
+      ? initialDay === undefined
+        ? null
+        : { start: initialDay, end: initialDay }
+      : { start: entry.fromDate, end: entry.toDate },
   );
   const [reason, setReason] = useState<TimeOffReason>(entry?.reason ?? 'vacation');
   const [standin, setStandin] = useState<string>(entry?.standinMemberId ?? NOBODY);

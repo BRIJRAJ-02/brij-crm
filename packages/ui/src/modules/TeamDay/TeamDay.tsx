@@ -17,9 +17,9 @@ export type TeamDayTone = 'booked' | 'free' | 'off' | 'away';
 export interface TeamDayPerson {
   readonly id: string;
   readonly name: string;
-  /** Their job title, quiet under the name. */
+  /** Their job title, first on the quiet line under the name: it is why the columns are in the order they are. */
   readonly title?: string;
-  /** Their day in a few words: "3 booked", "Free", "No hours", "Away". */
+  /** Their day in a word or two: "3 booked", "Free", "Off", "Away". */
   readonly status: string;
   readonly tone: TeamDayTone;
   /** Their zone's offset after the status, only when it differs from the reader's ("UTC+5:30"). */
@@ -116,7 +116,11 @@ export function TeamDay({ people, selectedPerson, onSelectPerson, focusPerson, l
   );
 }
 
-/** A person's head: their picture, name and title, and how their day stands, with their calendar's chip after. */
+/**
+ * A person's head: their picture and name over one quiet line, the job title first (the stable fact, and why the
+ * columns are in their order), then how their day stands, then their zone's offset when it isn't the reader's
+ * (timefix's header), with their calendar's chip at the end.
+ */
 function PersonHead({ person }: { readonly person: TeamDayPerson }) {
   return (
     <span className={styles.person} aria-hidden="true">
@@ -127,13 +131,11 @@ function PersonHead({ person }: { readonly person: TeamDayPerson }) {
         <span className={styles.name}>
           <TruncatedText>{person.name}</TruncatedText>
         </span>
-        {person.title !== undefined && (
-          <span className={styles.title}>
-            <TruncatedText>{person.title}</TruncatedText>
+        <span className={styles.meta}>
+          {person.title !== undefined && `${person.title}${strings.separator}`}
+          <span className={styles.status} data-tone={person.tone}>
+            {person.status}
           </span>
-        )}
-        <span className={styles.status} data-tone={person.tone}>
-          {person.status}
           {person.badge !== undefined && `${strings.separator}${person.badge}`}
         </span>
       </span>
@@ -153,7 +155,6 @@ function Lane({ lane }: { readonly lane: NonNullable<TeamDayProps['lane']> }) {
         <h2 className={styles.laneTitle}>{strings.lane}</h2>
         <Badge count={lane.items.length} tone="accent" />
       </header>
-      <p className={styles.laneHint}>{strings.laneHint}</p>
       <ul className={styles.laneList}>
         {lane.items.map((item) => (
           <li key={item.id}>

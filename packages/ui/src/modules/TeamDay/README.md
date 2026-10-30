@@ -30,16 +30,17 @@ The references (Mobbin, 31 October 2026):
 ```
 
 - `people` are the columns, in order. A column's name for screen readers is the person's `label`; the head is decoration for sighted readers and says the same.
-- `tone` colours the status: `booked` in the text colour (news), `free` secondary, `off` tertiary ("No hours"), `away` in the Team week's Away colour, strong.
+- Under the name, one quiet line: the job `title` first (the stable fact, and why the columns are in their order), then the `status` ("3 booked", "Free", "Off", "Away"), then the zone's offset. `tone: 'away'` alone is coloured, in the Team week's Away colour, strong; the rest stay quiet (timefix's header).
 - `badge` follows the status after a middle dot: the screen passes the person's zone offset only when it differs from the reader's.
 - `extra` sits at the head's end: the screen's calendar health chip, quiet while all is well.
+- `openHours` gives each person's open hours on the reader's clock: the rest of their column is shaded `surface-sunken`, as the week shades it; an empty list shades the whole column (Off).
 - `band` draws time off down the column in the yellow tag's surface, its word ("Away", "Away · Vacation") at its top, pinned as the hours scroll; under every block, never taking the pointer, so a span can still be drawn over it.
 - `lane` shows only with items. Each item is a card button: time, status ("Needs a host", "Host away") in the orange tag's text, the page's title, then who it is with and whose it was. Pressing one opens `detail` in a Popover beside it; pressing it again, Escape or a press outside closes it (`onClose`).
 - The now line runs across every column when the screen passes `now` (it does only while the day shown is today).
 
 ## States
 
-Columns: booked, free, no hours (the whole column shaded by `openHours` answering an empty list), away (band), the reader's own first. Lane: absent (nothing to hand on), items, an open item (selected surface, accent edge), hover (pointer only: a control's edge), focus (the focus ring), press (`scale-press`). Loading and empty are WeekCalendar's (`isLoading`, `emptyHint`); a failed read and "A team calendar needs a team" are the screen's EmptyState. Every text colour is a token that meets 4.5:1 in both themes.
+Columns: booked, free, off (the whole column shaded by `openHours` answering an empty list), away (band), the reader's own first. Lane: absent (nothing to hand on), items, an open item (selected surface, accent edge), hover (pointer only: a control's edge), focus (the focus ring), press (`scale-press`). Loading and empty are WeekCalendar's (`isLoading`, `emptyHint`); a failed read and "A team calendar needs a team" are the screen's EmptyState. Every text colour is a token that meets 4.5:1 in both themes.
 
 Below 480px of its container (a phone) one column shows at a time with Previous and Next in the corner (AC-765); the lane then sits over the grid, a few cards high.
 

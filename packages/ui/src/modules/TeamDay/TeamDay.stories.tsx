@@ -48,7 +48,7 @@ function people(): TeamDayPerson[] {
       badge: 'UTC+5:30',
       label: 'Katherine Johnson, free, UTC+5:30',
     },
-    { id: LINUS, name: 'Linus Torvalds', status: 'No hours', tone: 'off', label: 'Linus Torvalds, no hours' },
+    { id: LINUS, name: 'Linus Torvalds', status: 'Off', tone: 'off', label: 'Linus Torvalds, off' },
   ];
 }
 
@@ -162,6 +162,7 @@ const meta = {
     scrollToMinute: 8 * 60,
     onOpen: fn(),
     onClose: fn(),
+    onDraw: fn(),
   },
 } satisfies Meta<typeof TeamDay>;
 

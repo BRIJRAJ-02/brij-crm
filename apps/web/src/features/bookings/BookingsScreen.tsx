@@ -322,7 +322,7 @@ function TeamFilterMenu({
             <MenuItem id="order-title">{strings.orderTitle}</MenuItem>
           </MenuSection>
           <MenuSection
-            label={strings.onlyBooked}
+            label={strings.sourceLabel}
             selectionMode="multiple"
             selectedKeys={search.withBookings === true ? ['booked'] : []}
             onSelectionChange={(keys) => onSearch({ withBookings: [...keys].length > 0 ? true : undefined })}
