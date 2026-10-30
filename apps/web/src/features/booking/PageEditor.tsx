@@ -765,7 +765,7 @@ export function PageEditor({
                       status: page.status === 'live' ? ('live' as const) : ('paused' as const),
                       onPause: () => setLive('paused'),
                       onResume: () => setLive('live'),
-                      onDuplicate: duplicate,
+                      ...(page.ownerName === undefined ? { onDuplicate: duplicate } : {}),
                       onDelete: () => setDeleting(true),
                       deleteLabel: strings.deletePage,
                     },
@@ -829,7 +829,8 @@ export function PageEditor({
                           {strings.readOnlyText}
                         </Callout>
                       )}
-                      {hasNoCalendar && !isNoteDismissed && (
+                      {/* The note is about the reader's own calendar: not on a colleague's page. */}
+                      {hasNoCalendar && !isNoteDismissed && page.ownerName === undefined && (
                         <CalendarNote
                           slug={slug}
                           canConnect={calendar.enabled}

@@ -322,7 +322,7 @@ export const strings = {
   notNow: 'Not now',
   statusLive: 'Live',
   statusOff: 'Paused',
-  noCalendar: 'Calendar sync is off: other meetings don’t block times.',
+  noCalendar: 'Other meetings don’t block times until you connect one.',
   notFoundTitle: 'This booking page isn’t here',
   notFoundText: 'It was deleted, or it isn’t yours.',
   endBeforeStart: 'End these hours after they start.',
