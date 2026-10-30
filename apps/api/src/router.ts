@@ -45,6 +45,7 @@ import { usageRouter } from './modules/usage/router.ts';
 import { viewsRouter } from './modules/views/router.ts';
 import { workspacesRouter } from './modules/workspaces/router.ts';
 import { accountRouter } from './modules/account/router.ts';
+import { automationsRouter } from './modules/automations/router.ts';
 import { base } from './orpc.ts';
 
 // One module per feature under ./modules, each implementing its contract namespace.
@@ -73,6 +74,7 @@ export const router = base.router({
   scheduling: schedulingRouter,
   realtime: realtimeRouter,
   jobs: jobsRouter,
+  automations: automationsRouter,
   usage: usageRouter,
   views: viewsRouter,
   trash: trashRouter,

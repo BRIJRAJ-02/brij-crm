@@ -67,7 +67,8 @@ export interface OutboxEvent {
     | 'comments'
     | 'notifications'
     | 'calendars'
-    | 'time_off';
+    | 'time_off'
+    | 'automations';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
@@ -375,6 +376,8 @@ function kindRows(change: CappedChange): OutboxEvent[] {
   }
   // Time off changed (spec 0037): one row naming nothing, so the Team week, time off and Host away read again.
   if (change.timeOff.length > 0) rows.push({ kind: 'time_off', ...NO_IDS, coarse: false });
+  // An automation or a run's outcome changed (parity #53): one row naming nothing.
+  if (change.automations.length > 0) rows.push({ kind: 'automations', ...NO_IDS, coarse: false });
   // A member's own sidebar (spec 0034): one row naming the members whose rows the write changed, nothing else.
   if (change.nav.length > 0) {
     rows.push({ kind: 'nav', ...NO_IDS, itemIds: [...change.nav].sort(byId), coarse: false });

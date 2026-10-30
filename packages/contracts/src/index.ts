@@ -16,6 +16,7 @@ import { commentsContract } from './comments.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
 import { routingContract } from './forms/routing.ts';
 import { exportsContract, importsContract } from './imports.ts';
+import { automationsContract } from './automations.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
@@ -64,6 +65,7 @@ export * from './comments.ts';
 export * from './errors.ts';
 export * from './forms/index.ts';
 export * from './imports.ts';
+export * from './automations.ts';
 export * from './jobs.ts';
 export * from './scheduling.ts';
 export * from './csv.ts';
@@ -136,6 +138,7 @@ export const contract = {
   // Scheduling access (spec 0037): delegations of See or Manage over someone's scheduling.
   scheduling: schedulingContract,
   realtime: realtimeContract,
+  automations: automationsContract,
   jobs: jobsContract,
   usage: usageContract,
   views: viewsContract,

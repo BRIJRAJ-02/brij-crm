@@ -268,6 +268,17 @@ export const TimeOffEvent = z.object({
   mutationId,
 });
 
+/**
+ * An automation, or a run's outcome, changed (parity #53): names nothing, and only an audience whose members all hold
+ * `automations.manage` receives it (any other gets the stub). A screen holding the automations or their run log reads
+ * them again.
+ */
+export const AutomationsEvent = z.object({
+  ...place,
+  kind: z.literal('automations'),
+  mutationId,
+});
+
 /** Background jobs changed (spec 0008): refetch them, or when `coarse` the unfinished jobs you hold. */
 export const JobsEvent = z.object({
   ...place,
@@ -306,6 +317,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   NavEvent,
   CalendarsEvent,
   TimeOffEvent,
+  AutomationsEvent,
   CommentsEvent,
   NotificationsEvent,
   RestrictedEvent,
@@ -331,6 +343,7 @@ export const CHANGE_EVENT_KINDS = [
   'notifications',
   'calendars',
   'time_off',
+  'automations',
   'restricted',
 ] as const satisfies readonly ChangeEvent['kind'][];
 

@@ -121,6 +121,17 @@ export {
   type SignInAlertDeps,
 } from './account/activity.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
+// Automations (parity #53): the write hook that queues runs, and the member door's part (the worker's runs are in `@crm/core/system`).
+export { automationHook } from './automations/hook.ts';
+export {
+  createAutomation,
+  deleteAutomation,
+  listAutomationRuns,
+  listAutomations,
+  restoreAutomation,
+  setAutomationEnabled,
+  updateAutomation,
+} from './automations/service.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
 export {

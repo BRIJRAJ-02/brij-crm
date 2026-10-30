@@ -112,6 +112,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'outboxEvents',
   // The first record milestone's hook (spec 0010, AC-176): it runs inside the write, after the door let it in.
   'milestoneHook',
+  // The automations hook (parity #53) queues runs in the write's own transaction, after the door let the write in.
+  'automationHook',
   // Change events as pure data (spec 0007): rows to events, the stub, the wire shape, catch up's collapse, and
   // the caller as an audience of one.
   'outboxEvent',
@@ -141,6 +143,13 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // system through the `systemScope` it is handed; its once key is a pure helper.
   'runDailyCleanup',
   'maintenanceKey',
+  // Automations (parity #53): the worker's runs enter as the member each automation runs as through the door
+  // (`enterAsAutomation`), and its task, due sweep and cleanup take the worker's deps and the workspace id.
+  'enterAsAutomation',
+  'derivedTaskId',
+  'runAutomationQueue',
+  'queueDueAutomations',
+  'pruneAutomations',
   // Calendar sync (spec 0024): the worker's sync takes its deps and enters as the system through the
   // `systemScope` it is handed; the rest are pure (provider errors, emails, signed values, the token key).
   'syncConnection',

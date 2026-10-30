@@ -16,8 +16,8 @@ import type { WorkspaceTx } from '@crm/db';
 import { uuidList } from '../engine/ids.ts';
 import type { WriteContext } from '../engine/write.ts';
 
-/** The kinds a member's switches email after a notification (a form's submission and a join request each have their own email). */
-type SwitchedKind = Exclude<NotificationKind, 'form_submission' | 'join_request'>;
+/** The kinds a member's switches email after a notification (a form's submission and a join request each have their own email; an automation's notice is in app only). */
+type SwitchedKind = Exclude<NotificationKind, 'form_submission' | 'join_request' | 'automation'>;
 
 /** The settings column that says whether a kind is emailed. */
 // A join request has its own email (`requestToJoin`'s notice), so it never queues this one.
